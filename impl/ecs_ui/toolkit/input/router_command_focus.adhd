@@ -105,7 +105,8 @@ b8 CanRouterEditCommand(
     in u64 focusDeclaration,
     in InputEvent event
 ){
-    if(event.type != InputEventType::CommandDown || !event.edit)
+    const b8 tabInsert = event.command == InputCommand::FocusNext;
+    if(event.type != InputEventType::CommandDown || (!event.edit && !tabInsert))
         return false;
     const Expected<usize> sourceIndex = FindRouterCommandSourceIndex(commandSources, event.source);
     if(!sourceIndex.has_value())
@@ -116,6 +117,8 @@ b8 CanRouterEditCommand(
     const Expected<usize> focusedIndex = FindTargetIndexInTable(targets, lookup, source.focusOwner.target, source.focusOwner.declarationGeneration);
     if(!focusedIndex.has_value() || !targets[focusedIndex.value()].textEditable)
         return false;
+    if(tabInsert)
+        return targets[focusedIndex.value()].acceptTab && !source.delegated;
     return !source.delegated || ((event.command == InputCommand::Accept || event.command == InputCommand::Submit) && IsCurrentRouterControlCommandOwner(targets, lookup, popups, source));
 }
 

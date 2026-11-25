@@ -45,7 +45,7 @@ class ListLayoutPreparer{
         request.language = language.value();
         request.fontSize = frame.widgetStyle.fontSize;
         request.scriptTag = frame.measureKey.scriptTag;
-        request.direction = TextDirection::LeftToRight;
+        request.direction = frame.measureKey.direction;
         if(!this.m_scope.listStateMatches(this.m_context, frame))
             return MakeUnexpected(Failure());
         const auto measured = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
@@ -62,12 +62,54 @@ class ListLayoutPreparer{
     }
 
     [cpp_unwind]
-    public Expected<ScrollPlacement> measureListPlacement(mut BuilderListFrame frame, in LayoutBox box, in Rect clip)const{
+    public b8 ensureVariableRowOffsets(in BuilderListFrame frame, mut ListState state)const{
+        if(!frame.rowHeights.has_value()){
+            if(!state.m_rowOffsets.empty())
+                state.m_rowOffsets.clear();
+            return true;
+        }
+        if(state.m_measureKey == frame.measureKey && state.m_rowOffsets.size() == cast<usize>(frame.rowCount) + 1u)
+            return true;
+        const u64 inputGeneration = state.m_inputGeneration;
+        Vector<f64> offsets;
+        offsets.resize(cast<usize>(frame.rowCount) + 1u, 0.0);
+        f64 total = 0.0;
+        in IListRowHeightProvider heights = frame.rowHeights.value();
+        for(u64 index = 0u; index < frame.rowCount; ++index){
+            if(!this.m_scope.listMatches(this.m_context, frame) || state.m_inputGeneration != inputGeneration)
+                return false;
+            const f32 h = heights.rowHeight(index, frame.rowHeight);
+            if(!IsFinite(VectorSingle(h)) || h <= 0.0f || !this.m_scope.listMatches(this.m_context, frame) || state.m_inputGeneration != inputGeneration)
+                return false;
+            total += cast<f64>(h);
+            if(!IsFinite(VectorDouble(total)))
+                return false;
+            offsets[cast<usize>(index + 1u)] = total;
+        }
+        if(!this.m_scope.listMatches(this.m_context, frame) || state.m_inputGeneration != inputGeneration)
+            return false;
+        state.m_rowOffsets.resize(offsets.size());
+        for(usize idx = 0u; idx < offsets.size(); ++idx)
+            state.m_rowOffsets[idx] = offsets[idx];
+        state.m_measureKey = frame.measureKey;
+        state.m_rowHeight = frame.rowHeight;
+        state.m_scrollRowHeight = frame.rowHeight;
+        state.m_scrollSourceGeneration = frame.measureKey.sourceGeneration;
+        state.m_contentWidth = 0.0;
+        return true;
+    }
+
+    [cpp_unwind]
+    public Expected<ListScrollPlacementResult> measureListPlacement(mut BuilderListFrame frame, in LayoutBox box, in Rect clip)const{
         mut Vector<BuilderListRow> rows = frame.rows;
         mut ListState state = frame.state.value();
         ScrollState scroll;
-        if(!this.m_scope.listMatches(this.m_context, frame) || !scroll.setOffset(frame.scrollOffset))
+        ScrollState scrollX;
+        if(!this.m_scope.listMatches(this.m_context, frame) || !scroll.setOffset(frame.scrollOffset) || !scrollX.setOffset(frame.scrollOffsetX))
             return MakeUnexpected(Failure());
+        if(!this.ensureVariableRowOffsets(frame, state))
+            return MakeUnexpected(Failure());
+        const Span<f64> rowOffsets(state.m_rowOffsets);
         const b8 revealCursor = frame.revealCursor && frame.cursorKey != 0u;
         u64 cursorIndex = 0u;
         if(revealCursor){
@@ -78,25 +120,59 @@ class ListLayoutPreparer{
             if(frame.source.value().key(cursorIndex) != frame.cursorKey || !this.m_scope.listStateMatches(this.m_context, frame) || !frame.source.value().enabled(cursorIndex) || !this.m_scope.listMatches(this.m_context, frame))
                 return MakeUnexpected(Failure());
         }
+        f64 measuredContentWidth = frame.contentWidth;
+        const b8 trackHorizontal = frame.options.horizontalScrollbar != ScrollbarPolicy::Never;
         while(true){
-            auto candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
+            auto candidate = CalculateListScrollPlacement(
+                box.rectangle,
+                clip,
+                frame.padding,
+                frame.style.scrollbarWidth,
+                frame.style.minimumThumb,
+                frame.rowCount,
+                frame.rowHeight,
+                rowOffsets,
+                measuredContentWidth,
+                scrollX.offset(),
+                scroll.offset(),
+                frame.options.horizontalScrollbar,
+                frame.options.verticalScrollbar
+            );
             if(!candidate.has_value())
                 return MakeUnexpected(Failure());
             if(revealCursor){
                 VectorDouble span(0.0);
-                if(!TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight, span) || !scroll.ensureVisible(span.x, span.y, candidate.value().viewport.height))
+                if(!TryResolveListCursorScrollSpan(cursorIndex, frame.rowHeight, rowOffsets, span) || !scroll.ensureVisible(span.x, span.y, candidate.value().placement.viewport.height))
                     return MakeUnexpected(Failure());
+                candidate = CalculateListScrollPlacement(
+                    box.rectangle,
+                    clip,
+                    frame.padding,
+                    frame.style.scrollbarWidth,
+                    frame.style.minimumThumb,
+                    frame.rowCount,
+                    frame.rowHeight,
+                    rowOffsets,
+                    measuredContentWidth,
+                    scrollX.offset(),
+                    scroll.offset(),
+                    frame.options.horizontalScrollbar,
+                    frame.options.verticalScrollbar
+                );
             }
-            if(revealCursor)
-                candidate = CalculateScrollPlacement(box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb, frame.rowCount, frame.rowHeight, scroll.offset());
-            if(!candidate.has_value() || candidate.value().endRow - candidate.value().firstRow > s_ListMaxPreparedRows)
+            if(!candidate.has_value() || candidate.value().placement.endRow - candidate.value().placement.firstRow > s_ListMaxPreparedRows)
                 return MakeUnexpected(Failure());
             f32 height = frame.rowHeight;
-            usize cursor = ListRowInsertionIndex(rows, candidate.value().firstRow);
-            for(u64 index = candidate.value().firstRow; index < candidate.value().endRow; ++index){
+            f64 nextContentWidth = measuredContentWidth;
+            usize cursor = ListRowInsertionIndex(rows, candidate.value().placement.firstRow);
+            for(u64 index = candidate.value().placement.firstRow; index < candidate.value().placement.endRow; ++index){
                 while(cursor < rows.size() && rows[cursor].index < index)
                     ++cursor;
                 if(cursor < rows.size() && rows[cursor].index == index){
+                    if(trackHorizontal){
+                        const f64 rowW = (cast<f64>(rows[cursor].textBounds.width) + cast<f64>(frame.style.row.padding.left)) + cast<f64>(frame.style.row.padding.right);
+                        nextContentWidth = UiSimdMaxF64(nextContentWidth, rowW);
+                    }
                     ++cursor;
                     continue;
                 }
@@ -105,7 +181,12 @@ class ListLayoutPreparer{
                 auto row = this.prepareListRow(frame, index);
                 if(!row.has_value())
                     return MakeUnexpected(Failure());
-                height = ComputeListRowPaddedHeight(row.value().textBounds.height, frame.style.row.padding, height);
+                if(!frame.rowHeights.has_value())
+                    height = ComputeListRowPaddedHeight(row.value().textBounds.height, frame.style.row.padding, height);
+                if(trackHorizontal){
+                    const f64 rowW = (cast<f64>(row.value().textBounds.width) + cast<f64>(frame.style.row.padding.left)) + cast<f64>(frame.style.row.padding.right);
+                    nextContentWidth = UiSimdMaxF64(nextContentWidth, rowW);
+                }
                 if(cursor == rows.size()){
                     rows.push_back(row.value());
                     ++cursor;
@@ -116,25 +197,33 @@ class ListLayoutPreparer{
                     ++cursor;
                 }
             }
-            if(!IsFinite(VectorSingle(height)) || height <= 0.0f || !this.m_scope.listMatches(this.m_context, frame))
+            if(!IsFinite(VectorSingle(height)) || height <= 0.0f || !IsFinite(VectorDouble(nextContentWidth)) || !this.m_scope.listMatches(this.m_context, frame))
                 return MakeUnexpected(Failure());
-            if(height == frame.rowHeight){
-                frame.scrollOffset = candidate.value().offset;
-                if(state.m_measureKey == frame.measureKey && !(state.m_rowHeight > frame.rowHeight))
+            if(height == frame.rowHeight && nextContentWidth == measuredContentWidth){
+                frame.scrollOffset = candidate.value().placement.offset;
+                frame.scrollOffsetX = candidate.value().scrollbars.horizontal.offset;
+                frame.contentWidth = nextContentWidth;
+                if(!frame.rowHeights.has_value() && state.m_measureKey == frame.measureKey && !(state.m_rowHeight > frame.rowHeight))
                     state.m_rowHeight = frame.rowHeight;
+                state.m_contentWidth = nextContentWidth;
+                state.m_visibleFirstRow = candidate.value().placement.firstRow;
+                state.m_visibleEndRow = candidate.value().placement.endRow;
                 return candidate.value();
             }
-            const f64 offset = ComputeListExpandedScrollOffset(
-                candidate.value().contentClip.y,
-                candidate.value().viewport.y,
-                candidate.value().offset,
-                candidate.value().firstRow,
-                frame.rowHeight,
-                height
-            );
-            if(!scroll.setOffset(offset))
-                return MakeUnexpected(Failure());
-            frame.rowHeight = height;
+            if(height != frame.rowHeight){
+                const f64 offset = ComputeListExpandedScrollOffset(
+                    candidate.value().placement.contentClip.y,
+                    candidate.value().placement.viewport.y,
+                    candidate.value().placement.offset,
+                    candidate.value().placement.firstRow,
+                    frame.rowHeight,
+                    height
+                );
+                if(!scroll.setOffset(offset))
+                    return MakeUnexpected(Failure());
+                frame.rowHeight = height;
+            }
+            measuredContentWidth = nextContentWidth;
         }
     }
 }
@@ -143,7 +232,18 @@ class ListLayoutPreparer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, mut VectorDouble outSpan){
+b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, in Span<f64> rowOffsets, mut VectorDouble outSpan){
+    if(!rowOffsets.empty()){
+        if(cursorIndex + 1u >= rowOffsets.size())
+            return false;
+        const f64 start = rowOffsets[cast<usize>(cursorIndex)];
+        const f64 end = rowOffsets[cast<usize>(cursorIndex + 1u)];
+        const VectorDouble span(start, end, 0.0, 0.0);
+        if(!IsFinite(span) || end <= start)
+            return false;
+        outSpan = span;
+        return true;
+    }
     const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
     const f64 end = start + cast<f64>(rowHeight);
     const VectorDouble span(start, end, 0.0, 0.0);
@@ -151,6 +251,10 @@ b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, mut Vect
         return false;
     outSpan = span;
     return true;
+}
+
+b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, mut VectorDouble outSpan){
+    return TryResolveListCursorScrollSpan(cursorIndex, rowHeight, Span<f64>(), outSpan);
 }
 
 usize ListRowInsertionIndex(in Vector<BuilderListRow> rows, in u64 index){

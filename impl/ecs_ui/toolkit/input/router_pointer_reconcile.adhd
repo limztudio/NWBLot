@@ -210,6 +210,26 @@ void CancelRouterPointerPress(
     outCaptureControl = ControlToken();
 }
 
+b8 IsBetterRouterHitTarget(
+    in HitTarget candidate,
+    in usize candidateIndex,
+    in b8 hasFound,
+    in u32 foundLayer,
+    in u32 foundZOrder,
+    in u64 foundPaintOrder,
+    in usize foundIndex
+){
+    if(!hasFound)
+        return true;
+    if(candidate.layer != foundLayer)
+        return candidate.layer > foundLayer;
+    if(candidate.zOrder != foundZOrder)
+        return candidate.zOrder > foundZOrder;
+    if(candidate.paintOrder != foundPaintOrder)
+        return candidate.paintOrder > foundPaintOrder;
+    return candidateIndex >= foundIndex;
+}
+
 Expected<usize> FindRouterHitTargetIndex(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,
@@ -221,15 +241,17 @@ Expected<usize> FindRouterHitTargetIndex(
     b8 hasFound = false;
     usize foundIndex = 0u;
     u32 foundLayer = 0u;
+    u32 foundZOrder = 0u;
     u64 foundPaintOrder = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
         in HitTarget target = targets[index];
         if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
             continue;
-        if(!hasFound || target.layer > foundLayer || (target.layer == foundLayer && target.paintOrder >= foundPaintOrder)){
+        if(IsBetterRouterHitTarget(target, index, hasFound, foundLayer, foundZOrder, foundPaintOrder, foundIndex)){
             hasFound = true;
             foundIndex = index;
             foundLayer = target.layer;
+            foundZOrder = target.zOrder;
             foundPaintOrder = target.paintOrder;
         }
     }
@@ -259,6 +281,7 @@ Expected<usize> FindRouterHitTargetIndexIndexed(
     b8 hasFound = false;
     usize foundIndex = 0u;
     u32 foundLayer = 0u;
+    u32 foundZOrder = 0u;
     u64 foundPaintOrder = 0u;
 
     const usize cellBegin = cast<usize>(spatial.cellOffsets[cell]);
@@ -268,10 +291,11 @@ Expected<usize> FindRouterHitTargetIndexIndexed(
         in HitTarget target = targets[index];
         if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
             continue;
-        if(!hasFound || target.layer > foundLayer || (target.layer == foundLayer && (target.paintOrder > foundPaintOrder || (target.paintOrder == foundPaintOrder && index >= foundIndex)))){
+        if(IsBetterRouterHitTarget(target, index, hasFound, foundLayer, foundZOrder, foundPaintOrder, foundIndex)){
             hasFound = true;
             foundIndex = index;
             foundLayer = target.layer;
+            foundZOrder = target.zOrder;
             foundPaintOrder = target.paintOrder;
         }
     }
@@ -280,10 +304,11 @@ Expected<usize> FindRouterHitTargetIndexIndexed(
         in HitTarget target = targets[index];
         if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
             continue;
-        if(!hasFound || target.layer > foundLayer || (target.layer == foundLayer && (target.paintOrder > foundPaintOrder || (target.paintOrder == foundPaintOrder && index >= foundIndex)))){
+        if(IsBetterRouterHitTarget(target, index, hasFound, foundLayer, foundZOrder, foundPaintOrder, foundIndex)){
             hasFound = true;
             foundIndex = index;
             foundLayer = target.layer;
+            foundZOrder = target.zOrder;
             foundPaintOrder = target.paintOrder;
         }
     }

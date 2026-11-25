@@ -17,6 +17,9 @@ extern enum HandlerMutationType : u8{
 extern class InputDispatcher{
     void addHandlerToBack(...);
     void addHandlerToFront(...);
+    void gamepadAxisUpdate(...);
+    void gamepadButtonUpdate(...);
+    void gamepadConnectionUpdate(...);
     void keyboardCharInput(...);
     b8 keyboardTextBlocked(...)const;
     void keyboardUpdate(...);

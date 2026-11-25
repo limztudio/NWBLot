@@ -20,6 +20,11 @@ interface IListDataSource{
     b8 enabled(in u64 index)const;
 }
 
+interface IListRowHeightProvider{
+    u64 rowHeightRevision()const;
+    f32 rowHeight(in u64 index, in f32 defaultRowHeight)const;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +70,153 @@ Expected<u64> FindListCursor(in IListDataSource source, in u64 count, in u64 cur
     return key;
 }
 
+b8 DidListSelectionSetChange(in HashSet<u64> previousSet, in HashSet<u64> nextSet){
+    if(previousSet.size() != nextSet.size())
+        return true;
+    for(in u64 key : nextSet){
+        if(previousSet.find(key) == previousSet.end())
+            return true;
+    }
+    return false;
+}
+
+b8 CollectEnabledListRangeKeys(in IListDataSource source, in u64 count, in u64 startIndex, in u64 endIndex, mut Vector<u64> outKeys){
+    outKeys.clear();
+    if(startIndex >= count || endIndex >= count)
+        return false;
+    const u64 lo = Min(startIndex, endIndex);
+    const u64 hi = Max(startIndex, endIndex);
+    u64 cur = lo;
+    while(cur <= hi){
+        const Expected<u64> found = source.findEnabled(cur, false);
+        if(!found.has_value())
+            break;
+        if(!ValidateListEnabledSearchIndex(found.value(), count, cur, false))
+            return false;
+        if(found.value() > hi)
+            break;
+        const u64 key = source.key(found.value());
+        if(key == 0u)
+            return false;
+        const Expected<ListKeyResolution> resolved = ResolveListKey(source, count, key);
+        if(!resolved.has_value() || !resolved.value().present || resolved.value().index != found.value())
+            return false;
+        outKeys.push_back(key);
+        if(found.value() == hi)
+            break;
+        cur = found.value() + 1u;
+    }
+    return true;
+}
+
+void CopyListSelectionContainers(in Span<u64> sourceKeys, mut Vector<u64> outKeys, mut HashSet<u64> outSet){
+    outKeys.clear();
+    outKeys.reserve(sourceKeys.size());
+    outSet.clear();
+    outSet.reserve(sourceKeys.size());
+    for(in u64 key : sourceKeys){
+        outKeys.push_back(key);
+        outSet.insert(key);
+    }
+}
+
+b8 ApplyIndexedMultiSelectionMutation(
+    in ListSelectionMode selectionMode,
+    in b8 selectOnNavigate,
+    in b8 activate,
+    in b8 extend,
+    in b8 toggle,
+    in u64 candidate,
+    in u64 resolvedAnchor,
+    in Span<u64> rangeKeys,
+    mut Vector<u64> inOutKeys,
+    mut HashSet<u64> inOutKeySet,
+    mut u64 inOutSelected,
+    mut u64 outCursor,
+    mut u64 outAnchor,
+    mut b8 outEnsureCursor
+){
+    u64 nextAnchor = resolvedAnchor;
+    Vector<u64> nextKeys;
+    HashSet<u64> nextSet;
+    u64 nextSelected = inOutSelected;
+    if(extend){
+        if(toggle){
+            nextKeys.reserve(inOutKeys.size() + rangeKeys.size());
+            nextSet.reserve(inOutKeys.size() + rangeKeys.size());
+            for(in u64 k : inOutKeys){
+                nextKeys.push_back(k);
+                nextSet.insert(k);
+            }
+        }
+        else{
+            nextKeys.reserve(rangeKeys.size());
+            nextSet.reserve(rangeKeys.size());
+        }
+        for(in u64 key : rangeKeys){
+            if(nextSet.find(key) == nextSet.end()){
+                nextKeys.push_back(key);
+                nextSet.insert(key);
+            }
+        }
+        nextSelected = candidate;
+    }
+    else if(selectionMode == ListSelectionMode::Multiple || (activate && toggle)){
+        nextKeys.reserve(inOutKeys.size() + 1u);
+        nextSet.reserve(inOutKeys.size() + 1u);
+        for(in u64 k : inOutKeys){
+            nextKeys.push_back(k);
+            nextSet.insert(k);
+        }
+        if(activate){
+            if(nextSet.find(candidate) != nextSet.end()){
+                nextSet.erase(candidate);
+                for(usize idx = 0u; idx < nextKeys.size(); ++idx){
+                    if(nextKeys[idx] == candidate){
+                        for(usize mv = idx + 1u; mv < nextKeys.size(); ++mv)
+                            nextKeys[mv - 1u] = nextKeys[mv];
+                        nextKeys.pop_back();
+                        break;
+                    }
+                }
+                if(nextSelected == candidate){
+                    if(nextKeys.empty())
+                        nextSelected = 0u;
+                    else
+                        nextSelected = nextKeys.back();
+                }
+            }
+            else{
+                nextKeys.push_back(candidate);
+                nextSet.insert(candidate);
+                nextSelected = candidate;
+            }
+            nextAnchor = candidate;
+        }
+    }
+    else if(toggle || (!activate && !selectOnNavigate)){
+        nextKeys.reserve(inOutKeys.size());
+        nextSet.reserve(inOutKeys.size());
+        for(in u64 k : inOutKeys){
+            nextKeys.push_back(k);
+            nextSet.insert(k);
+        }
+    }
+    else{
+        nextKeys.push_back(candidate);
+        nextSet.insert(candidate);
+        nextSelected = candidate;
+        nextAnchor = candidate;
+    }
+    const b8 changed = DidListSelectionSetChange(inOutKeySet, nextSet);
+    CopyListSelectionContainers(Span<u64>(nextKeys), inOutKeys, inOutKeySet);
+    inOutSelected = nextSelected;
+    outCursor = candidate;
+    outAnchor = nextAnchor;
+    outEnsureCursor = true;
+    return changed;
+}
+
 b8 ReconcileListState(mut ListState state, in IListDataSource source){
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
@@ -72,31 +224,86 @@ b8 ReconcileListState(mut ListState state, in IListDataSource source){
     if(generation == 0u || revision == 0u)
         return false;
     const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+    const u64 count = source.rowCount();
     u64 selected = 0u;
     u64 cursor = 0u;
+    u64 anchor = 0u;
+    Vector<u64> keptKeys;
+    HashSet<u64> keptSet;
+    b8 cursorPresent = false;
+    b8 anchorPresent = false;
     if(!replacement){
         selected = state.m_selected;
         cursor = state.m_cursor;
-    }
-    const u64 count = source.rowCount();
-    const Expected<ListKeyResolution> selectedResolution = ResolveListKey(source, count, selected);
-    if(!selectedResolution.has_value())
-        return false;
-    b8 cursorPresent = selectedResolution.value().present;
-    if(cursor != selected){
-        const Expected<ListKeyResolution> cursorResolution = ResolveListKey(source, count, cursor);
-        if(!cursorResolution.has_value())
-            return false;
-        cursorPresent = cursorResolution.value().present;
+        anchor = state.m_anchor;
+        keptKeys.reserve(state.m_selectedKeys.size() + 1u);
+        for(in u64 key : state.m_selectedKeys){
+            if(key == 0u || keptSet.find(key) != keptSet.end())
+                continue;
+            const Expected<ListKeyResolution> resolution = ResolveListKey(source, count, key);
+            if(!resolution.has_value())
+                return false;
+            if(resolution.value().present){
+                keptKeys.push_back(key);
+                keptSet.insert(key);
+            }
+        }
+        if(selected != 0u && keptSet.find(selected) == keptSet.end()){
+            const Expected<ListKeyResolution> selectedResolution = ResolveListKey(source, count, selected);
+            if(!selectedResolution.has_value())
+                return false;
+            if(selectedResolution.value().present){
+                keptKeys.push_back(selected);
+                keptSet.insert(selected);
+            }
+        }
+        if(keptSet.find(selected) == keptSet.end()){
+            if(keptKeys.empty())
+                selected = 0u;
+            else
+                selected = keptKeys.back();
+        }
+        cursorPresent = selected != 0u && cursor == selected;
+        if(!cursorPresent && cursor != 0u){
+            if(keptSet.find(cursor) != keptSet.end())
+                cursorPresent = true;
+            else{
+                const Expected<ListKeyResolution> cursorResolution = ResolveListKey(source, count, cursor);
+                if(!cursorResolution.has_value())
+                    return false;
+                cursorPresent = cursorResolution.value().present;
+            }
+        }
+        if(anchor != 0u){
+            if(keptSet.find(anchor) != keptSet.end())
+                anchorPresent = true;
+            else if(anchor == cursor)
+                anchorPresent = cursorPresent;
+            else{
+                const Expected<ListKeyResolution> anchorResolution = ResolveListKey(source, count, anchor);
+                if(!anchorResolution.has_value())
+                    return false;
+                anchorPresent = anchorResolution.value().present;
+            }
+        }
     }
     if(!MatchesListSource(source, generation, revision) || state.m_inputGeneration != inputGeneration)
         return false;
-    if(replacement && !state.m_scroll.setOffset(0.0))
+    if(replacement && (!state.m_scroll.setOffset(0.0) || !state.m_scrollX.setOffset(0.0)))
         return false;
+    CopyListSelectionContainers(Span<u64>(keptKeys), state.m_selectedKeys, state.m_selectedKeySet);
+    if(anchorPresent)
+        state.m_anchor = anchor;
+    else
+        state.m_anchor = selected;
+    if(replacement){
+        state.m_rowOffsets.clear();
+        state.m_contentWidth = 0.0;
+    }
     CommitListReconcileState(
         generation,
         revision,
-        selectedResolution.value().present,
+        selected != 0u,
         cursorPresent,
         selected,
         cursor,
@@ -122,10 +329,42 @@ b8 ApplyListControlAction(in IListDataSource source, in ListOptions options, in 
     )
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        const Expected<f64> offset = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
-        if(!offset.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(offset.value()))
+        f64 nextY = state.m_scroll.offset();
+        if(action.delta != 0.0 || action.deltaX == 0.0){
+            const Expected<f64> offset = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
+            if(!offset.has_value() || state.m_inputGeneration != inputGeneration)
+                return false;
+            nextY = offset.value();
+        }
+        f64 nextX = state.m_scrollX.offset();
+        if(action.deltaX != 0.0 && action.stepX > 0.0){
+            const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), action.deltaX, action.stepX, action.maximumX);
+            if(!offsetX.has_value() || state.m_inputGeneration != inputGeneration)
+                return false;
+            nextX = offsetX.value();
+        }
+        if(!state.m_scroll.setOffset(nextY) || !state.m_scrollX.setOffset(nextX))
             return false;
         state.m_ensureCursor = false;
+        result.valid = true;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right){
+        if(options.horizontalScrollbar != ScrollbarPolicy::Never){
+            f64 deltaX = 1.0;
+            if(action.kind == ControlActionKind::Left)
+                deltaX = -1.0;
+            f64 stepX = action.stepX;
+            if(stepX <= 0.0)
+                stepX = cast<f64>(options.wheelColumns);
+            f64 maxX = action.maximumX;
+            if(maxX <= 0.0 && state.m_scrollbars.horizontal.maximum > 0.0)
+                maxX = state.m_scrollbars.horizontal.maximum;
+            const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), deltaX, stepX, maxX);
+            if(!offsetX.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scrollX.setOffset(offsetX.value()))
+                return false;
+            state.m_ensureCursor = false;
+        }
         result.valid = true;
         return true;
     }
@@ -151,9 +390,162 @@ b8 ApplyListControlAction(in IListDataSource source, in ListOptions options, in 
             return false;
         candidate = cursor.value();
     }
+    if(options.selectionMode == ListSelectionMode::Single){
+        if(!MatchesListSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        const u64 prevSelected = state.m_selected;
+        ApplyListCandidateSelection(options, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, result);
+        if(state.m_selected != prevSelected || (state.m_selected != 0u && state.m_selectedKeySet.find(state.m_selected) == state.m_selectedKeySet.end()) || (state.m_selected == 0u && !state.m_selectedKeys.empty())){
+            state.m_selectedKeys.clear();
+            state.m_selectedKeySet.clear();
+            if(state.m_selected != 0u){
+                state.m_selectedKeys.push_back(state.m_selected);
+                state.m_selectedKeySet.insert(state.m_selected);
+            }
+        }
+        if(candidate != 0u && (activate || options.selectOnNavigate))
+            state.m_anchor = state.m_selected;
+        return true;
+    }
+    if(candidate == 0u){
+        if(!MatchesListSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        result.valid = true;
+        return true;
+    }
+    u64 nextAnchor = state.m_anchor;
+    Vector<u64> rangeKeys;
+    const b8 rangeSelect = action.extend;
+    if(rangeSelect){
+        const Expected<ListKeyResolution> candidateRes = ResolveListKey(source, count, candidate);
+        if(!candidateRes.has_value() || !candidateRes.value().present)
+            return false;
+        u64 resolvedAnchorKey = state.m_anchor;
+        b8 haveAnchor = false;
+        u64 anchorIdx = candidateRes.value().index;
+        if(resolvedAnchorKey != 0u){
+            const Expected<ListKeyResolution> anchorRes = ResolveListKey(source, count, resolvedAnchorKey);
+            if(!anchorRes.has_value())
+                return false;
+            if(anchorRes.value().present){
+                haveAnchor = true;
+                anchorIdx = anchorRes.value().index;
+            }
+        }
+        if(!haveAnchor && state.m_cursor != 0u){
+            const Expected<ListKeyResolution> cursorRes = ResolveListKey(source, count, state.m_cursor);
+            if(!cursorRes.has_value())
+                return false;
+            if(cursorRes.value().present){
+                haveAnchor = true;
+                resolvedAnchorKey = state.m_cursor;
+                anchorIdx = cursorRes.value().index;
+            }
+        }
+        if(!haveAnchor)
+            resolvedAnchorKey = candidate;
+        nextAnchor = resolvedAnchorKey;
+        if(!CollectEnabledListRangeKeys(source, count, anchorIdx, candidateRes.value().index, rangeKeys))
+            return false;
+    }
     if(!MatchesListSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
         return false;
-    ApplyListCandidateSelection(options, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, result);
+    Vector<u64> nextKeys;
+    HashSet<u64> nextSet;
+    u64 nextSelected = state.m_selected;
+    if(rangeSelect){
+        if(action.toggle){
+            nextKeys = state.m_selectedKeys;
+            nextSet = state.m_selectedKeySet;
+        }
+        else{
+            nextKeys.reserve(rangeKeys.size());
+        }
+        for(in u64 key : rangeKeys){
+            if(nextSet.find(key) == nextSet.end()){
+                nextKeys.push_back(key);
+                nextSet.insert(key);
+            }
+        }
+        nextSelected = candidate;
+    }
+    else if(options.selectionMode == ListSelectionMode::Multiple){
+        nextKeys = state.m_selectedKeys;
+        nextSet = state.m_selectedKeySet;
+        if(activate){
+            if(nextSet.find(candidate) != nextSet.end()){
+                nextSet.erase(candidate);
+                for(usize idx = 0u; idx < nextKeys.size(); ++idx){
+                    if(nextKeys[idx] == candidate){
+                        nextKeys.erase(nextKeys.begin() + cast<isize>(idx));
+                        break;
+                    }
+                }
+                if(nextSelected == candidate){
+                    if(nextKeys.empty())
+                        nextSelected = 0u;
+                    else
+                        nextSelected = nextKeys.back();
+                }
+            }
+            else{
+                nextKeys.push_back(candidate);
+                nextSet.insert(candidate);
+                nextSelected = candidate;
+            }
+            nextAnchor = candidate;
+        }
+    }
+    else{
+        if(activate && action.toggle){
+            nextKeys = state.m_selectedKeys;
+            nextSet = state.m_selectedKeySet;
+            if(nextSet.find(candidate) != nextSet.end()){
+                nextSet.erase(candidate);
+                for(usize idx = 0u; idx < nextKeys.size(); ++idx){
+                    if(nextKeys[idx] == candidate){
+                        nextKeys.erase(nextKeys.begin() + cast<isize>(idx));
+                        break;
+                    }
+                }
+                if(nextSelected == candidate){
+                    if(nextKeys.empty())
+                        nextSelected = 0u;
+                    else
+                        nextSelected = nextKeys.back();
+                }
+            }
+            else{
+                nextKeys.push_back(candidate);
+                nextSet.insert(candidate);
+                nextSelected = candidate;
+            }
+            nextAnchor = candidate;
+        }
+        else if(action.toggle){
+            nextKeys = state.m_selectedKeys;
+            nextSet = state.m_selectedKeySet;
+        }
+        else if(activate || options.selectOnNavigate){
+            nextKeys.push_back(candidate);
+            nextSet.insert(candidate);
+            nextSelected = candidate;
+            nextAnchor = candidate;
+        }
+        else{
+            nextKeys = state.m_selectedKeys;
+            nextSet = state.m_selectedKeySet;
+        }
+    }
+    const b8 changed = DidListSelectionSetChange(state.m_selectedKeySet, nextSet);
+    CopyListSelectionContainers(Span<u64>(nextKeys), state.m_selectedKeys, state.m_selectedKeySet);
+    state.m_selected = nextSelected;
+    state.m_cursor = candidate;
+    state.m_anchor = nextAnchor;
+    state.m_ensureCursor = true;
+    result.selectionChanged = result.selectionChanged || changed;
+    result.activated = result.activated || activate;
+    result.valid = true;
     return true;
 }
 

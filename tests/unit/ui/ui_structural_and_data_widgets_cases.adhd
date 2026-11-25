@@ -1,0 +1,722 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_numeric_and_popup_tools.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class StructuralSplitterTests : WidgetFixture{
+    public SplitterState m_splitter;
+    public u32 m_firstClicks = 0u;
+    public u32 m_secondClicks = 0u;
+
+    public b8 renderSplitter(in u64 generation, in SplitterOptions options, in b8 includeSecond){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 400.0f, 200.0f)))
+            return false;
+        if(!this.m_builder.beginSplitter("split", this.m_splitter, options)){
+            this.m_builder.endPanel();
+            return false;
+        }
+        if(this.m_builder.button("pane_btn", "First"))
+            ++this.m_firstClicks;
+        if(includeSecond){
+            if(!this.m_builder.splitterSecondPane()){
+                this.m_builder.endPanel();
+                return false;
+            }
+            if(this.m_builder.button("pane_btn", "Second"))
+                ++this.m_secondClicks;
+        }
+        if(!this.m_builder.endSplitter()){
+            this.m_builder.endPanel();
+            return false;
+        }
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+}
+
+class StructuralSpinBoxTests : NumericFixture{
+    public ScrollAreaState m_scroll;
+    public NumericEditBoxResult m_lastNumeric;
+
+    public b8 renderIntSpin(in u64 generation, in IntegerSpinBoxOptions options){
+        if(!this.beginNumeric(generation))
+            return false;
+        this.m_lastNumeric = this.m_builder.integerSpinBox("spin", this.m_integer, this.m_integerState, options);
+        return this.acceptNumeric();
+    }
+
+    public b8 renderFloatSpin(in u64 generation, in FloatSpinBoxOptions options){
+        if(!this.beginNumeric(generation))
+            return false;
+        this.m_lastNumeric = this.m_builder.floatSpinBox("spin", this.m_float, this.m_floatState, options);
+        return this.acceptNumeric();
+    }
+
+    public b8 renderIntSpinInScroll(in u64 generation, in IntegerSpinBoxOptions options){
+        if(!this.beginNumeric(generation))
+            return false;
+        ScrollAreaOptions saOpts;
+        saOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+        saOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+        if(!this.m_builder.beginScrollArea("scroll", this.m_scroll, saOpts))
+            return false;
+        this.m_builder.label("top_pad", "Spacer 1");
+        this.m_lastNumeric = this.m_builder.integerSpinBox("spin", this.m_integer, this.m_integerState, options);
+        for(u32 i = 0u; i < 8u; ++i){
+            String lbl;
+            lbl.assign("sp_");
+            AppendUnsignedU64Text(lbl, cast<u64>(i));
+            this.m_builder.label(StringView(lbl), "Spacer");
+        }
+        if(!this.m_builder.endScrollArea())
+            return false;
+        return this.acceptNumeric();
+    }
+}
+
+class TestTreeNodeData{
+    public u64 key = 0u;
+    public u64 parentKey = 0u;
+    public String label;
+    public b8 hasChildren = false;
+    public b8 enabled = true;
+}
+
+class TestTreeDataSource : ITreeDataSource{
+    public Vector<TestTreeNodeData> m_nodes;
+    public u64 m_generation = 3101u;
+    public u64 m_revision = 1u;
+    public b8 m_duplicateChildKey = false;
+    public b8 m_selfCycle = false;
+
+    public void addNode(in u64 key, in u64 parentKey, in StringView labelText, in b8 hasChildren, in b8 enabled){
+        TestTreeNodeData node;
+        node.key = key;
+        node.parentKey = parentKey;
+        node.label.assign(labelText);
+        node.hasChildren = hasChildren;
+        node.enabled = enabled;
+        this.m_nodes.push_back(node);
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_generation; }
+    public u64 revision()const override{ return this.m_revision; }
+
+    public u64 childCount(in u64 parentKey)const override{
+        if(this.m_selfCycle && parentKey == 10u)
+            return 1u;
+        u64 count = 0u;
+        for(in TestTreeNodeData n : this.m_nodes){
+            if(n.parentKey == parentKey)
+                ++count;
+        }
+        if(this.m_duplicateChildKey && parentKey == 0u && count > 1u)
+            return 2u;
+        return count;
+    }
+
+    public u64 childKey(in u64 parentKey, in u64 childIndex)const override{
+        if(this.m_selfCycle && parentKey == 10u && childIndex == 0u)
+            return 10u;
+        if(this.m_duplicateChildKey && parentKey == 0u)
+            return this.m_nodes[0u].key;
+        u64 seen = 0u;
+        for(in TestTreeNodeData n : this.m_nodes){
+            if(n.parentKey == parentKey){
+                if(seen == childIndex)
+                    return n.key;
+                ++seen;
+            }
+        }
+        return 0u;
+    }
+
+    public b8 hasChildren(in u64 nodeKey)const override{
+        if(this.m_selfCycle && nodeKey == 10u)
+            return true;
+        for(in TestTreeNodeData n : this.m_nodes){
+            if(n.key == nodeKey)
+                return n.hasChildren;
+        }
+        return false;
+    }
+
+    public StringView label(in u64 nodeKey)const override{
+        for(in TestTreeNodeData n : this.m_nodes){
+            if(n.key == nodeKey)
+                return StringView(n.label);
+        }
+        return "";
+    }
+
+    public b8 enabled(in u64 nodeKey)const override{
+        for(in TestTreeNodeData n : this.m_nodes){
+            if(n.key == nodeKey)
+                return n.enabled;
+        }
+        return false;
+    }
+}
+
+class StructuralTreeTests : WidgetFixture{
+    public TestTreeDataSource m_source;
+    public TreeState m_state;
+    public TreeResult m_result;
+
+    public b8 renderTree(in u64 generation, in TreeOptions options){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 400.0f, 320.0f)))
+            return false;
+        this.m_result = this.m_builder.treeView("tree", this.m_source, this.m_state, options);
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId treeId()const{
+        return this.id("tree", "panel");
+    }
+
+    public Point rowCenter(in u64 key){
+        const auto root = TryMakeWidgetId(this.treeId(), s_WidgetPartRows);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), key);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+
+    public Point toggleCenter(in u64 key){
+        const auto root = TryMakeWidgetId(this.treeId(), s_WidgetPartTreeToggle);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), key);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+class TestTableRowData{
+    public u64 key = 0u;
+    public String name;
+    public i64 score = 0ll;
+    public String scoreText;
+    public String note;
+    public b8 enabled = true;
+}
+
+class TestTableDataSource : ITableDataSource{
+    public Vector<TestTableRowData> m_rows;
+    public u64 m_generation = 4101u;
+    public u64 m_revision = 1u;
+    public TestObserved<u64> m_offscreenCol4Calls;
+
+    public void addRow(in u64 key, in StringView name, in i64 score, in StringView note, in b8 enabled){
+        TestTableRowData row;
+        row.key = key;
+        row.name.assign(name);
+        row.score = score;
+        CompactString scoreStr;
+        if(FormatI64Into(score, scoreStr).has_value())
+            row.scoreText.assign(scoreStr.view());
+        row.note.assign(note);
+        row.enabled = enabled;
+        this.m_rows.push_back(row);
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_generation; }
+    public u64 revision()const override{ return this.m_revision; }
+    public u64 rowCount()const override{ return cast<u64>(this.m_rows.size()); }
+
+    public u64 rowKey(in u64 rowIndex)const override{
+        if(rowIndex >= this.m_rows.size())
+            return 0u;
+        return this.m_rows[cast<usize>(rowIndex)].key;
+    }
+
+    public b8 rowEnabled(in u64 rowIndex)const override{
+        return rowIndex < this.m_rows.size() && this.m_rows[cast<usize>(rowIndex)].enabled;
+    }
+
+    public StringView cellText(in u64 rowIndex, in u64 columnKey)const override{
+        if(rowIndex >= this.m_rows.size())
+            return "";
+        in TestTableRowData row = this.m_rows[cast<usize>(rowIndex)];
+        if(columnKey == 1u)
+            return StringView(row.name);
+        if(columnKey == 2u)
+            return StringView(row.scoreText);
+        if(columnKey == 3u)
+            return StringView(row.note);
+        if(columnKey == 4u){
+            ++this.m_offscreenCol4Calls.value();
+            return StringView(row.note);
+        }
+        return "";
+    }
+
+    public i32 compareRows(in u64 lhsRowIndex, in u64 rhsRowIndex, in u64 columnKey)const override{
+        in TestTableRowData lhs = this.m_rows[cast<usize>(lhsRowIndex)];
+        in TestTableRowData rhs = this.m_rows[cast<usize>(rhsRowIndex)];
+        if(columnKey == 1u){
+            if(StringView(lhs.name) < StringView(rhs.name))
+                return -1;
+            if(StringView(lhs.name) > StringView(rhs.name))
+                return 1;
+            return 0;
+        }
+        if(columnKey == 2u){
+            if(lhs.score < rhs.score)
+                return -1;
+            if(lhs.score > rhs.score)
+                return 1;
+            return 0;
+        }
+        return 0;
+    }
+}
+
+class StructuralTableTests : WidgetFixture{
+    public TestTableDataSource m_source;
+    public TableState m_state;
+    public TableResult m_result;
+
+    public b8 renderTable(in u64 generation, in Span<TableColumn> cols, in TableOptions options){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 440.0f, 300.0f)))
+            return false;
+        this.m_result = this.m_builder.dataTable("table", cols, this.m_source, this.m_state, options);
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId tableId()const{
+        return this.id("table", "panel");
+    }
+
+    public Point rowCenter(in u64 key){
+        const auto root = TryMakeWidgetId(this.tableId(), s_WidgetPartRows);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), key);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+
+    public Point headerCenter(in u64 colKey){
+        const auto root = TryMakeWidgetId(this.tableId(), s_WidgetPartTableHeader);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), colKey);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+
+    public Point resizeCenter(in u64 colKey){
+        const auto root = TryMakeWidgetId(this.tableId(), s_WidgetPartTableResize);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), colKey);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+void SpinBoxModifiedClick(mut WidgetFixture self, in Point pos, in b8 extend, in b8 toggle){
+    InputEvent down = InputEvent();
+    down.type = InputEventType::PrimaryDown;
+    down.position = pos;
+    down.shift = extend;
+    down.extend = extend;
+    down.control = toggle;
+    EXPECT_TRUE(self.send(down).pointerConsumed);
+    InputEvent up = InputEvent();
+    up.type = InputEventType::PrimaryUp;
+    up.position = pos;
+    up.shift = extend;
+    up.extend = extend;
+    up.control = toggle;
+    EXPECT_TRUE(self.send(up).pointerConsumed);
+}
+
+void TreeModifiedClick(mut WidgetFixture self, in Point pos, in b8 extend, in b8 toggle){
+    SpinBoxModifiedClick(self, pos, extend, toggle);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifySplitter_DragClampKeyboardZeroRatioScopedKeysAndUnbalancedFail(mut StructuralSplitterTests self){
+    SplitterOptions hOpts;
+    hOpts.orientation = SplitterOrientation::Horizontal;
+    hOpts.minFirst = 60.0f;
+    hOpts.minSecond = 80.0f;
+    hOpts.handleThickness = 8.0f;
+    hOpts.keyboardStep = 0.1f;
+
+    EXPECT_TRUE(self.m_splitter.setRatio(0.0f));
+    ASSERT_TRUE(self.renderSplitter(1u, hOpts, true));
+    EXPECT_GT(self.m_splitter.handleRect().width, 0.0f);
+    EXPECT_GE(self.m_splitter.firstRect().width, 60.0f);
+
+    EXPECT_TRUE(self.m_splitter.setRatio(0.5f));
+    ASSERT_TRUE(self.renderSplitter(2u, hOpts, true));
+    const Rect midHandle = self.m_splitter.handleRect();
+    const f32 totalW = self.m_splitter.bounds().width;
+    EXPECT_NEAR(self.m_splitter.firstRect().width + self.m_splitter.secondRect().width + hOpts.handleThickness, totalW, 1.5f);
+
+    const Point handleCenter = CenterUiRect(midHandle);
+    self.drag(handleCenter, Point(handleCenter.x - 500.0f, handleCenter.y));
+    ASSERT_TRUE(self.renderSplitter(3u, hOpts, true));
+    EXPECT_GE(self.m_splitter.firstRect().width, 59.5f);
+    EXPECT_LE(self.m_splitter.firstRect().width, 62.0f);
+
+    self.drag(CenterUiRect(self.m_splitter.handleRect()), Point(handleCenter.x + 500.0f, handleCenter.y));
+    ASSERT_TRUE(self.renderSplitter(4u, hOpts, true));
+    EXPECT_GE(self.m_splitter.secondRect().width, 79.5f);
+    EXPECT_LE(self.m_splitter.secondRect().width, 82.0f);
+
+    self.press(Key::Home);
+    ASSERT_TRUE(self.renderSplitter(5u, hOpts, true));
+    EXPECT_GE(self.m_splitter.firstRect().width, 59.5f);
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderSplitter(6u, hOpts, true));
+    const f32 afterRightW = self.m_splitter.firstRect().width;
+    EXPECT_GT(afterRightW, 70.0f);
+    self.press(Key::End);
+    ASSERT_TRUE(self.renderSplitter(7u, hOpts, true));
+    EXPECT_GE(self.m_splitter.secondRect().width, 79.5f);
+
+    const WidgetId firstBtnId = RequireUiWidgetId(RequireUiWidgetId(self.id("split", "panel"), "first"), "pane_btn");
+    const WidgetId secondBtnId = RequireUiWidgetId(RequireUiWidgetId(self.id("split", "panel"), "second"), "pane_btn");
+    ASSERT_TRUE(self.hasTarget(firstBtnId));
+    ASSERT_TRUE(self.hasTarget(secondBtnId));
+    self.click(CenterUiRect(self.target(firstBtnId).value().rectangle));
+    self.click(CenterUiRect(self.target(secondBtnId).value().rectangle));
+    ASSERT_TRUE(self.renderSplitter(8u, hOpts, true));
+    EXPECT_EQ(self.m_firstClicks, 1u);
+    EXPECT_EQ(self.m_secondClicks, 1u);
+
+    SplitterOptions vOpts;
+    vOpts.orientation = SplitterOrientation::Vertical;
+    vOpts.minFirst = 30.0f;
+    vOpts.minSecond = 30.0f;
+    vOpts.handleThickness = 6.0f;
+    vOpts.keyboardStep = 0.2f;
+    EXPECT_TRUE(self.m_splitter.setRatio(0.5f));
+    ASSERT_TRUE(self.renderSplitter(9u, vOpts, true));
+    self.click(CenterUiRect(self.m_splitter.handleRect()));
+    ASSERT_TRUE(self.renderSplitter(10u, vOpts, true));
+    self.press(Key::Down);
+    ASSERT_TRUE(self.renderSplitter(11u, vOpts, true));
+    EXPECT_GT(self.m_splitter.ratio(), 0.65f);
+
+    EXPECT_FALSE(self.renderSplitter(12u, hOpts, false));
+}
+
+void VerifySpinBox_IntegerFloatButtonsKeysWheelWrapDirtyCommitAndDisabled(mut StructuralSpinBoxTests self){
+    self.useHost();
+    IntegerSpinBoxOptions opts;
+    opts.edit.bounds.minimum = 0ll;
+    opts.edit.bounds.maximum = 100ll;
+    opts.edit.bounds.policy = NumericBoundsPolicy::Clamp;
+    opts.step = 2ll;
+    opts.fastStep = 10ll;
+    opts.wrap = true;
+    ASSERT_TRUE(self.m_integer.setValue(4ll));
+    ASSERT_TRUE(self.renderIntSpin(1u, opts));
+
+    const WidgetId spinId = self.id("spin", "panel");
+    const WidgetId editId = RequireUiWidgetId(spinId, "edit");
+    const auto decId = TryMakeWidgetId(spinId, s_WidgetPartSpinDec);
+    const auto incId = TryMakeWidgetId(spinId, s_WidgetPartSpinInc);
+    ASSERT_TRUE(decId.has_value());
+    ASSERT_TRUE(incId.has_value());
+    ASSERT_TRUE(self.hasTarget(editId));
+    ASSERT_TRUE(self.hasTarget(decId.value()));
+    ASSERT_TRUE(self.hasTarget(incId.value()));
+
+    self.click(CenterUiRect(self.target(incId.value()).value().rectangle));
+    ASSERT_TRUE(self.renderIntSpin(2u, opts));
+    EXPECT_EQ(self.m_integer.value(), 6ll);
+    EXPECT_TRUE(self.m_lastNumeric.numeric.valueChanged);
+
+    self.click(CenterUiRect(self.target(editId).value().rectangle));
+    ASSERT_TRUE(self.renderIntSpin(3u, opts));
+    self.press(Key::Up);
+    ASSERT_TRUE(self.renderIntSpin(4u, opts));
+    EXPECT_EQ(self.m_integer.value(), 8ll);
+
+    self.press(Key::Up, false, true);
+    ASSERT_TRUE(self.renderIntSpin(5u, opts));
+    EXPECT_EQ(self.m_integer.value(), 18ll);
+
+    self.press(Key::PageDown);
+    ASSERT_TRUE(self.renderIntSpin(6u, opts));
+    EXPECT_EQ(self.m_integer.value(), 8ll);
+
+    ASSERT_TRUE(self.m_integer.setValue(0ll));
+    ASSERT_TRUE(self.renderIntSpin(7u, opts));
+    self.click(CenterUiRect(self.target(decId.value()).value().rectangle));
+    ASSERT_TRUE(self.renderIntSpin(8u, opts));
+    EXPECT_EQ(self.m_integer.value(), 99ll);
+
+    self.click(CenterUiRect(self.target(incId.value()).value().rectangle));
+    ASSERT_TRUE(self.renderIntSpin(9u, opts));
+    EXPECT_EQ(self.m_integer.value(), 0ll);
+
+    ASSERT_TRUE(self.m_integer.setDraft("25"));
+    ASSERT_TRUE(self.renderIntSpin(10u, opts));
+    self.click(CenterUiRect(self.target(incId.value()).value().rectangle));
+    ASSERT_TRUE(self.renderIntSpin(11u, opts));
+    EXPECT_EQ(self.m_integer.value(), 27ll);
+
+    ASSERT_TRUE(self.m_integer.setDraft("40"));
+    ASSERT_TRUE(self.renderIntSpin(12u, opts));
+    self.click(CenterUiRect(self.target(editId).value().rectangle));
+    ASSERT_TRUE(self.renderIntSpin(13u, opts));
+    self.press(Key::Enter);
+    ASSERT_TRUE(self.renderIntSpin(14u, opts));
+    EXPECT_EQ(self.m_integer.value(), 40ll);
+    const Point incPt = CenterUiRect(self.target(incId.value()).value().rectangle);
+
+    ASSERT_TRUE(self.renderIntSpinInScroll(15u, opts));
+    const WidgetId scrollSpinId = RequireUiWidgetId(self.id("scroll", "panel"), "spin");
+    const WidgetId scrollEditId = RequireUiWidgetId(scrollSpinId, "edit");
+    EXPECT_EQ(self.m_scroll.scroll().y, 0.0f);
+    InputEvent wheel;
+    wheel.type = InputEventType::PointerWheel;
+    wheel.position = CenterUiRect(self.target(scrollEditId).value().rectangle);
+    wheel.scrollY = 2.0;
+    EXPECT_TRUE(self.send(wheel).pointerConsumed);
+    ASSERT_TRUE(self.renderIntSpinInScroll(16u, opts));
+    EXPECT_EQ(self.m_integer.value(), 44ll);
+    EXPECT_EQ(self.m_scroll.scroll().y, 0.0f);
+
+    IntegerSpinBoxOptions roOpts = opts;
+    roOpts.edit.edit.readOnly = true;
+    ASSERT_TRUE(self.renderIntSpin(17u, roOpts));
+    EXPECT_FALSE(self.hasTarget(incId.value()));
+    self.click(incPt);
+    ASSERT_TRUE(self.renderIntSpin(18u, roOpts));
+    EXPECT_EQ(self.m_integer.value(), 44ll);
+
+    FloatSpinBoxOptions fOpts;
+    fOpts.edit.bounds.minimum = -5.0;
+    fOpts.edit.bounds.maximum = 5.0;
+    fOpts.step = 0.25;
+    fOpts.fastStep = 1.0;
+    ASSERT_TRUE(self.m_float.setValue(1.5));
+    ASSERT_TRUE(self.renderFloatSpin(19u, fOpts));
+    self.click(CenterUiRect(self.target(incId.value()).value().rectangle));
+    ASSERT_TRUE(self.renderFloatSpin(20u, fOpts));
+    EXPECT_NEAR(self.m_float.value(), 1.75, 0.0001);
+}
+
+void VerifyTreeView_ExpandCollapseNavigationPruningMultiSelectAndCycleReject(mut StructuralTreeTests self){
+    self.m_source.addNode(1u, 0u, "RootA", true, true);
+    self.m_source.addNode(10u, 1u, "Child1", true, true);
+    self.m_source.addNode(100u, 10u, "Leaf", false, true);
+    self.m_source.addNode(11u, 1u, "ChildDisabled", false, false);
+    self.m_source.addNode(12u, 1u, "Child2", false, true);
+    self.m_source.addNode(2u, 0u, "RootB", false, true);
+
+    TreeOptions opts;
+    opts.selectionMode = ListSelectionMode::Extended;
+    opts.height = LayoutSize(LayoutSizePolicy::Fixed, 260.0f);
+    ASSERT_TRUE(self.renderTree(1u, opts));
+    EXPECT_EQ(self.m_state.visibleCount(), 2u);
+
+    self.click(self.toggleCenter(1u));
+    ASSERT_TRUE(self.renderTree(2u, opts));
+    EXPECT_TRUE(self.m_result.expansionChanged);
+    EXPECT_EQ(self.m_result.toggledKey, 1u);
+    EXPECT_EQ(self.m_state.visibleCount(), 5u);
+
+    self.click(self.rowCenter(10u));
+    ASSERT_TRUE(self.renderTree(3u, opts));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderTree(4u, opts));
+    EXPECT_EQ(self.m_state.visibleCount(), 6u);
+    EXPECT_TRUE(self.m_state.isExpanded(10u));
+
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderTree(5u, opts));
+    EXPECT_EQ(self.m_state.selectedKey(), 100u);
+
+    self.press(Key::Left);
+    ASSERT_TRUE(self.renderTree(6u, opts));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+
+    self.click(self.rowCenter(100u));
+    ASSERT_TRUE(self.renderTree(7u, opts));
+    EXPECT_EQ(self.m_state.selectedKey(), 100u);
+
+    self.click(self.toggleCenter(1u));
+    ASSERT_TRUE(self.renderTree(8u, opts));
+    EXPECT_EQ(self.m_state.visibleCount(), 2u);
+    EXPECT_EQ(self.m_state.selectedKey(), 1u);
+
+    self.click(self.toggleCenter(1u));
+    ASSERT_TRUE(self.renderTree(9u, opts));
+    self.click(self.rowCenter(1u));
+    ASSERT_TRUE(self.renderTree(10u, opts));
+    TreeModifiedClick(self, self.rowCenter(12u), true, false);
+    ASSERT_TRUE(self.renderTree(11u, opts));
+    EXPECT_TRUE(self.m_state.isSelected(1u));
+    EXPECT_TRUE(self.m_state.isSelected(10u));
+    EXPECT_FALSE(self.m_state.isSelected(11u));
+    EXPECT_TRUE(self.m_state.isSelected(12u));
+
+    self.m_source.m_duplicateChildKey = true;
+    ++self.m_source.m_revision;
+    TreeState badDupState;
+    EXPECT_FALSE(ReconcileTreeState(badDupState, self.m_source, 0u));
+
+    self.m_source.m_duplicateChildKey = false;
+    self.m_source.m_selfCycle = true;
+    ++self.m_source.m_revision;
+    TreeState cycleState;
+    cycleState.setExpanded(1u, true);
+    cycleState.setExpanded(10u, true);
+    EXPECT_FALSE(ReconcileTreeState(cycleState, self.m_source, 0u));
+}
+
+void VerifyDataTable_SortCycleStableTieResizeClampOffscreenAndSelection(mut StructuralTableTests self){
+    self.m_source.addRow(10u, "Alpha", 30ll, "Note10", true);
+    self.m_source.addRow(20u, "Alpha", 10ll, "Note20", true);
+    self.m_source.addRow(30u, "Beta", 20ll, "Note30", true);
+    self.m_source.addRow(40u, "Gamma", 5ll, "Note40", false);
+
+    Vector<TableColumn> cols;
+    TableColumn colName;
+    colName.key = 1u;
+    colName.title = "Name";
+    colName.width = 100.0f;
+    colName.minWidth = 60.0f;
+    cols.push_back(colName);
+
+    TableColumn colScore;
+    colScore.key = 2u;
+    colScore.title = "Score";
+    colScore.width = 110.0f;
+    colScore.minWidth = 50.0f;
+    colScore.maxWidth = 160.0f;
+    colScore.alignment = TextAlignment::Trailing;
+    cols.push_back(colScore);
+
+    TableColumn colNote;
+    colNote.key = 3u;
+    colNote.title = "Note";
+    colNote.width = 120.0f;
+    colNote.minWidth = 80.0f;
+    colNote.sortable = false;
+    colNote.resizable = false;
+    cols.push_back(colNote);
+
+    TableColumn colTail;
+    colTail.key = 4u;
+    colTail.title = "Tail";
+    colTail.width = 180.0f;
+    colTail.minWidth = 80.0f;
+    cols.push_back(colTail);
+
+    TableOptions opts;
+    opts.selectionMode = ListSelectionMode::Extended;
+    opts.width = LayoutSize(LayoutSizePolicy::Fixed, 300.0f);
+    opts.height = LayoutSize(LayoutSizePolicy::Fixed, 220.0f);
+    ASSERT_TRUE(self.renderTable(1u, Span<TableColumn>(cols), opts));
+    EXPECT_EQ(self.m_source.m_offscreenCol4Calls.value(), 0u);
+
+    self.click(self.rowCenter(20u));
+    ASSERT_TRUE(self.renderTable(2u, Span<TableColumn>(cols), opts));
+    EXPECT_EQ(self.m_state.selectedKey(), 20u);
+
+    self.click(self.headerCenter(1u));
+    ASSERT_TRUE(self.renderTable(3u, Span<TableColumn>(cols), opts));
+    EXPECT_TRUE(self.m_result.sortChanged);
+    EXPECT_EQ(self.m_state.sortColumnKey(), 1u);
+    EXPECT_EQ(self.m_state.sortDirection(), TableSortDirection::Ascending);
+    EXPECT_EQ(self.m_state.displayRowSourceIndex(0u), 0u);
+    EXPECT_EQ(self.m_state.displayRowSourceIndex(1u), 1u);
+    EXPECT_EQ(self.m_state.selectedKey(), 20u);
+
+    self.click(self.headerCenter(1u));
+    ASSERT_TRUE(self.renderTable(4u, Span<TableColumn>(cols), opts));
+    EXPECT_EQ(self.m_state.sortDirection(), TableSortDirection::Descending);
+    EXPECT_EQ(self.m_state.displayRowSourceIndex(0u), 3u);
+
+    self.click(self.headerCenter(1u));
+    ASSERT_TRUE(self.renderTable(5u, Span<TableColumn>(cols), opts));
+    EXPECT_EQ(self.m_state.sortDirection(), TableSortDirection::None);
+
+    const Point col2ResizePt = self.resizeCenter(2u);
+    self.drag(col2ResizePt, Point(col2ResizePt.x + 250.0f, col2ResizePt.y));
+    ASSERT_TRUE(self.renderTable(6u, Span<TableColumn>(cols), opts));
+    EXPECT_TRUE(self.m_result.columnResized);
+    EXPECT_NEAR(self.m_state.columnWidth(2u, 110.0f), 160.0f, 0.5f);
+
+    const Point col2ResizeMax = self.resizeCenter(2u);
+    self.drag(col2ResizeMax, Point(col2ResizeMax.x - 400.0f, col2ResizeMax.y));
+    ASSERT_TRUE(self.renderTable(7u, Span<TableColumn>(cols), opts));
+    EXPECT_NEAR(self.m_state.columnWidth(2u, 110.0f), 50.0f, 0.5f);
+
+    self.click(self.rowCenter(10u));
+    ASSERT_TRUE(self.renderTable(8u, Span<TableColumn>(cols), opts));
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderTable(9u, Span<TableColumn>(cols), opts));
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderTable(10u, Span<TableColumn>(cols), opts));
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderTable(11u, Span<TableColumn>(cols), opts));
+    self.press(Key::Right);
+    ASSERT_TRUE(self.renderTable(12u, Span<TableColumn>(cols), opts));
+    EXPECT_GT(self.m_state.scrollOffsetX(), 0.0);
+    EXPECT_GT(self.m_source.m_offscreenCol4Calls.value(), 0u);
+
+    const auto nonResizableId = TryMakeWidgetPartId(TryMakeWidgetId(self.tableId(), s_WidgetPartTableResize).value(), 3u);
+    EXPECT_FALSE(self.hasTarget(nonResizableId.value()));
+
+    TableOptions noUnsortOpts = opts;
+    noUnsortOpts.allowUnsortedCycle = false;
+    self.click(self.headerCenter(2u));
+    ASSERT_TRUE(self.renderTable(13u, Span<TableColumn>(cols), noUnsortOpts));
+    EXPECT_EQ(self.m_state.sortDirection(), TableSortDirection::Ascending);
+    self.click(self.headerCenter(2u));
+    ASSERT_TRUE(self.renderTable(14u, Span<TableColumn>(cols), noUnsortOpts));
+    EXPECT_EQ(self.m_state.sortDirection(), TableSortDirection::Descending);
+    self.click(self.headerCenter(2u));
+    ASSERT_TRUE(self.renderTable(15u, Span<TableColumn>(cols), noUnsortOpts));
+    EXPECT_EQ(self.m_state.sortDirection(), TableSortDirection::Ascending);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(StructuralSplitterTests, DragClampKeyboardZeroRatioScopedKeysAndUnbalancedFail, VerifySplitter_DragClampKeyboardZeroRatioScopedKeysAndUnbalancedFail)
+NWB_ADHD_GTEST_F(StructuralSpinBoxTests, IntegerFloatButtonsKeysWheelWrapDirtyCommitAndDisabled, VerifySpinBox_IntegerFloatButtonsKeysWheelWrapDirtyCommitAndDisabled)
+NWB_ADHD_GTEST_F(StructuralTreeTests, ExpandCollapseNavigationPruningMultiSelectAndCycleReject, VerifyTreeView_ExpandCollapseNavigationPruningMultiSelectAndCycleReject)
+NWB_ADHD_GTEST_F(StructuralTableTests, SortCycleStableTieResizeClampOffscreenAndSelection, VerifyDataTable_SortCycleStableTieResizeClampOffscreenAndSelection)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

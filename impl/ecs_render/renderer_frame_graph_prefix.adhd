@@ -296,6 +296,7 @@ Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks
     uploadInputs.csgClipContextSlots = resources.csgClipContextSlots;
     uploadInputs.csgIntervalSampleState = resources.csgIntervalSampleState;
     uploadInputs.dependencyTask = this.m_graphicsPrefixDeferredClearTask;
+    uploadInputs.instanceTransformPatchContributor = context.instanceTransformPatchContributor;
     auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(uploadInputs, instanceData);
     if(!opaqueUploadChainResult.has_value()){
         warning("RendererSystem: could not declare opaque upload chain");

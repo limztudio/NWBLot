@@ -1,0 +1,221 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router_focus_traversal.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> FocusDirection{
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VectorSingle ComputeVisibleSpatialBounds(in HitTarget target){
+    const VectorSingle rectMin(target.rectangle.x, target.rectangle.y, 0.0f, 0.0f);
+    const VectorSingle clipMin(target.clip.x, target.clip.y, 0.0f, 0.0f);
+    const VectorSingle rectMax(target.rectangle.x + target.rectangle.width, target.rectangle.y + target.rectangle.height, 0.0f, 0.0f);
+    const VectorSingle clipMax(target.clip.x + target.clip.width, target.clip.y + target.clip.height, 0.0f, 0.0f);
+    const VectorSingle minCorner = VectorSelect(rectMin, clipMin, VectorGreater(clipMin, rectMin));
+    const VectorSingle maxCorner = VectorSelect(rectMax, clipMax, VectorLess(clipMax, rectMax));
+    const VectorSingle clampedMax = VectorSelect(maxCorner, minCorner, VectorLess(maxCorner, minCorner));
+    return VectorSingle(minCorner.x, minCorner.y, clampedMax.x, clampedMax.y);
+}
+
+b8 TryMoveRouterSpatialFocus(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in FocusDirection direction,
+    mut Vector<CommandSource> commandSources,
+    mut WidgetId inOutFocus,
+    mut u64 inOutFocusDeclaration,
+    mut ControlToken inOutFocusControl
+){
+    if(targets.empty())
+        return false;
+
+    const Expected<usize> currentIndex = FindTargetIndexInTable(targets, lookup, inOutFocus, inOutFocusDeclaration);
+    b8 hasCurrent = false;
+    HitTarget current;
+    if(currentIndex.has_value()){
+        const HitTarget candidateCurrent = targets[currentIndex.value()];
+        if(candidateCurrent.focusable && IsRouterTargetInteractive(targets, lookup, popups, candidateCurrent)){
+            hasCurrent = true;
+            current = candidateCurrent;
+        }
+    }
+
+    if(hasCurrent){
+        WidgetId overrideId;
+        if(direction == FocusDirection::Up)
+            overrideId = current.focusNeighborUp;
+        else if(direction == FocusDirection::Down)
+            overrideId = current.focusNeighborDown;
+        else if(direction == FocusDirection::Left)
+            overrideId = current.focusNeighborLeft;
+        else
+            overrideId = current.focusNeighborRight;
+
+        if(overrideId.valid() && overrideId != current.id){
+            const Expected<usize> neighborIdx = FindTargetIndexInTable(targets, lookup, overrideId, 0u);
+            if(neighborIdx.has_value()){
+                const HitTarget neighbor = targets[neighborIdx.value()];
+                const b8 groupOk = !current.trapDirectionalFocus || current.focusGroup == 0u || neighbor.focusGroup == current.focusGroup;
+                if(groupOk && neighbor.focusable && IsRouterTargetInteractive(targets, lookup, popups, neighbor)){
+                    AssignRouterFocus(neighbor, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+                    return true;
+                }
+            }
+        }
+
+        const VectorSingle curBounds = ComputeVisibleSpatialBounds(current);
+        const f32 curCx = (curBounds.x + curBounds.z) * 0.5f;
+        const f32 curCy = (curBounds.y + curBounds.w) * 0.5f;
+
+        b8 hasBest = false;
+        usize bestIndex = 0u;
+        u32 bestTier = 2u;
+        f32 bestScore = 0.0f;
+        u32 bestPaintOrder = 0u;
+
+        for(usize index = 0u; index < targets.size(); ++index){
+            const HitTarget cand = targets[index];
+            if(cand.id == current.id || !cand.focusable || !IsRouterTargetInteractive(targets, lookup, popups, cand))
+                continue;
+            if(current.trapDirectionalFocus && current.focusGroup != 0u && cand.focusGroup != current.focusGroup)
+                continue;
+
+            const VectorSingle candBounds = ComputeVisibleSpatialBounds(cand);
+            const f32 candCx = (candBounds.x + candBounds.z) * 0.5f;
+            const f32 candCy = (candBounds.y + candBounds.w) * 0.5f;
+
+            f32 primaryDelta = 0.0f;
+            f32 primaryEdgeGap = 0.0f;
+            f32 curPerpMin = 0.0f;
+            f32 curPerpMax = 0.0f;
+            f32 candPerpMin = 0.0f;
+            f32 candPerpMax = 0.0f;
+            f32 curPerpCenter = 0.0f;
+            f32 candPerpCenter = 0.0f;
+
+            if(direction == FocusDirection::Right){
+                primaryDelta = candCx - curCx;
+                primaryEdgeGap = candBounds.x - curBounds.z;
+                curPerpMin = curBounds.y;
+                curPerpMax = curBounds.w;
+                candPerpMin = candBounds.y;
+                candPerpMax = candBounds.w;
+                curPerpCenter = curCy;
+                candPerpCenter = candCy;
+            }
+            else if(direction == FocusDirection::Left){
+                primaryDelta = curCx - candCx;
+                primaryEdgeGap = curBounds.x - candBounds.z;
+                curPerpMin = curBounds.y;
+                curPerpMax = curBounds.w;
+                candPerpMin = candBounds.y;
+                candPerpMax = candBounds.w;
+                curPerpCenter = curCy;
+                candPerpCenter = candCy;
+            }
+            else if(direction == FocusDirection::Down){
+                primaryDelta = candCy - curCy;
+                primaryEdgeGap = candBounds.y - curBounds.w;
+                curPerpMin = curBounds.x;
+                curPerpMax = curBounds.z;
+                candPerpMin = candBounds.x;
+                candPerpMax = candBounds.z;
+                curPerpCenter = curCx;
+                candPerpCenter = candCx;
+            }
+            else{
+                primaryDelta = curCy - candCy;
+                primaryEdgeGap = curBounds.y - candBounds.w;
+                curPerpMin = curBounds.x;
+                curPerpMax = curBounds.z;
+                candPerpMin = candBounds.x;
+                candPerpMax = candBounds.z;
+                curPerpCenter = curCx;
+                candPerpCenter = candCx;
+            }
+
+            if(primaryDelta <= 0.5f)
+                continue;
+
+            const f32 overlap = UiSimdMin(curPerpMax, candPerpMax) - UiSimdMax(curPerpMin, candPerpMin);
+            const f32 perpAbs = Abs(VectorSingle(candPerpCenter - curPerpCenter)).x;
+            u32 tier = 0u;
+            f32 score = 0.0f;
+            if(overlap > 0.0f){
+                tier = 0u;
+                score = UiSimdMax(0.0f, primaryEdgeGap) * 2.0f + primaryDelta + perpAbs * 0.25f;
+            }
+            else{
+                if(perpAbs > primaryDelta * 2.5f + 32.0f)
+                    continue;
+                tier = 1u;
+                score = primaryDelta + UiSimdMax(0.0f, -overlap) * 3.0f + perpAbs * 1.5f;
+            }
+
+            if(!hasBest
+                || tier < bestTier
+                || (tier == bestTier && score < bestScore)
+                || (tier == bestTier && score == bestScore && cand.paintOrder < bestPaintOrder)
+            ){
+                hasBest = true;
+                bestIndex = index;
+                bestTier = tier;
+                bestScore = score;
+                bestPaintOrder = cand.paintOrder;
+            }
+        }
+
+        if(!hasBest)
+            return false;
+        AssignRouterFocus(targets[bestIndex], commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+        return true;
+    }
+
+    b8 hasEntry = false;
+    usize entryIndex = 0u;
+    f32 entryScore = 0.0f;
+    u32 entryPaintOrder = 0u;
+    const b8 forwardEntry = direction == FocusDirection::Down || direction == FocusDirection::Right;
+
+    for(usize index = 0u; index < targets.size(); ++index){
+        const HitTarget cand = targets[index];
+        if(!cand.focusable || !IsRouterTargetInteractive(targets, lookup, popups, cand))
+            continue;
+        const VectorSingle bounds = ComputeVisibleSpatialBounds(cand);
+        f32 score = 0.0f;
+        if(forwardEntry)
+            score = bounds.y * 4096.0f + bounds.x;
+        else
+            score = -bounds.w * 4096.0f - bounds.z;
+
+        if(!hasEntry || score < entryScore || (score == entryScore && cand.paintOrder < entryPaintOrder)){
+            hasEntry = true;
+            entryIndex = index;
+            entryScore = score;
+            entryPaintOrder = cand.paintOrder;
+        }
+    }
+
+    if(!hasEntry)
+        return false;
+    AssignRouterFocus(targets[entryIndex], commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

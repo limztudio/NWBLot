@@ -1256,6 +1256,59 @@ void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlace
     }
 }
 
+void VerifyUiImageLayoutTests_UvSubRectAndContainCoverFitModesComputeExactGeometry(){
+    const UiSkinRegion region = MakeUiImageLayoutSprite();
+    ImageOptions subOptions = ImageOptions();
+    subOptions.uvRect = Rect(0.25f, 0.5f, 0.5f, 0.5f);
+    const Expected<ImageMetrics> subMetrics = MeasureImage(subOptions, region, 2.0f);
+    ASSERT_TRUE(subMetrics.has_value());
+    ExpectUiImageLayoutMetrics(subMetrics.value(), 50.0f, 25.0f);
+
+    ImageOptions invalidUv = ImageOptions();
+    invalidUv.uvRect = Rect(0.6f, 0.0f, 0.5f, 1.0f);
+    EXPECT_FALSE(MeasureImage(invalidUv, region, 1.0f).has_value());
+    invalidUv.uvRect = Rect(0.0f, 0.0f, 0.0f, 1.0f);
+    EXPECT_FALSE(MeasureImage(invalidUv, region, 1.0f).has_value());
+    invalidUv.uvRect = Rect(0.0f, 0.0f, 1.0f, 1.0f);
+    invalidUv.fitMode = cast<ImageFitMode>(9u);
+    EXPECT_FALSE(MeasureImage(invalidUv, region, 1.0f).has_value());
+
+    const Rect wideBox = Rect(10.0f, 20.0f, 100.0f, 40.0f);
+    const Expected<ImagePlacement> containWide = PlaceImage(wideBox, wideBox, Point(20.0f, 20.0f), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Contain);
+    ASSERT_TRUE(containWide.has_value());
+    ExpectUiRectExact(containWide.value().drawBounds, Rect(40.0f, 20.0f, 40.0f, 40.0f));
+    ExpectUiRectExact(containWide.value().uvRect, Rect(0.0f, 0.0f, 1.0f, 1.0f));
+
+    const Expected<ImagePlacement> coverWide = PlaceImage(wideBox, wideBox, Point(20.0f, 20.0f), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Cover);
+    ASSERT_TRUE(coverWide.has_value());
+    ExpectUiRectExact(coverWide.value().drawBounds, wideBox);
+    ExpectUiRect(coverWide.value().uvRect, Rect(0.0f, 0.3f, 1.0f, 0.4f));
+
+    const Expected<ImagePlacement> coverTall = PlaceImage(Rect(0.0f, 0.0f, 20.0f, 40.0f), Rect(0.0f, 0.0f, 20.0f, 40.0f), Point(40.0f, 20.0f), Rect(0.2f, 0.1f, 0.6f, 0.8f), ImageFitMode::Cover);
+    ASSERT_TRUE(coverTall.has_value());
+    EXPECT_NEAR(coverTall.value().uvRect.x, 0.425f, 0.0001f);
+    EXPECT_NEAR(coverTall.value().uvRect.width, 0.15f, 0.0001f);
+    EXPECT_FLOAT_EQ(coverTall.value().uvRect.y, 0.1f);
+    EXPECT_FLOAT_EQ(coverTall.value().uvRect.height, 0.8f);
+}
+
+void VerifyUiImageBuilderTests_SubRectAndFitModesEmitMappedUvsAndClippedBounds(mut UiImageBuilderTests self){
+    ASSERT_TRUE(self.panel(1u));
+    ImageOptions options = MakeFixedImageFixtureOptions(40.0f, 12.0f);
+    options.uvRect = Rect(0.25f, 0.5f, 0.5f, 0.5f);
+    options.fitMode = ImageFitMode::Contain;
+    ASSERT_TRUE(self.m_builder.image("sprite", s_UiImageBuilderSpriteRegionName, options));
+    ASSERT_TRUE(self.finishPanel());
+    const DrawSnapshot snapshot = self.m_paint.freeze();
+    const Expected<UiFixtureSkinPaintSample> sprite = self.sampleSkinPaint(snapshot, s_UiImageBuilderSpriteRegionName);
+    ASSERT_TRUE(sprite.has_value());
+    EXPECT_FLOAT_EQ(sprite.value().bounds.width, 20.0f);
+    EXPECT_FLOAT_EQ(sprite.value().bounds.height, 12.0f);
+    EXPECT_FLOAT_EQ(sprite.value().bounds.x, 23.0f);
+    EXPECT_NEAR(sprite.value().maximumU, 15.0f / 128.0f, 0.0001f);
+    EXPECT_TRUE(self.m_context.commitFrame(1u));
+}
+
 void VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone(mut ImageLoaderTests self){
     const Expected<SharedImageSource> imageResult = LoadImageSource(self.m_pool, self.assets(), self.m_identity);
     ASSERT_TRUE(imageResult.has_value());
@@ -1645,6 +1698,8 @@ NWB_ADHD_GTEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAccept
 
 NWB_ADHD_GTEST_F(UiImageBuilderTests, NonfiniteTintRejectsWithoutReplacingAcceptedTargets, VerifyUiImageBuilderTests_NonfiniteTintRejectsWithoutReplacingAcceptedTargets)
 
+NWB_ADHD_GTEST_F(UiImageBuilderTests, SubRectAndFitModesEmitMappedUvsAndClippedBounds, VerifyUiImageBuilderTests_SubRectAndFitModesEmitMappedUvsAndClippedBounds)
+
 NWB_ADHD_GTEST(UiImageLayoutTests, NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExtent, VerifyUiImageLayoutTests_NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExtent)
 
 NWB_ADHD_GTEST(UiImageLayoutTests, EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins, VerifyUiImageLayoutTests_EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins)
@@ -1658,6 +1713,8 @@ NWB_ADHD_GTEST(UiImageLayoutTests, InvalidRegionExtentMinimumsAndSliceMetadataRe
 NWB_ADHD_GTEST(UiImageLayoutTests, UnrepresentableNaturalExtentRejectsMeasurement, VerifyUiImageLayoutTests_UnrepresentableNaturalExtentRejectsMeasurement)
 
 NWB_ADHD_GTEST(UiImageLayoutTests, InvalidAndCollapsedProspectiveEndpointsRejectPlacement, VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlacement)
+
+NWB_ADHD_GTEST(UiImageLayoutTests, UvSubRectAndContainCoverFitModesComputeExactGeometry, VerifyUiImageLayoutTests_UvSubRectAndContainCoverFitModesComputeExactGeometry)
 
 NWB_ADHD_GTEST_F(ImageLoaderTests, RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone, VerifyImageLoaderTests_RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndBinaryAreGone)
 

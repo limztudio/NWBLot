@@ -16,6 +16,39 @@ enum<u8> CharacterGroundState{
     InAir = 3u
 }
 
+[reflect]
+enum<u8> CharacterShapeType{
+    Capsule = 0u,
+    Box = 1u,
+    Cylinder = 2u,
+    Sphere = 3u,
+    kCount
+}
+
+[reflect]
+enum<u8> CharacterControllerEventType{
+    Landed = 0u,
+    LeftGround = 1u,
+    WallHit = 2u,
+    CeilingHit = 3u,
+    StepUp = 4u,
+    kCount
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CharacterControllerEvent{
+    public CharacterControllerEventType type = CharacterControllerEventType::Landed;
+    public BodyId otherBodyId;
+    public ShapeId otherShapeId;
+    public u32 triangleIndex = s_NullIndex;
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32 speed = 0.0f;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,13 +75,56 @@ class CharacterControllerDef{
     public f32 predictiveContactDistance = 0.08f;
     public u32 maxCollisionIterations = 4u;
     public u32 maxConstraintIterations = 4u;
+    public CharacterShapeType shapeType = CharacterShapeType::Capsule;
+    public f32x4 boxHalfExtents(0.35f, 0.9f, 0.35f, 0.0f);
     public Filter filter;
     public BodyId ignoreBodyId;
     public ShapeId ignoreShapeId;
     public b8 hitSensors = false;
     public b8 stickToFloor = true;
     public b8 pushDynamicBodies = true;
+    public b8 applyStandingWeight = true;
+    public b8 followPlatformPitchRoll = false;
     public f32x4 up(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
+VectorSingle SolveCharacterMultiPlaneLcp(in Span<f32x4> planeNormals, in VectorSingle desiredVec){
+    const usize n = Min(planeNormals.size(), cast<usize>(8u));
+    if(n == 0u)
+        return VectorSingle(desiredVec, 0.0f);
+    const VectorSingle desired(desiredVec, 0.0f);
+    if(Vector3LengthSq(desired).x <= 1.0e-12f)
+        return VectorSingle(0.0f);
+
+    Array<f32, 8u> lambdas;
+    for(usize i = 0u; i < n; ++i)
+        lambdas[i] = 0.0f;
+    VectorSingle v = desired;
+
+    for(u32 iter = 0u; iter < 24u; ++iter){
+        for(usize i = 0u; i < n; ++i){
+            const VectorSingle ni = SafeNormalizeVec3(VectorSingle(planeNormals[i]), VectorSingle(0.0f));
+            if(Vector3LengthSq(ni).x <= 1.0e-8f)
+                continue;
+            const f32 c = Vector3Dot(ni, v).x;
+            const f32 oldL = lambdas[i];
+            const f32 newL = SimdMax(0.0f, oldL - c);
+            const f32 dl = newL - oldL;
+            if(dl != 0.0f){
+                v = v + ni * dl;
+                lambdas[i] = newL;
+            }
+        }
+    }
+
+    if(Vector3Dot(v, desired).x <= 1.0e-8f)
+        return VectorSingle(0.0f);
+    for(usize i = 0u; i < n; ++i){
+        const VectorSingle ni = SafeNormalizeVec3(VectorSingle(planeNormals[i]), VectorSingle(0.0f));
+        if(Vector3LengthSq(ni).x > 1.0e-8f && Vector3Dot(ni, v).x < -1.0e-3f)
+            return VectorSingle(0.0f);
+    }
+    return v;
 }
 
 class CharacterController{
@@ -68,6 +144,7 @@ class CharacterController{
     public Transform3D prevGroundTransform;
     public b8 hasPrevGroundTransform = false;
     public Vector<CharacterContactInfo> activeContacts;
+    public Vector<CharacterControllerEvent> stepEvents;
     private f32x4 m_groundConveyorVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     private Vector<ShapeOverlapHit> m_scratchHits;
     private Vector<CharacterContactInfo> m_scratchStepContacts;
@@ -107,10 +184,13 @@ class CharacterController{
 
     private void sanitizeAndRefreshDef(in CharacterControllerDef inDef){
         this.def = inDef;
+        if(cast<u8>(this.def.shapeType) >= cast<u8>(CharacterShapeType::kCount))
+            this.def.shapeType = CharacterShapeType::Capsule;
         if(this.def.radius < 0.05f)
             this.def.radius = 0.05f;
         if(this.def.halfHeight < 0.0f)
             this.def.halfHeight = 0.0f;
+        this.def.boxHalfExtents = f32x4(Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f)), 0.0f);
         if(this.def.skinWidth < 0.002f)
             this.def.skinWidth = 0.002f;
         if(this.def.maxCollisionIterations == 0u)
@@ -127,6 +207,19 @@ class CharacterController{
 
     public void applyDefInPlace(in CharacterControllerDef inDef){
         this.sanitizeAndRefreshDef(inDef);
+    }
+
+    public VectorSingle snapshotGroundConveyorVelocity()const{
+        return VectorSingle(this.m_groundConveyorVelocity);
+    }
+
+    public void finalizeSnapshotRestore(in VectorSingle groundConveyorVel){
+        this.m_groundConveyorVelocity = f32x4(groundConveyorVel, 0.0f);
+        this.m_cachedSlopeAngleRad = -1.0f;
+        this.syncWalkableCos();
+        this.m_cachedProxyRadius = -1.0f;
+        this.syncCachedProxies();
+        this.stepEvents.clear();
     }
 
     public void init(in CharacterControllerDef inDef, in VectorSingle startPosition, in VectorSingle startRotation){
@@ -147,10 +240,27 @@ class CharacterController{
         this.prevGroundTransform = Transform3D();
         this.hasPrevGroundTransform = false;
         this.activeContacts.clear();
+        this.stepEvents.clear();
     }
 
     public VectorSingle upDirection()const{
         return VectorSingle(this.def.up);
+    }
+
+    public f32 footHalfHeight()const{
+        if(this.def.shapeType == CharacterShapeType::Cylinder)
+            return SimdMax(0.01f, this.def.halfHeight);
+        if(this.def.shapeType == CharacterShapeType::Sphere)
+            return this.def.radius;
+        if(this.def.shapeType == CharacterShapeType::Box)
+            return SimdMax(0.05f, this.def.boxHalfExtents.y);
+        return this.def.halfHeight + this.def.radius;
+    }
+
+    public f32 horizontalExtent()const{
+        if(this.def.shapeType == CharacterShapeType::Box)
+            return SimdMax(SimdMax(0.05f, this.def.boxHalfExtents.x), SimdMax(0.05f, this.def.boxHalfExtents.z));
+        return this.def.radius;
     }
 
     public b8 isWalkableNormal(in VectorSingle normal)const{
@@ -178,31 +288,54 @@ class CharacterController{
         return MakeCapsuleProxy(cap);
     }
 
-    private ShapeProxyView makeCapsuleProxyView(in f32 extraRadius, mut Array<f32x3u, 2u> outPts)const{
+    private ShapeProxyView makeShapeProxyView(in f32 extraRadius, mut Array<f32x3u, 8u> outPts)const{
+        const f32 extra = SimdMax(0.0f, extraRadius);
+        if(this.def.shapeType == CharacterShapeType::Sphere){
+            outPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
+            return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 1u), this.def.radius + extra);
+        }
+        if(this.def.shapeType == CharacterShapeType::Cylinder){
+            ShapeProxyView view;
+            view.kind = ProxyKind::Cylinder;
+            view.param0 = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
+            view.param1 = f32x4(SimdMax(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
+            view.radius = extra;
+            return view;
+        }
+        if(this.def.shapeType == CharacterShapeType::Box){
+            const VectorSingle he = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
+            usize ci = 0u;
+            for(u32 iz = 0u; iz < 2u; ++iz){
+                f32 sz = -he.z;
+                if(iz != 0u) sz = he.z;
+                for(u32 iy = 0u; iy < 2u; ++iy){
+                    f32 sy = -he.y;
+                    if(iy != 0u) sy = he.y;
+                    for(u32 ix = 0u; ix < 2u; ++ix){
+                        f32 sx = -he.x;
+                        if(ix != 0u) sx = he.x;
+                        outPts[ci] = f32x3u(sx, sy, sz);
+                        ++ci;
+                    }
+                }
+            }
+            return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 8u), extra);
+        }
         outPts[0u] = f32x3u(0.0f, -this.def.halfHeight, 0.0f);
         outPts[1u] = f32x3u(0.0f, this.def.halfHeight, 0.0f);
-        return MakeSpanProxyView(Span<f32x3u>(outPts), this.def.radius + SimdMax(0.0f, extraRadius));
+        return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 2u), this.def.radius + extra);
     }
 
     private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius){
-        Array<f32x3u, 2u> pts;
-        const ShapeProxyView view = this.makeCapsuleProxyView(extraRadius, pts);
+        Array<f32x3u, 8u> pts;
+        const ShapeProxyView view = this.makeShapeProxyView(extraRadius, pts);
         const Transform3D xf(testPos, VectorSingle(this.rotation));
-        if(!world.m_customFilterCallback.has_value()){
-            world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchHits);
-            return;
-        }
-        in PhysicsWorld worldRef = world;
-        const ShapeId igShapeId = this.def.ignoreShapeId;
-        const ShapeQueryFilterCallback cb = lambda[in worldRef, in igShapeId](in ShapeId sId) -> b8{
-            return worldRef.passesCustomFilter(igShapeId, sId);
-        };
-        world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, cb, this.m_scratchHits);
+        world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchHits);
     }
 
     private ShapeCastHit castCapsule(in PhysicsWorld world, in VectorSingle fromPos, in VectorSingle delta)const{
-        Array<f32x3u, 2u> pts;
-        const ShapeProxyView view = this.makeCapsuleProxyView(0.0f, pts);
+        Array<f32x3u, 8u> pts;
+        const ShapeProxyView view = this.makeShapeProxyView(0.0f, pts);
         ShapeCastInput input;
         input.originTransform = Transform3D(fromPos, VectorSingle(this.rotation));
         input.translation = f32x4(delta, 0.0f);
@@ -301,11 +434,30 @@ class CharacterController{
         this.position = f32x4(pos, 0.0f);
     }
 
+    private void pushOrMergeStepEvent(in CharacterControllerEvent ev){
+        if(ev.type == CharacterControllerEventType::WallHit || ev.type == CharacterControllerEventType::CeilingHit){
+            for(usize i = 0u; i < this.stepEvents.size(); ++i){
+                mut CharacterControllerEvent ex = this.stepEvents[i];
+                if(ex.type == ev.type && ex.otherShapeId == ev.otherShapeId){
+                    if(ev.speed > ex.speed){
+                        ex.speed = ev.speed;
+                        ex.point = ev.point;
+                        ex.normal = ev.normal;
+                        ex.triangleIndex = ev.triangleIndex;
+                    }
+                    return;
+                }
+            }
+        }
+        this.stepEvents.push_back(ev);
+    }
+
     private VectorSingle slideMoveFrom(
         in VectorSingle startPos,
         in VectorSingle initialDelta,
         in f32 dt,
         in b8 pushBodies,
+        in b8 emitSlideEvents,
         mut PhysicsWorld world,
         mut Vector<CharacterContactInfo> dstContacts,
         mut b8 outHitObstacle,
@@ -321,7 +473,7 @@ class CharacterController{
         VectorSingle curPos = startPos;
         VectorSingle remDelta = initialDelta;
         f32 remFrac = 1.0f;
-        FixedVector<f32x4, 4u> clipPlanes;
+        FixedVector<f32x4, 8u> clipPlanes;
 
         for(u32 iter = 0u; iter < this.def.maxCollisionIterations; ++iter){
             const f32 remLenSq = Vector3LengthSq(VectorSingle(remDelta, 0.0f)).x;
@@ -345,6 +497,21 @@ class CharacterController{
                 outHitSteepWall = true;
 
             const VectorSingle approachVel = remDelta / SimdMax(dt * remFrac, 1.0e-4f);
+            if(emitSlideEvents && (nDotUp < -0.5f || !walkable)){
+                CharacterControllerEvent ev;
+                if(nDotUp < -0.5f)
+                    ev.type = CharacterControllerEventType::CeilingHit;
+                else
+                    ev.type = CharacterControllerEventType::WallHit;
+                ev.otherShapeId = hit.shapeId;
+                ev.triangleIndex = hit.triangleIndex;
+                if(hit.shapeId.valid() && world.isValidShape(hit.shapeId))
+                    ev.otherBodyId = world.makeBodyId(world.m_shapes[hit.shapeId.index].bodyId);
+                ev.point = hit.point;
+                ev.normal = f32x4(n, 0.0f);
+                ev.speed = SimdMax(0.0f, -Vector3Dot(approachVel, n).x);
+                this.pushOrMergeStepEvent(ev);
+            }
             const f32 safeFrac = SimdMax(0.0f, hit.fraction - 0.002f);
             f32 pushClear = 2.0e-4f;
             if(hit.fraction <= 1.0e-4f)
@@ -359,22 +526,13 @@ class CharacterController{
 
             VectorSingle clipN = n;
             if(!walkable && nDotUp > 0.05f){
-                const VectorSingle nHoriz = SafeNormalizeVec3(n - up * nDotUp, n);
-                clipN = nHoriz;
-                const f32 intoH = Vector3Dot(remDelta, nHoriz).x;
-                if(intoH < 0.0f)
-                    remDelta = remDelta - nHoriz * intoH;
+                clipN = SafeNormalizeVec3(n - up * nDotUp, n);
                 const f32 remUp = Vector3Dot(remDelta, up).x;
                 if(remUp > 0.0f)
                     remDelta = remDelta - up * remUp;
             }
-            else{
-                const f32 intoN = Vector3Dot(remDelta, n).x;
-                if(intoN < 0.0f)
-                    remDelta = remDelta - n * intoN;
-            }
 
-            if(!walkable){
+            if(!walkable || !clipPlanes.empty() || iter == 0u){
                 b8 dupPlane = false;
                 for(usize pi = 0u; pi < clipPlanes.size(); ++pi){
                     if(Vector3Dot(VectorSingle(clipPlanes[pi]), clipN).x >= 0.999f){
@@ -382,58 +540,16 @@ class CharacterController{
                         break;
                     }
                 }
-                if(!dupPlane && clipPlanes.size() < 4u)
+                if(!dupPlane && clipPlanes.size() < 8u)
                     clipPlanes.push_back(f32x4(clipN, 0.0f));
-
-                if(clipPlanes.size() == 2u){
-                    const VectorSingle p0 = VectorSingle(clipPlanes[0u]);
-                    const VectorSingle p1 = VectorSingle(clipPlanes[1u]);
-                    if(Vector3Dot(p0, p1).x < 0.99f){
-                        const VectorSingle crease = SafeNormalizeVec3(Cross(p0, p1), VectorSingle(0.0f));
-                        if(Vector3LengthSq(VectorSingle(crease, 0.0f)).x > 1.0e-6f)
-                            remDelta = crease * Vector3Dot(remDelta, crease).x;
-                        else
-                            remDelta = VectorSingle(0.0f);
-                    }
-                }
-                else if(clipPlanes.size() >= 3u){
-                    const usize pCount = clipPlanes.size();
-                    b8 validSlide = true;
-                    for(usize pi = 0u; pi < pCount; ++pi){
-                        if(Vector3Dot(remDelta, VectorSingle(clipPlanes[pi])).x < -1.0e-4f){
-                            validSlide = false;
-                            break;
-                        }
-                    }
-                    if(!validSlide){
-                        b8 foundCrease = false;
-                        for(usize pa = 0u; pa < pCount && !foundCrease; ++pa){
-                            const VectorSingle planeA = VectorSingle(clipPlanes[pa]);
-                            for(usize pb = pa + 1u; pb < pCount && !foundCrease; ++pb){
-                                const VectorSingle planeB = VectorSingle(clipPlanes[pb]);
-                                if(Vector3Dot(planeA, planeB).x >= 0.99f)
-                                    continue;
-                                const VectorSingle crease = SafeNormalizeVec3(Cross(planeA, planeB), VectorSingle(0.0f));
-                                if(Vector3LengthSq(VectorSingle(crease, 0.0f)).x <= 1.0e-6f)
-                                    continue;
-                                const VectorSingle cand = crease * Vector3Dot(remDelta, crease).x;
-                                b8 candOk = (Vector3LengthSq(VectorSingle(cand, 0.0f)).x > 1.0e-10f);
-                                for(usize pk = 0u; pk < pCount && candOk; ++pk){
-                                    if(pk != pa && pk != pb && Vector3Dot(cand, VectorSingle(clipPlanes[pk])).x < -1.0e-4f)
-                                        candOk = false;
-                                }
-                                if(candOk){
-                                    remDelta = cand;
-                                    foundCrease = true;
-                                }
-                            }
-                        }
-                        if(!foundCrease){
-                            remDelta = VectorSingle(0.0f);
-                            break;
-                        }
-                    }
-                }
+            }
+            if(!clipPlanes.empty()){
+                remDelta = SolveCharacterMultiPlaneLcp(Span<f32x4>(clipPlanes.data(), clipPlanes.size()), remDelta);
+            }
+            else{
+                const f32 intoN = Vector3Dot(remDelta, clipN).x;
+                if(intoN < 0.0f)
+                    remDelta = remDelta - clipN * intoN;
             }
         }
 
@@ -464,7 +580,7 @@ class CharacterController{
         b8 hitSteep = false;
         b8 hitCeil = false;
         VectorSingle unusedN(0.0f);
-        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
+        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, false, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
 
         const VectorSingle downVec = up * (-(lifted + this.def.stepDownHeight));
         ShapeCastHit downHit = this.castCapsule(world, movedTop, downVec);
@@ -478,11 +594,11 @@ class CharacterController{
             const f32 horizLenSq = Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x;
             if(horizLenSq <= 1.0e-10f)
                 return false;
-            const f32 effR = this.def.radius + this.def.skinWidth;
+            const f32 effR = this.horizontalExtent() + this.def.skinWidth;
             const f32 maxSlopeSin = SqrtFast(SimdMax(0.0f, 1.0f - this.m_minWalkableCos * this.m_minWalkableCos));
             const f32 extraForward = effR * (1.0f - maxSlopeSin) + 0.02f;
             const VectorSingle extraHoriz = horizDelta * (extraForward * Rsqrt(VectorSingle(horizLenSq)).x);
-            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
+            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, false, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
             const ShapeCastHit probeDown = this.castCapsule(world, probeTop, downVec);
             if(!probeDown.hit)
                 return false;
@@ -663,6 +779,7 @@ class CharacterController{
     }
 
     public void update(mut PhysicsWorld world, in f32 dt){
+        this.stepEvents.clear();
         if(dt <= 0.0f)
             return;
         world.ensureCpuBroadphaseSynced();
@@ -671,7 +788,9 @@ class CharacterController{
         this.activeContacts.clear();
         this.hitCeiling = false;
         const VectorSingle up = this.upDirection();
-        const b8 wasOnGround = (this.groundState == CharacterGroundState::OnGround);
+        const CharacterGroundState prevGroundState = this.groundState;
+        const b8 wasOnGround = (prevGroundState == CharacterGroundState::OnGround);
+        const b8 wasGroundedAny = (prevGroundState == CharacterGroundState::OnGround || prevGroundState == CharacterGroundState::OnSteepGround);
 
         if(wasOnGround && this.hasPrevGroundTransform && this.groundBodyId.valid() && world.isValidBody(this.groundBodyId)){
             const Expected<Transform3D> curGroundRes = world.tryGetBodyTransform(this.groundBodyId);
@@ -679,9 +798,27 @@ class CharacterController{
                 in Transform3D curG = curGroundRes.value();
                 const VectorSingle localP = InverseTransformPointValues(VectorSingle(this.prevGroundTransform.position), VectorSingle(this.prevGroundTransform.rotation), VectorSingle(this.position));
                 const VectorSingle carriedP = TransformPointValues(VectorSingle(curG.position), VectorSingle(curG.rotation), localP);
-                this.position = f32x4(carriedP, 0.0f);
-                const VectorSingle dQ = QuaternionMultiply(VectorSingle(curG.rotation), QuaternionConjugate(VectorSingle(this.prevGroundTransform.rotation)));
-                this.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(dQ, VectorSingle(this.rotation))));
+                const VectorSingle carryDelta = carriedP - VectorSingle(this.position);
+                if(Vector3LengthSq(VectorSingle(carryDelta, 0.0f)).x > 1.0e-10f){
+                    this.m_scratchStepContacts.clear();
+                    b8 carryObs = false;
+                    b8 carrySteep = false;
+                    b8 carryCeil = false;
+                    VectorSingle carryN = up;
+                    const VectorSingle carriedEnd = this.slideMoveFrom(VectorSingle(this.position), carryDelta, dt, false, false, world, this.m_scratchStepContacts, carryObs, carrySteep, carryCeil, carryN);
+                    this.position = f32x4(carriedEnd, 0.0f);
+                    for(usize ci = 0u; ci < this.m_scratchStepContacts.size(); ++ci){
+                        in CharacterContactInfo sc = this.m_scratchStepContacts[ci];
+                        this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
+                    }
+                }
+                const VectorSingle dQ = SafeNormalizeQuat(QuaternionMultiply(VectorSingle(curG.rotation), QuaternionConjugate(VectorSingle(this.prevGroundTransform.rotation))));
+                VectorSingle applyRotQ = dQ;
+                if(!this.def.followPlatformPitchRoll){
+                    const VectorSingle proj = up * Vector3Dot(VectorSingle(dQ.x, dQ.y, dQ.z, 0.0f), up).x;
+                    applyRotQ = SafeNormalizeQuat(VectorSingle(proj.x, proj.y, proj.z, dQ.w));
+                }
+                this.rotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(applyRotQ, VectorSingle(this.rotation))));
             }
         }
 
@@ -702,7 +839,7 @@ class CharacterController{
         VectorSingle flatEndPos = curPos;
 
         const f32 fullDistSq = Vector3LengthSq(VectorSingle(fullDelta, 0.0f)).x;
-        const f32 maxStepDist = SimdMax(0.1f, this.def.radius * 0.75f);
+        const f32 maxStepDist = SimdMax(0.1f, this.horizontalExtent() * 0.75f);
         u32 moveSubSteps = 1u;
         if(fullDistSq > maxStepDist * maxStepDist){
             const f32 fullDist = SqrtFast(fullDistSq);
@@ -716,7 +853,7 @@ class CharacterController{
             b8 subSteep = false;
             b8 subCeil = false;
             VectorSingle subEndN = up;
-            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, world, this.activeContacts, subObs, subSteep, subCeil, subEndN);
+            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, world, this.activeContacts, subObs, subSteep, subCeil, subEndN);
             if(subObs)
                 hitObs = true;
             if(subSteep)
@@ -745,6 +882,18 @@ class CharacterController{
                         in CharacterContactInfo sc = this.m_scratchStepContacts[si];
                         this.recordContactTo(world, sc.shapeId, sc.triangleIndex, VectorSingle(sc.point), VectorSingle(sc.normal), sc.penetrationDepth, this.activeContacts);
                     }
+                    CharacterControllerEvent stepEv;
+                    stepEv.type = CharacterControllerEventType::StepUp;
+                    if(!this.m_scratchStepContacts.empty()){
+                        in CharacterContactInfo sc0 = this.m_scratchStepContacts[0u];
+                        stepEv.otherBodyId = sc0.bodyId;
+                        stepEv.otherShapeId = sc0.shapeId;
+                        stepEv.triangleIndex = sc0.triangleIndex;
+                    }
+                    stepEv.point = f32x4(steppedPos, 0.0f);
+                    stepEv.normal = f32x4(up, 0.0f);
+                    stepEv.speed = SimdMax(0.0f, Vector3Dot(steppedPos - curPos, up).x);
+                    this.stepEvents.push_back(stepEv);
                 }
             }
         }
@@ -767,6 +916,42 @@ class CharacterController{
 
         this.depenetrate(world);
         this.updateGroundState(world);
+        const b8 nowGroundedAny = (this.groundState == CharacterGroundState::OnGround || this.groundState == CharacterGroundState::OnSteepGround);
+        if(!wasGroundedAny && nowGroundedAny){
+            CharacterControllerEvent landEv;
+            landEv.type = CharacterControllerEventType::Landed;
+            landEv.otherBodyId = this.groundBodyId;
+            landEv.otherShapeId = this.groundShapeId;
+            landEv.triangleIndex = this.groundTriangleIndex;
+            landEv.point = this.groundPoint;
+            landEv.normal = this.groundNormal;
+            landEv.speed = SimdMax(0.0f, -Vector3Dot(vel, up).x);
+            this.stepEvents.push_back(landEv);
+        }
+        else if(wasGroundedAny && !nowGroundedAny){
+            CharacterControllerEvent airEv;
+            airEv.type = CharacterControllerEventType::LeftGround;
+            airEv.point = this.position;
+            airEv.normal = this.groundNormal;
+            airEv.speed = Abs(VectorSingle(Vector3Dot(VectorSingle(this.linearVelocity), up).x)).x;
+            this.stepEvents.push_back(airEv);
+        }
+
+        if(
+            this.def.applyStandingWeight
+            && this.def.pushDynamicBodies
+            && dt > 0.0f
+            && (this.groundState == CharacterGroundState::OnGround || this.groundState == CharacterGroundState::OnSteepGround)
+            && this.groundBodyId.valid()
+            && world.isValidBody(this.groundBodyId)
+        ){
+            const Expected<BodyType> gbType = world.tryGetBodyType(this.groundBodyId);
+            if(gbType.has_value() && gbType.value() == BodyType::Dynamic && this.def.mass > 0.0f){
+                const f32 gIntoGround = -Vector3Dot(world.gravity(), VectorSingle(this.groundNormal)).x;
+                if(gIntoGround > 0.0f)
+                    world.applyLinearImpulseAtPoint(this.groundBodyId, VectorSingle(this.groundNormal) * (-(this.def.mass * gIntoGround * dt)), VectorSingle(this.groundPoint), true);
+            }
+        }
 
         if(this.def.ignoreBodyId.valid() && world.isValidBody(this.def.ignoreBodyId)){
             const Transform3D targetXf(VectorSingle(this.position), VectorSingle(this.rotation));
@@ -774,15 +959,84 @@ class CharacterController{
         }
     }
 
-    public b8 trySetShapeDimensions(in PhysicsWorld world, in f32 newRadius, in f32 newHalfHeight){
-        if(newRadius < 0.05f || newHalfHeight < 0.0f)
+    private void syncCompanionBodyShape(mut PhysicsWorld world){
+        if(!this.def.ignoreBodyId.valid() || !world.isValidBody(this.def.ignoreBodyId))
+            return;
+
+        ShapeId targetShapeId;
+        if(this.def.ignoreShapeId.valid() && world.isValidShape(this.def.ignoreShapeId)){
+            const Expected<BodyId> ownerRes = world.tryGetShapeBody(this.def.ignoreShapeId);
+            if(ownerRes.has_value() && ownerRes.value() == this.def.ignoreBodyId)
+                targetShapeId = this.def.ignoreShapeId;
+        }
+        if(!targetShapeId.valid()){
+            Vector<ShapeId> bodyShapeIds;
+            world.bodyShapes(this.def.ignoreBodyId, bodyShapeIds);
+            ShapeType desiredType = ShapeType::Capsule;
+            if(this.def.shapeType == CharacterShapeType::Sphere)
+                desiredType = ShapeType::Sphere;
+            else if(this.def.shapeType == CharacterShapeType::Cylinder)
+                desiredType = ShapeType::Cylinder;
+            else if(this.def.shapeType == CharacterShapeType::Box)
+                desiredType = ShapeType::Hull;
+            for(usize si = 0u; si < bodyShapeIds.size(); ++si){
+                const Expected<ShapeType> stRes = world.tryGetShapeType(bodyShapeIds[si]);
+                if(stRes.has_value() && stRes.value() == desiredType){
+                    targetShapeId = bodyShapeIds[si];
+                    break;
+                }
+            }
+            if(!targetShapeId.valid() && !bodyShapeIds.empty())
+                targetShapeId = bodyShapeIds[0u];
+        }
+
+        const Expected<BodyType> btRes = world.tryGetBodyType(this.def.ignoreBodyId);
+        b8 updMass = false;
+        if(btRes.has_value() && btRes.value() == BodyType::Dynamic)
+            updMass = true;
+
+        if(targetShapeId.valid()){
+            if(this.def.shapeType == CharacterShapeType::Sphere || (this.def.shapeType == CharacterShapeType::Capsule && this.def.halfHeight <= 1.0e-4f)){
+                SphereShape sp;
+                sp.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
+                world.setSphereShape(targetShapeId, sp, updMass);
+            }
+            else if(this.def.shapeType == CharacterShapeType::Cylinder){
+                CylinderShape cy;
+                cy.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
+                cy.halfHeightRadiusConvex = f32x4(SimdMax(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
+                world.setCylinderShape(targetShapeId, cy, updMass);
+            }
+            else if(this.def.shapeType == CharacterShapeType::Box){
+                const VectorSingle he = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
+                const Expected<HullShape> boxHull = MakeBoxHull(he.x, he.y, he.z, 0.0f);
+                if(boxHull.has_value())
+                    world.setHullShape(targetShapeId, boxHull.value(), updMass);
+            }
+            else{
+                CapsuleShape cap;
+                const f32 hh = SimdMax(this.def.halfHeight, 0.5f * s_MinCapsuleLength + 1.0e-3f);
+                cap.center1Radius = f32x4(0.0f, -hh, 0.0f, this.def.radius);
+                cap.center2 = f32x4(0.0f, hh, 0.0f, 0.0f);
+                world.setCapsuleShape(targetShapeId, cap, updMass);
+            }
+        }
+
+        if(!btRes.has_value() || btRes.value() == BodyType::Kinematic)
+            world.setBodyTransform(this.def.ignoreBodyId, VectorSingle(this.position), VectorSingle(this.rotation));
+    }
+
+    public b8 trySetShapeDimensions(mut PhysicsWorld world, in f32 newRadius, in f32 newHalfHeight){
+        if(!IsFinite(VectorSingle(newRadius, newHalfHeight, 0.0f, 0.0f)) || newRadius < 0.05f || newHalfHeight < 0.0f)
             return false;
+        world.ensureCpuBroadphaseSynced();
         const f32 oldR = this.def.radius;
         const f32 oldH = this.def.halfHeight;
-        const f32 footDelta = (newHalfHeight + newRadius) - (oldH + oldR);
-        const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
+        const f32 oldFoot = this.footHalfHeight();
         this.def.radius = newRadius;
         this.def.halfHeight = newHalfHeight;
+        const f32 footDelta = this.footHalfHeight() - oldFoot;
+        const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
         this.syncCachedProxies();
         this.gatherOverlapsAt(world, testPos, 0.0f);
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
@@ -794,6 +1048,33 @@ class CharacterController{
             }
         }
         this.position = f32x4(testPos, 0.0f);
+        this.syncCompanionBodyShape(world);
+        return true;
+    }
+
+    public b8 trySetBoxHalfExtents(mut PhysicsWorld world, in VectorSingle newHalfExtents){
+        if(!IsFiniteVec3(newHalfExtents))
+            return false;
+        const VectorSingle clamped = VectorSingle(newHalfExtents, 0.0f);
+        if(clamped.x < 0.05f || clamped.y < 0.05f || clamped.z < 0.05f)
+            return false;
+        world.ensureCpuBroadphaseSynced();
+        const f32x4 oldExt = this.def.boxHalfExtents;
+        const f32 oldFoot = this.footHalfHeight();
+        this.def.boxHalfExtents = f32x4(clamped, 0.0f);
+        const f32 footDelta = this.footHalfHeight() - oldFoot;
+        const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
+        this.syncCachedProxies();
+        this.gatherOverlapsAt(world, testPos, 0.0f);
+        for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
+            if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
+                this.def.boxHalfExtents = oldExt;
+                this.syncCachedProxies();
+                return false;
+            }
+        }
+        this.position = f32x4(testPos, 0.0f);
+        this.syncCompanionBodyShape(world);
         return true;
     }
 }

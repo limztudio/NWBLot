@@ -92,6 +92,60 @@ class ComponentAssetBinaryCodec{
         return UnpackTransformComponentPayloadBinary(binaryPayload.value());
     }
 
+    public b8 appendLocalTransform(in LocalTransformComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_TransformComponentPayloadBinaryBytes))
+            return false;
+        const TransformComponentPayloadBinary binaryPayload = PackLocalTransformComponentPayloadBinary(component);
+        outBinary.reserve(outBinary.size() + s_TransformComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
+        return true;
+    }
+
+    public b8 serializeLocalTransform(in LocalTransformComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendLocalTransform(component, outPayload);
+    }
+
+    public Expected<LocalTransformComponent> deserializeLocalTransform(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<TransformComponentPayloadBinary> binaryPayload = ReadPOD<TransformComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("LocalTransformComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        return UnpackLocalTransformComponentPayloadBinary(binaryPayload.value());
+    }
+
+    public b8 appendSceneParent(in SceneParentComponent component, mut Vector<u8> outBinary)const{
+        static_assert(size_of<SceneParentComponentPayloadBinary>() == s_SceneParentComponentPayloadBinaryBytes && offset_of<SceneParentComponentPayloadBinary>(reserved2) == 68u);
+        if(!CanAppendBytes(outBinary, s_SceneParentComponentPayloadBinaryBytes))
+            return false;
+        const SceneParentComponentPayloadBinary binaryPayload = PackSceneParentComponentPayloadBinary(component);
+        outBinary.reserve(outBinary.size() + s_SceneParentComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
+        return true;
+    }
+
+    public b8 serializeSceneParent(in SceneParentComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendSceneParent(component, outPayload);
+    }
+
+    public Expected<SceneParentComponent> deserializeSceneParent(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<SceneParentComponentPayloadBinary> binaryPayload = ReadPOD<SceneParentComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("SceneParentComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        const Expected<SceneParentComponent> unpacked = UnpackSceneParentComponentPayloadBinary(binaryPayload.value());
+        if(!unpacked.has_value()){
+            error("SceneParentComponentAsset::loadComponentPayload failed: invalid scene parent flags");
+            return MakeUnexpected(Failure());
+        }
+        return unpacked.value();
+    }
+
     public b8 appendCamera(in CameraComponent component, mut Vector<u8> outBinary)const{
         if(!CanAppendBytes(outBinary, s_CameraComponentPayloadBinaryBytes))
             return false;

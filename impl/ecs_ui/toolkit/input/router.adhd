@@ -31,6 +31,7 @@ class InputRouter : NoCopy{
     private InputVector<InputAction> m_actions;
     private InputVector<ControlAction> m_controlActions;
     private InputVector<ContextMenuAction> m_contextMenuActions;
+    private InputVector<WindowPressRecord> m_windowPresses;
     private InputPopupState m_popupState;
     private InputHoverState m_hoverState;
     private WidgetId m_pointerPressedTarget;
@@ -47,6 +48,7 @@ class InputRouter : NoCopy{
         this.m_actions.reserve(s_InputMaxActions);
         this.m_controlActions.reserve(s_InputMaxControlActions);
         this.m_contextMenuActions.reserve(s_InputMaxContextMenuActions);
+        this.m_windowPresses.reserve(s_InputMaxWindowPresses);
         this.m_pointerState.reserveGestures();
     }
     [cpp_unwind]
@@ -68,7 +70,7 @@ class InputRouter : NoCopy{
                 this.routeCommand(event, result);
             else if(event.type == InputEventType::FocusLost){
                 ApplyRouterFocusLostEvent(
-                    this.hasPopup(),
+                    this.hasBlockingPopup(),
                     this.m_pointerState.capture(),
                     this.m_pointerState.primaryConsumed(),
                     this.m_pointerState.secondaryConsumed(),
@@ -87,6 +89,7 @@ class InputRouter : NoCopy{
         FinalizeRouterProcessResult(
             this.wantsPointer(),
             this.wantsCommands(),
+            this.resolvedCursor(),
             this.m_hoverState.target,
             this.m_commandSources.focus(),
             this.m_pointerState.capture(),
@@ -147,6 +150,7 @@ class InputRouter : NoCopy{
         this.reconcileTargets();
     }
     public b8 hasPopup()const{ return !this.m_popupState.records().empty(); }
+    public b8 hasBlockingPopup()const{ return HasBlockingRouterPopup(this.m_popupState.records()); }
     public usize popupCount()const{ return this.m_popupState.records().size(); }
     public Optional<in PopupScope> popupScope(in PopupToken token)const{
         const Expected<usize> scopeIndex = FindRouterPopupScopeIndex(this.m_popupState.records(), token);
@@ -212,6 +216,72 @@ class InputRouter : NoCopy{
         this.m_commandSources.clearFocus();
         this.m_commandPressedTarget = WidgetId();
     }
+    [cpp_unwind]
+    public b8 setFocus(in WidgetId target){
+        if(!this.m_windowFocused || !target.valid())
+            return false;
+        const Optional<in HitTarget> found = this.findTarget(target);
+        if(!found.has_value() || !found.value().focusable)
+            return false;
+        if(!IsRouterTargetInteractive(this.m_targetTable.targets(), this.m_targetTable.lookup(), this.m_popupState.records(), found.value()))
+            return false;
+        AssignRouterFocus(
+            found.value(),
+            this.m_commandSources.records(),
+            this.m_commandSources.focus(),
+            this.m_commandSources.declaration(),
+            this.m_commandSources.control()
+        );
+        this.refreshPressedCache();
+        return true;
+    }
+    [cpp_unwind]
+    public b8 moveFocus(in FocusDirection direction){
+        if(!this.m_windowFocused)
+            return false;
+        const b8 moved = TryMoveRouterSpatialFocus(
+            this.m_targetTable.targets(),
+            this.m_targetTable.lookup(),
+            this.m_popupState.records(),
+            direction,
+            this.m_commandSources.records(),
+            this.m_commandSources.focus(),
+            this.m_commandSources.declaration(),
+            this.m_commandSources.control()
+        );
+        if(moved)
+            this.refreshPressedCache();
+        return moved;
+    }
+    public PointerCursor resolvedCursor()const{
+        if(this.m_pointerState.capture().valid()){
+            const Optional<in HitTarget> captured = this.findTarget(this.m_pointerState.capture(), this.m_pointerState.captureDeclaration());
+            if(captured.has_value()){
+                PointerCursor resolved = captured.value().cursor;
+                if(resolved == PointerCursor::Default && captured.value().owner.valid()){
+                    const Optional<in HitTarget> owner = this.findTarget(captured.value().owner, captured.value().ownerDeclarationGeneration);
+                    if(owner.has_value())
+                        resolved = owner.value().cursor;
+                }
+                if(resolved == PointerCursor::Grab)
+                    return PointerCursor::Grabbing;
+                return resolved;
+            }
+        }
+        if(this.m_hoverState.known && this.m_hoverState.target.valid()){
+            const Optional<in HitTarget> hovered = this.findTarget(this.m_hoverState.target);
+            if(hovered.has_value()){
+                PointerCursor resolved = hovered.value().cursor;
+                if(resolved == PointerCursor::Default && hovered.value().owner.valid()){
+                    const Optional<in HitTarget> owner = this.findTarget(hovered.value().owner, hovered.value().ownerDeclarationGeneration);
+                    if(owner.has_value())
+                        resolved = owner.value().cursor;
+                }
+                return resolved;
+            }
+        }
+        return PointerCursor::Default;
+    }
     public void reset(){
         this.retireQueuedReleases();
         this.m_admission.clear();
@@ -221,6 +291,12 @@ class InputRouter : NoCopy{
         this.m_pointerPressedTarget = WidgetId();
         this.m_commandPressedTarget = WidgetId();
         this.m_pointerPressedCached = true;
+    }
+    public void takeWindowPresses(mut Vector<WindowPressRecord> outPresses){
+        outPresses.clear();
+        for(in WindowPressRecord record : this.m_windowPresses)
+            outPresses.push_back(record);
+        this.m_windowPresses.clear();
     }
     public void cancelDeviceInput(in u64 device){
         if(MatchesInputDeviceSource(this.m_pointerState.activeSource(), device))
@@ -257,7 +333,7 @@ class InputRouter : NoCopy{
             return this.m_pointerState.primaryConsumed();
         if(this.m_pointerState.secondaryDown())
             return this.m_pointerState.secondaryConsumed();
-        return WouldConsumeIdlePointer(this.hasPopup(), this.m_pointerState.capture(), this.hitTest(position));
+        return WouldConsumeIdlePointer(this.hasBlockingPopup(), this.m_pointerState.capture(), this.hitTest(position));
     }
     public u64 layoutGeneration()const{ return this.m_targetTable.generation(); }
     public in Vector<HitTarget> targets()const{ return this.m_targetTable.targets(); }
@@ -284,7 +360,7 @@ class InputRouter : NoCopy{
     public in Point pointerPosition()const{ return this.m_hoverState.position; }
     public b8 windowFocused()const{ return this.m_windowFocused; }
     public b8 wantsPointer()const{
-        return this.m_pointerState.wants(this.hasPopup(), this.m_hoverState.target);
+        return this.m_pointerState.wants(this.hasBlockingPopup(), this.m_hoverState.target);
     }
     public b8 wantsCommands()const{
         return this.m_commandSources.wants(this.m_popupState.records());
@@ -461,7 +537,7 @@ class InputRouter : NoCopy{
     }
     [cpp_unwind]
     private void routeSecondary(in InputEvent event, in b8 hasHit, in HitTarget hit, mut InputRoutingResult result){
-        const InputPointerRouteEffects effects = this.m_pointerState.routeSecondary(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_windowFocused, this.m_contextMenuActions, this.m_nextActionSequence, result);
+        const InputPointerRouteEffects effects = this.m_pointerState.routeSecondary(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_windowFocused, this.m_contextMenuActions, this.m_windowPresses, this.m_nextActionSequence, result);
         if(effects.dismissedPopup && !this.m_popupState.apply(effects.popupDismissal))
             TerminateInvariant();
         if(effects.advanceHover)
@@ -571,6 +647,7 @@ class InputRouter : NoCopy{
     }
     private void cancelInteraction(){
         this.m_hoverState.advanceActivity();
+        this.m_windowPresses.clear();
         CancelRouterInteraction(
             this.m_actions,
             this.m_controlActions,
@@ -594,7 +671,7 @@ class InputRouter : NoCopy{
     }
     [cpp_unwind]
     private void routePointer(in InputEvent event, in b8 hasHit, in HitTarget hit, mut InputRoutingResult result){
-        const InputPointerRouteEffects effects = this.m_pointerState.routePrimary(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_commandSources, this.m_actions, this.m_controlActions, this.m_nextActionSequence, result);
+        const InputPointerRouteEffects effects = this.m_pointerState.routePrimary(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_commandSources, this.m_actions, this.m_controlActions, this.m_windowPresses, this.m_nextActionSequence, result);
         if(effects.dismissedPopup && !this.m_popupState.apply(effects.popupDismissal))
             TerminateInvariant();
         if(effects.advanceHover)
@@ -680,6 +757,7 @@ void ApplyRouterFocusLostEvent(
 void FinalizeRouterProcessResult(
     in b8 wantsPointer,
     in b8 wantsCommands,
+    in PointerCursor cursor,
     in WidgetId hover,
     in WidgetId focus,
     in WidgetId capture,
@@ -687,6 +765,7 @@ void FinalizeRouterProcessResult(
 ){
     inOutResult.wantsPointer = wantsPointer;
     inOutResult.wantsCommands = wantsCommands;
+    inOutResult.cursor = cursor;
     inOutResult.hover = hover;
     inOutResult.focus = focus;
     inOutResult.capture = capture;

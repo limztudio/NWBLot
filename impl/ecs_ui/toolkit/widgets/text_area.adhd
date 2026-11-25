@@ -19,6 +19,12 @@ class TextAreaState : NoCopy{
     public u64 m_compositionGeneration = 0u;
     public f32 m_scrollY = 0.0f;
     public b8 m_revealCaret = true;
+    public TextWrapMode m_wrapMode = TextWrapMode::None;
+    public f32 m_wrapWidth = 0.0f;
+    public u32 m_tabStopSpaces = s_TextDefaultTabStopSpaces;
+    public f32 m_lastWrapBoxWidth = 0.0f;
+    public f32 m_lastWrapBoxHeight = 0.0f;
+    public TextAreaModelStamp m_lastWrapStamp;
 
     public u64 instanceGeneration()const{
         return this.m_navigation.instanceGeneration();
@@ -67,6 +73,12 @@ class TextAreaState : NoCopy{
         this.m_compositionGeneration = 0u;
         this.m_scrollY = 0.0f;
         this.m_revealCaret = true;
+        this.m_wrapMode = TextWrapMode::None;
+        this.m_wrapWidth = 0.0f;
+        this.m_tabStopSpaces = s_TextDefaultTabStopSpaces;
+        this.m_lastWrapBoxWidth = 0.0f;
+        this.m_lastWrapBoxHeight = 0.0f;
+        this.m_lastWrapStamp = TextAreaModelStamp();
     }
 }
 

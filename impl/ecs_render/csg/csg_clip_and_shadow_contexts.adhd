@@ -100,11 +100,14 @@ b8 VisitReceiverClipCutters<Visitor>(
         const auto parameters = TryResolveCsgCutterParameterBytes(shape.value().desc.parameterByteSize, shape.value().desc.defaultParameterBytes, cutter.parameterBytes);
         if(!parameters.has_value())
             continue;
+        MatrixSingle worldToShape = MatrixIdentity();
+        MatrixSingle shapeToWorld = MatrixIdentity();
+        lookup.resolveCutterTransforms(row.value(), worldToShape, shapeToWorld);
         b8 workValid = false;
         VectorSingle workMin = VectorZero();
         VectorSingle workMax = VectorZero();
         if(CsgClipCutterRequiresShapeBounds(receiverBoundsValid, shape.value().desc.shaderModule != s_NameNone, shape.value().desc.name)){
-            const auto cutterBounds = registry.buildShapeBounds(shape.value().id, MatrixSingle(cutter.shapeToWorld), parameters.value());
+            const auto cutterBounds = registry.buildShapeBounds(shape.value().id, shapeToWorld, parameters.value());
             if(!cutterBounds.has_value())
                 continue;
             if(!ResolveCsgClipWorkBoundsValues(
@@ -121,7 +124,7 @@ b8 VisitReceiverClipCutters<Visitor>(
             ))
                 continue;
         }
-        if(!visit(shape.value().id, shape.value().desc.shaderModule, shape.value().desc.parameterByteSize, MatrixSingle(cutter.worldToShape), parameters.value(), workValid, workMin, workMax))
+        if(!visit(shape.value().id, shape.value().desc.shaderModule, shape.value().desc.parameterByteSize, worldToShape, parameters.value(), workValid, workMin, workMax))
             return false;
     }
     return true;

@@ -8,6 +8,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Expected<usize> ResolveMappedDisplayByte(in Span<EditCaretMapping> stops, in usize committedByte){
+    usize low = 0u;
+    usize high = stops.size();
+    while(low < high){
+        const usize mid = low + (high - low) / 2u;
+        if(stops[mid].committedByte < committedByte)
+            low = mid + 1u;
+        else
+            high = mid;
+    }
+    if(low < stops.size() && stops[low].committedByte == committedByte)
+        return stops[low].displayByte;
+    return MakeUnexpected(Failure());
+}
+
 class EditBoxSnapshotSizes{
     public usize replaced = 0u;
     public usize preeditBytes = 0u;
@@ -35,6 +50,23 @@ class EditBoxSnapshotBuilder{
         item.committedByte = committedByte;
         item.displayByte = displayByte;
         return item;
+    }
+
+    [cpp_unwind]
+    private b8 appendMaskedCluster(
+        in StringView source,
+        in usize clusterStart,
+        in StringView maskUtf8,
+        in EditTextMode textMode,
+        mut String outDisplay
+    )const{
+        StringView piece = maskUtf8;
+        if(textMode == EditTextMode::Multiline && source[clusterStart] == '\n')
+            piece = "\n";
+        if(piece.size() > s_TextMaxBytes - outDisplay.size())
+            return false;
+        outDisplay.append(piece);
+        return true;
     }
 
     [cpp_unwind]
@@ -70,6 +102,134 @@ class EditBoxSnapshotBuilder{
                 outStops.push_back(this.makeCaretMapping(boundary, boundary - sizes.value().replaced + sizes.value().preeditBytes));
         }
         return sizes.value().preeditBytes;
+    }
+
+    [cpp_unwind]
+    private b8 buildMaskedInto(
+        in StringView committed,
+        in Span<usize> graphemeBoundaries,
+        in EditCompositionView composition,
+        in EditTextMode textMode,
+        in u32 maskCodePoint,
+        mut String outDisplay,
+        mut Vector<EditCaretMapping> outStops,
+        mut Vector<EditPreeditClause> outPreeditClauses,
+        mut usize outPreeditBegin,
+        mut usize outPreeditEnd,
+        mut usize outPreeditAnchorOffset,
+        mut usize outPreeditCaretOffset
+    )const{
+        outPreeditClauses.clear();
+        outPreeditBegin = 0u;
+        outPreeditEnd = 0u;
+        outPreeditAnchorOffset = 0u;
+        outPreeditCaretOffset = 0u;
+        if(!IsValidEditBoxMaskCodePoint(maskCodePoint) || graphemeBoundaries.empty() || graphemeBoundaries[0u] != 0u || graphemeBoundaries[graphemeBoundaries.size() - 1u] != committed.size())
+            return false;
+        String maskUtf8 = "";
+        if(!EncodeUtf8CodePoint(maskCodePoint, maskUtf8) || maskUtf8.empty())
+            return false;
+        outDisplay.clear();
+        outStops.clear();
+        outStops.reserve(graphemeBoundaries.size() + 1u);
+        b8 hasPrevPrefix = false;
+        usize prevPrefix = 0u;
+        for(in usize boundary : graphemeBoundaries){
+            if(composition.active && boundary > composition.replacementStart)
+                break;
+            if(hasPrevPrefix && !this.appendMaskedCluster(committed, prevPrefix, StringView(maskUtf8), textMode, outDisplay))
+                return false;
+            outStops.push_back(this.makeCaretMapping(boundary, outDisplay.size()));
+            prevPrefix = boundary;
+            hasPrevPrefix = true;
+        }
+        if(composition.active){
+            if(!hasPrevPrefix || prevPrefix != composition.replacementStart)
+                return false;
+            outPreeditBegin = outDisplay.size();
+            Vector<usize> preeditBoundaries;
+            if(!TryBuildGraphemeBoundariesInto(composition.text, textMode == EditTextMode::SingleLine, preeditBoundaries))
+                return false;
+            b8 foundAnchor = composition.anchor == 0u;
+            b8 foundCaret = composition.caret == 0u;
+            Vector<EditBoxRange> clusterDisplayRanges;
+            if(!composition.clauses.empty() && preeditBoundaries.size() > 1u)
+                clusterDisplayRanges.reserve(preeditBoundaries.size() - 1u);
+            for(usize index = 1u; index < preeditBoundaries.size(); ++index){
+                const usize segStart = preeditBoundaries[index - 1u];
+                const usize segEnd = preeditBoundaries[index];
+                const usize dispStart = outDisplay.size();
+                if(!this.appendMaskedCluster(composition.text, segStart, StringView(maskUtf8), textMode, outDisplay))
+                    return false;
+                if(!composition.clauses.empty()){
+                    EditBoxRange dispRange;
+                    dispRange.begin = dispStart;
+                    dispRange.end = outDisplay.size();
+                    clusterDisplayRanges.push_back(dispRange);
+                }
+                const usize dispOffset = outDisplay.size() - outPreeditBegin;
+                if(!foundAnchor && segEnd >= composition.anchor){
+                    outPreeditAnchorOffset = dispOffset;
+                    foundAnchor = true;
+                }
+                if(!foundCaret && segEnd >= composition.caret){
+                    outPreeditCaretOffset = dispOffset;
+                    foundCaret = true;
+                }
+            }
+            if(!foundAnchor)
+                outPreeditAnchorOffset = outDisplay.size() - outPreeditBegin;
+            if(!foundCaret)
+                outPreeditCaretOffset = outDisplay.size() - outPreeditBegin;
+            outPreeditEnd = outDisplay.size();
+            if(!composition.clauses.empty()){
+                outPreeditClauses.reserve(composition.clauses.size());
+                usize prevMappedEnd = outPreeditBegin;
+                for(in EditPreeditClause clause : composition.clauses){
+                    usize mappedBegin = outPreeditEnd;
+                    usize mappedEnd = prevMappedEnd;
+                    for(usize index = 1u; index < preeditBoundaries.size(); ++index){
+                        const usize segStart = preeditBoundaries[index - 1u];
+                        const usize segEnd = preeditBoundaries[index];
+                        if(segEnd <= clause.beginByte || segStart >= clause.endByte)
+                            continue;
+                        in EditBoxRange dispRange = clusterDisplayRanges[index - 1u];
+                        mappedBegin = Min(mappedBegin, dispRange.begin);
+                        mappedEnd = Max(mappedEnd, dispRange.end);
+                    }
+                    mappedBegin = Max(mappedBegin, prevMappedEnd);
+                    if(mappedBegin < mappedEnd){
+                        EditPreeditClause mappedClause;
+                        mappedClause.beginByte = mappedBegin;
+                        mappedClause.endByte = mappedEnd;
+                        mappedClause.style = clause.style;
+                        outPreeditClauses.push_back(mappedClause);
+                        prevMappedEnd = mappedEnd;
+                    }
+                }
+            }
+            b8 hasPrevSuffix = false;
+            usize prevSuffix = 0u;
+            for(in usize boundary : graphemeBoundaries){
+                if(boundary < composition.replacementEnd)
+                    continue;
+                if(!hasPrevSuffix){
+                    if(boundary != composition.replacementEnd)
+                        return false;
+                    outStops.push_back(this.makeCaretMapping(boundary, outDisplay.size()));
+                    prevSuffix = boundary;
+                    hasPrevSuffix = true;
+                    continue;
+                }
+                if(!this.appendMaskedCluster(committed, prevSuffix, StringView(maskUtf8), textMode, outDisplay))
+                    return false;
+                outStops.push_back(this.makeCaretMapping(boundary, outDisplay.size()));
+                prevSuffix = boundary;
+            }
+            if(!hasPrevSuffix)
+                return false;
+        }
+        return ValidateEditTextForMode(outDisplay, textMode);
     }
 
     private void resolveRanges(
@@ -112,10 +272,13 @@ class EditBoxSnapshotBuilder{
         in usize selectionEnd,
         in usize modelCaret,
         in u64 modelRevision,
+        in b8 password,
+        in u32 maskCodePoint,
         mut String outDisplay,
         mut Vector<EditCaretMapping> outMapping,
         mut EditBoxRange outSelection,
         mut EditBoxRange outPreedit,
+        mut Vector<EditPreeditClause> outPreeditClauses,
         mut EditBoxRange outReplacement,
         mut usize outCaret,
         mut usize outCommittedBytes,
@@ -126,6 +289,55 @@ class EditBoxSnapshotBuilder{
     )const{
         String display = "";
         Vector<EditCaretMapping> stops = Vector<EditCaretMapping>();
+        Vector<EditPreeditClause> mappedClauses = Vector<EditPreeditClause>();
+        if(password){
+            usize preeditBegin = 0u;
+            usize preeditEnd = 0u;
+            usize preeditAnchorOffset = 0u;
+            usize preeditCaretOffset = 0u;
+            if(!this.buildMaskedInto(committed, graphemeBoundaries, composition, textMode, maskCodePoint, display, stops, mappedClauses, preeditBegin, preeditEnd, preeditAnchorOffset, preeditCaretOffset))
+                return false;
+            EditBoxRange nextPreedit;
+            EditBoxRange nextReplacement;
+            EditBoxRange nextSelection;
+            usize nextCaret = 0u;
+            if(composition.active){
+                nextPreedit.begin = preeditBegin;
+                nextPreedit.end = preeditEnd;
+                nextReplacement.begin = composition.replacementStart;
+                nextReplacement.end = composition.replacementEnd;
+                nextSelection.begin = preeditBegin + Min(preeditAnchorOffset, preeditCaretOffset);
+                nextSelection.end = preeditBegin + Max(preeditAnchorOffset, preeditCaretOffset);
+                nextCaret = preeditBegin + preeditCaretOffset;
+            }
+            else{
+                const Expected<usize> selStart = ResolveMappedDisplayByte(Span<EditCaretMapping>(stops), selectionStart);
+                const Expected<usize> selEnd = ResolveMappedDisplayByte(Span<EditCaretMapping>(stops), selectionEnd);
+                const Expected<usize> caretDisp = ResolveMappedDisplayByte(Span<EditCaretMapping>(stops), modelCaret);
+                if(!selStart.has_value() || !selEnd.has_value() || !caretDisp.has_value())
+                    return false;
+                nextSelection.begin = selStart.value();
+                nextSelection.end = selEnd.value();
+                nextCaret = caretDisp.value();
+            }
+            outMapping.reserve(stops.size());
+            outDisplay.assign(display);
+            AssignTriviallyCopyableVector(outMapping, Span<EditCaretMapping>(stops));
+            outPreeditClauses.clear();
+            outPreeditClauses.reserve(mappedClauses.size());
+            for(in EditPreeditClause clause : mappedClauses)
+                outPreeditClauses.push_back(clause);
+            outComposing = composition.active;
+            outPreedit = nextPreedit;
+            outReplacement = nextReplacement;
+            outSelection = nextSelection;
+            outCaret = nextCaret;
+            outCommittedBytes = committed.size();
+            outRevision = modelRevision;
+            outTextMode = textMode;
+            outReady = false;
+            return true;
+        }
         const Expected<usize> preeditBytes = this.buildInto(committed, graphemeBoundaries, composition, textMode, display, stops);
         if(!preeditBytes.has_value())
             return false;
@@ -144,6 +356,17 @@ class EditBoxSnapshotBuilder{
             outSelection,
             outCaret
         );
+        outPreeditClauses.clear();
+        if(composition.active && !composition.clauses.empty()){
+            outPreeditClauses.reserve(composition.clauses.size());
+            for(in EditPreeditClause clause : composition.clauses){
+                EditPreeditClause displayClause;
+                displayClause.beginByte = outPreedit.begin + clause.beginByte;
+                displayClause.endByte = outPreedit.begin + clause.endByte;
+                displayClause.style = clause.style;
+                outPreeditClauses.push_back(displayClause);
+            }
+        }
         outCommittedBytes = committed.size();
         outRevision = modelRevision;
         outTextMode = textMode;

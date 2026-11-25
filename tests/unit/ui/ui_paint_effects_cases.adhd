@@ -1,0 +1,317 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
+#include <tests/unit/ui/snapshot_fault_fixture.adhd>
+#include <impl/ecs_ui/toolkit/gpu/image_resources.adhd>
+#include <impl/ecs_ui/toolkit/gpu/shader_abi.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type PaintEffectsTests = PaintTextFixture;
+
+void BeginPaintEffectsBuilder(mut PaintEffectsTests self){
+    DrawSnapshot discarded = self.m_builder.freeze();
+    self.m_builder.recycle(discarded);
+    self.m_builder.begin(DisplayMetrics(400.0f, 300.0f, 1.0f, 1.0f), 8u, 3u, MakeUiFixtureAssetRef<UiSkin>(s_PaintTextSkinPath), self.m_skin);
+    self.m_builder.reserve(32u);
+}
+
+f32 ComputeTriangulatedArea(in Span<Point> verts, in Span<u32> indices){
+    f32 area = 0.0f;
+    for(usize i = 0u; i + 2u < indices.size(); i += 3u){
+        in Point a = verts[cast<usize>(indices[i])];
+        in Point b = verts[cast<usize>(indices[i + 1u])];
+        in Point c = verts[cast<usize>(indices[i + 2u])];
+        area += 0.5f * Abs(VectorSingle((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x))).x;
+    }
+    return area;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyPaintEffects_PathTriangulationConcaveAndHoles(mut PaintEffectsTests self){
+    BeginPaintEffectsBuilder(self);
+
+    PaintPath concavePath;
+    concavePath.moveTo(Point(0.0f, 0.0f));
+    concavePath.lineTo(Point(100.0f, 0.0f));
+    concavePath.lineTo(Point(100.0f, 30.0f));
+    concavePath.lineTo(Point(30.0f, 30.0f));
+    concavePath.lineTo(Point(30.0f, 100.0f));
+    concavePath.lineTo(Point(0.0f, 100.0f));
+    concavePath.close();
+
+    Vector<Point> flatPoints;
+    Vector<PaintPathSubpath> subpaths;
+    FlattenPaintPath(concavePath, false, PaintTransformIdentity(), 1.0f, flatPoints, subpaths);
+    ASSERT_EQ(subpaths.size(), 1u);
+
+    Vector<Point> triVerts;
+    Vector<u32> triIndices;
+    Vector<PaintPathSubpath> triFringe;
+    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::NonZero, triVerts, triIndices, triFringe);
+    EXPECT_EQ(triFringe.size(), 1u);
+    EXPECT_EQ(triIndices.size(), 12u);
+    EXPECT_NEAR(ComputeTriangulatedArea(Span<Point>(triVerts), Span<u32>(triIndices)), 5100.0f, 0.5f);
+
+    PaintPath nonZeroHolePath;
+    nonZeroHolePath.addRect(Rect(0.0f, 0.0f, 100.0f, 100.0f));
+    nonZeroHolePath.moveTo(Point(30.0f, 30.0f));
+    nonZeroHolePath.lineTo(Point(30.0f, 70.0f));
+    nonZeroHolePath.lineTo(Point(70.0f, 70.0f));
+    nonZeroHolePath.lineTo(Point(70.0f, 30.0f));
+    nonZeroHolePath.close();
+
+    FlattenPaintPath(nonZeroHolePath, false, PaintTransformIdentity(), 1.0f, flatPoints, subpaths);
+    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::NonZero, triVerts, triIndices, triFringe);
+    EXPECT_EQ(triFringe.size(), 2u);
+    EXPECT_NEAR(ComputeTriangulatedArea(Span<Point>(triVerts), Span<u32>(triIndices)), 8400.0f, 0.5f);
+    for(usize i = 0u; i + 2u < triIndices.size(); i += 3u){
+        in Point a = triVerts[cast<usize>(triIndices[i])];
+        in Point b = triVerts[cast<usize>(triIndices[i + 1u])];
+        in Point c = triVerts[cast<usize>(triIndices[i + 2u])];
+        const f32 cx = (a.x + b.x + c.x) / 3.0f;
+        const f32 cy = (a.y + b.y + c.y) / 3.0f;
+        const b8 insideHole = cx > 31.0f && cx < 69.0f && cy > 31.0f && cy < 69.0f;
+        EXPECT_FALSE(insideHole);
+    }
+
+    PaintPath evenOddHolePath;
+    evenOddHolePath.addRect(Rect(0.0f, 0.0f, 100.0f, 100.0f));
+    evenOddHolePath.addRect(Rect(30.0f, 30.0f, 40.0f, 40.0f));
+    FlattenPaintPath(evenOddHolePath, false, PaintTransformIdentity(), 1.0f, flatPoints, subpaths);
+    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::EvenOdd, triVerts, triIndices, triFringe);
+    EXPECT_EQ(triFringe.size(), 2u);
+    EXPECT_NEAR(ComputeTriangulatedArea(Span<Point>(triVerts), Span<u32>(triIndices)), 8400.0f, 0.5f);
+
+    PaintPath curvedPath;
+    curvedPath.moveTo(Point(10.0f, 20.0f));
+    curvedPath.quadTo(Point(60.0f, 0.0f), Point(110.0f, 20.0f));
+    curvedPath.cubicTo(Point(125.0f, 40.0f), Point(125.0f, 70.0f), Point(110.0f, 90.0f));
+    curvedPath.arcTo(Point(60.0f, 90.0f), 25.0f, 15.0f, 0.0f, s_Pi, false);
+    curvedPath.close();
+    curvedPath.addRoundedRect(Rect(140.0f, 20.0f, 40.0f, 40.0f), 8.0f);
+    curvedPath.addCircle(Point(210.0f, 40.0f), 16.0f);
+
+    self.m_builder.pushTranslate(4.0f, 6.0f);
+    self.m_builder.fillPath(curvedPath, Color(0.2f, 0.6f, 0.9f, 1.0f), PaintFillRule::EvenOdd);
+    PaintLineStyle strokeStyle;
+    strokeStyle.thickness = 2.0f;
+    strokeStyle.dashLength = 6.0f;
+    strokeStyle.gapLength = 3.0f;
+    self.m_builder.strokePath(curvedPath, strokeStyle, Color(1.0f, 1.0f, 1.0f, 1.0f));
+    self.m_builder.popTransform();
+
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    EXPECT_FALSE(snapshot.commands().empty());
+    EXPECT_FALSE(snapshot.vertices().empty());
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
+}
+
+void VerifyPaintEffects_GradientsAndDropShadowsEncoding(mut PaintEffectsTests self){
+    BeginPaintEffectsBuilder(self);
+
+    PaintGradient linear = MakeLinearGradient(Point(0.0f, 0.0f), Point(100.0f, 0.0f), Color(1.0f, 0.0f, 0.0f, 1.0f), Color(0.0f, 0.0f, 1.0f, 1.0f));
+    PaintGradient unsorted;
+    unsorted.kind = PaintGradientKind::Linear;
+    unsorted.spread = PaintGradientSpread::Repeat;
+    unsorted.start = Point(10.0f, 20.0f);
+    unsorted.end = Point(110.0f, 20.0f);
+    ASSERT_TRUE(unsorted.addStop(1.0f, Color(0.0f, 0.0f, 1.0f, 1.0f)));
+    ASSERT_TRUE(unsorted.addStop(0.5f, Color(0.8f, 0.4f, 0.2f, 0.5f)));
+    ASSERT_TRUE(unsorted.addStop(0.0f, Color(1.0f, 0.0f, 0.0f, 1.0f)));
+    ASSERT_TRUE(self.m_builder.fillRectGradient(Rect(10.0f, 20.0f, 100.0f, 40.0f), unsorted));
+
+    PaintGradient radial = MakeRadialGradient(Point(180.0f, 60.0f), 32.0f, Color(1.0f, 1.0f, 0.0f, 1.0f), Color(0.0f, 1.0f, 0.0f, 0.5f));
+    radial.spread = PaintGradientSpread::Mirror;
+    ASSERT_TRUE(self.m_builder.fillCircleGradient(Point(180.0f, 60.0f), 30.0f, radial));
+
+    PaintGradient conic = MakeConicGradient(Point(250.0f, 60.0f), 0.25f, Color(1.0f, 0.0f, 1.0f, 1.0f), Color(0.0f, 1.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.fillRoundedRectGradient(Rect(220.0f, 20.0f, 60.0f, 60.0f), 10.0f, conic));
+
+    PaintPath starPath;
+    starPath.moveTo(Point(40.0f, 80.0f));
+    starPath.lineTo(Point(90.0f, 110.0f));
+    starPath.lineTo(Point(40.0f, 140.0f));
+    starPath.lineTo(Point(55.0f, 110.0f));
+    starPath.close();
+    ASSERT_TRUE(self.m_builder.fillPathGradient(starPath, linear));
+
+    PaintShadowStyle outerShadow;
+    outerShadow.offset = Point(0.0f, 6.0f);
+    outerShadow.blurRadius = 12.0f;
+    outerShadow.spread = 2.0f;
+    outerShadow.color = Color(0.0f, 0.0f, 0.0f, 0.5f);
+    ASSERT_TRUE(self.m_builder.drawDropShadow(Rect(20.0f, 160.0f, 80.0f, 50.0f), 8.0f, outerShadow));
+
+    PaintShadowStyle insetShadow;
+    insetShadow.offset = Point(1.0f, 2.0f);
+    insetShadow.blurRadius = 6.0f;
+    insetShadow.spread = 1.0f;
+    insetShadow.color = Color(0.1f, 0.2f, 0.4f, 0.6f);
+    insetShadow.inset = true;
+    ASSERT_TRUE(self.m_builder.drawDropShadow(Rect(120.0f, 160.0f, 80.0f, 50.0f), 8.0f, insetShadow));
+
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    ASSERT_GE(snapshot.commands().size(), 6u);
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
+
+    in DrawCommand firstGradCmd = snapshot.commands()[0u];
+    EXPECT_EQ(firstGradCmd.material, PaintMaterial::Gradient);
+    ASSERT_NE(firstGradCmd.effectOffset, u32.max);
+    const usize baseWord = cast<usize>(firstGradCmd.effectOffset >> 2u);
+    in Vector<u32> words = snapshot.effectWords();
+    EXPECT_EQ(words[baseWord + 0u], cast<u32>(PaintGradientKind::Linear));
+    EXPECT_EQ(words[baseWord + 1u], cast<u32>(PaintGradientSpread::Repeat));
+    EXPECT_EQ(words[baseWord + 2u], 3u);
+    const usize stop1Word = baseWord + cast<usize>(s_ShaderUiGradientHeaderBytes >> 2u) + cast<usize>(s_ShaderUiGradientStopBytes >> 2u);
+    EXPECT_NEAR(bit_cast<f32>(words[stop1Word + 0u]), 0.4f, 1.0e-5f);
+    EXPECT_NEAR(bit_cast<f32>(words[stop1Word + 3u]), 0.5f, 1.0e-5f);
+    EXPECT_NEAR(bit_cast<f32>(words[stop1Word + 4u]), 0.5f, 1.0e-5f);
+
+    in DrawCommand outerCmd = snapshot.commands()[4u];
+    in DrawCommand insetCmd = snapshot.commands()[5u];
+    EXPECT_EQ(outerCmd.material, PaintMaterial::DropShadow);
+    EXPECT_EQ(insetCmd.material, PaintMaterial::DropShadow);
+    EXPECT_EQ(outerCmd.clipMaskOffset, u32.max);
+    EXPECT_NE(insetCmd.clipMaskOffset, u32.max);
+}
+
+void VerifyPaintEffects_AnalyticClipsBlendModesAndOpacityStack(mut PaintEffectsTests self){
+    BeginPaintEffectsBuilder(self);
+
+    self.m_builder.pushRoundedClip(Rect(10.0f, 10.0f, 200.0f, 150.0f), 12.0f);
+    self.m_builder.pushRotate(0.15f);
+    self.m_builder.pushEllipseClip(Rect(20.0f, 20.0f, 120.0f, 90.0f));
+    self.m_builder.popTransform();
+
+    ASSERT_TRUE(self.m_builder.pushOpacity(0.5f));
+    ASSERT_TRUE(self.m_builder.pushOpacity(0.5f));
+    EXPECT_NEAR(self.m_builder.currentOpacity(), 0.25f, 1.0e-6f);
+    self.m_builder.fillRect(Rect(25.0f, 25.0f, 40.0f, 40.0f), Color(1.0f, 0.5f, 0.25f, 1.0f));
+
+    ASSERT_TRUE(self.m_builder.pushBlendMode(PaintBlendMode::Additive));
+    self.m_builder.fillRect(Rect(30.0f, 30.0f, 40.0f, 40.0f), Color(0.0f, 1.0f, 0.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.pushBlendMode(PaintBlendMode::Multiply));
+    self.m_builder.fillRect(Rect(35.0f, 35.0f, 40.0f, 40.0f), Color(0.0f, 0.0f, 1.0f, 1.0f));
+
+    ASSERT_TRUE(self.m_builder.beginOverlay(10u));
+    EXPECT_NEAR(self.m_builder.currentOpacity(), 1.0f, 1.0e-6f);
+    EXPECT_EQ(self.m_builder.currentBlendMode(), PaintBlendMode::Normal);
+    self.m_builder.fillRect(Rect(0.0f, 0.0f, 20.0f, 20.0f), Color(1.0f, 1.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.endOverlay());
+
+    EXPECT_NEAR(self.m_builder.currentOpacity(), 0.25f, 1.0e-6f);
+    EXPECT_EQ(self.m_builder.currentBlendMode(), PaintBlendMode::Multiply);
+    EXPECT_TRUE(self.m_builder.popBlendMode());
+    EXPECT_EQ(self.m_builder.currentBlendMode(), PaintBlendMode::Additive);
+    EXPECT_TRUE(self.m_builder.popBlendMode());
+    EXPECT_TRUE(self.m_builder.popOpacity());
+    EXPECT_TRUE(self.m_builder.popOpacity());
+    EXPECT_TRUE(self.m_builder.popClip());
+    EXPECT_TRUE(self.m_builder.popClip());
+
+    const DrawSnapshot snapshot = self.m_builder.freeze();
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
+    ASSERT_EQ(snapshot.commands().size(), 4u);
+
+    in DrawCommand cmd0 = snapshot.commands()[0u];
+    in DrawCommand cmd1 = snapshot.commands()[1u];
+    in DrawCommand cmd2 = snapshot.commands()[2u];
+    in DrawCommand cmd3 = snapshot.commands()[3u];
+    EXPECT_EQ(cmd0.blendMode, PaintBlendMode::Normal);
+    EXPECT_EQ(cmd1.blendMode, PaintBlendMode::Additive);
+    EXPECT_EQ(cmd2.blendMode, PaintBlendMode::Multiply);
+    EXPECT_EQ(cmd3.layer, 10u);
+    EXPECT_EQ(cmd3.clipMaskOffset, u32.max);
+    EXPECT_NE(cmd0.clipMaskOffset, u32.max);
+
+    const usize ellipseWord = cast<usize>(cmd0.clipMaskOffset >> 2u);
+    in Vector<u32> words = snapshot.effectWords();
+    EXPECT_EQ(words[ellipseWord + 0u], cast<u32>(PaintClipShapeKind::Ellipse));
+    const u32 parentOffset = words[ellipseWord + 1u];
+    EXPECT_NE(parentOffset, u32.max);
+    EXPECT_EQ(words[cast<usize>(parentOffset >> 2u) + 0u], cast<u32>(PaintClipShapeKind::RoundedRect));
+
+    EXPECT_NEAR(snapshot.vertices()[0u].color.a, 0.25f, 1.0e-5f);
+    EXPECT_NEAR(snapshot.vertices()[0u].color.r, 0.25f, 1.0e-5f);
+}
+
+void VerifyPaintEffects_IsolatedEffectLayerAndBlur(mut PaintEffectsTests self){
+    BeginPaintEffectsBuilder(self);
+
+    ASSERT_TRUE(self.m_builder.pushOpacity(0.5f));
+    ASSERT_TRUE(self.m_builder.beginEffectLayer(Rect(10.0f, 10.0f, 120.0f, 80.0f), 0.8f, 6.0f, PaintBlendMode::Screen));
+    EXPECT_FALSE(self.m_builder.beginEffectLayer(Rect(0.0f, 0.0f, 10.0f, 10.0f), 1.0f, 0.0f));
+    self.m_builder.fillRect(Rect(20.0f, 20.0f, 60.0f, 40.0f), Color(1.0f, 0.0f, 0.0f, 1.0f));
+    PaintGradient grad = MakeLinearGradient(Point(20.0f, 20.0f), Point(80.0f, 60.0f), Color(0.0f, 1.0f, 0.0f, 1.0f), Color(0.0f, 0.0f, 1.0f, 1.0f));
+    ASSERT_TRUE(self.m_builder.fillRectGradient(Rect(40.0f, 30.0f, 60.0f, 40.0f), grad));
+    ASSERT_TRUE(self.m_builder.endEffectLayer());
+    EXPECT_TRUE(self.m_builder.popOpacity());
+
+    DrawSnapshot snapshot = self.m_builder.freeze();
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
+    ASSERT_EQ(snapshot.effectLayers().size(), 1u);
+    ASSERT_EQ(snapshot.effectCommands().size(), 2u);
+    ASSERT_EQ(snapshot.commands().size(), 1u);
+
+    in PaintEffectLayer layer = snapshot.effectLayers()[0u];
+    EXPECT_EQ(layer.commandBegin, 0u);
+    EXPECT_EQ(layer.commandEnd, 2u);
+    EXPECT_NEAR(layer.opacity, 0.8f, 1.0e-5f);
+    EXPECT_NEAR(layer.blurRadius, 6.0f, 1.0e-5f);
+    EXPECT_NE(layer.blurHorizontalOffset, u32.max);
+    EXPECT_NE(layer.blurVerticalOffset, u32.max);
+
+    in DrawCommand compositeCmd = snapshot.commands()[0u];
+    EXPECT_EQ(compositeCmd.material, PaintMaterial::EffectLayerComposite);
+    EXPECT_EQ(compositeCmd.effectOffset, 0u);
+    EXPECT_EQ(compositeCmd.blendMode, PaintBlendMode::Screen);
+
+    GpuPaintPushConstants a;
+    GpuPaintPushConstants b;
+    AssignGpuPaintMaterialPushConstants(PaintMaterial::Gradient, s_ShaderUiInvalidHeapSlot, 0u, 0u, 0u, 3u, 64u, 128u, a);
+    b = a;
+    EXPECT_TRUE(SameGpuPaintPushConstants(a, b));
+    b.effectBufferSlot = 4u;
+    EXPECT_FALSE(SameGpuPaintPushConstants(a, b));
+    b = a;
+    b.effectOffset = 96u;
+    EXPECT_FALSE(SameGpuPaintPushConstants(a, b));
+    b = a;
+    b.clipMaskOffset = 256u;
+    EXPECT_FALSE(SameGpuPaintPushConstants(a, b));
+
+    DrawSnapshotFaultFixture fault;
+    const DrawCommand savedCmd = fault.command(snapshot, 0u);
+    fault.command(snapshot, 0u).effectOffset = 9999u;
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
+    fault.command(snapshot, 0u) = savedCmd;
+    fault.command(snapshot, 0u).clipMaskOffset = 9999u;
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
+    fault.command(snapshot, 0u) = savedCmd;
+    fault.command(snapshot, 0u).material = PaintMaterial::Blur;
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
+    fault.command(snapshot, 0u) = savedCmd;
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(PaintEffectsTests, PathTriangulationConcaveAndHoles, VerifyPaintEffects_PathTriangulationConcaveAndHoles)
+NWB_ADHD_GTEST_F(PaintEffectsTests, GradientsAndDropShadowsEncoding, VerifyPaintEffects_GradientsAndDropShadowsEncoding)
+NWB_ADHD_GTEST_F(PaintEffectsTests, AnalyticClipsBlendModesAndOpacityStack, VerifyPaintEffects_AnalyticClipsBlendModesAndOpacityStack)
+NWB_ADHD_GTEST_F(PaintEffectsTests, IsolatedEffectLayerAndBlur, VerifyPaintEffects_IsolatedEffectLayerAndBlur)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

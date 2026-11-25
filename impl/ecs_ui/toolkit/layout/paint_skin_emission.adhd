@@ -429,9 +429,57 @@ void EmitPaintSkinRegionCore(
     }
 }
 
+void EmitPaintSkinRegionSubRectCore(
+    in b8 recording,
+    in PaintClipEntry clip,
+    in UiSkinRegion region,
+    in Rect rectangle,
+    in Rect uvSubRect,
+    in Color tint,
+    in u32 atlasWidth,
+    in u32 atlasHeight,
+    in b8 hasTransform,
+    in PaintTransform2D xf,
+    in b8 axisAlignedPositive,
+    in u32 layer,
+    mut Vector<Vertex> vertices,
+    mut Vector<u32> indices,
+    mut Vector<DrawCommand> commands,
+    mut b8 inOutCommandsOrdered,
+    mut b8 inOutCommandsStrictlyDescending
+){
+    const Rect baseUv = ResolveSkinRegionUv(region.rectangle, atlasWidth, atlasHeight);
+    const VectorSingle baseExtent(baseUv.width, baseUv.height, baseUv.width, baseUv.height);
+    const VectorSingle subVec(uvSubRect.x, uvSubRect.y, uvSubRect.width, uvSubRect.height);
+    const VectorSingle composed = VectorSingle(baseUv.x, baseUv.y, 0.0f, 0.0f) + (baseExtent * subVec);
+    const Rect composedUv(composed.x, composed.y, composed.z, composed.w);
+    EmitPaintSkinQuadWithTransform(
+        recording,
+        clip,
+        rectangle,
+        composedUv,
+        tint,
+        hasTransform,
+        xf,
+        axisAlignedPositive,
+        layer,
+        vertices,
+        indices,
+        commands,
+        inOutCommandsOrdered,
+        inOutCommandsStrictlyDescending
+    );
+}
+
+u64 MakePaintCommandSortKey(in DrawCommand command){
+    return (cast<u64>(command.layer) << 32u) | cast<u64>(command.zOrder);
+}
+
 b8 IsPaintDrawCommandBefore(in DrawCommand lhs, in DrawCommand rhs){
     if(lhs.layer != rhs.layer)
         return lhs.layer < rhs.layer;
+    if(lhs.zOrder != rhs.zOrder)
+        return lhs.zOrder < rhs.zOrder;
     return lhs.firstIndex < rhs.firstIndex;
 }
 
@@ -471,6 +519,9 @@ void BeginPaintBuilderRecordingCached(
     mut Vector<PaintClipEntry> outClips,
     mut usize outOverlayDepth,
     mut u32 outLayer,
+    mut b8 outZOrderActive,
+    mut u32 outZOrder,
+    mut usize outZOrderCommandStart,
     mut b8 outCommandsOrdered,
     mut b8 outCommandsStrictlyDescending,
     mut b8 outRecording
@@ -488,28 +539,32 @@ void BeginPaintBuilderRecordingCached(
     outClips.push_back(rootClip);
     outOverlayDepth = 0u;
     outLayer = 0u;
+    outZOrderActive = false;
+    outZOrder = 0u;
+    outZOrderCommandStart = 0u;
     outCommandsOrdered = true;
     outCommandsStrictlyDescending = true;
     outRecording = true;
 }
 
-void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u32 orDiff, mut Vector<DrawCommand> scratch){
+void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u64 orDiff, mut Vector<DrawCommand> scratch){
     const usize count = inOutCommands.size();
     scratch.resize(count);
     b8 inScratch = false;
-    for(u32 shift = 0u; shift < 32u; shift += 8u){
-        if(((orDiff >> shift) & 0xffu) == 0u)
+    const u64 mask = 0xffu;
+    for(u32 shift = 0u; shift < 64u; shift += 8u){
+        if(((orDiff >> shift) & mask) == 0u)
             continue;
         Array<u32, 256u> counts;
         for(usize bucket = 0u; bucket < 256u; ++bucket)
             counts[bucket] = 0u;
         if(!inScratch){
             for(usize index = 0u; index < count; ++index)
-                ++counts[cast<usize>((inOutCommands[index].layer >> shift) & 0xffu)];
+                ++counts[cast<usize>((MakePaintCommandSortKey(inOutCommands[index]) >> shift) & mask)];
         }
         else{
             for(usize index = 0u; index < count; ++index)
-                ++counts[cast<usize>((scratch[index].layer >> shift) & 0xffu)];
+                ++counts[cast<usize>((MakePaintCommandSortKey(scratch[index]) >> shift) & mask)];
         }
         u32 offset = 0u;
         for(usize bucket = 0u; bucket < 256u; ++bucket){
@@ -520,7 +575,7 @@ void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u32 orDiff
         if(!inScratch){
             for(usize index = 0u; index < count; ++index){
                 in DrawCommand command = inOutCommands[index];
-                const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
+                const usize bucket = cast<usize>((MakePaintCommandSortKey(command) >> shift) & mask);
                 scratch[cast<usize>(counts[bucket])] = command;
                 ++counts[bucket];
             }
@@ -528,7 +583,7 @@ void RadixSortPaintCommands(mut Vector<DrawCommand> inOutCommands, in u32 orDiff
         else{
             for(usize index = 0u; index < count; ++index){
                 in DrawCommand command = scratch[index];
-                const usize bucket = cast<usize>((command.layer >> shift) & 0xffu);
+                const usize bucket = cast<usize>((MakePaintCommandSortKey(command) >> shift) & mask);
                 inOutCommands[cast<usize>(counts[bucket])] = command;
                 ++counts[bucket];
             }
@@ -543,12 +598,13 @@ void FinalizePaintBuilderRecording(
     in b8 commandsOrdered,
     in b8 commandsStrictlyDescending,
     in usize overlayDepth,
+    in b8 zOrderActive,
     mut Vector<DrawCommand> inOutCommands,
     mut Vector<PaintClipEntry> inOutClips,
     mut Vector<DrawCommand> sortScratch,
     mut b8 inOutRecording
 ){
-    [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u);
+    [essential] assert(inOutRecording && inOutClips.size() == 1u && overlayDepth == 0u && !zOrderActive);
     const usize count = inOutCommands.size();
     if(!commandsOrdered && count > 1u){
         if(commandsStrictlyDescending){
@@ -561,14 +617,14 @@ void FinalizePaintBuilderRecording(
         }
         else{
             b8 firstIndexMonotonic = true;
-            u32 orDiff = 0u;
-            const u32 firstLayer = inOutCommands[0u].layer;
+            u64 orDiff = 0u;
+            const u64 firstKey = MakePaintCommandSortKey(inOutCommands[0u]);
             for(usize index = 1u; index < count; ++index){
                 in DrawCommand prev = inOutCommands[index - 1u];
                 in DrawCommand cur = inOutCommands[index];
                 if(!(prev.firstIndex < cur.firstIndex))
                     firstIndexMonotonic = false;
-                orDiff |= (cur.layer ^ firstLayer);
+                orDiff |= (MakePaintCommandSortKey(cur) ^ firstKey);
             }
             if(orDiff != 0u){
                 if(count <= 32u || !firstIndexMonotonic)

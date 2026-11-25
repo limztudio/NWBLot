@@ -81,6 +81,20 @@ extern const u32 s_Win32Killfocus;
 extern const u32 s_Win32Setfocus;
 [cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_MOUSEMOVE")]
 extern const u32 s_Win32Mousemove;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_SETCURSOR")]
+extern const u32 s_Win32Setcursor;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("WM_GETOBJECT")]
+extern const u32 s_Win32Getobject;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_Win32UiaRootObjectId")]
+extern const isize s_Win32UiaRootObjectId;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_Win32HitClient")]
+extern const isize s_Win32HitClient;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_Win32HitCaption")]
+extern const isize s_Win32HitCaption;
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Core::DispatchWin32CursorMessage")]
+extern Optional<isize> DispatchWin32CursorMessage(mut ICursorService service, in u32 message, in usize wParam, in isize lParam);
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Core::DispatchWin32AccessibilityMessage")]
+extern Optional<isize> DispatchWin32AccessibilityMessage(mut IAccessibilityService service, in u32 message, in usize wParam, in isize lParam);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

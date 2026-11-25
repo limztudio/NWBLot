@@ -27,6 +27,10 @@ Win32TextInputService::Win32TextInputService(Alloc::GlobalArena& arena, const No
     , m_wideText(arena)
     , m_utf8Text(arena)
     , m_preeditText(arena)
+    , m_compAttr(arena)
+    , m_compClause(arena)
+    , m_utf16ByteOffsets(arena)
+    , m_preeditClauses(arena)
 {
     const HWND window = static_cast<HWND>(m_nativeWindowHandle.get());
     if(IsWindow(window)){
@@ -136,4 +140,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

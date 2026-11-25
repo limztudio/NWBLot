@@ -1,0 +1,599 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DockBorderThickness = 1.0f;
+const f32 s_DockClosePaddingFraction = 0.25f;
+const f32 s_DockCloseThickness = 1.5f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f32 ComputeDockSplitRatioFromGesture(in PointerGesture gesture, in DockSplitDirection dir){
+    if(!IsValidUiRect(gesture.referenceRectangle) || !(gesture.referenceRectangle.width > 0.0f) || !(gesture.referenceRectangle.height > 0.0f))
+        return 0.5f;
+    if(dir == DockSplitDirection::Horizontal)
+        return (gesture.position.x - gesture.referenceRectangle.x) / gesture.referenceRectangle.width;
+    return (gesture.position.y - gesture.referenceRectangle.y) / gesture.referenceRectangle.height;
+}
+
+f32 ComputeDockTabWidth(in DockNode node, in u64 panelKey, in Vector<DockPanelTitleEntry> titles, in DockSpaceStyle style, in b8 allowClose){
+    f32 textW = 48.0f;
+    for(in DockPanelTitleEntry entry : titles){
+        if(entry.key == panelKey){
+            textW = UiSimdMax(16.0f, entry.titleBounds.width);
+            break;
+        }
+    }
+    f32 closeW = 0.0f;
+    if(allowClose)
+        closeW = style.tabCloseSize + 4.0f;
+    const f32 desired = textW + 2.0f * style.tabPaddingX + closeW;
+    const f32 countF = cast<f32>(UiSimdMax(cast<usize>(1u), node.panelKeys.size()));
+    const f32 maxPerTab = UiSimdMax(24.0f, node.tabBarRect.width / countF);
+    return UiSimdMin(desired, maxPerTab);
+}
+
+b8 FindDockTitleLayout(in u64 panelKey, in Vector<DockPanelTitleEntry> titles, mut SharedTextLayout outLayout, mut Rect outBounds){
+    for(in DockPanelTitleEntry entry : titles){
+        if(entry.key == panelKey){
+            outLayout = entry.title;
+            outBounds = entry.titleBounds;
+            return entry.title.valid();
+        }
+    }
+    return false;
+}
+
+b8 Builder::beginDockSpace(in StringView stableKey, mut DockSpaceState state, in DockSpaceOptions options){
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || !IsValidDockSpaceOptions(options)
+        || !IsValidDockSpaceStyle(this.m_dockSpaceStyle)
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.synchronizePopup())
+        return false;
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::DockSpace);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration())){
+        this.m_context.fail();
+        return false;
+    }
+    const auto splitRoot = TryMakeWidgetId(widget.value().id, s_WidgetPartDockSplit);
+    const auto tabRoot = TryMakeWidgetId(widget.value().id, s_WidgetPartDockTab);
+    const auto closeRoot = TryMakeWidgetId(widget.value().id, s_WidgetPartDockClose);
+    if(!splitRoot.has_value() || !tabRoot.has_value() || !closeRoot.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+
+    state.ensureRoot();
+    state.m_lastClosedPanelKey = 0u;
+    state.m_lastUndockedPanelKey = 0u;
+
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = state.instanceGeneration();
+    token.contentRevision = 1u;
+    mut InputRouter input = this.m_context.input();
+    input.fenceControl(widget.value().id, widget.value().declarationGeneration, token);
+
+    if(!options.enabled){
+        input.invalidateTarget(widget.value().id);
+        state.m_dragActive = false;
+        state.m_draggingPanelKey = 0u;
+        state.m_hoverTargetNodeId = 0u;
+        state.m_hoverDropZone = DockDropZone::None;
+    }
+    else{
+        if(options.allowSplitResize){
+            Vector<u32> branchIds;
+            Vector<DockSplitDirection> branchDirs;
+            for(in DockNode n : state.m_nodes){
+                if(!n.isLeaf()){
+                    branchIds.push_back(n.id);
+                    branchDirs.push_back(n.splitDirection);
+                }
+            }
+            for(usize bi = 0u; bi < branchIds.size(); ++bi){
+                const Expected<WidgetId> splitPartId = TryMakeWidgetPartId(splitRoot.value(), cast<u64>(branchIds[bi]));
+                if(!splitPartId.has_value())
+                    continue;
+                while(true){
+                    const auto g = this.m_context.takePartPointerGesture(widget.value(), splitPartId.value(), true);
+                    if(!g.has_value())
+                        break;
+                    const f32 nextRatio = ComputeDockSplitRatioFromGesture(g.value(), branchDirs[bi]);
+                    state.setSplitRatio(branchIds[bi], nextRatio);
+                }
+            }
+        }
+
+        while(true){
+            const auto action = this.m_context.takeControlAction(widget.value(), true, token);
+            if(!action.has_value())
+                break;
+            in ControlAction act = action.value();
+            if(act.kind != ControlActionKind::Activate || act.value == 0u)
+                continue;
+            const Expected<WidgetId> closePart = TryMakeWidgetPartId(closeRoot.value(), act.value);
+            const Expected<WidgetId> tabPart = TryMakeWidgetPartId(tabRoot.value(), act.value);
+            if(options.allowTabClose && closePart.has_value() && act.source == closePart.value()){
+                if(state.undockPanel(act.value))
+                    state.m_lastClosedPanelKey = act.value;
+            }
+            else if(tabPart.has_value() && act.source == tabPart.value()){
+                const u32 leafId = state.findPanelNodeId(act.value);
+                if(leafId != 0u)
+                    state.selectTab(leafId, act.value);
+            }
+        }
+
+        if(options.allowDragDock){
+            Vector<u64> panelKeys;
+            for(in DockNode n : state.m_nodes){
+                if(!n.isLeaf())
+                    continue;
+                for(in u64 pk : n.panelKeys)
+                    panelKeys.push_back(pk);
+            }
+            for(in u64 pk : panelKeys){
+                const Expected<WidgetId> tabPart = TryMakeWidgetPartId(tabRoot.value(), pk);
+                if(!tabPart.has_value())
+                    continue;
+                while(true){
+                    const auto g = this.m_context.takePartPointerGesture(widget.value(), tabPart.value(), true);
+                    if(!g.has_value())
+                        break;
+                    in PointerGesture gesture = g.value();
+                    const VectorSingle d = VectorSingle(gesture.position.x, gesture.position.y, 0.0f, 0.0f) - VectorSingle(gesture.origin.x, gesture.origin.y, 0.0f, 0.0f);
+                    const b8 exceeded = (d.x * d.x + d.y * d.y) >= (s_DockDefaultDragThreshold * s_DockDefaultDragThreshold);
+                    const b8 wasDragging = state.m_dragActive && state.m_draggingPanelKey == pk;
+                    if(gesture.state == PointerGestureState::Active){
+                        if(wasDragging || exceeded){
+                            state.m_dragActive = true;
+                            state.m_draggingPanelKey = pk;
+                            state.m_draggingSourceNodeId = state.findPanelNodeId(pk);
+                            state.m_dragOrigin = gesture.origin;
+                            state.m_dragPointer = gesture.position;
+                            if(state.m_draggingSourceNodeId != 0u)
+                                state.selectTab(state.m_draggingSourceNodeId, pk);
+                            u32 hoverNode = 0u;
+                            DockDropZone hoverZone = DockDropZone::None;
+                            state.hitTestDropZone(gesture.position, this.m_dockSpaceStyle.dropZoneEdgeFraction, hoverNode, hoverZone);
+                            state.m_hoverTargetNodeId = hoverNode;
+                            state.m_hoverDropZone = hoverZone;
+                        }
+                    }
+                    else if(gesture.state == PointerGestureState::Completed){
+                        if(wasDragging || exceeded){
+                            u32 dropNode = 0u;
+                            DockDropZone dropZone = DockDropZone::None;
+                            if(state.hitTestDropZone(gesture.position, this.m_dockSpaceStyle.dropZoneEdgeFraction, dropNode, dropZone))
+                                state.dockPanel(pk, dropNode, dropZone, 0.5f);
+                            else if(!UiRectContainsPoint(state.m_lastBounds, gesture.position)){
+                                if(state.undockPanel(pk))
+                                    state.m_lastUndockedPanelKey = pk;
+                            }
+                        }
+                        state.m_dragActive = false;
+                        state.m_draggingPanelKey = 0u;
+                        state.m_hoverTargetNodeId = 0u;
+                        state.m_hoverDropZone = DockDropZone::None;
+                    }
+                }
+            }
+        }
+    }
+
+    Rect arrangeBounds = state.m_lastBounds;
+    if(!(arrangeBounds.width > 0.0f) || !(arrangeBounds.height > 0.0f)){
+        if(options.width.policy == LayoutSizePolicy::Fixed && options.height.policy == LayoutSizePolicy::Fixed)
+            arrangeBounds = Rect(0.0f, 0.0f, options.width.value, options.height.value);
+        else
+            arrangeBounds = Rect(0.0f, 0.0f, this.m_scope.value().m_bounds.width, this.m_scope.value().m_bounds.height);
+    }
+    if(arrangeBounds.width > 0.0f && arrangeBounds.height > 0.0f)
+        state.arrange(arrangeBounds, this.m_dockSpaceStyle);
+
+    LayoutNodeDesc dockDesc;
+    dockDesc.direction = LayoutDirection::Overlay;
+    dockDesc.clipChildren = true;
+    dockDesc.width = options.width;
+    dockDesc.height = options.height;
+    dockDesc.intrinsicSize = Point(240.0f, 160.0f);
+    ApplyLayoutItemOptions(options.layout, dockDesc);
+    const auto admittedNode = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), dockDesc);
+    if(!admittedNode.has_value() || !this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
+        return false;
+    }
+    if(dockDesc.zIndex != 0)
+        this.m_scope.value().m_hasNonZeroZIndex = true;
+
+    const u32 dockIndex = cast<u32>(this.m_scope.value().m_dockSpaces.size());
+    BuilderDockSpaceFrame frame;
+    frame.widget = widget.value();
+    frame.state = Optional<mut DockSpaceState>(state);
+    frame.style = this.m_dockSpaceStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.token = token;
+    frame.revision = state.revision();
+    frame.node = admittedNode.value();
+    frame.layer = this.m_context.popupLayer() + 1u;
+    frame.arrangedBounds = arrangeBounds;
+
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.node = admittedNode.value();
+    item.dockSpace = dockIndex;
+
+    this.m_scope.value().m_dockSpaces.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    this.m_scope.value().m_stack.push_back(admittedNode.value());
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::DockSpace);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_dockSpaceStack.push_back(dockIndex);
+    return true;
+}
+
+b8 Builder::beginDockedPanel(in StringView stableKey, in u64 panelKey, in StringView title){
+    if(
+        this.declarationBlocked()
+        || panelKey == 0u
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
+        || this.m_scope.value().m_scopeKinds.empty()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::DockSpace
+        || this.m_scope.value().m_dockSpaceStack.empty()
+        || this.m_context.failed()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    const u32 dockIndex = this.m_scope.value().m_dockSpaceStack.back();
+    if(cast<usize>(dockIndex) >= this.m_scope.value().m_dockSpaces.size()){
+        this.m_context.fail();
+        return false;
+    }
+    mut BuilderDockSpaceFrame frame = this.m_scope.value().m_dockSpaces[cast<usize>(dockIndex)];
+    if(!frame.state.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    mut DockSpaceState state = frame.state.value();
+
+    const ShapeRequest req = this.textShapeRequest(title, frame.widgetStyle.fontSize);
+    const auto measured = this.m_text.layoutAndMeasureShared(req, this.m_paint.displayMetrics());
+    if(!measured.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    DockPanelTitleEntry titleEntry;
+    titleEntry.key = panelKey;
+    titleEntry.title = measured.value().layout;
+    titleEntry.titleBounds = measured.value().bounds;
+    frame.panelTitles.push_back(titleEntry);
+
+    if(!state.isKnownPanel(panelKey)){
+        if(state.autoDockPanel(panelKey)){
+            if(frame.arrangedBounds.width > 0.0f && frame.arrangedBounds.height > 0.0f)
+                state.arrange(frame.arrangedBounds, frame.style);
+            frame.revision = state.revision();
+        }
+    }
+
+    if(!state.isPanelVisible(panelKey))
+        return false;
+
+    const Rect contentRect = state.panelContentRect(panelKey);
+    if(!(contentRect.width > 0.0f) || !(contentRect.height > 0.0f))
+        return false;
+    if(!this.m_context.declare(stableKey, WidgetKind::Container).has_value() || !this.m_context.pushScope(stableKey)){
+        this.m_context.fail();
+        return false;
+    }
+
+    LayoutNodeDesc panelDesc;
+    panelDesc.direction = LayoutDirection::Column;
+    panelDesc.clipChildren = true;
+    panelDesc.positionMode = LayoutPositionMode::Absolute;
+    panelDesc.anchor = LayoutAnchor::TopLeft;
+    panelDesc.pinLeft = true;
+    panelDesc.pinTop = true;
+    panelDesc.absoluteOffset = Point(contentRect.x - frame.arrangedBounds.x, contentRect.y - frame.arrangedBounds.y);
+    panelDesc.width = LayoutSize(LayoutSizePolicy::Fixed, contentRect.width);
+    panelDesc.height = LayoutSize(LayoutSizePolicy::Fixed, contentRect.height);
+    panelDesc.gap = this.m_style.gap;
+    const auto panelAdmitted = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), panelDesc);
+    if(!panelAdmitted.has_value()){
+        this.m_context.popScope();
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_stack.push_back(panelAdmitted.value());
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::DockPanel);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
+    return true;
+}
+
+b8 Builder::endDockedPanel(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::DockPanel
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+    return this.m_context.popScope();
+}
+
+b8 Builder::endDockSpace(){
+    if(
+        this.declarationBlocked()
+        || !this.m_scope.value().m_panelActive
+        || this.m_scope.value().m_stack.size() <= 1u
+        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::DockSpace
+        || this.m_scope.value().m_dockSpaceStack.empty()
+    ){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_stack.pop_back();
+    this.m_scope.value().m_scrollAreaStack.pop_back();
+    this.m_scope.value().m_scopeKinds.pop_back();
+    this.m_scope.value().m_virtualListStack.pop_back();
+    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().m_dockSpaceStack.pop_back();
+    return this.m_context.popScope();
+}
+
+b8 Builder::dockSpaceStateMatches(in BuilderDockSpaceFrame frame)const{
+    return frame.state.has_value() && this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
+}
+
+b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
+    if(item.dockSpace >= this.m_scope.value().m_dockSpaces.size())
+        return false;
+    in BuilderDockSpaceFrame frame = this.m_scope.value().m_dockSpaces[item.dockSpace];
+    if(!frame.state.has_value())
+        return false;
+    mut DockSpaceState state = frame.state.value();
+    in DockSpaceStyle style = frame.style;
+    const Rect clip = this.visibleClip(box.clip);
+    const Rect dockRect = box.rectangle;
+    state.arrange(dockRect, style);
+
+    const auto splitRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartDockSplit);
+    const auto tabRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartDockTab);
+    const auto closeRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartDockClose);
+    if(!splitRoot.has_value() || !tabRoot.has_value() || !closeRoot.has_value())
+        return false;
+
+    HitTargetFactory targets;
+    in InputRouter input = this.m_context.input();
+    const HitTarget host = targets.makeDockSpaceHostHitTarget(dockRect, clip, item.enabled, frame.token);
+    if(!this.m_context.addTarget(frame.widget, host))
+        return false;
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::DockSpace,
+        dockRect,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip),
+        s_AccessibilityActionNone
+    );
+
+    this.m_paint.pushClip(clip);
+    this.m_paint.fillRect(dockRect, style.backgroundColor);
+    this.m_paint.strokeRect(dockRect, s_DockBorderThickness, style.borderColor);
+
+    b8 paintOk = true;
+    for(in DockNode node : state.m_nodes){
+        if(!node.isLeaf()){
+            if(node.splitterRect.width > 0.0f && node.splitterRect.height > 0.0f){
+                const Expected<WidgetId> splitId = TryMakeWidgetPartId(splitRoot.value(), cast<u64>(node.id));
+                if(!splitId.has_value()){
+                    this.m_paint.popClip();
+                    return false;
+                }
+                const b8 splitHover = item.enabled && frame.options.allowSplitResize && (input.hover() == splitId.value() || input.capture() == splitId.value());
+                Color splitCol = style.splitterColor;
+                if(splitHover)
+                    splitCol = style.splitterHoverColor;
+                this.m_paint.fillRect(node.splitterRect, splitCol);
+                if(item.enabled && frame.options.allowSplitResize){
+                    const Rect splitClip = IntersectUiRectsBounds(node.splitterRect, clip);
+                    const HitTarget splitTgt = targets.makeDockSplitterHitTarget(node.splitterRect, splitClip, node.computedRect, node.splitDirection, true, frame.token);
+                    if(!this.m_context.addPartTarget(frame.widget, splitId.value(), splitTgt)){
+                        this.m_paint.popClip();
+                        return false;
+                    }
+                }
+            }
+            continue;
+        }
+
+        if(node.computedRect.width > 0.0f && node.computedRect.height > 0.0f)
+            this.m_paint.strokeRect(node.computedRect, s_DockBorderThickness, style.borderColor);
+
+        if(node.tabBarRect.width > 0.0f && node.tabBarRect.height > 0.0f && !node.panelKeys.empty()){
+            this.m_paint.pushClip(IntersectUiRectsBounds(node.tabBarRect, clip));
+            this.m_paint.fillRect(node.tabBarRect, style.tabBarBgColor);
+            f32 curX = node.tabBarRect.x;
+            for(in u64 pk : node.panelKeys){
+                const f32 tabW = ComputeDockTabWidth(node, pk, frame.panelTitles, style, frame.options.allowTabClose);
+                const Rect tabRect(curX, node.tabBarRect.y, tabW, node.tabBarRect.height);
+                curX += tabW;
+                const Expected<WidgetId> tabId = TryMakeWidgetPartId(tabRoot.value(), pk);
+                const Expected<WidgetId> closeId = TryMakeWidgetPartId(closeRoot.value(), pk);
+                if(!tabId.has_value() || !closeId.has_value()){
+                    this.m_paint.popClip();
+                    this.m_paint.popClip();
+                    return false;
+                }
+                const b8 isActive = node.activePanelKey == pk;
+                const b8 isHover = item.enabled && input.hover() == tabId.value();
+                Color tabCol = style.inactiveTabColor;
+                if(isActive)
+                    tabCol = style.activeTabColor;
+                else if(isHover)
+                    tabCol = style.hoverTabColor;
+                this.m_paint.fillRect(tabRect, tabCol);
+                this.m_paint.strokeRect(tabRect, s_DockBorderThickness, style.borderColor);
+
+                f32 labelMaxW = UiSimdMax(0.0f, tabRect.width - 2.0f * style.tabPaddingX);
+                Rect closeRect;
+                if(frame.options.allowTabClose && tabRect.width > style.tabCloseSize + style.tabPaddingX){
+                    const f32 cs = UiSimdMin(style.tabCloseSize, tabRect.height - 4.0f);
+                    closeRect = Rect(
+                        tabRect.x + tabRect.width - style.tabPaddingX * 0.5f - cs,
+                        tabRect.y + (tabRect.height - cs) * 0.5f,
+                        cs,
+                        cs
+                    );
+                    labelMaxW = UiSimdMax(0.0f, closeRect.x - 4.0f - (tabRect.x + style.tabPaddingX));
+                }
+
+                SharedTextLayout titleLayout;
+                Rect titleBounds;
+                if(FindDockTitleLayout(pk, frame.panelTitles, titleLayout, titleBounds) && labelMaxW > 0.0f){
+                    Color textCol = style.inactiveTextColor;
+                    if(isActive && item.enabled)
+                        textCol = style.textColor;
+                    const Rect lblRect(tabRect.x + style.tabPaddingX, tabRect.y, labelMaxW, tabRect.height);
+                    const Point titleOrigin = ResolveCenteredTextOrigin(lblRect, 0.0f, titleBounds);
+                    this.m_paint.pushClip(lblRect);
+                    paintOk = paintOk && this.m_text.paint(this.m_paint, titleLayout.deref(), titleOrigin, textCol);
+                    const b8 lblPop = this.m_paint.popClip();
+                    paintOk = paintOk && lblPop;
+                }
+
+                if(frame.options.allowTabClose && closeRect.width > 0.0f && closeRect.height > 0.0f){
+                    const f32 pad = closeRect.width * s_DockClosePaddingFraction;
+                    this.m_paint.drawLine(
+                        Point(closeRect.x + pad, closeRect.y + pad),
+                        Point(closeRect.x + closeRect.width - pad, closeRect.y + closeRect.height - pad),
+                        s_DockCloseThickness,
+                        style.textColor
+                    );
+                    this.m_paint.drawLine(
+                        Point(closeRect.x + closeRect.width - pad, closeRect.y + pad),
+                        Point(closeRect.x + pad, closeRect.y + closeRect.height - pad),
+                        s_DockCloseThickness,
+                        style.textColor
+                    );
+                }
+
+                if(item.enabled){
+                    const Rect tabClip = IntersectUiRectsBounds(tabRect, clip);
+                    const HitTarget tabTgt = targets.makeDockTabHitTarget(tabRect, tabClip, true, frame.options.allowDragDock, frame.token, pk);
+                    if(!this.m_context.addPartTarget(frame.widget, tabId.value(), tabTgt)){
+                        this.m_paint.popClip();
+                        this.m_paint.popClip();
+                        return false;
+                    }
+                    if(frame.options.allowTabClose && closeRect.width > 0.0f && closeRect.height > 0.0f){
+                        const Rect closeClip = IntersectUiRectsBounds(closeRect, clip);
+                        const HitTarget closeTgt = targets.makeDockTabCloseHitTarget(closeRect, closeClip, true, frame.token, pk);
+                        if(!this.m_context.addPartTarget(frame.widget, closeId.value(), closeTgt)){
+                            this.m_paint.popClip();
+                            this.m_paint.popClip();
+                            return false;
+                        }
+                    }
+                }
+                StringView dockTabName = StringView();
+                if(titleLayout.valid())
+                    dockTabName = titleLayout.deref().utf8();
+                u32 dockTabState = ResolveAccessibleVisibilityStateBits(item.enabled, tabRect) | s_AccessibilityStateFocusable;
+                if(isActive)
+                    dockTabState |= s_AccessibilityStateSelected;
+                this.emitAccessiblePartNode(
+                    tabId.value(),
+                    frame.widget.id,
+                    AccessibilityRole::Tab,
+                    tabRect,
+                    dockTabName,
+                    dockTabState,
+                    s_AccessibilityActionSelect | s_AccessibilityActionFocus,
+                    0,
+                    0,
+                    0
+                );
+            }
+            const b8 barPop = this.m_paint.popClip();
+            if(!paintOk || !barPop){
+                this.m_paint.popClip();
+                return false;
+            }
+        }
+    }
+
+    return this.m_paint.popClip() && paintOk;
+}
+
+b8 Builder::paintDockSpaceOverlays(){
+    for(in BuilderDockSpaceFrame frame : this.m_scope.value().m_dockSpaces){
+        if(!this.dockSpaceStateMatches(frame))
+            return false;
+        in DockSpaceState state = frame.state.value();
+        if(!state.m_dragActive || state.m_hoverTargetNodeId == 0u || state.m_hoverDropZone == DockDropZone::None)
+            continue;
+        const Rect preview = state.computeDropPreviewRect(state.m_hoverTargetNodeId, state.m_hoverDropZone);
+        if(!(preview.width > 0.0f) || !(preview.height > 0.0f))
+            continue;
+        if(!this.m_paint.beginOverlay(frame.layer))
+            return false;
+        this.m_paint.fillRect(preview, frame.style.dropPreviewFill);
+        this.m_paint.strokeRect(preview, 2.0f, frame.style.dropPreviewBorder);
+        if(!this.m_paint.endOverlay())
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,0 +1,616 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MenuTestSource : IListDataSource{
+    public u64 m_generation = 901u;
+    public u64 m_revision = 1u;
+    public u64 m_baseKey = 100u;
+
+    public u64 instanceGeneration()const override{ return this.m_generation; }
+    public u64 revision()const override{ return this.m_revision; }
+    public u64 rowCount()const override{ return 3u; }
+    public u64 key(in u64 index)const override{ return this.m_baseKey + index; }
+    public Expected<u64> indexOf(in u64 value)const override{
+        if(value >= this.m_baseKey && value < this.m_baseKey + 3u)
+            return value - this.m_baseKey;
+        return MakeUnexpected(Failure());
+    }
+    public Expected<u64> findEnabled(in u64 start, in b8 backwards)const override{
+        if(start < 3u)
+            return start;
+        if(backwards)
+            return 2u;
+        return 0u;
+    }
+    public StringView text(in u64 index)const override{
+        if(index == 0u)
+            return "First";
+        if(index == 1u)
+            return "Second";
+        return "Third";
+    }
+    public b8 enabled(in u64 index)const override{ return index != 2u; }
+}
+
+class ChromeModalDialogTests : WidgetFixture{
+    public DialogState m_dialog;
+    public u32 m_bgClicks = 0u;
+    public u32 m_okClicks = 0u;
+
+    public b8 renderFrame(in u64 generation, in DialogOptions options){
+        if(!this.begin(generation))
+            return false;
+        if(!this.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 360.0f, 240.0f))){
+            this.m_builder.endPanel();
+            return false;
+        }
+        WidgetOptions bgOpts;
+        bgOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 120.0f);
+        bgOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
+        if(this.m_builder.button("bg_btn", "Behind", bgOpts))
+            ++this.m_bgClicks;
+        if(!this.m_builder.endPanel())
+            return false;
+
+        if(this.m_builder.beginModalDialog("dlg", "Confirm", this.m_dialog, options)){
+            if(this.m_builder.button("ok", "OK"))
+                ++this.m_okClicks;
+            if(!this.m_builder.endModalDialog())
+                return false;
+        }
+        return this.finishRoot() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId dialogCloseId()const{
+        const WidgetId rootId = RequireUiRootId(this.m_root);
+        const WidgetId dlgId = RequireUiWidgetId(rootId, "dlg");
+        const WidgetId hdrId = RequireUiWidgetId(dlgId, s_DialogHeaderScopeKey);
+        return RequireUiWidgetId(hdrId, s_DialogCloseButtonKey);
+    }
+
+    public Point bgButtonCenter(){
+        const auto tgt = this.tryTarget(this.id("bg_btn", "panel"));
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+
+    public Point closeButtonCenter(){
+        const auto tgt = this.tryTarget(this.dialogCloseId());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+class ChromeMenuBarTests : WidgetFixture{
+    public MenuTestSource m_fileSource;
+    public MenuTestSource m_editSource;
+    public MenuBarState m_state;
+    public MenuBarResult m_result;
+
+    public ChromeMenuBarTests(){
+        this.m_editSource.m_generation = 902u;
+        this.m_editSource.m_baseKey = 200u;
+    }
+
+    public void buildDefaultMenus(mut Vector<MenuBarMenu> outMenus){
+        outMenus.clear();
+        MenuBarMenu fileMenu;
+        fileMenu.key = 1u;
+        fileMenu.label = "File";
+        fileMenu.items = Optional<in IListDataSource>(this.m_fileSource);
+        outMenus.push_back(fileMenu);
+
+        MenuBarMenu editMenu;
+        editMenu.key = 2u;
+        editMenu.label = "Edit";
+        editMenu.items = Optional<in IListDataSource>(this.m_editSource);
+        outMenus.push_back(editMenu);
+
+        MenuBarMenu helpMenu;
+        helpMenu.key = 3u;
+        helpMenu.label = "Help";
+        outMenus.push_back(helpMenu);
+
+        MenuBarMenu disabledMenu;
+        disabledMenu.key = 4u;
+        disabledMenu.label = "Off";
+        disabledMenu.enabled = false;
+        outMenus.push_back(disabledMenu);
+    }
+
+    public b8 renderBar(in u64 generation, in Span<MenuBarMenu> menus, in MenuBarOptions options){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 460.0f, 280.0f)))
+            return false;
+        this.m_result = this.m_builder.menuBar("mbar", menus, this.m_state, options);
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId menuBarId()const{
+        return this.id("mbar", "panel");
+    }
+
+    public Point menuItemCenter(in u64 key){
+        const auto root = TryMakeWidgetId(this.menuBarId(), s_WidgetPartMenuItem);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), key);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+
+    public Point dropdownRowCenter(in u64 key){
+        const auto listId = TryMakeWidgetId(this.menuBarId(), s_WidgetPartRows);
+        EXPECT_TRUE(listId.has_value());
+        const auto rowRoot = TryMakeWidgetId(listId.value(), s_WidgetPartRows);
+        EXPECT_TRUE(rowRoot.has_value());
+        const auto part = TryMakeWidgetPartId(rowRoot.value(), key);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+class ChromeToolbarStatusTests : WidgetFixture{
+    public b8 m_bold = false;
+    public u32 m_saveClicks = 0u;
+
+    public b8 renderFrame(in u64 generation){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 400.0f, 260.0f)))
+            return false;
+
+        ToolbarOptions rowOpts;
+        rowOpts.direction = LayoutDirection::Row;
+        if(!this.m_builder.beginToolbar("row_tb", rowOpts)){
+            this.m_builder.endPanel();
+            return false;
+        }
+        if(this.m_builder.toolbarButton("save", "Save"))
+            ++this.m_saveClicks;
+        this.m_builder.toolbarSeparator("row_sep");
+        this.m_builder.toolbarToggle("bold", "Bold", this.m_bold);
+        if(!this.m_builder.endToolbar()){
+            this.m_builder.endPanel();
+            return false;
+        }
+
+        ToolbarOptions colOpts;
+        colOpts.direction = LayoutDirection::Column;
+        colOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 80.0f);
+        if(!this.m_builder.beginToolbar("col_tb", colOpts)){
+            this.m_builder.endPanel();
+            return false;
+        }
+        this.m_builder.toolbarButton("vbtn", "Tool");
+        this.m_builder.toolbarSeparator("col_sep");
+        this.m_builder.toolbarButton("vbtn2", "Tool2");
+        if(!this.m_builder.endToolbar()){
+            this.m_builder.endPanel();
+            return false;
+        }
+
+        StatusBarOptions sbOpts;
+        sbOpts.height = 24.0f;
+        if(!this.m_builder.beginStatusBar("sb", sbOpts)){
+            this.m_builder.endPanel();
+            return false;
+        }
+        LabelOptions leftLabel;
+        leftLabel.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+        leftLabel.ellipsis = true;
+        this.m_builder.statusBarSection("left", "Ready", leftLabel);
+        this.m_builder.statusBarSection("right", "Ln 1");
+        if(!this.m_builder.endStatusBar()){
+            this.m_builder.endPanel();
+            return false;
+        }
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public Point widgetCenter(in StringView key, in StringView toolbarKey){
+        const WidgetId barId = this.id(toolbarKey, "panel");
+        const auto tgt = this.tryTarget(RequireUiWidgetId(barId, key));
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+class ChromeToastTests : WidgetFixture{
+    public ToastState m_state;
+    public ToastResult m_result;
+
+    public b8 renderToasts(in u64 generation, in f32 deltaSeconds, in ToastOptions options){
+        this.m_builder.setDeltaSeconds(deltaSeconds);
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 200.0f, 200.0f)))
+            return false;
+        this.m_result = this.m_builder.toastStack("toasts", this.m_state, options);
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId toastWidgetId()const{
+        return this.id("toasts", "panel");
+    }
+
+    public Point closeCenter(in u64 toastId){
+        const auto root = TryMakeWidgetId(this.toastWidgetId(), s_WidgetPartToastClose);
+        EXPECT_TRUE(root.has_value());
+        const auto part = TryMakeWidgetPartId(root.value(), toastId);
+        EXPECT_TRUE(part.has_value());
+        const auto tgt = this.tryTarget(part.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        return CenterUiRect(tgt.value().rectangle);
+    }
+}
+
+class ChromeColorPickerTests : WidgetFixture{
+    public ColorPickerState m_state;
+    public ColorPickerResult m_result;
+
+    public b8 renderPicker(in u64 generation, in ColorPickerOptions options){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 300.0f, 340.0f)))
+            return false;
+        this.m_result = this.m_builder.colorPicker("cp", this.m_state, options);
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
+
+    public WidgetId pickerId()const{
+        return this.id("cp", "panel");
+    }
+
+    public Point partPoint(in StringView partKey, in f32 nx, in f32 ny){
+        const auto idOpt = TryMakeWidgetId(this.pickerId(), partKey);
+        EXPECT_TRUE(idOpt.has_value());
+        const auto tgt = this.tryTarget(idOpt.value());
+        EXPECT_TRUE(tgt.has_value());
+        if(!tgt.has_value())
+            return Point();
+        in Rect r = tgt.value().rectangle;
+        return Point(r.x + r.width * nx, r.y + r.height * ny);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyModalDialog_CenterBackdropCloseEscOutsideAndInvalid(mut ChromeModalDialogTests self){
+    DialogOptions opts;
+    opts.size = Point(320.0f, 180.0f);
+    opts.closable = true;
+    opts.dismissOutside = false;
+    opts.dismissCancel = true;
+
+    self.m_dialog.open();
+    ASSERT_TRUE(self.renderFrame(1u, opts));
+    EXPECT_TRUE(self.m_dialog.isOpen());
+    EXPECT_FALSE(self.m_dialog.wasClosedByUser());
+    EXPECT_NEAR(self.m_dialog.placement().bounds.x, 240.0f, 1.0f);
+    EXPECT_NEAR(self.m_dialog.placement().bounds.y, 210.0f, 1.0f);
+
+    const Point behindPt = self.bgButtonCenter();
+    InputEvent behindClick;
+    behindClick.position = behindPt;
+    behindClick.type = InputEventType::PrimaryDown;
+    self.send(behindClick);
+    behindClick.type = InputEventType::PrimaryUp;
+    self.send(behindClick);
+    ASSERT_TRUE(self.renderFrame(2u, opts));
+    EXPECT_EQ(self.m_bgClicks, 0u);
+    EXPECT_TRUE(self.m_dialog.isOpen());
+
+    self.click(self.closeButtonCenter());
+    ASSERT_TRUE(self.renderFrame(3u, opts));
+    EXPECT_FALSE(self.m_dialog.isOpen());
+    EXPECT_TRUE(self.m_dialog.wasClosedByUser());
+
+    ASSERT_TRUE(self.renderFrame(4u, opts));
+    EXPECT_FALSE(self.m_dialog.wasClosedByUser());
+
+    self.m_dialog.open();
+    ASSERT_TRUE(self.renderFrame(5u, opts));
+    self.press(Key::Escape);
+    ASSERT_TRUE(self.renderFrame(6u, opts));
+    EXPECT_FALSE(self.m_dialog.isOpen());
+    EXPECT_TRUE(self.m_dialog.wasClosedByUser());
+
+    DialogOptions lockedOpts = opts;
+    lockedOpts.dismissCancel = false;
+    lockedOpts.dismissOutside = true;
+    self.m_dialog.open();
+    ASSERT_TRUE(self.renderFrame(7u, lockedOpts));
+    InputEvent escEvt;
+    escEvt.type = InputEventType::KeyDown;
+    escEvt.key = Key::Escape;
+    self.send(escEvt);
+    escEvt.type = InputEventType::KeyUp;
+    self.send(escEvt);
+    ASSERT_TRUE(self.renderFrame(8u, lockedOpts));
+    EXPECT_TRUE(self.m_dialog.isOpen());
+
+    InputEvent outsideClick;
+    outsideClick.position = Point(5.0f, 5.0f);
+    outsideClick.type = InputEventType::PrimaryDown;
+    self.send(outsideClick);
+    outsideClick.type = InputEventType::PrimaryUp;
+    self.send(outsideClick);
+    ASSERT_TRUE(self.renderFrame(9u, lockedOpts));
+    EXPECT_FALSE(self.m_dialog.isOpen());
+    EXPECT_TRUE(self.m_dialog.wasClosedByUser());
+
+    DialogOptions invalidOpts;
+    invalidOpts.size = Point(0.0f, 100.0f);
+    EXPECT_FALSE(IsValidDialogOptions(invalidOpts));
+}
+
+void VerifyMenuBar_DropdownHoverSwitchActivateKeyboardAndValidation(mut ChromeMenuBarTests self){
+    Vector<MenuBarMenu> menus;
+    self.buildDefaultMenus(menus);
+    MenuBarOptions opts;
+
+    Vector<MenuBarMenu> invalidMenus = menus;
+    invalidMenus[1u].key = 1u;
+    EXPECT_FALSE(IsValidMenuBarMenus(Span<MenuBarMenu>(invalidMenus)));
+    invalidMenus[1u].key = 0u;
+    EXPECT_FALSE(IsValidMenuBarMenus(Span<MenuBarMenu>(invalidMenus)));
+
+    ASSERT_TRUE(self.renderBar(1u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_TRUE(self.m_result.valid);
+    EXPECT_EQ(self.m_result.openMenuKey, 0u);
+
+    const Point fileCenter = self.menuItemCenter(1u);
+    const Point editCenter = self.menuItemCenter(2u);
+    const Point helpCenter = self.menuItemCenter(3u);
+    const auto offRoot = TryMakeWidgetId(self.menuBarId(), s_WidgetPartMenuItem).value();
+    EXPECT_FALSE(self.hasTarget(TryMakeWidgetPartId(offRoot, 4u).value()));
+
+    self.click(fileCenter);
+    ASSERT_TRUE(self.renderBar(2u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_TRUE(self.m_state.isOpen());
+    EXPECT_EQ(self.m_result.openMenuKey, 1u);
+    EXPECT_GE(self.m_state.m_popup.placement().bounds.y, fileCenter.y);
+
+    InputEvent moveToEdit;
+    moveToEdit.type = InputEventType::PointerMove;
+    moveToEdit.position = editCenter;
+    self.send(moveToEdit);
+    ASSERT_TRUE(self.renderBar(3u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_TRUE(self.m_state.isOpen());
+    EXPECT_EQ(self.m_result.openMenuKey, 2u);
+
+    self.click(self.dropdownRowCenter(201u));
+    ASSERT_TRUE(self.renderBar(4u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_FALSE(self.m_state.isOpen());
+    EXPECT_TRUE(self.m_result.activated);
+    EXPECT_EQ(self.m_result.menuKey, 2u);
+    EXPECT_EQ(self.m_result.itemKey, 201u);
+
+    self.click(helpCenter);
+    ASSERT_TRUE(self.renderBar(5u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_FALSE(self.m_state.isOpen());
+    EXPECT_TRUE(self.m_result.activated);
+    EXPECT_EQ(self.m_result.menuKey, 3u);
+    EXPECT_EQ(self.m_result.itemKey, 0u);
+
+    self.press(Key::Left);
+    ASSERT_TRUE(self.renderBar(6u, Span<MenuBarMenu>(menus), opts));
+    self.press(Key::Down);
+    ASSERT_TRUE(self.renderBar(7u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_TRUE(self.m_state.isOpen());
+    EXPECT_EQ(self.m_result.openMenuKey, 2u);
+
+    self.press(Key::Escape);
+    ASSERT_TRUE(self.renderBar(8u, Span<MenuBarMenu>(menus), opts));
+    EXPECT_FALSE(self.m_state.isOpen());
+}
+
+void VerifyToolbarAndStatusBar_AutoSeparatorToggleStateAndFixedHeight(mut ChromeToolbarStatusTests self){
+    ASSERT_TRUE(self.renderFrame(1u));
+    EXPECT_FALSE(self.m_bold);
+
+    const WidgetId rowTbId = self.id("row_tb", "panel");
+    const WidgetId colTbId = self.id("col_tb", "panel");
+    const auto saveTgt = self.tryTarget(RequireUiWidgetId(rowTbId, "save"));
+    const auto boldTgt = self.tryTarget(RequireUiWidgetId(rowTbId, "bold"));
+    const auto v1Tgt = self.tryTarget(RequireUiWidgetId(colTbId, "vbtn"));
+    const auto v2Tgt = self.tryTarget(RequireUiWidgetId(colTbId, "vbtn2"));
+    ASSERT_TRUE(saveTgt.has_value());
+    ASSERT_TRUE(boldTgt.has_value());
+    ASSERT_TRUE(v1Tgt.has_value());
+    ASSERT_TRUE(v2Tgt.has_value());
+    EXPECT_GT(boldTgt.value().rectangle.x - (saveTgt.value().rectangle.x + saveTgt.value().rectangle.width), 8.0f);
+    EXPECT_GT(v2Tgt.value().rectangle.y - (v1Tgt.value().rectangle.y + v1Tgt.value().rectangle.height), 8.0f);
+
+    Vector<Vertex> glyphs;
+    CopyGlyphVertices(self.m_paint.freeze(), glyphs);
+    EXPECT_FALSE(glyphs.empty());
+
+    const Point savePt = self.widgetCenter("save", "row_tb");
+    const Point boldPt = self.widgetCenter("bold", "row_tb");
+    self.click(savePt);
+    ASSERT_TRUE(self.renderFrame(2u));
+    EXPECT_EQ(self.m_saveClicks, 1u);
+
+    self.click(boldPt);
+    ASSERT_TRUE(self.renderFrame(3u));
+    EXPECT_TRUE(self.m_bold);
+
+    self.click(boldPt);
+    ASSERT_TRUE(self.renderFrame(4u));
+    EXPECT_FALSE(self.m_bold);
+}
+
+void VerifyToastStack_MaxVisiblePauseOnHoverManualDismissAndPersistent(mut ChromeToastTests self){
+    ToastOptions opts;
+    opts.corner = ToastCorner::BottomRight;
+    opts.maxVisible = 2u;
+    opts.pauseOnHover = true;
+
+    const u64 id1 = self.m_state.push("Build", "Started", ToastSeverity::Info, 2.0f);
+    const u64 id2 = self.m_state.push("Test", "Running", ToastSeverity::Success, 2.0f);
+    const u64 id3 = self.m_state.push("Warn", "Cache cold", ToastSeverity::Warning, 3.0f);
+    const u64 id4 = self.m_state.push("Keep", "Pinned", ToastSeverity::Error, 0.0f);
+    EXPECT_NE(id1, 0u);
+    EXPECT_NE(id4, 0u);
+
+    ASSERT_TRUE(self.renderToasts(1u, 0.0f, opts));
+    EXPECT_TRUE(self.m_result.valid);
+    EXPECT_EQ(self.m_result.activeCount, 4u);
+    ASSERT_EQ(self.m_state.m_visibleIds.size(), 2u);
+    EXPECT_EQ(self.m_state.m_visibleIds[0u], id1);
+    EXPECT_EQ(self.m_state.m_visibleIds[1u], id2);
+    EXPECT_GT(self.m_state.m_visibleRects[0u].x, 400.0f);
+    EXPECT_GT(self.m_state.m_visibleRects[0u].y, 300.0f);
+
+    InputEvent hoverId1;
+    hoverId1.type = InputEventType::PointerMove;
+    hoverId1.position = CenterUiRect(self.m_state.m_visibleRects[0u]);
+    self.send(hoverId1);
+    ASSERT_TRUE(self.renderToasts(2u, 2.5f, opts));
+    EXPECT_EQ(self.m_result.dismissedCount, 1u);
+    EXPECT_EQ(self.m_result.lastDismissedId, id2);
+    EXPECT_EQ(self.m_result.activeCount, 3u);
+    ASSERT_EQ(self.m_state.m_visibleIds.size(), 2u);
+    EXPECT_EQ(self.m_state.m_visibleIds[0u], id1);
+    EXPECT_EQ(self.m_state.m_visibleIds[1u], id3);
+
+    self.click(self.closeCenter(id1));
+    ASSERT_TRUE(self.renderToasts(3u, 0.0f, opts));
+    EXPECT_EQ(self.m_result.dismissedCount, 1u);
+    EXPECT_EQ(self.m_result.lastDismissedId, id1);
+    EXPECT_EQ(self.m_result.activeCount, 2u);
+
+    InputEvent moveAway;
+    moveAway.type = InputEventType::PointerMove;
+    moveAway.position = Point(5.0f, 5.0f);
+    self.send(moveAway);
+    ASSERT_TRUE(self.renderToasts(4u, 5.0f, opts));
+    EXPECT_EQ(self.m_result.dismissedCount, 1u);
+    EXPECT_EQ(self.m_result.lastDismissedId, id3);
+    EXPECT_EQ(self.m_result.activeCount, 1u);
+    ASSERT_EQ(self.m_state.m_visibleIds.size(), 1u);
+    EXPECT_EQ(self.m_state.m_visibleIds[0u], id4);
+}
+
+void VerifyColorPicker_ConversionsHexDragAndKeyboard(mut ChromeColorPickerTests self){
+    Array<ColorHsv, 6u> sectorHsvs;
+    for(usize si = 0u; si < 6u; ++si){
+        sectorHsvs[si].h = cast<f32>(si) * 60.0f + 15.0f;
+        sectorHsvs[si].s = 0.75f;
+        sectorHsvs[si].v = 0.85f;
+        sectorHsvs[si].a = 0.6f;
+        const Color rgb = HsvToRgb(sectorHsvs[si]);
+        const ColorHsv back = RgbToHsv(rgb);
+        EXPECT_NEAR(back.h, sectorHsvs[si].h, 0.5f);
+        EXPECT_NEAR(back.s, sectorHsvs[si].s, 0.01f);
+        EXPECT_NEAR(back.v, sectorHsvs[si].v, 0.01f);
+        EXPECT_NEAR(back.a, sectorHsvs[si].a, 0.01f);
+    }
+
+    String hexOut;
+    EXPECT_TRUE(FormatColorHex(Color(1.0f, 0.5f, 0.0f, 1.0f), false, hexOut));
+    EXPECT_EQ(StringView(hexOut), "#FF8000");
+    EXPECT_TRUE(FormatColorHex(Color(1.0f, 0.0f, 0.0f, 0.5f), true, hexOut));
+    EXPECT_EQ(StringView(hexOut), "#FF000080");
+
+    const auto parsedShort = TryParseColorHex("#3af");
+    ASSERT_TRUE(parsedShort.has_value());
+    EXPECT_NEAR(parsedShort.value().r, 0.2f, 0.01f);
+    EXPECT_NEAR(parsedShort.value().g, 0.666f, 0.01f);
+    EXPECT_NEAR(parsedShort.value().b, 1.0f, 0.01f);
+
+    const auto parsedFull = TryParseColorHex("#11223344");
+    ASSERT_TRUE(parsedFull.has_value());
+    EXPECT_NEAR(parsedFull.value().a, 68.0f / 255.0f, 0.01f);
+    EXPECT_FALSE(TryParseColorHex("#ZZZ").has_value());
+    EXPECT_FALSE(TryParseColorHex("12345").has_value());
+
+    ColorPickerOptions opts;
+    opts.showAlpha = true;
+    ASSERT_TRUE(self.renderPicker(1u, opts));
+    EXPECT_TRUE(self.m_result.valid);
+
+    const Point svMid = self.partPoint(s_WidgetPartColorSv, 0.5f, 0.5f);
+    const Point svOverBottom = Point(svMid.x + 500.0f, svMid.y + 500.0f);
+    self.drag(svMid, svOverBottom);
+    ASSERT_TRUE(self.renderPicker(2u, opts));
+    EXPECT_TRUE(self.m_result.changed);
+    EXPECT_NEAR(self.m_state.hsv().s, 1.0f, 0.01f);
+    EXPECT_NEAR(self.m_state.hsv().v, 0.0f, 0.01f);
+
+    const Point svOverTop = Point(svMid.x + 500.0f, svMid.y - 500.0f);
+    self.drag(svMid, svOverTop);
+    ASSERT_TRUE(self.renderPicker(3u, opts));
+    EXPECT_TRUE(self.m_result.changed);
+    EXPECT_NEAR(self.m_state.hsv().s, 1.0f, 0.01f);
+    EXPECT_NEAR(self.m_state.hsv().v, 1.0f, 0.01f);
+
+    const Point hueStart = self.partPoint(s_WidgetPartColorHue, 0.1f, 0.5f);
+    const Point hueThird = self.partPoint(s_WidgetPartColorHue, 1.0f / 3.0f, 0.5f);
+    self.drag(hueStart, hueThird);
+    ASSERT_TRUE(self.renderPicker(4u, opts));
+    EXPECT_NEAR(self.m_state.hsv().h, 120.0f, 3.0f);
+    EXPECT_NEAR(self.m_state.color().g, 1.0f, 0.05f);
+
+    const Point alphaStart = self.partPoint(s_WidgetPartColorAlpha, 0.8f, 0.5f);
+    const Point alphaHalf = self.partPoint(s_WidgetPartColorAlpha, 0.5f, 0.5f);
+    self.drag(alphaStart, alphaHalf);
+    ASSERT_TRUE(self.renderPicker(5u, opts));
+    EXPECT_NEAR(self.m_state.hsv().a, 0.5f, 0.03f);
+
+    const f32 prevH = self.m_state.hsv().h;
+    self.click(self.partPoint(s_WidgetPartColorSv, 0.8f, 0.2f));
+    ASSERT_TRUE(self.renderPicker(6u, opts));
+    self.press(Key::Right, false, true);
+    ASSERT_TRUE(self.renderPicker(7u, opts));
+    EXPECT_NEAR(self.m_state.hsv().h, WrapHueDegrees(prevH + 15.0f), 0.5f);
+
+    self.press(Key::Down);
+    ASSERT_TRUE(self.renderPicker(8u, opts));
+    EXPECT_LT(self.m_state.hsv().v, 0.9f);
+
+    ColorPickerOptions noAlphaOpts = opts;
+    noAlphaOpts.showAlpha = false;
+    ASSERT_TRUE(self.renderPicker(9u, noAlphaOpts));
+    EXPECT_FALSE(self.hasTarget(TryMakeWidgetId(self.pickerId(), s_WidgetPartColorAlpha).value()));
+
+    ColorPickerOptions disabledOpts = opts;
+    disabledOpts.enabled = false;
+    const Color frozenColor = self.m_state.color();
+    ASSERT_TRUE(self.renderPicker(10u, disabledOpts));
+    EXPECT_NEAR(self.m_state.color().r, frozenColor.r, 0.001f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(ChromeModalDialogTests, CenterBackdropCloseEscOutsideAndInvalid, VerifyModalDialog_CenterBackdropCloseEscOutsideAndInvalid)
+NWB_ADHD_GTEST_F(ChromeMenuBarTests, DropdownHoverSwitchActivateKeyboardAndValidation, VerifyMenuBar_DropdownHoverSwitchActivateKeyboardAndValidation)
+NWB_ADHD_GTEST_F(ChromeToolbarStatusTests, AutoSeparatorToggleStateAndFixedHeight, VerifyToolbarAndStatusBar_AutoSeparatorToggleStateAndFixedHeight)
+NWB_ADHD_GTEST_F(ChromeToastTests, MaxVisiblePauseOnHoverManualDismissAndPersistent, VerifyToastStack_MaxVisiblePauseOnHoverManualDismissAndPersistent)
+NWB_ADHD_GTEST_F(ChromeColorPickerTests, ConversionsHexDragAndKeyboard, VerifyColorPicker_ConversionsHexDragAndKeyboard)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

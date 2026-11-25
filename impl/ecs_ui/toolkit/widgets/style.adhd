@@ -26,7 +26,10 @@ const f32 s_StyleDisabledIconAlpha = 0.5f;
 const f32 s_CheckmarkInsetFraction = 0.2f;
 const f32 s_CheckmarkInsetSides = 2.0f;
 const f32 s_StyleWindowCollapseExtent = 20.0f;
+const f32 s_StyleWindowCloseExtent = 20.0f;
 const f32 s_StyleWindowResizeExtent = 16.0f;
+const f32 s_StyleWindowResizeBorder = 6.0f;
+const f32 s_StyleHeaderIndicatorExtent = 16.0f;
 const Color s_StyleTextColor = Color(0.92f, 0.94f, 0.98f, 1.0f);
 const Color s_StyleDisabledTextColor = Color(0.48f, 0.50f, 0.55f, 1.0f);
 const Color s_StyleInsetColor = Color(0.08f, 0.10f, 0.14f, 1.0f);
@@ -37,6 +40,7 @@ const Name s_StylePanelNormalRegionName = "panel.normal";
 const Name s_StyleWindowNormalRegionName = "window.normal";
 const Name s_StyleWindowTitleRegionName = "window.title";
 const Name s_StyleWindowCollapseRegionName = "window.collapse";
+const Name s_StyleWindowCloseRegionName = "window.close";
 const Name s_StyleWindowResizeRegionName = "window.resize";
 const Name s_StyleSeparatorRegionName = "separator";
 const Name s_StyleWhiteRegionName = "white";
@@ -49,6 +53,11 @@ const Name s_StyleCheckboxHoverRegionName = "checkbox.hover";
 const Name s_StyleCheckboxCheckedRegionName = "checkbox.checked";
 const Name s_StyleCheckboxDisabledRegionName = "checkbox.disabled";
 const Name s_StyleCheckboxMarkRegionName = "checkbox.mark";
+const Name s_StyleHeaderNormalRegionName = "header.normal";
+const Name s_StyleHeaderHoverRegionName = "header.hover";
+const Name s_StyleHeaderPressedRegionName = "header.pressed";
+const Name s_StyleHeaderDisabledRegionName = "header.disabled";
+const Name s_StyleHeaderIndicatorRegionName = "header.indicator";
 const Name s_StyleFocusOverlayRegionName = "focus.overlay";
 
 
@@ -65,6 +74,7 @@ class WidgetStyle{
     public Name window = s_StyleWindowNormalRegionName;
     public Name windowTitle = s_StyleWindowTitleRegionName;
     public Name windowCollapse = s_StyleWindowCollapseRegionName;
+    public Name windowClose = s_StyleWindowCloseRegionName;
     public Name windowResize = s_StyleWindowResizeRegionName;
     public Name separator = s_StyleSeparatorRegionName;
     public Name white = s_StyleWhiteRegionName;
@@ -77,20 +87,48 @@ class WidgetStyle{
     public Name checkboxChecked = s_StyleCheckboxCheckedRegionName;
     public Name checkboxDisabled = s_StyleCheckboxDisabledRegionName;
     public Name checkboxMark = s_StyleCheckboxMarkRegionName;
+    public Name header = s_StyleHeaderNormalRegionName;
+    public Name headerHover = s_StyleHeaderHoverRegionName;
+    public Name headerPressed = s_StyleHeaderPressedRegionName;
+    public Name headerDisabled = s_StyleHeaderDisabledRegionName;
+    public Name headerIndicator = s_StyleHeaderIndicatorRegionName;
     public Name focus = s_StyleFocusOverlayRegionName;
     public Color text = s_StyleTextColor;
     public Color disabledText = s_StyleDisabledTextColor;
+    public FontDescriptor font;
     public f32 fontSize = s_TextDefaultFontSize;
     public f32 gap = s_StyleSpacingMedium;
     public f32 checkboxExtent = s_StyleControlExtent;
     public f32 windowCollapseExtent = s_StyleWindowCollapseExtent;
+    public f32 windowCloseExtent = s_StyleWindowCloseExtent;
     public f32 windowResizeExtent = s_StyleWindowResizeExtent;
+    public f32 windowResizeBorder = s_StyleWindowResizeBorder;
+    public f32 headerIndicatorExtent = s_StyleHeaderIndicatorExtent;
+}
+
+class CollapsibleHeaderOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
 }
 
 class WidgetOptions{
     public LayoutSize width;
     public LayoutSize height;
     public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class LabelOptions{
+    public LayoutSize width;
+    public LayoutSize height;
+    public b8 enabled = true;
+    public TextAlignment alignment = TextAlignment::Leading;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public f32 maxWidth = 0.0f;
+    public b8 ellipsis = false;
+    public LayoutItemOptions layout;
 }
 
 class ContainerOptions{
@@ -98,12 +136,21 @@ class ContainerOptions{
     public LayoutSize height;
     public Insets padding;
     public f32 gap = s_StyleSpacingMedium;
+    public b8 clipChildren = true;
+    public LayoutAlign alignItems = LayoutAlign::Start;
+    public LayoutJustify justifyContent = LayoutJustify::Start;
+    public b8 flexWrap = false;
+    public b8 hasCrossGap = false;
+    public f32 crossGap = 0.0f;
+    public u32 gridColumns = 1u;
+    public LayoutItemOptions layout;
 }
 
 class SeparatorOptions{
     public LayoutSize length = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     public f32 thickness = 0.0f;
     public SeparatorDirection direction = SeparatorDirection::Horizontal;
+    public LayoutItemOptions layout;
 }
 
 
@@ -212,6 +259,25 @@ Point ResolveCheckboxIntrinsicSize(in Point textBounds, in f32 checkboxExtent, i
     return Point(textBounds.x + checkboxExtent + gap, UiSimdMax(textBounds.y, checkboxExtent));
 }
 
+void ResolveCollapsibleHeaderLayout(
+    in Rect bounds,
+    in Insets padding,
+    in f32 indicatorExtent,
+    in f32 gap,
+    in Point measured,
+    mut Rect outIndicator,
+    mut Rect outTextClip,
+    mut Point outOrigin
+){
+    const Rect inner = InsetUiRectBounds(bounds, padding);
+    const f32 extent = UiSimdMin(indicatorExtent, inner.height);
+    const f32 indicatorY = inner.y + UiSimdMax(0.0f, (inner.height - extent) * s_RectCenterFraction);
+    outIndicator = Rect(inner.x, indicatorY, extent, extent);
+    const f32 offsetX = UiSimdMin(inner.width, extent + gap);
+    outTextClip = Rect(inner.x + offsetX, inner.y, UiSimdMax(0.0f, inner.width - offsetX), inner.height);
+    outOrigin = ResolveCenteredTextOrigin(inner, offsetX, measured.y);
+}
+
 LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in SeparatorOptions options){
     const b8 horizontal = options.direction == SeparatorDirection::Horizontal;
     f32 minimum = skinRegion.minimumWidth;
@@ -230,13 +296,24 @@ LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in Separator
         description.height = options.length;
     }
     description.intrinsicSize = Point(skinRegion.minimumWidth, skinRegion.minimumHeight);
+    ApplyLayoutItemOptions(options.layout, description);
     return description;
 }
 
-LayoutNodeDesc BuildWidthLeafNodeDesc(in LayoutSize width, in Point intrinsicSize){
+LayoutNodeDesc BuildWidthLeafNodeDesc(in LayoutSize width, in Point intrinsicSize, in LayoutItemOptions layout){
     LayoutNodeDesc description;
     description.width = width;
     description.intrinsicSize = intrinsicSize;
+    ApplyLayoutItemOptions(layout, description);
+    return description;
+}
+
+LayoutNodeDesc BuildSizedLeafNodeDesc(in LayoutSize width, in LayoutSize height, in Point intrinsicSize, in LayoutItemOptions layout){
+    LayoutNodeDesc description;
+    description.width = width;
+    description.height = height;
+    description.intrinsicSize = intrinsicSize;
+    ApplyLayoutItemOptions(layout, description);
     return description;
 }
 

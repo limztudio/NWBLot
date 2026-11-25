@@ -92,6 +92,7 @@ class ColliderShapeEntry{
     public AssetRef<Mesh> meshAsset;
     public AssetRef<PhysicsMaterialAsset> materialAsset;
     public AssetRef<ConvexHullAsset> convexHullAsset;
+    public AssetRef<CompoundHullAsset> compoundHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public AssetRef<HeightfieldAsset> heightfieldAsset;
     public f32 staticFriction = -1.0f;
@@ -117,6 +118,17 @@ class ColliderShapeEntry{
     public Vector<f32x4> chainPoints;
     public b8 chainClosed = false;
     public f32 chainRadius = 0.0f;
+    public b8 heightfieldFlipDiagonal = false;
+    public Vector<u8> heightfieldCellHoles;
+    public u32 vhacdMaxRecursionDepth = 8u;
+    public f32 vhacdConcavityThreshold = 0.02f;
+    public u32 vhacdMaxVerticesPerHull = 32u;
+    public f32 vhacdMinVolumeRatio = 0.001f;
+    public b8 vhacdEnableArbitraryPlanes = true;
+    public b8 vhacdEnableHullMerging = true;
+    public f32 vhacdMergeVolumeTolerance = 0.05f;
+    public b8 syncCsgCuts = false;
+    public b8 useMeshComponentFallback = false;
 }
 
 [arena, component("collider")]
@@ -152,6 +164,7 @@ class ColliderComponent{
     public AssetRef<Mesh> meshAsset;
     public AssetRef<PhysicsMaterialAsset> materialAsset;
     public AssetRef<ConvexHullAsset> convexHullAsset;
+    public AssetRef<CompoundHullAsset> compoundHullAsset;
     public AssetRef<CollisionMeshAsset> collisionMeshAsset;
     public AssetRef<HeightfieldAsset> heightfieldAsset;
     public f32 staticFriction = -1.0f;
@@ -177,6 +190,17 @@ class ColliderComponent{
     public Vector<f32x4> chainPoints;
     public b8 chainClosed = false;
     public f32 chainRadius = 0.0f;
+    public b8 heightfieldFlipDiagonal = false;
+    public Vector<u8> heightfieldCellHoles;
+    public u32 vhacdMaxRecursionDepth = 8u;
+    public f32 vhacdConcavityThreshold = 0.02f;
+    public u32 vhacdMaxVerticesPerHull = 32u;
+    public f32 vhacdMinVolumeRatio = 0.001f;
+    public b8 vhacdEnableArbitraryPlanes = true;
+    public b8 vhacdEnableHullMerging = true;
+    public f32 vhacdMergeVolumeTolerance = 0.05f;
+    public b8 syncCsgCuts = false;
+    public b8 useMeshComponentFallback = false;
     public Vector<ColliderShapeEntry> extraShapes;
     public b8 dirty = true;
     public ShapeId runtimeShapeId;
@@ -243,6 +267,15 @@ class JointEntry{
     public Vector<f32x4> pathPoints;
     public b8 pathClosed = false;
     public b8 pathLockRotation = false;
+    public b8 enableTwistLimit = false;
+    public b8 enableSlerpDrive = false;
+    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32 slerpHertz = 0.0f;
+    public f32 slerpDampingRatio = 1.0f;
+    public f32 slerpMaxTorque = 0.0f;
+    public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
+    public f32 sixDofSwingLimitY = 0.0f;
+    public f32 sixDofSwingLimitZ = 0.0f;
 }
 
 [arena, component("joint")]
@@ -304,6 +337,15 @@ class JointComponent{
     public Vector<f32x4> pathPoints;
     public b8 pathClosed = false;
     public b8 pathLockRotation = false;
+    public b8 enableTwistLimit = false;
+    public b8 enableSlerpDrive = false;
+    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32 slerpHertz = 0.0f;
+    public f32 slerpDampingRatio = 1.0f;
+    public f32 slerpMaxTorque = 0.0f;
+    public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
+    public f32 sixDofSwingLimitY = 0.0f;
+    public f32 sixDofSwingLimitZ = 0.0f;
     public Vector<JointEntry> extraJoints;
     public b8 dirty = true;
     public JointId runtimeJointId;
@@ -340,6 +382,8 @@ class PhysicsWorldConfigComponent{
     public b8 gpuResidentMode = false;
     public b8 useGpuLbvhBroadphase = false;
     public b8 interpolateTransforms = false;
+    public b8 publishEventsToMessageBus = false;
+    public b8 publishContinuousEventsToMessageBus = false;
     public b8 dirty = true;
 }
 

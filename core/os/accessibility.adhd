@@ -1,0 +1,208 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityBackend::Enum")]
+extern enum AccessibilityBackend : u8{
+    Unsupported,
+    Win32Uia,
+    LinuxAtSpi
+};
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityRole::Enum")]
+extern enum AccessibilityRole : u8{
+    None,
+    Window,
+    Dialog,
+    Panel,
+    Group,
+    Region,
+    Text,
+    Heading,
+    Button,
+    ToggleButton,
+    CheckBox,
+    RadioGroup,
+    RadioButton,
+    TextField,
+    TextArea,
+    Slider,
+    SpinButton,
+    ProgressBar,
+    ComboBox,
+    List,
+    ListItem,
+    Tree,
+    TreeItem,
+    Table,
+    TableHeader,
+    TableRow,
+    TabList,
+    Tab,
+    MenuBar,
+    Menu,
+    MenuItem,
+    ScrollBar,
+    Splitter,
+    Link,
+    Image,
+    Canvas,
+    Tooltip,
+    Alert,
+    Status,
+    Toolbar,
+    ColorPicker,
+    DockSpace,
+    kCount
+};
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityLiveMode::Enum")]
+extern enum AccessibilityLiveMode : u8{
+    Off,
+    Polite,
+    Assertive
+};
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionKind::Enum")]
+extern enum AccessibilityActionKind : u8{
+    Invoke,
+    Toggle,
+    Select,
+    Focus,
+    Expand,
+    Collapse,
+    Increment,
+    Decrement,
+    SetValue,
+    ContextMenu
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityCapabilities"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class AccessibilityCapabilities{
+    b8 tree;
+    b8 announcements;
+    b8 actions;
+    AccessibilityBackend backend;
+};
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityNodeData"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class AccessibilityNodeData{
+    u64 id;
+    u64 parentId;
+    AccessibilityRole role;
+    AccessibilityLiveMode liveMode;
+    u32 stateBits;
+    u32 actionBits;
+    f32 x;
+    f32 y;
+    f32 width;
+    f32 height;
+    u32 nameOffset;
+    u32 nameLength;
+    u32 descriptionOffset;
+    u32 descriptionLength;
+    u32 valueOffset;
+    u32 valueLength;
+    f64 numericValue;
+    f64 numericMin;
+    f64 numericMax;
+    f64 numericStep;
+    i32 positionInSet;
+    i32 setSize;
+    i32 level;
+};
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionEvent"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class AccessibilityActionEvent{
+    u64 targetId;
+    AccessibilityActionKind kind;
+    f64 numericValue;
+};
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::IAccessibilityService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IAccessibilityService{
+    AccessibilityCapabilities capabilities()const;
+    b8 isOwnerThread()const;
+    [cpp_flags(unwind)] b8 publishTree(in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY);
+    [cpp_flags(unwind)] b8 announce(in StringView text, in AccessibilityLiveMode politeness);
+    b8 pollAction(mut AccessibilityActionEvent outEvent);
+    u64 publishedVersion()const;
+    usize publishedNodeCount()const;
+    u64 publishedFocusedId()const;
+    usize announcementCount()const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::None")]
+extern const u32 s_AccessibilityStateNone;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Enabled")]
+extern const u32 s_AccessibilityStateEnabled;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Focusable")]
+extern const u32 s_AccessibilityStateFocusable;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Focused")]
+extern const u32 s_AccessibilityStateFocused;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Checked")]
+extern const u32 s_AccessibilityStateChecked;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Selected")]
+extern const u32 s_AccessibilityStateSelected;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Expanded")]
+extern const u32 s_AccessibilityStateExpanded;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Collapsed")]
+extern const u32 s_AccessibilityStateCollapsed;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Pressed")]
+extern const u32 s_AccessibilityStatePressed;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Hovered")]
+extern const u32 s_AccessibilityStateHovered;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::ReadOnly")]
+extern const u32 s_AccessibilityStateReadOnly;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Password")]
+extern const u32 s_AccessibilityStatePassword;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Multiline")]
+extern const u32 s_AccessibilityStateMultiline;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Modal")]
+extern const u32 s_AccessibilityStateModal;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::HasPopup")]
+extern const u32 s_AccessibilityStateHasPopup;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityStateBits::Offscreen")]
+extern const u32 s_AccessibilityStateOffscreen;
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::None")]
+extern const u32 s_AccessibilityActionNone;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Invoke")]
+extern const u32 s_AccessibilityActionInvoke;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Toggle")]
+extern const u32 s_AccessibilityActionToggle;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Select")]
+extern const u32 s_AccessibilityActionSelect;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Focus")]
+extern const u32 s_AccessibilityActionFocus;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Expand")]
+extern const u32 s_AccessibilityActionExpand;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Collapse")]
+extern const u32 s_AccessibilityActionCollapse;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Increment")]
+extern const u32 s_AccessibilityActionIncrement;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::Decrement")]
+extern const u32 s_AccessibilityActionDecrement;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::SetValue")]
+extern const u32 s_AccessibilityActionSetValue;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionBits::ContextMenu")]
+extern const u32 s_AccessibilityActionContextMenu;
+
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::s_AccessibilityMaxActions")]
+extern const usize s_AccessibilityMaxActions;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::s_AccessibilityMaxNodes")]
+extern const usize s_AccessibilityMaxNodes;
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::s_AccessibilityMaxTextBytes")]
+extern const usize s_AccessibilityMaxTextBytes;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -114,7 +114,7 @@ b8 WithinPaintImageSpanLimits(in usize glyphCount, in usize sdfCount, in usize t
 }
 
 b8 CompatibleGlyphPageDimensions<TFont>(in GlyphPageBindingRecord<TFont> candidate, in GlyphPageBindingRecord<TFont> existing){
-    return candidate.width == existing.width && candidate.height == existing.height;
+    return candidate.width == existing.width && candidate.height == existing.height && candidate.channelCount == existing.channelCount;
 }
 
 b8 ShouldUpgradeBoundGlyphPage<TFont>(in GlyphPageBindingRecord<TFont> existing, in GlyphPageBindingRecord<TFont> candidate){

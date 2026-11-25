@@ -1,0 +1,436 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_ColorPickerDefaultWidth = 220.0f;
+const f32 s_ColorPickerDefaultSvHeight = 140.0f;
+const f32 s_ColorPickerDefaultBarHeight = 16.0f;
+const f32 s_ColorPickerDefaultSwatchHeight = 24.0f;
+const f32 s_ColorPickerDefaultGap = 6.0f;
+const f32 s_ColorPickerDefaultReticleRadius = 5.0f;
+const f32 s_ColorPickerHueKeyboardStep = 5.0f;
+const f32 s_ColorPickerHueKeyboardFastStep = 15.0f;
+const f32 s_ColorPickerValueKeyboardStep = 0.05f;
+const Color s_ColorPickerDefaultBorderColor = Color(0.28f, 0.32f, 0.38f, 0.90f);
+const Color s_ColorPickerDefaultCheckerLight = Color(0.80f, 0.80f, 0.80f, 1.0f);
+const Color s_ColorPickerDefaultCheckerDark = Color(0.48f, 0.48f, 0.48f, 1.0f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ColorHsv{
+    public f32 h = 0.0f;
+    public f32 s = 1.0f;
+    public f32 v = 1.0f;
+    public f32 a = 1.0f;
+}
+
+class ColorPickerStyle{
+    public f32 svHeight = s_ColorPickerDefaultSvHeight;
+    public f32 barHeight = s_ColorPickerDefaultBarHeight;
+    public f32 swatchHeight = s_ColorPickerDefaultSwatchHeight;
+    public f32 gap = s_ColorPickerDefaultGap;
+    public f32 reticleRadius = s_ColorPickerDefaultReticleRadius;
+    public Color borderColor = s_ColorPickerDefaultBorderColor;
+    public Color checkerLight = s_ColorPickerDefaultCheckerLight;
+    public Color checkerDark = s_ColorPickerDefaultCheckerDark;
+}
+
+class ColorPickerOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Fixed, s_ColorPickerDefaultWidth);
+    public b8 showAlpha = true;
+    public b8 showPreview = true;
+    public b8 showHexLabel = true;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class ColorPickerResult{
+    public b8 valid = false;
+    public b8 changed = false;
+    public b8 dragging = false;
+    public Color color = Color(1.0f, 0.0f, 0.0f, 1.0f);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f32 WrapHueDegrees(in f32 hue){
+    if(!IsFinite(VectorSingle(hue)))
+        return 0.0f;
+    f32 wrapped = hue - VectorFloor(VectorSingle(hue / 360.0f)).x * 360.0f;
+    if(wrapped < 0.0f || wrapped >= 360.0f)
+        wrapped = 0.0f;
+    return wrapped;
+}
+
+ColorHsv RgbToHsv(in Color rgb){
+    const VectorSingle clamped = Max(VectorSingle(0.0f), Min(VectorSingle(1.0f), VectorSingle(rgb.r, rgb.g, rgb.b, rgb.a)));
+    const f32 r = clamped.x;
+    const f32 g = clamped.y;
+    const f32 b = clamped.z;
+    const f32 maxC = UiSimdMax(r, UiSimdMax(g, b));
+    const f32 minC = UiSimdMin(r, UiSimdMin(g, b));
+    const f32 delta = maxC - minC;
+    ColorHsv out;
+    out.v = maxC;
+    out.a = clamped.w;
+    if(maxC > 0.0f)
+        out.s = delta / maxC;
+    else
+        out.s = 0.0f;
+    if(delta > 1.0e-6f){
+        f32 rawH = 0.0f;
+        if(maxC == r)
+            rawH = 60.0f * ((g - b) / delta);
+        else if(maxC == g)
+            rawH = 60.0f * (((b - r) / delta) + 2.0f);
+        else
+            rawH = 60.0f * (((r - g) / delta) + 4.0f);
+        out.h = WrapHueDegrees(rawH);
+    }
+    else
+        out.h = 0.0f;
+    return out;
+}
+
+Color HsvToRgb(in ColorHsv hsv){
+    const f32 h = WrapHueDegrees(hsv.h);
+    const VectorSingle svA = Max(VectorSingle(0.0f), Min(VectorSingle(1.0f), VectorSingle(hsv.s, hsv.v, hsv.a, 0.0f)));
+    const f32 s = svA.x;
+    const f32 v = svA.y;
+    const f32 a = svA.z;
+    if(s <= 0.0f)
+        return Color(v, v, v, a);
+    const f32 hScaled = h / 60.0f;
+    const u32 sector = cast<u32>(hScaled) % 6u;
+    const f32 f = hScaled - cast<f32>(sector);
+    const f32 p = v * (1.0f - s);
+    const f32 q = v * (1.0f - s * f);
+    const f32 t = v * (1.0f - s * (1.0f - f));
+    switch(sector){
+    case 0u:
+        return Color(v, t, p, a);
+    case 1u:
+        return Color(q, v, p, a);
+    case 2u:
+        return Color(p, v, t, a);
+    case 3u:
+        return Color(p, q, v, a);
+    case 4u:
+        return Color(t, p, v, a);
+    default:
+        return Color(v, p, q, a);
+    }
+}
+
+u8 ColorChannelToByte(in f32 channel){
+    const f32 clamped = UiSimdMax(0.0f, UiSimdMin(1.0f, channel));
+    return cast<u8>(UiSimdMax(0.0f, UiSimdMin(255.0f, VectorFloor(VectorSingle(clamped * 255.0f + 0.5f)).x)));
+}
+
+void AppendHexByte(in u8 value, mut String outHex){
+    const StringView digits = "0123456789ABCDEF";
+    const usize hi = cast<usize>((value >> 4u) & 0x0fu);
+    const usize lo = cast<usize>(value & 0x0fu);
+    outHex.push_back(digits[hi]);
+    outHex.push_back(digits[lo]);
+}
+
+b8 FormatColorHex(in Color color, in b8 includeAlpha, mut String outHex){
+    if(!IsValidPaintColor(color))
+        return false;
+    outHex.clear();
+    outHex.push_back('#');
+    AppendHexByte(ColorChannelToByte(color.r), outHex);
+    AppendHexByte(ColorChannelToByte(color.g), outHex);
+    AppendHexByte(ColorChannelToByte(color.b), outHex);
+    if(includeAlpha)
+        AppendHexByte(ColorChannelToByte(color.a), outHex);
+    return true;
+}
+
+Expected<u8> ParseHexNibble(in u8 ch){
+    if(ch >= cast<u8>('0') && ch <= cast<u8>('9'))
+        return cast<u8>(ch - cast<u8>('0'));
+    if(ch >= cast<u8>('a') && ch <= cast<u8>('f'))
+        return cast<u8>(10u + (ch - cast<u8>('a')));
+    if(ch >= cast<u8>('A') && ch <= cast<u8>('F'))
+        return cast<u8>(10u + (ch - cast<u8>('A')));
+    return MakeUnexpected(Failure());
+}
+
+Expected<u8> ParseHexByte(in u8 hiCh, in u8 loCh){
+    const Expected<u8> hi = ParseHexNibble(hiCh);
+    const Expected<u8> lo = ParseHexNibble(loCh);
+    if(!hi.has_value() || !lo.has_value())
+        return MakeUnexpected(Failure());
+    return cast<u8>((hi.value() << 4u) | lo.value());
+}
+
+Expected<Color> TryParseColorHex(in StringView text){
+    if(text.empty())
+        return MakeUnexpected(Failure());
+    usize start = 0u;
+    if(text[0u] == '#')
+        start = 1u;
+    const usize hexLen = text.size() - start;
+    if(hexLen == 3u || hexLen == 4u){
+        const Expected<u8> rN = ParseHexNibble(cast<u8>(text[start]));
+        const Expected<u8> gN = ParseHexNibble(cast<u8>(text[start + 1u]));
+        const Expected<u8> bN = ParseHexNibble(cast<u8>(text[start + 2u]));
+        if(!rN.has_value() || !gN.has_value() || !bN.has_value())
+            return MakeUnexpected(Failure());
+        u8 aByte = 255u;
+        if(hexLen == 4u){
+            const Expected<u8> aN = ParseHexNibble(cast<u8>(text[start + 3u]));
+            if(!aN.has_value())
+                return MakeUnexpected(Failure());
+            aByte = cast<u8>(aN.value() * 17u);
+        }
+        return Color(
+            cast<f32>(rN.value() * 17u) / 255.0f,
+            cast<f32>(gN.value() * 17u) / 255.0f,
+            cast<f32>(bN.value() * 17u) / 255.0f,
+            cast<f32>(aByte) / 255.0f
+        );
+    }
+    if(hexLen == 6u || hexLen == 8u){
+        const Expected<u8> rB = ParseHexByte(cast<u8>(text[start]), cast<u8>(text[start + 1u]));
+        const Expected<u8> gB = ParseHexByte(cast<u8>(text[start + 2u]), cast<u8>(text[start + 3u]));
+        const Expected<u8> bB = ParseHexByte(cast<u8>(text[start + 4u]), cast<u8>(text[start + 5u]));
+        if(!rB.has_value() || !gB.has_value() || !bB.has_value())
+            return MakeUnexpected(Failure());
+        u8 aByte = 255u;
+        if(hexLen == 8u){
+            const Expected<u8> aB = ParseHexByte(cast<u8>(text[start + 6u]), cast<u8>(text[start + 7u]));
+            if(!aB.has_value())
+                return MakeUnexpected(Failure());
+            aByte = aB.value();
+        }
+        return Color(
+            cast<f32>(rB.value()) / 255.0f,
+            cast<f32>(gB.value()) / 255.0f,
+            cast<f32>(bB.value()) / 255.0f,
+            cast<f32>(aByte) / 255.0f
+        );
+    }
+    return MakeUnexpected(Failure());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ColorPickerState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public ColorHsv m_hsv;
+    public Color m_color = Color(1.0f, 0.0f, 0.0f, 1.0f);
+    public Color m_originalColor = Color(1.0f, 0.0f, 0.0f, 1.0f);
+    public Rect m_svRect;
+    public Rect m_hueRect;
+    public Rect m_alphaRect;
+    public b8 m_dragging = false;
+
+    public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
+    public u64 inputGeneration()const{ return this.m_inputGeneration; }
+    public u64 revision()const{ return this.m_revision; }
+    public in Color color()const{ return this.m_color; }
+    public in ColorHsv hsv()const{ return this.m_hsv; }
+    public in Color originalColor()const{ return this.m_originalColor; }
+    public in Rect svRect()const{ return this.m_svRect; }
+    public in Rect hueRect()const{ return this.m_hueRect; }
+    public in Rect alphaRect()const{ return this.m_alphaRect; }
+
+    public b8 setColor(in Color color){
+        if(!IsValidPaintColor(color))
+            return false;
+        ColorHsv nextHsv = RgbToHsv(color);
+        if(nextHsv.s <= 1.0e-5f)
+            nextHsv.h = this.m_hsv.h;
+        this.m_hsv = nextHsv;
+        this.m_color = Color(
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.r)),
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.g)),
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.b)),
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.a))
+        );
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        return true;
+    }
+
+    public b8 setHsv(in ColorHsv hsv){
+        if(!IsFinite(VectorSingle(hsv.h, hsv.s, hsv.v, hsv.a)))
+            return false;
+        const VectorSingle svA = Max(VectorSingle(0.0f), Min(VectorSingle(1.0f), VectorSingle(hsv.s, hsv.v, hsv.a, 0.0f)));
+        this.m_hsv.h = WrapHueDegrees(hsv.h);
+        this.m_hsv.s = svA.x;
+        this.m_hsv.v = svA.y;
+        this.m_hsv.a = svA.z;
+        this.m_color = HsvToRgb(this.m_hsv);
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+        return true;
+    }
+
+    public b8 setOriginalColor(in Color color){
+        if(!IsValidPaintColor(color))
+            return false;
+        this.m_originalColor = Color(
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.r)),
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.g)),
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.b)),
+            UiSimdMax(0.0f, UiSimdMin(1.0f, color.a))
+        );
+        AdvanceNonWrappingRevision(this.m_revision);
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidColorPickerOptions(in ColorPickerOptions options){
+    return IsValidLayoutSize(options.width);
+}
+
+b8 IsValidColorPickerStyle(in ColorPickerStyle style){
+    return IsValidPaintColor(style.borderColor)
+        && IsValidPaintColor(style.checkerLight)
+        && IsValidPaintColor(style.checkerDark)
+        && IsFinite(VectorSingle(style.svHeight, style.barHeight, style.swatchHeight, style.gap))
+        && IsFinite(VectorSingle(style.reticleRadius))
+        && style.svHeight > 0.0f
+        && style.barHeight > 0.0f
+        && style.swatchHeight > 0.0f
+        && style.gap >= 0.0f
+        && style.reticleRadius > 0.0f;
+}
+
+f32 ComputeColorPickerIntrinsicHeight(in ColorPickerOptions options, in ColorPickerStyle style){
+    f32 h = style.svHeight + style.gap + style.barHeight;
+    if(options.showAlpha)
+        h += style.gap + style.barHeight;
+    if(options.showPreview || options.showHexLabel)
+        h += style.gap + style.swatchHeight;
+    return h;
+}
+
+b8 ColorsEqualExact(in Color lhs, in Color rhs){
+    return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
+}
+
+b8 ApplyColorPickerSvGesture(in PointerGesture gesture, mut ColorPickerState state, mut b8 outChanged){
+    if(
+        !gesture.id.valid()
+        || !IsValidUiRect(gesture.referenceRectangle)
+        || !(gesture.referenceRectangle.width > 0.0f)
+        || !(gesture.referenceRectangle.height > 0.0f)
+        || !IsFinite(VectorSingle(gesture.position.x, gesture.position.y, 0.0f, 0.0f))
+    )
+        return false;
+    const f32 normX = (gesture.position.x - gesture.referenceRectangle.x) / gesture.referenceRectangle.width;
+    const f32 normY = (gesture.position.y - gesture.referenceRectangle.y) / gesture.referenceRectangle.height;
+    const f32 nextS = UiSimdMax(0.0f, UiSimdMin(1.0f, normX));
+    const f32 nextV = UiSimdMax(0.0f, UiSimdMin(1.0f, 1.0f - normY));
+    const Color prevColor = state.m_color;
+    const b8 hsvChanged = nextS != state.m_hsv.s || nextV != state.m_hsv.v;
+    state.m_hsv.s = nextS;
+    state.m_hsv.v = nextV;
+    state.m_color = HsvToRgb(state.m_hsv);
+    if(hsvChanged || !ColorsEqualExact(state.m_color, prevColor)){
+        AdvanceNonWrappingRevision(state.m_revision);
+        outChanged = true;
+    }
+    return true;
+}
+
+b8 ApplyColorPickerBarGesture(in PointerGesture gesture, in b8 isAlpha, mut ColorPickerState state, mut b8 outChanged){
+    if(
+        !gesture.id.valid()
+        || !IsValidUiRect(gesture.referenceRectangle)
+        || !(gesture.referenceRectangle.width > 0.0f)
+        || !IsFinite(VectorSingle(gesture.position.x, 0.0f, 0.0f, 0.0f))
+    )
+        return false;
+    const f32 normX = UiSimdMax(0.0f, UiSimdMin(1.0f, (gesture.position.x - gesture.referenceRectangle.x) / gesture.referenceRectangle.width));
+    const Color prevColor = state.m_color;
+    b8 paramChanged = false;
+    if(isAlpha){
+        paramChanged = normX != state.m_hsv.a;
+        state.m_hsv.a = normX;
+    }
+    else{
+        const f32 nextHue = UiSimdMax(0.0f, UiSimdMin(360.0f, normX * 360.0f));
+        paramChanged = nextHue != state.m_hsv.h;
+        state.m_hsv.h = nextHue;
+    }
+    state.m_color = HsvToRgb(state.m_hsv);
+    if(paramChanged || !ColorsEqualExact(state.m_color, prevColor)){
+        AdvanceNonWrappingRevision(state.m_revision);
+        outChanged = true;
+    }
+    return true;
+}
+
+b8 ApplyColorPickerKeyboardAction(in ControlAction action, mut ColorPickerState state, mut b8 outChanged){
+    const Color prevColor = state.m_color;
+    b8 paramChanged = false;
+    f32 hueStep = s_ColorPickerHueKeyboardStep;
+    if(action.extend)
+        hueStep = s_ColorPickerHueKeyboardFastStep;
+    if(action.kind == ControlActionKind::Left){
+        state.m_hsv.h = WrapHueDegrees(state.m_hsv.h - hueStep);
+        paramChanged = true;
+    }
+    else if(action.kind == ControlActionKind::Right){
+        state.m_hsv.h = WrapHueDegrees(state.m_hsv.h + hueStep);
+        paramChanged = true;
+    }
+    else if(action.kind == ControlActionKind::Up){
+        const f32 nextV = UiSimdMax(0.0f, UiSimdMin(1.0f, state.m_hsv.v + s_ColorPickerValueKeyboardStep));
+        paramChanged = nextV != state.m_hsv.v;
+        state.m_hsv.v = nextV;
+    }
+    else if(action.kind == ControlActionKind::Down){
+        const f32 nextV = UiSimdMax(0.0f, UiSimdMin(1.0f, state.m_hsv.v - s_ColorPickerValueKeyboardStep));
+        paramChanged = nextV != state.m_hsv.v;
+        state.m_hsv.v = nextV;
+    }
+    else if(action.kind == ControlActionKind::Home){
+        paramChanged = state.m_hsv.h != 0.0f;
+        state.m_hsv.h = 0.0f;
+    }
+    else if(action.kind == ControlActionKind::End){
+        paramChanged = state.m_hsv.v != 1.0f;
+        state.m_hsv.v = 1.0f;
+    }
+    else
+        return true;
+    state.m_color = HsvToRgb(state.m_hsv);
+    if(paramChanged || !ColorsEqualExact(state.m_color, prevColor)){
+        AdvanceNonWrappingRevision(state.m_revision);
+        outChanged = true;
+    }
+    return true;
+}
+
+void ApplySkinPaletteToColorPickerStyle(in UiSkinPalette palette, mut ColorPickerStyle style){
+    style.borderColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

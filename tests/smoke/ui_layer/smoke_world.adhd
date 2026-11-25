@@ -365,11 +365,33 @@ b8 InitUiLayerSmokeSystem(mut ProjectRuntimeContext context, mut World world, in
         skin = AssetRef<UiSkin>("alternate_skin");
     mut UiLayerSystem layer = world.addSystem<UiLayerSystem>(
         world, context.graphics, context.input, context.clipboard, context.textInput,
+        context.cursor, context.accessibility,
         context.assetManager, context.shaderPathResolver, skin, UiLayerPresentation::Standalone
     );
     if(!ConfigureSmokeLayerInputProfile(layer))
         return false;
     ConfigureSmokeLayerRecordingMode(layer);
+    PointerInput touch;
+    touch.source.device = 77u;
+    touch.source.control = 1u;
+    touch.phase = PointerPhase::Press;
+    touch.position = Point(4.0f, 4.0f);
+    b8 consumed = true;
+    if(!layer.dispatchPointerInput(touch, consumed) || consumed){
+        error("UiLayerSmokeProject: custom pointer dispatch failed unexpectedly");
+        return false;
+    }
+    layer.cancelPointerDevice(77u);
+    InputEvent extraKey;
+    extraKey.source.device = 77u;
+    extraKey.source.control = 2u;
+    extraKey.type = InputEventType::KeyUp;
+    extraKey.key = s_SmokeKeyF12;
+    b8 blockText = true;
+    if(!layer.dispatchInputEvent(extraKey, blockText) || blockText){
+        error("UiLayerSmokeProject: custom input event dispatch failed unexpectedly");
+        return false;
+    }
     return true;
 }
 

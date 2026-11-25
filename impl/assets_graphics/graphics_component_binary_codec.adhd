@@ -3,6 +3,7 @@
 
 
 #include <impl/assets_graphics/components.adhd>
+#include <impl/assets_material/field_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -10,6 +11,29 @@
 
 const usize s_SingleAssetRefComponentPayloadBinaryBytes = 64u;
 const usize s_RendererComponentPayloadBinaryBytes = 144u;
+const usize s_MaterialInstanceComponentHeaderBinaryBytes = 72u;
+const usize s_MaterialInstanceParameterBinaryBytes = 216u;
+const usize s_SkeletonComponentHeaderBinaryBytes = 8u;
+const usize s_SkeletonPoseJointBinaryStrideBytes = 52u;
+const usize s_SkinnedMeshBindingComponentPayloadBinaryBytes = 128u;
+const usize s_CsgReceiverComponentPayloadBinaryBytes = 72u;
+const usize s_CsgCutterComponentHeaderBinaryBytes = 240u;
+
+static_assert(size_of<SingleAssetRefComponentPayloadBinary>() == s_SingleAssetRefComponentPayloadBinaryBytes, "SingleAssetRefComponentPayloadBinary size mismatch");
+static_assert(size_of<RendererComponentPayloadBinary>() == s_RendererComponentPayloadBinaryBytes, "RendererComponentPayloadBinary size mismatch");
+static_assert(size_of<MaterialInstanceComponentHeaderBinary>() == s_MaterialInstanceComponentHeaderBinaryBytes, "MaterialInstanceComponentHeaderBinary size mismatch");
+static_assert(size_of<MaterialInstanceParameterBinary>() == s_MaterialInstanceParameterBinaryBytes, "MaterialInstanceParameterBinary size mismatch");
+static_assert(size_of<SkeletonComponentHeaderBinary>() == s_SkeletonComponentHeaderBinaryBytes, "SkeletonComponentHeaderBinary size mismatch");
+static_assert(size_of<SkeletonJointMatrix>() == s_SkeletonJointMatrixBinaryBytes, "SkeletonJointMatrix size mismatch");
+static_assert(size_of<u32>() + size_of<SkeletonJointMatrix>() == s_SkeletonPoseJointBinaryStrideBytes, "SkeletonPose joint stride size mismatch");
+static_assert(size_of<SkinnedMeshBindingComponentPayloadBinary>() == s_SkinnedMeshBindingComponentPayloadBinaryBytes, "SkinnedMeshBindingComponentPayloadBinary size mismatch");
+static_assert(size_of<CsgReceiverComponentPayloadBinary>() == s_CsgReceiverComponentPayloadBinaryBytes, "CsgReceiverComponentPayloadBinary size mismatch");
+static_assert(size_of<CsgCutterComponentHeaderBinary>() == s_CsgCutterComponentHeaderBinaryBytes, "CsgCutterComponentHeaderBinary size mismatch");
+static_assert(offset_of<CsgCutterComponentHeaderBinary>(worldToShape) == 128u && offset_of<CsgCutterComponentHeaderBinary>(reserved1) == 232u, "CsgCutterComponentHeaderBinary layout mismatch");
+
+b8 IsFiniteCsgCutterMatrix3x4(in MatrixSingle matrix){
+    return IsFinite(matrix[0u]) && IsFinite(matrix[1u]) && IsFinite(matrix[2u]);
+}
 
 class GraphicsComponentBinaryCodec{
     private RendererComponentPayloadBinary packRenderer(in RendererComponent component)const{
@@ -140,6 +164,537 @@ class GraphicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         return unpacked.value();
+    }
+
+    public b8 validateMaterialInstance(in MaterialInstanceComponent component, in Name virtualPath, in StringView context)const{
+        if(component.materialInterface == s_NameNone){
+            error("{} failed: material_instance_component '{}' material_interface must not be empty", context, virtualPath.resolvedText());
+            return false;
+        }
+        if(component.overrides.size() > cast<usize>(u32.max)){
+            error("{} failed: material_instance_component '{}' override count overflows", context, virtualPath.resolvedText());
+            return false;
+        }
+        HashSet<Name> seenParameters;
+        seenParameters.reserve(component.overrides.size());
+        for(in MaterialInstanceParameter param : component.overrides){
+            if(param.parameterName == s_NameNone || param.blockName == s_NameNone || param.fieldName == s_NameNone){
+                error("{} failed: material_instance_component '{}' override has empty parameter, block, or field name", context, virtualPath.resolvedText());
+                return false;
+            }
+            if(!IsMaterialLayoutNumericFieldType(param.fieldType)){
+                error("{} failed: material_instance_component '{}' override '{}' must use numeric field type", context, virtualPath.resolvedText(), param.parameterName.resolvedText());
+                return false;
+            }
+            if(!seenParameters.insert(param.parameterName).second){
+                error("{} failed: material_instance_component '{}' has duplicate override '{}'", context, virtualPath.resolvedText(), param.parameterName.resolvedText());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 appendMaterialInstance(in MaterialInstanceComponent component, mut Vector<u8> outBinary)const{
+        if(component.overrides.size() > cast<usize>(u32.max))
+            return false;
+        if(component.overrides.size() > (usize.max - s_MaterialInstanceComponentHeaderBinaryBytes) / s_MaterialInstanceParameterBinaryBytes)
+            return false;
+        const usize totalBytes = s_MaterialInstanceComponentHeaderBinaryBytes + component.overrides.size() * s_MaterialInstanceParameterBinaryBytes;
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+
+        MaterialInstanceComponentHeaderBinary header;
+        header.materialInterfaceHash = component.materialInterface.hash();
+        header.overrideCount = cast<u32>(component.overrides.size());
+        header.reserved0 = 0u;
+        outBinary.reserve(outBinary.size() + totalBytes);
+        AppendPOD(outBinary, header);
+        for(in MaterialInstanceParameter param : component.overrides){
+            MaterialInstanceParameterBinary binaryParam;
+            binaryParam.parameterNameHash = param.parameterName.hash();
+            binaryParam.blockNameHash = param.blockName.hash();
+            binaryParam.fieldNameHash = param.fieldName.hash();
+            binaryParam.fieldType = cast<u32>(param.fieldType);
+            binaryParam.valueX = param.value.x;
+            binaryParam.valueY = param.value.y;
+            binaryParam.valueZ = param.value.z;
+            binaryParam.valueW = param.value.w;
+            binaryParam.reserved0 = 0u;
+            AppendPOD(outBinary, binaryParam);
+        }
+        return true;
+    }
+
+    public b8 serializeMaterialInstance(in MaterialInstanceComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendMaterialInstance(component, outPayload);
+    }
+
+    public Expected<MaterialInstanceComponent> deserializeMaterialInstance(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<MaterialInstanceComponentHeaderBinary> headerResult = ReadPOD<MaterialInstanceComponentHeaderBinary>(payload, cursor);
+        if(!headerResult.has_value()){
+            error("MaterialInstanceComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        const MaterialInstanceComponentHeaderBinary header = headerResult.value();
+        if(header.reserved0 != 0u){
+            error("MaterialInstanceComponentAsset::loadComponentPayload failed: non-zero header reserved bytes");
+            return MakeUnexpected(Failure());
+        }
+        const Name materialInterface(header.materialInterfaceHash);
+        if(materialInterface == s_NameNone){
+            error("MaterialInstanceComponentAsset::loadComponentPayload failed: empty material_interface");
+            return MakeUnexpected(Failure());
+        }
+        const usize overrideCount = cast<usize>(header.overrideCount);
+        const usize remainingBytes = payload.size() - cursor;
+        if(
+            remainingBytes % s_MaterialInstanceParameterBinaryBytes != 0u
+            || remainingBytes / s_MaterialInstanceParameterBinaryBytes != overrideCount
+        ){
+            error("MaterialInstanceComponentAsset::loadComponentPayload failed: override byte size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        MaterialInstanceComponent outComponent(materialInterface);
+        if(!CanStoreValueCount(outComponent.overrides, overrideCount)){
+            error("MaterialInstanceComponentAsset::loadComponentPayload failed: override count exceeds capacity");
+            return MakeUnexpected(Failure());
+        }
+        outComponent.overrides.reserve(overrideCount);
+        HashSet<Name> seenParameters;
+        seenParameters.reserve(overrideCount);
+        for(usize i = 0u; i < overrideCount; ++i){
+            const Expected<MaterialInstanceParameterBinary> paramResult = ReadPOD<MaterialInstanceParameterBinary>(payload, cursor);
+            if(!paramResult.has_value()){
+                error("MaterialInstanceComponentAsset::loadComponentPayload failed: malformed override entry");
+                return MakeUnexpected(Failure());
+            }
+            const MaterialInstanceParameterBinary binaryParam = paramResult.value();
+            if(binaryParam.reserved0 != 0u){
+                error("MaterialInstanceComponentAsset::loadComponentPayload failed: non-zero override reserved bytes");
+                return MakeUnexpected(Failure());
+            }
+            if(
+                binaryParam.fieldType < cast<u32>(MaterialLayoutFieldType::b8)
+                || binaryParam.fieldType > cast<u32>(MaterialLayoutFieldType::f32x4)
+            ){
+                error("MaterialInstanceComponentAsset::loadComponentPayload failed: invalid override fieldType");
+                return MakeUnexpected(Failure());
+            }
+            const MaterialLayoutFieldType fieldType = cast<MaterialLayoutFieldType>(binaryParam.fieldType);
+            if(!IsMaterialLayoutNumericFieldType(fieldType)){
+                error("MaterialInstanceComponentAsset::loadComponentPayload failed: non-numeric override fieldType");
+                return MakeUnexpected(Failure());
+            }
+            MaterialInstanceParameter param;
+            param.parameterName = Name(binaryParam.parameterNameHash);
+            param.blockName = Name(binaryParam.blockNameHash);
+            param.fieldName = Name(binaryParam.fieldNameHash);
+            if(param.parameterName == s_NameNone || param.blockName == s_NameNone || param.fieldName == s_NameNone){
+                error("MaterialInstanceComponentAsset::loadComponentPayload failed: override name cannot be empty");
+                return MakeUnexpected(Failure());
+            }
+            if(!seenParameters.insert(param.parameterName).second){
+                error("MaterialInstanceComponentAsset::loadComponentPayload failed: duplicate override parameter");
+                return MakeUnexpected(Failure());
+            }
+            param.fieldType = fieldType;
+            param.value = u32x4u(binaryParam.valueX, binaryParam.valueY, binaryParam.valueZ, binaryParam.valueW);
+            outComponent.overrides.push_back(param);
+        }
+        if(!outComponent.overrides.empty())
+            outComponent.revision = 1u;
+        return outComponent;
+    }
+
+    public b8 validateSkeletonJointPalette(in SkeletonJointPaletteComponent component, in Name virtualPath, in StringView context)const{
+        if(!ValidSkeletonSkinningMode(component.skinningMode)){
+            error("{} failed: skeleton_joint_palette_component '{}' has invalid skinning mode", context, virtualPath.resolvedText());
+            return false;
+        }
+        if(component.joints.size() > cast<usize>(u32.max)){
+            error("{} failed: skeleton_joint_palette_component '{}' joint count overflows", context, virtualPath.resolvedText());
+            return false;
+        }
+        for(in SkeletonJointMatrix joint : component.joints){
+            if(!IsFiniteSkeletonJointMatrix(MatrixSingle(joint))){
+                error("{} failed: skeleton_joint_palette_component '{}' contains non-finite joint matrix", context, virtualPath.resolvedText());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 appendSkeletonJointPalette(in SkeletonJointPaletteComponent component, mut Vector<u8> outBinary)const{
+        if(!ValidSkeletonSkinningMode(component.skinningMode) || component.joints.size() > cast<usize>(u32.max))
+            return false;
+        if(component.joints.size() > (usize.max - s_SkeletonComponentHeaderBinaryBytes) / s_SkeletonJointMatrixBinaryBytes)
+            return false;
+        const usize totalBytes = s_SkeletonComponentHeaderBinaryBytes + component.joints.size() * s_SkeletonJointMatrixBinaryBytes;
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+
+        SkeletonComponentHeaderBinary header;
+        header.jointCount = cast<u32>(component.joints.size());
+        header.skinningMode = component.skinningMode;
+        outBinary.reserve(outBinary.size() + totalBytes);
+        AppendPOD(outBinary, header);
+        for(in SkeletonJointMatrix joint : component.joints)
+            AppendPOD(outBinary, joint);
+        return true;
+    }
+
+    public b8 serializeSkeletonJointPalette(in SkeletonJointPaletteComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendSkeletonJointPalette(component, outPayload);
+    }
+
+    public Expected<SkeletonJointPaletteComponent> deserializeSkeletonJointPalette(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<SkeletonComponentHeaderBinary> headerResult = ReadPOD<SkeletonComponentHeaderBinary>(payload, cursor);
+        if(!headerResult.has_value()){
+            error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        const SkeletonComponentHeaderBinary header = headerResult.value();
+        if(!ValidSkeletonSkinningMode(header.skinningMode)){
+            error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: invalid skinning mode");
+            return MakeUnexpected(Failure());
+        }
+        const usize jointCount = cast<usize>(header.jointCount);
+        const usize remainingBytes = payload.size() - cursor;
+        if(
+            remainingBytes % s_SkeletonJointMatrixBinaryBytes != 0u
+            || remainingBytes / s_SkeletonJointMatrixBinaryBytes != jointCount
+        ){
+            error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: joint payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        SkeletonJointPaletteComponent outComponent;
+        outComponent.skinningMode = header.skinningMode;
+        if(!CanStoreValueCount(outComponent.joints, jointCount)){
+            error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: joint count exceeds capacity");
+            return MakeUnexpected(Failure());
+        }
+        outComponent.joints.reserve(jointCount);
+        for(usize i = 0u; i < jointCount; ++i){
+            const Expected<SkeletonJointMatrix> jointResult = ReadPOD<SkeletonJointMatrix>(payload, cursor);
+            if(!jointResult.has_value() || !IsFiniteSkeletonJointMatrix(MatrixSingle(jointResult.value()))){
+                error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: invalid joint matrix");
+                return MakeUnexpected(Failure());
+            }
+            outComponent.joints.push_back(jointResult.value());
+        }
+        return outComponent;
+    }
+
+    public b8 validateSkeletonPose(in SkeletonPoseComponent component, in Name virtualPath, in StringView context)const{
+        if(!ValidSkeletonSkinningMode(component.skinningMode)){
+            error("{} failed: skeleton_pose_component '{}' has invalid skinning mode", context, virtualPath.resolvedText());
+            return false;
+        }
+        if(component.parentJoints.size() != component.localJoints.size() || component.localJoints.size() > cast<usize>(u32.max)){
+            error("{} failed: skeleton_pose_component '{}' joint and parent arrays do not match", context, virtualPath.resolvedText());
+            return false;
+        }
+        if(!component.localJoints.empty() && !ValidSkeletonPoseTopology(component)){
+            error("{} failed: skeleton_pose_component '{}' has invalid parent joint topology", context, virtualPath.resolvedText());
+            return false;
+        }
+        for(in SkeletonJointMatrix joint : component.localJoints){
+            if(!IsFiniteSkeletonJointMatrix(MatrixSingle(joint))){
+                error("{} failed: skeleton_pose_component '{}' contains non-finite joint matrix", context, virtualPath.resolvedText());
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 appendSkeletonPose(in SkeletonPoseComponent component, mut Vector<u8> outBinary)const{
+        if(!ValidSkeletonSkinningMode(component.skinningMode) || component.parentJoints.size() != component.localJoints.size() || component.localJoints.size() > cast<usize>(u32.max))
+            return false;
+        if(component.localJoints.size() > (usize.max - s_SkeletonComponentHeaderBinaryBytes) / s_SkeletonPoseJointBinaryStrideBytes)
+            return false;
+        const usize totalBytes = s_SkeletonComponentHeaderBinaryBytes + component.localJoints.size() * s_SkeletonPoseJointBinaryStrideBytes;
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+
+        SkeletonComponentHeaderBinary header;
+        header.jointCount = cast<u32>(component.localJoints.size());
+        header.skinningMode = component.skinningMode;
+        outBinary.reserve(outBinary.size() + totalBytes);
+        AppendPOD(outBinary, header);
+        for(in u32 parentJoint : component.parentJoints)
+            AppendPOD(outBinary, parentJoint);
+        for(in SkeletonJointMatrix joint : component.localJoints)
+            AppendPOD(outBinary, joint);
+        return true;
+    }
+
+    public b8 serializeSkeletonPose(in SkeletonPoseComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendSkeletonPose(component, outPayload);
+    }
+
+    public Expected<SkeletonPoseComponent> deserializeSkeletonPose(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<SkeletonComponentHeaderBinary> headerResult = ReadPOD<SkeletonComponentHeaderBinary>(payload, cursor);
+        if(!headerResult.has_value()){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        const SkeletonComponentHeaderBinary header = headerResult.value();
+        if(!ValidSkeletonSkinningMode(header.skinningMode)){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: invalid skinning mode");
+            return MakeUnexpected(Failure());
+        }
+        const usize jointCount = cast<usize>(header.jointCount);
+        const usize remainingBytes = payload.size() - cursor;
+        if(
+            remainingBytes % s_SkeletonPoseJointBinaryStrideBytes != 0u
+            || remainingBytes / s_SkeletonPoseJointBinaryStrideBytes != jointCount
+        ){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: joint pose payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+
+        SkeletonPoseComponent outComponent;
+        outComponent.skinningMode = header.skinningMode;
+        if(!CanStoreValueCount(outComponent.parentJoints, jointCount) || !CanStoreValueCount(outComponent.localJoints, jointCount)){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: joint count exceeds capacity");
+            return MakeUnexpected(Failure());
+        }
+        outComponent.parentJoints.reserve(jointCount);
+        outComponent.localJoints.reserve(jointCount);
+        for(usize i = 0u; i < jointCount; ++i){
+            const Expected<u32> parentResult = ReadPOD<u32>(payload, cursor);
+            if(!parentResult.has_value()){
+                error("SkeletonPoseComponentAsset::loadComponentPayload failed: malformed parent joint index");
+                return MakeUnexpected(Failure());
+            }
+            outComponent.parentJoints.push_back(parentResult.value());
+        }
+        for(usize i = 0u; i < jointCount; ++i){
+            const Expected<SkeletonJointMatrix> jointResult = ReadPOD<SkeletonJointMatrix>(payload, cursor);
+            if(!jointResult.has_value() || !IsFiniteSkeletonJointMatrix(MatrixSingle(jointResult.value()))){
+                error("SkeletonPoseComponentAsset::loadComponentPayload failed: invalid local joint matrix");
+                return MakeUnexpected(Failure());
+            }
+            outComponent.localJoints.push_back(jointResult.value());
+        }
+        if(jointCount > 0u && !ValidSkeletonPoseTopology(outComponent)){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: invalid parent joint topology");
+            return MakeUnexpected(Failure());
+        }
+        return outComponent;
+    }
+
+    public b8 appendSkinnedMeshBinding(in SkinnedMeshBindingComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_SkinnedMeshBindingComponentPayloadBinaryBytes))
+            return false;
+        SkinnedMeshBindingComponentPayloadBinary binaryPayload;
+        binaryPayload.skinHash = component.skin.name().hash();
+        binaryPayload.skeletonEntityNameHash = component.skeletonEntityName.hash();
+        outBinary.reserve(outBinary.size() + s_SkinnedMeshBindingComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
+        return true;
+    }
+
+    public b8 serializeSkinnedMeshBinding(in SkinnedMeshBindingComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendSkinnedMeshBinding(component, outPayload);
+    }
+
+    public Expected<SkinnedMeshBindingComponent> deserializeSkinnedMeshBinding(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<SkinnedMeshBindingComponentPayloadBinary> binaryPayload = ReadPOD<SkinnedMeshBindingComponentPayloadBinary>(payload, cursor);
+        if(!binaryPayload.has_value() || cursor != payload.size()){
+            error("SkinnedMeshBindingComponentAsset::loadComponentPayload failed: invalid payload size");
+            return MakeUnexpected(Failure());
+        }
+        SkinnedMeshBindingComponent outComponent;
+        outComponent.skin.virtualPath = Name(binaryPayload.value().skinHash);
+        outComponent.skeletonEntity = s_InvalidEntityId;
+        outComponent.skeletonEntityName = Name(binaryPayload.value().skeletonEntityNameHash);
+        outComponent.runtimeMesh = s_InvalidRuntimeMeshHandle;
+        return outComponent;
+    }
+
+    public b8 appendCsgReceiver(in CsgReceiverComponent component, mut Vector<u8> outBinary)const{
+        if(!CanAppendBytes(outBinary, s_CsgReceiverComponentPayloadBinaryBytes))
+            return false;
+        CsgReceiverComponentPayloadBinary binaryPayload;
+        binaryPayload.receiverGroupHash = component.receiverGroup.hash();
+        if(component.enabled)
+            binaryPayload.enabled = 1u;
+        else
+            binaryPayload.enabled = 0u;
+        if(component.affectOpaquePass)
+            binaryPayload.affectOpaquePass = 1u;
+        else
+            binaryPayload.affectOpaquePass = 0u;
+        if(component.affectTransparentPass)
+            binaryPayload.affectTransparentPass = 1u;
+        else
+            binaryPayload.affectTransparentPass = 0u;
+        binaryPayload.reserved0 = 0u;
+        binaryPayload.reserved1 = 0u;
+        outBinary.reserve(outBinary.size() + s_CsgReceiverComponentPayloadBinaryBytes);
+        AppendPOD(outBinary, binaryPayload);
+        return true;
+    }
+
+    public b8 serializeCsgReceiver(in CsgReceiverComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendCsgReceiver(component, outPayload);
+    }
+
+    public Expected<CsgReceiverComponent> deserializeCsgReceiver(in Span<u8> payload, in StringView context)const{
+        usize cursor = 0u;
+        const Expected<CsgReceiverComponentPayloadBinary> binaryResult = ReadPOD<CsgReceiverComponentPayloadBinary>(payload, cursor);
+        if(!binaryResult.has_value() || cursor != payload.size()){
+            error("{} failed: invalid payload size", context);
+            return MakeUnexpected(Failure());
+        }
+        const CsgReceiverComponentPayloadBinary binaryPayload = binaryResult.value();
+        if(
+            binaryPayload.enabled > 1u
+            || binaryPayload.affectOpaquePass > 1u
+            || binaryPayload.affectTransparentPass > 1u
+            || binaryPayload.reserved0 != 0u
+            || binaryPayload.reserved1 != 0u
+        ){
+            error("{} failed: invalid receiver flags or reserved bytes", context);
+            return MakeUnexpected(Failure());
+        }
+        CsgReceiverComponent outComponent;
+        outComponent.receiverGroup = Name(binaryPayload.receiverGroupHash);
+        outComponent.enabled = binaryPayload.enabled != 0u;
+        outComponent.affectOpaquePass = binaryPayload.affectOpaquePass != 0u;
+        outComponent.affectTransparentPass = binaryPayload.affectTransparentPass != 0u;
+        return outComponent;
+    }
+
+    public b8 validateCsgCutter(in CsgCutterComponent component, in Name virtualPath, in StringView context)const{
+        if(component.shapeType == s_NameNone){
+            error("{} failed: csg_cutter_component '{}' shape_type must not be empty", context, virtualPath.resolvedText());
+            return false;
+        }
+        if(
+            !IsFiniteCsgCutterMatrix3x4(MatrixSingle(component.worldToShape))
+            || !IsFiniteCsgCutterMatrix3x4(MatrixSingle(component.shapeToWorld))
+        ){
+            error("{} failed: csg_cutter_component '{}' contains non-finite transform matrix", context, virtualPath.resolvedText());
+            return false;
+        }
+        if(component.parameterBytes.size() > cast<usize>(u32.max)){
+            error("{} failed: csg_cutter_component '{}' parameter byte count overflows", context, virtualPath.resolvedText());
+            return false;
+        }
+        return true;
+    }
+
+    public b8 appendCsgCutter(in CsgCutterComponent component, mut Vector<u8> outBinary)const{
+        if(component.parameterBytes.size() > cast<usize>(u32.max))
+            return false;
+        if(component.parameterBytes.size() > usize.max - s_CsgCutterComponentHeaderBinaryBytes)
+            return false;
+        const usize totalBytes = s_CsgCutterComponentHeaderBinaryBytes + component.parameterBytes.size();
+        if(!CanAppendBytes(outBinary, totalBytes))
+            return false;
+
+        CsgCutterComponentHeaderBinary header;
+        header.receiverGroupHash = component.receiverGroup.hash();
+        header.shapeTypeHash = component.shapeType.hash();
+        header.worldToShape = component.worldToShape;
+        header.shapeToWorld = component.shapeToWorld;
+        header.parameterByteCount = cast<u32>(component.parameterBytes.size());
+        if(component.active)
+            header.active = 1u;
+        else
+            header.active = 0u;
+        if(component.syncFromTransform)
+            header.syncFromTransform = 1u;
+        else
+            header.syncFromTransform = 0u;
+        header.reserved0 = 0u;
+        header.reserved1[0u] = 0u;
+        header.reserved1[1u] = 0u;
+
+        const usize startSize = outBinary.size();
+        outBinary.reserve(startSize + totalBytes);
+        AppendPOD(outBinary, header);
+        if(!component.parameterBytes.empty()){
+            const auto appendRes = AppendBinaryVectorPayload(outBinary, Span<u8>(component.parameterBytes));
+            if(!appendRes.has_value()){
+                outBinary.resize(startSize);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public b8 serializeCsgCutter(in CsgCutterComponent component, mut Vector<u8> outPayload)const{
+        outPayload.clear();
+        return this.appendCsgCutter(component, outPayload);
+    }
+
+    public Expected<CsgCutterComponent> deserializeCsgCutter(in Span<u8> payload)const{
+        usize cursor = 0u;
+        const Expected<CsgCutterComponentHeaderBinary> headerResult = ReadPOD<CsgCutterComponentHeaderBinary>(payload, cursor);
+        if(!headerResult.has_value()){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: truncated header");
+            return MakeUnexpected(Failure());
+        }
+        const CsgCutterComponentHeaderBinary header = headerResult.value();
+        if(
+            header.active > 1u
+            || header.syncFromTransform > 1u
+            || header.reserved0 != 0u
+            || header.reserved1[0u] != 0u
+            || header.reserved1[1u] != 0u
+        ){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: invalid cutter flags or reserved bytes");
+            return MakeUnexpected(Failure());
+        }
+        const usize remainingBytes = payload.size() - cursor;
+        const usize parameterByteCount = cast<usize>(header.parameterByteCount);
+        if(remainingBytes != parameterByteCount){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: parameter byte count mismatch");
+            return MakeUnexpected(Failure());
+        }
+        const Name shapeType(header.shapeTypeHash);
+        if(shapeType == s_NameNone){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: empty shape_type");
+            return MakeUnexpected(Failure());
+        }
+        if(
+            !IsFiniteCsgCutterMatrix3x4(MatrixSingle(header.worldToShape))
+            || !IsFiniteCsgCutterMatrix3x4(MatrixSingle(header.shapeToWorld))
+        ){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: non-finite cutter transform matrix");
+            return MakeUnexpected(Failure());
+        }
+
+        CsgCutterComponent outComponent;
+        outComponent.receiverGroup = Name(header.receiverGroupHash);
+        outComponent.shapeType = shapeType;
+        outComponent.worldToShape = header.worldToShape;
+        outComponent.shapeToWorld = header.shapeToWorld;
+        outComponent.active = header.active != 0u;
+        outComponent.syncFromTransform = header.syncFromTransform != 0u;
+        if(!CanStoreValueCount(outComponent.parameterBytes, parameterByteCount)){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: parameter byte count exceeds capacity");
+            return MakeUnexpected(Failure());
+        }
+        outComponent.parameterBytes.reserve(parameterByteCount);
+        const Span<u8> paramSpan = payload.subspan(cursor, parameterByteCount);
+        for(in u8 byteValue : paramSpan)
+            outComponent.parameterBytes.push_back(byteValue);
+        return outComponent;
     }
 }
 

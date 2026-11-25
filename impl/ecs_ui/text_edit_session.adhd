@@ -284,7 +284,31 @@ b8 IsStaleUiTextEditSurroundingRevision(
         const b8 wasActive = model.composition().active;
         if(!wasActive && !model.beginComposition())
             return UiTextEditStatus::ModelRejected;
-        if(model.updateComposition(event.text, event.anchorByte, event.caretByte))
+        Vector<EditPreeditClause> clauses;
+        clauses.reserve(event.preeditClauses.size());
+        for(in TextInputPreeditClause clause : event.preeditClauses){
+            EditPreeditClause converted;
+            converted.beginByte = clause.beginByte;
+            converted.endByte = clause.endByte;
+            switch(clause.style){
+            case TextInputPreeditClauseStyle::Raw:
+                converted.style = EditPreeditClauseStyle::Raw;
+                break;
+            case TextInputPreeditClauseStyle::Converted:
+                converted.style = EditPreeditClauseStyle::Converted;
+                break;
+            case TextInputPreeditClauseStyle::Target:
+                converted.style = EditPreeditClauseStyle::Target;
+                break;
+            case TextInputPreeditClauseStyle::Selected:
+                converted.style = EditPreeditClauseStyle::Selected;
+                break;
+            default:
+                return UiTextEditStatus::ModelRejected;
+            }
+            clauses.push_back(converted);
+        }
+        if(model.updateComposition(event.text, event.anchorByte, event.caretByte, Span<EditPreeditClause>(clauses)))
             return UiTextEditStatus::Applied;
         if(!wasActive)
             model.cancelComposition();

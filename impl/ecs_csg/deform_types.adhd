@@ -13,7 +13,7 @@ const f32x4 s_DefaultShapeParameter(0.0f, 1.0f, 0.0f, 0.0f);
 const f32 s_MinEpsilon = 0.0000001f;
 const f32 s_SplitDenominatorEpsilon = 0.0000001f;
 const f32 s_NormalizeEpsilon = 0.000001f;
-const f32 s_NormalizeEpsilonSq = s_NormalizeEpsilon * s_NormalizeEpsilon;
+const f32 s_CsgDeformNormalizeEpsilonSq = s_NormalizeEpsilon * s_NormalizeEpsilon;
 const f32 s_LoopAreaEpsilonSq = s_MinEpsilon * s_MinEpsilon;
 const f32 s_OptionEpsilonLow = 0.0f;
 const f32 s_OptionEpsilonHigh = 1.0f;
@@ -190,7 +190,7 @@ b8 CsgDeformValidTopology(in Span<CsgDeformTriangle> triangles, in usize vertexC
 }
 
 VectorSingle NormalizeCsgDeformNormal(in VectorSingle normal){
-    if(LengthSq(normal.xyz) > s_NormalizeEpsilonSq){
+    if(LengthSq(normal.xyz) > s_CsgDeformNormalizeEpsilonSq){
         const VectorSingle normalized = Normalize(normal.xyz);
         return VectorSingle(normalized, normal.w);
     }
@@ -198,7 +198,7 @@ VectorSingle NormalizeCsgDeformNormal(in VectorSingle normal){
 }
 
 VectorSingle NormalizeCsgDeformTangent(in VectorSingle tangent){
-    if(LengthSq(tangent.xyz) > s_NormalizeEpsilonSq){
+    if(LengthSq(tangent.xyz) > s_CsgDeformNormalizeEpsilonSq){
         const VectorSingle normalized = Normalize(tangent.xyz);
         f32 sign = s_OneWeight;
         if(tangent.w < 0.0f)

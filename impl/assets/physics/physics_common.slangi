@@ -61,6 +61,8 @@ struct NwbPhysicsGpuShapeProxy{
     float4 localRotationOrMeta;
     uint4 bodyIndexTypeShape;
     uint4 filterData;
+    float4 localTransformPos;
+    float4 localTransformRot;
 };
 
 struct NwbPhysicsGpuBroadphasePair{
@@ -173,6 +175,64 @@ struct NwbPhysicsGpuJointConstraint{
     float4 projectionParams;
 };
 
+struct NwbPhysicsGpuShapeMaterial{
+    float4 fricRestStatRoll;
+    float4 tanFlagsThreshSlot;
+};
+
+struct NwbPhysicsGpuWarmCacheEntry{
+    uint4 keyMeta;
+    uint4 featureIds;
+    float4 normalImpulses;
+    float4 fricTwist;
+};
+
+struct NwbPhysicsGpuEvent{
+    uint4 header;
+    float4 pointImpulse;
+    float4 normalApproach;
+};
+
+struct NwbPhysicsGpuSoftParticle{
+    float4 posInvMass;
+    float4 prevPosFlags;
+    float4 velPad;
+    float4 extForcePad;
+};
+
+struct NwbPhysicsGpuSoftDistConstraint{
+    uint4 indices;
+    float4 restCompLambdaPad;
+};
+
+struct NwbPhysicsGpuSoftVolConstraint{
+    uint4 indices;
+    float4 restCompLambdaPad;
+};
+
+struct NwbPhysicsGpuSoftBackstop{
+    float4 centerMaxDist;
+    float4 normalRadiusIdx;
+};
+
+struct NwbPhysicsGpuForceField{
+    float4 originOrDirStrength;
+    float4 axisRadius;
+    float4 minDistFalloffTurb;
+    float4 boundsMinType;
+    float4 boundsMaxFilter;
+    float4 extraParams;
+};
+
+struct NwbPhysicsGpuFluidVolume{
+    float4 surfaceNormalOffset;
+    float4 boundsMinShape;
+    float4 boundsMaxDensity;
+    float4 flowVelLinDrag;
+    float4 dragLiftWaveAmpFreq;
+    float4 waveSpeedTimeFilter;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -201,6 +261,15 @@ struct NwbPhysicsGpuJointConstraint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSpatialQueryResult, Std430DataLayout> g_NwbPhysicsSpatialQueryResultBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuRenderTransformBinding, Std430DataLayout> g_NwbPhysicsRenderBindingBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuRenderTransformOut, Std430DataLayout> g_NwbPhysicsRenderTransformOutBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuShapeMaterial, Std430DataLayout> g_NwbPhysicsShapeMaterialBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuWarmCacheEntry, Std430DataLayout> g_NwbPhysicsWarmCacheBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuEvent, Std430DataLayout> g_NwbPhysicsEventBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftParticle, Std430DataLayout> g_NwbPhysicsSoftParticleBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftDistConstraint, Std430DataLayout> g_NwbPhysicsSoftDistConstraintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftVolConstraint, Std430DataLayout> g_NwbPhysicsSoftVolConstraintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftBackstop, Std430DataLayout> g_NwbPhysicsSoftBackstopBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuForceField, Std430DataLayout> g_NwbPhysicsForceFieldBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuFluidVolume, Std430DataLayout> g_NwbPhysicsFluidVolumeBuffers[];
 #pragma warning(pop)
 
 
@@ -329,6 +398,425 @@ bool nwbPhysicsIsNonCollidingBodyPair(const uint tableSlot, const uint tableMask
             return true;
     }
     return false;
+}
+
+float3 nwbPhysicsSafeNormal(const float3 v, const float3 fallback){
+    const float lenSq = dot(v, v);
+    if(lenSq > 1.0e-12f)
+        return v * rsqrt(lenSq);
+    return fallback;
+}
+
+void nwbPhysicsResolveShapeWorldPose(
+    const NwbPhysicsGpuShapeProxy proxy,
+    const float3 bodyOrigin,
+    const float4 bodyRot,
+    out float3 outOrigin,
+    out float4 outRot
+){
+    if((proxy.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_HAS_LOCAL_TRANSFORM) != 0u){
+        outOrigin = bodyOrigin + nwbPhysicsQuatRotate(proxy.localTransformPos.xyz, bodyRot);
+        outRot = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyRot, proxy.localTransformRot));
+        return;
+    }
+    outOrigin = bodyOrigin;
+    outRot = bodyRot;
+}
+
+float nwbPhysicsHfSelectLane(const float4 v, const uint lane){
+    if(lane == 0u)
+        return v.x;
+    if(lane == 1u)
+        return v.y;
+    if(lane == 2u)
+        return v.z;
+    return v.w;
+}
+
+float nwbPhysicsHfReadRawHeight(
+    const uint dataSlot,
+    const uint hfBase,
+    const uint cols,
+    const uint col,
+    const uint row
+){
+    const uint hIdx = row * cols + col;
+    const float4 pack = g_NwbPhysicsFloat4Buffers[dataSlot][hfBase + 3u + (hIdx >> 2u)];
+    return nwbPhysicsHfSelectLane(pack, hIdx & 3u);
+}
+
+bool nwbPhysicsHfIsCellHoleBitSet(
+    const uint dataSlot,
+    const uint hfBase,
+    const uint cols,
+    const uint rows,
+    const uint hfFlags,
+    const uint cx,
+    const uint cz
+){
+    if((hfFlags & NWB_PHYSICS_HF_FLAG_HAS_HOLES) == 0u || cx + 1u >= cols || cz + 1u >= rows)
+        return false;
+    const uint holeBase = hfBase + 3u + ((cols * rows + 3u) >> 2u);
+    const uint cellIdx = cz * (cols - 1u) + cx;
+    const uint wordIdx = cellIdx >> 5u;
+    const float4 pack = g_NwbPhysicsFloat4Buffers[dataSlot][holeBase + (wordIdx >> 2u)];
+    const uint word = asuint(nwbPhysicsHfSelectLane(pack, wordIdx & 3u));
+    return (word & (1u << (cellIdx & 31u))) != 0u;
+}
+
+bool nwbPhysicsHfLoadCellVertices(
+    const uint dataSlot,
+    const uint hfBase,
+    const uint cols,
+    const uint rows,
+    const float3 hfOrigin,
+    const float cellSizeX,
+    const float cellSizeZ,
+    const float scaleY,
+    const uint hfFlags,
+    const uint cx,
+    const uint cz,
+    out float3 outV00,
+    out float3 outV10,
+    out float3 outV01,
+    out float3 outV11
+){
+    outV00 = float3(0.0f, 0.0f, 0.0f);
+    outV10 = float3(0.0f, 0.0f, 0.0f);
+    outV01 = float3(0.0f, 0.0f, 0.0f);
+    outV11 = float3(0.0f, 0.0f, 0.0f);
+    if(cx + 1u >= cols || cz + 1u >= rows)
+        return false;
+    if(nwbPhysicsHfIsCellHoleBitSet(dataSlot, hfBase, cols, rows, hfFlags, cx, cz))
+        return false;
+    const float r00 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, cx, cz);
+    const float r10 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, cx + 1u, cz);
+    const float r01 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, cx, cz + 1u);
+    const float r11 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, cx + 1u, cz + 1u);
+    if(!all(isfinite(float4(r00, r10, r01, r11))))
+        return false;
+    const float x0 = hfOrigin.x + float(cx) * cellSizeX;
+    const float x1 = x0 + cellSizeX;
+    const float z0 = hfOrigin.z + float(cz) * cellSizeZ;
+    const float z1 = z0 + cellSizeZ;
+    outV00 = float3(x0, hfOrigin.y + r00 * scaleY, z0);
+    outV10 = float3(x1, hfOrigin.y + r10 * scaleY, z0);
+    outV01 = float3(x0, hfOrigin.y + r01 * scaleY, z1);
+    outV11 = float3(x1, hfOrigin.y + r11 * scaleY, z1);
+    return true;
+}
+
+void nwbPhysicsHfExtractTriangle(
+    const bool flipDiag,
+    const uint ti,
+    const float3 v00,
+    const float3 v10,
+    const float3 v01,
+    const float3 v11,
+    out float3 outV0,
+    out float3 outV1,
+    out float3 outV2
+){
+    if(!flipDiag){
+        if(ti == 0u){
+            outV0 = v00;
+            outV1 = v01;
+            outV2 = v10;
+        }
+        else{
+            outV0 = v10;
+            outV1 = v01;
+            outV2 = v11;
+        }
+        return;
+    }
+    if(ti == 0u){
+        outV0 = v00;
+        outV1 = v01;
+        outV2 = v11;
+    }
+    else{
+        outV0 = v00;
+        outV1 = v11;
+        outV2 = v10;
+    }
+}
+
+float3 nwbPhysicsHfTriNormal(const float3 p0, const float3 p1, const float3 p2){
+    const float3 c = cross(p1 - p0, p2 - p0);
+    const float lSq = dot(c, c);
+    return (lSq > 1.0e-12f) ? (c * rsqrt(lSq)) : float3(0.0f, 1.0f, 0.0f);
+}
+
+bool nwbPhysicsHfDihedralSmooth(const float3 nA, const float3 edgePt, const float3 oppPtB, const float3 nB){
+    return dot(nA, nB) >= 0.999f || dot(nA, oppPtB - edgePt) > 1.0e-5f;
+}
+
+bool nwbPhysicsHfGridVertexSmooth(
+    const uint dataSlot,
+    const uint hfBase,
+    const uint cols,
+    const uint rows,
+    const float3 hfOrigin,
+    const float sx,
+    const float sz,
+    const float sy,
+    const uint hfFlags,
+    const uint vx,
+    const uint vz
+){
+    if(vx == 0u || vx + 1u >= cols || vz == 0u || vz + 1u >= rows)
+        return false;
+    [loop]
+    for(uint hk = 0u; hk < 4u; ++hk){
+        const uint hcx = ((hk & 1u) != 0u) ? vx : (vx - 1u);
+        const uint hcz = ((hk & 2u) != 0u) ? vz : (vz - 1u);
+        if(nwbPhysicsHfIsCellHoleBitSet(dataSlot, hfBase, cols, rows, hfFlags, hcx, hcz))
+            return false;
+    }
+    const float r00 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx - 1u, vz - 1u);
+    const float r10 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx, vz - 1u);
+    const float r20 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx + 1u, vz - 1u);
+    const float r01 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx - 1u, vz);
+    const float r11 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx, vz);
+    const float r21 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx + 1u, vz);
+    const float r02 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx - 1u, vz + 1u);
+    const float r12 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx, vz + 1u);
+    const float r22 = nwbPhysicsHfReadRawHeight(dataSlot, hfBase, cols, vx + 1u, vz + 1u);
+    if(
+        !all(isfinite(float3(r00, r10, r20)))
+        || !all(isfinite(float3(r01, r11, r21)))
+        || !all(isfinite(float3(r02, r12, r22)))
+    )
+        return false;
+    const float xm = hfOrigin.x + float(vx - 1u) * sx;
+    const float x0 = xm + sx;
+    const float xp = x0 + sx;
+    const float zm = hfOrigin.z + float(vz - 1u) * sz;
+    const float z0 = zm + sz;
+    const float zp = z0 + sz;
+    const float3 p00 = float3(xm, hfOrigin.y + r00 * sy, zm);
+    const float3 p10 = float3(x0, hfOrigin.y + r10 * sy, zm);
+    const float3 p20 = float3(xp, hfOrigin.y + r20 * sy, zm);
+    const float3 p01 = float3(xm, hfOrigin.y + r01 * sy, z0);
+    const float3 p11 = float3(x0, hfOrigin.y + r11 * sy, z0);
+    const float3 p21 = float3(xp, hfOrigin.y + r21 * sy, z0);
+    const float3 p02 = float3(xm, hfOrigin.y + r02 * sy, zp);
+    const float3 p12 = float3(x0, hfOrigin.y + r12 * sy, zp);
+    const float3 p22 = float3(xp, hfOrigin.y + r22 * sy, zp);
+
+    if((hfFlags & NWB_PHYSICS_HF_FLAG_FLIP_DIAGONAL) == 0u){
+        const float3 nNW1 = nwbPhysicsHfTriNormal(p10, p01, p11);
+        const float3 nNE0 = nwbPhysicsHfTriNormal(p10, p11, p20);
+        const float3 nNE1 = nwbPhysicsHfTriNormal(p20, p11, p21);
+        const float3 nSW0 = nwbPhysicsHfTriNormal(p01, p02, p11);
+        const float3 nSW1 = nwbPhysicsHfTriNormal(p11, p02, p12);
+        const float3 nSE0 = nwbPhysicsHfTriNormal(p11, p12, p21);
+        return nwbPhysicsHfDihedralSmooth(nNW1, p11, p20, nNE0)
+            && nwbPhysicsHfDihedralSmooth(nNE0, p11, p21, nNE1)
+            && nwbPhysicsHfDihedralSmooth(nNE1, p11, p12, nSE0)
+            && nwbPhysicsHfDihedralSmooth(nSE0, p11, p02, nSW1)
+            && nwbPhysicsHfDihedralSmooth(nSW1, p11, p01, nSW0)
+            && nwbPhysicsHfDihedralSmooth(nSW0, p11, p10, nNW1);
+    }
+
+    const float3 mNW0 = nwbPhysicsHfTriNormal(p00, p01, p11);
+    const float3 mNW1 = nwbPhysicsHfTriNormal(p00, p11, p10);
+    const float3 mNE0 = nwbPhysicsHfTriNormal(p10, p11, p21);
+    const float3 mSE1 = nwbPhysicsHfTriNormal(p11, p22, p21);
+    const float3 mSE0 = nwbPhysicsHfTriNormal(p11, p12, p22);
+    const float3 mSW1 = nwbPhysicsHfTriNormal(p01, p12, p11);
+    return nwbPhysicsHfDihedralSmooth(mNW0, p11, p10, mNW1)
+        && nwbPhysicsHfDihedralSmooth(mNW1, p11, p21, mNE0)
+        && nwbPhysicsHfDihedralSmooth(mNE0, p11, p22, mSE1)
+        && nwbPhysicsHfDihedralSmooth(mSE1, p11, p12, mSE0)
+        && nwbPhysicsHfDihedralSmooth(mSE0, p11, p01, mSW1)
+        && nwbPhysicsHfDihedralSmooth(mSW1, p11, p00, mNW0);
+}
+
+uint nwbPhysicsHfComputeTriangleEdgeFlags(
+    const uint dataSlot,
+    const uint hfBase,
+    const uint cols,
+    const uint rows,
+    const float3 hfOrigin,
+    const float sx,
+    const float sz,
+    const float sy,
+    const uint hfFlags,
+    const uint cx,
+    const uint cz,
+    const uint ti,
+    const float3 v00,
+    const float3 v10,
+    const float3 v01,
+    const float3 v11,
+    const float3 triN
+){
+    uint flags = 0u;
+    uint ncx[2] = { 0u, 0u };
+    uint ncz[2] = { 0u, 0u };
+    bool nValid[2] = { false, false };
+    uint nBit[2] = { 0u, 0u };
+    uint nOppCorner[2] = { 0u, 0u };
+    bool nUseUpperTri[2] = { false, false };
+    float3 nEdgePt[2] = { v00, v00 };
+    uint vx[3] = { cx, cx, cx };
+    uint vz[3] = { cz, cz, cz };
+
+    const bool flipDiag = (hfFlags & NWB_PHYSICS_HF_FLAG_FLIP_DIAGONAL) != 0u;
+    if(!flipDiag){
+        if(ti == 0u){
+            ncx[0] = (cx > 0u) ? (cx - 1u) : 0u;
+            ncz[0] = cz;
+            nValid[0] = (cx > 0u);
+            nBit[0] = 0x01u;
+            nOppCorner[0] = 2u;
+            nUseUpperTri[0] = true;
+            nEdgePt[0] = v00;
+
+            ncx[1] = cx;
+            ncz[1] = (cz > 0u) ? (cz - 1u) : 0u;
+            nValid[1] = (cz > 0u);
+            nBit[1] = 0x04u;
+            nOppCorner[1] = 1u;
+            nUseUpperTri[1] = true;
+            nEdgePt[1] = v10;
+
+            const float3 diagN = nwbPhysicsHfTriNormal(v10, v01, v11);
+            if(nwbPhysicsHfDihedralSmooth(triN, v01, v11, diagN))
+                flags |= 0x02u;
+
+            vx[0] = cx;
+            vz[0] = cz;
+            vx[1] = cx;
+            vz[1] = cz + 1u;
+            vx[2] = cx + 1u;
+            vz[2] = cz;
+        }
+        else{
+            ncx[0] = cx;
+            ncz[0] = cz + 1u;
+            nValid[0] = (cz + 2u < rows);
+            nBit[0] = 0x02u;
+            nOppCorner[0] = 2u;
+            nUseUpperTri[0] = false;
+            nEdgePt[0] = v01;
+
+            ncx[1] = cx + 1u;
+            ncz[1] = cz;
+            nValid[1] = (cx + 2u < cols);
+            nBit[1] = 0x04u;
+            nOppCorner[1] = 1u;
+            nUseUpperTri[1] = false;
+            nEdgePt[1] = v11;
+
+            const float3 diagN = nwbPhysicsHfTriNormal(v00, v01, v10);
+            if(nwbPhysicsHfDihedralSmooth(triN, v10, v00, diagN))
+                flags |= 0x01u;
+
+            vx[0] = cx + 1u;
+            vz[0] = cz;
+            vx[1] = cx;
+            vz[1] = cz + 1u;
+            vx[2] = cx + 1u;
+            vz[2] = cz + 1u;
+        }
+    }
+    else if(ti == 0u){
+        ncx[0] = (cx > 0u) ? (cx - 1u) : 0u;
+        ncz[0] = cz;
+        nValid[0] = (cx > 0u);
+        nBit[0] = 0x01u;
+        nOppCorner[0] = 0u;
+        nUseUpperTri[0] = true;
+        nEdgePt[0] = v00;
+
+        ncx[1] = cx;
+        ncz[1] = cz + 1u;
+        nValid[1] = (cz + 2u < rows);
+        nBit[1] = 0x02u;
+        nOppCorner[1] = 3u;
+        nUseUpperTri[1] = true;
+        nEdgePt[1] = v01;
+
+        const float3 diagN = nwbPhysicsHfTriNormal(v00, v11, v10);
+        if(nwbPhysicsHfDihedralSmooth(triN, v11, v10, diagN))
+            flags |= 0x04u;
+
+        vx[0] = cx;
+        vz[0] = cz;
+        vx[1] = cx;
+        vz[1] = cz + 1u;
+        vx[2] = cx + 1u;
+        vz[2] = cz + 1u;
+    }
+    else{
+        ncx[0] = cx + 1u;
+        ncz[0] = cz;
+        nValid[0] = (cx + 2u < cols);
+        nBit[0] = 0x02u;
+        nOppCorner[0] = 3u;
+        nUseUpperTri[0] = false;
+        nEdgePt[0] = v11;
+
+        ncx[1] = cx;
+        ncz[1] = (cz > 0u) ? (cz - 1u) : 0u;
+        nValid[1] = (cz > 0u);
+        nBit[1] = 0x04u;
+        nOppCorner[1] = 0u;
+        nUseUpperTri[1] = false;
+        nEdgePt[1] = v10;
+
+        const float3 diagN = nwbPhysicsHfTriNormal(v00, v01, v11);
+        if(nwbPhysicsHfDihedralSmooth(triN, v00, v01, diagN))
+            flags |= 0x01u;
+
+        vx[0] = cx;
+        vz[0] = cz;
+        vx[1] = cx + 1u;
+        vz[1] = cz + 1u;
+        vx[2] = cx + 1u;
+        vz[2] = cz;
+    }
+
+    const float3 zeroVec = float3(0.0f, 0.0f, 0.0f);
+    [loop]
+    for(uint ni = 0u; ni < 2u; ++ni){
+        if(!nValid[ni])
+            continue;
+        float3 nb00 = zeroVec;
+        float3 nb10 = zeroVec;
+        float3 nb01 = zeroVec;
+        float3 nb11 = zeroVec;
+        if(!nwbPhysicsHfLoadCellVertices(dataSlot, hfBase, cols, rows, hfOrigin, sx, sz, sy, hfFlags, ncx[ni], ncz[ni], nb00, nb10, nb01, nb11))
+            continue;
+        float3 nbV0 = zeroVec;
+        float3 nbV1 = zeroVec;
+        float3 nbV2 = zeroVec;
+        nwbPhysicsHfExtractTriangle(flipDiag, nUseUpperTri[ni] ? 1u : 0u, nb00, nb10, nb01, nb11, nbV0, nbV1, nbV2);
+        const float3 nbN = nwbPhysicsHfTriNormal(nbV0, nbV1, nbV2);
+        float3 oppPt = nb11;
+        if(nOppCorner[ni] == 0u)
+            oppPt = nb00;
+        else if(nOppCorner[ni] == 1u)
+            oppPt = nb10;
+        else if(nOppCorner[ni] == 2u)
+            oppPt = nb01;
+        if(nwbPhysicsHfDihedralSmooth(triN, nEdgePt[ni], oppPt, nbN))
+            flags |= nBit[ni];
+    }
+
+    const uint reqMask[3] = { 0x05u, 0x03u, 0x06u };
+    const uint outBit[3] = { 0x08u, 0x10u, 0x20u };
+    [loop]
+    for(uint vk = 0u; vk < 3u; ++vk){
+        if((flags & reqMask[vk]) == reqMask[vk]){
+            if(nwbPhysicsHfGridVertexSmooth(dataSlot, hfBase, cols, rows, hfOrigin, sx, sz, sy, hfFlags, vx[vk], vz[vk]))
+                flags |= outBit[vk];
+        }
+    }
+    return flags;
 }
 
 

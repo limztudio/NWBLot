@@ -41,11 +41,11 @@ class UiNestedPopupSmokeScene : IUiSmokeInputScene{
     private UiNestedPopupSmokeSource m_source = UiNestedPopupSmokeSource();
     private PopupState m_parent = PopupState();
     private PopupState m_child = PopupState();
-    private ListState m_beforeList = ListState();
-    private ListState m_afterList = ListState();
-    private ComboState m_combo = ComboState();
+    private ListState m_beforeList;
+    private ListState m_afterList;
+    private ComboState m_combo;
     private SearchComboState m_search;
-    private ContextMenuState m_menu = ContextMenuState();
+    private ContextMenuState m_menu;
     private EditModel m_beforeText;
     private EditModel m_afterText;
     private EditModel m_childText;
@@ -149,7 +149,7 @@ class UiPopupSmokeScene : IUiSmokeInputScene{
 
 class UiPopupToolsSmokeScene : IUiSmokeInputScene{
     private UiPopupToolsSmokeSource m_source = UiPopupToolsSmokeSource();
-    private ContextMenuState m_menu = ContextMenuState();
+    private ContextMenuState m_menu;
     private TooltipState m_tooltip = TooltipState();
     private EditModel m_sentinel;
     private EditBoxState m_sentinelState = EditBoxState();

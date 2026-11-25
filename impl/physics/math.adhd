@@ -593,6 +593,94 @@ void PushRayCastChildrenOrdered(
     }
 }
 
+void PushBvhNodeWithSpill(
+    in u32 nodeIdx,
+    mut Array<u32, 256u> fixedStack,
+    mut u32 fixedCount,
+    mut Vector<u32> overflowStack,
+    mut b8 useOverflow
+){
+    if(!useOverflow && fixedCount < 256u){
+        fixedStack[fixedCount] = nodeIdx;
+        ++fixedCount;
+        return;
+    }
+    if(!useOverflow){
+        overflowStack.reserve(512u);
+        for(u32 si = 0u; si < fixedCount; ++si)
+            overflowStack.push_back(fixedStack[si]);
+        fixedCount = 0u;
+        useOverflow = true;
+    }
+    overflowStack.push_back(nodeIdx);
+}
+
+void PushRayCastChildrenOrderedWithSpill(
+    in u32 childA,
+    in b8 hitA,
+    in f32 tA,
+    in u32 childB,
+    in b8 hitB,
+    in f32 tB,
+    mut Array<u32, 256u> stackNodes,
+    mut Array<f32, 256u> stackTMins,
+    mut u32 stackCount,
+    mut Vector<u32> overflowNodes,
+    mut Vector<f32> overflowTMins,
+    mut b8 useOverflow
+){
+    b8 firstHit = hitA;
+    u32 firstChild = childA;
+    f32 firstT = tA;
+    b8 secondHit = hitB;
+    u32 secondChild = childB;
+    f32 secondT = tB;
+    if(hitB && (!hitA || tB > tA)){
+        firstHit = hitB;
+        firstChild = childB;
+        firstT = tB;
+        secondHit = hitA;
+        secondChild = childA;
+        secondT = tA;
+    }
+    if(!useOverflow){
+        u32 needed = 0u;
+        if(firstHit)
+            ++needed;
+        if(secondHit)
+            ++needed;
+        if(stackCount + needed <= 256u){
+            if(firstHit){
+                stackNodes[stackCount] = firstChild;
+                stackTMins[stackCount] = firstT;
+                ++stackCount;
+            }
+            if(secondHit){
+                stackNodes[stackCount] = secondChild;
+                stackTMins[stackCount] = secondT;
+                ++stackCount;
+            }
+            return;
+        }
+        overflowNodes.reserve(512u);
+        overflowTMins.reserve(512u);
+        for(u32 si = 0u; si < stackCount; ++si){
+            overflowNodes.push_back(stackNodes[si]);
+            overflowTMins.push_back(stackTMins[si]);
+        }
+        stackCount = 0u;
+        useOverflow = true;
+    }
+    if(firstHit){
+        overflowNodes.push_back(firstChild);
+        overflowTMins.push_back(firstT);
+    }
+    if(secondHit){
+        overflowNodes.push_back(secondChild);
+        overflowTMins.push_back(secondT);
+    }
+}
+
 VectorSingle ApplyLinearLocks(in VectorSingle v, in u32 flags){
     f32 x = v.x;
     f32 y = v.y;

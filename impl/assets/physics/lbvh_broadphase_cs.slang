@@ -120,11 +120,23 @@ void nwbPhysicsEmitBroadphasePair(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+uint nwbPhysicsFloatToOrderedUint(const float f){
+    const uint u = asuint(f);
+    return ((u & 0x80000000u) != 0u) ? ~u : (u | 0x80000000u);
+}
+
+float nwbPhysicsOrderedUintToFloat(const uint o){
+    const uint u = ((o & 0x80000000u) != 0u) ? (o & 0x7fffffffu) : ~o;
+    return asfloat(u);
+}
+
 groupshared uint s_LbvhSortMorton[NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE];
 groupshared uint s_LbvhSortShape[NWB_PHYSICS_LBVH_LOCAL_SORT_SIZE];
 groupshared uint s_RadixHist[256];
 groupshared uint s_RadixLocalHist[1024];
 groupshared uint s_RadixAux[256];
+groupshared uint s_BoundsMin[3];
+groupshared uint s_BoundsMax[3];
 
 void nwbPhysicsLbvhLocalBitonicStep(
     const uint localTid,
@@ -198,9 +210,54 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     const uint lbvhNodeSlot = g_NwbPhysicsPushConstants.slots0.w;
 
     const uint pairSlot = g_NwbPhysicsPushConstants.slots1.x;
+    const uint lbvhMetaSlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint counterSlot = g_NwbPhysicsPushConstants.slots1.y;
     const uint nonCollideSlot = g_NwbPhysicsPushConstants.slots1.z;
     const uint nonCollideMask = g_NwbPhysicsPushConstants.slots1.w;
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_CLEAR_BOUNDS){
+        if(tid == 0u){
+            const uint infMin = nwbPhysicsFloatToOrderedUint(1.0e30f);
+            const uint infMax = nwbPhysicsFloatToOrderedUint(-1.0e30f);
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][0u] = infMin;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][1u] = infMin;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][2u] = infMin;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][3u] = infMax;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][4u] = infMax;
+            g_NwbPhysicsUintBuffers[lbvhMetaSlot][5u] = infMax;
+        }
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_LBVH_MODE_COMPUTE_BOUNDS){
+        const uint localTid = groupThreadID.x;
+        if(localTid < 3u){
+            s_BoundsMin[localTid] = nwbPhysicsFloatToOrderedUint(1.0e30f);
+            s_BoundsMax[localTid] = nwbPhysicsFloatToOrderedUint(-1.0e30f);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if(tid < itemCount){
+            const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 0u].xyz;
+            const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 1u].xyz;
+            const float3 center = (aMin + aMax) * 0.5f;
+            if(all(isfinite(center)) && all(abs(center) < 1.0e18f) && all((aMax - aMin) < 1.9e4f)){
+                InterlockedMin(s_BoundsMin[0u], nwbPhysicsFloatToOrderedUint(center.x));
+                InterlockedMin(s_BoundsMin[1u], nwbPhysicsFloatToOrderedUint(center.y));
+                InterlockedMin(s_BoundsMin[2u], nwbPhysicsFloatToOrderedUint(center.z));
+                InterlockedMax(s_BoundsMax[0u], nwbPhysicsFloatToOrderedUint(center.x));
+                InterlockedMax(s_BoundsMax[1u], nwbPhysicsFloatToOrderedUint(center.y));
+                InterlockedMax(s_BoundsMax[2u], nwbPhysicsFloatToOrderedUint(center.z));
+            }
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if(localTid < 3u){
+            InterlockedMin(g_NwbPhysicsUintBuffers[lbvhMetaSlot][localTid], s_BoundsMin[localTid]);
+            InterlockedMax(g_NwbPhysicsUintBuffers[lbvhMetaSlot][3u + localTid], s_BoundsMax[localTid]);
+        }
+        return;
+    }
 
     if(mode == NWB_PHYSICS_LBVH_MODE_COMPUTE_MORTON){
         if(tid >= itemCount)
@@ -211,12 +268,33 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             const float3 aMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 0u].xyz;
             const float3 aMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][tid * 2u + 1u].xyz;
             const float3 center = (aMin + aMax) * 0.5f;
-            const float3 sceneMin = float3(
+            float3 sceneMin = float3(
                 g_NwbPhysicsPushConstants.deltaTime,
                 g_NwbPhysicsPushConstants.invDeltaTime,
                 g_NwbPhysicsPushConstants.maxLinearVelocity
             );
-            const float3 invExtent = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+            float3 invExtent = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+            if((g_NwbPhysicsPushConstants.flags & 1u) != 0u){
+                const float3 bMin = float3(
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][0u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][1u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][2u])
+                );
+                const float3 bMax = float3(
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][3u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][4u]),
+                    nwbPhysicsOrderedUintToFloat(g_NwbPhysicsUintBuffers[lbvhMetaSlot][5u])
+                );
+                if(all(bMin <= bMax)){
+                    const float3 span = max(bMax - bMin, float3(1.0f, 1.0f, 1.0f));
+                    sceneMin = bMin - float3(1.0f, 1.0f, 1.0f);
+                    invExtent = float3(1.0f / (span.x + 2.0f), 1.0f / (span.y + 2.0f), 1.0f / (span.z + 2.0f));
+                }
+                else{
+                    sceneMin = float3(-1.0f, -1.0f, -1.0f);
+                    invExtent = float3(0.5f, 0.5f, 0.5f);
+                }
+            }
             const uint code = nwbPhysicsMorton3D((center - sceneMin) * invExtent);
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 0u] = code;
             g_NwbPhysicsUintBuffers[mortonSlot][tid * 2u + 1u] = tid;
@@ -422,8 +500,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         }
         return;
     }
-
-    const uint lbvhMetaSlot = g_NwbPhysicsPushConstants.slots1.x;
 
     if(mode == NWB_PHYSICS_LBVH_MODE_BUILD_TREE){
         if(tid >= itemCount || itemCount < 2u)

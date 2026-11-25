@@ -11,12 +11,8 @@
 Expected<MultilineTextStep> TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
     MultilineTextStep outStep;
     outStep.sourceBytes = decodedBytes;
-    const b8 lineBreak = IsMultilineLineBreakScalar(scalar);
-    if(lineBreak || scalar == s_EditUnicodeTab){
-        if(lineBreak)
-            outStep.replacement = cast<u8>(s_EditUnicodeLineFeed);
-        else
-            outStep.replacement = cast<u8>(s_TextUnicodeSpace);
+    if(IsMultilineLineBreakScalar(scalar)){
+        outStep.replacement = cast<u8>(s_EditUnicodeLineFeed);
         outStep.outputBytes = 1u;
         if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
             ++outStep.sourceBytes;

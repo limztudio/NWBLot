@@ -25,7 +25,7 @@ class WidgetStateAppendRollback : NoCopy{
 
 class WidgetStateIndexPolicy{
     private b8 validTouchRequest(in WidgetId id, in WidgetRoot root, in WidgetKind kind, in u64 frameGeneration)const{
-        return id.valid() && root.generation != 0u && frameGeneration != 0u && cast<u8>(kind) <= cast<u8>(WidgetKind::Image);
+        return id.valid() && root.generation != 0u && frameGeneration != 0u && cast<u8>(kind) <= cast<u8>(WidgetKind::DockSpace);
     }
 
     private b8 canTouchExisting(in WidgetState entry, in WidgetRoot root, in u64 frameGeneration)const{

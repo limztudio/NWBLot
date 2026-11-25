@@ -78,6 +78,14 @@ extern class HarfBuzzFont{
     b8 glyphExtents(in u32 glyph, mut HarfBuzzGlyphExtents extents)const;
 };
 
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiOpenTypeFeature"), cpp_flags(self_defaulted)]
+extern class HarfBuzzOpenTypeFeature{
+    u32 tag;
+    u32 value;
+    u32 start;
+    u32 end;
+};
+
 [cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::HarfBuzzBuffer"), cpp_flags(self_defaulted, no_copy, no_assign)]
 extern class HarfBuzzBuffer{
     b8 valid()const;
@@ -88,6 +96,7 @@ extern class HarfBuzzBuffer{
     b8 setLanguage(in StringView language);
     b8 addUtf8(in StringView text, in u32 offset, in u32 count);
     void shape(in HarfBuzzFont font);
+    void shapeWithFeatures(in HarfBuzzFont font, in Span<HarfBuzzOpenTypeFeature> features);
     Span<HarfBuzzGlyphInfo> glyphInfos()const;
     Span<HarfBuzzGlyphPosition> glyphPositions()const;
 };

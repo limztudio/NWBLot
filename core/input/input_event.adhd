@@ -156,12 +156,46 @@ extern enum MouseButton : u32{
     Button8
 };
 
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::GamepadButton::Enum")]
+extern enum GamepadButton : u32{
+    A,
+    B,
+    X,
+    Y,
+    LeftBumper,
+    RightBumper,
+    Back,
+    Start,
+    Guide,
+    LeftThumb,
+    RightThumb,
+    DPadUp,
+    DPadRight,
+    DPadDown,
+    DPadLeft,
+    kCount
+};
+
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::GamepadAxis::Enum")]
+extern enum GamepadAxis : u32{
+    LeftX,
+    LeftY,
+    RightX,
+    RightY,
+    LeftTrigger,
+    RightTrigger,
+    kCount
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_flags(self_defaulted, brace_init, polymorphic_base)]
 extern class IInputEventHandler{
+    [cpp_flags(unwind)] void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected);
+    [cpp_flags(unwind)] b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action);
+    [cpp_flags(unwind)] b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value);
     [cpp_flags(unwind)] b8 keyboardCharInput(in u32 code, in i32 modifiers);
     [cpp_flags(unwind)] KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers);
     [cpp_flags(unwind)] b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 modifiers);
@@ -234,6 +268,8 @@ extern const i32 s_ModifierShiftBits;
 extern const i32 s_ModifierSuperBits;
 [cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::MouseButton::s_MouseButtonLeftBase")]
 extern const i32 s_MouseButtonLeftBase;
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::s_MaxGamepadCount")]
+extern const u32 s_MaxGamepadCount;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

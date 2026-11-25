@@ -4,6 +4,7 @@
 
 #include <impl/ecs_csg/frame_types.adhd>
 #include <impl/ecs_csg/shape_registry.adhd>
+#include <impl/ecs_scene/components.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,6 +142,14 @@ class CsgFrameReceiverLookup : NoCopy{
         return cutters.subspan(drawState.firstCutter, drawState.cutterCount);
     }
 
+    public void resolveCutterTransforms(
+        in CsgFrameCutterRef cutterRef,
+        mut MatrixSingle outWorldToShape,
+        mut MatrixSingle outShapeToWorld
+    )const{
+        ResolveCsgCutterWorldTransforms(this.m_world, cutterRef.entity, cutterRef.cutter, outWorldToShape, outShapeToWorld);
+    }
+
     [cpp_unwind]
     public void precomputeCutters(in CsgShapeRegistry shapeRegistry){
         this.m_precomputedCutters.clear();
@@ -172,7 +181,7 @@ class CsgFrameReceiverLookup : NoCopy{
                 const auto inserted = shapeTypeCache.try_emplace(cutter.shapeType, foundShape.value());
                 shapeIt = inserted.first;
             }
-            this.m_precomputedCutters.push_back(BuildPrecomputedCsgCutter(record.value().entity, cutter, shapeIt.value()));
+            this.m_precomputedCutters.push_back(BuildPrecomputedCsgCutter(this.m_world, record.value().entity, cutter, shapeIt.value()));
         }
     }
 
@@ -213,13 +222,65 @@ static_assert(is_trivially_copyable<CsgFrameBuildDesc>(), "CsgFrameBuildDesc mus
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgPrecomputedCutter BuildPrecomputedCsgCutter(in EntityID entity, in CsgCutterComponent cutter, in CsgShapeTypeInfo shapeType){
+b8 TryComputeCsgCutterMatricesFromTransform(
+    in TransformComponent transform,
+    mut MatrixSingle outWorldToShape,
+    mut MatrixSingle outShapeToWorld
+){
+    const MatrixSingle shapeToWorld = LoadTransformMatrix(transform);
+    if(!IsFinite(shapeToWorld[0u]) || !IsFinite(shapeToWorld[1u]) || !IsFinite(shapeToWorld[2u]) || !IsFinite(shapeToWorld[3u]))
+        return false;
+    const VectorSingle determinant = MatrixDeterminant(shapeToWorld);
+    if(!IsFinite(determinant) || Abs(determinant).x <= 1.0e-12f)
+        return false;
+    const MatrixSingle worldToShape = Inverse(shapeToWorld);
+    if(!IsFinite(worldToShape[0u]) || !IsFinite(worldToShape[1u]) || !IsFinite(worldToShape[2u]) || !IsFinite(worldToShape[3u]))
+        return false;
+    outWorldToShape = worldToShape;
+    outShapeToWorld = shapeToWorld;
+    return true;
+}
+
+b8 SyncCsgCutterFromTransform(in World world, in EntityID entity, mut CsgCutterComponent inOutCutter){
+    if(!inOutCutter.syncFromTransform)
+        return false;
+    if(!world.hasComponent<TransformComponent>(entity))
+        return false;
+    MatrixSingle worldToShape = MatrixIdentity();
+    MatrixSingle shapeToWorld = MatrixIdentity();
+    if(!TryComputeCsgCutterMatricesFromTransform(world.getComponent<TransformComponent>(entity), worldToShape, shapeToWorld))
+        return false;
+    inOutCutter.worldToShape = f32x3x4(worldToShape);
+    inOutCutter.shapeToWorld = f32x3x4(shapeToWorld);
+    return true;
+}
+
+void ResolveCsgCutterWorldTransforms(
+    in World world,
+    in EntityID entity,
+    in CsgCutterComponent cutter,
+    mut MatrixSingle outWorldToShape,
+    mut MatrixSingle outShapeToWorld
+){
+    if(cutter.syncFromTransform && world.hasComponent<TransformComponent>(entity)){
+        if(TryComputeCsgCutterMatricesFromTransform(world.getComponent<TransformComponent>(entity), outWorldToShape, outShapeToWorld))
+            return;
+    }
+    outWorldToShape = MatrixSingle(cutter.worldToShape);
+    outShapeToWorld = MatrixSingle(cutter.shapeToWorld);
+}
+
+CsgPrecomputedCutter BuildPrecomputedCsgCutter(in World world, in EntityID entity, in CsgCutterComponent cutter, in CsgShapeTypeInfo shapeType){
     CsgPrecomputedCutter out;
     Span<u8> resolved = cutter.parameterBytes;
     if(cutter.parameterBytes.empty())
         resolved = shapeType.desc.defaultParameterBytes;
     if(resolved.size() != cast<usize>(shapeType.desc.parameterByteSize) || resolved.size() > s_CsgShapeInlineParameterMaxBytes)
         return out;
+
+    MatrixSingle worldToShape = MatrixIdentity();
+    MatrixSingle shapeToWorld = MatrixIdentity();
+    ResolveCsgCutterWorldTransforms(world, entity, cutter, worldToShape, shapeToWorld);
 
     out.entity = entity;
     out.shapeType = cutter.shapeType;
@@ -229,13 +290,13 @@ CsgPrecomputedCutter BuildPrecomputedCsgCutter(in EntityID entity, in CsgCutterC
     out.parameterByteSize = shapeType.desc.parameterByteSize;
     for(usize byteIndex = 0u; byteIndex < resolved.size(); ++byteIndex)
         out.parameterBytes.push_back(resolved[byteIndex]);
-    out.worldToShape = cutter.worldToShape;
-    out.shapeToWorld = cutter.shapeToWorld;
+    out.worldToShape = f32x3x4(worldToShape);
+    out.shapeToWorld = f32x3x4(shapeToWorld);
     out.hasShaderModule = shapeType.desc.shaderModule != s_NameNone;
     out.valid = true;
     if(shapeType.desc.boundsCallback.has_value()){
         const Span<u8> paramSpan(out.parameterBytes);
-        const auto bounds = shapeType.desc.boundsCallback.value()(MatrixSingle(cutter.shapeToWorld), paramSpan);
+        const auto bounds = shapeType.desc.boundsCallback.value()(shapeToWorld, paramSpan);
         if(bounds.has_value() && (!bounds.value().finiteBounds || AabbValid(LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))){
             out.boundsMin = bounds.value().minBounds;
             out.boundsMax = bounds.value().maxBounds;
@@ -249,18 +310,21 @@ CsgPrecomputedCutter BuildPrecomputedCsgCutter(in EntityID entity, in CsgCutterC
 void GatherCsgReceiverState<ReceiverT>(
     mut World world,
     in CsgReceiverKind kind,
+    in b8 genericReceiver,
     in CsgFrameReceiverLookup lookup,
     in CsgFrameBuildDesc desc,
     mut CsgFrameState state
 ){
     for(in auto row : world.view<ReceiverT>()){
         const EntityID entity = Get<0>(row);
+        if(kind == CsgReceiverKind::Skinned && world.hasComponent<StaticCsgMeshComponent>(entity))
+            continue;
+        if(genericReceiver && (world.hasComponent<StaticCsgMeshComponent>(entity) || world.hasComponent<SkinnedCsgMeshComponent>(entity)))
+            continue;
         const CsgReceiverComponent receiver = Get<1>(row).asReceiver();
         if(!receiver.enabled)
             continue;
         if(desc.visibility.has_value() && !desc.visibility.value().filter.visible(world, entity, kind, receiver))
-            continue;
-        if(kind == CsgReceiverKind::Skinned && world.hasComponent<StaticCsgMeshComponent>(entity))
             continue;
         const b8 wantOpaque = desc.includeOpaquePass && IsCsgReceiverPassEnabled(receiver, CsgReceiverPass::Opaque);
         const b8 wantTransparent = desc.includeTransparentPass && IsCsgReceiverPassEnabled(receiver, CsgReceiverPass::Transparent);
@@ -278,8 +342,9 @@ CsgFrameState BuildCsgFrameState(mut World world, in CsgFrameBuildDesc desc){
         return state;
     const CsgFrameReceiverLookup lookup = CsgFrameReceiverLookup(world);
     if(!lookup.empty()){
-        GatherCsgReceiverState<StaticCsgMeshComponent>(world, CsgReceiverKind::Static, lookup, desc, state);
-        GatherCsgReceiverState<SkinnedCsgMeshComponent>(world, CsgReceiverKind::Skinned, lookup, desc, state);
+        GatherCsgReceiverState<StaticCsgMeshComponent>(world, CsgReceiverKind::Static, false, lookup, desc, state);
+        GatherCsgReceiverState<SkinnedCsgMeshComponent>(world, CsgReceiverKind::Skinned, false, lookup, desc, state);
+        GatherCsgReceiverState<CsgReceiverComponent>(world, CsgReceiverKind::Static, true, lookup, desc, state);
         FinalizeCsgFrameState(state);
     }
     return state;

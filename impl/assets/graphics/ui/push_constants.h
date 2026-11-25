@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_UI_PUSH_CONSTANTS_BYTE_SIZE 40u
+#define NWB_UI_PUSH_CONSTANTS_BYTE_SIZE 52u
 #define NWB_UI_PUSH_CONSTANTS_SCALE_BYTE_OFFSET 0u
 #define NWB_UI_PUSH_CONSTANTS_TRANSLATE_BYTE_OFFSET 8u
 #define NWB_UI_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET 16u
@@ -24,6 +24,9 @@
 #define NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET 28u
 #define NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET 32u
 #define NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET 36u
+#define NWB_UI_PUSH_CONSTANTS_EFFECT_BUFFER_SLOT_BYTE_OFFSET 40u
+#define NWB_UI_PUSH_CONSTANTS_EFFECT_OFFSET_BYTE_OFFSET 44u
+#define NWB_UI_PUSH_CONSTANTS_CLIP_MASK_OFFSET_BYTE_OFFSET 48u
 
 #define NWB_UI_PUSH_CONSTANTS_FIELDS(FLOAT2_FIELD, UINT_FIELD) \
     FLOAT2_FIELD(scale) \
@@ -33,7 +36,10 @@
     UINT_FIELD(material) \
     UINT_FIELD(sdfChannel) \
     UINT_FIELD(sdfSpreadPixels) \
-    UINT_FIELD(sdfDistanceEncoding)
+    UINT_FIELD(sdfDistanceEncoding) \
+    UINT_FIELD(effectBufferSlot) \
+    UINT_FIELD(effectOffset) \
+    UINT_FIELD(clipMaskOffset)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,4 +49,3 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

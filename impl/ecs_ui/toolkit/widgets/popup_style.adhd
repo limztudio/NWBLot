@@ -37,6 +37,7 @@ class PopupOptions{
     public PopupPlacementSide side = PopupPlacementSide::Below;
     public f32 gap = s_StyleSpacingSmall;
     public b8 modal = false;
+    public b8 blockOutsideInput = true;
     public b8 dismissOutside = true;
     public b8 dismissCancel = true;
     public b8 autofocus = true;

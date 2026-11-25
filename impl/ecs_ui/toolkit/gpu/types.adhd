@@ -168,6 +168,9 @@ void AssignGpuPaintMaterialPushConstants(
     in u32 sdfChannel,
     in u32 sdfSpreadPixels,
     in u32 sdfDistanceEncoding,
+    in u32 effectBufferSlot,
+    in u32 effectOffset,
+    in u32 clipMaskOffset,
     mut GpuPaintPushConstants inOutPush
 ){
     inOutPush.material = cast<u32>(material);
@@ -177,6 +180,9 @@ void AssignGpuPaintMaterialPushConstants(
         inOutPush.sdfSpreadPixels = sdfSpreadPixels;
         inOutPush.sdfDistanceEncoding = sdfDistanceEncoding;
     }
+    inOutPush.effectBufferSlot = effectBufferSlot;
+    inOutPush.effectOffset = effectOffset;
+    inOutPush.clipMaskOffset = clipMaskOffset;
 }
 
 b8 SameGpuPaintPushConstants(in GpuPaintPushConstants lhs, in GpuPaintPushConstants rhs){
@@ -184,6 +190,9 @@ b8 SameGpuPaintPushConstants(in GpuPaintPushConstants lhs, in GpuPaintPushConsta
         lhs.material != rhs.material
         || lhs.textureSlot != rhs.textureSlot
         || lhs.samplerSlot != rhs.samplerSlot
+        || lhs.effectBufferSlot != rhs.effectBufferSlot
+        || lhs.effectOffset != rhs.effectOffset
+        || lhs.clipMaskOffset != rhs.clipMaskOffset
         || lhs.scale.x != rhs.scale.x
         || lhs.scale.y != rhs.scale.y
         || lhs.translate.x != rhs.translate.x

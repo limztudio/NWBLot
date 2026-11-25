@@ -1246,9 +1246,18 @@ Manifold CollideHullAndMesh(
     Array<u32, 256u> stack;
     stack[0u] = 0u;
     u32 stackCount = 1u;
-    while(stackCount > 0u){
-        --stackCount;
-        const u32 nodeIdx = stack[stackCount];
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -1761,14 +1770,8 @@ Manifold CollideHullAndMesh(
             }
         }
         else{
-            if(stackCount < 256u){
-                stack[stackCount] = node.leftOrFirst();
-                ++stackCount;
-            }
-            if(stackCount < 256u){
-                stack[stackCount] = node.rightOrCount();
-                ++stackCount;
-            }
+            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
         }
     }
 
@@ -1818,6 +1821,28 @@ void TransformLocalAabbValuesWithAbsAxes(
     outMax = cA + eA;
 }
 
+void PushMeshPairWithSpill(
+    in u32x2u pair,
+    mut Array<u32x2u, 256u> fixedStack,
+    mut u32 fixedCount,
+    mut Vector<u32x2u> overflowStack,
+    mut b8 useOverflow
+){
+    if(!useOverflow && fixedCount < 256u){
+        fixedStack[fixedCount] = pair;
+        ++fixedCount;
+        return;
+    }
+    if(!useOverflow){
+        overflowStack.reserve(512u);
+        for(u32 i = 0u; i < fixedCount; ++i)
+            overflowStack.push_back(fixedStack[i]);
+        fixedCount = 0u;
+        useOverflow = true;
+    }
+    overflowStack.push_back(pair);
+}
+
 Manifold CollideMeshes(
     in MeshShape meshA,
     in VectorSingle posA,
@@ -1854,10 +1879,19 @@ Manifold CollideMeshes(
     Array<u32x2u, 256u> stack;
     stack[0u] = u32x2u(0u, 0u);
     u32 stackCount = 1u;
+    Vector<u32x2u> overflowStack;
+    b8 useOverflow = false;
 
-    while(stackCount > 0u){
-        --stackCount;
-        const u32x2u pair = stack[stackCount];
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32x2u pair(0u, 0u);
+        if(useOverflow){
+            pair = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            pair = stack[stackCount];
+        }
         in MeshBvhNode nodeA = meshA.nodes[pair.x];
         in MeshBvhNode nodeB = meshB.nodes[pair.y];
 
@@ -2204,47 +2238,23 @@ Manifold CollideMeshes(
             }
         }
         else if(nodeA.isLeaf()){
-            if(stackCount < 256u){
-                stack[stackCount] = u32x2u(pair.x, nodeB.leftOrFirst());
-                ++stackCount;
-            }
-            if(stackCount < 256u){
-                stack[stackCount] = u32x2u(pair.x, nodeB.rightOrCount());
-                ++stackCount;
-            }
+            PushMeshPairWithSpill(u32x2u(pair.x, nodeB.leftOrFirst()), stack, stackCount, overflowStack, useOverflow);
+            PushMeshPairWithSpill(u32x2u(pair.x, nodeB.rightOrCount()), stack, stackCount, overflowStack, useOverflow);
         }
         else if(nodeB.isLeaf()){
-            if(stackCount < 256u){
-                stack[stackCount] = u32x2u(nodeA.leftOrFirst(), pair.y);
-                ++stackCount;
-            }
-            if(stackCount < 256u){
-                stack[stackCount] = u32x2u(nodeA.rightOrCount(), pair.y);
-                ++stackCount;
-            }
+            PushMeshPairWithSpill(u32x2u(nodeA.leftOrFirst(), pair.y), stack, stackCount, overflowStack, useOverflow);
+            PushMeshPairWithSpill(u32x2u(nodeA.rightOrCount(), pair.y), stack, stackCount, overflowStack, useOverflow);
         }
         else{
             const f32 areaA = AabbPerimeterValues(VectorSingle(nodeA.aabbMinLeft, 0.0f), VectorSingle(nodeA.aabbMaxRight, 0.0f));
             const f32 areaB = AabbPerimeterValues(VectorSingle(nodeB.aabbMinLeft, 0.0f), VectorSingle(nodeB.aabbMaxRight, 0.0f));
             if(areaA >= areaB){
-                if(stackCount < 256u){
-                    stack[stackCount] = u32x2u(nodeA.leftOrFirst(), pair.y);
-                    ++stackCount;
-                }
-                if(stackCount < 256u){
-                    stack[stackCount] = u32x2u(nodeA.rightOrCount(), pair.y);
-                    ++stackCount;
-                }
+                PushMeshPairWithSpill(u32x2u(nodeA.leftOrFirst(), pair.y), stack, stackCount, overflowStack, useOverflow);
+                PushMeshPairWithSpill(u32x2u(nodeA.rightOrCount(), pair.y), stack, stackCount, overflowStack, useOverflow);
             }
             else{
-                if(stackCount < 256u){
-                    stack[stackCount] = u32x2u(pair.x, nodeB.leftOrFirst());
-                    ++stackCount;
-                }
-                if(stackCount < 256u){
-                    stack[stackCount] = u32x2u(pair.x, nodeB.rightOrCount());
-                    ++stackCount;
-                }
+                PushMeshPairWithSpill(u32x2u(pair.x, nodeB.leftOrFirst()), stack, stackCount, overflowStack, useOverflow);
+                PushMeshPairWithSpill(u32x2u(pair.x, nodeB.rightOrCount()), stack, stackCount, overflowStack, useOverflow);
             }
         }
     }

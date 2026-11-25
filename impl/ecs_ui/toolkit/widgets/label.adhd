@@ -19,10 +19,13 @@ class Label : NoCopy{
     private u64 m_measuredAtlasIdentity = 0u;
     private usize m_measuredAtlasGlyphCount = 0u;
     private f32 m_fontSize = s_TextDefaultFontSize;
+    private f32 m_maxWidth = 0.0f;
     private u32 m_scriptTag = s_TextDefaultScriptTag;
     private u32 m_measuredPixelScaleXBits = 0u;
     private u32 m_measuredPixelScaleYBits = 0u;
     private TextDirection m_direction = TextDirection::LeftToRight;
+    private TextWrapMode m_wrapMode = TextWrapMode::None;
+    private TextAlignment m_alignment = TextAlignment::Leading;
     private b8 m_dirty = true;
     private b8 m_hasMeasured = false;
     private b8 m_measuredNeedsAtlasRecheck = false;
@@ -32,7 +35,7 @@ class Label : NoCopy{
     }
 
     public TextLayoutStatus setText(in ShapeRequest request){
-        return SetLabelTextRequest(request, this.m_text, this.m_language, this.m_fontSize, this.m_scriptTag, this.m_direction, this.m_dirty);
+        return SetLabelTextRequest(request, this.m_text, this.m_language, this.m_fontSize, this.m_maxWidth, this.m_scriptTag, this.m_direction, this.m_wrapMode, this.m_alignment, this.m_dirty);
     }
 
     public Expected<Rect> measure(mut TextService text, in DisplayMetrics display){
@@ -41,8 +44,11 @@ class Label : NoCopy{
             request.text = this.m_text;
             request.language = this.m_language;
             request.fontSize = this.m_fontSize;
+            request.maxWidth = this.m_maxWidth;
             request.scriptTag = this.m_scriptTag;
             request.direction = this.m_direction;
+            request.wrapMode = this.m_wrapMode;
+            request.alignment = this.m_alignment;
             Expected<TextLayout, TextLayoutStatus> layout = text.layout(request);
             if(!layout.has_value())
                 return MakeUnexpected(Failure());

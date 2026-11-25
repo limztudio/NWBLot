@@ -176,6 +176,37 @@ void nwbPhysicsClearContactWarmStart(const uint constraintIdx, const uint constr
     g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].rollingImpulsePad.xyz = float3(0.0f, 0.0f, 0.0f);
 }
 
+void nwbPhysicsApplyContactCustomScales(
+    const uint metaW,
+    inout float invMassA,
+    inout float4 invIA0,
+    inout float4 invIA1,
+    inout float invMassB,
+    inout float4 invIB0,
+    inout float4 invIB1,
+    out float outMaxNormalImpulse
+){
+    outMaxNormalImpulse = 3.4e38f;
+    if(metaW == NWB_PHYSICS_INVALID_INDEX || (metaW & NWB_PHYSICS_CONTACT_AUX_HAS_CUSTOM_SCALE) == 0u)
+        return;
+    const uint auxSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.w);
+    if(auxSlot == NWB_PHYSICS_INVALID_INDEX)
+        return;
+    const uint auxBase = (metaW & NWB_PHYSICS_CONTACT_AUX_INDEX_MASK) * NWB_PHYSICS_CONTACT_AUX_STRIDE_FLOAT4;
+    const float rawMaxN = g_NwbPhysicsFloat4Buffers[auxSlot][auxBase + 2u].w;
+    if(rawMaxN >= 0.0f)
+        outMaxNormalImpulse = rawMaxN;
+    const float4 sc = g_NwbPhysicsFloat4Buffers[auxSlot][auxBase + 3u];
+    invMassA *= max(sc.x, 0.0f);
+    invMassB *= max(sc.y, 0.0f);
+    const float sIA = max(sc.z, 0.0f);
+    const float sIB = max(sc.w, 0.0f);
+    invIA0 *= sIA;
+    invIA1.xy *= sIA;
+    invIB0 *= sIB;
+    invIB1.xy *= sIB;
+}
+
 void nwbPhysicsWarmStartContact(
     const uint constraintIdx,
     const uint bodySimSlot,
@@ -224,6 +255,9 @@ void nwbPhysicsWarmStartContact(
     float4 invIB0;
     float4 invIB1;
     nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, invIB0, invIB1);
+
+    float dummyMaxNormalImpulse;
+    nwbPhysicsApplyContactCustomScales(meta.w, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, dummyMaxNormalImpulse);
 
     const float3 normal = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalFriction.xyz;
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
@@ -361,6 +395,8 @@ void nwbPhysicsRestitutionContact(
     nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, invIB0, invIB1);
 
     const float3 normal = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalFriction.xyz;
+    float maxNormalImpulse = 3.4e38f;
+    nwbPhysicsApplyContactCustomScales(meta.w, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, maxNormalImpulse);
     const float4 normalMasses = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalMasses;
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
     const uint ldsIdx = constraintIdx - g_NwbPhysicsLdsContactOffset;
@@ -394,7 +430,9 @@ void nwbPhysicsRestitutionContact(
         const float3 rnB = hasB ? cross(rB, normal) : float3(0.0f, 0.0f, 0.0f);
         const float vn = dot(vB - vA, normal) + dot(wB, rnB) - dot(wA, rnA);
         const float normalMass = normalMasses[i];
-        const float impulse = -normalMass * (vn + restitution * relVel);
+        float impulse = -normalMass * (vn + restitution * relVel);
+        if(maxNormalImpulse < 1.0e37f)
+            impulse = min(impulse, max(maxNormalImpulse - ptTotal, 0.0f));
         if(impulse > 0.0f){
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
             ldsNormImp[i] = 0.0f;
@@ -477,6 +515,8 @@ void nwbPhysicsSolveContactVelocity(
     nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, invIB0, invIB1);
 
     const float4 nf = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalFriction;
+    float maxNormalImpulse = 3.4e38f;
+    nwbPhysicsApplyContactCustomScales(meta.w, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, maxNormalImpulse);
     const float3 normal = nf.xyz;
     const float friction = nf.w;
     const float4 tvrml = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentVelRollMaxLever;
@@ -545,7 +585,7 @@ void nwbPhysicsSolveContactVelocity(
         const float3 rnB = hasB ? cross(rB, normal) : float3(0.0f, 0.0f, 0.0f);
         const float vn = dot(vB - vA, normal) + dot(wB, rnB) - dot(wA, rnA);
         const float impulse = -normalMass * massScale * (vn + bias) - impulseScale * oldImpulse;
-        const float newImpulse = max(oldImpulse + impulse, 0.0f);
+        const float newImpulse = clamp(oldImpulse + impulse, 0.0f, maxNormalImpulse);
         const float delta = newImpulse - oldImpulse;
         totalNormalImpulse += newImpulse;
 

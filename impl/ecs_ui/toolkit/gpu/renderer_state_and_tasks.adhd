@@ -52,16 +52,62 @@ b8 EnsureGpuGeometryBuffer<TElement>(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
 b8 GpuRendererState::prepareBuffers(mut GpuFrameSlot slot, in DrawSnapshot snapshot){
     const usize vertexCount = snapshot.vertices().size();
     const usize indexCount = snapshot.indices().size();
-    if(vertexCount == 0u && indexCount == 0u)
-        return true;
-    if(!IsValidGpuSnapshotBufferCounts(vertexCount, indexCount, size_of<Vertex>(), size_of<u32>()))
-        return false;
-    mut Device device = this.m_graphics.getDevice();
-    return EnsureGpuGeometryBuffer<Vertex>(device, vertexCount, s_GpuInitialVertexCapacity, s_GpuVertexBufferName, true, slot.vertices, slot.vertexCapacity)
-        && EnsureGpuGeometryBuffer<u32>(device, indexCount, s_GpuInitialIndexCapacity, s_GpuIndexBufferName, false, slot.indices, slot.indexCapacity);
+    const usize effectWordCount = snapshot.effectWords().size();
+    if(vertexCount > 0u || indexCount > 0u){
+        if(!IsValidGpuSnapshotBufferCounts(vertexCount, indexCount, size_of<Vertex>(), size_of<u32>()))
+            return false;
+        mut Device device = this.m_graphics.getDevice();
+        if(
+            !EnsureGpuGeometryBuffer<Vertex>(device, vertexCount, s_GpuInitialVertexCapacity, s_GpuVertexBufferName, true, slot.vertices, slot.vertexCapacity)
+            || !EnsureGpuGeometryBuffer<u32>(device, indexCount, s_GpuInitialIndexCapacity, s_GpuIndexBufferName, false, slot.indices, slot.indexCapacity)
+        )
+            return false;
+    }
+    if(effectWordCount > 0u){
+        if(effectWordCount > usize.max / size_of<u32>())
+            return false;
+        if(!slot.effectBuffer.valid() || slot.effectBuffer.deref().m_wordCapacity < effectWordCount){
+            usize prevCap = 0u;
+            if(slot.effectBuffer.valid())
+                prevCap = slot.effectBuffer.deref().m_wordCapacity;
+            const usize capacity = ComputeGpuGrowingBufferCapacity(prevCap, effectWordCount, s_GpuInitialEffectWordCapacity, size_of<u32>());
+            const auto verResult = this.m_versions.make<GpuEffectBufferVersion>(this.m_graphics);
+            if(!verResult.has_value())
+                return false;
+            GpuVersion<GpuEffectBufferVersion> effectVer = verResult.value();
+            mut Device device = this.m_graphics.getDevice();
+            BufferDesc effectDesc;
+            effectDesc.setByteSize(cast<u64>(capacity * size_of<u32>()))
+                .setStructStride(cast<u32>(size_of<u32>()))
+                .setCanHaveRawViews(true)
+                .setDebugName(s_GpuEffectBufferName)
+                .enableAutomaticStateTracking(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+            ;
+            const auto bufferResult = device.createBuffer(effectDesc);
+            if(!bufferResult.has_value())
+                return false;
+            mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+            const Expected<GpuDescriptorHandle> descriptorResult = heap.allocate(GpuDescriptorClass::StorageBuffer);
+            if(!descriptorResult.has_value())
+                return false;
+            const GpuDescriptorHandle descriptor = descriptorResult.value();
+            GpuDescriptorRetirementGuard descriptorGuard(heap, descriptor);
+            BufferHandle localBuffer = bufferResult.value();
+            if(!heap.write(descriptor, DescriptorWriteItemRawBufferSrv(0u, localBuffer.deref())))
+                return false;
+            effectVer.deref().m_buffer = bufferResult.value();
+            effectVer.deref().m_descriptor = descriptor;
+            effectVer.deref().m_wordCapacity = capacity;
+            descriptorGuard.release();
+            slot.effectBuffer = effectVer;
+        }
+    }
+    return true;
 }
 
 
@@ -113,6 +159,32 @@ b8 GpuRendererState::prepare(in AcquiredPresentationFrame acquired){
         if(!imageResources.prepareGlyphPages(this.m_pending.deref().m_snapshot, this.m_pending.deref().m_glyphPages) || !imageResources.prepareSdfPages(this.m_pending.deref().m_snapshot,
             this.m_pending.deref().m_sdfPages) || !imageResources.prepareTextureImages(this.m_pending.deref().m_snapshot, this.m_pending.deref().m_textureImages) || !this.prepareBuffers(slot, this.m_pending.deref().m_snapshot))
             return false;
+        in Vector<PaintEffectLayer> effectLayers = this.m_pending.deref().m_snapshot.effectLayers();
+        if(!effectLayers.empty()){
+            if(!slot.scratchA.valid()){
+                const auto scratchAResult = CreateGpuTargetNamed(this.m_versions, this.m_graphics, this.m_width, this.m_height, s_GpuScratchATextureName);
+                if(!scratchAResult.has_value())
+                    return false;
+                slot.scratchA = scratchAResult.value();
+            }
+            if(!slot.scratchB.valid()){
+                const auto scratchBResult = CreateGpuTargetNamed(this.m_versions, this.m_graphics, this.m_width, this.m_height, s_GpuScratchBTextureName);
+                if(!scratchBResult.has_value())
+                    return false;
+                slot.scratchB = scratchBResult.value();
+            }
+            this.m_pending.deref().m_scratchA = slot.scratchA;
+            this.m_pending.deref().m_scratchB = slot.scratchB;
+            const usize maxCaptures = effectLayers.size() * 5u + 1u;
+            while(this.m_pending.deref().m_extraCommandIrCaptures.size() < maxCaptures){
+                auto extraCap = this.m_versions.make<GpuCommandIrCapture>(this.m_graphics.allocator());
+                if(!extraCap.has_value())
+                    return false;
+                this.m_pending.deref().m_extraCommandIrCaptures.push_back(extraCap.value());
+            }
+        }
+        if(!this.m_pending.deref().m_snapshot.effectWords().empty())
+            this.m_pending.deref().m_effectBuffer = slot.effectBuffer;
         this.m_pending.deref().m_target = slot.target;
         this.m_pending.deref().m_resources = this.m_resources;
         this.m_pending.deref().m_vertices = slot.vertices;

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/widgets/style.adhd>
+#include <impl/ecs_ui/toolkit/paint_types.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,10 +15,20 @@ type ImageFrame = ImageFrameRecord<SharedImageSource>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> ImageFitMode{
+    Fill = 0u,
+    Contain = 1u,
+    Cover = 2u,
+    kCount
+}
+
 class ImageOptions{
     public LayoutSize width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
     public LayoutSize height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
     public Color tint;
+    public Rect uvRect = Rect(0.0f, 0.0f, 1.0f, 1.0f);
+    public ImageFitMode fitMode = ImageFitMode::Fill;
+    public LayoutItemOptions layout;
 }
 
 class ImageMetrics{
@@ -27,6 +38,8 @@ class ImageMetrics{
 class ImagePlacement{
     public Rect bounds;
     public Rect clip;
+    public Rect drawBounds;
+    public Rect uvRect = Rect(0.0f, 0.0f, 1.0f, 1.0f);
 }
 
 class ImageFrameRecord<TImage>{
@@ -40,41 +53,115 @@ class ImageFrameRecord<TImage>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 IsFullImageUvRect(in Rect uv){
+    return uv.x == 0.0f && uv.y == 0.0f && uv.width == 1.0f && uv.height == 1.0f;
+}
+
+b8 IsValidImageOptions(in ImageOptions options){
+    return IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsValidUiColor(options.tint)
+        && IsValidPaintUvRect(options.uvRect)
+        && cast<u8>(options.fitMode) <= cast<u8>(ImageFitMode::Cover);
+}
+
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion region, in f32 density){
     ImageMetrics outMetrics;
-    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint) || !IsFinite(VectorSingle(density)) || density <= 0.0f)
+    if(!IsValidImageOptions(options) || !IsFinite(VectorSingle(density)) || density <= 0.0f)
         return MakeUnexpected(Failure());
-    VectorDouble sliceExtents(0.0);
-    if(!TryLoadUiSkinSliceExtents(region, sliceExtents))
+    if(IsFullImageUvRect(options.uvRect)){
+        VectorDouble sliceExtents(0.0);
+        if(!TryLoadUiSkinSliceExtents(region, sliceExtents))
+            return MakeUnexpected(Failure());
+        const f64 pixelW = UiSimdMaxF64(cast<f64>(region.rectangle.width), sliceExtents.x);
+        const f64 pixelH = UiSimdMaxF64(cast<f64>(region.rectangle.height), sliceExtents.y);
+        const f64 densityF64 = cast<f64>(density);
+        VectorSingle minimum(0.0f);
+        if(!TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64), minimum))
+            return MakeUnexpected(Failure());
+        outMetrics.contentSize = Point(minimum.x, minimum.y);
+        return outMetrics;
+    }
+    const VectorDouble regionPx(cast<f64>(region.rectangle.width), cast<f64>(region.rectangle.height), 0.0, 0.0);
+    const VectorDouble uvExt(cast<f64>(options.uvRect.width), cast<f64>(options.uvRect.height), 1.0, 1.0);
+    const VectorDouble logical = (regionPx * uvExt) / VectorDouble(cast<f64>(density));
+    if(!IsFinite(logical.xy) || logical.x > s_UiMaxFloatF64 || logical.y > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
-    const f64 pixelW = UiSimdMaxF64(cast<f64>(region.rectangle.width), sliceExtents.x);
-    const f64 pixelH = UiSimdMaxF64(cast<f64>(region.rectangle.height), sliceExtents.y);
-    const f64 densityF64 = cast<f64>(density);
-    VectorSingle minimum(0.0f);
-    if(!TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64), minimum))
-        return MakeUnexpected(Failure());
-    outMetrics.contentSize = Point(minimum.x, minimum.y);
+    outMetrics.contentSize = Point(cast<f32>(logical.x), cast<f32>(logical.y));
     return outMetrics;
 }
 
 Expected<ImageMetrics> MeasureImage(in ImageOptions options, in ImageSource source){
-    if(!IsValidLayoutSize(options.width) || !IsValidLayoutSize(options.height) || !IsValidUiColor(options.tint))
+    if(!IsValidImageOptions(options))
+        return MakeUnexpected(Failure());
+    const VectorDouble texturePx(cast<f64>(source.texture().width()), cast<f64>(source.texture().height()), 0.0, 0.0);
+    const VectorDouble uvExt(cast<f64>(options.uvRect.width), cast<f64>(options.uvRect.height), 1.0, 1.0);
+    const VectorDouble size = texturePx * uvExt;
+    if(!IsFinite(size.xy) || size.x > s_UiMaxFloatF64 || size.y > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     ImageMetrics metrics;
-    metrics.contentSize = Point(cast<f32>(source.texture().width()), cast<f32>(source.texture().height()));
+    metrics.contentSize = Point(cast<f32>(size.x), cast<f32>(size.y));
     return metrics;
 }
 
-Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
-    ImagePlacement outPlacement;
-    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
+Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip, in Point sourceSize, in Rect uvRect, in ImageFitMode fitMode){
+    if(
+        !IsBoundedUiRect(bounds)
+        || !IsBoundedUiRect(clip)
+        || !IsValidUiExtent(sourceSize)
+        || !IsValidPaintUvRect(uvRect)
+        || cast<u8>(fitMode) > cast<u8>(ImageFitMode::Cover)
+    )
         return MakeUnexpected(Failure());
     const Expected<Rect> intersection = TryIntersectUiRects(bounds, clip, UiRectPrecision::EmptyPaint);
     if(!intersection.has_value())
         return MakeUnexpected(Failure());
+    ImagePlacement outPlacement;
     outPlacement.bounds = bounds;
     outPlacement.clip = intersection.value();
+    outPlacement.drawBounds = bounds;
+    outPlacement.uvRect = uvRect;
+    if(fitMode == ImageFitMode::Fill || sourceSize.x <= 0.0f || sourceSize.y <= 0.0f || bounds.width <= 0.0f || bounds.height <= 0.0f)
+        return outPlacement;
+    if(fitMode == ImageFitMode::Contain){
+        const f64 srcW = cast<f64>(sourceSize.x);
+        const f64 srcH = cast<f64>(sourceSize.y);
+        const f64 dstW = cast<f64>(bounds.width);
+        const f64 dstH = cast<f64>(bounds.height);
+        const f64 scale = UiSimdMinF64(dstW / srcW, dstH / srcH);
+        const VectorDouble drawSize = VectorDouble(srcW, srcH, 0.0, 0.0) * VectorDouble(scale);
+        const VectorDouble offset = (VectorDouble(dstW, dstH, 0.0, 0.0) - drawSize) * VectorDouble(0.5);
+        const Expected<Rect> drawRect = TryMakeUiRect(cast<f64>(bounds.x) + offset.x, cast<f64>(bounds.y) + offset.y, drawSize.x, drawSize.y, UiRectPrecision::EmptyPaint);
+        if(!drawRect.has_value())
+            return MakeUnexpected(Failure());
+        outPlacement.drawBounds = drawRect.value();
+        return outPlacement;
+    }
+    const f64 srcAspect = cast<f64>(sourceSize.x) / cast<f64>(sourceSize.y);
+    const f64 dstAspect = cast<f64>(bounds.width) / cast<f64>(bounds.height);
+    if(srcAspect > dstAspect){
+        const f64 frac = dstAspect / srcAspect;
+        const f64 newW = cast<f64>(uvRect.width) * frac;
+        const f64 newX = cast<f64>(uvRect.x) + (cast<f64>(uvRect.width) - newW) * 0.5;
+        const f32 u0 = UiSimdClamp(cast<f32>(newX), 0.0f, 1.0f);
+        const f32 uw = UiSimdMin(cast<f32>(newW), 1.0f - u0);
+        if(uw > 0.0f)
+            outPlacement.uvRect = Rect(u0, uvRect.y, uw, uvRect.height);
+    }
+    else if(srcAspect < dstAspect){
+        const f64 frac = srcAspect / dstAspect;
+        const f64 newH = cast<f64>(uvRect.height) * frac;
+        const f64 newY = cast<f64>(uvRect.y) + (cast<f64>(uvRect.height) - newH) * 0.5;
+        const f32 v0 = UiSimdClamp(cast<f32>(newY), 0.0f, 1.0f);
+        const f32 vh = UiSimdMin(cast<f32>(newH), 1.0f - v0);
+        if(vh > 0.0f)
+            outPlacement.uvRect = Rect(uvRect.x, v0, uvRect.width, vh);
+    }
     return outPlacement;
+}
+
+Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
+    return PlaceImage(bounds, clip, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
 }
 
 

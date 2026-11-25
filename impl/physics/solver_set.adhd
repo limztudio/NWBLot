@@ -44,6 +44,7 @@ flag<u8> JointFlags{
     Alive = 0x10u,
     Enabled = 0x20u,
     EnableProjection = 0x40u,
+    EnableTwistLimit = 0x80u,
 }
 
 class Body{
@@ -398,7 +399,17 @@ class JointExtraData{
     public Array<f32, 6u> sixDofSpringImpulses;
     public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 slerpImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 pulleyConstant = 0.0f;
+    public f32 slerpHertz = 0.0f;
+    public f32 slerpDampingRatio = 1.0f;
+    public f32 slerpMaxTorque = 0.0f;
+    public f32 sixDofSwingLimitY = 0.0f;
+    public f32 sixDofSwingLimitZ = 0.0f;
+    public f32 sixDofSwingImpulse = 0.0f;
+    public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
+    public b8 enableSlerpDrive = false;
     public Vector<f32x4> pathPoints;
     public Vector<f32x4> pathSegVecs;
     public Vector<f32x4> pathSegTangentsInvLenSq;
@@ -501,9 +512,12 @@ class Joint{
     public f32 ratio = 1.0f;
     public f32 breakForce = 0.0f;
     public f32 breakTorque = 0.0f;
+    public f32 continuousAngle = 0.0f;
+    public f32 accumulatedPhaseError = 0.0f;
     public u16 generation = 0u;
     public JointType type = JointType::Distance;
     public u8 flags = 0u;
+    public b8 hasContinuousAngle = false;
 
     public VectorSingle localAnchorA()const{
         return VectorSingle(this.localAnchorALength, 0.0f);
@@ -687,6 +701,10 @@ class Joint{
 
     public b8 enableProjection()const{
         return this.hasFlag(JointFlags::EnableProjection);
+    }
+
+    public b8 enableTwistLimit()const{
+        return this.hasFlag(JointFlags::EnableTwistLimit);
     }
 }
 
@@ -926,6 +944,218 @@ ShapeProxyView MakeShapeProxyViewFromShape(
     return ShapeProxyView();
 }
 
+Manifold CollideInfinitePlanes(
+    in PlaneShape planeA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in PlaneShape planeB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold m;
+    const VectorSingle up(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle nA = SafeNormalizeVec3(Vector3Rotate(planeA.normal(), rotA), up);
+    const VectorSingle p0A = TransformPointValues(posA, rotA, planeA.normal() * planeA.offset());
+    const VectorSingle nB = SafeNormalizeVec3(Vector3Rotate(planeB.normal(), rotB), up);
+    const VectorSingle p0B = TransformPointValues(posB, rotB, planeB.normal() * planeB.offset());
+    const f32 dA = Vector3Dot(nA, p0A).x;
+    const f32 dB = Vector3Dot(nB, p0B).x;
+    const f32 dotN = Vector3Dot(nA, nB).x;
+    if(dotN > 0.9999f)
+        return m;
+    if(dotN < -0.9999f){
+        const f32 sep = -(dA + dB);
+        if(sep <= maxDistance){
+            const VectorSingle wA = p0A;
+            const VectorSingle wB = p0A + nA * sep;
+            m.normalTwist = f32x4(nA, 0.0f);
+            m.setPointCount(1u);
+            SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, sep, MakeFeatureId(6u, 0u, 6u, 0u));
+        }
+        return m;
+    }
+    if(0.0f > maxDistance)
+        return m;
+    const f32 det = 1.0f - dotN * dotN;
+    if(det <= 1.0e-6f)
+        return m;
+    const f32 c1 = (dA - dotN * dB) / det;
+    const f32 c2 = (dB - dotN * dA) / det;
+    const VectorSingle linePt = nA * c1 + nB * c2;
+    const VectorSingle nAtoB = SafeNormalizeVec3(VectorSingle(nA - nB, 0.0f), nA);
+    m.normalTwist = f32x4(nAtoB, 0.0f);
+    m.setPointCount(1u);
+    SetManifoldPoint(m, 0u, linePt, linePt - posA, linePt - posB, 0.0f, MakeFeatureId(6u, 0u, 6u, 0u));
+    return m;
+}
+
+f32 ComputeAabbMinSignedDistToPlaneValues(
+    in VectorSingle boxMin,
+    in VectorSingle boxMax,
+    in VectorSingle planeN,
+    in f32 planeD
+){
+    const VectorSingle minCorner = VectorSelect(boxMin, boxMax, VectorLess(planeN, VectorZero()));
+    return Vector3Dot(planeN, minCorner).x - planeD;
+}
+
+Manifold CollidePlaneAndMeshRaw(
+    in PlaneShape planeA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold m;
+    if(meshB.nodes.empty() || meshB.triangles.empty())
+        return m;
+    const VectorSingle up(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(planeA.normal(), rotA), up);
+    const VectorSingle worldPlanePt = TransformPointValues(posA, rotA, planeA.normal() * planeA.offset());
+    const VectorSingle planeNInB = SafeNormalizeVec3(Vector3InverseRotate(nAtoB, rotB), up);
+    const VectorSingle planePtInB = InverseTransformPointValues(posB, rotB, worldPlanePt);
+    const f32 planeDInB = Vector3Dot(planeNInB, planePtInB).x;
+    const f32 meshR = meshB.radius();
+    const f32 thresh = meshR + maxDistance;
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    Array<u32, 256u> stack;
+    stack[0u] = 0u;
+    u32 stackCount = 1u;
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
+        in MeshBvhNode node = meshB.nodes[nodeIdx];
+        if(ComputeAabbMinSignedDistToPlaneValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), planeNInB, planeDInB) > thresh)
+            continue;
+        if(node.isLeaf()){
+            const u32 firstTri = node.leftOrFirst();
+            const u32 endTri = firstTri + node.rightOrCount();
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                in MeshTriangle tri = meshB.triangles[ti];
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = tri.v0;
+                triPts[1u] = tri.v1;
+                triPts[2u] = tri.v2;
+                for(u32 vi = 0u; vi < 3u; ++vi){
+                    const VectorSingle v(triPts[vi], 0.0f);
+                    const f32 sd = Vector3Dot(planeNInB, v).x - planeDInB - meshR;
+                    if(sd <= maxDistance){
+                        const VectorSingle wB = TransformPointValues(posB, rotB, v) - nAtoB * meshR;
+                        const VectorSingle wA = wB - nAtoB * sd;
+                        PushMeshCandidateWithTris(
+                            (wA + wB) * 0.5f,
+                            wA - posA,
+                            wB - posB,
+                            nAtoB,
+                            sd,
+                            MakeFeatureId(6u, 0u, 3u, cast<u8>(ti & 0xffu)),
+                            s_NullIndex,
+                            ti,
+                            candidates
+                        );
+                    }
+                }
+            }
+        }
+        else{
+            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+        }
+    }
+    if(!candidates.empty())
+        ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+    return m;
+}
+
+Manifold CollidePlaneAndHeightfieldRaw(
+    in PlaneShape planeA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HeightfieldShape hfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold m;
+    if(!hfB.isValid())
+        return m;
+    const VectorSingle up(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(planeA.normal(), rotA), up);
+    const VectorSingle worldPlanePt = TransformPointValues(posA, rotA, planeA.normal() * planeA.offset());
+    const VectorSingle planeNInB = SafeNormalizeVec3(Vector3InverseRotate(nAtoB, rotB), up);
+    const VectorSingle planePtInB = InverseTransformPointValues(posB, rotB, worldPlanePt);
+    const f32 planeDInB = Vector3Dot(planeNInB, planePtInB).x;
+    const Aabb3D localBox = hfB.computeLocalAabb();
+    if(ComputeAabbMinSignedDistToPlaneValues(VectorSingle(localBox.lowerBound), VectorSingle(localBox.upperBound), planeNInB, planeDInB) > maxDistance)
+        return m;
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    const u32 maxCx = hfB.cols - 2u;
+    const u32 maxCz = hfB.rows - 2u;
+    for(u32 cz = 0u; cz < hfB.rows; ++cz){
+        const u32 cellZ = Min(cz, maxCz);
+        const f32 pz = hfB.originMaxY.z + cast<f32>(cz) * hfB.scaleMinMaxY.z;
+        for(u32 cx = 0u; cx < hfB.cols; ++cx){
+            if(!hfB.cellHoles.empty()){
+                b8 anySolidCell = false;
+                if(cx > 0u && cz > 0u && !hfB.isCellHoleBitSet(cx - 1u, cz - 1u))
+                    anySolidCell = true;
+                if(cx <= maxCx && cz > 0u && !hfB.isCellHoleBitSet(cx, cz - 1u))
+                    anySolidCell = true;
+                if(cx > 0u && cz <= maxCz && !hfB.isCellHoleBitSet(cx - 1u, cz))
+                    anySolidCell = true;
+                if(cx <= maxCx && cz <= maxCz && !hfB.isCellHoleBitSet(cx, cz))
+                    anySolidCell = true;
+                if(!anySolidCell)
+                    continue;
+            }
+            const f32 rawH = hfB.heights[cast<usize>(cz) * cast<usize>(hfB.cols) + cast<usize>(cx)];
+            if(!IsFinite(VectorSingle(rawH)))
+                continue;
+            const VectorSingle v(
+                hfB.originMaxY.x + cast<f32>(cx) * hfB.scaleMinMaxY.x,
+                hfB.originMaxY.y + rawH * hfB.scaleMinMaxY.y,
+                pz,
+                0.0f
+            );
+            const f32 sd = Vector3Dot(planeNInB, v).x - planeDInB - hfB.thickness;
+            if(sd <= maxDistance){
+                const u32 cellX = Min(cx, maxCx);
+                const u32 cellIdx = cellZ * (hfB.cols - 1u) + cellX;
+                const VectorSingle wB = TransformPointValues(posB, rotB, v) - nAtoB * hfB.thickness;
+                const VectorSingle wA = wB - nAtoB * sd;
+                PushMeshCandidateWithTris(
+                    (wA + wB) * 0.5f,
+                    wA - posA,
+                    wB - posB,
+                    nAtoB,
+                    sd,
+                    MakeFeatureId(6u, 0u, 7u, cast<u8>(cellIdx & 0xffu)),
+                    s_NullIndex,
+                    cellIdx,
+                    candidates
+                );
+            }
+        }
+    }
+    if(!candidates.empty())
+        ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+    return m;
+}
+
 Manifold CollideShapePairRaw(
     in Shape shapeA,
     in VectorSingle posA,
@@ -952,21 +1182,27 @@ Manifold CollideShapePairRaw(
                 const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
                 return FlipManifoldNormalAndAnchors(CollideConvexProxyVsPlane(pPlaneB, posB, rotB, planeA, posA, rotA, maxDistance));
             }
-            return Manifold();
+            return CollideInfinitePlanes(planeA, posA, rotA, planeB, posB, rotB, maxDistance);
         }
         if(shapeB.type == ShapeType::Mesh){
-            if(planeA.isFiniteExtent() && shapeB.geometryIndex < meshShapes.size()){
-                Array<f32x3u, 4u> quadPtsA;
-                const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
-                return CollideConvexProxyAndMesh(pPlaneA, posA, rotA, meshShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+            if(shapeB.geometryIndex < meshShapes.size()){
+                if(planeA.isFiniteExtent()){
+                    Array<f32x3u, 4u> quadPtsA;
+                    const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
+                    return CollideConvexProxyAndMesh(pPlaneA, posA, rotA, meshShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+                }
+                return CollidePlaneAndMeshRaw(planeA, posA, rotA, meshShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
             }
             return Manifold();
         }
         if(shapeB.type == ShapeType::Heightfield){
-            if(planeA.isFiniteExtent() && shapeB.geometryIndex < heightfieldShapes.size()){
-                Array<f32x3u, 4u> quadPtsA;
-                const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
-                return CollideConvexProxyAndHeightfield(pPlaneA, posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+            if(shapeB.geometryIndex < heightfieldShapes.size()){
+                if(planeA.isFiniteExtent()){
+                    Array<f32x3u, 4u> quadPtsA;
+                    const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(planeA, quadPtsA);
+                    return CollideConvexProxyAndHeightfield(pPlaneA, posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
+                }
+                return CollidePlaneAndHeightfieldRaw(planeA, posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance);
             }
             return Manifold();
         }
@@ -977,18 +1213,24 @@ Manifold CollideShapePairRaw(
     if(shapeB.type == ShapeType::Plane){
         const PlaneShape planeB = shapeB.planeShape();
         if(shapeA.type == ShapeType::Mesh){
-            if(planeB.isFiniteExtent() && shapeA.geometryIndex < meshShapes.size()){
-                Array<f32x3u, 4u> quadPtsB;
-                const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
-                return FlipManifoldNormalAndAnchors(CollideConvexProxyAndMesh(pPlaneB, posB, rotB, meshShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
+            if(shapeA.geometryIndex < meshShapes.size()){
+                if(planeB.isFiniteExtent()){
+                    Array<f32x3u, 4u> quadPtsB;
+                    const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
+                    return FlipManifoldNormalAndAnchors(CollideConvexProxyAndMesh(pPlaneB, posB, rotB, meshShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
+                }
+                return FlipManifoldNormalAndAnchors(CollidePlaneAndMeshRaw(planeB, posB, rotB, meshShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
             }
             return Manifold();
         }
         if(shapeA.type == ShapeType::Heightfield){
-            if(planeB.isFiniteExtent() && shapeA.geometryIndex < heightfieldShapes.size()){
-                Array<f32x3u, 4u> quadPtsB;
-                const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
-                return FlipManifoldNormalAndAnchors(CollideConvexProxyAndHeightfield(pPlaneB, posB, rotB, heightfieldShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
+            if(shapeA.geometryIndex < heightfieldShapes.size()){
+                if(planeB.isFiniteExtent()){
+                    Array<f32x3u, 4u> quadPtsB;
+                    const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(planeB, quadPtsB);
+                    return FlipManifoldNormalAndAnchors(CollideConvexProxyAndHeightfield(pPlaneB, posB, rotB, heightfieldShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
+                }
+                return FlipManifoldNormalAndAnchors(CollidePlaneAndHeightfieldRaw(planeB, posB, rotB, heightfieldShapes[shapeA.geometryIndex], posA, rotA, maxDistance));
             }
             return Manifold();
         }
@@ -1126,6 +1368,28 @@ Manifold CollideShapePairRaw(
     return CollideConvexProxyViews(MakeShapeProxyViewFromShape(shapeA, hullShapes, ptsA), posA, rotA, MakeShapeProxyViewFromShape(shapeB, hullShapes, ptsB), posB, rotB, maxDistance);
 }
 
+void ShiftManifoldLocalTransformAnchors(
+    in Shape shapeA,
+    in VectorSingle shiftA,
+    in Shape shapeB,
+    in VectorSingle shiftB,
+    mut Manifold m
+){
+    if((!shapeA.hasLocalTransform() && !shapeB.hasLocalTransform()) || m.pointCount() == 0u)
+        return;
+    const u32 count = m.pointCount();
+    for(u32 pi = 0u; pi < count; ++pi){
+        if(shapeA.hasLocalTransform()){
+            const f32 nImp = m.points[pi].normalImpulse();
+            m.points[pi].anchorANormalImpulse = f32x4(m.points[pi].anchorA() + shiftA, nImp);
+        }
+        if(shapeB.hasLocalTransform()){
+            const f32 tImp = m.points[pi].totalNormalImpulse();
+            m.points[pi].anchorBTotalImpulse = f32x4(m.points[pi].anchorB() + shiftB, tImp);
+        }
+    }
+}
+
 Manifold CollideShapePair(
     in Shape shapeA,
     in VectorSingle posA,
@@ -1147,22 +1411,123 @@ Manifold CollideShapePair(
     if(shapeB.hasLocalTransform())
         shapeB.worldTransformValues(posB, rotB, effPosB, effRotB);
     Manifold m = CollideShapePairRaw(shapeA, effPosA, effRotA, shapeB, effPosB, effRotB, maxDistance, hullShapes, meshShapes, heightfieldShapes);
-    if((shapeA.hasLocalTransform() || shapeB.hasLocalTransform()) && m.pointCount() > 0u){
-        const VectorSingle shiftA = effPosA - posA;
-        const VectorSingle shiftB = effPosB - posB;
-        const u32 count = m.pointCount();
-        for(u32 pi = 0u; pi < count; ++pi){
-            if(shapeA.hasLocalTransform()){
-                const f32 nImp = m.points[pi].normalImpulse();
-                m.points[pi].anchorANormalImpulse = f32x4(m.points[pi].anchorA() + shiftA, nImp);
-            }
-            if(shapeB.hasLocalTransform()){
-                const f32 tImp = m.points[pi].totalNormalImpulse();
-                m.points[pi].anchorBTotalImpulse = f32x4(m.points[pi].anchorB() + shiftB, tImp);
-            }
-        }
-    }
+    ShiftManifoldLocalTransformAnchors(shapeA, effPosA - posA, shapeB, effPosB - posB, m);
     return m;
+}
+
+b8 IsConvexShapeForMultiPair(in Shape s){
+    if(s.type == ShapeType::Mesh || s.type == ShapeType::Heightfield)
+        return false;
+    if(s.type == ShapeType::Plane)
+        return s.planeShape().isFiniteExtent();
+    return true;
+}
+
+Manifold CollideConvexViewAndConcaveMulti(
+    in ShapeProxyView viewA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in Shape shapeB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes,
+    mut Manifold outSecondary
+){
+    Manifold primary;
+    outSecondary = Manifold();
+    if(shapeB.type == ShapeType::Mesh){
+        if(shapeB.geometryIndex < meshShapes.size())
+            CollideConvexProxyAndMeshMulti(viewA, posA, rotA, meshShapes[shapeB.geometryIndex], posB, rotB, maxDistance, primary, outSecondary);
+        return primary;
+    }
+    if(shapeB.type == ShapeType::Heightfield){
+        if(shapeB.geometryIndex < heightfieldShapes.size())
+            CollideConvexProxyAndHeightfieldMulti(viewA, posA, rotA, heightfieldShapes[shapeB.geometryIndex], posB, rotB, maxDistance, primary, outSecondary);
+        return primary;
+    }
+    return primary;
+}
+
+void CollideShapePairRawMulti(
+    in Shape shapeA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in Shape shapeB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes,
+    mut Manifold outPrimary,
+    mut Manifold outSecondary
+){
+    outPrimary = Manifold();
+    outSecondary = Manifold();
+    if((shapeA.type == ShapeType::Mesh || shapeA.type == ShapeType::Heightfield) && IsConvexShapeForMultiPair(shapeB)){
+        Manifold rawS;
+        Manifold rawP;
+        if(shapeB.type == ShapeType::Plane){
+            Array<f32x3u, 4u> quadPtsB;
+            const ShapeProxyView pPlaneB = MakeFinitePlaneQuadProxyView(shapeB.planeShape(), quadPtsB);
+            rawP = CollideConvexViewAndConcaveMulti(pPlaneB, posB, rotB, shapeA, posA, rotA, maxDistance, meshShapes, heightfieldShapes, rawS);
+        }
+        else{
+            Array<f32x3u, 2u> ptsB;
+            const ShapeProxyView pViewB = MakeShapeProxyViewFromShape(shapeB, hullShapes, ptsB);
+            rawP = CollideConvexViewAndConcaveMulti(pViewB, posB, rotB, shapeA, posA, rotA, maxDistance, meshShapes, heightfieldShapes, rawS);
+        }
+        outPrimary = FlipManifoldNormalAndAnchors(rawP);
+        if(rawS.pointCount() > 0u)
+            outSecondary = FlipManifoldNormalAndAnchors(rawS);
+        return;
+    }
+    if((shapeB.type == ShapeType::Mesh || shapeB.type == ShapeType::Heightfield) && IsConvexShapeForMultiPair(shapeA)){
+        if(shapeA.type == ShapeType::Plane){
+            Array<f32x3u, 4u> quadPtsA;
+            const ShapeProxyView pPlaneA = MakeFinitePlaneQuadProxyView(shapeA.planeShape(), quadPtsA);
+            outPrimary = CollideConvexViewAndConcaveMulti(pPlaneA, posA, rotA, shapeB, posB, rotB, maxDistance, meshShapes, heightfieldShapes, outSecondary);
+        }
+        else{
+            Array<f32x3u, 2u> ptsA;
+            const ShapeProxyView pViewA = MakeShapeProxyViewFromShape(shapeA, hullShapes, ptsA);
+            outPrimary = CollideConvexViewAndConcaveMulti(pViewA, posA, rotA, shapeB, posB, rotB, maxDistance, meshShapes, heightfieldShapes, outSecondary);
+        }
+        return;
+    }
+    outPrimary = CollideShapePairRaw(shapeA, posA, rotA, shapeB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes);
+}
+
+void CollideShapePairMulti(
+    in Shape shapeA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in Shape shapeB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in Vector<HullShape> hullShapes,
+    in Vector<MeshShape> meshShapes,
+    in Vector<HeightfieldShape> heightfieldShapes,
+    mut Manifold outPrimary,
+    mut Manifold outSecondary
+){
+    VectorSingle effPosA = posA;
+    VectorSingle effRotA = rotA;
+    if(shapeA.hasLocalTransform())
+        shapeA.worldTransformValues(posA, rotA, effPosA, effRotA);
+    VectorSingle effPosB = posB;
+    VectorSingle effRotB = rotB;
+    if(shapeB.hasLocalTransform())
+        shapeB.worldTransformValues(posB, rotB, effPosB, effRotB);
+    CollideShapePairRawMulti(shapeA, effPosA, effRotA, shapeB, effPosB, effRotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, outPrimary, outSecondary);
+    const VectorSingle shiftA = effPosA - posA;
+    const VectorSingle shiftB = effPosB - posB;
+    ShiftManifoldLocalTransformAnchors(shapeA, shiftA, shapeB, shiftB, outPrimary);
+    if(outSecondary.pointCount() > 0u)
+        ShiftManifoldLocalTransformAnchors(shapeA, shiftA, shapeB, shiftB, outSecondary);
 }
 
 f32 CombineMaterialFriction(in f32 a, in f32 b){
@@ -1256,10 +1621,25 @@ void CombineResolvedSurfaceMaterialsValues(
         const f32 sz = CombineMaterialWithMode(afA.z, afB.z, fricMode);
         outContact.anisotropicFriction = f32x4(sx, sy, sz, 1.0f);
         VectorSingle dir(1.0f, 0.0f, 0.0f, 0.0f);
-        if(matA.anisotropicFriction.w != 0.0f)
+        if(matA.anisotropicFriction.w != 0.0f && matB.anisotropicFriction.w != 0.0f){
+            const VectorSingle dirA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(matA.frictionDirection, 0.0f), rotA), dir);
+            VectorSingle dirB = SafeNormalizeVec3(Vector3Rotate(VectorSingle(matB.frictionDirection, 0.0f), rotB), dir);
+            if(Vector3Dot(dirA, dirB).x < 0.0f)
+                dirB = -dirB;
+            f32 wA = Abs(VectorSingle(afA.x - afA.y)).x + Abs(VectorSingle(afA.x - afA.z)).x;
+            f32 wB = Abs(VectorSingle(afB.x - afB.y)).x + Abs(VectorSingle(afB.x - afB.z)).x;
+            if(wA + wB <= 1.0e-6f){
+                wA = 0.5f;
+                wB = 0.5f;
+            }
+            dir = SafeNormalizeVec3(dirA * wA + dirB * wB, dirA);
+        }
+        else if(matA.anisotropicFriction.w != 0.0f){
             dir = SafeNormalizeVec3(Vector3Rotate(VectorSingle(matA.frictionDirection, 0.0f), rotA), dir);
-        else
+        }
+        else{
             dir = SafeNormalizeVec3(Vector3Rotate(VectorSingle(matB.frictionDirection, 0.0f), rotB), dir);
+        }
         outContact.frictionDirection = f32x4(dir, 0.0f);
         outContact.flags |= cast<u32>(ContactFlags::HasAnisotropicFriction);
     }

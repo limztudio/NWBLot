@@ -15,6 +15,265 @@ f32 AabbPairMinDistanceSq(in VectorSingle minA, in VectorSingle maxA, in VectorS
     return Vector3LengthSq(d).x;
 }
 
+void PushMeshDistNodeWithSpill(
+    in u32 nodeIdx,
+    in f32 lbSq,
+    mut Array<u32, 256u> fixedNodes,
+    mut Array<f32, 256u> fixedLbSq,
+    mut u32 fixedCount,
+    mut Vector<u32> overflowNodes,
+    mut Vector<f32> overflowLbSq,
+    mut b8 useOverflow
+){
+    if(useOverflow){
+        overflowNodes.push_back(nodeIdx);
+        overflowLbSq.push_back(lbSq);
+        return;
+    }
+    if(fixedCount < 256u){
+        fixedNodes[fixedCount] = nodeIdx;
+        fixedLbSq[fixedCount] = lbSq;
+        ++fixedCount;
+        return;
+    }
+    useOverflow = true;
+    overflowNodes.reserve(512u);
+    overflowLbSq.reserve(512u);
+    for(u32 i = 0u; i < fixedCount; ++i){
+        overflowNodes.push_back(fixedNodes[i]);
+        overflowLbSq.push_back(fixedLbSq[i]);
+    }
+    fixedCount = 0u;
+    overflowNodes.push_back(nodeIdx);
+    overflowLbSq.push_back(lbSq);
+}
+
+Expected<DistanceOutput> ComputeInfinitePlaneVsInfinitePlaneDistance(
+    in PlaneShape plA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in PlaneShape plB,
+    in VectorSingle posB,
+    in VectorSingle rotB
+){
+    const VectorSingle up(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle nA = SafeNormalizeVec3(Vector3Rotate(plA.normal(), rotA), up);
+    const VectorSingle p0A = TransformPointValues(posA, rotA, plA.normal() * plA.offset());
+    const VectorSingle nB = SafeNormalizeVec3(Vector3Rotate(plB.normal(), rotB), up);
+    const VectorSingle p0B = TransformPointValues(posB, rotB, plB.normal() * plB.offset());
+    const f32 dA = Vector3Dot(nA, p0A).x;
+    const f32 dB = Vector3Dot(nB, p0B).x;
+    const f32 dotN = Vector3Dot(nA, nB).x;
+    DistanceOutput outD;
+    if(dotN < -0.9999f){
+        const f32 sep = -(dA + dB);
+        if(sep > 0.0f){
+            outD.pointADistance = f32x4(p0A, sep);
+            outD.pointB = f32x4(p0A + nA * sep, 0.0f);
+            outD.normalIterations = f32x3_u32(nA.x, nA.y, nA.z, 1u);
+            return outD;
+        }
+        outD.pointADistance = f32x4(p0A, 0.0f);
+        outD.pointB = f32x4(p0A, 0.0f);
+        outD.normalIterations = f32x3_u32(nA.x, nA.y, nA.z, 1u);
+        return outD;
+    }
+    if(dotN > 0.9999f){
+        VectorSingle deepPt = p0A;
+        if(dB < dA)
+            deepPt = p0B;
+        outD.pointADistance = f32x4(deepPt, 0.0f);
+        outD.pointB = f32x4(deepPt, 0.0f);
+        outD.normalIterations = f32x3_u32(nA.x, nA.y, nA.z, 1u);
+        return outD;
+    }
+    const f32 denom = 1.0f - dotN * dotN;
+    VectorSingle linePt = p0A;
+    if(denom > 1.0e-6f){
+        const f32 c1 = (dA - dB * dotN) / denom;
+        const f32 c2 = (dB - dA * dotN) / denom;
+        linePt = nA * c1 + nB * c2;
+    }
+    outD.pointADistance = f32x4(linePt, 0.0f);
+    outD.pointB = f32x4(linePt, 0.0f);
+    outD.normalIterations = f32x3_u32(nA.x, nA.y, nA.z, 1u);
+    return outD;
+}
+
+Expected<DistanceOutput> ComputeInfinitePlaneMeshDistance(
+    in PlaneShape pl,
+    in VectorSingle posPlane,
+    in VectorSingle rotPlane,
+    in MeshShape mesh,
+    in VectorSingle posMesh,
+    in VectorSingle rotMesh,
+    in b8 flipOrder
+){
+    if(mesh.nodes.empty() || mesh.triangles.empty())
+        return MakeUnexpected(Failure());
+    const VectorSingle up(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle worldPlaneN = SafeNormalizeVec3(Vector3Rotate(pl.normal(), rotPlane), up);
+    const VectorSingle planeOriginW = TransformPointValues(posPlane, rotPlane, pl.normal() * pl.offset());
+    const VectorSingle planeNInM = SafeNormalizeVec3(Vector3InverseRotate(worldPlaneN, rotMesh), up);
+    const VectorSingle planePtInM = InverseTransformPointValues(posMesh, rotMesh, planeOriginW);
+    const f32 planeDInM = Vector3Dot(planeNInM, planePtInM).x;
+    const f32 meshR = mesh.radius();
+
+    b8 foundAny = false;
+    f32 minSd = s_MaxF32;
+    VectorSingle bestPtM(0.0f);
+
+    Array<u32, 256u> stack;
+    stack[0u] = 0u;
+    u32 stackCount = 1u;
+    Vector<u32> overflowStack;
+    b8 useOverflow = false;
+    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+        u32 nodeIdx = 0u;
+        if(useOverflow){
+            nodeIdx = overflowStack.back();
+            overflowStack.pop_back();
+        }
+        else{
+            --stackCount;
+            nodeIdx = stack[stackCount];
+        }
+        in MeshBvhNode node = mesh.nodes[nodeIdx];
+        const f32 nodeMinSd = ComputeAabbMinSignedDistToPlaneValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), planeNInM, planeDInM) - meshR;
+        if(foundAny && nodeMinSd >= minSd)
+            continue;
+        if(node.isLeaf()){
+            const u32 firstTri = node.leftOrFirst();
+            const u32 endTri = firstTri + node.rightOrCount();
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                in MeshTriangle tri = mesh.triangles[ti];
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = tri.v0;
+                triPts[1u] = tri.v1;
+                triPts[2u] = tri.v2;
+                for(u32 vi = 0u; vi < 3u; ++vi){
+                    const VectorSingle v(triPts[vi], 0.0f);
+                    const f32 sd = Vector3Dot(planeNInM, v).x - planeDInM - meshR;
+                    if(!foundAny || sd < minSd){
+                        foundAny = true;
+                        minSd = sd;
+                        bestPtM = v - planeNInM * meshR;
+                    }
+                }
+            }
+        }
+        else{
+            const u32 leftIdx = node.leftOrFirst();
+            const u32 rightIdx = node.rightOrCount();
+            in MeshBvhNode leftNode = mesh.nodes[leftIdx];
+            in MeshBvhNode rightNode = mesh.nodes[rightIdx];
+            const f32 lMinSd = ComputeAabbMinSignedDistToPlaneValues(VectorSingle(leftNode.aabbMinLeft, 0.0f), VectorSingle(leftNode.aabbMaxRight, 0.0f), planeNInM, planeDInM) - meshR;
+            const f32 rMinSd = ComputeAabbMinSignedDistToPlaneValues(VectorSingle(rightNode.aabbMinLeft, 0.0f), VectorSingle(rightNode.aabbMaxRight, 0.0f), planeNInM, planeDInM) - meshR;
+            if(lMinSd < rMinSd){
+                if(!foundAny || rMinSd < minSd)
+                    PushBvhNodeWithSpill(rightIdx, stack, stackCount, overflowStack, useOverflow);
+                if(!foundAny || lMinSd < minSd)
+                    PushBvhNodeWithSpill(leftIdx, stack, stackCount, overflowStack, useOverflow);
+            }
+            else{
+                if(!foundAny || lMinSd < minSd)
+                    PushBvhNodeWithSpill(leftIdx, stack, stackCount, overflowStack, useOverflow);
+                if(!foundAny || rMinSd < minSd)
+                    PushBvhNodeWithSpill(rightIdx, stack, stackCount, overflowStack, useOverflow);
+            }
+        }
+    }
+    if(!foundAny)
+        return MakeUnexpected(Failure());
+
+    const VectorSingle ptMeshW = TransformPointValues(posMesh, rotMesh, bestPtM);
+    const f32 signedGap = Vector3Dot(VectorSingle(ptMeshW - planeOriginW, 0.0f), worldPlaneN).x;
+    const f32 dist = SimdMax(0.0f, signedGap);
+    const VectorSingle ptPlaneW = ptMeshW - worldPlaneN * signedGap;
+    DistanceOutput outD;
+    if(flipOrder){
+        outD.pointADistance = f32x4(ptMeshW, dist);
+        outD.pointB = f32x4(ptPlaneW, 0.0f);
+        outD.normalIterations = f32x3_u32(-worldPlaneN.x, -worldPlaneN.y, -worldPlaneN.z, 1u);
+    }
+    else{
+        outD.pointADistance = f32x4(ptPlaneW, dist);
+        outD.pointB = f32x4(ptMeshW, 0.0f);
+        outD.normalIterations = f32x3_u32(worldPlaneN.x, worldPlaneN.y, worldPlaneN.z, 1u);
+    }
+    return outD;
+}
+
+Expected<DistanceOutput> ComputeInfinitePlaneHeightfieldDistance(
+    in PlaneShape pl,
+    in VectorSingle posPlane,
+    in VectorSingle rotPlane,
+    in HeightfieldShape hf,
+    in VectorSingle posHf,
+    in VectorSingle rotHf,
+    in b8 flipOrder
+){
+    if(!hf.isValid())
+        return MakeUnexpected(Failure());
+    const VectorSingle up(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle worldPlaneN = SafeNormalizeVec3(Vector3Rotate(pl.normal(), rotPlane), up);
+    const VectorSingle planeOriginW = TransformPointValues(posPlane, rotPlane, pl.normal() * pl.offset());
+    const VectorSingle planeNInHf = SafeNormalizeVec3(Vector3InverseRotate(worldPlaneN, rotHf), up);
+    const VectorSingle planePtInHf = InverseTransformPointValues(posHf, rotHf, planeOriginW);
+    const f32 planeDInHf = Vector3Dot(planeNInHf, planePtInHf).x;
+    const f32 thick = hf.thickness;
+
+    b8 foundAny = false;
+    f32 minSd = s_MaxF32;
+    VectorSingle bestPtHf(0.0f);
+
+    const u32 cellCols = hf.cols - 1u;
+    const u32 cellRows = hf.rows - 1u;
+    for(u32 cz = 0u; cz < cellRows; ++cz){
+        for(u32 cx = 0u; cx < cellCols; ++cx){
+            VectorSingle v00(0.0f);
+            VectorSingle v10(0.0f);
+            VectorSingle v01(0.0f);
+            VectorSingle v11(0.0f);
+            if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
+                continue;
+            Array<f32x4, 4u> verts;
+            verts[0u] = f32x4(v00);
+            verts[1u] = f32x4(v10);
+            verts[2u] = f32x4(v01);
+            verts[3u] = f32x4(v11);
+            for(u32 vi = 0u; vi < 4u; ++vi){
+                const VectorSingle v(verts[vi], 0.0f);
+                const f32 sd = Vector3Dot(planeNInHf, v).x - planeDInHf - thick;
+                if(!foundAny || sd < minSd){
+                    foundAny = true;
+                    minSd = sd;
+                    bestPtHf = v - planeNInHf * thick;
+                }
+            }
+        }
+    }
+    if(!foundAny)
+        return MakeUnexpected(Failure());
+
+    const VectorSingle ptHfW = TransformPointValues(posHf, rotHf, bestPtHf);
+    const f32 signedGap = Vector3Dot(VectorSingle(ptHfW - planeOriginW, 0.0f), worldPlaneN).x;
+    const f32 dist = SimdMax(0.0f, signedGap);
+    const VectorSingle ptPlaneW = ptHfW - worldPlaneN * signedGap;
+    DistanceOutput outD;
+    if(flipOrder){
+        outD.pointADistance = f32x4(ptHfW, dist);
+        outD.pointB = f32x4(ptPlaneW, 0.0f);
+        outD.normalIterations = f32x3_u32(-worldPlaneN.x, -worldPlaneN.y, -worldPlaneN.z, 1u);
+    }
+    else{
+        outD.pointADistance = f32x4(ptPlaneW, dist);
+        outD.pointB = f32x4(ptHfW, 0.0f);
+        outD.normalIterations = f32x3_u32(worldPlaneN.x, worldPlaneN.y, worldPlaneN.z, 1u);
+    }
+    return outD;
+}
+
 class MeshDistBvhPair{
     public u32 nodeA = 0u;
     public u32 nodeB = 0u;
@@ -222,6 +481,12 @@ class BulletToiQueryResult{
     public f32 bestTangentSpeed = 0.0f;
     public f32 bestRollingResistance = 0.0f;
     public f32 bestStaticFriction = -1.0f;
+    public f32 bestInvMassScaleA = 1.0f;
+    public f32 bestInvMassScaleB = 1.0f;
+    public f32 bestInvInertiaScaleA = 1.0f;
+    public f32 bestInvInertiaScaleB = 1.0f;
+    public f32 bestMaxNormalImpulse = s_MaxF32;
+    public f32 bestSeparation = 0.0f;
     public f32x4 bestSurfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 bestAnisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 bestFrictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
@@ -240,6 +505,8 @@ class BulletToiQueryResult{
 class CpuBucketSolverScratch{
     public Vector<ContactConstraint> localConstraints;
     public Vector<ContactConstraintStepCache> localCaches;
+    public Vector<ContactConstraint> secondaryConstraints;
+    public Vector<ContactConstraintStepCache> secondaryCaches;
     public Vector<JointConstraint> localJoints;
     public Vector<JointConstraintStepCache> localJointCaches;
     public Vector<ContactHitEvent> hitEvents;
@@ -249,6 +516,8 @@ class CpuBucketSolverScratch{
     public Vector<u32> brokenJointSlotIndices;
 
     public void clear(){
+        this.secondaryConstraints.clear();
+        this.secondaryCaches.clear();
         this.hitEvents.clear();
         this.hitSlots.clear();
         this.breakEvents.clear();
@@ -268,8 +537,12 @@ class PhysicsWorldCpuScratch{
     public Vector<u32> pruneContactIds;
     public Vector<u8> contactTransitionFlags;
     public Vector<Manifold> evaluatedManifolds;
+    public Vector<Manifold> evaluatedSecondaryManifolds;
+    public Vector<u8> evaluatedHasSecondary;
     public Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
     public Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorConstraintCaches;
+    public Vector<ContactConstraint> globalSecondaryConstraints;
+    public Vector<ContactConstraintStepCache> globalSecondaryCaches;
     public Vector<JointConstraint> jointConstraints;
     public Vector<JointConstraintStepCache> jointConstraintCaches;
     public Vector<u32> activeJointIds;
@@ -370,10 +643,14 @@ class PhysicsWorldCpuScratch{
         this.pruneContactIds.clear();
         this.contactTransitionFlags.clear();
         this.evaluatedManifolds.clear();
+        this.evaluatedSecondaryManifolds.clear();
+        this.evaluatedHasSecondary.clear();
         for(usize c = 0u; c < s_GraphColorCount; ++c){
             this.colorConstraints[c].clear();
             this.colorConstraintCaches[c].clear();
         }
+        this.globalSecondaryConstraints.clear();
+        this.globalSecondaryCaches.clear();
         this.jointConstraints.clear();
         this.jointConstraintCaches.clear();
         this.activeJointIds.clear();
@@ -500,6 +777,8 @@ class PhysicsWorld{
     public Vector<Contact> m_contacts;
     public Vector<u32> m_freeContactIds;
     public HashMap<u64, u32> m_pairContactMap;
+    public HashMap<u32, Manifold> m_secondaryContactManifolds;
+    public HashSet<u64> m_ignoredBodyPairs;
     public Vector<Joint> m_joints;
     public Vector<u32> m_freeJointIds;
     public Vector<JointExtraData> m_jointExtraData;
@@ -575,6 +854,7 @@ class PhysicsWorld{
     }
 
     private void initDefaultSets(){
+        this.m_worldGeneration = AllocateWrappingIdentity<PhysicsWorld>();
         this.m_solverSets.resize(3u);
         this.m_solverSets[s_StaticSetIndex].setIndex = s_StaticSetIndex;
         this.m_solverSets[s_DisabledSetIndex].setIndex = s_DisabledSetIndex;
@@ -605,6 +885,8 @@ class PhysicsWorld{
         this.m_contacts.clear();
         this.m_freeContactIds.clear();
         this.m_pairContactMap.clear();
+        this.m_secondaryContactManifolds.clear();
+        this.m_ignoredBodyPairs.clear();
         this.m_joints.clear();
         this.m_freeJointIds.clear();
         this.m_jointExtraData.clear();
@@ -637,7 +919,7 @@ class PhysicsWorld{
         this.m_hitEventShapeCount = 0u;
         this.m_breakableJointCount = 0u;
         this.m_bulletBodyCount = 0u;
-        ++this.m_worldGeneration;
+        this.m_worldGeneration = AllocateWrappingIdentity<PhysicsWorld>();
         this.m_lastStats = WorldStepStats();
         this.m_customFilterCallback.reset();
         this.m_preSolveCallback.reset();
@@ -1418,6 +1700,20 @@ class PhysicsWorld{
                 this.m_freeSolverSetIds.push_back(setIdx);
         }
 
+        if(!this.m_ignoredBodyPairs.empty()){
+            Vector<u64> eraseKeys;
+            for(in u64 key : this.m_ignoredBodyPairs){
+                const u32 kA = cast<u32>(key >> 32u);
+                const u32 kB = cast<u32>(key & 0xffffffffu);
+                if(kA == idx || kB == idx)
+                    eraseKeys.push_back(key);
+            }
+            for(usize ei = 0u; ei < eraseKeys.size(); ++ei)
+                this.m_ignoredBodyPairs.erase(eraseKeys[ei]);
+            if(!eraseKeys.empty())
+                ++this.m_nonCollideJointVersion;
+        }
+
         this.m_bodies[idx].alive = false;
         this.m_bodies[idx].userData = 0u;
         this.m_freeBodyIds.push_back(idx);
@@ -1625,6 +1921,7 @@ class PhysicsWorld{
             this.m_heightfieldRefCounts[slot] = 1u;
             this.m_heightfieldOwnedByUser[slot] = 0u;
         }
+        ++this.m_geomDataStamp;
         return slot;
     }
 
@@ -1658,6 +1955,7 @@ class PhysicsWorld{
         }
         else if(shape.type == ShapeType::Heightfield && shape.geometryIndex != s_NullIndex){
             this.freeHeightfieldShape(shape.geometryIndex);
+            ++this.m_geomDataStamp;
         }
         shape.geometryIndex = s_NullIndex;
         shape.geom0 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1890,7 +2188,7 @@ class PhysicsWorld{
         else
             this.markBodyMassDirty(bodyId.index);
 
-        if(shape.type == ShapeType::Hull || shape.type == ShapeType::Mesh)
+        if(shape.type == ShapeType::Hull || shape.type == ShapeType::Mesh || shape.type == ShapeType::Heightfield)
             ++this.m_geomDataStamp;
         this.markSetTopologyDirty(this.m_bodies[bodyId.index].setIndex);
         return this.makeShapeId(shapeIdx);
@@ -2665,13 +2963,17 @@ class PhysicsWorld{
             ++this.m_poseMutationVersion;
         if(!this.m_inStep && oldSet >= 3u && newAwakeCount > prevAwakeCount){
             in Vector<BodySim> awakeSims = this.m_solverSets[s_AwakeSetIndex].sims;
+            const u32 justWokeBit = cast<u32>(BodyFlags::JustWoke);
             for(usize ai = prevAwakeCount; ai < newAwakeCount; ++ai){
                 const u32 wokenId = awakeSims[ai].bodyId;
+                this.m_bodies[wokenId].flags &= ~justWokeBit;
+                this.syncBodyFlagsToSimAndState(wokenId);
                 BodyWakeEvent ev;
                 ev.bodyId = this.makeBodyId(wokenId);
                 ev.userData = this.m_bodies[wokenId].userData;
                 ev.awake = true;
                 this.m_bodyWakeEvents.push_back(ev);
+                this.m_pendingBodyWakeEvents.push_back(ev);
             }
         }
         return true;
@@ -3433,7 +3735,7 @@ class PhysicsWorld{
         else{
             this.markBodyMassDirty(bodyIdx);
         }
-        if(this.m_shapes[shapeIdx].type == ShapeType::Hull || this.m_shapes[shapeIdx].type == ShapeType::Mesh)
+        if(this.m_shapes[shapeIdx].type == ShapeType::Hull || this.m_shapes[shapeIdx].type == ShapeType::Mesh || this.m_shapes[shapeIdx].type == ShapeType::Heightfield)
             ++this.m_geomDataStamp;
         this.markSetTopologyDirty(this.m_bodies[bodyIdx].setIndex);
     }
@@ -3609,8 +3911,11 @@ class PhysicsWorld{
         if(!this.isValidShape(shapeId) || !this.isHullGeometryValid(id))
             return false;
         const u32 idx = shapeId.index;
-        if(this.m_shapes[idx].type == ShapeType::Hull && this.m_shapes[idx].geometryIndex == id.index)
+        if(this.m_shapes[idx].type == ShapeType::Hull && this.m_shapes[idx].geometryIndex == id.index){
+            if(updateBodyMass)
+                this.refreshShapeGeometryAndContacts(idx, true);
             return true;
+        }
         this.releaseShapeGeometry(this.m_shapes[idx]);
         ++this.m_hullRefCounts[id.index];
         this.m_shapes[idx].type = ShapeType::Hull;
@@ -3633,6 +3938,19 @@ class PhysicsWorld{
         this.m_shapes[idx].type = ShapeType::Mesh;
         this.m_shapes[idx].geometryIndex = id.index;
         this.refreshShapeGeometryAndContacts(idx, false);
+        return true;
+    }
+
+    public b8 updateMeshGeometryVertices(in MeshGeometryId id, in Span<f32x4> newVertices){
+        if(!this.isMeshGeometryValid(id))
+            return false;
+        if(!this.m_meshShapes[id.index].refitBvh(newVertices))
+            return false;
+        for(usize si = 0u; si < this.m_shapes.size(); ++si){
+            in Shape s = this.m_shapes[si];
+            if(s.alive() && s.type == ShapeType::Mesh && s.geometryIndex == id.index)
+                this.refreshShapeGeometryAndContacts(cast<u32>(si), false);
+        }
         return true;
     }
 
@@ -4680,6 +4998,10 @@ class PhysicsWorld{
             || !IsFinite(VectorSingle(def.projectionAngularTolerance, def.ratio, def.lengthA, def.lengthB))
             || !IsFiniteVec3(VectorSingle(def.groundAnchorA))
             || !IsFiniteVec3(VectorSingle(def.groundAnchorB))
+            || !IsFiniteQuat(VectorSingle(def.targetOrientation))
+            || !IsFinite(VectorSingle(def.slerpHertz, def.slerpDampingRatio, def.slerpMaxTorque, def.sixDofSwingLimitY))
+            || !IsFinite(VectorSingle(def.sixDofSwingLimitZ))
+            || cast<u8>(def.sixDofSwingLimitMode) >= cast<u8>(SixDofSwingLimitMode::kCount)
             || def.length < 0.0f
             || def.minLength < 0.0f
             || def.maxLength < def.minLength
@@ -4706,6 +5028,11 @@ class PhysicsWorld{
             || def.projectionAngularTolerance < 0.0f
             || def.lengthA < 0.0f
             || def.lengthB < 0.0f
+            || def.slerpHertz < 0.0f
+            || def.slerpDampingRatio < 0.0f
+            || def.slerpMaxTorque < 0.0f
+            || def.sixDofSwingLimitY < 0.0f
+            || def.sixDofSwingLimitZ < 0.0f
         )
             return MakeUnexpected(Failure());
 
@@ -4838,16 +5165,33 @@ class PhysicsWorld{
         joint.setFlag(JointFlags::CollideConnected, def.collideConnected);
         joint.setFlag(JointFlags::Enabled, def.enabled);
         joint.setFlag(JointFlags::EnableProjection, def.enableProjection);
+        joint.setFlag(JointFlags::EnableTwistLimit, def.enableTwistLimit);
         joint.userData = def.userData;
         joint.setFlag(JointFlags::Alive, true);
 
-        if(def.type == JointType::SixDof || def.type == JointType::Pulley || def.type == JointType::Path){
+        const b8 needSphericalExtra = (def.type == JointType::Spherical && (def.enableSlerpDrive || def.slerpHertz > 0.0f));
+        if(def.type == JointType::SixDof || def.type == JointType::Pulley || def.type == JointType::Path || needSphericalExtra){
             const u32 extraIdx = this.allocJointExtraDataInternal();
             joint.extraDataIndex = extraIdx;
             mut JointExtraData extra = this.m_jointExtraData[extraIdx];
             if(def.type == JointType::SixDof){
                 for(usize k = 0u; k < 6u; ++k)
                     extra.sixDofAxes[k] = def.sixDofAxes[k];
+                extra.sixDofSwingLimitMode = def.sixDofSwingLimitMode;
+                extra.sixDofSwingLimitY = def.sixDofSwingLimitY;
+                extra.sixDofSwingLimitZ = def.sixDofSwingLimitZ;
+                extra.enableSlerpDrive = def.enableSlerpDrive;
+                extra.targetOrientation = f32x4(SafeNormalizeQuat(VectorSingle(def.targetOrientation)));
+                extra.slerpHertz = def.slerpHertz;
+                extra.slerpDampingRatio = def.slerpDampingRatio;
+                extra.slerpMaxTorque = def.slerpMaxTorque;
+            }
+            else if(def.type == JointType::Spherical){
+                extra.enableSlerpDrive = def.enableSlerpDrive;
+                extra.targetOrientation = f32x4(SafeNormalizeQuat(VectorSingle(def.targetOrientation)));
+                extra.slerpHertz = def.slerpHertz;
+                extra.slerpDampingRatio = def.slerpDampingRatio;
+                extra.slerpMaxTorque = def.slerpMaxTorque;
             }
             else if(def.type == JointType::Pulley){
                 extra.groundAnchorA = def.groundAnchorA;
@@ -5036,6 +5380,8 @@ class PhysicsWorld{
                 extra.sixDofMotorImpulses[k] = 0.0f;
                 extra.sixDofSpringImpulses[k] = 0.0f;
             }
+            extra.slerpImpulse = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            extra.sixDofSwingImpulse = 0.0f;
         }
         this.wakeJointBodies(jointIdx);
     }
@@ -5391,6 +5737,71 @@ class PhysicsWorld{
             return false;
         mut JointExtraData extra = this.m_jointExtraData[j.extraDataIndex];
         extra.sixDofAxes[axisIndex] = cfg;
+        this.resetJointWarmStartAndWake(jointId.index);
+        return true;
+    }
+
+    private u32 ensureJointSlerpExtraDataInternal(in u32 jointIdx){
+        mut Joint j = this.m_joints[jointIdx];
+        if(j.extraDataIndex >= this.m_jointExtraData.size()){
+            const u32 extraIdx = this.allocJointExtraDataInternal();
+            j.extraDataIndex = extraIdx;
+        }
+        return j.extraDataIndex;
+    }
+
+    public b8 setJointSlerpDrive(in JointId jointId, in b8 enable, in f32 hertz, in f32 dampingRatio, in f32 maxTorque){
+        if(!this.isValidJoint(jointId))
+            return false;
+        in JointType jt = this.m_joints[jointId.index].type;
+        if(jt != JointType::Spherical && jt != JointType::SixDof)
+            return false;
+        if(!IsFinite(VectorSingle(hertz, dampingRatio, maxTorque, 0.0f)) || hertz < 0.0f || dampingRatio < 0.0f || maxTorque < 0.0f)
+            return false;
+        const u32 extraIdx = this.ensureJointSlerpExtraDataInternal(jointId.index);
+        mut JointExtraData extra = this.m_jointExtraData[extraIdx];
+        extra.enableSlerpDrive = enable;
+        extra.slerpHertz = hertz;
+        extra.slerpDampingRatio = dampingRatio;
+        extra.slerpMaxTorque = maxTorque;
+        if(!enable || hertz <= 0.0f)
+            extra.slerpImpulse = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        this.wakeJointBodies(jointId.index);
+        return true;
+    }
+
+    public b8 setJointTargetOrientation(in JointId jointId, in VectorSingle targetOrientation){
+        if(!this.isValidJoint(jointId) || !IsFiniteQuat(targetOrientation))
+            return false;
+        in JointType jt = this.m_joints[jointId.index].type;
+        if(jt != JointType::Spherical && jt != JointType::SixDof)
+            return false;
+        const u32 extraIdx = this.ensureJointSlerpExtraDataInternal(jointId.index);
+        this.m_jointExtraData[extraIdx].targetOrientation = f32x4(SafeNormalizeQuat(targetOrientation));
+        this.wakeJointBodies(jointId.index);
+        return true;
+    }
+
+    public b8 setJointEnableTwistLimit(in JointId jointId, in b8 enableTwistLimit){
+        if(!this.isValidJoint(jointId))
+            return false;
+        this.m_joints[jointId.index].setFlag(JointFlags::EnableTwistLimit, enableTwistLimit);
+        this.resetJointWarmStartAndWake(jointId.index);
+        return true;
+    }
+
+    public b8 setJointSixDofSwingLimits(in JointId jointId, in SixDofSwingLimitMode mode, in f32 limitY, in f32 limitZ){
+        if(!this.isValidJoint(jointId) || cast<u8>(mode) >= cast<u8>(SixDofSwingLimitMode::kCount))
+            return false;
+        if(!IsFinite(VectorSingle(limitY, limitZ, 0.0f, 0.0f)) || limitY < 0.0f || limitZ < 0.0f)
+            return false;
+        in Joint j = this.m_joints[jointId.index];
+        if(j.type != JointType::SixDof || j.extraDataIndex >= this.m_jointExtraData.size())
+            return false;
+        mut JointExtraData extra = this.m_jointExtraData[j.extraDataIndex];
+        extra.sixDofSwingLimitMode = mode;
+        extra.sixDofSwingLimitY = limitY;
+        extra.sixDofSwingLimitZ = limitZ;
         this.resetJointWarmStartAndWake(jointId.index);
         return true;
     }
@@ -5992,7 +6403,74 @@ class PhysicsWorld{
         return cId;
     }
 
+    public b8 isBodyPairIgnoredInternal(in u32 bodyIdA, in u32 bodyIdB)const{
+        if(this.m_ignoredBodyPairs.empty() || bodyIdA == bodyIdB)
+            return false;
+        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(bodyIdA), cast<isize>(bodyIdB));
+        return this.m_ignoredBodyPairs.find(pairKey) != this.m_ignoredBodyPairs.end();
+    }
+
+    public b8 isCollisionPairIgnored(in BodyId bodyIdA, in BodyId bodyIdB)const{
+        if(!this.isValidBody(bodyIdA) || !this.isValidBody(bodyIdB) || bodyIdA.index == bodyIdB.index)
+            return false;
+        return this.isBodyPairIgnoredInternal(bodyIdA.index, bodyIdB.index);
+    }
+
+    public b8 addIgnoreCollisionPair(in BodyId bodyIdA, in BodyId bodyIdB){
+        if(!this.isValidBody(bodyIdA) || !this.isValidBody(bodyIdB) || bodyIdA.index == bodyIdB.index)
+            return false;
+        const u32 bA = bodyIdA.index;
+        const u32 bB = bodyIdB.index;
+        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(bA), cast<isize>(bB));
+        this.m_ignoredBodyPairs.emplace(pairKey);
+        ++this.m_nonCollideJointVersion;
+        this.wakeJointCollisionPeersInternal(bA, bB, false);
+        this.wakeBody(bodyIdA);
+        this.wakeBody(bodyIdB);
+        return true;
+    }
+
+    public b8 removeIgnoreCollisionPair(in BodyId bodyIdA, in BodyId bodyIdB){
+        if(!this.isValidBody(bodyIdA) || !this.isValidBody(bodyIdB) || bodyIdA.index == bodyIdB.index)
+            return false;
+        const u32 bA = bodyIdA.index;
+        const u32 bB = bodyIdB.index;
+        const u64 pairKey = PackUnorderedU32Pair(cast<isize>(bA), cast<isize>(bB));
+        if(this.m_ignoredBodyPairs.find(pairKey) == this.m_ignoredBodyPairs.end())
+            return true;
+        this.m_ignoredBodyPairs.erase(pairKey);
+        ++this.m_nonCollideJointVersion;
+        this.wakeJointCollisionPeersInternal(bA, bB, true);
+        this.wakeBody(bodyIdA);
+        this.wakeBody(bodyIdB);
+        return true;
+    }
+
+    public void clearIgnoreCollisionPairs(){
+        if(this.m_ignoredBodyPairs.empty())
+            return;
+        Vector<u64> keys;
+        keys.reserve(this.m_ignoredBodyPairs.size());
+        for(in u64 key : this.m_ignoredBodyPairs)
+            keys.push_back(key);
+        this.m_ignoredBodyPairs.clear();
+        ++this.m_nonCollideJointVersion;
+        for(usize i = 0u; i < keys.size(); ++i){
+            const u32 bA = cast<u32>(keys[i] >> 32u);
+            const u32 bB = cast<u32>(keys[i] & 0xffffffffu);
+            if(bA < this.m_bodies.size() && bB < this.m_bodies.size() && this.m_bodies[bA].alive && this.m_bodies[bB].alive){
+                this.wakeJointCollisionPeersInternal(bA, bB, true);
+                this.wakeBody(this.makeBodyId(bA));
+                this.wakeBody(this.makeBodyId(bB));
+            }
+        }
+    }
+
     public u32 createContactFromUniqueNewPair(in u32 orderedA, in u32 orderedB, in u64 pairKey){
+        in Shape sA = this.m_shapes[orderedA];
+        in Shape sB = this.m_shapes[orderedB];
+        if(!sA.isSensor() && !sB.isSensor() && this.isBodyPairIgnoredInternal(sA.bodyId, sB.bodyId))
+            return s_NullIndex;
         if(this.m_customFilterCallback.has_value()){
             if(!this.m_customFilterCallback.value()(this.makeShapeId(orderedA), this.makeShapeId(orderedB)))
                 return s_NullIndex;
@@ -6034,7 +6512,7 @@ class PhysicsWorld{
             return s_NullIndex;
         if(!ShouldCollideFilters(sA.filter, sB.filter))
             return s_NullIndex;
-        if(!hasSensor && this.areBodiesConnectedNonColliding(sA.bodyId, sB.bodyId))
+        if(!hasSensor && (this.areBodiesConnectedNonColliding(sA.bodyId, sB.bodyId) || this.isBodyPairIgnoredInternal(sA.bodyId, sB.bodyId)))
             return s_NullIndex;
 
         u32 orderedA = shapeIdA;
@@ -6097,6 +6575,8 @@ class PhysicsWorld{
             UnlinkContactFromIsland(this.m_islands, this.m_solverSets, this.m_contacts, contactId);
 
         this.m_pairContactMap.erase(this.m_contacts[contactId].pairKey);
+        if(!this.m_secondaryContactManifolds.empty())
+            this.m_secondaryContactManifolds.erase(contactId);
 
         for(u32 edgeIdx = 0u; edgeIdx < 2u; ++edgeIdx){
             const u32 bodyId = this.m_contacts[contactId].edges[edgeIdx].bodyId;
@@ -6227,6 +6707,34 @@ class PhysicsWorld{
             hit.point = f32x4(localHit.point(), 0.0f);
             hit.normal = f32x4(localHit.normal(), 0.0f);
             hit.shapeId = shapeId;
+            hit.triangleIndex = triIdx;
+            hit.barycentrics = bary;
+        }
+        return hit;
+    }
+
+    public RayCastHit testRayCastShapeAt(
+        in u32 shapeIdx,
+        in VectorSingle bodyPos,
+        in VectorSingle bodyRot,
+        in VectorSingle origin,
+        in VectorSingle translation,
+        in f32 maxFraction,
+        in b8 cullBackFaces
+    )const{
+        RayCastHit hit;
+        if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
+            return hit;
+        in Shape shape = this.m_shapes[shapeIdx];
+        u32 triIdx = s_NullIndex;
+        f32x2u bary(0.0f, 0.0f);
+        const LocalRayHit localHit = this.rayCastShapeInternal(shape, bodyPos, bodyRot, origin, translation, maxFraction, cullBackFaces, triIdx, bary);
+        if(localHit.hit()){
+            hit.hit = true;
+            hit.fraction = localHit.fraction();
+            hit.point = f32x4(localHit.point(), 0.0f);
+            hit.normal = f32x4(localHit.normal(), 0.0f);
+            hit.shapeId = this.makeShapeId(shapeIdx);
             hit.triangleIndex = triIdx;
             hit.barycentrics = bary;
         }
@@ -6689,7 +7197,7 @@ class PhysicsWorld{
                 lambda[in this, in t, in queryMin, in queryMax, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in queryFilter, mut outShapes](in u32 proxyId, in u32 shapeIdx) -> b8{
                     if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
                         return true;
-                    if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, false, queryFilter))
+                    if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, true, queryFilter))
                         return true;
                     in Shape shape = this.m_shapes[shapeIdx];
                     if(AabbOverlapsValues(VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), queryMin, queryMax))
@@ -6707,7 +7215,7 @@ class PhysicsWorld{
                 u32 shapeIdx = body.headShapeId;
                 while(shapeIdx != s_NullIndex){
                     in Shape shape = this.m_shapes[shapeIdx];
-                    if(this.passesQueryShapeFilter(shapeIdx, filter, ignoreBodyId, ignoreShapeId, hitSensors, false, queryFilter) && AabbOverlapsValues(VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), queryMin, queryMax))
+                    if(this.passesQueryShapeFilter(shapeIdx, filter, ignoreBodyId, ignoreShapeId, hitSensors, true, queryFilter) && AabbOverlapsValues(VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), queryMin, queryMax))
                         outShapes.push_back(this.makeShapeId(shapeIdx));
                     shapeIdx = shape.nextShapeId;
                 }
@@ -6844,8 +7352,15 @@ class PhysicsWorld{
             return ShapeCastHeightfieldViewDetailed(effectiveView, normOriginPos, normOriginRot, trans, this.m_heightfieldShapes[shape.geometryIndex], effPos, effRot, maxFraction, outTriIdx, outBary);
         }
         if(shape.type == ShapeType::Plane){
-            LocalRayHit planeHit;
             const PlaneShape pl = shape.planeShape();
+            if(pl.isFiniteExtent()){
+                Array<f32x3u, 4u> quadPts;
+                const ShapeProxyView planeQuad = MakeFinitePlaneQuadProxyView(pl, quadPts);
+                if(hasRotation)
+                    return ShapeCastProxyViewsRotated(effectiveView, normOriginPos, normOriginRot, trans, endRot, planeQuad, effPos, effRot, maxFraction);
+                return ShapeCastProxyViews(effectiveView, normOriginPos, normOriginRot, trans, planeQuad, effPos, effRot, VectorSingle(0.0f), maxFraction);
+            }
+            LocalRayHit planeHit;
             const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(pl.normal(), effRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle planePt = TransformPointValues(effPos, effRot, pl.normal() * pl.offset());
             const VectorSingle c1 = normOriginPos + VectorSingle(trans, 0.0f);
@@ -6905,17 +7420,6 @@ class PhysicsWorld{
                 }
             }
             if(bestT <= maxFraction){
-                if(pl.isFiniteExtent()){
-                    VectorSingle t1L(0.0f);
-                    VectorSingle t2L(0.0f);
-                    ComputeTangentBasisFromUnitNormal(pl.normal(), t1L, t2L);
-                    const VectorSingle wt1 = Vector3Rotate(t1L, effRot);
-                    const VectorSingle wt2 = Vector3Rotate(t2L, effRot);
-                    const VectorSingle rel = VectorSingle(bestPt - planePt, 0.0f);
-                    const VectorSingle absRel = Abs(VectorSingle(Vector3Dot(rel, wt1).x, Vector3Dot(rel, wt2).x, 0.0f, 0.0f));
-                    if(absRel.x > pl.halfExtent.x + effectiveView.radius || absRel.y > pl.halfExtent.z + effectiveView.radius)
-                        return planeHit;
-                }
                 planeHit.pointFraction = f32x4(bestPt, bestT);
                 planeHit.normalHit = f32x3_u32(-worldN.x, -worldN.y, -worldN.z, 1u);
             }
@@ -6926,6 +7430,48 @@ class PhysicsWorld{
         if(hasRotation)
             return ShapeCastProxyViewsRotated(effectiveView, normOriginPos, normOriginRot, trans, endRot, targetProxy, effPos, effRot, maxFraction);
         return ShapeCastProxyViews(effectiveView, normOriginPos, normOriginRot, trans, targetProxy, effPos, effRot, VectorSingle(0.0f), maxFraction);
+    }
+
+    public ShapeCastHit testSphereCastShapeAt(
+        in u32 shapeIdx,
+        in VectorSingle bodyPos,
+        in VectorSingle bodyRot,
+        in VectorSingle origin,
+        in f32 radius,
+        in VectorSingle translation,
+        in f32 maxFraction
+    )const{
+        ShapeCastHit hit;
+        if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
+            return hit;
+        in Shape shape = this.m_shapes[shapeIdx];
+        const ShapeProxy sphereProxy = MakePointProxy(VectorSingle(0.0f), SimdMax(radius, 0.0f));
+        u32 triIdx = s_NullIndex;
+        f32x2u bary(0.0f, 0.0f);
+        const LocalRayHit castHit = this.shapeCastSingleShape(
+            shape,
+            bodyPos,
+            bodyRot,
+            MakeShapeProxyView(sphereProxy),
+            origin,
+            QuaternionIdentity(),
+            translation,
+            false,
+            QuaternionIdentity(),
+            maxFraction,
+            triIdx,
+            bary
+        );
+        if(castHit.hit()){
+            hit.hit = true;
+            hit.fraction = castHit.fraction();
+            hit.point = f32x4(castHit.point(), 0.0f);
+            hit.normal = f32x4(castHit.normal(), 0.0f);
+            hit.shapeId = this.makeShapeId(shapeIdx);
+            hit.triangleIndex = triIdx;
+            hit.barycentrics = bary;
+        }
+        return hit;
     }
 
     private void queryAwakeShapesAabb<Callback>(in VectorSingle queryMin, in VectorSingle queryMax, in u32 queryMask, in u8 reqNodeFlags, in Callback callback)const{
@@ -7444,7 +7990,7 @@ class PhysicsWorld{
                 const PlaneShape plA = sA.planeShape();
                 const PlaneShape plB = sB.planeShape();
                 if(!plA.isFiniteExtent() && !plB.isFiniteExtent())
-                    return MakeUnexpected(Failure());
+                    return ComputeInfinitePlaneVsInfinitePlaneDistance(plA, posA, rotA, plB, posB, rotB);
                 if(plA.isFiniteExtent() && plB.isFiniteExtent()){
                     Array<f32x3u, 4u> quadPtsA;
                     Array<f32x3u, 4u> quadPtsB;
@@ -7507,8 +8053,10 @@ class PhysicsWorld{
                     posMesh = posA;
                     rotMesh = rotA;
                 }
-                if(!pl.isFiniteExtent() || meshGeom >= this.m_meshShapes.size())
+                if(meshGeom >= this.m_meshShapes.size())
                     return MakeUnexpected(Failure());
+                if(!pl.isFiniteExtent())
+                    return ComputeInfinitePlaneMeshDistance(pl, posPlane, rotPlane, this.m_meshShapes[meshGeom], posMesh, rotMesh, flipOrder);
                 Array<f32x3u, 4u> quadPts;
                 const ShapeProxyView pQuad = MakeFinitePlaneQuadProxyView(pl, quadPts);
                 return this.shapeProxyViewVsMeshDistance(pQuad, posPlane, rotPlane, this.m_meshShapes[meshGeom], posMesh, rotMesh, flipOrder);
@@ -7529,11 +8077,13 @@ class PhysicsWorld{
                     posHf = posA;
                     rotHf = rotA;
                 }
-                if(!pl.isFiniteExtent() || hfGeom >= this.m_heightfieldShapes.size())
+                if(hfGeom >= this.m_heightfieldShapes.size())
                     return MakeUnexpected(Failure());
                 in HeightfieldShape hf = this.m_heightfieldShapes[hfGeom];
                 if(!hf.isValid())
                     return MakeUnexpected(Failure());
+                if(!pl.isFiniteExtent())
+                    return ComputeInfinitePlaneHeightfieldDistance(pl, posPlane, rotPlane, hf, posHf, rotHf, flipOrder);
                 Array<f32x3u, 4u> quadPts;
                 const ShapeProxyView pQuad = MakeFinitePlaneQuadProxyView(pl, quadPts);
                 return this.shapeProxyViewVsHeightfieldDistance(pQuad, posPlane, rotPlane, hf, posHf, rotHf, flipOrder);
@@ -8342,12 +8892,25 @@ class PhysicsWorld{
             in MeshBvhNode rootNode = mesh.nodes[0u];
             stackLbSq[0u] = AabbPairMinDistanceSq(cMin, cMax, VectorSingle(rootNode.aabbMinLeft, 0.0f), VectorSingle(rootNode.aabbMaxRight, 0.0f));
             u32 stackCount = 1u;
-            while(stackCount > 0u){
-                --stackCount;
-                const f32 lbSq = stackLbSq[stackCount];
+            Vector<u32> overflowStack;
+            Vector<f32> overflowLbSq;
+            b8 useOverflow = false;
+            while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+                f32 lbSq = 0.0f;
+                u32 nodeIdx = 0u;
+                if(useOverflow){
+                    nodeIdx = overflowStack.back();
+                    lbSq = overflowLbSq.back();
+                    overflowStack.pop_back();
+                    overflowLbSq.pop_back();
+                }
+                else{
+                    --stackCount;
+                    lbSq = stackLbSq[stackCount];
+                    nodeIdx = stack[stackCount];
+                }
                 if(hasBound && lbSq > bestCoreBoundSq)
                     continue;
-                const u32 nodeIdx = stack[stackCount];
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
                 if(node.isLeaf()){
                     const u32 firstTri = node.leftOrFirst();
@@ -8393,23 +8956,19 @@ class PhysicsWorld{
                     const b8 keepR = (!hasBound || lbRight <= bestCoreBoundSq);
                     if(keepL && keepR){
                         if(lbLeft <= lbRight){
-                            if(stackCount < 256u){ stack[stackCount] = rightIdx; stackLbSq[stackCount] = lbRight; ++stackCount; }
-                            if(stackCount < 256u){ stack[stackCount] = leftIdx; stackLbSq[stackCount] = lbLeft; ++stackCount; }
+                            PushMeshDistNodeWithSpill(rightIdx, lbRight, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
+                            PushMeshDistNodeWithSpill(leftIdx, lbLeft, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
                         }
                         else{
-                            if(stackCount < 256u){ stack[stackCount] = leftIdx; stackLbSq[stackCount] = lbLeft; ++stackCount; }
-                            if(stackCount < 256u){ stack[stackCount] = rightIdx; stackLbSq[stackCount] = lbRight; ++stackCount; }
+                            PushMeshDistNodeWithSpill(leftIdx, lbLeft, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
+                            PushMeshDistNodeWithSpill(rightIdx, lbRight, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
                         }
                     }
-                    else if(keepL && stackCount < 256u){
-                        stack[stackCount] = leftIdx;
-                        stackLbSq[stackCount] = lbLeft;
-                        ++stackCount;
+                    else if(keepL){
+                        PushMeshDistNodeWithSpill(leftIdx, lbLeft, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
                     }
-                    else if(keepR && stackCount < 256u){
-                        stack[stackCount] = rightIdx;
-                        stackLbSq[stackCount] = lbRight;
-                        ++stackCount;
+                    else if(keepR){
+                        PushMeshDistNodeWithSpill(rightIdx, lbRight, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
                     }
                 }
             }
@@ -8453,25 +9012,21 @@ class PhysicsWorld{
         return this.shapeProxyViewVsMeshDistanceWithRel(pConvex, posConvexInMesh, rotConvexInMesh, mesh, meshPos, meshRot, flipOrder, false, s_MaxF32, s_MaxF32);
     }
 
-    private b8 evalClosestPointCandidate(
+    public ClosestPointHit testClosestPointShapeAt(
         in u32 shapeIdx,
+        in VectorSingle bodyPos,
+        in VectorSingle bodyRot,
         in VectorSingle worldPoint,
-        in Filter filterRef,
-        in b8 hitSensors,
-        in BodyId ignoreBodyId,
-        in ShapeId ignoreShapeId,
-        in Optional<ShapeQueryFilterCallback> queryFilter,
-        mut ClosestPointHit best
+        in f32 maxDistance
     )const{
-        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, false, queryFilter))
-            return true;
-
+        ClosestPointHit hit;
+        hit.distance = maxDistance;
+        if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
+            return hit;
         in Shape shape = this.m_shapes[shapeIdx];
-        in Body body = this.m_bodies[shape.bodyId];
-        in Transform3D bodyXf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
         VectorSingle xfPos(0.0f);
         VectorSingle xfRot(0.0f, 0.0f, 0.0f, 1.0f);
-        shape.worldTransformValues(VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), xfPos, xfRot);
+        shape.worldTransformValues(bodyPos, bodyRot, xfPos, xfRot);
         const VectorSingle localPt = InverseTransformPointValues(xfPos, xfRot, worldPoint);
         VectorSingle localClosest = localPt;
         VectorSingle localNormal(0.0f, 1.0f, 0.0f, 0.0f);
@@ -8483,14 +9038,11 @@ class PhysicsWorld{
             const VectorSingle delta = VectorSingle(localPt - sp.center(), 0.0f);
             const f32 dSq = Vector3LengthSq(delta).x;
             const f32 r = sp.radius();
-            if(dSq <= r * r){
-                localNormal = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            localNormal = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            if(dSq <= r * r)
                 localClosest = localPt;
-            }
-            else{
-                localNormal = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            else
                 localClosest = sp.center() + localNormal * r;
-            }
         }
         else if(shape.type == ShapeType::Capsule){
             const CapsuleShape cap = shape.capsuleShape();
@@ -8538,17 +9090,39 @@ class PhysicsWorld{
         }
 
         if(!evaluated)
-            return true;
+            return hit;
         const VectorSingle worldClosest = TransformPointValues(xfPos, xfRot, localClosest);
         const f32 dist = SqrtFast(Vector3LengthSq(VectorSingle(worldPoint - worldClosest, 0.0f)).x);
-        if(dist <= best.distance && (!best.hit || dist < best.distance)){
-            best.hit = true;
-            best.distance = dist;
-            best.shapeId = this.makeShapeId(shapeIdx);
-            best.point = f32x4(worldClosest, 0.0f);
-            best.normal = f32x4(SafeNormalizeVec3(Vector3Rotate(localNormal, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
-            best.triangleIndex = triIdx;
+        if(dist <= maxDistance){
+            hit.hit = true;
+            hit.distance = dist;
+            hit.shapeId = this.makeShapeId(shapeIdx);
+            hit.point = f32x4(worldClosest, 0.0f);
+            hit.normal = f32x4(SafeNormalizeVec3(Vector3Rotate(localNormal, xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+            hit.triangleIndex = triIdx;
         }
+        return hit;
+    }
+
+    private b8 evalClosestPointCandidate(
+        in u32 shapeIdx,
+        in VectorSingle worldPoint,
+        in Filter filterRef,
+        in b8 hitSensors,
+        in BodyId ignoreBodyId,
+        in ShapeId ignoreShapeId,
+        in Optional<ShapeQueryFilterCallback> queryFilter,
+        mut ClosestPointHit best
+    )const{
+        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, true, queryFilter))
+            return true;
+
+        in Shape shape = this.m_shapes[shapeIdx];
+        in Body body = this.m_bodies[shape.bodyId];
+        in Transform3D bodyXf = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
+        const ClosestPointHit cand = this.testClosestPointShapeAt(shapeIdx, VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), worldPoint, best.distance);
+        if(cand.hit && (!best.hit || cand.distance < best.distance))
+            best = cand;
         return true;
     }
 
@@ -8646,6 +9220,8 @@ class PhysicsWorld{
             if(sd > 0.0f)
                 return false;
             if(pl.isFiniteExtent()){
+                if(sd < -0.05f)
+                    return false;
                 VectorSingle t1(0.0f);
                 VectorSingle t2(0.0f);
                 ComputeTangentBasisFromUnitNormal(pl.normal(), t1, t2);
@@ -8681,9 +9257,18 @@ class PhysicsWorld{
             Array<u32, 256u> stack;
             stack[0u] = 0u;
             u32 stackCount = 1u;
-            while(stackCount > 0u){
-                --stackCount;
-                const u32 nodeIdx = stack[stackCount];
+            Vector<u32> overflowStack;
+            b8 useOverflow = false;
+            while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+                u32 nodeIdx = 0u;
+                if(useOverflow){
+                    nodeIdx = overflowStack.back();
+                    overflowStack.pop_back();
+                }
+                else{
+                    --stackCount;
+                    nodeIdx = stack[stackCount];
+                }
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
                 if(!AabbContainsValues(VectorSingle(node.aabbMinLeft, 0.0f) - rVec, VectorSingle(node.aabbMaxRight, 0.0f) + rVec, localPt, localPt))
                     continue;
@@ -8697,14 +9282,8 @@ class PhysicsWorld{
                     }
                 }
                 else{
-                    if(stackCount < 256u){
-                        stack[stackCount] = node.leftOrFirst();
-                        ++stackCount;
-                    }
-                    if(stackCount < 256u){
-                        stack[stackCount] = node.rightOrCount();
-                        ++stackCount;
-                    }
+                    PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+                    PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
                 }
             }
             if(mesh.isClosed() && IsPointInsideClosedMesh(mesh, localPt))
@@ -8820,7 +9399,7 @@ class PhysicsWorld{
         in Optional<ShapeQueryFilterCallback> queryFilter,
         mut Vector<ShapeId> outShapes
     )const{
-        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, false, queryFilter))
+        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, true, queryFilter))
             return true;
         in Shape shape = this.m_shapes[shapeIdx];
         in Body body = this.m_bodies[shape.bodyId];
@@ -8908,7 +9487,7 @@ class PhysicsWorld{
         in Optional<ShapeQueryFilterCallback> queryFilter,
         mut Vector<ShapeId> outShapes
     )const{
-        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, false, queryFilter))
+        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, true, queryFilter))
             return true;
         in Shape shape = this.m_shapes[shapeIdx];
 
@@ -8954,9 +9533,18 @@ class PhysicsWorld{
             Array<u32, 256u> stack;
             stack[0u] = 0u;
             u32 stackCount = 1u;
-            while(stackCount > 0u){
-                --stackCount;
-                const u32 nodeIdx = stack[stackCount];
+            Vector<u32> overflowStack;
+            b8 useOverflow = false;
+            while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+                u32 nodeIdx = 0u;
+                if(useOverflow){
+                    nodeIdx = overflowStack.back();
+                    overflowStack.pop_back();
+                }
+                else{
+                    --stackCount;
+                    nodeIdx = stack[stackCount];
+                }
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
                 if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localMin, localMax))
                     continue;
@@ -8987,14 +9575,8 @@ class PhysicsWorld{
                     }
                 }
                 else{
-                    if(stackCount < 256u){
-                        stack[stackCount] = node.leftOrFirst();
-                        ++stackCount;
-                    }
-                    if(stackCount < 256u){
-                        stack[stackCount] = node.rightOrCount();
-                        ++stackCount;
-                    }
+                    PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+                    PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
                 }
             }
             if(mesh.isClosed()){
@@ -9106,7 +9688,7 @@ class PhysicsWorld{
         mut b8 outHasHit
     )const{
         outHasHit = false;
-        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, false, queryFilter))
+        if(!this.passesQueryShapeFilter(shapeIdx, filterRef, ignoreBodyId, ignoreShapeId, hitSensors, true, queryFilter))
             return true;
         if(!queryHullAttempted && queryKind == 0u && queryViewRef.kind == ProxyKind::PointCloud && queryViewRef.points.size() >= 3u){
             in ShapeType st = this.m_shapes[shapeIdx].type;
@@ -9327,9 +9909,19 @@ class PhysicsWorld{
                         Array<u32, 256u> stack;
                         stack[0u] = 0u;
                         u32 stackCount = 1u;
-                        while(stackCount > 0u){
-                            --stackCount;
-                            in MeshBvhNode node = mesh.nodes[stack[stackCount]];
+                        Vector<u32> overflowStack;
+                        b8 useOverflow = false;
+                        while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
+                            u32 nodeIdx = 0u;
+                            if(useOverflow){
+                                nodeIdx = overflowStack.back();
+                                overflowStack.pop_back();
+                            }
+                            else{
+                                --stackCount;
+                                nodeIdx = stack[stackCount];
+                            }
+                            in MeshBvhNode node = mesh.nodes[nodeIdx];
                             if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localMin, localMax))
                                 continue;
                             if(node.isLeaf()){
@@ -9363,12 +9955,8 @@ class PhysicsWorld{
                                 }
                             }
                             else{
-                                if(stackCount + 2u <= 256u){
-                                    stack[stackCount] = node.rightOrCount();
-                                    ++stackCount;
-                                    stack[stackCount] = node.leftOrFirst();
-                                    ++stackCount;
-                                }
+                                PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+                                PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
                             }
                         }
                     }
@@ -9826,6 +10414,10 @@ class PhysicsWorld{
                     return true;
                 if(!ShouldCollideFilters(defRef.filter, shape.filter))
                     return true;
+                if(this.m_customFilterCallback.has_value()){
+                    if(!this.m_customFilterCallback.value()(ShapeId(), this.makeShapeId(shapeIdx)))
+                        return true;
+                }
 
                 const u32 bodyIdx = shape.bodyId;
                 in Body body = this.m_bodies[bodyIdx];

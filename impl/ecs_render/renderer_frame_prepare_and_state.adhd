@@ -74,6 +74,10 @@ void RendererSystem::setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsys
     this.m_pipeline.setActiveSceneSubsystems(subsystems);
 }
 
+void RendererSystem::setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor){
+    this.m_pipeline.setInstanceTransformPatchContributor(contributor);
+}
+
 void RendererSystem::setRefractionEnabled(in b8 enabled){
     this.m_pipeline.setRefractionEnabled(enabled);
 }
@@ -377,12 +381,23 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
             warning("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay");
     }
 
+    if(this.m_instanceTransformPatchContributor.has_value()){
+        if(!this.m_instanceTransformPatchContributor.value().prepareInstanceTransformPatches()){
+            warning("RendererSystem: instance transform patch contributor preparation failed");
+            return false;
+        }
+    }
+
     return true;
 }
 
 void RendererFramePipeline::setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
     this.m_activeSceneSubsystems = subsystems;
     this.m_shaderSystem.setActiveSceneSubsystems(subsystems);
+}
+
+void RendererFramePipeline::setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor){
+    this.m_instanceTransformPatchContributor = contributor;
 }
 
 b8 RendererFramePipeline::setSurfelGiQualitySettings(in SurfelGiQualitySettings settings){

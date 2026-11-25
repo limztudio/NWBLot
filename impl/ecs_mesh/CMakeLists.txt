@@ -23,3 +23,4 @@ nwb_target_adhd_sources(nwb_ecs_mesh
 target_link_libraries(nwb_ecs_mesh PUBLIC nwb_ecs_mesh_components nwb_ecs nwb_assets nwb_graphics nwb_assets_skeleton_types nwb_assets_mesh_types)
 
 add_subdirectory(skinning)
+add_subdirectory(soft_body)

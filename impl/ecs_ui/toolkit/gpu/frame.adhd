@@ -18,6 +18,9 @@ class GpuFrameData{
     public Vector<GpuVersion<GpuSdfAtlasVersion>> m_sdfPages;
     public Vector<GpuVersion<GpuTextureImageVersion>> m_textureImages;
     public GpuVersion<GpuTargetVersion> m_target;
+    public GpuVersion<GpuTargetVersion> m_scratchA;
+    public GpuVersion<GpuTargetVersion> m_scratchB;
+    public GpuVersion<GpuEffectBufferVersion> m_effectBuffer;
     public GpuVersion<GpuSharedResources> m_resources;
     public BufferHandle m_vertices;
     public BufferHandle m_indices;
@@ -25,14 +28,17 @@ class GpuFrameData{
     public AcquiredPresentationFrame m_acquired;
     public QueueSubmissionToken m_vertexUpload;
     public QueueSubmissionToken m_indexUpload;
+    public QueueSubmissionToken m_effectUpload;
     public QueueSubmissionToken m_clear;
     public QueueSubmissionToken m_raster;
+    public Vector<QueueSubmissionToken> m_extraTokens;
     public QueueSubmissionToken m_finalConsumer;
     public GpuCommandRecordingMode m_recordingMode = GpuCommandRecordingMode::Direct;
     public b8 m_prepared = false;
     public u32 m_presentationMode = s_ShaderUiPresentationSdr;
     public GpuVersion<GpuCommandIrCapture> m_rasterCommandIrCapture;
     public GpuVersion<GpuCommandIrCapture> m_outputCommandIrCapture;
+    public Vector<GpuVersion<GpuCommandIrCapture>> m_extraCommandIrCaptures;
 
     public void reset(mut DrawSnapshot snapshot, in GpuVersion<GpuSkinVersion> skin){
         DrawSnapshot retired;
@@ -47,6 +53,9 @@ class GpuFrameData{
         this.m_sdfPages.clear();
         this.m_textureImages.clear();
         this.m_target.reset();
+        this.m_scratchA.reset();
+        this.m_scratchB.reset();
+        this.m_effectBuffer.reset();
         this.m_resources.reset();
         this.m_vertices.reset();
         this.m_indices.reset();
@@ -54,8 +63,10 @@ class GpuFrameData{
         this.m_acquired = AcquiredPresentationFrame();
         this.m_vertexUpload = QueueSubmissionToken();
         this.m_indexUpload = QueueSubmissionToken();
+        this.m_effectUpload = QueueSubmissionToken();
         this.m_clear = QueueSubmissionToken();
         this.m_raster = QueueSubmissionToken();
+        this.m_extraTokens.clear();
         this.m_finalConsumer = QueueSubmissionToken();
         this.m_recordingMode = GpuCommandRecordingMode::Direct;
         this.m_presentationMode = s_ShaderUiPresentationSdr;
@@ -64,16 +75,36 @@ class GpuFrameData{
             this.m_rasterCommandIrCapture.deref().reset();
         if(this.m_outputCommandIrCapture.valid())
             this.m_outputCommandIrCapture.deref().reset();
+        for(in auto cap : this.m_extraCommandIrCaptures){
+            if(cap.valid())
+                cap.deref().reset();
+        }
     }
 
     [cpp_unwind]
     public b8 prefixComplete(mut Device device)const{
-        return GpuTokenComplete(device, this.m_vertexUpload) && GpuTokenComplete(device, this.m_indexUpload) && GpuTokenComplete(device, this.m_clear) && GpuTokenComplete(device, this.m_raster);
+        if(
+            !GpuTokenComplete(device, this.m_vertexUpload)
+            || !GpuTokenComplete(device, this.m_indexUpload)
+            || !GpuTokenComplete(device, this.m_effectUpload)
+            || !GpuTokenComplete(device, this.m_clear)
+            || !GpuTokenComplete(device, this.m_raster)
+        )
+            return false;
+        for(in QueueSubmissionToken tok : this.m_extraTokens){
+            if(!GpuTokenComplete(device, tok))
+                return false;
+        }
+        return true;
     }
 
     [cpp_unwind]
     public b8 recyclable(mut Device device)const{
         if(!GpuTokenComplete(device, this.m_finalConsumer) || !this.prefixComplete(device))
+            return false;
+        if(this.m_scratchA.valid() && !GpuTokenComplete(device, this.m_scratchA.deref().m_readinessToken))
+            return false;
+        if(this.m_scratchB.valid() && !GpuTokenComplete(device, this.m_scratchB.deref().m_readinessToken))
             return false;
         for(in auto page : this.m_glyphPages){
             if(!GpuTokenComplete(device, page.deref().m_readinessToken))
@@ -100,6 +131,9 @@ type GpuFrame = GpuVersion<GpuFrameData>;
 
 class GpuFrameSlot{
     public GpuVersion<GpuTargetVersion> target;
+    public GpuVersion<GpuTargetVersion> scratchA;
+    public GpuVersion<GpuTargetVersion> scratchB;
+    public GpuVersion<GpuEffectBufferVersion> effectBuffer;
     public BufferHandle vertices;
     public BufferHandle indices;
     public GpuFrame inFlight;

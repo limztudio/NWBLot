@@ -834,6 +834,66 @@ void VerifyUiPopupToolsBuilderTests_TooltipDelayBeginsOnlyAfterTheAnchorLayoutIs
     EXPECT_TRUE(self.m_tooltip.visible());
 }
 
+void VerifyUiPopupRouterTests_NonBlockingPopoverAllowsOutsideHoverActivationAndPreservesClickedFocus(mut UiPopupRouterTests self){
+    self.focusBase();
+    PopupScope nonBlocking = MakeUiPopupRouterScope();
+    nonBlocking.modal = false;
+    nonBlocking.blockOutsideInput = false;
+    nonBlocking.dismissOutside = true;
+    nonBlocking.autofocus = false;
+    ASSERT_TRUE(self.install(nonBlocking, 2u));
+
+    const Point outsideButton(75.0f, 20.0f);
+    EXPECT_EQ(self.send(MakeUiPointerEvent(InputEventType::PointerMove, outsideButton)).hover, WidgetId(2u));
+    self.click(outsideButton);
+    EXPECT_TRUE(self.m_router.consumeActivation(WidgetId(2u)));
+    EXPECT_EQ(self.m_router.focus(), WidgetId(2u));
+    const auto dismissed = self.m_router.consumePopupDismissal(nonBlocking.token);
+    ASSERT_TRUE(dismissed.has_value());
+    EXPECT_EQ(dismissed.value(), PopupDismissReason::OutsideClick);
+    ASSERT_TRUE(self.m_router.commitTargets(MakeUiPopupRouterBaseTargets(), 3u));
+    EXPECT_EQ(self.m_router.focus(), WidgetId(2u));
+
+    PopupScope blocking = MakeUiPopupRouterScope();
+    blocking.modal = false;
+    blocking.blockOutsideInput = true;
+    ASSERT_TRUE(self.install(blocking, 4u));
+    EXPECT_FALSE(self.m_router.hitTest(outsideButton).valid());
+}
+
+void VerifyUiPopupToolsBuilderTests_TooltipMaximumWidthWrapsLongHelpVertically(mut UiPopupToolsBuilderTests self){
+    const StringView longHelp = "Alpha beta gamma delta epsilon zeta eta theta";
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiPopupToolsCasePanelKey, Rect(10.0f, 10.0f, 360.0f, 280.0f)));
+    EXPECT_FALSE(self.m_builder.button(s_UiPopupToolsCaseAnchorKey, "Anchor", self.m_anchorOptions));
+    ASSERT_TRUE(self.m_builder.tooltip("tip", s_UiPopupToolsCaseAnchorKey, longHelp, self.m_tooltip, self.m_tooltipOptions));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const auto anchor = self.tryTarget(self.id(s_UiPopupToolsCaseAnchorKey, s_UiPopupToolsCasePanelKey));
+    ASSERT_TRUE(anchor.has_value());
+    self.send(MakeUiPointerEvent(InputEventType::PointerMove, CenterUiRect(anchor.value().rectangle)));
+
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiPopupToolsCasePanelKey, Rect(10.0f, 10.0f, 360.0f, 280.0f)));
+    EXPECT_FALSE(self.m_builder.button(s_UiPopupToolsCaseAnchorKey, "Anchor", self.m_anchorOptions));
+    ASSERT_TRUE(self.m_builder.tooltip("tip", s_UiPopupToolsCaseAnchorKey, longHelp, self.m_tooltip, self.m_tooltipOptions));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+    ASSERT_TRUE(self.m_tooltip.visible());
+    const f32 singleHeight = self.m_tooltip.placement().bounds.height;
+
+    self.m_tooltipOptions.maximumWidth = 70.0f;
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginPanel(s_UiPopupToolsCasePanelKey, Rect(10.0f, 10.0f, 360.0f, 280.0f)));
+    EXPECT_FALSE(self.m_builder.button(s_UiPopupToolsCaseAnchorKey, "Anchor", self.m_anchorOptions));
+    ASSERT_TRUE(self.m_builder.tooltip("tip", s_UiPopupToolsCaseAnchorKey, longHelp, self.m_tooltip, self.m_tooltipOptions));
+    ASSERT_TRUE(self.finishPanel());
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+    ASSERT_TRUE(self.m_tooltip.visible());
+    EXPECT_LE(self.m_tooltip.placement().bounds.width, 70.01f);
+    EXPECT_GT(self.m_tooltip.placement().bounds.height, singleHeight);
+}
+
 void VerifyUiPopupToolsBuilderTests_ZeroDelayTooltipPaintsWithoutCreatingPopupTargetsOrTakingFocus(mut UiPopupToolsBuilderTests self){
     ASSERT_TRUE(self.acceptTools(1u, true, false));
     const usize targetCount = self.m_context.input().targets().size();
@@ -1555,7 +1615,10 @@ NWB_ADHD_GTEST_F(UiPopupRouterTests, InvalidatingPopupOwnerRetiresItsScopeAction
 NWB_ADHD_GTEST_F(UiPopupRouterTests, InvalidScopeDescriptionsRejectAtomicallyWithoutChangingAcceptedInteraction, VerifyUiPopupRouterTests_InvalidScopeDescriptionsRejectAtomicallyWithoutChangingAcceptedInteraction)
 NWB_ADHD_GTEST_F(UiPopupRouterTests, MissingOwnersDuplicateScopesAndMismatchedScopedTargetsRejectAtomically, VerifyUiPopupRouterTests_MissingOwnersDuplicateScopesAndMismatchedScopedTargetsRejectAtomically)
 NWB_ADHD_GTEST_F(UiPopupRouterTests, PopupCountBoundRejectsWithoutReplacingTheAcceptedScope, VerifyUiPopupRouterTests_PopupCountBoundRejectsWithoutReplacingTheAcceptedScope)
+NWB_ADHD_GTEST_F(UiPopupRouterTests, NonBlockingPopoverAllowsOutsideHoverActivationAndPreservesClickedFocus, VerifyUiPopupRouterTests_NonBlockingPopoverAllowsOutsideHoverActivationAndPreservesClickedFocus)
 NWB_ADHD_GTEST_F(UiPopupRouterTests, ResetDropsOwnedScopesDismissalsAndInteractionBeforeLayoutReuse, VerifyUiPopupRouterTests_ResetDropsOwnedScopesDismissalsAndInteractionBeforeLayoutReuse)
+
+NWB_ADHD_GTEST_F(UiPopupToolsBuilderTests, TooltipMaximumWidthWrapsLongHelpVertically, VerifyUiPopupToolsBuilderTests_TooltipMaximumWidthWrapsLongHelpVertically)
 
 NWB_ADHD_GTEST_F(UiPopupToolsBuilderTests, TooltipDelayBeginsOnlyAfterTheAnchorLayoutIsAccepted, VerifyUiPopupToolsBuilderTests_TooltipDelayBeginsOnlyAfterTheAnchorLayoutIsAccepted)
 NWB_ADHD_GTEST_F(UiPopupToolsBuilderTests, ZeroDelayTooltipPaintsWithoutCreatingPopupTargetsOrTakingFocus, VerifyUiPopupToolsBuilderTests_ZeroDelayTooltipPaintsWithoutCreatingPopupTargetsOrTakingFocus)

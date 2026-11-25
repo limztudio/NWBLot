@@ -34,7 +34,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/win32/*.ipp"
         "${CMAKE_CURRENT_LIST_DIR}/win32/*.ixx"
     )
-    target_link_libraries(nwb_os PRIVATE user32 imm32)
+    target_link_libraries(nwb_os PRIVATE user32 imm32 oleaut32)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_os PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/linux/*.c"
@@ -59,4 +59,3 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         nwb_enable_primary_selection_protocol(nwb_os)
     endif()
 endif()
-

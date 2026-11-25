@@ -914,9 +914,12 @@ void VerifyTextLayoutTests_FailedLaterLineAndSourceMutationPreserveCommittedLayo
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
     EXPECT_FLOAT_EQ(self.m_layout.measure().x, 20.0f);
     ASSERT_EQ(self.m_layout.lines().size(), 1u);
+    const auto controlResult = self.m_builder.layout(MakeUiDefaultShapeRequest("A\x01B"));
+    ASSERT_FALSE(controlResult.has_value());
+    EXPECT_EQ(controlResult.error(), TextLayoutStatus::UnsupportedControl);
     const auto tabResult = self.m_builder.layout(MakeUiDefaultShapeRequest("A\tB"));
-    ASSERT_FALSE(tabResult.has_value());
-    EXPECT_EQ(tabResult.error(), TextLayoutStatus::UnsupportedControl);
+    ASSERT_TRUE(tabResult.has_value());
+    EXPECT_GT(tabResult.value().measure().x, 20.0f);
     EXPECT_EQ(self.m_layout.utf8(), s_UiTextLayoutTwoGlyphText);
 }
 
@@ -930,6 +933,73 @@ void VerifyTextLayoutTests_EmptyTextHasOneTypographicLineAndNoInk(mut TextLayout
     const auto caret = self.m_layout.caretRect(0u, TextCaretEdge::Leading);
     ASSERT_TRUE(caret.has_value());
     EXPECT_FLOAT_EQ(caret.value().height, 12.0f);
+}
+
+void VerifyTextFontTests_MissingCodePointFallsBackToNotdefGlyphInsteadOfFailing(mut TextFontTests self){
+    const ShapeRequest request = MakeUiDefaultShapeRequest("\xEE\x80\x80");
+    ASSERT_TRUE(self.applyLayout(request));
+    ASSERT_EQ(self.m_layout.clusters().size(), 1u);
+    ASSERT_EQ(self.m_layout.glyphs().size(), 1u);
+    EXPECT_EQ(self.m_layout.glyphs()[0u].glyphId, 0u);
+    self.beginPaint(1u);
+    EXPECT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(10.0f, 10.0f), Color(1.0f, 1.0f, 1.0f, 1.0f)));
+}
+
+void VerifyTextLayoutTests_SoftWrapAndAlignmentSupportLtrAndRtlAndRejectInvalidInputs(mut TextLayoutTests self){
+    ShapeRequest word = MakeUiDefaultShapeRequest("ab cd ef");
+    word.wrapMode = TextWrapMode::Word;
+    word.maxWidth = 35.0f;
+    ASSERT_TRUE(self.applyLayout(word));
+    ASSERT_EQ(self.m_layout.lines().size(), 3u);
+    EXPECT_EQ(self.m_layout.lines()[0u].byteBegin, 0u);
+    EXPECT_EQ(self.m_layout.lines()[0u].byteEnd, 2u);
+    EXPECT_EQ(self.m_layout.lines()[1u].byteBegin, 3u);
+    EXPECT_EQ(self.m_layout.lines()[2u].byteBegin, 6u);
+    EXPECT_FLOAT_EQ(self.m_layout.measure().x, 20.0f);
+    EXPECT_FLOAT_EQ(self.m_layout.measure().y, 36.0f);
+
+    ShapeRequest charWrap = MakeUiDefaultShapeRequest("abcde");
+    charWrap.wrapMode = TextWrapMode::Character;
+    charWrap.maxWidth = 25.0f;
+    ASSERT_TRUE(self.applyLayout(charWrap));
+    ASSERT_EQ(self.m_layout.lines().size(), 3u);
+    EXPECT_EQ(self.m_layout.lines()[0u].byteEnd, 2u);
+    EXPECT_EQ(self.m_layout.lines()[1u].byteEnd, 4u);
+
+    ShapeRequest rtlWrap = MakeUiDefaultShapeRequest("ab cd");
+    rtlWrap.direction = TextDirection::RightToLeft;
+    rtlWrap.wrapMode = TextWrapMode::Word;
+    rtlWrap.maxWidth = 35.0f;
+    ASSERT_TRUE(self.applyLayout(rtlWrap));
+    ASSERT_EQ(self.m_layout.lines().size(), 2u);
+    EXPECT_EQ(self.m_layout.clusters()[0u].byteBegin, 1u);
+    EXPECT_EQ(self.m_layout.clusters()[0u].byteEnd, 2u);
+
+    ShapeRequest centered = MakeUiDefaultShapeRequest("ab\nc");
+    centered.alignment = TextAlignment::Center;
+    ASSERT_TRUE(self.applyLayout(centered));
+    ASSERT_EQ(self.m_layout.clusters().size(), 3u);
+    EXPECT_FLOAT_EQ(self.m_layout.clusters()[2u].leadingX, 5.0f);
+    EXPECT_FLOAT_EQ(self.m_layout.clusters()[2u].trailingX, 15.0f);
+
+    ShapeRequest trailing = MakeUiDefaultShapeRequest("ab\nc");
+    trailing.alignment = TextAlignment::Trailing;
+    ASSERT_TRUE(self.applyLayout(trailing));
+    EXPECT_FLOAT_EQ(self.m_layout.clusters()[2u].leadingX, 10.0f);
+    EXPECT_FLOAT_EQ(self.m_layout.clusters()[2u].trailingX, 20.0f);
+
+    ShapeRequest badWidth = MakeUiDefaultShapeRequest("ok");
+    badWidth.maxWidth = -1.0f;
+    const auto widthFail = self.m_builder.layout(badWidth);
+    ASSERT_FALSE(widthFail.has_value());
+    EXPECT_EQ(widthFail.error(), TextLayoutStatus::InvalidParameters);
+    ShapeRequest badWrap = MakeUiDefaultShapeRequest("ok");
+    badWrap.wrapMode = cast<TextWrapMode>(99u);
+    EXPECT_EQ(self.m_builder.layout(badWrap).error(), TextLayoutStatus::InvalidParameters);
+    ShapeRequest badAlign = MakeUiDefaultShapeRequest("ok");
+    badAlign.alignment = cast<TextAlignment>(99u);
+    EXPECT_EQ(self.m_builder.layout(badAlign).error(), TextLayoutStatus::InvalidParameters);
+    EXPECT_EQ(self.m_layout.utf8(), "ab\nc");
 }
 
 void VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAtomic(mut TextLayoutTests self){
@@ -1050,6 +1120,8 @@ NWB_ADHD_GTEST_F(TextLayoutTests, FailedLaterLineAndSourceMutationPreserveCommit
 
 NWB_ADHD_GTEST_F(TextLayoutTests, EmptyTextHasOneTypographicLineAndNoInk, VerifyTextLayoutTests_EmptyTextHasOneTypographicLineAndNoInk)
 
+NWB_ADHD_GTEST_F(TextFontTests, MissingCodePointFallsBackToNotdefGlyphInsteadOfFailing, VerifyTextFontTests_MissingCodePointFallsBackToNotdefGlyphInsteadOfFailing)
+NWB_ADHD_GTEST_F(TextLayoutTests, SoftWrapAndAlignmentSupportLtrAndRtlAndRejectInvalidInputs, VerifyTextLayoutTests_SoftWrapAndAlignmentSupportLtrAndRtlAndRejectInvalidInputs)
 NWB_ADHD_GTEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFailureAtomic, VerifyTextLayoutTests_StrictUtf8AndHorizontalRequestValidationAreFailureAtomic)
 
 void VerifyTextGlyphVisibility_CoverageSnapMatchesScalarAtHalfPixelsAndDirectedRounding(){

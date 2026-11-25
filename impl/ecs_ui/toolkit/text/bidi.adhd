@@ -1,0 +1,901 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/text/shaper_types.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u8 s_BidiMaxDepth = 125u;
+const usize s_BidiMaxBracketPairs = 63u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> BidiClass{
+    L,
+    R,
+    AL,
+    EN,
+    ES,
+    ET,
+    AN,
+    CS,
+    NSM,
+    BN,
+    B,
+    S,
+    WS,
+    ON,
+    LRE,
+    LRO,
+    RLE,
+    RLO,
+    PDF,
+    LRI,
+    RLI,
+    FSI,
+    PDI,
+}
+
+enum<u8> BidiDirectionalOverride{
+    Neutral,
+    L,
+    R,
+}
+
+class BidiStatusEntry{
+    public u8 level = 0u;
+    public BidiDirectionalOverride overrideStatus = BidiDirectionalOverride::Neutral;
+    public b8 isolateStatus = false;
+}
+
+class BidiCharEntry{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u32 codePoint = 0u;
+    public BidiClass origClass = BidiClass::L;
+    public BidiClass resolvedClass = BidiClass::L;
+    public u8 level = 0u;
+}
+
+class BidiVisualRun{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public u8 level = 0u;
+    public TextDirection direction = TextDirection::LeftToRight;
+}
+
+class BidiParagraph{
+    public TextDirection baseDirection = TextDirection::LeftToRight;
+    public u8 baseLevel = 0u;
+    public Vector<BidiCharEntry> chars;
+}
+
+class BidiLevelRun{
+    public usize startChar = 0u;
+    public usize endChar = 0u;
+    public u8 level = 0u;
+    public BidiClass sos = BidiClass::L;
+    public BidiClass eos = BidiClass::L;
+    public usize nextRun = usize.max;
+    public b8 hasPrev = false;
+}
+
+class BidiBracketStackEntry{
+    public usize seqIndex = 0u;
+    public u32 closeCodePoint = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+BidiClass ClassifyBidiCodePoint(in u32 cp){
+    if(cp == 0x061Cu)
+        return BidiClass::AL;
+    if(cp == 0x200Eu)
+        return BidiClass::L;
+    if(cp == 0x200Fu)
+        return BidiClass::R;
+    if(cp == 0x202Au)
+        return BidiClass::LRE;
+    if(cp == 0x202Bu)
+        return BidiClass::RLE;
+    if(cp == 0x202Cu)
+        return BidiClass::PDF;
+    if(cp == 0x202Du)
+        return BidiClass::LRO;
+    if(cp == 0x202Eu)
+        return BidiClass::RLO;
+    if(cp == 0x2066u)
+        return BidiClass::LRI;
+    if(cp == 0x2067u)
+        return BidiClass::RLI;
+    if(cp == 0x2068u)
+        return BidiClass::FSI;
+    if(cp == 0x2069u)
+        return BidiClass::PDI;
+    if((cp >= 0x200Bu && cp <= 0x200Du) || (cp >= 0x2060u && cp <= 0x2064u) || cp == 0xFEFFu)
+        return BidiClass::BN;
+    if(cp == 0x0Au || cp == 0x0Du || cp == 0x0085u || cp == 0x2029u)
+        return BidiClass::B;
+    if(cp == 0x09u || cp == 0x0Bu || cp == 0x001Fu)
+        return BidiClass::S;
+    if(cp == 0x20u || cp == 0x0Cu || cp == 0x1680u || (cp >= 0x2000u && cp <= 0x200Au) || cp == 0x2028u || cp == 0x205Fu || cp == 0x3000u)
+        return BidiClass::WS;
+
+    if(cp <= 0x007Fu){
+        if(cp >= 0x30u && cp <= 0x39u)
+            return BidiClass::EN;
+        if(cp == 0x2Bu || cp == 0x2Du)
+            return BidiClass::ES;
+        if(cp == 0x23u || cp == 0x24u || cp == 0x25u)
+            return BidiClass::ET;
+        if(cp == 0x2Cu || cp == 0x2Eu || cp == 0x2Fu || cp == 0x3Au)
+            return BidiClass::CS;
+        if(cp < 0x20u || cp == 0x7Fu)
+            return BidiClass::BN;
+        if((cp >= 0x41u && cp <= 0x5Au) || (cp >= 0x61u && cp <= 0x7Au))
+            return BidiClass::L;
+        return BidiClass::ON;
+    }
+
+    if(cp == 0x00A0u)
+        return BidiClass::CS;
+    if((cp >= 0x00A2u && cp <= 0x00A5u) || cp == 0x00B0u || cp == 0x00B1u || (cp >= 0x2030u && cp <= 0x2034u) || (cp >= 0x20A0u && cp <= 0x20CFu))
+        return BidiClass::ET;
+    if(cp == 0x00B2u || cp == 0x00B3u || cp == 0x00B9u)
+        return BidiClass::EN;
+    if(cp == 0x00ABu || cp == 0x00BBu || (cp >= 0x2018u && cp <= 0x2027u) || (cp >= 0x2035u && cp <= 0x2046u) || (cp >= 0x2190u && cp <= 0x2BFFu) || (cp >= 0x3001u && cp <= 0x3020u) || (cp >= 0x1F000u && cp <= 0x1FAFFu))
+        return BidiClass::ON;
+
+    if(
+        (cp >= 0x0300u && cp <= 0x036Fu)
+        || (cp >= 0x0591u && cp <= 0x05BDu)
+        || cp == 0x05BFu
+        || cp == 0x05C1u
+        || cp == 0x05C2u
+        || cp == 0x05C4u
+        || cp == 0x05C5u
+        || cp == 0x05C7u
+        || (cp >= 0x0610u && cp <= 0x061Au)
+        || (cp >= 0x064Bu && cp <= 0x065Fu)
+        || cp == 0x0670u
+        || (cp >= 0x06D6u && cp <= 0x06DCu)
+        || (cp >= 0x06DFu && cp <= 0x06E4u)
+        || (cp >= 0x06E7u && cp <= 0x06E8u)
+        || (cp >= 0x06EAu && cp <= 0x06EDu)
+        || (cp >= 0xFE00u && cp <= 0xFE0Fu)
+        || (cp >= 0xFE20u && cp <= 0xFE2Fu)
+    )
+        return BidiClass::NSM;
+
+    if(cp == 0xFB1Eu)
+        return BidiClass::NSM;
+    if((cp >= 0x0590u && cp <= 0x05FFu) || (cp >= 0xFB1Du && cp <= 0xFB4Fu))
+        return BidiClass::R;
+
+    if(cp == 0x066Au || cp == 0x0609u || cp == 0x060Au)
+        return BidiClass::ET;
+    if(cp == 0x060Cu)
+        return BidiClass::CS;
+    if(cp >= 0x0660u && cp <= 0x066Cu)
+        return BidiClass::AN;
+    if(cp >= 0x06F0u && cp <= 0x06F9u)
+        return BidiClass::EN;
+    if((cp >= 0x0600u && cp <= 0x07BFu) || (cp >= 0x0860u && cp <= 0x08FFu) || (cp >= 0xFB50u && cp <= 0xFDFFu) || (cp >= 0xFE70u && cp <= 0xFEFFu))
+        return BidiClass::AL;
+    if(cp >= 0x07C0u && cp <= 0x085Fu)
+        return BidiClass::R;
+
+    return BidiClass::L;
+}
+
+b8 IsBidiIsolateInitiator(in BidiClass cls){
+    return cls == BidiClass::LRI || cls == BidiClass::RLI || cls == BidiClass::FSI;
+}
+
+b8 IsBidiRemovedByX9(in BidiClass cls){
+    return cls == BidiClass::LRE || cls == BidiClass::RLE || cls == BidiClass::LRO || cls == BidiClass::RLO || cls == BidiClass::PDF || cls == BidiClass::BN;
+}
+
+b8 IsBidiResetByL1(in BidiClass cls){
+    return cls == BidiClass::WS || cls == BidiClass::FSI || cls == BidiClass::LRI || cls == BidiClass::RLI || cls == BidiClass::PDI || IsBidiRemovedByX9(cls);
+}
+
+BidiClass BidiLevelDirectionClass(in u8 level){
+    if((level & 1u) != 0u)
+        return BidiClass::R;
+    return BidiClass::L;
+}
+
+u8 ComputeBidiBaseLevel(in Span<BidiCharEntry> chars, in usize startIndex, in b8 stopOnPdi, in TextBidiMode mode){
+    if(mode == TextBidiMode::ForceLeftToRight)
+        return 0u;
+    if(mode == TextBidiMode::ForceRightToLeft)
+        return 1u;
+    usize isolateDepth = 0u;
+    for(usize idx = startIndex; idx < chars.size(); ++idx){
+        in BidiClass cls = chars[idx].origClass;
+        if(IsBidiIsolateInitiator(cls)){
+            ++isolateDepth;
+            continue;
+        }
+        if(cls == BidiClass::PDI){
+            if(isolateDepth > 0u)
+                --isolateDepth;
+            else if(stopOnPdi)
+                return 0u;
+            continue;
+        }
+        if(isolateDepth != 0u)
+            continue;
+        if(cls == BidiClass::L)
+            return 0u;
+        if(cls == BidiClass::R || cls == BidiClass::AL)
+            return 1u;
+    }
+    return 0u;
+}
+
+u32 FindMatchingBidiBracketClose(in u32 cp){
+    if(cp == 0x28u) return 0x29u;
+    if(cp == 0x5Bu) return 0x5Du;
+    if(cp == 0x7Bu) return 0x7Du;
+    if(cp == 0x3008u) return 0x3009u;
+    if(cp == 0x300Au) return 0x300Bu;
+    if(cp == 0x300Cu) return 0x300Du;
+    if(cp == 0x300Eu) return 0x300Fu;
+    if(cp == 0x3010u) return 0x3011u;
+    return 0u;
+}
+
+u32 FindMatchingBidiBracketOpen(in u32 cp){
+    if(cp == 0x29u) return 0x28u;
+    if(cp == 0x5Du) return 0x5Bu;
+    if(cp == 0x7Du) return 0x7Bu;
+    if(cp == 0x3009u) return 0x3008u;
+    if(cp == 0x300Bu) return 0x300Au;
+    if(cp == 0x300Du) return 0x300Cu;
+    if(cp == 0x300Fu) return 0x300Eu;
+    if(cp == 0x3011u) return 0x3010u;
+    return 0u;
+}
+
+b8 IsBidiStrongForNeutral(in BidiClass cls){
+    return cls == BidiClass::L || cls == BidiClass::R || cls == BidiClass::EN || cls == BidiClass::AN;
+}
+
+BidiClass ToBidiStrongNeutralSide(in BidiClass cls){
+    if(cls == BidiClass::L)
+        return BidiClass::L;
+    return BidiClass::R;
+}
+
+b8 IsBidiNeutralClass(in BidiClass cls){
+    return cls == BidiClass::ON || cls == BidiClass::WS || cls == BidiClass::B || cls == BidiClass::S || cls == BidiClass::LRI || cls == BidiClass::RLI || cls == BidiClass::FSI || cls == BidiClass::PDI;
+}
+
+void ResolveBidiIsolateSequence(
+    in Span<usize> indices,
+    in BidiClass sos,
+    in BidiClass eos,
+    in u8 seqLevel,
+    mut Vector<BidiCharEntry> chars
+){
+    if(indices.empty())
+        return;
+    const usize n = indices.size();
+    const BidiClass embeddingDir = BidiLevelDirectionClass(seqLevel);
+
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        if(chars[ci].resolvedClass == BidiClass::NSM){
+            if(i == 0u)
+                chars[ci].resolvedClass = sos;
+            else{
+                in BidiClass prevCls = chars[indices[i - 1u]].resolvedClass;
+                if(IsBidiIsolateInitiator(prevCls) || prevCls == BidiClass::PDI)
+                    chars[ci].resolvedClass = BidiClass::ON;
+                else
+                    chars[ci].resolvedClass = prevCls;
+            }
+        }
+    }
+
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        if(chars[ci].resolvedClass != BidiClass::EN)
+            continue;
+        BidiClass strong = sos;
+        usize k = i;
+        while(k > 0u){
+            --k;
+            in BidiClass c = chars[indices[k]].resolvedClass;
+            if(c == BidiClass::L || c == BidiClass::R || c == BidiClass::AL){
+                strong = c;
+                break;
+            }
+        }
+        if(strong == BidiClass::AL)
+            chars[ci].resolvedClass = BidiClass::AN;
+    }
+
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        if(chars[ci].resolvedClass == BidiClass::AL)
+            chars[ci].resolvedClass = BidiClass::R;
+    }
+
+    for(usize i = 1u; i + 1u < n; ++i){
+        const usize ci = indices[i];
+        in BidiClass cur = chars[ci].resolvedClass;
+        in BidiClass prev = chars[indices[i - 1u]].resolvedClass;
+        in BidiClass next = chars[indices[i + 1u]].resolvedClass;
+        if(cur == BidiClass::ES && prev == BidiClass::EN && next == BidiClass::EN)
+            chars[ci].resolvedClass = BidiClass::EN;
+        else if(cur == BidiClass::CS){
+            if(prev == BidiClass::EN && next == BidiClass::EN)
+                chars[ci].resolvedClass = BidiClass::EN;
+            else if(prev == BidiClass::AN && next == BidiClass::AN)
+                chars[ci].resolvedClass = BidiClass::AN;
+        }
+    }
+
+    for(usize i = 0u; i < n; ++i){
+        if(chars[indices[i]].resolvedClass != BidiClass::ET)
+            continue;
+        b8 touchesEn = false;
+        usize scan = i;
+        while(scan > 0u && chars[indices[scan - 1u]].resolvedClass == BidiClass::ET)
+            --scan;
+        if(scan > 0u && chars[indices[scan - 1u]].resolvedClass == BidiClass::EN)
+            touchesEn = true;
+        usize tail = i;
+        while(tail + 1u < n && chars[indices[tail + 1u]].resolvedClass == BidiClass::ET)
+            ++tail;
+        if(!touchesEn && tail + 1u < n && chars[indices[tail + 1u]].resolvedClass == BidiClass::EN)
+            touchesEn = true;
+        if(touchesEn){
+            for(usize k = scan; k <= tail; ++k)
+                chars[indices[k]].resolvedClass = BidiClass::EN;
+        }
+    }
+
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        in BidiClass cur = chars[ci].resolvedClass;
+        if(cur == BidiClass::ES || cur == BidiClass::ET || cur == BidiClass::CS)
+            chars[ci].resolvedClass = BidiClass::ON;
+    }
+
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        if(chars[ci].resolvedClass != BidiClass::EN)
+            continue;
+        BidiClass strong = sos;
+        usize k = i;
+        while(k > 0u){
+            --k;
+            in BidiClass c = chars[indices[k]].resolvedClass;
+            if(c == BidiClass::L || c == BidiClass::R){
+                strong = c;
+                break;
+            }
+        }
+        if(strong == BidiClass::L)
+            chars[ci].resolvedClass = BidiClass::L;
+    }
+
+    Vector<BidiBracketStackEntry> bracketStack;
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        if(chars[ci].resolvedClass != BidiClass::ON)
+            continue;
+        const u32 closeTarget = FindMatchingBidiBracketClose(chars[ci].codePoint);
+        if(closeTarget != 0u){
+            if(bracketStack.size() >= s_BidiMaxBracketPairs)
+                break;
+            BidiBracketStackEntry entry;
+            entry.seqIndex = i;
+            entry.closeCodePoint = closeTarget;
+            bracketStack.push_back(entry);
+            continue;
+        }
+        const u32 openExpected = FindMatchingBidiBracketOpen(chars[ci].codePoint);
+        if(openExpected == 0u || bracketStack.empty())
+            continue;
+        usize matchStackIdx = bracketStack.size();
+        for(usize si = bracketStack.size(); si > 0u; --si){
+            if(bracketStack[si - 1u].closeCodePoint == chars[ci].codePoint){
+                matchStackIdx = si - 1u;
+                break;
+            }
+        }
+        if(matchStackIdx == bracketStack.size())
+            continue;
+        const usize openSeq = bracketStack[matchStackIdx].seqIndex;
+        bracketStack.resize(matchStackIdx);
+
+        b8 hasEmbedding = false;
+        b8 hasOpposite = false;
+        for(usize k = openSeq + 1u; k < i; ++k){
+            in BidiClass innerCls = chars[indices[k]].resolvedClass;
+            if(!IsBidiStrongForNeutral(innerCls))
+                continue;
+            if(ToBidiStrongNeutralSide(innerCls) == embeddingDir)
+                hasEmbedding = true;
+            else
+                hasOpposite = true;
+        }
+        BidiClass pairResolved = BidiClass::ON;
+        if(hasEmbedding)
+            pairResolved = embeddingDir;
+        else if(hasOpposite){
+            BidiClass contextStrong = sos;
+            usize back = openSeq;
+            while(back > 0u){
+                --back;
+                in BidiClass prevCls = chars[indices[back]].resolvedClass;
+                if(IsBidiStrongForNeutral(prevCls)){
+                    contextStrong = ToBidiStrongNeutralSide(prevCls);
+                    break;
+                }
+            }
+            if(contextStrong == ToBidiStrongNeutralSide(BidiClass::L) || contextStrong == ToBidiStrongNeutralSide(BidiClass::R))
+                pairResolved = contextStrong;
+            else
+                pairResolved = embeddingDir;
+        }
+        if(pairResolved != BidiClass::ON){
+            chars[indices[openSeq]].resolvedClass = pairResolved;
+            chars[ci].resolvedClass = pairResolved;
+            usize postOpen = openSeq + 1u;
+            while(postOpen < i && chars[indices[postOpen]].origClass == BidiClass::NSM){
+                chars[indices[postOpen]].resolvedClass = pairResolved;
+                ++postOpen;
+            }
+            usize postClose = i + 1u;
+            while(postClose < n && chars[indices[postClose]].origClass == BidiClass::NSM){
+                chars[indices[postClose]].resolvedClass = pairResolved;
+                ++postClose;
+            }
+        }
+    }
+
+    usize nPos = 0u;
+    while(nPos < n){
+        if(!IsBidiNeutralClass(chars[indices[nPos]].resolvedClass)){
+            ++nPos;
+            continue;
+        }
+        usize nEnd = nPos + 1u;
+        while(nEnd < n && IsBidiNeutralClass(chars[indices[nEnd]].resolvedClass))
+            ++nEnd;
+
+        BidiClass leftStrong = ToBidiStrongNeutralSide(sos);
+        if(nPos > 0u)
+            leftStrong = ToBidiStrongNeutralSide(chars[indices[nPos - 1u]].resolvedClass);
+        BidiClass rightStrong = ToBidiStrongNeutralSide(eos);
+        if(nEnd < n)
+            rightStrong = ToBidiStrongNeutralSide(chars[indices[nEnd]].resolvedClass);
+
+        BidiClass resolvedNeutral = embeddingDir;
+        if(leftStrong == rightStrong)
+            resolvedNeutral = leftStrong;
+        for(usize k = nPos; k < nEnd; ++k)
+            chars[indices[k]].resolvedClass = resolvedNeutral;
+        nPos = nEnd;
+    }
+
+    const b8 evenLevel = (seqLevel & 1u) == 0u;
+    for(usize i = 0u; i < n; ++i){
+        const usize ci = indices[i];
+        in BidiClass cls = chars[ci].resolvedClass;
+        if(evenLevel){
+            if(cls == BidiClass::R)
+                chars[ci].level = seqLevel + 1u;
+            else if(cls == BidiClass::AN || cls == BidiClass::EN)
+                chars[ci].level = seqLevel + 2u;
+            else
+                chars[ci].level = seqLevel;
+        }
+        else{
+            if(cls == BidiClass::L || cls == BidiClass::AN || cls == BidiClass::EN)
+                chars[ci].level = seqLevel + 1u;
+            else
+                chars[ci].level = seqLevel;
+        }
+    }
+}
+
+b8 ResolveBidiParagraph(in StringView text, in TextBidiMode mode, mut BidiParagraph outParagraph){
+    outParagraph.chars.clear();
+    outParagraph.baseLevel = 0u;
+    outParagraph.baseDirection = TextDirection::LeftToRight;
+    if(text.empty()){
+        if(mode == TextBidiMode::ForceRightToLeft){
+            outParagraph.baseLevel = 1u;
+            outParagraph.baseDirection = TextDirection::RightToLeft;
+        }
+        return true;
+    }
+
+    usize offset = 0u;
+    while(offset < text.size()){
+        u32 cp = 0u;
+        usize bytes = 0u;
+        if(!TryDecodeUtf8Scalar(text.substr(offset), cp, bytes) || cp == 0u)
+            return false;
+        BidiCharEntry entry;
+        entry.byteBegin = cast<u32>(offset);
+        entry.byteEnd = cast<u32>(offset + bytes);
+        entry.codePoint = cp;
+        entry.origClass = ClassifyBidiCodePoint(cp);
+        entry.resolvedClass = entry.origClass;
+        outParagraph.chars.push_back(entry);
+        offset += bytes;
+    }
+
+    const u8 baseLevel = ComputeBidiBaseLevel(Span<BidiCharEntry>(outParagraph.chars), 0u, false, mode);
+    outParagraph.baseLevel = baseLevel;
+    if((baseLevel & 1u) != 0u)
+        outParagraph.baseDirection = TextDirection::RightToLeft;
+    else
+        outParagraph.baseDirection = TextDirection::LeftToRight;
+
+    Vector<BidiStatusEntry> statusStack;
+    BidiStatusEntry initialStatus;
+    initialStatus.level = baseLevel;
+    initialStatus.overrideStatus = BidiDirectionalOverride::Neutral;
+    initialStatus.isolateStatus = false;
+    statusStack.push_back(initialStatus);
+
+    u32 overflowIsolateCount = 0u;
+    u32 overflowEmbeddingCount = 0u;
+    u32 validIsolateCount = 0u;
+
+    const usize charCount = outParagraph.chars.size();
+    for(usize idx = 0u; idx < charCount; ++idx){
+        in BidiClass orig = outParagraph.chars[idx].origClass;
+        in BidiStatusEntry top = statusStack.back();
+        if(orig == BidiClass::RLE || orig == BidiClass::LRE || orig == BidiClass::RLO || orig == BidiClass::LRO){
+            const b8 isRtlDir = orig == BidiClass::RLE || orig == BidiClass::RLO;
+            u8 nextLevel = 0u;
+            if(isRtlDir)
+                nextLevel = top.level + 1u + (top.level & 1u);
+            else
+                nextLevel = top.level + 2u - (top.level & 1u);
+            if(nextLevel <= s_BidiMaxDepth && overflowIsolateCount == 0u && overflowEmbeddingCount == 0u){
+                BidiStatusEntry nextStatus;
+                nextStatus.level = nextLevel;
+                if(orig == BidiClass::LRO)
+                    nextStatus.overrideStatus = BidiDirectionalOverride::L;
+                else if(orig == BidiClass::RLO)
+                    nextStatus.overrideStatus = BidiDirectionalOverride::R;
+                else
+                    nextStatus.overrideStatus = BidiDirectionalOverride::Neutral;
+                nextStatus.isolateStatus = false;
+                statusStack.push_back(nextStatus);
+            }
+            else if(overflowIsolateCount == 0u){
+                ++overflowEmbeddingCount;
+            }
+            outParagraph.chars[idx].level = top.level;
+            outParagraph.chars[idx].resolvedClass = BidiClass::BN;
+        }
+        else if(IsBidiIsolateInitiator(orig)){
+            outParagraph.chars[idx].level = top.level;
+            if(top.overrideStatus == BidiDirectionalOverride::L)
+                outParagraph.chars[idx].resolvedClass = BidiClass::L;
+            else if(top.overrideStatus == BidiDirectionalOverride::R)
+                outParagraph.chars[idx].resolvedClass = BidiClass::R;
+
+            b8 isRtlIso = orig == BidiClass::RLI;
+            if(orig == BidiClass::FSI){
+                const u8 fsiLevel = ComputeBidiBaseLevel(Span<BidiCharEntry>(outParagraph.chars), idx + 1u, true, TextBidiMode::Auto);
+                isRtlIso = (fsiLevel & 1u) != 0u;
+            }
+            u8 nextLevel = 0u;
+            if(isRtlIso)
+                nextLevel = top.level + 1u + (top.level & 1u);
+            else
+                nextLevel = top.level + 2u - (top.level & 1u);
+            if(nextLevel <= s_BidiMaxDepth && overflowIsolateCount == 0u && overflowEmbeddingCount == 0u){
+                ++validIsolateCount;
+                BidiStatusEntry nextStatus;
+                nextStatus.level = nextLevel;
+                nextStatus.overrideStatus = BidiDirectionalOverride::Neutral;
+                nextStatus.isolateStatus = true;
+                statusStack.push_back(nextStatus);
+            }
+            else
+                ++overflowIsolateCount;
+        }
+        else if(orig == BidiClass::PDI){
+            if(overflowIsolateCount > 0u)
+                --overflowIsolateCount;
+            else if(validIsolateCount > 0u){
+                overflowEmbeddingCount = 0u;
+                while(statusStack.size() > 1u && !statusStack.back().isolateStatus)
+                    statusStack.pop_back();
+                if(statusStack.size() > 1u)
+                    statusStack.pop_back();
+                --validIsolateCount;
+            }
+            in BidiStatusEntry nowTop = statusStack.back();
+            outParagraph.chars[idx].level = nowTop.level;
+            if(nowTop.overrideStatus == BidiDirectionalOverride::L)
+                outParagraph.chars[idx].resolvedClass = BidiClass::L;
+            else if(nowTop.overrideStatus == BidiDirectionalOverride::R)
+                outParagraph.chars[idx].resolvedClass = BidiClass::R;
+        }
+        else if(orig == BidiClass::PDF){
+            if(overflowIsolateCount == 0u){
+                if(overflowEmbeddingCount > 0u)
+                    --overflowEmbeddingCount;
+                else if(statusStack.size() > 1u && !statusStack.back().isolateStatus)
+                    statusStack.pop_back();
+            }
+            outParagraph.chars[idx].level = statusStack.back().level;
+            outParagraph.chars[idx].resolvedClass = BidiClass::BN;
+        }
+        else if(orig == BidiClass::B){
+            statusStack.clear();
+            statusStack.push_back(initialStatus);
+            overflowIsolateCount = 0u;
+            overflowEmbeddingCount = 0u;
+            validIsolateCount = 0u;
+            outParagraph.chars[idx].level = baseLevel;
+        }
+        else if(orig == BidiClass::BN){
+            outParagraph.chars[idx].level = top.level;
+            outParagraph.chars[idx].resolvedClass = BidiClass::BN;
+        }
+        else{
+            outParagraph.chars[idx].level = top.level;
+            if(top.overrideStatus == BidiDirectionalOverride::L)
+                outParagraph.chars[idx].resolvedClass = BidiClass::L;
+            else if(top.overrideStatus == BidiDirectionalOverride::R)
+                outParagraph.chars[idx].resolvedClass = BidiClass::R;
+        }
+    }
+
+    Vector<BidiLevelRun> levelRuns;
+    usize pos = 0u;
+    while(pos < charCount){
+        if(IsBidiRemovedByX9(outParagraph.chars[pos].origClass)){
+            ++pos;
+            continue;
+        }
+        const u8 lvl = outParagraph.chars[pos].level;
+        usize end = pos + 1u;
+        while(end < charCount){
+            in BidiCharEntry c = outParagraph.chars[end];
+            if(IsBidiRemovedByX9(c.origClass)){
+                ++end;
+                continue;
+            }
+            if(c.level != lvl)
+                break;
+            ++end;
+        }
+        BidiLevelRun run;
+        run.startChar = pos;
+        run.endChar = end;
+        run.level = lvl;
+        levelRuns.push_back(run);
+        pos = end;
+    }
+
+    for(usize ri = 0u; ri < levelRuns.size(); ++ri){
+        usize lastNonBn = levelRuns[ri].endChar;
+        while(lastNonBn > levelRuns[ri].startChar && IsBidiRemovedByX9(outParagraph.chars[lastNonBn - 1u].origClass))
+            --lastNonBn;
+        if(lastNonBn == levelRuns[ri].startChar)
+            continue;
+        if(!IsBidiIsolateInitiator(outParagraph.chars[lastNonBn - 1u].origClass))
+            continue;
+        usize depth = 1u;
+        usize search = lastNonBn;
+        usize matchingPdiChar = usize.max;
+        while(search < charCount){
+            in BidiClass oc = outParagraph.chars[search].origClass;
+            if(IsBidiIsolateInitiator(oc))
+                ++depth;
+            else if(oc == BidiClass::PDI){
+                if(depth > 0u)
+                    --depth;
+                if(depth == 0u){
+                    matchingPdiChar = search;
+                    break;
+                }
+            }
+            ++search;
+        }
+        if(matchingPdiChar != usize.max){
+            for(usize nextRi = ri + 1u; nextRi < levelRuns.size(); ++nextRi){
+                if(levelRuns[nextRi].startChar <= matchingPdiChar && matchingPdiChar < levelRuns[nextRi].endChar){
+                    levelRuns[ri].nextRun = nextRi;
+                    levelRuns[nextRi].hasPrev = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    for(usize ri = 0u; ri < levelRuns.size(); ++ri){
+        u8 prevLevel = baseLevel;
+        if(ri > 0u)
+            prevLevel = levelRuns[ri - 1u].level;
+        u8 nextLevel = baseLevel;
+        if(levelRuns[ri].nextRun == usize.max && ri + 1u < levelRuns.size())
+            nextLevel = levelRuns[ri + 1u].level;
+        u8 sosLvl = levelRuns[ri].level;
+        if(prevLevel > sosLvl)
+            sosLvl = prevLevel;
+        u8 eosLvl = levelRuns[ri].level;
+        if(nextLevel > eosLvl)
+            eosLvl = nextLevel;
+        levelRuns[ri].sos = BidiLevelDirectionClass(sosLvl);
+        levelRuns[ri].eos = BidiLevelDirectionClass(eosLvl);
+    }
+
+    Vector<usize> seqIndices;
+    for(usize ri = 0u; ri < levelRuns.size(); ++ri){
+        if(levelRuns[ri].hasPrev)
+            continue;
+        seqIndices.clear();
+        const u8 seqLevel = levelRuns[ri].level;
+        const BidiClass sos = levelRuns[ri].sos;
+        usize cur = ri;
+        usize tail = ri;
+        while(cur != usize.max){
+            for(usize ci = levelRuns[cur].startChar; ci < levelRuns[cur].endChar; ++ci){
+                if(!IsBidiRemovedByX9(outParagraph.chars[ci].origClass))
+                    seqIndices.push_back(ci);
+            }
+            tail = cur;
+            cur = levelRuns[cur].nextRun;
+        }
+        const BidiClass eos = levelRuns[tail].eos;
+        ResolveBidiIsolateSequence(Span<usize>(seqIndices), sos, eos, seqLevel, outParagraph.chars);
+    }
+    return true;
+}
+
+void ResolveBidiLogicalRuns(in BidiParagraph paragraph, in u32 rangeBegin, in u32 rangeEnd, mut Vector<BidiVisualRun> outRuns){
+    outRuns.clear();
+    if(rangeBegin >= rangeEnd || paragraph.chars.empty())
+        return;
+    b8 hasOpen = false;
+    BidiVisualRun current;
+    for(in BidiCharEntry c : paragraph.chars){
+        if(c.byteEnd <= rangeBegin || c.byteBegin >= rangeEnd)
+            continue;
+        TextDirection dir = TextDirection::LeftToRight;
+        if((c.level & 1u) != 0u)
+            dir = TextDirection::RightToLeft;
+        if(!hasOpen){
+            current.byteBegin = c.byteBegin;
+            current.byteEnd = c.byteEnd;
+            current.level = c.level;
+            current.direction = dir;
+            hasOpen = true;
+        }
+        else if(current.level == c.level){
+            current.byteEnd = c.byteEnd;
+        }
+        else{
+            outRuns.push_back(current);
+            current.byteBegin = c.byteBegin;
+            current.byteEnd = c.byteEnd;
+            current.level = c.level;
+            current.direction = dir;
+        }
+    }
+    if(hasOpen)
+        outRuns.push_back(current);
+}
+
+void ResolveBidiVisualRuns(in BidiParagraph paragraph, in u32 lineByteBegin, in u32 lineByteEnd, mut Vector<BidiVisualRun> outRuns){
+    outRuns.clear();
+    if(lineByteBegin >= lineByteEnd || paragraph.chars.empty())
+        return;
+
+    Vector<usize> lineCharIndices;
+    Vector<u8> lineLevels;
+    for(usize idx = 0u; idx < paragraph.chars.size(); ++idx){
+        in BidiCharEntry c = paragraph.chars[idx];
+        if(c.byteEnd <= lineByteBegin || c.byteBegin >= lineByteEnd)
+            continue;
+        lineCharIndices.push_back(idx);
+        lineLevels.push_back(c.level);
+    }
+    if(lineCharIndices.empty())
+        return;
+
+    const usize m = lineCharIndices.size();
+    for(usize k = 0u; k < m; ++k){
+        in BidiClass oc = paragraph.chars[lineCharIndices[k]].origClass;
+        if(oc == BidiClass::B || oc == BidiClass::S)
+            lineLevels[k] = paragraph.baseLevel;
+    }
+    usize trail = m;
+    while(trail > 0u && IsBidiResetByL1(paragraph.chars[lineCharIndices[trail - 1u]].origClass)){
+        --trail;
+        lineLevels[trail] = paragraph.baseLevel;
+    }
+    for(usize k = 0u; k < m; ++k){
+        in BidiClass oc = paragraph.chars[lineCharIndices[k]].origClass;
+        if(oc == BidiClass::B || oc == BidiClass::S){
+            usize back = k;
+            while(back > 0u && IsBidiResetByL1(paragraph.chars[lineCharIndices[back - 1u]].origClass)){
+                --back;
+                lineLevels[back] = paragraph.baseLevel;
+            }
+        }
+    }
+
+    u8 maxLevel = 0u;
+    u8 minOddLevel = u8.max;
+    for(usize k = 0u; k < m; ++k){
+        in u8 lvl = lineLevels[k];
+        in BidiCharEntry c = paragraph.chars[lineCharIndices[k]];
+        if(lvl > maxLevel)
+            maxLevel = lvl;
+        if((lvl & 1u) != 0u && lvl < minOddLevel)
+            minOddLevel = lvl;
+        TextDirection dir = TextDirection::LeftToRight;
+        if((lvl & 1u) != 0u)
+            dir = TextDirection::RightToLeft;
+        if(outRuns.empty() || outRuns.back().level != lvl){
+            BidiVisualRun run;
+            run.byteBegin = c.byteBegin;
+            run.byteEnd = c.byteEnd;
+            run.level = lvl;
+            run.direction = dir;
+            outRuns.push_back(run);
+        }
+        else
+            outRuns.back().byteEnd = c.byteEnd;
+    }
+
+    if(minOddLevel == u8.max || maxLevel < minOddLevel)
+        return;
+
+    u8 passLevel = maxLevel;
+    while(passLevel >= minOddLevel){
+        usize runIdx = 0u;
+        while(runIdx < outRuns.size()){
+            if(outRuns[runIdx].level < passLevel){
+                ++runIdx;
+                continue;
+            }
+            usize runEnd = runIdx + 1u;
+            while(runEnd < outRuns.size() && outRuns[runEnd].level >= passLevel)
+                ++runEnd;
+            usize lo = runIdx;
+            usize hi = runEnd - 1u;
+            while(lo < hi){
+                const BidiVisualRun tmp = outRuns[lo];
+                outRuns[lo] = outRuns[hi];
+                outRuns[hi] = tmp;
+                ++lo;
+                --hi;
+            }
+            runIdx = runEnd;
+        }
+        if(passLevel == 0u)
+            break;
+        --passLevel;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

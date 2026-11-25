@@ -18,6 +18,12 @@ const Name s_SliderThumbDisabledRegionName = "slider.thumb.disabled";
 const Name s_SliderTrackFallbackRegionName = "scrollbar.track";
 const Name s_SliderThumbFallbackRegionName = "scrollbar.thumb.normal";
 
+enum<u8> SliderOrientation{
+    Horizontal = 0u,
+    Vertical = 1u,
+    kCount
+}
+
 class SliderStyle{
     public Name track = s_SliderTrackRegionName;
     public Name normal = s_SliderThumbNormalRegionName;
@@ -42,6 +48,9 @@ class SliderOptions{
     public f64 minimum = 0.0;
     public f64 maximum = 1.0;
     public f64 keyStep = 0.0;
+    public f64 step = 0.0;
+    public SliderOrientation orientation = SliderOrientation::Horizontal;
+    public LayoutItemOptions layout;
 }
 
 class SliderResult{
@@ -86,6 +95,7 @@ class SliderMetrics{
     public Point thumbExtent = Point(s_StyleControlExtent, s_StyleControlExtent);
     public f32 trackHeight = s_StyleSliderTrackHeight;
     public Point contentSize;
+    public SliderOrientation orientation = SliderOrientation::Horizontal;
 }
 
 class SliderPlacement{
@@ -96,6 +106,7 @@ class SliderPlacement{
     public Rect centerTravel;
     public Rect thumb;
     public Point thumbExtent;
+    public SliderOrientation orientation = SliderOrientation::Horizontal;
 }
 
 b8 SameSliderPlacementGeometry(in SliderPlacement lhs, in SliderPlacement rhs){
@@ -105,7 +116,8 @@ b8 SameSliderPlacementGeometry(in SliderPlacement lhs, in SliderPlacement rhs){
         && EqualUiRect(lhs.track, rhs.track)
         && EqualUiRect(lhs.centerTravel, rhs.centerTravel)
         && bit_cast<u32>(lhs.thumbExtent.x) == bit_cast<u32>(rhs.thumbExtent.x)
-        && bit_cast<u32>(lhs.thumbExtent.y) == bit_cast<u32>(rhs.thumbExtent.y);
+        && bit_cast<u32>(lhs.thumbExtent.y) == bit_cast<u32>(rhs.thumbExtent.y)
+        && lhs.orientation == rhs.orientation;
 }
 
 b8 IsValidSliderRange(in f64 minimum, in f64 maximum){
@@ -120,6 +132,7 @@ b8 IsValidSliderPlacement(in SliderPlacement placement){
         && IsPreciseUiRect(placement.centerTravel)
         && IsPreciseUiRect(placement.thumb)
         && IsValidUiExtent(placement.thumbExtent)
+        && cast<u8>(placement.orientation) <= cast<u8>(SliderOrientation::Vertical)
         && placement.thumbExtent.x == placement.thumb.width
         && placement.thumbExtent.y == placement.thumb.height
         && placement.thumbExtent.x <= placement.travelBounds.width
@@ -141,8 +154,10 @@ b8 IsValidSliderGesture(in PointerGesture gesture){
 
 b8 IsValidSliderOptions(in SliderOptions options){
     return IsValidSliderRange(options.minimum, options.maximum)
-        && IsFinite(VectorDouble(options.keyStep))
+        && IsFinite(VectorDouble(options.keyStep, options.step, 0.0, 0.0))
         && options.keyStep >= 0.0
+        && options.step >= 0.0
+        && cast<u8>(options.orientation) <= cast<u8>(SliderOrientation::Vertical)
         && IsValidLayoutSize(options.width)
         && IsFinite(VectorSingle(options.height))
         && options.height >= 0.0f;
@@ -161,12 +176,15 @@ b8 IsValidSliderMetrics(in SliderMetrics metrics){
         || metrics.thumbExtent.x <= 0.0f
         || metrics.thumbExtent.y <= 0.0f
         || metrics.trackHeight <= 0.0f
+        || cast<u8>(metrics.orientation) > cast<u8>(SliderOrientation::Vertical)
         || !IsValidUiExtent(metrics.contentSize)
     )
         return false;
     const VectorDouble paddingSize = VectorDouble(cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top), cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top)) + VectorDouble(cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom), cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom));
-    const f64 thumbHeight = UiSimdMaxF64(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight));
-    const VectorDouble size = paddingSize + VectorDouble(cast<f64>(metrics.thumbExtent.x), thumbHeight, cast<f64>(metrics.thumbExtent.x), thumbHeight);
+    VectorDouble innerExtent(cast<f64>(metrics.thumbExtent.x), UiSimdMaxF64(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight)), 0.0, 0.0);
+    if(metrics.orientation == SliderOrientation::Vertical)
+        innerExtent = VectorDouble(UiSimdMaxF64(cast<f64>(metrics.thumbExtent.x), cast<f64>(metrics.trackHeight)), cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
+    const VectorDouble size = paddingSize + VectorDouble(innerExtent.x, innerExtent.y, innerExtent.x, innerExtent.y);
     const f64 width = size.x;
     const f64 height = size.y;
     return width <= s_UiMaxFloatF64
@@ -190,9 +208,12 @@ Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle s
     candidate.padding = style.padding;
     candidate.thumbExtent = style.thumbExtent;
     candidate.trackHeight = style.trackHeight;
+    candidate.orientation = options.orientation;
     const VectorDouble paddingSize = VectorDouble(cast<f64>(style.padding.left), cast<f64>(style.padding.top), cast<f64>(style.padding.left), cast<f64>(style.padding.top)) + VectorDouble(cast<f64>(style.padding.right), cast<f64>(style.padding.bottom), cast<f64>(style.padding.right), cast<f64>(style.padding.bottom));
-    const f64 thumbHeight = UiSimdMaxF64(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight));
-    const VectorDouble size = paddingSize + VectorDouble(cast<f64>(style.thumbExtent.x), thumbHeight, cast<f64>(style.thumbExtent.x), thumbHeight);
+    VectorDouble innerExtent(cast<f64>(style.thumbExtent.x), UiSimdMaxF64(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight)), 0.0, 0.0);
+    if(options.orientation == SliderOrientation::Vertical)
+        innerExtent = VectorDouble(UiSimdMaxF64(cast<f64>(style.thumbExtent.x), cast<f64>(style.trackHeight)), cast<f64>(style.thumbExtent.y), 0.0, 0.0);
+    const VectorDouble size = paddingSize + VectorDouble(innerExtent.x, innerExtent.y, innerExtent.x, innerExtent.y);
     const f64 width = size.x;
     const f64 intrinsicH = size.y;
     const f64 height = UiSimdMaxF64(intrinsicH, cast<f64>(options.height));
@@ -209,6 +230,7 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
         return MakeUnexpected(Failure());
     SliderPlacement candidate;
     candidate.bounds = bounds;
+    candidate.orientation = metrics.orientation;
     const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
     if(!clipped.has_value())
         return MakeUnexpected(Failure());
@@ -220,34 +242,60 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
     const f64 h = insetRect.w;
     const f64 thumbW = UiSimdMinF64(cast<f64>(metrics.thumbExtent.x), UiSimdMaxF64(0.0, w));
     const f64 thumbH = UiSimdMinF64(cast<f64>(metrics.thumbExtent.y), UiSimdMaxF64(0.0, h));
-    const f64 trackH = UiSimdMinF64(cast<f64>(metrics.trackHeight), h);
-    const f64 travelW = w - thumbW;
-    const f64 centerStartX = x + thumbW * 0.5;
-    const f64 thumbCenterX = x + travelW * normalized;
-    f64 thumbX = thumbCenterX;
-    if(normalized == 0.0)
-        thumbX = x;
-    else if(normalized == 1.0)
-        thumbX = x + travelW;
     const Expected<Rect> travelBounds = TryMakeUiRect(x, y, w, h, UiRectPrecision::PreciseExtents);
     if(!travelBounds.has_value())
         return MakeUnexpected(Failure());
     candidate.travelBounds = travelBounds.value();
-    const Expected<Rect> centerTravel = TryMakeUiRect(centerStartX, y, travelW, h, UiRectPrecision::PreciseExtents);
-    if(!centerTravel.has_value())
-        return MakeUnexpected(Failure());
-    candidate.centerTravel = centerTravel.value();
-    const VectorDouble centeredY = VectorDoubleMultiplyAddExpression(VectorDouble(h) - VectorDouble(trackH, thumbH, trackH, thumbH), VectorDouble(0.5), VectorDouble(y));
-    const f64 trackY = centeredY.x;
-    const f64 thumbY = centeredY.y;
-    const Expected<Rect> track = TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents);
-    if(!track.has_value())
-        return MakeUnexpected(Failure());
-    candidate.track = track.value();
-    const Expected<Rect> thumb = TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents);
-    if(!thumb.has_value())
-        return MakeUnexpected(Failure());
-    candidate.thumb = thumb.value();
+    if(metrics.orientation == SliderOrientation::Horizontal){
+        const f64 trackH = UiSimdMinF64(cast<f64>(metrics.trackHeight), h);
+        const f64 travelW = w - thumbW;
+        const f64 centerStartX = x + thumbW * 0.5;
+        f64 thumbX = x + travelW * normalized;
+        if(normalized == 0.0)
+            thumbX = x;
+        else if(normalized == 1.0)
+            thumbX = x + travelW;
+        const Expected<Rect> centerTravel = TryMakeUiRect(centerStartX, y, travelW, h, UiRectPrecision::PreciseExtents);
+        if(!centerTravel.has_value())
+            return MakeUnexpected(Failure());
+        candidate.centerTravel = centerTravel.value();
+        const VectorDouble centeredY = VectorDoubleMultiplyAddExpression(VectorDouble(h) - VectorDouble(trackH, thumbH, trackH, thumbH), VectorDouble(0.5), VectorDouble(y));
+        const f64 trackY = centeredY.x;
+        const f64 thumbY = centeredY.y;
+        const Expected<Rect> track = TryMakeUiRect(centerStartX, trackY, travelW, trackH, UiRectPrecision::PreciseExtents);
+        if(!track.has_value())
+            return MakeUnexpected(Failure());
+        candidate.track = track.value();
+        const Expected<Rect> thumb = TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents);
+        if(!thumb.has_value())
+            return MakeUnexpected(Failure());
+        candidate.thumb = thumb.value();
+    }
+    else{
+        const f64 trackW = UiSimdMinF64(cast<f64>(metrics.trackHeight), w);
+        const f64 travelH = h - thumbH;
+        const f64 centerStartY = y + thumbH * 0.5;
+        f64 thumbY = y + travelH * (1.0 - normalized);
+        if(normalized == 0.0)
+            thumbY = y + travelH;
+        else if(normalized == 1.0)
+            thumbY = y;
+        const Expected<Rect> centerTravel = TryMakeUiRect(x, centerStartY, w, travelH, UiRectPrecision::PreciseExtents);
+        if(!centerTravel.has_value())
+            return MakeUnexpected(Failure());
+        candidate.centerTravel = centerTravel.value();
+        const VectorDouble centeredX = VectorDoubleMultiplyAddExpression(VectorDouble(w) - VectorDouble(trackW, thumbW, trackW, thumbW), VectorDouble(0.5), VectorDouble(x));
+        const f64 trackX = centeredX.x;
+        const f64 thumbX = centeredX.y;
+        const Expected<Rect> track = TryMakeUiRect(trackX, centerStartY, trackW, travelH, UiRectPrecision::PreciseExtents);
+        if(!track.has_value())
+            return MakeUnexpected(Failure());
+        candidate.track = track.value();
+        const Expected<Rect> thumb = TryMakeUiRect(thumbX, thumbY, thumbW, thumbH, UiRectPrecision::PreciseExtents);
+        if(!thumb.has_value())
+            return MakeUnexpected(Failure());
+        candidate.thumb = thumb.value();
+    }
     candidate.thumbExtent = Point(cast<f32>(thumbW), cast<f32>(thumbH));
     return candidate;
 }

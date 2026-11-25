@@ -48,15 +48,35 @@ Bool X11TextInputService::OnPreeditDraw(XIC context, const XPointer data, const 
         return 0;
     }
     service.m_insertion.clear();
+    service.m_insertionStyles.clear();
     const b8 feedbackOnly = draw.text && !draw.text->string.multi_byte;
     b8 valid = true;
-    if(feedbackOnly)
-        valid = service.m_preedit.moveCaret(static_cast<usize>(draw.caret));
+    if(feedbackOnly){
+        if(draw.text->feedback && draw.chg_length > 0){
+            if(draw.text->length < static_cast<unsigned short>(draw.chg_length))
+                valid = false;
+            else{
+                service.m_insertionStyles.reserve(static_cast<usize>(draw.chg_length));
+                for(usize index = 0u; index < static_cast<usize>(draw.chg_length); ++index){
+                    const XIMFeedback fb = draw.text->feedback[index];
+                    TextInputPreeditClauseStyle::Enum style = TextInputPreeditClauseStyle::Raw;
+                    if((fb & (XIMReverse | XIMHighlight)) != 0)
+                        style = TextInputPreeditClauseStyle::Target;
+                    else if((fb & (XIMPrimary | XIMSecondary | XIMTertiary)) != 0)
+                        style = TextInputPreeditClauseStyle::Converted;
+                    service.m_insertionStyles.push_back(style);
+                }
+                valid = service.m_preedit.updateFeedback(static_cast<usize>(draw.chg_first), static_cast<usize>(draw.chg_length), service.m_insertionStyles, static_cast<usize>(draw.caret));
+            }
+        }
+        else
+            valid = service.m_preedit.moveCaret(static_cast<usize>(draw.caret));
+    }
     else{
         if(draw.text)
             valid = service.convertPreeditText(*draw.text);
         if(valid){
-            valid = service.m_preedit.replace(static_cast<usize>(draw.chg_first), static_cast<usize>(draw.chg_length), service.m_insertion, static_cast<usize>(draw.caret));
+            valid = service.m_preedit.replace(static_cast<usize>(draw.chg_first), static_cast<usize>(draw.chg_length), service.m_insertion, static_cast<usize>(draw.caret), service.m_insertionStyles);
         }
     }
     if(!valid)
@@ -120,6 +140,9 @@ b8 X11TextInputService::convertPreeditText(const XIMText& text){
     constexpr usize s_InvalidSequence = static_cast<usize>(-1);
     constexpr usize s_IncompleteSequence = static_cast<usize>(-2);
     m_insertion.clear();
+    m_insertionStyles.clear();
+    if(text.feedback)
+        m_insertionStyles.reserve(text.length);
     mbstate_t state{};
     const char* next = text.string.multi_byte;
     for(usize index = 0u; index < text.length; ++index){
@@ -142,12 +165,21 @@ b8 X11TextInputService::convertPreeditText(const XIMText& text){
         if(count > s_TextInputMaxEventTextBytes - m_insertion.size())
             return false;
         m_insertion.append(bytes.data(), count);
+        if(text.feedback){
+            const XIMFeedback fb = text.feedback[index];
+            TextInputPreeditClauseStyle::Enum style = TextInputPreeditClauseStyle::Raw;
+            if((fb & (XIMReverse | XIMHighlight)) != 0)
+                style = TextInputPreeditClauseStyle::Target;
+            else if((fb & (XIMPrimary | XIMSecondary | XIMTertiary)) != 0)
+                style = TextInputPreeditClauseStyle::Converted;
+            m_insertionStyles.push_back(style);
+        }
     }
     return true;
 }
 
 void X11TextInputService::publishPreedit(){
-    const TextInputAdmission::Enum status = emitPreedit(m_nativeToken, m_preedit.text(), m_preedit.caretByte(), m_preedit.caretByte(), m_caretVisible);
+    const TextInputAdmission::Enum status = emitPreedit(m_nativeToken, m_preedit.text(), m_preedit.caretByte(), m_preedit.caretByte(), m_caretVisible, m_preedit.clauses());
     if(status != TextInputAdmission::Accepted && status != TextInputAdmission::InvalidSession)
         nativeFailure();
 }
@@ -160,4 +192,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -133,9 +133,13 @@
 #include <core/metascript/statement_parser.adhd>
 #include <core/metascript/value.adhd>
 
+#include <core/os/accessibility.adhd>
+#include <core/os/accessibility_service.adhd>
 #include <core/os/clipboard.adhd>
 #include <core/os/clipboard_service.adhd>
 #include <core/os/clipboard_text.adhd>
+#include <core/os/cursor.adhd>
+#include <core/os/cursor_service.adhd>
 #include <core/os/text_input.adhd>
 #include <core/os/text_input_service.adhd>
 #include <core/os/text_input_text.adhd>
@@ -163,6 +167,7 @@
 #include <core/task/gpu/dependency_pair_hash.adhd>
 #include <core/task/gpu/frame_timing_begin_task.adhd>
 #include <core/task/gpu/inferred_dependency_collector.adhd>
+#include <core/task/gpu/instance_transform_patch_contributor.adhd>
 #include <core/task/gpu/output_layer_contributor.adhd>
 #include <core/task/gpu/packet_runtime.adhd>
 #include <core/task/gpu/packet_runtime_initial_state_validation.adhd>

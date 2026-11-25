@@ -1338,6 +1338,44 @@ void VerifyUiSelectionEpochTests_OrderedHostRetiresOldNativeTextAndKeepsTheAppli
     EXPECT_EQ(self.m_model.caret(), 0u);
 }
 
+void VerifyUiEditBoxHostTests_AcceptTabInsertsTabAndRoutesNativeImeClauses(mut UiEditBoxHostTests self){
+    EditModel model = EditModel(EditLimits(), EditTextMode::Multiline);
+    ASSERT_TRUE(model.setText("ab"));
+    ASSERT_TRUE(model.setSelection(1u, 1u));
+    self.m_includeButton = true;
+    EditBoxOptions options = EditBoxOptions();
+    options.acceptTab = true;
+    ASSERT_TRUE(self.frame(model, options));
+    ASSERT_TRUE(self.key(Key::Tab));
+    ASSERT_TRUE(self.frame(model, options));
+    ASSERT_EQ(self.m_context.input().focus(), self.m_widget.id);
+
+    ASSERT_TRUE(self.key(Key::Tab));
+    ASSERT_TRUE(self.frame(model, options));
+    EXPECT_EQ(self.m_context.input().focus(), self.m_widget.id);
+    EXPECT_EQ(model.text(), "a\tb");
+    EXPECT_EQ(model.caret(), 2u);
+
+    Array<TextInputPreeditClause, 2u> nativeClauses;
+    nativeClauses[0u].beginByte = 0u;
+    nativeClauses[0u].endByte = 2u;
+    nativeClauses[0u].style = TextInputPreeditClauseStyle::Converted;
+    nativeClauses[1u].beginByte = 2u;
+    nativeClauses[1u].endByte = 4u;
+    nativeClauses[1u].style = TextInputPreeditClauseStyle::Target;
+    ASSERT_EQ(self.m_textInput.preedit("abcd", 0u, 4u, true, nativeClauses), TextInputAdmission::Accepted);
+    self.m_host.collectNative();
+    ASSERT_TRUE(self.frame(model, options));
+    ASSERT_TRUE(model.composition().active);
+    ASSERT_EQ(model.composition().clauses.size(), 2u);
+    EXPECT_EQ(model.composition().clauses[0u].style, EditPreeditClauseStyle::Converted);
+    EXPECT_EQ(model.composition().clauses[1u].style, EditPreeditClauseStyle::Target);
+
+    ASSERT_TRUE(self.key(Key::Tab, true));
+    ASSERT_TRUE(self.frame(model, options));
+    EXPECT_EQ(self.m_context.input().focus(), self.m_otherWidget.id);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1385,6 +1423,7 @@ NWB_ADHD_GTEST_F(UiSelectionEpochTests, OrderedHostRejectsCollectedNativeTextAft
 NWB_ADHD_GTEST_F(UiSelectionEpochTests, OrderedHostRejectsCollectedNativeTextAfterAcceptedIdenticalSelection, VerifyUiSelectionEpochTests_OrderedHostRejectsCollectedNativeTextAfterAcceptedIdenticalSelection)
 NWB_ADHD_GTEST_F(UiSelectionEpochTests, OrderedHostRejectsCollectedNativeTextAfterCompositionRoundTrip, VerifyUiSelectionEpochTests_OrderedHostRejectsCollectedNativeTextAfterCompositionRoundTrip)
 NWB_ADHD_GTEST_F(UiSelectionEpochTests, OrderedHostRetiresOldNativeTextAndKeepsTheApplicationReplacementSelection, VerifyUiSelectionEpochTests_OrderedHostRetiresOldNativeTextAndKeepsTheApplicationReplacementSelection)
+NWB_ADHD_GTEST_F(UiEditBoxHostTests, AcceptTabInsertsTabAndRoutesNativeImeClauses, VerifyUiEditBoxHostTests_AcceptTabInsertsTabAndRoutesNativeImeClauses)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

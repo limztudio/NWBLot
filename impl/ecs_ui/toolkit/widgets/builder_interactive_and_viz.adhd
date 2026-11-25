@@ -1,0 +1,1142 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DragPreviewFallbackWidth = 100.0f;
+const f32 s_DragPreviewFallbackHeight = 24.0f;
+const f32 s_DragPreviewBorderThickness = 1.0f;
+const f32 s_HyperlinkStrikeThickness = 1.0f;
+const f32 s_RichTextFallbackCharWidth = 6.0f;
+const f32 s_PlotMinBarWidth = 2.0f;
+const f32 s_PlotHoverMaxMarkerRadius = 4.0f;
+const Color s_DragPreviewFallbackBg = Color(0.14f, 0.17f, 0.22f, 0.94f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendRichTextWordRun(
+    in StringView chunk,
+    in RichTextSpan sp,
+    in f32 fontSize,
+    in HyperlinkStyle linkStyle,
+    in WidgetStyle widgetStyle,
+    in b8 enabled,
+    in b8 wrap,
+    in f32 maxLineW,
+    in DisplayMetrics display,
+    in ShapeRequest baseReq,
+    mut TextService svc,
+    mut u32 inOutLineIndex,
+    mut f32 inOutCursorX,
+    mut Vector<RichTextRun> outRuns,
+    mut b8 outFailed
+){
+    if(chunk.empty()){
+        return;
+    }
+    ShapeRequest req = baseReq;
+    req.text = chunk;
+    if(sp.hasFont)
+        req.font = sp.font;
+    req.fontSize = fontSize;
+    req.letterSpacing = sp.letterSpacing;
+    req.wordSpacing = sp.wordSpacing;
+    req.features = sp.features;
+    req.featureCount = sp.featureCount;
+    req.wrapMode = TextWrapMode::None;
+    req.maxWidth = 0.0f;
+    const auto measured = svc.layoutAndMeasureShared(req, display);
+    if(!measured.has_value()){
+        outFailed = true;
+        return;
+    }
+    in Rect tb = measured.value().bounds;
+    const f32 advW = UiSimdMax(0.0f, tb.width);
+    const f32 advH = UiSimdMax(fontSize * req.lineHeightMultiplier, tb.height);
+    if(wrap && maxLineW > 0.0f && inOutCursorX > 0.0f && inOutCursorX + advW > maxLineW){
+        ++inOutLineIndex;
+        inOutCursorX = 0.0f;
+    }
+    RichTextRun run;
+    run.lineIndex = inOutLineIndex;
+    run.x = inOutCursorX;
+    run.y = 0.0f;
+    run.width = advW;
+    run.height = advH;
+    run.layout = measured.value().layout;
+    run.textBounds = tb;
+    if(!enabled)
+        run.color = linkStyle.disabledColor;
+    else if(sp.hasColor)
+        run.color = sp.color;
+    else if(sp.linkKey != 0u)
+        run.color = linkStyle.normalColor;
+    else
+        run.color = widgetStyle.text;
+    run.backgroundColor = sp.backgroundColor;
+    run.hasBackground = sp.hasBackground;
+    run.underline = sp.underline || (sp.linkKey != 0u && !linkStyle.underlineOnHoverOnly);
+    run.strikethrough = sp.strikethrough;
+    run.linkKey = sp.linkKey;
+    outRuns.push_back(run);
+    inOutCursorX += advW;
+}
+
+DragDropResult Builder::dragSource(in StringView stableKey, in StringView anchorKey, in DragDropPayload payload, mut DragDropState state, in DragDropOptions options){
+    DragDropResult result;
+    const auto anchorIndex = this.annotationAnchorIndex(anchorKey);
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !anchorIndex.has_value()
+        || !IsValidDragDropOptions(options)
+        || !IsValidDragDropStyle(this.m_dragDropStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    in BuilderItem anchorConst = this.m_scope.value().m_items[anchorIndex.value()];
+    mut BuilderItem anchor = this.m_scope.value().m_items[anchorIndex.value()];
+    const b8 effectiveEnabled = options.enabled && anchorConst.enabled;
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::DragSource);
+    if(!widget.has_value())
+        return result;
+
+    in InputRouter inputRef = this.m_context.input();
+    mut InputRouter input = this.m_context.input();
+    const u64 currentFrame = widget.value().lastSeenFrame;
+
+    if(state.m_pendingDrop && !state.m_dropConsumed && currentFrame > state.m_dropFrame + 1u){
+        state.m_pendingDrop = false;
+        state.m_active = false;
+        state.m_sourceWidget = WidgetId();
+        AdvanceNonWrappingRevision(state.m_revision);
+    }
+
+    if(!effectiveEnabled){
+        input.invalidateTarget(widget.value().id);
+        if(state.m_active && state.m_sourceWidget == widget.value().id)
+            state.cancel();
+    }
+    else if(!inputRef.windowFocused() && state.m_active && state.m_sourceWidget == widget.value().id){
+        state.cancel();
+    }
+    else{
+        while(true){
+            const auto gesture = this.m_context.takePointerGesture(widget.value(), true);
+            if(!gesture.has_value())
+                break;
+            in PointerGesture g = gesture.value();
+            const b8 wasDragging = state.m_active && state.m_sourceWidget == widget.value().id;
+            const b8 exceeded = DragDistanceExceedsThreshold(g.origin, g.position, options.dragThreshold);
+            if(g.state == PointerGestureState::Active){
+                if(wasDragging || exceeded){
+                    state.m_active = true;
+                    state.m_pendingDrop = false;
+                    state.m_dropConsumed = false;
+                    state.m_sourceWidget = widget.value().id;
+                    state.m_pressOrigin = g.origin;
+                    state.m_pointerPosition = g.position;
+                    state.m_payload = payload;
+                    AdvanceNonWrappingRevision(state.m_revision);
+                }
+            }
+            else if(g.state == PointerGestureState::Completed){
+                if(wasDragging || exceeded){
+                    state.m_active = false;
+                    state.m_pendingDrop = true;
+                    state.m_dropConsumed = false;
+                    state.m_sourceWidget = widget.value().id;
+                    state.m_pressOrigin = g.origin;
+                    state.m_pointerPosition = g.position;
+                    state.m_dropPosition = g.position;
+                    state.m_dropFrame = currentFrame;
+                    state.m_payload = payload;
+                    AdvanceNonWrappingRevision(state.m_revision);
+                    result.dropped = true;
+                    result.payload = payload;
+                }
+            }
+        }
+    }
+
+    BuilderDragSourceFrame frame;
+    frame.widget = widget.value();
+    frame.state = Optional<mut DragDropState>(state);
+    frame.style = this.m_dragDropStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.options.enabled = effectiveEnabled;
+    frame.anchorIndex = cast<u32>(anchorIndex.value());
+    frame.layer = this.m_context.popupLayer() + 1u;
+    frame.dragging = state.m_active && state.m_sourceWidget == widget.value().id;
+    frame.instanceGeneration = state.instanceGeneration();
+    if(frame.dragging && !state.m_payload.previewLabel.empty()){
+        const ShapeRequest req = this.textShapeRequest(StringView(state.m_payload.previewLabel), frame.widgetStyle.fontSize);
+        const auto measured = this.m_text.layoutAndMeasureShared(req, this.m_paint.displayMetrics());
+        if(!measured.has_value()){
+            this.m_context.fail();
+            return DragDropResult();
+        }
+        frame.previewText = measured.value().layout;
+        frame.previewBounds = measured.value().bounds;
+    }
+
+    anchor.annotated = true;
+    this.m_scope.value().m_dragSources.push_back(frame);
+    result.valid = true;
+    result.dragging = frame.dragging;
+    if(frame.dragging)
+        result.payload = state.m_payload;
+    return result;
+}
+
+DragDropResult Builder::dropTarget(in StringView stableKey, in StringView anchorKey, in Name acceptType, mut DragDropState state, in DragDropOptions options){
+    DragDropResult result;
+    const auto anchorIndex = this.annotationAnchorIndex(anchorKey);
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !anchorIndex.has_value()
+        || !IsValidDragDropOptions(options)
+        || !IsValidDragDropStyle(this.m_dragDropStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    in BuilderItem anchorConst = this.m_scope.value().m_items[anchorIndex.value()];
+    mut BuilderItem anchor = this.m_scope.value().m_items[anchorIndex.value()];
+    const b8 effectiveEnabled = options.enabled && anchorConst.enabled;
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::DropTarget);
+    if(!widget.has_value())
+        return result;
+
+    const Optional<Rect> prevRect = state.findTargetRect(widget.value().id);
+    const b8 typeMatches = acceptType == s_NameNone || acceptType == state.m_payload.type;
+    if(effectiveEnabled && typeMatches && prevRect.has_value()){
+        if(state.m_active && UiRectContainsPoint(prevRect.value(), state.m_pointerPosition)){
+            result.hovered = true;
+            state.m_hoveredTarget = widget.value().id;
+        }
+        if(state.m_pendingDrop && !state.m_dropConsumed && UiRectContainsPoint(prevRect.value(), state.m_dropPosition)){
+            result.dropped = true;
+            result.payload = state.m_payload;
+            state.m_dropConsumed = true;
+            state.m_pendingDrop = false;
+            state.m_active = false;
+            state.m_hoveredTarget = WidgetId();
+            AdvanceNonWrappingRevision(state.m_revision);
+        }
+    }
+
+    BuilderDropTargetFrame frame;
+    frame.widget = widget.value();
+    frame.state = Optional<mut DragDropState>(state);
+    frame.style = this.m_dragDropStyle;
+    frame.options = options;
+    frame.options.enabled = effectiveEnabled;
+    frame.anchorIndex = cast<u32>(anchorIndex.value());
+    frame.layer = this.m_context.popupLayer() + 1u;
+    frame.highlighted = result.hovered;
+    frame.instanceGeneration = state.instanceGeneration();
+
+    anchor.annotated = true;
+    this.m_scope.value().m_dropTargets.push_back(frame);
+    result.valid = true;
+    result.dragging = state.m_active && effectiveEnabled && typeMatches;
+    return result;
+}
+
+b8 Builder::dragSourceStateMatches(in BuilderDragSourceFrame frame)const{
+    return frame.state.has_value() && this.popupAncestorsVisible() && frame.state.value().instanceGeneration() == frame.instanceGeneration;
+}
+
+b8 Builder::dropTargetStateMatches(in BuilderDropTargetFrame frame)const{
+    return frame.state.has_value() && this.popupAncestorsVisible() && frame.state.value().instanceGeneration() == frame.instanceGeneration;
+}
+
+b8 Builder::paintDragDrops(){
+    HitTargetFactory targets;
+    for(mut auto frame : this.m_scope.value().m_dropTargets){
+        if(!this.dropTargetStateMatches(frame) || frame.anchorIndex >= this.m_scope.value().m_items.size())
+            return false;
+        in BuilderItem anchor = this.m_scope.value().m_items[frame.anchorIndex];
+        const Optional<LayoutBox> anchorBox = this.m_scope.value().m_layout.box(anchor.node);
+        if(!anchorBox.has_value())
+            return false;
+        frame.state.value().setTargetRect(frame.widget.id, anchorBox.value().rectangle);
+        if(frame.highlighted){
+            if(!this.m_paint.beginOverlay(frame.layer))
+                return false;
+            this.m_paint.pushClip(this.visibleClip(anchorBox.value().clip));
+            this.m_paint.fillRect(anchorBox.value().rectangle, frame.style.highlightFillColor);
+            this.m_paint.strokeRect(anchorBox.value().rectangle, frame.style.highlightBorderThickness, frame.style.highlightBorderColor);
+            const b8 popped = this.m_paint.popClip();
+            if(!this.m_paint.endOverlay() || !popped)
+                return false;
+        }
+    }
+    for(mut auto frame : this.m_scope.value().m_dragSources){
+        if(!this.dragSourceStateMatches(frame) || frame.anchorIndex >= this.m_scope.value().m_items.size())
+            return false;
+        in BuilderItem anchor = this.m_scope.value().m_items[frame.anchorIndex];
+        const Optional<LayoutBox> anchorBox = this.m_scope.value().m_layout.box(anchor.node);
+        if(!anchorBox.has_value())
+            return false;
+        const Rect clip = this.visibleClip(anchorBox.value().clip);
+        const HitTarget dragTarget = targets.makeDragSourceHitTarget(anchorBox.value().rectangle, clip, frame.options.enabled);
+        if(!this.m_context.addTarget(frame.widget, dragTarget))
+            return false;
+        this.emitAccessibleNode(
+            frame.widget,
+            AccessibilityRole::Group,
+            anchorBox.value().rectangle,
+            StringView(),
+            StringView(),
+            ResolveAccessibleVisibilityStateBits(frame.options.enabled, clip),
+            s_AccessibilityActionNone
+        );
+        if(frame.dragging && frame.state.value().m_active){
+            if(!this.m_paint.beginOverlay(frame.layer))
+                return false;
+            in DragDropState st = frame.state.value();
+            const Point pos(st.m_pointerPosition.x + frame.style.previewOffset.x, st.m_pointerPosition.y + frame.style.previewOffset.y);
+            f32 bw = s_DragPreviewFallbackWidth;
+            f32 bh = s_DragPreviewFallbackHeight;
+            if(frame.previewText.valid()){
+                bw = frame.previewBounds.width + frame.style.previewPadding.left + frame.style.previewPadding.right;
+                bh = frame.previewBounds.height + frame.style.previewPadding.top + frame.style.previewPadding.bottom;
+            }
+            const Rect badgeRect(pos.x, pos.y, bw, bh);
+            this.m_paint.fillRoundedRect(badgeRect, frame.style.previewCornerRadius, frame.style.previewBgColor);
+            this.m_paint.strokeRect(badgeRect, s_DragPreviewBorderThickness, frame.style.previewBorderColor);
+            b8 textOk = true;
+            if(frame.previewText.valid()){
+                const Point textOrigin = ResolveCenteredTextOrigin(badgeRect, frame.style.previewPadding.left, frame.previewBounds);
+                this.m_paint.pushClip(badgeRect);
+                textOk = this.m_text.paint(this.m_paint, frame.previewText.deref(), textOrigin, frame.style.previewTextColor);
+                const b8 popped = this.m_paint.popClip();
+                textOk = textOk && popped;
+            }
+            if(!this.m_paint.endOverlay() || !textOk)
+                return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::hyperlink(in StringView stableKey, in StringView text, in HyperlinkOptions options){
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidHyperlinkOptions(options) || !IsValidHyperlinkStyle(this.m_hyperlinkStyle)){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.synchronizePopup())
+        return false;
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Hyperlink);
+    if(!widget.has_value())
+        return false;
+    const b8 activated = this.m_context.takeActivation(widget.value(), options.enabled);
+    const ShapeRequest req = this.textShapeRequest(text, this.m_style.fontSize);
+    const auto measured = this.m_text.layoutAndMeasureShared(req, this.m_paint.displayMetrics());
+    if(!measured.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+
+    BuilderHyperlinkFrame frame;
+    frame.style = this.m_hyperlinkStyle;
+    frame.options = options;
+
+    auto item = this.makeItem();
+    item.styleIndex = this.currentItemStyleIndex();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.text = measured.value().layout;
+    item.textBounds = measured.value().bounds;
+    item.hyperlink = cast<u32>(this.m_scope.value().m_hyperlinks.size());
+
+    const Point intrinsic(UiSimdMax(0.0f, item.textBounds.width), UiSimdMax(this.m_style.fontSize, item.textBounds.height));
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, intrinsic, options.layout);
+    if(!this.addItemNode(description, item))
+        return false;
+    this.m_scope.value().m_hyperlinks.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    return activated;
+}
+
+b8 Builder::paintHyperlink(in BuilderItem item, in LayoutBox box){
+    if(item.hyperlink >= this.m_scope.value().m_hyperlinks.size() || !item.text.valid())
+        return false;
+    in BuilderHyperlinkFrame frame = this.m_scope.value().m_hyperlinks[item.hyperlink];
+    in InputRouter input = this.m_context.input();
+    const b8 hover = item.enabled && input.hover() == item.state.id;
+    const b8 pressed = item.enabled && input.pressed(item.state.id);
+    const b8 focused = item.enabled && input.focus() == item.state.id;
+    const Rect clip = this.visibleClip(box.clip);
+
+    Color col = frame.style.normalColor;
+    if(!item.enabled)
+        col = frame.style.disabledColor;
+    else if(pressed)
+        col = frame.style.pressedColor;
+    else if(hover)
+        col = frame.style.hoverColor;
+    else if(frame.options.visited)
+        col = frame.style.visitedColor;
+
+    const Point origin = ResolveLabelPaintOrigin(box.rectangle, item.textBounds);
+    const Rect textClip = IntersectUiRectsBounds(box.rectangle, clip);
+    this.m_paint.pushClip(clip);
+    this.m_paint.pushClip(textClip);
+    const b8 painted = this.m_text.paint(this.m_paint, item.text.deref(), origin, col);
+    const b8 showUnderline = !frame.style.underlineOnHoverOnly || hover || pressed || focused;
+    if(painted && showUnderline && item.textBounds.width > 0.0f){
+        const f32 lineY = box.rectangle.y + UiSimdMin(box.rectangle.height, item.textBounds.height);
+        const f32 lineW = UiSimdMin(box.rectangle.width, item.textBounds.width);
+        this.m_paint.drawLine(Point(box.rectangle.x, lineY), Point(box.rectangle.x + lineW, lineY), frame.style.underlineThickness, col);
+    }
+    const b8 innerPopped = this.m_paint.popClip();
+    if(focused){
+        in WidgetStyle itemStyle = this.itemWidgetStyle(item);
+        this.m_paint.tryDrawRegion(itemStyle.focus, box.rectangle);
+    }
+    const b8 outerPopped = this.m_paint.popClip();
+    if(!painted || !innerPopped || !outerPopped)
+        return false;
+    HitTargetFactory targets;
+    const HitTarget target = targets.makeHyperlinkHitTarget(box.rectangle, clip, item.enabled, item.contextMenu);
+    if(!this.m_context.addTarget(item.state, target))
+        return false;
+    u32 linkActions = s_AccessibilityActionInvoke | s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        linkActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::Link,
+        box.rectangle,
+        item.text.deref().utf8(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        linkActions
+    );
+    return true;
+}
+
+RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> spans, in RichTextOptions options){
+    RichTextResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidRichTextOptions(options)
+        || !IsValidRichTextSpans(spans, this.m_hyperlinkStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::RichText);
+    if(!widget.has_value())
+        return result;
+    const auto linkRoot = TryMakeWidgetId(widget.value().id, s_WidgetPartRichLink);
+    if(!linkRoot.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+
+    ControlToken token;
+    token.instanceGeneration = widget.value().declarationGeneration;
+    token.contentGeneration = 1u;
+    token.contentRevision = 1u;
+    mut InputRouter input = this.m_context.input();
+    in InputRouter inputRef = this.m_context.input();
+    input.fenceControl(widget.value().id, widget.value().declarationGeneration, token);
+
+    if(!options.enabled)
+        input.invalidateTarget(widget.value().id);
+    else{
+        while(true){
+            const auto action = this.m_context.takeControlAction(widget.value(), true, token);
+            if(!action.has_value())
+                break;
+            if(action.value().kind == ControlActionKind::Activate && action.value().value != 0u){
+                result.linkActivated = true;
+                result.activatedLinkKey = action.value().value;
+            }
+        }
+        const auto hoveredTgt = inputRef.findTarget(inputRef.hover());
+        if(hoveredTgt.has_value() && hoveredTgt.value().owner == widget.value().id && hoveredTgt.value().value != 0u)
+            result.hoveredLinkKey = hoveredTgt.value().value;
+    }
+
+    BuilderRichTextFrame frame;
+    frame.widget = widget.value();
+    frame.token = token;
+    frame.linkStyle = this.m_hyperlinkStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+
+    f32 maxLineW = options.maxWidth;
+    if(maxLineW <= 0.0f && options.width.policy == LayoutSizePolicy::Fixed && options.width.value > 0.0f)
+        maxLineW = options.width.value;
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    ShapeRequest templateReq = this.textShapeRequest("", this.m_style.fontSize);
+    templateReq.lineHeightMultiplier = options.lineHeightMultiplier;
+    if(options.bidiMode != TextBidiMode::None)
+        templateReq.bidiMode = options.bidiMode;
+
+    u32 lineIdx = 0u;
+    f32 cursorX = 0.0f;
+    b8 buildFailed = false;
+    for(in RichTextSpan sp : spans){
+        f32 spSize = frame.widgetStyle.fontSize;
+        if(sp.fontSize > 0.0f)
+            spSize = sp.fontSize;
+        const usize len = sp.text.size();
+        usize pos = 0u;
+        while(pos < len && !buildFailed){
+            if(sp.text[pos] == '\n'){
+                ++lineIdx;
+                cursorX = 0.0f;
+                ++pos;
+                continue;
+            }
+            usize lineEnd = pos;
+            while(lineEnd < len && sp.text[lineEnd] != '\n')
+                ++lineEnd;
+            if(!options.wrap || !(maxLineW > 0.0f)){
+                AppendRichTextWordRun(
+                    sp.text.substr(pos, lineEnd - pos),
+                    sp, spSize,
+                    frame.linkStyle, frame.widgetStyle, options.enabled, false, 0.0f, display, templateReq,
+                    this.m_text, lineIdx, cursorX, frame.runs, buildFailed
+                );
+                pos = lineEnd;
+                continue;
+            }
+            usize segStart = pos;
+            while(segStart < lineEnd && !buildFailed){
+                usize segEnd = segStart;
+                while(segEnd < lineEnd && sp.text[segEnd] == ' ')
+                    ++segEnd;
+                while(segEnd < lineEnd && sp.text[segEnd] != ' ')
+                    ++segEnd;
+                AppendRichTextWordRun(
+                    sp.text.substr(segStart, segEnd - segStart),
+                    sp, spSize,
+                    frame.linkStyle, frame.widgetStyle, options.enabled, true, maxLineW, display, templateReq,
+                    this.m_text, lineIdx, cursorX, frame.runs, buildFailed
+                );
+                segStart = segEnd;
+            }
+            pos = lineEnd;
+        }
+    }
+    if(buildFailed){
+        this.m_context.fail();
+        return RichTextResult();
+    }
+
+    const usize numLines = cast<usize>(lineIdx) + 1u;
+    Vector<f32> lineWidths;
+    Vector<f32> lineHeights;
+    lineWidths.resize(numLines, 0.0f);
+    lineHeights.resize(numLines, frame.widgetStyle.fontSize);
+    for(in RichTextRun run : frame.runs){
+        const usize li = cast<usize>(run.lineIndex);
+        if(li < numLines){
+            lineWidths[li] = UiSimdMax(lineWidths[li], run.x + run.width);
+            lineHeights[li] = UiSimdMax(lineHeights[li], run.height);
+        }
+    }
+
+    f32 totalW = 0.0f;
+    f32 totalH = 0.0f;
+    Vector<f32> lineY;
+    lineY.resize(numLines, 0.0f);
+    for(usize li = 0u; li < numLines; ++li){
+        totalW = UiSimdMax(totalW, lineWidths[li]);
+        lineY[li] = totalH;
+        totalH += lineHeights[li];
+        if(li + 1u < numLines)
+            totalH += options.lineSpacing;
+    }
+
+    for(mut RichTextRun run : frame.runs){
+        const usize li = cast<usize>(run.lineIndex);
+        if(li < numLines)
+            run.y = lineY[li] + UiSimdMax(0.0f, lineHeights[li] - run.height);
+    }
+
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.richText = cast<u32>(this.m_scope.value().m_richTexts.size());
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, Point(totalW, totalH), options.layout);
+    if(!this.addItemNode(description, item))
+        return RichTextResult();
+    this.m_scope.value().m_richTexts.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    result.valid = true;
+    return result;
+}
+
+b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
+    if(item.richText >= this.m_scope.value().m_richTexts.size())
+        return false;
+    in BuilderRichTextFrame frame = this.m_scope.value().m_richTexts[item.richText];
+    const auto linkRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartRichLink);
+    if(!linkRoot.has_value())
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    in InputRouter input = this.m_context.input();
+    HitTargetFactory targets;
+
+    const HitTarget host = targets.makeRichTextHostHitTarget(box.rectangle, clip, item.enabled, item.contextMenu, frame.token);
+    if(!this.m_context.addTarget(frame.widget, host))
+        return false;
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::Text,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip),
+        s_AccessibilityActionNone
+    );
+
+    u32 maxLine = 0u;
+    for(in RichTextRun run : frame.runs)
+        maxLine = UiSimdMax(maxLine, run.lineIndex);
+    const usize lineCount = cast<usize>(maxLine) + 1u;
+    Vector<f32> lineWidths;
+    lineWidths.resize(lineCount, 0.0f);
+    for(in RichTextRun run : frame.runs){
+        const usize li = cast<usize>(run.lineIndex);
+        if(li < lineCount)
+            lineWidths[li] = UiSimdMax(lineWidths[li], run.x + run.width);
+    }
+
+    this.m_paint.pushClip(clip);
+    const Rect boxClip = IntersectUiRectsBounds(box.rectangle, clip);
+    this.m_paint.pushClip(boxClip);
+    b8 paintOk = true;
+    for(usize ri = 0u; ri < frame.runs.size(); ++ri){
+        in RichTextRun run = frame.runs[ri];
+        f32 alignOffsetX = 0.0f;
+        const usize li = cast<usize>(run.lineIndex);
+        if(li < lineCount){
+            if(frame.options.alignment == TextAlignment::Center)
+                alignOffsetX = UiSimdMax(0.0f, (box.rectangle.width - lineWidths[li]) * s_RectCenterFraction);
+            else if(frame.options.alignment == TextAlignment::Trailing)
+                alignOffsetX = UiSimdMax(0.0f, box.rectangle.width - lineWidths[li]);
+        }
+        const Rect runRect(box.rectangle.x + alignOffsetX + run.x, box.rectangle.y + run.y, run.width, run.height);
+        Color drawCol = run.color;
+        b8 isLinkHover = false;
+        b8 isLinkPressed = false;
+        if(run.linkKey != 0u){
+            const auto partId = TryMakeWidgetPartId(linkRoot.value(), cast<u64>(ri) + 1u);
+            if(!partId.has_value()){
+                this.m_paint.popClip();
+                this.m_paint.popClip();
+                return false;
+            }
+            isLinkHover = item.enabled && input.hover() == partId.value();
+            isLinkPressed = item.enabled && input.pressed(partId.value());
+            if(item.enabled){
+                if(isLinkPressed)
+                    drawCol = frame.linkStyle.pressedColor;
+                else if(isLinkHover)
+                    drawCol = frame.linkStyle.hoverColor;
+                if(run.width > 0.0f && run.height > 0.0f){
+                    const Rect linkClip = IntersectUiRectsBounds(runRect, boxClip);
+                    const HitTarget linkTarget = targets.makeRichTextLinkHitTarget(runRect, linkClip, true, frame.token, run.linkKey);
+                    if(!this.m_context.addPartTarget(frame.widget, partId.value(), linkTarget)){
+                        this.m_paint.popClip();
+                        this.m_paint.popClip();
+                        return false;
+                    }
+                    StringView linkName = StringView();
+                    if(run.layout.valid())
+                        linkName = run.layout.deref().utf8();
+                    this.emitAccessiblePartNode(
+                        partId.value(),
+                        frame.widget.id,
+                        AccessibilityRole::Link,
+                        runRect,
+                        linkName,
+                        ResolveAccessibleVisibilityStateBits(true, linkClip) | s_AccessibilityStateFocusable,
+                        s_AccessibilityActionInvoke | s_AccessibilityActionFocus,
+                        0,
+                        0,
+                        0
+                    );
+                }
+            }
+        }
+        if(run.hasBackground && run.width > 0.0f && run.height > 0.0f)
+            this.m_paint.fillRect(runRect, run.backgroundColor);
+        if(run.layout.valid()){
+            const Point origin(runRect.x - run.textBounds.x, runRect.y - run.textBounds.y);
+            paintOk = paintOk && this.m_text.paint(this.m_paint, run.layout.deref(), origin, drawCol);
+        }
+        if((run.underline || (run.linkKey != 0u && (isLinkHover || isLinkPressed))) && run.width > 0.0f)
+            this.m_paint.drawLine(Point(runRect.x, runRect.y + runRect.height), Point(runRect.x + runRect.width, runRect.y + runRect.height), frame.linkStyle.underlineThickness, drawCol);
+        if(run.strikethrough && run.width > 0.0f){
+            const f32 sy = runRect.y + runRect.height * s_RichTextStrikeHeightFraction;
+            this.m_paint.drawLine(Point(runRect.x, sy), Point(runRect.x + runRect.width, sy), s_HyperlinkStrikeThickness, drawCol);
+        }
+    }
+    const b8 innerPopped = this.m_paint.popClip();
+    const b8 outerPopped = this.m_paint.popClip();
+    return paintOk && innerPopped && outerPopped;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in PlotOptions options){
+    PlotResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidPlotSeriesSpan(series)
+        || !IsValidPlotOptions(options)
+        || !IsValidPlotStyle(this.m_plotStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Plot);
+    if(!widget.has_value())
+        return result;
+
+    f32 minY = options.minY;
+    f32 maxY = options.maxY;
+    if(options.autoScaleY)
+        ComputePlotAutoRangeSimd(series, minY, maxY);
+
+    BuilderPlotFrame frame;
+    frame.widget = widget.value();
+    frame.style = this.m_plotStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.options.enabled = options.enabled;
+    frame.minY = minY;
+    frame.maxY = maxY;
+    frame.series.reserve(series.size());
+
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    for(in PlotSeries src : series){
+        PlotSeriesCopy copy;
+        copy.color = src.color;
+        copy.lineThickness = src.lineThickness;
+        copy.kind = src.kind;
+        copy.values.reserve(src.values.size());
+        for(usize vi = 0u; vi < src.values.size(); ++vi)
+            copy.values.push_back(src.values[vi]);
+        if(src.values.size() > frame.maxSamples)
+            frame.maxSamples = src.values.size();
+        if(options.showLegend && !src.label.empty()){
+            const ShapeRequest lblReq = this.textShapeRequest(src.label, frame.widgetStyle.fontSize);
+            const auto measuredLbl = this.m_text.layoutAndMeasureShared(lblReq, display);
+            if(!measuredLbl.has_value()){
+                this.m_context.fail();
+                return PlotResult();
+            }
+            copy.label = measuredLbl.value().layout;
+            copy.labelBounds = measuredLbl.value().bounds;
+        }
+        frame.series.push_back(copy);
+    }
+
+    in InputRouter inputRef = this.m_context.input();
+    if(options.enabled && inputRef.pointerKnown() && frame.maxSamples > 0u){
+        const auto prevTarget = inputRef.findTarget(widget.value().id);
+        if(prevTarget.has_value()){
+            const Rect inner = InsetUiRectBounds(prevTarget.value().rectangle, frame.style.padding);
+            if(inner.width > 0.0f && inner.height > 0.0f && UiRectContainsPoint(inner, inputRef.pointerPosition())){
+                result.hovered = true;
+                f32 relX = UiSimdClamp((inputRef.pointerPosition().x - inner.x) / inner.width, 0.0f, 1.0f);
+                usize sampleIdx = 0u;
+                if(frame.maxSamples > 1u)
+                    sampleIdx = cast<usize>(UiSimdMin(cast<f32>(frame.maxSamples - 1u), VectorFloor(VectorSingle(relX * cast<f32>(frame.maxSamples - 1u) + 0.5f)).x));
+                result.hoveredSampleIndex = sampleIdx;
+                if(!frame.series.empty() && sampleIdx < frame.series[0u].values.size())
+                    result.hoveredValue = frame.series[0u].values[sampleIdx];
+                frame.hovered = true;
+                frame.hoveredSampleIndex = result.hoveredSampleIndex;
+                frame.hoveredValue = result.hoveredValue;
+            }
+        }
+    }
+
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.plot = cast<u32>(this.m_scope.value().m_plots.size());
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, Point(240.0f, s_PlotDefaultHeight), options.layout);
+    if(!this.addItemNode(description, item))
+        return PlotResult();
+    this.m_scope.value().m_plots.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+
+    result.valid = true;
+    result.computedMinY = minY;
+    result.computedMaxY = maxY;
+    return result;
+}
+
+PlotResult Builder::plotLine(in StringView stableKey, in Span<f32> values, in PlotOptions options){
+    Array<PlotSeries, 1u> single;
+    single[0u].values = values;
+    single[0u].kind = PlotKind::Line;
+    return this.plot(stableKey, Span<PlotSeries>(single.data(), 1u), options);
+}
+
+PlotResult Builder::plotHistogram(in StringView stableKey, in Span<f32> values, in PlotOptions options){
+    Array<PlotSeries, 1u> single;
+    single[0u].values = values;
+    single[0u].kind = PlotKind::Bar;
+    return this.plot(stableKey, Span<PlotSeries>(single.data(), 1u), options);
+}
+
+b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
+    if(item.plot >= this.m_scope.value().m_plots.size())
+        return false;
+    in BuilderPlotFrame frame = this.m_scope.value().m_plots[item.plot];
+    in PlotStyle style = frame.style;
+    in Rect outer = box.rectangle;
+    const Rect clip = this.visibleClip(box.clip);
+    const Rect inner = InsetUiRectBounds(outer, style.padding);
+
+    this.m_paint.pushClip(clip);
+    this.m_paint.fillRect(outer, style.backgroundColor);
+    this.m_paint.strokeRect(outer, s_PlotDefaultAxisThickness, style.borderColor);
+
+    if(inner.width > 0.0f && inner.height > 0.0f){
+        const Rect innerClip = IntersectUiRectsBounds(inner, clip);
+        this.m_paint.pushClip(innerClip);
+
+        if(frame.options.showGrid){
+            for(u32 gx = 1u; gx < frame.options.gridLinesX; ++gx){
+                const f32 x = inner.x + (cast<f32>(gx) / cast<f32>(frame.options.gridLinesX)) * inner.width;
+                this.m_paint.drawLine(Point(x, inner.y), Point(x, inner.y + inner.height), s_PlotDefaultAxisThickness, style.gridColor);
+            }
+            for(u32 gy = 1u; gy < frame.options.gridLinesY; ++gy){
+                const f32 y = inner.y + (cast<f32>(gy) / cast<f32>(frame.options.gridLinesY)) * inner.height;
+                this.m_paint.drawLine(Point(inner.x, y), Point(inner.x + inner.width, y), s_PlotDefaultAxisThickness, style.gridColor);
+            }
+        }
+
+        const f32 rangeY = UiSimdMax(1.0e-6f, frame.maxY - frame.minY);
+        const f32 zeroY = UiSimdClamp(inner.y + ((frame.maxY - 0.0f) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+        if(frame.options.showZeroLine && frame.minY <= 0.0f && frame.maxY >= 0.0f)
+            this.m_paint.drawLine(Point(inner.x, zeroY), Point(inner.x + inner.width, zeroY), s_PlotDefaultAxisThickness, style.axisColor);
+
+        u32 barSeriesCount = 0u;
+        for(in PlotSeriesCopy s : frame.series){
+            if(s.kind == PlotKind::Bar)
+                ++barSeriesCount;
+        }
+
+        Vector<Point> pts;
+        u32 barSeriesIdx = 0u;
+        for(in PlotSeriesCopy s : frame.series){
+            const usize n = s.values.size();
+            if(n == 0u)
+                continue;
+            if(s.kind == PlotKind::Bar){
+                const f32 slotW = inner.width / cast<f32>(n);
+                const f32 usableW = slotW * (1.0f - style.barGapFraction);
+                const f32 singleW = UiSimdMax(s_PlotMinBarWidth, usableW / cast<f32>(UiSimdMax(1u, barSeriesCount)));
+                const f32 groupOffset = (slotW - singleW * cast<f32>(barSeriesCount)) * 0.5f + cast<f32>(barSeriesIdx) * singleW;
+                for(usize i = 0u; i < n; ++i){
+                    const f32 v = s.values[i];
+                    if(!IsFinite(VectorSingle(v)))
+                        continue;
+                    const f32 valY = UiSimdClamp(inner.y + ((frame.maxY - v) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+                    const f32 topY = UiSimdMin(valY, zeroY);
+                    const f32 botY = UiSimdMax(valY, zeroY);
+                    const f32 bh = UiSimdMax(1.0f, botY - topY);
+                    const f32 bx = inner.x + cast<f32>(i) * slotW + groupOffset;
+                    this.m_paint.fillRect(Rect(bx, topY, singleW, bh), s.color);
+                }
+                ++barSeriesIdx;
+                continue;
+            }
+
+            pts.clear();
+            pts.reserve(n);
+            for(usize i = 0u; i < n; ++i){
+                const f32 v = s.values[i];
+                if(!IsFinite(VectorSingle(v)))
+                    continue;
+                f32 px = inner.x + inner.width * 0.5f;
+                if(n > 1u)
+                    px = inner.x + (cast<f32>(i) / cast<f32>(n - 1u)) * inner.width;
+                const f32 py = UiSimdClamp(inner.y + ((frame.maxY - v) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+                pts.push_back(Point(px, py));
+            }
+            if(s.kind == PlotKind::Area && pts.size() >= 2u){
+                const Color fillCol(s.color.r, s.color.g, s.color.b, s.color.a * style.areaFillAlpha);
+                for(usize i = 0u; i + 1u < pts.size(); ++i){
+                    in Point p0 = pts[i];
+                    in Point p1 = pts[i + 1u];
+                    const b8 sameSide = (p0.y <= zeroY && p1.y <= zeroY) || (p0.y >= zeroY && p1.y >= zeroY);
+                    if(sameSide){
+                        Array<Point, 4u> quad;
+                        quad[0u] = p0;
+                        quad[1u] = p1;
+                        quad[2u] = Point(p1.x, zeroY);
+                        quad[3u] = Point(p0.x, zeroY);
+                        this.m_paint.fillConvexPolygon(Span<Point>(quad), fillCol);
+                    }
+                    else{
+                        const f32 denom = p1.y - p0.y;
+                        f32 t = 0.5f;
+                        if(Abs(VectorSingle(denom)).x > 1.0e-5f)
+                            t = UiSimdClamp((zeroY - p0.y) / denom, 0.0f, 1.0f);
+                        const Point mid(p0.x + (p1.x - p0.x) * t, zeroY);
+                        Array<Point, 3u> tri0;
+                        tri0[0u] = p0;
+                        tri0[1u] = mid;
+                        tri0[2u] = Point(p0.x, zeroY);
+                        this.m_paint.fillConvexPolygon(Span<Point>(tri0), fillCol);
+                        Array<Point, 3u> tri1;
+                        tri1[0u] = mid;
+                        tri1[1u] = p1;
+                        tri1[2u] = Point(p1.x, zeroY);
+                        this.m_paint.fillConvexPolygon(Span<Point>(tri1), fillCol);
+                    }
+                }
+            }
+            if(pts.size() >= 2u){
+                PaintLineStyle lineStyle;
+                lineStyle.thickness = s.lineThickness;
+                this.m_paint.drawPolyline(Span<Point>(pts), false, lineStyle, s.color);
+            }
+            else if(pts.size() == 1u)
+                this.m_paint.fillCircle(pts[0u], UiSimdMax(2.0f, s.lineThickness), s.color);
+        }
+
+        if(frame.hovered && frame.options.showCrosshair && frame.maxSamples > 0u){
+            f32 cx = inner.x + inner.width * 0.5f;
+            if(frame.maxSamples > 1u)
+                cx = inner.x + (cast<f32>(frame.hoveredSampleIndex) / cast<f32>(frame.maxSamples - 1u)) * inner.width;
+            this.m_paint.drawLine(Point(cx, inner.y), Point(cx, inner.y + inner.height), s_PlotDefaultCrosshairThickness, style.crosshairColor);
+            if(IsFinite(VectorSingle(frame.hoveredValue))){
+                const f32 cy = UiSimdClamp(inner.y + ((frame.maxY - frame.hoveredValue) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+                this.m_paint.fillCircle(Point(cx, cy), s_PlotDefaultMarkerRadius, style.crosshairColor);
+            }
+        }
+
+        if(frame.options.showLegend){
+            f32 lx = inner.x + s_PlotDefaultLegendGap;
+            const f32 ly = inner.y + s_PlotDefaultLegendGap;
+            for(in PlotSeriesCopy s : frame.series){
+                if(!s.label.valid())
+                    continue;
+                this.m_paint.fillRect(Rect(lx, ly + 2.0f, s_PlotDefaultLegendSwatchSize, s_PlotDefaultLegendSwatchSize), s.color);
+                lx += s_PlotDefaultLegendSwatchSize + 4.0f;
+                const Point lo(lx - s.labelBounds.x, ly - s.labelBounds.y);
+                if(!this.m_text.paint(this.m_paint, s.label.deref(), lo, style.textColor)){
+                    this.m_paint.popClip();
+                    this.m_paint.popClip();
+                    return false;
+                }
+                lx += s.labelBounds.width + s_PlotDefaultLegendGap * 2.0f;
+            }
+        }
+
+        if(!this.m_paint.popClip()){
+            this.m_paint.popClip();
+            return false;
+        }
+    }
+
+    if(!this.m_paint.popClip())
+        return false;
+    HitTargetFactory targets;
+    const HitTarget target = targets.makePlotHitTarget(outer, clip, item.enabled, item.contextMenu);
+    if(!this.m_context.addTarget(item.state, target))
+        return false;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::Image,
+        outer,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip),
+        s_AccessibilityActionNone
+    );
+    return true;
+}
+
+CanvasResult Builder::canvas(in StringView stableKey, mut ICanvasPainter painter, in CanvasOptions options){
+    CanvasResult result;
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidCanvasOptions(options)){
+        this.m_context.fail();
+        return result;
+    }
+    if(!this.synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::Canvas);
+    if(!widget.has_value())
+        return result;
+
+    ControlToken token;
+    token.instanceGeneration = widget.value().declarationGeneration;
+    token.contentGeneration = 1u;
+    token.contentRevision = 1u;
+    mut InputRouter input = this.m_context.input();
+    in InputRouter inputRef = this.m_context.input();
+    input.fenceControl(widget.value().id, widget.value().declarationGeneration, token);
+
+    const b8 active = options.enabled && options.interactive;
+    const auto prevTarget = inputRef.findTarget(widget.value().id);
+    if(prevTarget.has_value())
+        result.bounds = prevTarget.value().rectangle;
+
+    if(!active)
+        input.invalidateTarget(widget.value().id);
+    else{
+        result.dragging = inputRef.primaryDown() && inputRef.capture() == widget.value().id;
+        while(true){
+            const auto gesture = this.m_context.takePointerGesture(widget.value(), true);
+            if(!gesture.has_value())
+                break;
+            in PointerGesture g = gesture.value();
+            result.bounds = g.targetRectangle;
+            result.localPointer = Point(g.position.x - g.targetRectangle.x, g.position.y - g.targetRectangle.y);
+            result.dragOrigin = Point(g.origin.x - g.targetRectangle.x, g.origin.y - g.targetRectangle.y);
+            result.dragDelta = Point(g.position.x - g.origin.x, g.position.y - g.origin.y);
+            if(g.state == PointerGestureState::Active)
+                result.dragging = true;
+        }
+        if(this.m_context.takeActivation(widget.value(), true))
+            result.clicked = true;
+        while(true){
+            const auto action = this.m_context.takeControlAction(widget.value(), true, token);
+            if(!action.has_value())
+                break;
+            if(action.value().kind == ControlActionKind::Wheel)
+                result.wheelDelta += action.value().delta;
+        }
+        if(inputRef.pointerKnown() && prevTarget.has_value() && UiRectContainsPoint(prevTarget.value().rectangle, inputRef.pointerPosition())){
+            result.hovered = true;
+            in Rect tr = prevTarget.value().rectangle;
+            result.localPointer = Point(inputRef.pointerPosition().x - tr.x, inputRef.pointerPosition().y - tr.y);
+        }
+    }
+
+    BuilderCanvasFrame frame;
+    frame.widget = widget.value();
+    frame.token = token;
+    frame.options = options;
+    frame.painter = Optional<mut ICanvasPainter>(painter);
+
+    auto item = this.makeItem();
+    item.state = widget.value();
+    item.enabled = options.enabled;
+    item.canvas = cast<u32>(this.m_scope.value().m_canvases.size());
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, Point(240.0f, s_PlotDefaultHeight), options.layout);
+    if(!this.addItemNode(description, item))
+        return CanvasResult();
+    this.m_scope.value().m_canvases.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    result.valid = true;
+    return result;
+}
+
+b8 Builder::paintCanvas(in BuilderItem item, in LayoutBox box){
+    if(item.canvas >= this.m_scope.value().m_canvases.size())
+        return false;
+    mut BuilderCanvasFrame frame = this.m_scope.value().m_canvases[item.canvas];
+    if(!frame.painter.has_value())
+        return false;
+    const Rect clip = this.visibleClip(box.clip);
+    Rect drawClip = clip;
+    if(frame.options.clipToBounds)
+        drawClip = IntersectUiRectsBounds(box.rectangle, clip);
+    this.m_paint.pushClip(clip);
+    if(frame.options.fillBackground)
+        this.m_paint.fillRect(box.rectangle, frame.options.backgroundColor);
+    this.m_paint.pushClip(drawClip);
+    const b8 userPainted = frame.painter.value().paint(this.m_paint, this.m_text, box.rectangle, drawClip);
+    const b8 innerPopped = this.m_paint.popClip();
+    if(frame.options.drawBorder)
+        this.m_paint.strokeRect(box.rectangle, s_PlotDefaultAxisThickness, frame.options.borderColor);
+    const b8 outerPopped = this.m_paint.popClip();
+    if(!userPainted || !innerPopped || !outerPopped)
+        return false;
+    HitTargetFactory targets;
+    const HitTarget target = targets.makeCanvasHitTarget(box.rectangle, clip, item.enabled, frame.options.interactive, item.contextMenu, frame.token);
+    if(!this.m_context.addTarget(frame.widget, target))
+        return false;
+    u32 canvasState = ResolveAccessibleVisibilityStateBits(item.enabled, clip);
+    u32 canvasActions = s_AccessibilityActionNone;
+    if(frame.options.interactive){
+        canvasState |= s_AccessibilityStateFocusable;
+        canvasActions |= s_AccessibilityActionFocus;
+    }
+    if(item.contextMenu)
+        canvasActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::Canvas,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        canvasState,
+        canvasActions
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

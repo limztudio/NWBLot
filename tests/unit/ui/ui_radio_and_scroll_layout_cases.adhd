@@ -103,7 +103,8 @@ RadioGroupChoices MakeUiRadioGroupLayoutChoices(in u32 count){
     choices.sourceGeneration = 41u;
     choices.sourceRevision = 7u;
     choices.count = count;
-    for(u32 index = 0u; index < count && index < s_RadioGroupMaxChoices; ++index){
+    choices.rows.resize(cast<usize>(count));
+    for(u32 index = 0u; index < count; ++index){
         RadioGroupChoice row = RadioGroupChoice();
         row.key = cast<u64>(index + 1u);
         row.enabled = (index % 2u) == 0u;
@@ -218,7 +219,7 @@ void VerifyUiRadioGroupLayoutTests_InheritedClipRestrictsEachRowAndItsLabel(){
 }
 
 void VerifyUiRadioGroupLayoutTests_FullChoiceBoundProducesAllRowsWithoutVirtualization(){
-    const RadioGroupChoices choices = MakeUiRadioGroupLayoutChoices(s_RadioGroupMaxChoices);
+    const RadioGroupChoices choices = MakeUiRadioGroupLayoutChoices(64u);
     const auto metrics = MeasureRadioGroup(choices.count, Point(100.0f, 16.0f), RadioGroupOptions(), RadioGroupStyle());
     ASSERT_TRUE(metrics.has_value());
     EXPECT_FLOAT_EQ(metrics.value().contentSize.y, 1796.0f);
@@ -242,7 +243,7 @@ void VerifyUiRadioGroupLayoutTests_EmptyGroupHasOnlyPaddingAndNoChoiceGeometry()
     const RadioGroupPlacement placed = placement.value();
     EXPECT_EQ(placed.count, 0u);
     ExpectUiRect(placed.content, Rect(4.0f, 4.0f, 0.0f, 0.0f));
-    EXPECT_EQ(placed.rows[0u].key, 0u);
+    EXPECT_TRUE(placed.rows.empty());
 }
 
 void VerifyUiRadioGroupLayoutTests_NarrowBoundsShrinkTheIndicatorAndLeaveAnEmptyLabelArea(){
@@ -279,7 +280,11 @@ void VerifyUiRadioGroupLayoutTests_InvalidOptionsOrChoiceCountsRejectMetrics(){
     EXPECT_FALSE(MeasureRadioGroup(3u, Point(100.0f, 16.0f), options, RadioGroupStyle()).has_value());
     options.width = LayoutSize(LayoutSizePolicy::Fixed, bit_cast<f32>(s_UiRadioScrollQuietNaNF32Bits));
     EXPECT_FALSE(MeasureRadioGroup(3u, Point(100.0f, 16.0f), options, RadioGroupStyle()).has_value());
-    EXPECT_FALSE(MeasureRadioGroup(65u, Point(100.0f, 16.0f), RadioGroupOptions(), RadioGroupStyle()).has_value());
+    EXPECT_TRUE(MeasureRadioGroup(100u, Point(100.0f, 16.0f), RadioGroupOptions(), RadioGroupStyle()).has_value());
+    RadioGroupOptions badColumns = RadioGroupOptions();
+    badColumns.orientation = RadioGroupOrientation::Grid;
+    badColumns.columns = 0u;
+    EXPECT_FALSE(MeasureRadioGroup(3u, Point(100.0f, 16.0f), badColumns, RadioGroupStyle()).has_value());
     EXPECT_FALSE(MeasureRadioGroup(3u, Point(-1.0f, 16.0f), RadioGroupOptions(), RadioGroupStyle()).has_value());
 }
 

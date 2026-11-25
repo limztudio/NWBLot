@@ -1215,14 +1215,13 @@ void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWith
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("x\ny", 2u, 3u));
     const MultilineSnapshot before = MultilineSnapshot(self.m_model);
-    Array<StringView, 7u> invalid = Array<StringView, 7u>();
+    Array<StringView, 6u> invalid = Array<StringView, 6u>();
     invalid[0u] = "x\r\ny";
-    invalid[1u] = "x\ty";
-    invalid[2u] = "\xC2\x85";
-    invalid[3u] = "\xE2\x80\xA8";
-    invalid[4u] = "\xE2\x80\xA9";
-    invalid[5u] = "\xED\xA0\x80";
-    invalid[6u] = StringView("x\0y", 3u);
+    invalid[1u] = "\xC2\x85";
+    invalid[2u] = "\xE2\x80\xA8";
+    invalid[3u] = "\xE2\x80\xA9";
+    invalid[4u] = "\xED\xA0\x80";
+    invalid[5u] = StringView("x\0y", 3u);
     for(in StringView text : invalid){
         EXPECT_FALSE(self.m_model.updateComposition(text, 0u, text.size()));
         EXPECT_FALSE(self.m_model.commitComposition(text));
@@ -1346,15 +1345,14 @@ void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelect
     ASSERT_TRUE(self.m_model.beginComposition());
     ASSERT_TRUE(self.m_model.updateComposition("q\nr", 0u, 3u));
     const MultilineSnapshot before = MultilineSnapshot(self.m_model);
-    Array<StringView, 8u> invalid = Array<StringView, 8u>();
+    Array<StringView, 7u> invalid = Array<StringView, 7u>();
     invalid[0u] = "\r\n";
-    invalid[1u] = "\t";
-    invalid[2u] = "\xC2\x85";
-    invalid[3u] = s_UiMultilineLineSeparator;
-    invalid[4u] = s_UiMultilineParagraphSeparator;
-    invalid[5u] = "\xC0\xAF";
-    invalid[6u] = "\xED\xA0\x80";
-    invalid[7u] = StringView("a\0b", 3u);
+    invalid[1u] = "\xC2\x85";
+    invalid[2u] = s_UiMultilineLineSeparator;
+    invalid[3u] = s_UiMultilineParagraphSeparator;
+    invalid[4u] = "\xC0\xAF";
+    invalid[5u] = "\xED\xA0\x80";
+    invalid[6u] = StringView("a\0b", 3u);
     for(in StringView value : invalid){
         const ScopedTestTrace trace = ScopedTestTrace(value);
         EXPECT_FALSE(self.m_model.setText(value));
@@ -1362,7 +1360,7 @@ void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelect
         before.expectUnchanged(self.m_model);
     }
     for(u32 scalar = 0u; scalar < 32u; ++scalar){
-        if(scalar == 10u){
+        if(scalar == 9u || scalar == 10u){
             continue;
         }
         Array<u8, 1u> bytes = Array<u8, 1u>();
@@ -1625,21 +1623,21 @@ NWB_ADHD_GTEST_F(MultilineCompositionTests, AliasedCompositionCommitOwnsBytesBef
 NWB_ADHD_GTEST_F(MultilineCompositionTests, EmptyPreeditRetainsTheOriginalCrossLineReplacementRange, VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineReplacementRange)
 
 void VerifyListMeasureKey_PreservesEffectiveLanguageLength(){
-    const auto embedded = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView("en\0zz", 5u));
+    const auto embedded = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView("en\0zz", 5u), TextDirection::LeftToRight);
     ASSERT_TRUE(embedded.has_value());
     EXPECT_EQ(embedded.value().languageLength, 2u);
     EXPECT_EQ(embedded.value().language[3u], 'z');
     EXPECT_EQ(MakeUiMultilineByteView(Span<u8>(embedded.value().language).subspan(0u, embedded.value().languageLength)), "en");
-    const auto zero = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView("\0x", 2u));
+    const auto zero = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView("\0x", 2u), TextDirection::LeftToRight);
     ASSERT_TRUE(zero.has_value());
     EXPECT_EQ(zero.value().languageLength, 0u);
     String longLanguage;
     for(usize index = 0u; index < 64u; ++index)
         longLanguage.push_back('a');
-    const auto longest = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView(longLanguage).substr(0u, 63u));
+    const auto longest = TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView(longLanguage).substr(0u, 63u), TextDirection::LeftToRight);
     ASSERT_TRUE(longest.has_value());
     EXPECT_EQ(longest.value().languageLength, 63u);
-    EXPECT_FALSE(TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView(longLanguage)).has_value());
+    EXPECT_FALSE(TryBuildListMeasureKey(0u, 0u, 0u, 0u, 0u, 1.0f, DisplayMetrics(), SelectableMetrics(), 0u, StringView(longLanguage), TextDirection::LeftToRight).has_value());
 }
 
 NWB_ADHD_GTEST(ListMeasureKey, PreservesEffectiveLanguageLength, VerifyListMeasureKey_PreservesEffectiveLanguageLength)

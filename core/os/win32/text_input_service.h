@@ -42,9 +42,10 @@ private:
     [[nodiscard]] TextInputAdmission::Enum acceptUtf16Unit(TextInputSessionToken token, u32 unit, u32 repeatCount);
     [[nodiscard]] TextInputAdmission::Enum readCompositionText(NotNull<void*> nativeContext, u32 index);
     [[nodiscard]] Expected<usize, TextInputAdmission::Enum> compositionCursor(NotNull<void*> nativeContext)noexcept;
+    void readCompositionClauses(NotNull<void*> nativeContext, AStringView utf8Text);
     [[nodiscard]] TextInputAdmission::Enum acceptComposition(TextInputSessionToken token, usize wParam, isize flags);
     [[nodiscard]] TextInputAdmission::Enum acceptInsertedPreedit(TextInputSessionToken token, u32 unit, b8 moveCaret);
-    [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte);
+    [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, Span<const TextInputPreeditClause> clauses = {});
     void clearCompositionPreedit()noexcept;
     void rejectNativeInput(TextInputSessionToken token, TextInputAdmission::Enum admission);
     void replayContextVisibility();
@@ -55,6 +56,10 @@ private:
     WString<Alloc::GlobalArena> m_wideText;
     AString<Alloc::GlobalArena> m_utf8Text;
     AString<Alloc::GlobalArena> m_preeditText;
+    Vector<u8, Alloc::GlobalArena> m_compAttr;
+    Vector<u32, Alloc::GlobalArena> m_compClause;
+    Vector<usize, Alloc::GlobalArena> m_utf16ByteOffsets;
+    Vector<TextInputPreeditClause, Alloc::GlobalArena> m_preeditClauses;
     TextInputSessionToken m_compositionToken;
     u32 m_pendingHighSurrogate = 0u;
     u32 m_pendingPreeditHighSurrogate = 0u;
@@ -75,4 +80,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

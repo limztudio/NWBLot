@@ -50,6 +50,7 @@ b8 StageRouterHitTargets(
     mut Vector<TargetLookup> stagedLookup,
     mut b8 outHasOwners,
     mut b8 outHasCommandOwners,
+    mut b8 outHasScrollOwners,
     mut b8 outNeedsSort,
     mut b8 outHasFocusOnCommit
 ){
@@ -58,6 +59,7 @@ b8 StageRouterHitTargets(
     stagedLookup.reserve(targets.size());
     outHasOwners = false;
     outHasCommandOwners = false;
+    outHasScrollOwners = false;
     outNeedsSort = false;
     outHasFocusOnCommit = false;
     b8 needsSort = false;
@@ -77,11 +79,7 @@ b8 StageRouterHitTargets(
             && (target.gestureReference.width == 0.0f) == (target.gestureReference.height == 0.0f)
             && IsFinite(VectorSingle(target.gestureReference.x, target.gestureReference.y, 0.0f, 0.0f) + VectorSingle(target.gestureReference.width, target.gestureReference.height, 0.0f, 0.0f))
         );
-        b8 validPopup = false;
-        if(!target.popup.widget.valid())
-            validPopup = target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
-        else
-            validPopup = ValidStagedPopupTarget(target, stagedPopups);
+        const b8 validPopup = ValidStagedPopupTarget(target, stagedPopups);
         b8 validControlProps = false;
         if(!target.owner.valid() && !target.commandOwner.valid()){
             validControlProps =
@@ -105,12 +103,15 @@ b8 StageRouterHitTargets(
             || !validRect || !validClip || !validGestureRef
             || !validPopup
             || !validControlProps
+            || !HasValidHitTargetScrollOwnerProperties(target)
         )
             return false;
         if(target.owner.valid())
             outHasOwners = true;
         if(target.commandOwner.valid())
             outHasCommandOwners = true;
+        if(target.scrollOwner.valid())
+            outHasScrollOwners = true;
         if(target.focusOnCommit && target.focusable)
             outHasFocusOnCommit = true;
         TargetLookup entry;
@@ -138,6 +139,7 @@ b8 ValidateSortedStagedRouterTargetsAndPopups(
     in Span<PopupRecord> stagedPopups,
     in b8 hasOwners,
     in b8 hasCommandOwners,
+    in b8 hasScrollOwners,
     in b8 checkDuplicates
 ){
     if(checkDuplicates){
@@ -146,14 +148,14 @@ b8 ValidateSortedStagedRouterTargetsAndPopups(
                 return false;
         }
     }
-    if(hasOwners || hasCommandOwners){
+    if(hasOwners || hasCommandOwners || hasScrollOwners){
         for(in HitTarget target : stagedTargets){
             if(target.owner.valid()){
                 const Expected<usize> hostIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, target.owner, target.ownerDeclarationGeneration);
                 if(!hostIndex.has_value())
                     return false;
                 in HitTarget host = stagedTargets[hostIndex.value()];
-                if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer)
+                if(!host.enabled || !host.focusable || host.owner.valid() || host.control != target.control || host.popup != target.popup || host.layer != target.layer || host.zOrder != target.zOrder || host.windowId != target.windowId || host.windowDeclarationGeneration != target.windowDeclarationGeneration)
                     return false;
             }
             if(target.commandOwner.valid()){
@@ -161,7 +163,15 @@ b8 ValidateSortedStagedRouterTargetsAndPopups(
                 if(!hostIndex.has_value())
                     return false;
                 in HitTarget host = stagedTargets[hostIndex.value()];
-                if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != target.commandControl || host.popup != target.popup || host.layer != target.layer)
+                if(!host.enabled || !host.focusable || !host.navigable || host.owner.valid() || host.control != target.commandControl || host.popup != target.popup || host.layer != target.layer || host.zOrder != target.zOrder || host.windowId != target.windowId || host.windowDeclarationGeneration != target.windowDeclarationGeneration)
+                    return false;
+            }
+            if(target.scrollOwner.valid()){
+                const Expected<usize> scrollHostIndex = FindTargetIndexInTable(stagedTargets, stagedLookup, target.scrollOwner, target.scrollOwnerDeclarationGeneration);
+                if(!scrollHostIndex.has_value())
+                    return false;
+                in HitTarget scrollHost = stagedTargets[scrollHostIndex.value()];
+                if(scrollHost.owner.valid() || scrollHost.popup != target.popup || scrollHost.layer != target.layer || scrollHost.zOrder != target.zOrder || scrollHost.windowId != target.windowId || scrollHost.windowDeclarationGeneration != target.windowDeclarationGeneration)
                     return false;
             }
         }

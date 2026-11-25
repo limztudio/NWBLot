@@ -13,12 +13,22 @@ class GpuRasterTask{
     public GpuFrame frame;
     public GpuGraphResourceId color;
     public GpuGraphResourceId skin;
-    public GpuGraphPipelineId pipeline;
+    public Array<GpuGraphPipelineId, s_PaintBlendModeCount> pipelines;
     public GpuGraphResourceId vertices;
     public GpuGraphResourceId indices;
+    public GpuGraphResourceId effectBuffer;
+    public GpuGraphResourceId sampledScratch;
     public GpuSampledGraphResources glyphPages;
     public GpuSampledGraphResources sdfPages;
     public GpuSampledGraphResources textureImages;
+    public DrawCommand syntheticCommand;
+    public usize commandBegin = 0u;
+    public usize commandEnd = 0u;
+    public usize captureIndex = usize.max;
+    public usize tokenSlotIndex = usize.max;
+    public u32 sampledScratchSlot = 0xffffffffu;
+    public u8 targetKind = 0u;
+    public u8 passMode = 0u;
 
     public GpuTaskCommandRequirements commandRequirements()const{
         GpuTaskCommandRequirements requirements;
@@ -31,9 +41,13 @@ class GpuRasterTask{
         return RecordGpuRaster(this, commands, context);
     }
     public void accepted(in QueueSubmissionToken token){
-        this.frame.deref().m_raster = token;
+        if(this.tokenSlotIndex == usize.max)
+            this.frame.deref().m_raster = token;
+        else if(this.tokenSlotIndex < this.frame.deref().m_extraTokens.size())
+            this.frame.deref().m_extraTokens[this.tokenSlotIndex] = token;
         if(
-            this.frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay
+            (this.tokenSlotIndex == usize.max || this.tokenSlotIndex == 0u)
+            && this.frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay
             && !this.frame.deref().m_snapshot.vertices().empty()
             && !this.frame.deref().m_snapshot.commands().empty()
             && this.frame.deref().m_resources.valid()
@@ -109,6 +123,39 @@ b8 GpuPipelineMatches(in GpuTaskGraphDeclarationReadView declarations, in GpuGra
     return actual.has_value() == expected.valid() && (!actual.has_value() || SameAddress(actual.value(), expected.deref()));
 }
 
+b8 AllGpuRasterPipelinesMatch(
+    in GpuTaskGraphDeclarationReadView declarations,
+    in Array<GpuGraphPipelineId, s_PaintBlendModeCount> ids,
+    in Array<GraphicsPipelineHandle, s_PaintBlendModeCount> expected
+){
+    for(usize i = 0u; i < s_PaintBlendModeCount; ++i){
+        if(!ids[i].valid() || !GpuPipelineMatches(declarations, ids[i], expected[i]))
+            return false;
+    }
+    return true;
+}
+
+usize ResolveGpuPassDrawCommandCount(in GpuRasterTask payload, in DrawSnapshot snapshot){
+    if(payload.passMode == 2u)
+        return 1u;
+    if(payload.passMode == 1u){
+        if(payload.commandBegin <= payload.commandEnd && payload.commandEnd <= snapshot.effectCommands().size())
+            return payload.commandEnd - payload.commandBegin;
+        return 0u;
+    }
+    if(payload.commandBegin <= payload.commandEnd && payload.commandEnd <= snapshot.commands().size())
+        return payload.commandEnd - payload.commandBegin;
+    return 0u;
+}
+
+in DrawCommand BorrowGpuPassDrawCommand(in GpuRasterTask payload, in DrawSnapshot snapshot, in usize offset){
+    if(payload.passMode == 2u)
+        return payload.syntheticCommand;
+    if(payload.passMode == 1u)
+        return snapshot.effectCommands()[payload.commandBegin + offset];
+    return snapshot.commands()[payload.commandBegin + offset];
+}
+
 [cpp_unwind]
 b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture capture, mut CommandList commands){
     if(capture.recordCount() == 0u)
@@ -138,13 +185,18 @@ b8 CaptureOutputState(
 }
 
 [cpp_unwind]
-b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext context, mut CommandList commands){
+b8 RecordRasterCommandIr(
+    in GpuRasterTask payload,
+    in GpuTaskRecordContext context,
+    in TextureHandle targetColor,
+    in FramebufferHandle targetFramebuffer,
+    in u32 effectBufferSlot,
+    mut CommandList commands
+){
     if(context.hasCommandIrCapture())
         return false;
     in GpuFrame frame = payload.frame;
-    if(!frame.valid() || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid() || !payload.pipeline.valid())
-        return false;
-    if(!GpuPipelineMatches(context.declarations, payload.pipeline, frame.deref().m_resources.deref().m_pipeline))
+    if(!AllGpuRasterPipelinesMatch(context.declarations, payload.pipelines, frame.deref().m_resources.deref().m_pipelines))
         return false;
     if(frame.deref().m_snapshot.vertices().empty())
         return frame.deref().m_snapshot.commands().empty() && !commands.commandRecordingFailed();
@@ -154,9 +206,16 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
         || !GpuBufferMatches(context.declarations, payload.indices, frame.deref().m_indices)
     )
         return false;
-    if(!frame.deref().m_rasterCommandIrCapture.valid())
+
+    GpuVersion<GpuCommandIrCapture> captureVersion;
+    if(payload.captureIndex == usize.max)
+        captureVersion = frame.deref().m_rasterCommandIrCapture;
+    else if(payload.captureIndex < frame.deref().m_extraCommandIrCaptures.size())
+        captureVersion = frame.deref().m_extraCommandIrCaptures[payload.captureIndex];
+    if(!captureVersion.valid())
         return false;
-    mut GpuCommandIrCapture capture = frame.deref().m_rasterCommandIrCapture.deref();
+
+    mut GpuCommandIrCapture capture = captureVersion.deref();
     capture.reset();
     GpuCommandIrCaptureResetGuard captureResetGuard(capture);
     if(!capture.beginRecordingAttempt(context.recordingAttemptGeneration))
@@ -165,7 +224,7 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
     const auto descriptorOwner = RetainGpuCommandIrOwner<GpuFrame>(capture, frame);
     if(!descriptorOwner.has_value())
         return false;
-    in TextureDesc target = frame.deref().m_target.deref().m_color.deref().getDescription();
+    in TextureDesc target = targetColor.deref().getDescription();
     const GpuRasterGeometry geometry(frame.deref().m_snapshot.displayMetrics(), target.width, target.height);
     const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame.deref().m_resources.deref().m_samplerDescriptor.slot());
     if(!initialPush.has_value())
@@ -173,10 +232,8 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
     GpuPaintPushConstants push = initialPush.value();
     const Viewport viewport(0.0f, cast<f32>(target.width), 0.0f, cast<f32>(target.height), 0.0f, 1.0f);
     GpuCommandIrRasterStateDesc rasterState;
-    rasterState.pipeline = payload.pipeline;
-    rasterState.pipelineOwner = frame.deref().m_resources.deref().m_pipeline;
     rasterState.colorAttachment = payload.color;
-    rasterState.framebufferOwner = frame.deref().m_target.deref().m_framebuffer;
+    rasterState.framebufferOwner = targetFramebuffer;
     rasterState.viewport = viewport;
     rasterState.hasScissor = true;
     GpuCommandIrRasterVertexOwner vertex;
@@ -188,26 +245,36 @@ b8 RecordRasterCommandIr(in GpuRasterTask payload, in GpuTaskRecordContext conte
     rasterState.indexBuffer = frame.deref().m_indices;
     rasterState.indexFormat = Format::R32_UINT;
     GpuScissorRect boundScissor = GpuScissorRect();
+    PaintBlendMode boundBlendMode = PaintBlendMode::Normal;
     GpuPaintPushConstants boundPush;
     b8 hasPush = false;
     b8 hasRasterState = false;
     b8 hasDraw = false;
-    for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
+    const usize commandCount = ResolveGpuPassDrawCommandCount(payload, frame.deref().m_snapshot);
+    for(usize cmdIdx = 0u; cmdIdx < commandCount; ++cmdIdx){
+        in DrawCommand draw = BorrowGpuPassDrawCommand(payload, frame.deref().m_snapshot, cmdIdx);
+        if(draw.blendMode > PaintBlendMode::Replace)
+            return false;
         const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
         if(!resolvedScissor.has_value() || draw.indexCount == 0u)
             continue;
         in GpuScissorRect scissor = resolvedScissor.value();
-        if(!hasRasterState || !SameGpuScissorRect(scissor, boundScissor)){
+        const b8 pipelineChanged = !hasRasterState || draw.blendMode != boundBlendMode;
+        if(pipelineChanged || !SameGpuScissorRect(scissor, boundScissor)){
+            const usize modeIdx = cast<usize>(draw.blendMode);
+            rasterState.pipeline = payload.pipelines[modeIdx];
+            rasterState.pipelineOwner = frame.deref().m_resources.deref().m_pipelines[modeIdx];
             rasterState.scissor = scissor;
             if(!capture.captureSetGraphicsState(context.task, context.packet, context.queue, rasterState))
                 return false;
-            if(!hasRasterState && !capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.pipeline, frame.deref().m_resources.deref().m_pipeline, descriptorOwner.value()))
+            if(pipelineChanged && !capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, rasterState.pipeline, rasterState.pipelineOwner, descriptorOwner.value()))
                 return false;
+            boundBlendMode = draw.blendMode;
             boundScissor = scissor;
             hasRasterState = true;
             hasPush = false;
         }
-        if(!ResolvePaintPushConstants(frame.deref(), draw, push))
+        if(!ResolvePaintPushConstants(frame.deref(), draw, effectBufferSlot, payload.sampledScratchSlot, push))
             return false;
         if(!hasPush || !SameGpuPaintPushConstants(push, boundPush)){
             if(!capture.capturePushValue(context.task, context.packet, context.queue, push))
@@ -267,13 +334,19 @@ Optional<GpuScissorRect> ResolveGpuScissorRect(in GpuRasterGeometry geometry, in
     return Optional<GpuScissorRect>(bounds.value());
 }
 
-b8 ResolvePaintPushConstants(in GpuFrameData frame, in DrawCommand draw, mut GpuPaintPushConstants push){
+b8 ResolvePaintPushConstants(
+    in GpuFrameData frame,
+    in DrawCommand draw,
+    in u32 effectBufferSlot,
+    in u32 sampledScratchSlot,
+    mut GpuPaintPushConstants push
+){
     u32 textureSlot = s_ShaderUiInvalidHeapSlot;
     u32 sdfSpreadPixels = 0u;
     u32 sdfDistanceEncoding = 0u;
     if(draw.material == PaintMaterial::Skin)
         textureSlot = frame.m_skin.deref().m_texture.sampledImageHeapHandle.slot();
-    else if(draw.material == PaintMaterial::Glyph){
+    else if(draw.material == PaintMaterial::Glyph || draw.material == PaintMaterial::ColorGlyph){
         if(draw.glyphPageIndex >= frame.m_glyphPages.size())
             return false;
         textureSlot = frame.m_glyphPages[draw.glyphPageIndex].deref().m_sampledImage.slot();
@@ -291,19 +364,71 @@ b8 ResolvePaintPushConstants(in GpuFrameData frame, in DrawCommand draw, mut Gpu
             return false;
         textureSlot = frame.m_textureImages[draw.textureImageIndex].deref().m_texture.sampledImageHeapHandle.slot();
     }
-    AssignGpuPaintMaterialPushConstants(draw.material, textureSlot, draw.sdfChannel, sdfSpreadPixels, sdfDistanceEncoding, push);
+    else if(draw.material == PaintMaterial::Blur || draw.material == PaintMaterial::EffectLayerComposite){
+        if(sampledScratchSlot == s_ShaderUiInvalidHeapSlot)
+            return false;
+        textureSlot = sampledScratchSlot;
+    }
+    if(
+        (
+            draw.clipMaskOffset != u32.max
+            || draw.material == PaintMaterial::Gradient
+            || draw.material == PaintMaterial::DropShadow
+            || draw.material == PaintMaterial::Blur
+        )
+        && effectBufferSlot == s_ShaderUiInvalidHeapSlot
+    )
+        return false;
+    AssignGpuPaintMaterialPushConstants(
+        draw.material, textureSlot, draw.sdfChannel, sdfSpreadPixels, sdfDistanceEncoding,
+        effectBufferSlot, draw.effectOffset, draw.clipMaskOffset, push
+    );
     return true;
 }
 
 [cpp_unwind]
 b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTaskRecordContext context){
     in GpuFrame frame = payload.frame;
+    if(!frame.valid() || !frame.deref().m_prepared || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid())
+        return false;
+
+    TextureHandle targetColor;
+    FramebufferHandle targetFramebuffer;
+    if(payload.targetKind == 1u){
+        if(!frame.deref().m_scratchA.valid())
+            return false;
+        targetColor = frame.deref().m_scratchA.deref().m_color;
+        targetFramebuffer = frame.deref().m_scratchA.deref().m_framebuffer;
+    }
+    else if(payload.targetKind == 2u){
+        if(!frame.deref().m_scratchB.valid())
+            return false;
+        targetColor = frame.deref().m_scratchB.deref().m_color;
+        targetFramebuffer = frame.deref().m_scratchB.deref().m_framebuffer;
+    }
+    else{
+        targetColor = frame.deref().m_target.deref().m_color;
+        targetFramebuffer = frame.deref().m_target.deref().m_framebuffer;
+    }
+
     if(
-        !frame.valid() || !frame.deref().m_prepared || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid()
-        || !GpuTextureMatches(context.declarations, payload.color, frame.deref().m_target.deref().m_color)
+        !GpuTextureMatches(context.declarations, payload.color, targetColor)
         || !GpuTextureMatches(context.declarations, payload.skin, frame.deref().m_skin.deref().m_texture.texture)
     )
         return false;
+    if(payload.effectBuffer.valid()){
+        if(!frame.deref().m_effectBuffer.valid() || !GpuBufferMatches(context.declarations, payload.effectBuffer, frame.deref().m_effectBuffer.deref().m_buffer))
+            return false;
+    }
+    if(payload.sampledScratch.valid()){
+        TextureHandle scratchTex;
+        if(frame.deref().m_scratchA.valid() && frame.deref().m_scratchA.deref().m_sampledImage.slot() == payload.sampledScratchSlot)
+            scratchTex = frame.deref().m_scratchA.deref().m_color;
+        else if(frame.deref().m_scratchB.valid() && frame.deref().m_scratchB.deref().m_sampledImage.slot() == payload.sampledScratchSlot)
+            scratchTex = frame.deref().m_scratchB.deref().m_color;
+        if(!scratchTex.valid() || !GpuTextureMatches(context.declarations, payload.sampledScratch, scratchTex))
+            return false;
+    }
     if(!MatchesPreparedGpuSampledCounts(
         payload.glyphPages.size(),
         frame.deref().m_glyphPages.size(),
@@ -325,8 +450,13 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         if(!GpuTextureMatches(context.declarations, payload.textureImages[index], frame.deref().m_textureImages[index].deref().m_texture.texture))
             return false;
     }
+
+    u32 effectBufferSlot = s_ShaderUiInvalidHeapSlot;
+    if(frame.deref().m_effectBuffer.valid())
+        effectBufferSlot = frame.deref().m_effectBuffer.deref().m_descriptor.slot();
+
     if(frame.deref().m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
-        return RecordRasterCommandIr(payload, context, commands);
+        return RecordRasterCommandIr(payload, context, targetColor, targetFramebuffer, effectBufferSlot, commands);
     if(frame.deref().m_snapshot.vertices().empty())
         return frame.deref().m_snapshot.commands().empty() && !commands.commandRecordingFailed();
     if(
@@ -335,7 +465,7 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
         || !GpuBufferMatches(context.declarations, payload.indices, frame.deref().m_indices)
     )
         return false;
-    in TextureDesc target = frame.deref().m_target.deref().m_color.deref().getDescription();
+    in TextureDesc target = targetColor.deref().getDescription();
     const GpuRasterGeometry geometry(frame.deref().m_snapshot.displayMetrics(), target.width, target.height);
     const auto initialPush = TryInitializeGpuPaintPushConstants(geometry, frame.deref().m_resources.deref().m_samplerDescriptor.slot());
     if(!initialPush.has_value())
@@ -349,34 +479,41 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
     indices.setBuffer(frame.deref().m_indices.deref()).setFormat(Format::R32_UINT);
     GraphicsState state;
     state
-        .setPipeline(frame.deref().m_resources.deref().m_pipeline.deref())
-        .setFramebuffer(frame.deref().m_target.deref().m_framebuffer.deref())
+        .setFramebuffer(targetFramebuffer.deref())
         .addVertexBuffer(vertices)
         .setIndexBuffer(indices)
     ;
     GpuScissorRect boundScissor = GpuScissorRect();
+    PaintBlendMode boundBlendMode = PaintBlendMode::Normal;
     GpuPaintPushConstants boundPush;
     b8 hasPush = false;
     b8 heapBound = false;
-    for(in DrawCommand draw : frame.deref().m_snapshot.commands()){
+    const usize commandCount = ResolveGpuPassDrawCommandCount(payload, frame.deref().m_snapshot);
+    for(usize cmdIdx = 0u; cmdIdx < commandCount; ++cmdIdx){
+        in DrawCommand draw = BorrowGpuPassDrawCommand(payload, frame.deref().m_snapshot, cmdIdx);
+        if(draw.blendMode > PaintBlendMode::Replace)
+            return false;
         const auto resolvedScissor = ResolveGpuScissorRect(geometry, draw);
-        if(!resolvedScissor.has_value())
+        if(!resolvedScissor.has_value() || draw.indexCount == 0u)
             continue;
         in GpuScissorRect scissor = resolvedScissor.value();
-        if(!heapBound){
+        if(!heapBound || draw.blendMode != boundBlendMode){
+            in GraphicsPipelineHandle pipelineHandle = frame.deref().m_resources.deref().pipeline(draw.blendMode);
             ViewportState view;
             view.addViewport(viewport).addScissorRect(scissor);
-            state.setViewport(view);
+            state.setPipeline(pipelineHandle.deref()).setViewport(view);
             commands.setGraphicsState(state);
-            heap.bindGraphics(commands, frame.deref().m_resources.deref().m_pipeline.deref());
+            heap.bindGraphics(commands, pipelineHandle.deref());
             heapBound = true;
+            boundBlendMode = draw.blendMode;
             boundScissor = scissor;
+            hasPush = false;
         }
         else if(!SameGpuScissorRect(scissor, boundScissor)){
             commands.setScissorRect(scissor);
             boundScissor = scissor;
         }
-        if(!ResolvePaintPushConstants(frame.deref(), draw, push))
+        if(!ResolvePaintPushConstants(frame.deref(), draw, effectBufferSlot, payload.sampledScratchSlot, push))
             return false;
         if(!hasPush || !SameGpuPaintPushConstants(push, boundPush)){
             commands.setPushConstants(push);

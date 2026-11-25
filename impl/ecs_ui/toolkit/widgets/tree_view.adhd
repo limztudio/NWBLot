@@ -1,0 +1,744 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "list.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_TreeMaxDepth = 64u;
+const u64 s_TreeMaxVisibleNodes = 65536u;
+const f32 s_TreeDefaultIndentWidth = 18.0f;
+const f32 s_TreeDefaultToggleExtent = 14.0f;
+const f32 s_TreeDefaultToggleGap = 4.0f;
+const Color s_TreeDefaultToggleColor = Color(0.78f, 0.82f, 0.88f, 1.0f);
+const Color s_TreeDefaultToggleHoverColor = Color(1.0f, 1.0f, 1.0f, 1.0f);
+const Color s_TreeDefaultGuideLineColor = Color(0.28f, 0.32f, 0.38f, 0.55f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+interface ITreeDataSource{
+    u64 instanceGeneration()const;
+    u64 revision()const;
+    u64 childCount(in u64 parentKey)const;
+    u64 childKey(in u64 parentKey, in u64 childIndex)const;
+    b8 hasChildren(in u64 nodeKey)const;
+    StringView label(in u64 nodeKey)const;
+    b8 enabled(in u64 nodeKey)const;
+}
+
+class TreeVisibleNode{
+    public u64 key = 0u;
+    public u64 parentKey = 0u;
+    public u32 depth = 0u;
+    public b8 hasChildren = false;
+    public b8 expanded = false;
+    public b8 enabled = true;
+}
+
+class TreeStyle{
+    public ListStyle list;
+    public f32 indentWidth = s_TreeDefaultIndentWidth;
+    public f32 toggleExtent = s_TreeDefaultToggleExtent;
+    public f32 toggleGap = s_TreeDefaultToggleGap;
+    public Color toggleColor = s_TreeDefaultToggleColor;
+    public Color toggleHoverColor = s_TreeDefaultToggleHoverColor;
+    public Color guideLineColor = s_TreeDefaultGuideLineColor;
+    public b8 showGuideLines = true;
+}
+
+class TreeOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Fixed, s_ListDefaultHeight);
+    public ListSelectionMode selectionMode = ListSelectionMode::Single;
+    public ScrollbarPolicy horizontalScrollbar = ScrollbarPolicy::Auto;
+    public ScrollbarPolicy verticalScrollbar = ScrollbarPolicy::Auto;
+    public f32 wheelRows = s_StyleScrollWheelStep;
+    public f32 wheelColumns = 32.0f;
+    public b8 enabled = true;
+    public b8 selectOnNavigate = true;
+    public LayoutItemOptions layout;
+}
+
+class TreeResult{
+    public b8 valid = false;
+    public b8 selectionChanged = false;
+    public b8 expansionChanged = false;
+    public b8 activated = false;
+    public b8 focused = false;
+    public u64 toggledKey = 0u;
+    public u64 activatedKey = 0u;
+}
+
+class TreeBuildStackEntry{
+    public u64 parentKey = 0u;
+    public u64 childIndex = 0u;
+    public u64 childCount = 0u;
+    public u32 depth = 0u;
+}
+
+class TreeState : NoCopy{
+    public ListMeasureKey m_measureKey;
+    public HashSet<u64> m_expandedKeys;
+    public Vector<TreeVisibleNode> m_visibleNodes;
+    public HashMap<u64, u64> m_visibleIndexByKey;
+    public Vector<u64> m_selectedKeys;
+    public HashSet<u64> m_selectedKeySet;
+    public ScrollState m_scroll;
+    public ScrollState m_scrollX;
+    public ScrollPlacement m_placement;
+    public ScrollViewportPlacement m_scrollbars;
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_selected = 0u;
+    public u64 m_cursor = 0u;
+    public u64 m_anchor = 0u;
+    public u64 m_sourceGeneration = 0u;
+    public u64 m_sourceRevision = 0u;
+    public u64 m_expandRevision = 1u;
+    public u64 m_cachedExpandRevision = 0u;
+    public u64 m_visibleFirstRow = 0u;
+    public u64 m_visibleEndRow = 0u;
+    public f64 m_contentWidth = 0.0;
+    public f32 m_rowHeight = 0.0f;
+    public f32 m_scrollRowHeight = 0.0f;
+    public u64 m_scrollSourceGeneration = 0u;
+    public b8 m_ensureCursor = false;
+
+    public u64 instanceGeneration()const{ return this.m_scroll.instanceGeneration(); }
+    public u64 inputGeneration()const{ return this.m_inputGeneration; }
+    public u64 selectedKey()const{ return this.m_selected; }
+    public u64 cursorKey()const{ return this.m_cursor; }
+    public u64 anchorKey()const{ return this.m_anchor; }
+    public in Vector<u64> selectedKeys()const{ return this.m_selectedKeys; }
+    public usize selectedCount()const{ return this.m_selectedKeys.size(); }
+    public b8 isSelected(in u64 key)const{ return key != 0u && (this.m_selected == key || this.m_selectedKeySet.find(key) != this.m_selectedKeySet.end()); }
+    public b8 isExpanded(in u64 key)const{ return key != 0u && this.m_expandedKeys.find(key) != this.m_expandedKeys.end(); }
+    public f64 scrollOffset()const{ return this.m_scroll.offset(); }
+    public f64 scrollOffsetX()const{ return this.m_scrollX.offset(); }
+    public in Vector<TreeVisibleNode> visibleNodes()const{ return this.m_visibleNodes; }
+    public u64 visibleCount()const{ return cast<u64>(this.m_visibleNodes.size()); }
+    public u64 visibleFirstRow()const{ return this.m_visibleFirstRow; }
+    public u64 visibleEndRow()const{ return this.m_visibleEndRow; }
+    public in ScrollPlacement placement()const{ return this.m_placement; }
+    public in ScrollViewportPlacement scrollbars()const{ return this.m_scrollbars; }
+
+    public void setExpanded(in u64 key, in b8 expanded){
+        if(key == 0u)
+            return;
+        const b8 had = this.m_expandedKeys.find(key) != this.m_expandedKeys.end();
+        if(expanded && !had){
+            this.m_expandedKeys.insert(key);
+            AdvanceNonWrappingRevision(this.m_expandRevision);
+        }
+        else if(!expanded && had){
+            this.m_expandedKeys.erase(key);
+            AdvanceNonWrappingRevision(this.m_expandRevision);
+        }
+        this.m_inputGeneration = AllocateServiceIdentity();
+    }
+
+    public void toggleExpanded(in u64 key){
+        if(key == 0u)
+            return;
+        this.setExpanded(key, !this.isExpanded(key));
+    }
+
+    public void collapseAll(){
+        if(!this.m_expandedKeys.empty()){
+            this.m_expandedKeys.clear();
+            AdvanceNonWrappingRevision(this.m_expandRevision);
+        }
+        this.m_inputGeneration = AllocateServiceIdentity();
+    }
+
+    public void select(in u64 key){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKeys.clear();
+        this.m_selectedKeySet.clear();
+        if(key != 0u){
+            this.m_selectedKeys.push_back(key);
+            this.m_selectedKeySet.insert(key);
+        }
+        this.m_selected = key;
+        this.m_cursor = key;
+        this.m_anchor = key;
+        this.m_ensureCursor = key != 0u;
+    }
+
+    public void clearSelection(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKeys.clear();
+        this.m_selectedKeySet.clear();
+        this.m_selected = 0u;
+        this.m_anchor = 0u;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidTreeOptions(in TreeOptions options){
+    return IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && options.selectionMode < ListSelectionMode::kCount
+        && options.horizontalScrollbar <= ScrollbarPolicy::Never
+        && options.verticalScrollbar <= ScrollbarPolicy::Never
+        && IsFinite(VectorSingle(options.wheelRows, options.wheelColumns, 0.0f, 0.0f))
+        && options.wheelRows > 0.0f
+        && options.wheelColumns > 0.0f;
+}
+
+b8 IsValidTreeStyle(in TreeStyle style){
+    return IsBoundedUiPadding(style.list.row.padding)
+        && IsValidUiPadding(style.list.padding)
+        && IsFinite(VectorSingle(style.list.scrollbarWidth, style.list.minimumThumb, style.indentWidth, style.toggleExtent))
+        && IsFinite(VectorSingle(style.toggleGap, 0.0f, 0.0f, 0.0f))
+        && style.list.scrollbarWidth >= 0.0f
+        && style.list.minimumThumb >= 0.0f
+        && style.indentWidth >= 0.0f
+        && style.toggleExtent > 0.0f
+        && style.toggleGap >= 0.0f
+        && IsValidPaintColor(style.toggleColor)
+        && IsValidPaintColor(style.toggleHoverColor)
+        && IsValidPaintColor(style.guideLineColor);
+}
+
+b8 MatchesTreeSource(in ITreeDataSource source, in u64 generation, in u64 revision){
+    return source.instanceGeneration() == generation && source.revision() == revision;
+}
+
+b8 RebuildTreeVisibleNodes(
+    in ITreeDataSource source,
+    in u64 generation,
+    in u64 revision,
+    in HashSet<u64> expandedKeys,
+    mut Vector<TreeVisibleNode> outNodes,
+    mut HashMap<u64, u64> outIndexByKey
+){
+    if(!MatchesTreeSource(source, generation, revision))
+        return false;
+    Vector<TreeVisibleNode> nodes;
+    HashSet<u64> seenKeys;
+    Vector<TreeBuildStackEntry> stack;
+    const u64 rootCount = source.childCount(0u);
+    if(!MatchesTreeSource(source, generation, revision))
+        return false;
+    if(rootCount > s_TreeMaxVisibleNodes)
+        return false;
+    if(rootCount > 0u){
+        TreeBuildStackEntry rootEntry;
+        rootEntry.parentKey = 0u;
+        rootEntry.childIndex = 0u;
+        rootEntry.childCount = rootCount;
+        rootEntry.depth = 0u;
+        stack.push_back(rootEntry);
+    }
+    while(!stack.empty()){
+        const usize topIdx = stack.size() - 1u;
+        const u64 parentKey = stack[topIdx].parentKey;
+        const u64 childIndex = stack[topIdx].childIndex;
+        const u64 childCount = stack[topIdx].childCount;
+        const u32 depth = stack[topIdx].depth;
+        if(childIndex >= childCount){
+            stack.pop_back();
+            continue;
+        }
+        stack[topIdx].childIndex = childIndex + 1u;
+        const u64 key = source.childKey(parentKey, childIndex);
+        if(key == 0u || !MatchesTreeSource(source, generation, revision) || seenKeys.find(key) != seenKeys.end())
+            return false;
+        if(nodes.size() >= cast<usize>(s_TreeMaxVisibleNodes))
+            return false;
+        seenKeys.insert(key);
+        const b8 hasChildren = source.hasChildren(key);
+        const b8 nodeEnabled = source.enabled(key);
+        if(!MatchesTreeSource(source, generation, revision))
+            return false;
+        const b8 expanded = hasChildren && expandedKeys.find(key) != expandedKeys.end();
+        TreeVisibleNode node;
+        node.key = key;
+        node.parentKey = parentKey;
+        node.depth = depth;
+        node.hasChildren = hasChildren;
+        node.expanded = expanded;
+        node.enabled = nodeEnabled;
+        nodes.push_back(node);
+        if(expanded){
+            if(depth + 1u >= s_TreeMaxDepth)
+                return false;
+            const u64 grandCount = source.childCount(key);
+            if(!MatchesTreeSource(source, generation, revision))
+                return false;
+            if(grandCount > s_TreeMaxVisibleNodes)
+                return false;
+            if(grandCount > 0u){
+                TreeBuildStackEntry childEntry;
+                childEntry.parentKey = key;
+                childEntry.childIndex = 0u;
+                childEntry.childCount = grandCount;
+                childEntry.depth = depth + 1u;
+                stack.push_back(childEntry);
+            }
+        }
+    }
+    if(!MatchesTreeSource(source, generation, revision))
+        return false;
+    outNodes.clear();
+    outNodes.reserve(nodes.size());
+    outIndexByKey.clear();
+    outIndexByKey.reserve(nodes.size());
+    for(usize idx = 0u; idx < nodes.size(); ++idx){
+        outNodes.push_back(nodes[idx]);
+        outIndexByKey.try_emplace(nodes[idx].key, cast<u64>(idx));
+    }
+    return true;
+}
+
+b8 ReconcileTreeState(mut TreeState state, in ITreeDataSource source, in u64 collapsedAnchorKey){
+    const u64 inputGeneration = state.m_inputGeneration;
+    const u64 generation = source.instanceGeneration();
+    const u64 revision = source.revision();
+    if(generation == 0u || revision == 0u)
+        return false;
+    const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
+    const b8 needRebuild = replacement
+        || state.m_sourceGeneration != generation
+        || state.m_sourceRevision != revision
+        || state.m_cachedExpandRevision != state.m_expandRevision;
+    if(replacement){
+        state.m_expandedKeys.clear();
+        state.m_visibleNodes.clear();
+        state.m_visibleIndexByKey.clear();
+        state.m_selectedKeys.clear();
+        state.m_selectedKeySet.clear();
+        state.m_selected = 0u;
+        state.m_cursor = 0u;
+        state.m_anchor = 0u;
+        state.m_contentWidth = 0.0;
+        if(!state.m_scroll.setOffset(0.0) || !state.m_scrollX.setOffset(0.0))
+            return false;
+    }
+    if(needRebuild){
+        if(!RebuildTreeVisibleNodes(source, generation, revision, state.m_expandedKeys, state.m_visibleNodes, state.m_visibleIndexByKey))
+            return false;
+        state.m_contentWidth = 0.0;
+    }
+    if(state.m_inputGeneration != inputGeneration)
+        return false;
+    u64 anchorFallbackKey = 0u;
+    if(!replacement && collapsedAnchorKey != 0u){
+        const auto anchorFound = state.m_visibleIndexByKey.find(collapsedAnchorKey);
+        if(anchorFound != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(anchorFound.value())].enabled)
+            anchorFallbackKey = collapsedAnchorKey;
+    }
+    u64 selected = 0u;
+    u64 cursor = 0u;
+    u64 anchor = 0u;
+    Vector<u64> keptKeys;
+    HashSet<u64> keptSet;
+    b8 cursorPresent = false;
+    b8 anchorPresent = false;
+    if(!replacement){
+        selected = state.m_selected;
+        cursor = state.m_cursor;
+        anchor = state.m_anchor;
+        keptKeys.reserve(state.m_selectedKeys.size() + 1u);
+        for(in u64 key : state.m_selectedKeys){
+            if(key == 0u || keptSet.find(key) != keptSet.end())
+                continue;
+            const auto found = state.m_visibleIndexByKey.find(key);
+            if(found != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(found.value())].enabled){
+                keptKeys.push_back(key);
+                keptSet.insert(key);
+            }
+        }
+        if(selected != 0u && keptSet.find(selected) == keptSet.end()){
+            const auto foundSel = state.m_visibleIndexByKey.find(selected);
+            if(foundSel != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(foundSel.value())].enabled){
+                keptKeys.push_back(selected);
+                keptSet.insert(selected);
+            }
+        }
+        if(keptSet.find(selected) == keptSet.end()){
+            if(keptKeys.empty()){
+                if(anchorFallbackKey != 0u && !state.m_selectedKeySet.empty()){
+                    selected = anchorFallbackKey;
+                    keptKeys.push_back(anchorFallbackKey);
+                    keptSet.insert(anchorFallbackKey);
+                }
+                else
+                    selected = 0u;
+            }
+            else
+                selected = keptKeys.back();
+        }
+        if(cursor != 0u){
+            const auto foundCur = state.m_visibleIndexByKey.find(cursor);
+            if(foundCur != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(foundCur.value())].enabled)
+                cursorPresent = true;
+            else if(anchorFallbackKey != 0u){
+                cursor = anchorFallbackKey;
+                cursorPresent = true;
+            }
+        }
+        if(anchor != 0u){
+            const auto foundAnch = state.m_visibleIndexByKey.find(anchor);
+            if(foundAnch != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(foundAnch.value())].enabled)
+                anchorPresent = true;
+            else if(anchorFallbackKey != 0u){
+                anchor = anchorFallbackKey;
+                anchorPresent = true;
+            }
+        }
+    }
+    CopyListSelectionContainers(Span<u64>(keptKeys), state.m_selectedKeys, state.m_selectedKeySet);
+    if(anchorPresent)
+        state.m_anchor = anchor;
+    else
+        state.m_anchor = selected;
+    const b8 changed = state.m_sourceGeneration != generation || state.m_sourceRevision != revision || state.m_cachedExpandRevision != state.m_expandRevision;
+    state.m_selected = selected;
+    if(cursorPresent)
+        state.m_cursor = cursor;
+    else
+        state.m_cursor = selected;
+    state.m_ensureCursor = state.m_cursor != 0u && (state.m_ensureCursor || changed);
+    state.m_sourceGeneration = generation;
+    state.m_sourceRevision = revision;
+    state.m_cachedExpandRevision = state.m_expandRevision;
+    return true;
+}
+
+Expected<u64> FindEnabledTreeNodeIndex(in Span<TreeVisibleNode> nodes, in u64 start, in b8 reverse){
+    if(nodes.empty() || start >= nodes.size())
+        return MakeUnexpected(Failure());
+    u64 idx = start;
+    while(true){
+        if(nodes[cast<usize>(idx)].enabled)
+            return idx;
+        if(reverse){
+            if(idx == 0u)
+                return MakeUnexpected(Failure());
+            --idx;
+        }
+        else{
+            if(idx + 1u == nodes.size())
+                return MakeUnexpected(Failure());
+            ++idx;
+        }
+    }
+}
+
+u64 FindTreeEnabledParentKey(in TreeState state, in u64 key){
+    u64 current = key;
+    for(u32 step = 0u; step < s_TreeMaxDepth; ++step){
+        const auto found = state.m_visibleIndexByKey.find(current);
+        if(found == state.m_visibleIndexByKey.end())
+            return 0u;
+        in TreeVisibleNode node = state.m_visibleNodes[cast<usize>(found.value())];
+        if(node.parentKey == 0u)
+            return 0u;
+        const auto parentFound = state.m_visibleIndexByKey.find(node.parentKey);
+        if(parentFound == state.m_visibleIndexByKey.end())
+            return 0u;
+        if(state.m_visibleNodes[cast<usize>(parentFound.value())].enabled)
+            return node.parentKey;
+        current = node.parentKey;
+    }
+    return 0u;
+}
+
+void CollectEnabledTreeRangeKeys(in Span<TreeVisibleNode> nodes, in u64 startIdx, in u64 endIdx, mut Vector<u64> outKeys){
+    outKeys.clear();
+    if(startIdx >= nodes.size() || endIdx >= nodes.size())
+        return;
+    const u64 lo = Min(startIdx, endIdx);
+    const u64 hi = Max(startIdx, endIdx);
+    for(u64 i = lo; i <= hi; ++i){
+        in TreeVisibleNode node = nodes[cast<usize>(i)];
+        if(node.enabled && node.key != 0u)
+            outKeys.push_back(node.key);
+    }
+}
+
+b8 ApplyTreeSelectionCandidate(
+    in TreeOptions options,
+    in b8 activate,
+    in b8 extend,
+    in b8 toggle,
+    in u64 candidate,
+    mut TreeState state,
+    mut TreeResult result
+){
+    if(candidate == 0u){
+        result.valid = true;
+        return true;
+    }
+    if(options.selectionMode == ListSelectionMode::Single){
+        const u64 prevSelected = state.m_selected;
+        ListOptions listOpts;
+        listOpts.selectOnNavigate = options.selectOnNavigate;
+        ListResult listResult;
+        ApplyListCandidateSelection(listOpts, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, listResult);
+        if(state.m_selected != prevSelected || (state.m_selected != 0u && state.m_selectedKeySet.find(state.m_selected) == state.m_selectedKeySet.end()) || (state.m_selected == 0u && !state.m_selectedKeys.empty())){
+            state.m_selectedKeys.clear();
+            state.m_selectedKeySet.clear();
+            if(state.m_selected != 0u){
+                state.m_selectedKeys.push_back(state.m_selected);
+                state.m_selectedKeySet.insert(state.m_selected);
+            }
+        }
+        if(activate || options.selectOnNavigate)
+            state.m_anchor = state.m_selected;
+        result.selectionChanged = result.selectionChanged || listResult.selectionChanged;
+        if(activate){
+            result.activated = true;
+            result.activatedKey = candidate;
+        }
+        result.valid = true;
+        return true;
+    }
+    const auto candIdxFound = state.m_visibleIndexByKey.find(candidate);
+    if(candIdxFound == state.m_visibleIndexByKey.end())
+        return false;
+    const u64 candIdx = candIdxFound.value();
+    u64 nextAnchor = state.m_anchor;
+    Vector<u64> rangeKeys;
+    if(extend){
+        u64 resolvedAnchorKey = state.m_anchor;
+        u64 anchorIdx = candIdx;
+        b8 haveAnchor = false;
+        if(resolvedAnchorKey != 0u){
+            const auto anchorFound = state.m_visibleIndexByKey.find(resolvedAnchorKey);
+            if(anchorFound != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(anchorFound.value())].enabled){
+                haveAnchor = true;
+                anchorIdx = anchorFound.value();
+            }
+        }
+        if(!haveAnchor && state.m_cursor != 0u){
+            const auto curFound = state.m_visibleIndexByKey.find(state.m_cursor);
+            if(curFound != state.m_visibleIndexByKey.end() && state.m_visibleNodes[cast<usize>(curFound.value())].enabled){
+                haveAnchor = true;
+                resolvedAnchorKey = state.m_cursor;
+                anchorIdx = curFound.value();
+            }
+        }
+        if(!haveAnchor)
+            resolvedAnchorKey = candidate;
+        nextAnchor = resolvedAnchorKey;
+        CollectEnabledTreeRangeKeys(Span<TreeVisibleNode>(state.m_visibleNodes), anchorIdx, candIdx, rangeKeys);
+    }
+    const b8 changed = ApplyIndexedMultiSelectionMutation(
+        options.selectionMode,
+        options.selectOnNavigate,
+        activate,
+        extend,
+        toggle,
+        candidate,
+        nextAnchor,
+        Span<u64>(rangeKeys),
+        state.m_selectedKeys,
+        state.m_selectedKeySet,
+        state.m_selected,
+        state.m_cursor,
+        state.m_anchor,
+        state.m_ensureCursor
+    );
+    result.selectionChanged = result.selectionChanged || changed;
+    if(activate){
+        result.activated = true;
+        result.activatedKey = candidate;
+    }
+    result.valid = true;
+    return true;
+}
+
+b8 ApplyTreeControlAction(
+    in ITreeDataSource source,
+    in TreeOptions options,
+    in ControlAction action,
+    in b8 isToggleAction,
+    mut TreeState state,
+    mut TreeResult result
+){
+    const u64 inputGeneration = state.m_inputGeneration;
+    if(!IsValidTreeOptions(options) || !options.enabled || action.control.empty())
+        return false;
+    ControlToken token;
+    token.instanceGeneration = inputGeneration;
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    if(!token.valid() || action.control != token || cast<u8>(action.kind) > cast<u8>(ControlActionKind::Right))
+        return false;
+    if((action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown) && action.pageRows == 0u)
+        return false;
+    if(action.kind == ControlActionKind::Wheel){
+        b8 scrolled = false;
+        if(action.delta != 0.0){
+            const Expected<f64> nextY = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
+            if(!nextY.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(nextY.value()))
+                return false;
+            scrolled = true;
+        }
+        if(action.deltaX != 0.0 && options.horizontalScrollbar != ScrollbarPolicy::Never){
+            const Expected<f64> nextX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), action.deltaX, action.stepX, action.maximumX);
+            if(!nextX.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scrollX.setOffset(nextX.value()))
+                return false;
+            scrolled = true;
+        }
+        if(scrolled)
+            state.m_ensureCursor = false;
+        result.valid = true;
+        return true;
+    }
+    if(isToggleAction && action.kind == ControlActionKind::Activate){
+        const auto nodeFound = state.m_visibleIndexByKey.find(action.value);
+        if(nodeFound == state.m_visibleIndexByKey.end())
+            return false;
+        in TreeVisibleNode node = state.m_visibleNodes[cast<usize>(nodeFound.value())];
+        if(!node.enabled || !node.hasChildren)
+            return false;
+        const u64 nodeKey = node.key;
+        const b8 willExpand = !node.expanded;
+        u64 collapsedAnchor = 0u;
+        if(willExpand)
+            state.m_expandedKeys.insert(nodeKey);
+        else{
+            state.m_expandedKeys.erase(nodeKey);
+            collapsedAnchor = nodeKey;
+        }
+        AdvanceNonWrappingRevision(state.m_expandRevision);
+        const usize prevSelectedCount = state.m_selectedKeys.size();
+        const u64 prevSelected = state.m_selected;
+        if(!ReconcileTreeState(state, source, collapsedAnchor) || state.m_inputGeneration != inputGeneration)
+            return false;
+        result.expansionChanged = true;
+        result.toggledKey = nodeKey;
+        if(prevSelected != state.m_selected || prevSelectedCount != state.m_selectedKeys.size())
+            result.selectionChanged = true;
+        result.valid = true;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Right){
+        const auto curFound = state.m_visibleIndexByKey.find(state.m_cursor);
+        if(curFound != state.m_visibleIndexByKey.end()){
+            in TreeVisibleNode curNode = state.m_visibleNodes[cast<usize>(curFound.value())];
+            if(curNode.enabled && curNode.hasChildren && !curNode.expanded){
+                const u64 curKey = curNode.key;
+                state.m_expandedKeys.insert(curKey);
+                AdvanceNonWrappingRevision(state.m_expandRevision);
+                if(!ReconcileTreeState(state, source, 0u) || state.m_inputGeneration != inputGeneration)
+                    return false;
+                result.expansionChanged = true;
+                result.toggledKey = curKey;
+                result.valid = true;
+                return true;
+            }
+            if(curNode.hasChildren && curNode.expanded){
+                const u64 nextStart = curFound.value() + 1u;
+                for(u64 i = nextStart; i < cast<u64>(state.m_visibleNodes.size()); ++i){
+                    in TreeVisibleNode desc = state.m_visibleNodes[cast<usize>(i)];
+                    if(desc.depth <= curNode.depth)
+                        break;
+                    if(desc.enabled)
+                        return ApplyTreeSelectionCandidate(options, false, action.extend, action.toggle, desc.key, state, result);
+                }
+            }
+        }
+        result.valid = true;
+        return true;
+    }
+    if(action.kind == ControlActionKind::Left){
+        const auto curFound = state.m_visibleIndexByKey.find(state.m_cursor);
+        if(curFound != state.m_visibleIndexByKey.end()){
+            in TreeVisibleNode curNode = state.m_visibleNodes[cast<usize>(curFound.value())];
+            if(curNode.enabled && curNode.hasChildren && curNode.expanded){
+                const u64 curKey = curNode.key;
+                state.m_expandedKeys.erase(curKey);
+                AdvanceNonWrappingRevision(state.m_expandRevision);
+                const usize prevSelectedCount = state.m_selectedKeys.size();
+                const u64 prevSelected = state.m_selected;
+                if(!ReconcileTreeState(state, source, curKey) || state.m_inputGeneration != inputGeneration)
+                    return false;
+                result.expansionChanged = true;
+                result.toggledKey = curKey;
+                if(prevSelected != state.m_selected || prevSelectedCount != state.m_selectedKeys.size())
+                    result.selectionChanged = true;
+                result.valid = true;
+                return true;
+            }
+            const u64 parentKey = FindTreeEnabledParentKey(state, curNode.key);
+            if(parentKey != 0u)
+                return ApplyTreeSelectionCandidate(options, false, action.extend, action.toggle, parentKey, state, result);
+        }
+        result.valid = true;
+        return true;
+    }
+    const u64 count = cast<u64>(state.m_visibleNodes.size());
+    if(count == 0u){
+        result.valid = true;
+        return true;
+    }
+    const b8 activate = action.kind == ControlActionKind::Activate || action.kind == ControlActionKind::Submit;
+    u64 candidate = 0u;
+    if(activate){
+        u64 lookupKey = state.m_cursor;
+        if(action.kind == ControlActionKind::Activate)
+            lookupKey = action.value;
+        const auto found = state.m_visibleIndexByKey.find(lookupKey);
+        if(found == state.m_visibleIndexByKey.end()){
+            if(action.kind == ControlActionKind::Activate)
+                return false;
+            candidate = 0u;
+        }
+        else if(!state.m_visibleNodes[cast<usize>(found.value())].enabled){
+            if(action.kind == ControlActionKind::Activate)
+                return false;
+            candidate = 0u;
+        }
+        else
+            candidate = lookupKey;
+    }
+    else{
+        const b8 reverse = action.kind == ControlActionKind::Up || action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::End;
+        u64 start = 0u;
+        if(reverse)
+            start = count - 1u;
+        if(action.kind == ControlActionKind::Home)
+            start = 0u;
+        else if(action.kind == ControlActionKind::End)
+            start = count - 1u;
+        else{
+            const auto foundCur = state.m_visibleIndexByKey.find(state.m_cursor);
+            if(foundCur != state.m_visibleIndexByKey.end()){
+                const u64 curIdx = foundCur.value();
+                u64 dist = 1u;
+                if(action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown)
+                    dist = action.pageRows;
+                if(reverse)
+                    start = curIdx - Min(dist, curIdx);
+                else
+                    start = curIdx + Min(dist, count - 1u - curIdx);
+            }
+        }
+        const Expected<u64> targetIdx = FindEnabledTreeNodeIndex(Span<TreeVisibleNode>(state.m_visibleNodes), start, reverse);
+        if(targetIdx.has_value())
+            candidate = state.m_visibleNodes[cast<usize>(targetIdx.value())].key;
+    }
+    return ApplyTreeSelectionCandidate(options, activate, action.extend, action.toggle, candidate, state, result);
+}
+
+void ApplySkinPaletteToTreeStyle(in UiSkinPalette palette, mut TreeStyle style){
+    style.toggleColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
+    style.toggleHoverColor = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
+    style.guideLineColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

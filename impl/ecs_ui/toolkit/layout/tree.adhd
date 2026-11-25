@@ -76,6 +76,10 @@ class LayoutTree : NoCopy{
     public in Vector<LayoutBox> boxes()const{
         return this.m_boxes;
     }
+
+    public in Vector<LayoutTreeNode> nodes()const{
+        return this.m_nodes;
+    }
 }
 
 

@@ -25,6 +25,7 @@ class TransparentCsgIntervalProducerInputs{
     public in MeshViewGpuData meshViewState;
     public in DeferredGraphResourceImportResult resources;
     public GpuTaskId prefixTask;
+    public Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor;
     public b8 hasTransparentRenderers;
 
     public TransparentCsgIntervalProducerInputs(

@@ -1,0 +1,1418 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_ui/toolkit/builder.adhd>
+#include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
+#include <impl/ecs_ui/toolkit/widgets/ui_scope_descriptor_factory.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_MenuBarBorderThickness = 1.0f;
+const f32 s_ColorPickerBarBorderThickness = 1.0f;
+const f32 s_ColorPickerIndicatorHalfWidth = 2.0f;
+const f32 s_ColorPickerCheckerCellSize = 6.0f;
+const f32 s_ColorPickerReticleStrokeThickness = 1.5f;
+const f32 s_ToastBorderThickness = 1.0f;
+const f32 s_ToastCloseIconPaddingFraction = 0.25f;
+const f32 s_ToastCloseIconThickness = 1.5f;
+const Color s_ToastCloseIconColor = Color(0.85f, 0.88f, 0.94f, 0.95f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::beginModalDialog(in StringView stableKey, in StringView title, mut DialogState state, in DialogOptions options){
+    if(!IsValidDialogOptions(options) || !IsValidDialogStyle(this.m_dialogStyle)){
+        this.m_context.fail();
+        return false;
+    }
+    const b8 wasOpenBefore = state.isOpen();
+    state.m_closedThisFrame = false;
+
+    PopupOptions popupOptions;
+    popupOptions.size = options.size;
+    popupOptions.side = PopupPlacementSide::Center;
+    popupOptions.gap = 0.0f;
+    popupOptions.modal = options.modal;
+    popupOptions.blockOutsideInput = options.modal;
+    popupOptions.dismissOutside = options.dismissOutside;
+    popupOptions.dismissCancel = options.dismissCancel;
+    popupOptions.autofocus = options.autofocus;
+    if(!this.beginPopup(stableKey, state.m_popup, popupOptions)){
+        if(wasOpenBefore && !state.isOpen() && !this.m_context.failed())
+            state.m_closedThisFrame = true;
+        return false;
+    }
+
+    ContainerOptions headerOptions;
+    headerOptions.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    headerOptions.height = LayoutSize(LayoutSizePolicy::Fixed, this.m_dialogStyle.headerHeight);
+    headerOptions.gap = s_StyleSpacingMedium;
+    headerOptions.alignItems = LayoutAlign::Center;
+    if(!this.beginContainer(s_DialogHeaderScopeKey, LayoutDirection::Row, headerOptions)){
+        this.m_context.fail();
+        this.endPopup();
+        return false;
+    }
+
+    LabelOptions titleOptions;
+    titleOptions.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    titleOptions.ellipsis = true;
+    const b8 titleDeclared = this.label(s_DialogTitleItemKey, title, titleOptions);
+    b8 closeDeclared = true;
+    b8 closeClicked = false;
+    if(titleDeclared && options.closable){
+        WidgetOptions closeOptions;
+        closeOptions.width = LayoutSize(LayoutSizePolicy::Fixed, this.m_dialogStyle.closeButtonSize);
+        closeOptions.height = LayoutSize(LayoutSizePolicy::Fixed, this.m_dialogStyle.closeButtonSize);
+        closeClicked = this.button(s_DialogCloseButtonKey, "X", closeOptions);
+        closeDeclared = !this.m_context.failed();
+    }
+    const b8 headerEnded = this.endContainer();
+    if(!titleDeclared || !closeDeclared || !headerEnded){
+        this.m_context.fail();
+        this.endPopup();
+        return false;
+    }
+    if(closeClicked){
+        state.close();
+        state.m_closedThisFrame = true;
+        this.endPopup();
+        return false;
+    }
+
+    SeparatorOptions separatorOptions;
+    separatorOptions.length = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    separatorOptions.direction = SeparatorDirection::Horizontal;
+    if(!this.separator(s_DialogSeparatorItemKey, separatorOptions)){
+        this.m_context.fail();
+        this.endPopup();
+        return false;
+    }
+
+    ContainerOptions bodyOptions;
+    bodyOptions.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    bodyOptions.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    bodyOptions.padding = this.m_dialogStyle.bodyPadding;
+    bodyOptions.gap = this.m_style.gap;
+    if(!this.beginContainer(s_DialogBodyScopeKey, LayoutDirection::Column, bodyOptions)){
+        this.m_context.fail();
+        this.endPopup();
+        return false;
+    }
+    return true;
+}
+
+b8 Builder::endModalDialog(){
+    if(!this.m_scope.value().m_popupState.has_value()){
+        this.m_context.fail();
+        return false;
+    }
+    if(!this.endContainer())
+        return false;
+    return this.endPopup();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> menus, mut MenuBarState state, in MenuBarOptions options){
+    MenuBarResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidMenuBarMenus(menus)
+        || !IsValidMenuBarOptions(options)
+        || !IsValidMenuBarStyle(this.m_menuBarStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    const b8 popupVisible = this.synchronizePopup();
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::MenuBar);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
+        return result;
+    const auto popup = this.m_context.declarePart(widget.value(), s_WidgetPartPopup, WidgetKind::Popup);
+    const auto rows = this.m_context.declarePart(widget.value(), s_WidgetPartRows, WidgetKind::VirtualList);
+    const auto itemRoot = TryMakeWidgetId(widget.value().id, s_WidgetPartMenuItem);
+    if(!popup.has_value() || !rows.has_value() || !itemRoot.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+
+    BuilderMenuBarFrame frame;
+    frame.parentToken = this.m_context.popupToken();
+    frame.widget = widget.value();
+    frame.popup = popup.value();
+    frame.rows = rows.value();
+    frame.state = Optional<mut MenuBarState>(state);
+    frame.style = this.m_menuBarStyle;
+    frame.popupStyle = this.m_popupStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.options.enabled = options.enabled && popupVisible;
+
+    if(state.m_owner != frame.widget.id || state.m_ownerDeclaration != frame.widget.declarationGeneration){
+        if(state.m_owner.valid())
+            state.close();
+        state.m_owner = frame.widget.id;
+        state.m_ownerDeclaration = frame.widget.declarationGeneration;
+        state.m_focusedMenuKey = 0u;
+        state.m_itemRects.clear();
+        state.m_itemKeys.clear();
+        AdvanceNonWrappingRevision(state.m_revision);
+    }
+
+    const b8 previouslyFocused = this.m_context.input().focus() == frame.widget.id;
+    const b8 previouslyListFocused = this.m_context.input().focus() == frame.rows.id;
+    state.m_popup.bindParent(frame.parentToken);
+    frame.popupToken.widget = frame.popup.id;
+    frame.popupToken.declarationGeneration = frame.popup.declarationGeneration;
+    frame.popupToken.instanceGeneration = state.instanceGeneration();
+    frame.popupToken.openGeneration = state.m_popup.openGeneration();
+    frame.token.instanceGeneration = state.inputGeneration();
+    frame.token.contentGeneration = state.instanceGeneration();
+    frame.token.contentRevision = state.revision();
+
+    in InputRouter inputRef = this.m_context.input();
+    mut InputRouter input = this.m_context.input();
+    input.fencePopup(frame.popupToken);
+    if(input.consumePopupDismissal(frame.popupToken)){
+        state.close();
+        frame.token.instanceGeneration = state.inputGeneration();
+        frame.token.contentRevision = state.revision();
+        frame.popupToken.openGeneration = state.m_popup.openGeneration();
+        input.fencePopup(frame.popupToken);
+    }
+    input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
+
+    Vector<u64> menuKeys;
+    Vector<u8> menuEnabled;
+    menuKeys.reserve(menus.size());
+    menuEnabled.reserve(menus.size());
+    for(usize idx = 0u; idx < menus.size(); ++idx){
+        menuKeys.push_back(menus[idx].key);
+        u8 enabledByte = 0u;
+        if(frame.options.enabled && menus[idx].enabled)
+            enabledByte = 1u;
+        menuEnabled.push_back(enabledByte);
+    }
+
+    if(!frame.options.enabled){
+        state.close();
+        input.invalidateTarget(frame.widget.id);
+    }
+    else{
+        while(true){
+            const auto action = this.m_context.takeControlAction(frame.widget, true, frame.token);
+            if(!action.has_value())
+                break;
+            in ControlAction act = action.value();
+            b8 rotationNeeded = false;
+            if(act.kind == ControlActionKind::Activate){
+                const Expected<WidgetId> clickedPart = TryMakeWidgetPartId(itemRoot.value(), act.value);
+                u64 targetKey = 0u;
+                if(clickedPart.has_value() && act.source == clickedPart.value())
+                    targetKey = act.value;
+                else if(act.source == frame.widget.id){
+                    if(state.m_focusedMenuKey != 0u)
+                        targetKey = state.m_focusedMenuKey;
+                    else
+                        targetKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, true);
+                }
+                const Expected<usize> foundIdx = FindMenuBarIndexByKey(menus, targetKey);
+                if(foundIdx.has_value() && menus[foundIdx.value()].enabled){
+                    in MenuBarMenu targetMenu = menus[foundIdx.value()];
+                    state.m_focusedMenuKey = targetMenu.key;
+                    if(!targetMenu.items.has_value()){
+                        result.activated = true;
+                        result.menuKey = targetMenu.key;
+                        result.itemKey = 0u;
+                        if(state.isOpen()){
+                            state.close();
+                            rotationNeeded = true;
+                        }
+                    }
+                    else if(state.openMenuKey() == targetMenu.key){
+                        state.close();
+                        rotationNeeded = true;
+                    }
+                    else{
+                        state.openMenu(targetMenu.key);
+                        rotationNeeded = true;
+                    }
+                }
+            }
+            else if(
+                act.kind == ControlActionKind::Left
+                || act.kind == ControlActionKind::Right
+                || act.kind == ControlActionKind::Home
+                || act.kind == ControlActionKind::End
+            ){
+                u64 nextKey = 0u;
+                if(act.kind == ControlActionKind::Home)
+                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, true);
+                else if(act.kind == ControlActionKind::End)
+                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, false);
+                else{
+                    const b8 forward = act.kind == ControlActionKind::Right;
+                    u64 anchorKey = state.m_focusedMenuKey;
+                    if(state.isOpen())
+                        anchorKey = state.openMenuKey();
+                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), anchorKey, forward);
+                }
+                if(nextKey != 0u){
+                    state.m_focusedMenuKey = nextKey;
+                    if(state.isOpen()){
+                        const Expected<usize> foundNext = FindMenuBarIndexByKey(menus, nextKey);
+                        if(foundNext.has_value() && menus[foundNext.value()].items.has_value()){
+                            state.openMenu(nextKey);
+                            rotationNeeded = true;
+                        }
+                        else{
+                            state.close();
+                            rotationNeeded = true;
+                        }
+                    }
+                }
+            }
+            else if(act.kind == ControlActionKind::Down){
+                u64 targetKey = state.m_focusedMenuKey;
+                if(targetKey == 0u)
+                    targetKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, true);
+                const Expected<usize> foundTarget = FindMenuBarIndexByKey(menus, targetKey);
+                if(foundTarget.has_value() && menus[foundTarget.value()].enabled && menus[foundTarget.value()].items.has_value()){
+                    state.openMenu(targetKey);
+                    rotationNeeded = true;
+                }
+            }
+            if(rotationNeeded){
+                frame.token.instanceGeneration = state.inputGeneration();
+                frame.token.contentRevision = state.revision();
+                frame.popupToken.openGeneration = state.m_popup.openGeneration();
+                input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
+                input.fencePopup(frame.popupToken);
+            }
+        }
+
+        if(
+            state.isOpen()
+            && inputRef.pointerKnown()
+            && !inputRef.primaryDown()
+            && !inputRef.secondaryDown()
+            && !inputRef.capture().valid()
+        ){
+            in Point ptr = inputRef.pointerPosition();
+            for(usize ri = 0u; ri < state.m_itemRects.size() && ri < state.m_itemKeys.size(); ++ri){
+                const u64 hoverKey = state.m_itemKeys[ri];
+                if(hoverKey != state.openMenuKey() && IsPointInsideRect(ptr, state.m_itemRects[ri])){
+                    const Expected<usize> foundHover = FindMenuBarIndexByKey(menus, hoverKey);
+                    if(foundHover.has_value() && menus[foundHover.value()].enabled && menus[foundHover.value()].items.has_value()){
+                        state.openMenu(hoverKey);
+                        frame.token.instanceGeneration = state.inputGeneration();
+                        frame.token.contentRevision = state.revision();
+                        frame.popupToken.openGeneration = state.m_popup.openGeneration();
+                        input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
+                        input.fencePopup(frame.popupToken);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    const Expected<usize> openIdx = FindMenuBarIndexByKey(menus, state.openMenuKey());
+    if(state.isOpen() && (!openIdx.has_value() || !menus[openIdx.value()].enabled || !menus[openIdx.value()].items.has_value())){
+        state.close();
+        frame.token.instanceGeneration = state.inputGeneration();
+        frame.token.contentRevision = state.revision();
+        frame.popupToken.openGeneration = state.m_popup.openGeneration();
+        input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
+    }
+
+    if(state.isOpen()){
+        in IListDataSource openSource = menus[openIdx.value()].items.value();
+        frame.source = Optional<in IListDataSource>(openSource);
+        frame.listToken.contentGeneration = openSource.instanceGeneration();
+        frame.listToken.contentRevision = openSource.revision();
+        frame.rowCount = openSource.rowCount();
+    }
+    this.snapshotMenuBar(frame);
+    input.fencePopup(frame.popupToken);
+    input.fenceControl(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+
+    if(!frame.open)
+        input.closePopup(frame.popupToken);
+    else{
+        in IListDataSource openSource = frame.source.value();
+        if(!ReconcileListState(state.m_list, openSource) || !this.menuBarMatches(frame)){
+            this.m_context.fail();
+            return result;
+        }
+        if(state.m_list.cursorKey() == 0u){
+            ControlAction first;
+            first.control = frame.listToken;
+            first.kind = ControlActionKind::Home;
+            ListOptions cursorOpts;
+            cursorOpts.wheelRows = frame.options.wheelRows;
+            cursorOpts.selectOnNavigate = false;
+            ListResult cursorPreview;
+            if(!ApplyListControlAction(openSource, cursorOpts, first, state.m_list, cursorPreview) || !this.menuBarMatches(frame)){
+                this.m_context.fail();
+                return result;
+            }
+        }
+        if(!this.applyMenuBarListInput(frame, result)){
+            this.m_context.fail();
+            return result;
+        }
+        if(frame.open){
+            ListOptions listOptions;
+            listOptions.wheelRows = options.wheelRows;
+            listOptions.enabled = frame.options.enabled;
+            listOptions.selectOnNavigate = false;
+            const b8 focusOnCommit = frame.options.enabled && previouslyListFocused && this.m_context.input().focus() != frame.rows.id;
+            auto list = this.makeListFrame();
+            if(!this.prepareListFrame(openSource, state.m_list, listOptions, frame.listToken, frame.rowCount, focusOnCommit, WidgetId(), list).has_value() || !this.menuBarMatches(frame)){
+                this.m_context.fail();
+                return result;
+            }
+            frame.list = cast<u32>(this.m_scope.value().m_lists.size());
+            state.m_popup.bindParent(frame.parentToken);
+            if(!this.reserveCompoundPopup(frame.popup, frame.popupToken)){
+                this.m_context.fail();
+                return MenuBarResult();
+            }
+            AppendOwned<BuilderListFrame>(this.m_scope.value().m_lists, list);
+        }
+    }
+    frame.focusOnCommit = frame.options.enabled && !frame.open && previouslyFocused && this.m_context.input().focus() != frame.widget.id;
+
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    frame.labels.reserve(menus.size());
+    f32 totalWidth = 0.0f;
+    for(usize idx = 0u; idx < menus.size(); ++idx){
+        in MenuBarMenu menu = menus[idx];
+        const ShapeRequest req = this.textShapeRequest(menu.label, frame.widgetStyle.fontSize);
+        const auto measured = this.m_text.layoutAndMeasureShared(req, display);
+        if(!measured.has_value()){
+            this.m_context.fail();
+            return MenuBarResult();
+        }
+        MenuBarLabelEntry entry;
+        entry.key = menu.key;
+        entry.text = measured.value().layout;
+        entry.bounds = measured.value().bounds;
+        entry.enabled = menu.enabled;
+        entry.hasDropdown = menu.items.has_value();
+        frame.labels.push_back(entry);
+        const f32 itemW = entry.bounds.width + 2.0f * frame.style.itemPaddingX;
+        totalWidth += itemW;
+        if(idx + 1u < menus.size())
+            totalWidth += frame.style.itemGap;
+    }
+
+    auto item = this.makeItem();
+    item.state = frame.widget;
+    item.enabled = frame.options.enabled;
+    item.menuBar = cast<u32>(this.m_scope.value().m_menuBars.size());
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(
+        options.width,
+        LayoutSize(LayoutSizePolicy::Fixed, frame.style.height),
+        Point(totalWidth, frame.style.height),
+        options.layout
+    );
+    if(!this.addItemNode(description, item))
+        return MenuBarResult();
+    this.m_scope.value().m_menuBars.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+    result.valid = true;
+    result.openMenuKey = state.openMenuKey();
+    return result;
+}
+
+b8 Builder::applyMenuBarListInput(mut BuilderMenuBarFrame frame, mut MenuBarResult result){
+    ListOptions options;
+    options.wheelRows = frame.options.wheelRows;
+    options.selectOnNavigate = false;
+    in ListOptions optionsRef = options;
+    ListInput inputs(this.m_context);
+    const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.menuBarMatches(frame); };
+    const ListInputApplyAction apply = lambda[mut this, mut frame, in optionsRef, mut result](in ControlAction action) -> ListActionOutcome{
+        ListResult preview;
+        if(!ApplyListControlAction(frame.source.value(), optionsRef, action, frame.state.value().m_list, preview) || !this.menuBarMatches(frame))
+            return ListActionOutcome::Failed;
+        if(!preview.activated)
+            return ListActionOutcome::Continue;
+        result.activated = true;
+        result.menuKey = frame.openMenuKey;
+        result.itemKey = frame.state.value().m_list.selectedKey();
+        frame.state.value().close();
+        this.m_context.input().closePopup(frame.popupToken);
+        this.snapshotMenuBar(frame);
+        return ListActionOutcome::Stop;
+    };
+    return inputs.consume(
+        frame.rows,
+        frame.listToken,
+        true,
+        frame.popupToken,
+        frame.state.value().m_list,
+        matches,
+        apply
+    );
+}
+
+void Builder::snapshotMenuBar(mut BuilderMenuBarFrame frame){
+    frame.revision = frame.state.value().revision();
+    frame.open = frame.state.value().isOpen();
+    frame.openMenuKey = frame.state.value().openMenuKey();
+    frame.popupToken.openGeneration = frame.state.value().m_popup.openGeneration();
+    frame.token.instanceGeneration = frame.state.value().inputGeneration();
+    frame.token.contentGeneration = frame.state.value().instanceGeneration();
+    frame.token.contentRevision = frame.revision;
+    frame.listToken.instanceGeneration = frame.state.value().m_list.inputGeneration();
+    if(frame.list < this.m_scope.value().m_lists.size())
+        this.m_scope.value().m_lists[frame.list].token = frame.listToken;
+}
+
+b8 Builder::menuBarStateMatches(in BuilderMenuBarFrame frame)const{
+    if(!frame.state.has_value())
+        return false;
+    return this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
+}
+
+b8 Builder::menuBarMatches(in BuilderMenuBarFrame frame)const{
+    return this.menuBarStateMatches(frame)
+        && frame.source.has_value()
+        && frame.source.value().instanceGeneration() == frame.listToken.contentGeneration
+        && frame.source.value().revision() == frame.listToken.contentRevision
+        && frame.source.value().rowCount() == frame.rowCount;
+}
+
+b8 Builder::paintMenuBar(in BuilderItem item, in LayoutBox box){
+    if(item.menuBar >= this.m_scope.value().m_menuBars.size())
+        return false;
+    mut BuilderMenuBarFrame frame = this.m_scope.value().m_menuBars[item.menuBar];
+    if(!frame.state.has_value())
+        return false;
+    mut MenuBarState state = frame.state.value();
+    const Rect clip = this.visibleClip(box.clip);
+    const Optional<usize> bgIdx = this.m_paint.resolveRegionIndex(frame.style.background, frame.style.backgroundFallback);
+    if(!bgIdx.has_value())
+        return false;
+    this.m_paint.pushClip(clip);
+    this.m_paint.drawRegionByIndex(bgIdx.value(), box.rectangle);
+    const f32 borderY = UiSimdMax(box.rectangle.y, box.rectangle.y + box.rectangle.height - s_MenuBarBorderThickness);
+    this.m_paint.drawLine(
+        Point(box.rectangle.x, borderY),
+        Point(box.rectangle.x + box.rectangle.width, borderY),
+        s_MenuBarBorderThickness,
+        frame.style.borderColor
+    );
+
+    const auto itemRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartMenuItem);
+    if(!itemRoot.has_value()){
+        this.m_paint.popClip();
+        return false;
+    }
+
+    in InputRouter input = this.m_context.input();
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeMenuBarHostHitTarget(box.rectangle, clip, item.enabled, frame.token, frame.focusOnCommit);
+    if(!this.m_context.addTarget(frame.widget, host)){
+        this.m_paint.popClip();
+        return false;
+    }
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::MenuBar,
+        box.rectangle,
+        StringView(),
+        StringView(),
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        s_AccessibilityActionFocus
+    );
+
+    state.m_itemRects.clear();
+    state.m_itemKeys.clear();
+    f32 curX = box.rectangle.x;
+    for(usize idx = 0u; idx < frame.labels.size(); ++idx){
+        in MenuBarLabelEntry entry = frame.labels[idx];
+        const f32 itemW = entry.bounds.width + 2.0f * frame.style.itemPaddingX;
+        const Rect itemRect(curX, box.rectangle.y, itemW, box.rectangle.height);
+        curX += itemW + frame.style.itemGap;
+        state.m_itemRects.push_back(itemRect);
+        state.m_itemKeys.push_back(entry.key);
+
+        const Expected<WidgetId> partId = TryMakeWidgetPartId(itemRoot.value(), entry.key);
+        if(!partId.has_value()){
+            this.m_paint.popClip();
+            return false;
+        }
+
+        const b8 entryEnabled = item.enabled && entry.enabled;
+        const b8 isOpenItem = frame.open && frame.openMenuKey == entry.key;
+        const b8 isHovered = entryEnabled && input.hover() == partId.value();
+        if(isOpenItem){
+            const Optional<usize> openIdx = this.m_paint.resolveRegionIndex(frame.style.itemOpen, frame.style.itemFallback);
+            if(openIdx.has_value())
+                this.m_paint.drawRegionByIndex(openIdx.value(), itemRect);
+        }
+        else if(isHovered){
+            const Optional<usize> hoverIdx = this.m_paint.resolveRegionIndex(frame.style.itemHover, frame.style.itemFallback);
+            if(hoverIdx.has_value())
+                this.m_paint.drawRegionByIndex(hoverIdx.value(), itemRect);
+        }
+
+        Color textColor = frame.widgetStyle.disabledText;
+        if(entryEnabled)
+            textColor = frame.widgetStyle.text;
+        const Point origin = ResolveCenteredTextOrigin(itemRect, frame.style.itemPaddingX, entry.bounds);
+        this.m_paint.pushClip(itemRect);
+        const b8 textOk = this.m_text.paint(this.m_paint, entry.text.deref(), origin, textColor);
+        const b8 itemClipPopped = this.m_paint.popClip();
+        if(!textOk || !itemClipPopped){
+            this.m_paint.popClip();
+            return false;
+        }
+        if(item.enabled && entryEnabled){
+            const Rect itemClip = IntersectUiRectsBounds(itemRect, clip);
+            const HitTarget itemTarget = targets.makeMenuBarItemHitTarget(itemRect, itemClip, true, frame.token, entry.key);
+            if(!this.m_context.addPartTarget(frame.widget, partId.value(), itemTarget)){
+                this.m_paint.popClip();
+                return false;
+            }
+        }
+        u32 menuItemState = ResolveAccessibleVisibilityStateBits(entryEnabled, itemRect) | s_AccessibilityStateFocusable | s_AccessibilityStateHasPopup;
+        if(isOpenItem)
+            menuItemState |= s_AccessibilityStateExpanded;
+        else
+            menuItemState |= s_AccessibilityStateCollapsed;
+        this.emitAccessiblePartNode(
+            partId.value(),
+            frame.widget.id,
+            AccessibilityRole::MenuItem,
+            itemRect,
+            entry.text.deref().utf8(),
+            menuItemState,
+            s_AccessibilityActionInvoke | s_AccessibilityActionExpand | s_AccessibilityActionFocus,
+            cast<i32>(idx + 1u),
+            cast<i32>(frame.labels.size()),
+            0
+        );
+    }
+    return this.finishClipPaint(item, box.rectangle, clip, true);
+}
+
+b8 Builder::paintMenuBars(){
+    for(mut auto frame : this.m_scope.value().m_menuBars){
+        if(!this.menuBarStateMatches(frame))
+            return false;
+        if(frame.open && frame.options.enabled){
+            if(frame.list >= this.m_scope.value().m_lists.size() || !this.menuBarMatches(frame))
+                return false;
+            if(!this.paintMenuBarPopup(frame))
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 Builder::paintMenuBarPopup(mut BuilderMenuBarFrame frame){
+    in MenuBarState state = frame.state.value();
+    Rect anchorRect;
+    b8 foundAnchor = false;
+    for(usize idx = 0u; idx < state.m_itemKeys.size() && idx < state.m_itemRects.size(); ++idx){
+        if(state.m_itemKeys[idx] == frame.openMenuKey){
+            anchorRect = state.m_itemRects[idx];
+            foundAnchor = true;
+            break;
+        }
+    }
+    const auto background = this.region(frame.popupStyle.background, frame.popupStyle.fallback);
+    if(!foundAnchor || !background.has_value() || !this.menuBarMatches(frame))
+        return false;
+    PopupOptions options;
+    options.anchor = anchorRect;
+    options.size = frame.style.dropdownSize;
+    options.side = PopupPlacementSide::Below;
+    options.gap = 0.0f;
+    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
+    if(!placement.has_value())
+        return false;
+    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(frame.popupToken, frame.parentToken, placement.value());
+    if(!this.m_context.updatePopupScope(frame.popupToken, scope) || !this.m_context.activatePopupScope(frame.popupToken))
+        return false;
+    if(!this.m_paint.beginOverlay(this.m_context.popupLayer())){
+        const b8 ended = this.m_context.endPopupScope(false);
+        if(!ended)
+            this.m_context.fail();
+        return false;
+    }
+    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background.value().padding);
+    this.m_paint.pushClip(placement.value().bounds);
+    const b8 backgroundPainted = this.m_paint.drawRegion(background.value().name, placement.value().bounds);
+    const b8 popped = this.m_paint.popClip();
+    HitTargetFactory targets;
+    const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
+    b8 painted = backgroundPainted && popped && this.m_context.addTarget(frame.popup, barrier);
+    if(painted){
+        auto item = this.makeItem();
+        item.state = frame.rows;
+        item.list = frame.list;
+        item.enabled = frame.options.enabled;
+        LayoutBox box;
+        box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
+        box.clip = placement.value().bounds;
+        painted = this.paintList(item, box) && this.menuBarMatches(frame);
+    }
+    const b8 overlayEnded = this.m_paint.endOverlay();
+    const b8 scopeEnded = this.m_context.endPopupScope(painted);
+    if(painted)
+        frame.state.value().m_popup.m_placement = placement.value();
+    return painted && overlayEnded && scopeEnded;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 Builder::beginToolbar(in StringView stableKey, in ToolbarOptions options){
+    if(!IsValidToolbarOptions(options)){
+        this.m_context.fail();
+        return false;
+    }
+    ContainerOptions containerOpts;
+    containerOpts.width = options.width;
+    containerOpts.height = options.height;
+    containerOpts.padding = options.padding;
+    containerOpts.gap = options.gap;
+    containerOpts.alignItems = LayoutAlign::Center;
+    containerOpts.layout = options.layout;
+    return this.beginContainer(stableKey, options.direction, containerOpts);
+}
+
+b8 Builder::toolbarButton(in StringView stableKey, in StringView text, in WidgetOptions options){
+    return this.button(stableKey, text, options);
+}
+
+b8 Builder::toolbarToggle(in StringView stableKey, in StringView text, mut b8 active, in WidgetOptions options){
+    const auto item = this.addItem(stableKey, text, WidgetKind::Button, options);
+    if(!item.has_value())
+        return false;
+    const b8 changed = this.m_context.takeActivation(item.value().state, item.value().enabled);
+    if(changed)
+        active = !active;
+    item.value().checked = active;
+    return changed;
+}
+
+b8 Builder::toolbarSeparator(in StringView stableKey){
+    if(this.itemDeclarationBlocked()){
+        this.m_context.fail();
+        return false;
+    }
+    in u32 parentNodeIdx = this.m_scope.value().m_stack.back();
+    if(cast<usize>(parentNodeIdx) >= this.m_scope.value().m_layout.nodes().size()){
+        this.m_context.fail();
+        return false;
+    }
+    in LayoutDirection parentDir = this.m_scope.value().m_layout.nodes()[parentNodeIdx].description.direction;
+    SeparatorOptions sepOpts;
+    sepOpts.length = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    if(parentDir == LayoutDirection::Row)
+        sepOpts.direction = SeparatorDirection::Vertical;
+    else
+        sepOpts.direction = SeparatorDirection::Horizontal;
+    return this.separator(stableKey, sepOpts);
+}
+
+b8 Builder::endToolbar(){
+    return this.endContainer();
+}
+
+b8 Builder::beginStatusBar(in StringView stableKey, in StatusBarOptions options){
+    if(!IsValidStatusBarOptions(options)){
+        this.m_context.fail();
+        return false;
+    }
+    ContainerOptions containerOpts;
+    containerOpts.width = options.width;
+    containerOpts.height = LayoutSize(LayoutSizePolicy::Fixed, options.height);
+    containerOpts.padding = options.padding;
+    containerOpts.gap = options.gap;
+    containerOpts.alignItems = LayoutAlign::Center;
+    containerOpts.layout = options.layout;
+    return this.beginContainer(stableKey, LayoutDirection::Row, containerOpts);
+}
+
+b8 Builder::statusBarSection(in StringView stableKey, in StringView text, in LabelOptions options){
+    return this.label(stableKey, text, options);
+}
+
+b8 Builder::endStatusBar(){
+    return this.endContainer();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ToastResult Builder::toastStack(in StringView stableKey, mut ToastState state, in ToastOptions options){
+    ToastResult result;
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidToastOptions(options) || !IsValidToastStyle(this.m_toastStyle)){
+        this.m_context.fail();
+        return result;
+    }
+    const b8 popupVisible = this.synchronizePopup();
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::ToastStack);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
+        return result;
+    const auto closeRoot = TryMakeWidgetId(widget.value().id, s_WidgetPartToastClose);
+    if(!closeRoot.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+
+    BuilderToastFrame frame;
+    frame.widget = widget.value();
+    frame.state = Optional<mut ToastState>(state);
+    frame.style = this.m_toastStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.options.enabled = options.enabled && popupVisible;
+    frame.token.instanceGeneration = state.instanceGeneration();
+    frame.token.contentGeneration = state.instanceGeneration();
+    frame.token.contentRevision = 1u;
+    frame.layer = this.m_context.popupLayer() + 1u;
+
+    mut InputRouter input = this.m_context.input();
+    in InputRouter inputRef = this.m_context.input();
+    input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
+    if(!frame.options.enabled)
+        input.invalidateTarget(frame.widget.id);
+    else{
+        while(true){
+            const auto action = this.m_context.takeControlAction(frame.widget, true, frame.token);
+            if(!action.has_value())
+                break;
+            in ControlAction act = action.value();
+            if(act.kind == ControlActionKind::Activate){
+                const Expected<WidgetId> partId = TryMakeWidgetPartId(closeRoot.value(), act.value);
+                if(partId.has_value() && act.source == partId.value() && state.dismiss(act.value)){
+                    ++result.dismissedCount;
+                    result.lastDismissedId = act.value;
+                }
+            }
+        }
+    }
+
+    AdvanceToastTimers(
+        state,
+        this.m_deltaSeconds,
+        options.pauseOnHover,
+        inputRef.pointerKnown(),
+        inputRef.pointerPosition(),
+        options.maxVisible,
+        result.dismissedCount,
+        result.lastDismissedId
+    );
+
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    const f32 cardW = UiSimdMin(frame.style.cardWidth, UiSimdMax(40.0f, display.logicalWidth - frame.style.margin * 2.0f));
+    const f32 closeOffset = frame.style.closeButtonSize + frame.style.gap;
+    const f32 innerW = UiSimdMax(
+        16.0f,
+        cardW - frame.style.accentWidth - frame.style.padding.left - frame.style.padding.right - closeOffset
+    );
+    const usize visibleCount = Min(cast<usize>(options.maxVisible), state.count());
+    frame.entries.reserve(visibleCount);
+    for(usize idx = 0u; idx < visibleCount; ++idx){
+        in ToastItem item = state.items()[idx];
+        ToastPaintEntry entry;
+        entry.id = item.id;
+        entry.severity = item.severity;
+        entry.dismissible = item.dismissible;
+
+        f32 textHeight = 0.0f;
+        if(!item.title.empty()){
+            ShapeRequest titleReq = this.textShapeRequest(StringView(item.title), frame.widgetStyle.fontSize);
+            titleReq.wrapMode = TextWrapMode::Word;
+            titleReq.maxWidth = innerW;
+            const auto measuredTitle = this.m_text.layoutAndMeasureShared(titleReq, display);
+            if(!measuredTitle.has_value()){
+                this.m_context.fail();
+                return ToastResult();
+            }
+            entry.title = measuredTitle.value().layout;
+            entry.titleBounds = measuredTitle.value().bounds;
+            textHeight += entry.titleBounds.height;
+        }
+        if(!item.message.empty()){
+            ShapeRequest msgReq = this.textShapeRequest(StringView(item.message), frame.widgetStyle.fontSize);
+            msgReq.wrapMode = TextWrapMode::Word;
+            msgReq.maxWidth = innerW;
+            const auto measuredMsg = this.m_text.layoutAndMeasureShared(msgReq, display);
+            if(!measuredMsg.has_value()){
+                this.m_context.fail();
+                return ToastResult();
+            }
+            entry.message = measuredMsg.value().layout;
+            entry.messageBounds = measuredMsg.value().bounds;
+            if(!item.title.empty())
+                textHeight += frame.style.gap * 0.5f;
+            textHeight += entry.messageBounds.height;
+        }
+        const f32 paddedH = textHeight + frame.style.padding.top + frame.style.padding.bottom;
+        entry.cardHeight = UiSimdMax(frame.style.minCardHeight, paddedH);
+        frame.entries.push_back(entry);
+    }
+
+    frame.revision = state.revision();
+    this.m_scope.value().m_toasts.push_back(frame);
+    result.valid = true;
+    result.activeCount = cast<u32>(state.count());
+    return result;
+}
+
+b8 Builder::toastStateMatches(in BuilderToastFrame frame)const{
+    if(!frame.state.has_value())
+        return false;
+    return this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
+}
+
+b8 Builder::paintToasts(){
+    HitTargetFactory targets;
+    in DisplayMetrics display = this.m_paint.displayMetrics();
+    const Rect viewport(0.0f, 0.0f, display.logicalWidth, display.logicalHeight);
+    for(mut auto frame : this.m_scope.value().m_toasts){
+        if(!this.toastStateMatches(frame))
+            return false;
+        mut ToastState state = frame.state.value();
+        state.m_visibleRects.clear();
+        state.m_visibleIds.clear();
+        if(frame.entries.empty())
+            continue;
+        if(!this.m_paint.beginOverlay(frame.layer))
+            return false;
+
+        const auto closeRoot = TryMakeWidgetId(frame.widget.id, s_WidgetPartToastClose);
+        if(!closeRoot.has_value()){
+            this.m_paint.endOverlay();
+            return false;
+        }
+
+        const f32 cardW = UiSimdMin(frame.style.cardWidth, UiSimdMax(40.0f, display.logicalWidth - frame.style.margin * 2.0f));
+        const b8 alignRight = frame.options.corner == ToastCorner::TopRight || frame.options.corner == ToastCorner::BottomRight;
+        const b8 fromBottom = frame.options.corner == ToastCorner::BottomLeft || frame.options.corner == ToastCorner::BottomRight;
+        f32 cardX = frame.style.margin;
+        if(alignRight)
+            cardX = UiSimdMax(frame.style.margin, display.logicalWidth - frame.style.margin - cardW);
+        f32 cursorY = frame.style.margin;
+        if(fromBottom)
+            cursorY = display.logicalHeight - frame.style.margin;
+
+        Vector<Rect> cardRects;
+        Vector<Rect> closeRects;
+        cardRects.reserve(frame.entries.size());
+        closeRects.reserve(frame.entries.size());
+        f32 unionMinX = display.logicalWidth;
+        f32 unionMinY = display.logicalHeight;
+        f32 unionMaxX = 0.0f;
+        f32 unionMaxY = 0.0f;
+
+        b8 drawOk = true;
+        for(usize idx = 0u; idx < frame.entries.size(); ++idx){
+            in ToastPaintEntry entry = frame.entries[idx];
+            f32 cardY = cursorY;
+            if(fromBottom){
+                cardY = cursorY - entry.cardHeight;
+                cursorY = cardY - frame.style.gap;
+            }
+            else
+                cursorY += entry.cardHeight + frame.style.gap;
+
+            const Rect cardRect(cardX, cardY, cardW, entry.cardHeight);
+            cardRects.push_back(cardRect);
+            state.m_visibleRects.push_back(cardRect);
+            state.m_visibleIds.push_back(entry.id);
+            unionMinX = UiSimdMin(unionMinX, cardRect.x);
+            unionMinY = UiSimdMin(unionMinY, cardRect.y);
+            unionMaxX = UiSimdMax(unionMaxX, cardRect.x + cardRect.width);
+            unionMaxY = UiSimdMax(unionMaxY, cardRect.y + cardRect.height);
+
+            const Rect closeRect(
+                cardRect.x + cardRect.width - frame.style.padding.right - frame.style.closeButtonSize,
+                cardRect.y + frame.style.padding.top,
+                frame.style.closeButtonSize,
+                frame.style.closeButtonSize
+            );
+            closeRects.push_back(closeRect);
+
+            this.m_paint.pushClip(cardRect);
+            this.m_paint.fillRoundedRect(cardRect, frame.style.cornerRadius, frame.style.backgroundColor);
+            this.m_paint.strokeRect(cardRect, s_ToastBorderThickness, frame.style.borderColor);
+            if(frame.style.accentWidth > 0.0f){
+                const Color accent = ResolveToastAccentColor(frame.style, entry.severity);
+                this.m_paint.fillRect(Rect(cardRect.x, cardRect.y, frame.style.accentWidth, cardRect.height), accent);
+            }
+
+            const f32 textX = cardRect.x + frame.style.accentWidth + frame.style.padding.left;
+            f32 textY = cardRect.y + frame.style.padding.top;
+            const f32 textW = UiSimdMax(4.0f, closeRect.x - frame.style.gap - textX);
+            const Rect textClip(textX, cardRect.y, textW, cardRect.height);
+            this.m_paint.pushClip(textClip);
+            if(entry.title.valid()){
+                const Point titleOrigin(textX - entry.titleBounds.x, textY - entry.titleBounds.y);
+                drawOk = drawOk && this.m_text.paint(this.m_paint, entry.title.deref(), titleOrigin, frame.style.textColor);
+                textY += entry.titleBounds.height + frame.style.gap * 0.5f;
+            }
+            if(entry.message.valid()){
+                const Point msgOrigin(textX - entry.messageBounds.x, textY - entry.messageBounds.y);
+                drawOk = drawOk && this.m_text.paint(this.m_paint, entry.message.deref(), msgOrigin, frame.style.subtextColor);
+            }
+            const b8 textClipPopped = this.m_paint.popClip();
+
+            if(entry.dismissible){
+                const f32 pad = closeRect.width * s_ToastCloseIconPaddingFraction;
+                const Point p00(closeRect.x + pad, closeRect.y + pad);
+                const Point p11(closeRect.x + closeRect.width - pad, closeRect.y + closeRect.height - pad);
+                const Point p10(closeRect.x + closeRect.width - pad, closeRect.y + pad);
+                const Point p01(closeRect.x + pad, closeRect.y + closeRect.height - pad);
+                this.m_paint.drawLine(p00, p11, s_ToastCloseIconThickness, s_ToastCloseIconColor);
+                this.m_paint.drawLine(p10, p01, s_ToastCloseIconThickness, s_ToastCloseIconColor);
+            }
+            const b8 cardClipPopped = this.m_paint.popClip();
+            if(!drawOk || !textClipPopped || !cardClipPopped){
+                this.m_paint.endOverlay();
+                return false;
+            }
+        }
+
+        if(!this.m_paint.endOverlay())
+            return false;
+
+        const Rect hostRect(unionMinX, unionMinY, UiSimdMax(0.0f, unionMaxX - unionMinX), UiSimdMax(0.0f, unionMaxY - unionMinY));
+        this.emitAccessibleNode(
+            frame.widget,
+            AccessibilityRole::Region,
+            hostRect,
+            StringView(),
+            StringView(),
+            ResolveAccessibleVisibilityStateBits(frame.options.enabled, hostRect),
+            s_AccessibilityActionNone
+        );
+        for(usize idx = 0u; idx < frame.entries.size(); ++idx){
+            in ToastPaintEntry entry = frame.entries[idx];
+            in Rect cardRect = cardRects[idx];
+            String toastText;
+            if(entry.title.valid())
+                toastText.append(entry.title.deref().utf8());
+            if(entry.message.valid()){
+                if(!toastText.empty())
+                    toastText.append(": ");
+                toastText.append(entry.message.deref().utf8());
+            }
+            AccessibilityRole toastRole = AccessibilityRole::Status;
+            AccessibilityLiveMode liveMode = AccessibilityLiveMode::Polite;
+            if(entry.severity == ToastSeverity::Error){
+                toastRole = AccessibilityRole::Alert;
+                liveMode = AccessibilityLiveMode::Assertive;
+            }
+            else if(entry.severity == ToastSeverity::Warning)
+                toastRole = AccessibilityRole::Alert;
+            const Expected<WidgetId> cardPartId = TryMakeWidgetPartId(frame.widget.id, entry.id);
+            if(cardPartId.has_value()){
+                AccessibleNodeDesc toastDesc;
+                toastDesc.id = cardPartId.value();
+                toastDesc.parentId = frame.widget.id;
+                toastDesc.role = toastRole;
+                toastDesc.liveMode = liveMode;
+                toastDesc.stateBits = ResolveAccessibleVisibilityStateBits(frame.options.enabled, cardRect);
+                toastDesc.bounds = cardRect;
+                toastDesc.name = StringView(toastText);
+                this.m_context.addAccessibleNode(toastDesc);
+            }
+            if(!toastText.empty() && this.m_announcedToastIds.find(entry.id) == this.m_announcedToastIds.end()){
+                if(this.m_announcedToastIds.size() > 128u)
+                    this.m_announcedToastIds.clear();
+                this.m_announcedToastIds.insert(entry.id);
+                this.m_context.announce(StringView(toastText), liveMode);
+            }
+        }
+
+        if(frame.options.enabled){
+            const HitTarget host = targets.makeToastHostHitTarget(hostRect, viewport, true, frame.token);
+            if(!this.m_context.addTarget(frame.widget, host))
+                return false;
+            for(usize idx = 0u; idx < frame.entries.size(); ++idx){
+                if(!frame.entries[idx].dismissible)
+                    continue;
+                const Expected<WidgetId> closeId = TryMakeWidgetPartId(closeRoot.value(), frame.entries[idx].id);
+                if(!closeId.has_value())
+                    return false;
+                const HitTarget closeTarget = targets.makeToastCloseHitTarget(closeRects[idx], cardRects[idx], true, frame.token, frame.entries[idx].id);
+                if(!this.m_context.addPartTarget(frame.widget, closeId.value(), closeTarget))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+ColorPickerResult Builder::colorPicker(in StringView stableKey, mut ColorPickerState state, in ColorPickerOptions options){
+    ColorPickerResult result;
+    if(
+        this.itemDeclarationBlocked()
+        || !this.m_skin.has_value()
+        || !IsValidColorPickerOptions(options)
+        || !IsValidColorPickerStyle(this.m_colorPickerStyle)
+    ){
+        this.m_context.fail();
+        return result;
+    }
+    const b8 popupVisible = this.synchronizePopup();
+    this.m_declaring = true;
+    BuilderOperationEnd finish(this.m_declaring);
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::ColorPicker);
+    if(!widget.has_value() || !this.m_context.claimState(widget.value(), state.instanceGeneration()))
+        return result;
+
+    const auto svPartId = TryMakeWidgetId(widget.value().id, s_WidgetPartColorSv);
+    const auto huePartId = TryMakeWidgetId(widget.value().id, s_WidgetPartColorHue);
+    const auto alphaPartId = TryMakeWidgetId(widget.value().id, s_WidgetPartColorAlpha);
+    if(!svPartId.has_value() || !huePartId.has_value() || !alphaPartId.has_value()){
+        this.m_context.fail();
+        return result;
+    }
+
+    const b8 enabled = options.enabled && popupVisible;
+    BuilderColorPickerFrame frame;
+    frame.widget = widget.value();
+    frame.state = Optional<mut ColorPickerState>(state);
+    frame.style = this.m_colorPickerStyle;
+    frame.widgetStyle = this.m_style;
+    frame.options = options;
+    frame.options.enabled = enabled;
+    frame.token.instanceGeneration = state.inputGeneration();
+    frame.token.contentGeneration = state.instanceGeneration();
+    frame.token.contentRevision = 1u;
+
+    mut InputRouter input = this.m_context.input();
+    in InputRouter inputRef = this.m_context.input();
+    input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
+
+    if(!enabled){
+        input.invalidateTarget(frame.widget.id);
+        state.m_dragging = false;
+    }
+    else{
+        while(true){
+            const auto svGesture = this.m_context.takePartPointerGesture(frame.widget, svPartId.value(), true);
+            if(!svGesture.has_value())
+                break;
+            if(!ApplyColorPickerSvGesture(svGesture.value(), state, result.changed)){
+                this.m_context.fail();
+                return ColorPickerResult();
+            }
+        }
+        while(true){
+            const auto hueGesture = this.m_context.takePartPointerGesture(frame.widget, huePartId.value(), true);
+            if(!hueGesture.has_value())
+                break;
+            if(!ApplyColorPickerBarGesture(hueGesture.value(), false, state, result.changed)){
+                this.m_context.fail();
+                return ColorPickerResult();
+            }
+        }
+        if(options.showAlpha){
+            while(true){
+                const auto alphaGesture = this.m_context.takePartPointerGesture(frame.widget, alphaPartId.value(), true);
+                if(!alphaGesture.has_value())
+                    break;
+                if(!ApplyColorPickerBarGesture(alphaGesture.value(), true, state, result.changed)){
+                    this.m_context.fail();
+                    return ColorPickerResult();
+                }
+            }
+        }
+        else
+            input.invalidateTarget(alphaPartId.value());
+
+        while(true){
+            const auto action = this.m_context.takeControlAction(frame.widget, true, frame.token);
+            if(!action.has_value())
+                break;
+            if(!ApplyColorPickerKeyboardAction(action.value(), state, result.changed)){
+                this.m_context.fail();
+                return ColorPickerResult();
+            }
+        }
+
+        const WidgetId cap = inputRef.capture();
+        state.m_dragging = inputRef.primaryDown()
+            && (cap == svPartId.value() || cap == huePartId.value() || (options.showAlpha && cap == alphaPartId.value()));
+    }
+
+    frame.hsv = state.hsv();
+    frame.color = state.color();
+    frame.originalColor = state.originalColor();
+    frame.revision = state.revision();
+
+    if(options.showHexLabel){
+        String hexStr;
+        FormatColorHex(frame.color, options.showAlpha, hexStr);
+        const ShapeRequest hexReq = this.textShapeRequest(StringView(hexStr), frame.widgetStyle.fontSize);
+        const auto measuredHex = this.m_text.layoutAndMeasureShared(hexReq, this.m_paint.displayMetrics());
+        if(!measuredHex.has_value()){
+            this.m_context.fail();
+            return ColorPickerResult();
+        }
+        frame.hexText = measuredHex.value().layout;
+        frame.hexBounds = measuredHex.value().bounds;
+    }
+
+    const f32 intrinsicH = ComputeColorPickerIntrinsicHeight(options, frame.style);
+    auto item = this.makeItem();
+    item.state = frame.widget;
+    item.enabled = enabled;
+    item.colorPicker = cast<u32>(this.m_scope.value().m_colorPickers.size());
+    const LayoutNodeDesc description = BuildSizedLeafNodeDesc(
+        options.width,
+        LayoutSize(LayoutSizePolicy::Fixed, intrinsicH),
+        Point(s_ColorPickerDefaultWidth, intrinsicH),
+        options.layout
+    );
+    if(!this.addItemNode(description, item))
+        return ColorPickerResult();
+    this.m_scope.value().m_colorPickers.push_back(frame);
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
+
+    result.valid = true;
+    result.dragging = state.m_dragging;
+    result.color = frame.color;
+    return result;
+}
+
+b8 Builder::colorPickerStateMatches(in BuilderColorPickerFrame frame)const{
+    if(!frame.state.has_value())
+        return false;
+    return this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
+}
+
+b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
+    if(item.colorPicker >= this.m_scope.value().m_colorPickers.size())
+        return false;
+    in BuilderColorPickerFrame frame = this.m_scope.value().m_colorPickers[item.colorPicker];
+    if(!frame.state.has_value())
+        return false;
+    mut ColorPickerState state = frame.state.value();
+    const Rect clip = this.visibleClip(box.clip);
+    in ColorPickerStyle style = frame.style;
+    in Rect bounds = box.rectangle;
+    const f32 w = bounds.width;
+    if(!(w > 0.0f) || !(bounds.height > 0.0f))
+        return this.finishClipPaint(item, bounds, clip, true);
+
+    const Rect svRect(bounds.x, bounds.y, w, UiSimdMin(style.svHeight, bounds.height));
+    f32 curY = svRect.y + svRect.height + style.gap;
+    const Rect hueRect(bounds.x, curY, w, style.barHeight);
+    curY += style.barHeight + style.gap;
+    Rect alphaRect;
+    if(frame.options.showAlpha){
+        alphaRect = Rect(bounds.x, curY, w, style.barHeight);
+        curY += style.barHeight + style.gap;
+    }
+    const Rect footerRect(bounds.x, curY, w, style.swatchHeight);
+
+    state.m_svRect = svRect;
+    state.m_hueRect = hueRect;
+    state.m_alphaRect = alphaRect;
+
+    this.m_paint.pushClip(clip);
+
+    ColorHsv pureHsv;
+    pureHsv.h = frame.hsv.h;
+    pureHsv.s = 1.0f;
+    pureHsv.v = 1.0f;
+    pureHsv.a = 1.0f;
+    const Color pureHue = HsvToRgb(pureHsv);
+    const Color whiteColor(1.0f, 1.0f, 1.0f, 1.0f);
+    const Color transBlack(0.0f, 0.0f, 0.0f, 0.0f);
+    const Color opaqueBlack(0.0f, 0.0f, 0.0f, 1.0f);
+    this.m_paint.fillRectGradient(svRect, whiteColor, pureHue, pureHue, whiteColor);
+    this.m_paint.fillRectGradient(svRect, transBlack, transBlack, opaqueBlack, opaqueBlack);
+    this.m_paint.strokeRect(svRect, s_ColorPickerBarBorderThickness, style.borderColor);
+
+    const f32 rx = svRect.x + frame.hsv.s * svRect.width;
+    const f32 ry = svRect.y + (1.0f - frame.hsv.v) * svRect.height;
+    Color reticleColor(1.0f, 1.0f, 1.0f, 1.0f);
+    if(frame.hsv.v > 0.65f && frame.hsv.s < 0.35f)
+        reticleColor = opaqueBlack;
+    PaintLineStyle reticleLine;
+    reticleLine.thickness = s_ColorPickerReticleStrokeThickness;
+    this.m_paint.pushClip(svRect);
+    this.m_paint.strokeCircle(Point(rx, ry), style.reticleRadius, reticleLine, reticleColor);
+    this.m_paint.popClip();
+
+    Array<Color, 7u> hueStops;
+    hueStops[0u] = Color(1.0f, 0.0f, 0.0f, 1.0f);
+    hueStops[1u] = Color(1.0f, 1.0f, 0.0f, 1.0f);
+    hueStops[2u] = Color(0.0f, 1.0f, 0.0f, 1.0f);
+    hueStops[3u] = Color(0.0f, 1.0f, 1.0f, 1.0f);
+    hueStops[4u] = Color(0.0f, 0.0f, 1.0f, 1.0f);
+    hueStops[5u] = Color(1.0f, 0.0f, 1.0f, 1.0f);
+    hueStops[6u] = Color(1.0f, 0.0f, 0.0f, 1.0f);
+    const f32 hueRight = hueRect.x + hueRect.width;
+    const f32 segW = hueRect.width / 6.0f;
+    for(usize si = 0u; si < 6u; ++si){
+        const f32 sx = hueRect.x + cast<f32>(si) * segW;
+        f32 ex = sx + segW;
+        if(si == 5u)
+            ex = hueRight;
+        in Color leftCol = hueStops[si];
+        in Color rightCol = hueStops[si + 1u];
+        this.m_paint.fillRectGradient(Rect(sx, hueRect.y, ex - sx, hueRect.height), leftCol, rightCol, rightCol, leftCol);
+    }
+    this.m_paint.strokeRect(hueRect, s_ColorPickerBarBorderThickness, style.borderColor);
+    const f32 huePosX = UiSimdClamp(hueRect.x + (frame.hsv.h / 360.0f) * hueRect.width, hueRect.x, hueRight);
+    this.m_paint.strokeRect(
+        Rect(huePosX - s_ColorPickerIndicatorHalfWidth, hueRect.y, s_ColorPickerIndicatorHalfWidth * 2.0f, hueRect.height),
+        s_ColorPickerBarBorderThickness,
+        whiteColor
+    );
+
+    if(frame.options.showAlpha){
+        this.m_paint.pushClip(alphaRect);
+        const f32 cell = s_ColorPickerCheckerCellSize;
+        f32 cy = alphaRect.y;
+        u32 row = 0u;
+        while(cy < alphaRect.y + alphaRect.height){
+            f32 cx = alphaRect.x;
+            u32 col = 0u;
+            const f32 ch = UiSimdMin(cell, alphaRect.y + alphaRect.height - cy);
+            while(cx < alphaRect.x + alphaRect.width){
+                const f32 cw = UiSimdMin(cell, alphaRect.x + alphaRect.width - cx);
+                Color checker = style.checkerDark;
+                if(((row + col) & 1u) == 0u)
+                    checker = style.checkerLight;
+                this.m_paint.fillRect(Rect(cx, cy, cw, ch), checker);
+                cx += cell;
+                ++col;
+            }
+            cy += cell;
+            ++row;
+        }
+        this.m_paint.popClip();
+        const Color alphaZero(frame.color.r, frame.color.g, frame.color.b, 0.0f);
+        const Color alphaOne(frame.color.r, frame.color.g, frame.color.b, 1.0f);
+        this.m_paint.fillRectGradient(alphaRect, alphaZero, alphaOne, alphaOne, alphaZero);
+        this.m_paint.strokeRect(alphaRect, s_ColorPickerBarBorderThickness, style.borderColor);
+        const f32 alphaPosX = UiSimdClamp(alphaRect.x + frame.hsv.a * alphaRect.width, alphaRect.x, alphaRect.x + alphaRect.width);
+        this.m_paint.strokeRect(
+            Rect(alphaPosX - s_ColorPickerIndicatorHalfWidth, alphaRect.y, s_ColorPickerIndicatorHalfWidth * 2.0f, alphaRect.height),
+            s_ColorPickerBarBorderThickness,
+            whiteColor
+        );
+    }
+
+    if(frame.options.showPreview || frame.options.showHexLabel){
+        f32 textStartX = footerRect.x;
+        if(frame.options.showPreview){
+            const f32 swatchW = UiSimdMin(style.swatchHeight * 2.0f, footerRect.width * 0.4f);
+            const Rect swatchRect(footerRect.x, footerRect.y, swatchW, footerRect.height);
+            this.m_paint.fillRect(swatchRect, style.checkerLight);
+            const f32 halfW = swatchW * 0.5f;
+            this.m_paint.fillRect(Rect(swatchRect.x, swatchRect.y, halfW, swatchRect.height), frame.originalColor);
+            this.m_paint.fillRect(Rect(swatchRect.x + halfW, swatchRect.y, swatchW - halfW, swatchRect.height), frame.color);
+            this.m_paint.strokeRect(swatchRect, s_ColorPickerBarBorderThickness, style.borderColor);
+            textStartX = swatchRect.x + swatchW + style.gap;
+        }
+        if(frame.options.showHexLabel && frame.hexText.valid()){
+            Color hexColor = frame.widgetStyle.disabledText;
+            if(item.enabled)
+                hexColor = frame.widgetStyle.text;
+            const Rect hexRect(textStartX, footerRect.y, UiSimdMax(0.0f, footerRect.x + footerRect.width - textStartX), footerRect.height);
+            const Point hexOrigin = ResolveCenteredTextOrigin(hexRect, 0.0f, frame.hexBounds);
+            this.m_paint.pushClip(hexRect);
+            if(!this.m_text.paint(this.m_paint, frame.hexText.deref(), hexOrigin, hexColor)){
+                this.m_paint.popClip();
+                this.m_paint.popClip();
+                return false;
+            }
+            this.m_paint.popClip();
+        }
+    }
+
+    if(item.enabled && this.m_context.input().focus() == frame.widget.id)
+        this.m_paint.tryDrawRegion(frame.widgetStyle.focus, bounds);
+
+    const auto svPartId = TryMakeWidgetId(frame.widget.id, s_WidgetPartColorSv);
+    const auto huePartId = TryMakeWidgetId(frame.widget.id, s_WidgetPartColorHue);
+    const auto alphaPartId = TryMakeWidgetId(frame.widget.id, s_WidgetPartColorAlpha);
+    if(!svPartId.has_value() || !huePartId.has_value() || !alphaPartId.has_value()){
+        this.m_paint.popClip();
+        return false;
+    }
+
+    HitTargetFactory targets;
+    const HitTarget host = targets.makeColorPickerHostHitTarget(bounds, clip, item.enabled, item.contextMenu, frame.token);
+    if(!this.m_context.addTarget(frame.widget, host)){
+        this.m_paint.popClip();
+        return false;
+    }
+    StringView hexValue = StringView();
+    if(frame.hexText.valid())
+        hexValue = frame.hexText.deref().utf8();
+    u32 pickerActions = s_AccessibilityActionFocus;
+    if(item.contextMenu)
+        pickerActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        frame.widget,
+        AccessibilityRole::ColorPicker,
+        bounds,
+        StringView(),
+        hexValue,
+        ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable,
+        pickerActions
+    );
+    if(item.enabled){
+        const Rect svClip = IntersectUiRectsBounds(svRect, clip);
+        if(!this.m_context.addPartTarget(frame.widget, svPartId.value(), targets.makeColorPickerPartHitTarget(svRect, svClip, true, frame.token))){
+            this.m_paint.popClip();
+            return false;
+        }
+        const Rect hueClip = IntersectUiRectsBounds(hueRect, clip);
+        if(!this.m_context.addPartTarget(frame.widget, huePartId.value(), targets.makeColorPickerPartHitTarget(hueRect, hueClip, true, frame.token))){
+            this.m_paint.popClip();
+            return false;
+        }
+        if(frame.options.showAlpha){
+            const Rect alphaClip = IntersectUiRectsBounds(alphaRect, clip);
+            if(!this.m_context.addPartTarget(frame.widget, alphaPartId.value(), targets.makeColorPickerPartHitTarget(alphaRect, alphaClip, true, frame.token))){
+                this.m_paint.popClip();
+                return false;
+            }
+        }
+    }
+
+    return this.finishClipPaint(item, bounds, clip, true);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

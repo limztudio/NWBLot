@@ -8,6 +8,8 @@
 #include <engine_namespace.h>
 
 #include "service_sdk.h"
+#include <core/os/win32/accessibility.h>
+#include <core/os/win32/cursor.h>
 #include <core/os/win32/text_input.h>
 #include <core/os/win32/text_input_context.h>
 #include <windows.h>
@@ -56,10 +58,12 @@ inline WindowHandle PlatformWindow(const Window window)noexcept{ return window; 
 inline b8 Present(const Window window)noexcept{ return window != nullptr; }
 inline b8 Present(const ImeContext context)noexcept{ return context != nullptr; }
 inline constexpr Window s_EmptyWindow = nullptr;
+inline constexpr isize s_Win32UiaRootObjectId = static_cast<isize>(static_cast<LONG>(-25));
+inline constexpr isize s_Win32HitClient = static_cast<isize>(HTCLIENT);
+inline constexpr isize s_Win32HitCaption = static_cast<isize>(HTCAPTION);
 
 };
 NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

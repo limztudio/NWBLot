@@ -63,6 +63,8 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
 Frame::~Frame()noexcept(false){
     if(UncaughtExceptionCount() > 0){
         m_cpuTasks.drain();
+        m_accessibility.reset();
+        m_cursor.reset();
         m_textInput.reset();
         m_clipboard.reset();
         return;
@@ -70,6 +72,8 @@ Frame::~Frame()noexcept(false){
 
     ScopeExit drainOnFailure([this]()noexcept{
         m_cpuTasks.drain();
+        m_accessibility.reset();
+        m_cursor.reset();
         m_textInput.reset();
         m_clipboard.reset();
     });
@@ -77,6 +81,8 @@ Frame::~Frame()noexcept(false){
     m_cpuTasks.wait();
     cleanup();
     m_cpuTasks.drain();
+    m_accessibility.reset();
+    m_cursor.reset();
     m_textInput.reset();
     m_clipboard.reset();
     drainOnFailure.release();
@@ -103,6 +109,20 @@ b8 Frame::startup(){
         return false;
     }
     m_textInput = Move(*textInputResult);
+    auto cursorResult = createPlatformCursorService();
+    if(!cursorResult){
+        m_cursor.reset();
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: native cursor initialization failed"));
+        return false;
+    }
+    m_cursor = Move(*cursorResult);
+    auto accessibilityResult = createPlatformAccessibilityService();
+    if(!accessibilityResult){
+        m_accessibility.reset();
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Frame: native accessibility initialization failed"));
+        return false;
+    }
+    m_accessibility = Move(*accessibilityResult);
     if(!m_graphics.init(data<Common::FrameData>())){
         NWB_LOGGER_CRITICAL_WARNING(FOUNDATION_TEXT("Frame: graphics initialization failed"));
         return false;
@@ -180,6 +200,16 @@ IClipboardService& Frame::clipboard()noexcept{
 ITextInputService& Frame::textInput()noexcept{
     FOUNDATION_FATAL_ASSERT_MSG(m_textInput, FOUNDATION_TEXT("Frame text-input service requires completed startup"));
     return *m_textInput;
+}
+
+ICursorService& Frame::cursor()noexcept{
+    FOUNDATION_FATAL_ASSERT_MSG(m_cursor, FOUNDATION_TEXT("Frame cursor service requires completed startup"));
+    return *m_cursor;
+}
+
+IAccessibilityService& Frame::accessibility()noexcept{
+    FOUNDATION_FATAL_ASSERT_MSG(m_accessibility, FOUNDATION_TEXT("Frame accessibility service requires completed startup"));
+    return *m_accessibility;
 }
 
 TStringView Frame::windowTitleOrDefault()const noexcept{
@@ -263,4 +293,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

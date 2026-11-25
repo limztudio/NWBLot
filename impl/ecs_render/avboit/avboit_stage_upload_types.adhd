@@ -24,6 +24,7 @@ class FrameGraphAvboitStageInputs{
     public b8 hasTransparentRenderers = false;
     public b8 clearTargets = false;
     public b8 refractionCaptureEnabled = false;
+    public Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor;
 
     public FrameGraphAvboitStageInputs(
         mut DeferredFrameTargets targets,

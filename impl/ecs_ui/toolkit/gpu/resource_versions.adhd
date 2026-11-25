@@ -53,6 +53,16 @@ class GpuSkinVersion : NoCopy{
     public ~GpuSkinVersion(){ ReleaseTextureGpuResource(this.m_graphics, this.m_texture); }
 }
 
+class GpuEffectBufferVersion : NoCopy{
+    private mut GraphicsRuntime m_graphics;
+    public BufferHandle m_buffer;
+    public GpuDescriptorHandle m_descriptor;
+    public usize m_wordCapacity = 0u;
+
+    public GpuEffectBufferVersion(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
+    public ~GpuEffectBufferVersion(){ FreeGpuDescriptor(this.m_graphics, this.m_descriptor); }
+}
+
 class GpuTargetVersion : NoCopy{
     private mut GraphicsRuntime m_graphics;
     public TextureHandle m_color;
@@ -73,7 +83,7 @@ class GpuSharedResources : NoCopy{
     public InputLayoutHandle m_inputLayout;
     public BindingLayoutHandle m_layout;
     public BindingLayoutHandle m_outputLayout;
-    public GraphicsPipelineHandle m_pipeline;
+    public Array<GraphicsPipelineHandle, s_PaintBlendModeCount> m_pipelines;
     public GraphicsPipelineHandle m_outputPipeline;
     public SamplerHandle m_sampler;
     public GpuDescriptorHandle m_samplerDescriptor;
@@ -82,6 +92,7 @@ class GpuSharedResources : NoCopy{
     public GpuSharedResources(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
     public ~GpuSharedResources(){ FreeGpuDescriptor(this.m_graphics, this.m_samplerDescriptor); }
     public mut GraphicsRuntime graphics(){ return this.m_graphics; }
+    public in GraphicsPipelineHandle pipeline(in PaintBlendMode mode)const{ return this.m_pipelines[cast<usize>(mode)]; }
 }
 
 
@@ -142,13 +153,13 @@ Expected<GpuTaskId> DeclareGpuTargetInitialization(in GpuVersion<GpuTargetVersio
 }
 
 [cpp_unwind]
-Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, mut GraphicsRuntime graphics, in u32 width, in u32 height){
+Expected<GpuVersion<GpuTargetVersion>> CreateGpuTargetNamed(in SharedPool versions, mut GraphicsRuntime graphics, in u32 width, in u32 height, in Name textureName){
     const Expected<GpuVersion<GpuTargetVersion>> created = versions.make<GpuTargetVersion>(graphics);
     if(!created.has_value())
         return MakeUnexpected(created.error());
     GpuVersion<GpuTargetVersion> target = created.value();
     TextureDesc description;
-    description.setName(s_GpuLayerTextureName);
+    description.setName(textureName);
     description.setWidth(width);
     description.setHeight(height);
     description.setFormat(Format::RGBA16_FLOAT);
@@ -181,6 +192,11 @@ Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, m
     if(!PrepareGpuSampledTextureDescriptor(graphics, target.deref().m_color, Format::RGBA16_FLOAT, target.deref().m_sampledImage))
         return MakeUnexpected(Failure());
     return target;
+}
+
+[cpp_unwind]
+Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, mut GraphicsRuntime graphics, in u32 width, in u32 height){
+    return CreateGpuTargetNamed(versions, graphics, width, height, s_GpuLayerTextureName);
 }
 
 

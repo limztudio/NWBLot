@@ -44,6 +44,7 @@ class ComboOptions{
     public f32 wheelRows = s_StyleScrollWheelStep;
     public b8 enabled = true;
     public StringView placeholder = "Select...";
+    public LayoutItemOptions layout;
 }
 
 class ComboResult{

@@ -1,0 +1,689 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_mesh/cook_meshlet_bounds.adhd>
+#include <impl/assets_mesh/cook_meshlet_builder.adhd>
+#include <impl/assets_mesh/cook_solid_topology.adhd>
+#include <impl/assets_mesh/meshlet_ref_encode.adhd>
+#include <impl/assets_mesh/meshlet_triangle_indices.adhd>
+#include <impl/assets_mesh/meshlet_vertex_attributes.adhd>
+#include <impl/ecs_mesh/runtime/mesh.adhd>
+#include <impl/ecs_scene/component_types.adhd>
+#include <impl/physics/soft_body.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const u32 s_SoftBodyMissingIndex = 0xffffffffu;
+const StringView s_SoftBodyMeshMetaKind = "soft_body";
+const StringView s_SoftBodyMeshContextName = "runtime";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+f32 FlushSoftBodySubnormalBound(in f32 v){
+    if(v > -1.17549435e-38f && v < 1.17549435e-38f)
+        return 0.0f;
+    return v;
+}
+
+RuntimeMeshLocalBounds MakeSoftBodyRuntimeLocalBounds(in VectorSingle minVec, in VectorSingle maxVec){
+    RuntimeMeshLocalBounds outBounds;
+    outBounds.minBounds = f32x3_i32(
+        FlushSoftBodySubnormalBound(minVec.x),
+        FlushSoftBodySubnormalBound(minVec.y),
+        FlushSoftBodySubnormalBound(minVec.z),
+        s_RuntimeMeshBoundsValidFlag | s_RuntimeMeshBoundsFiniteFlag
+    );
+    outBounds.maxBounds = f32x3_i32(
+        FlushSoftBodySubnormalBound(maxVec.x),
+        FlushSoftBodySubnormalBound(maxVec.y),
+        FlushSoftBodySubnormalBound(maxVec.z),
+        0
+    );
+    return outBounds;
+}
+
+VectorSingle ComputeSoftBodyInverseScale(in TransformComponent xf){
+    const f32 sx = xf.scale.x;
+    const f32 sy = xf.scale.y;
+    const f32 sz = xf.scale.z;
+    f32 ix = 1.0f;
+    f32 iy = 1.0f;
+    f32 iz = 1.0f;
+    if(sx >= 1.0e-6f || sx <= -1.0e-6f)
+        ix = 1.0f / sx;
+    if(sy >= 1.0e-6f || sy <= -1.0e-6f)
+        iy = 1.0f / sy;
+    if(sz >= 1.0e-6f || sz <= -1.0e-6f)
+        iz = 1.0f / sz;
+    return VectorSingle(ix, iy, iz, 0.0f);
+}
+
+u32 CountSoftBodyTriangleMissingVertices(
+    in MeshletTriangleData triangle,
+    in Span<u32> vertexMeshletStamps,
+    in u32 currentMeshletStamp
+){
+    const u32 v0 = triangle.vertexRefs[0u];
+    const u32 v1 = triangle.vertexRefs[1u];
+    const u32 v2 = triangle.vertexRefs[2u];
+    u32 missing = 0u;
+    if(vertexMeshletStamps[cast<usize>(v0)] != currentMeshletStamp)
+        ++missing;
+    if(v1 != v0 && vertexMeshletStamps[cast<usize>(v1)] != currentMeshletStamp)
+        ++missing;
+    if(v2 != v0 && v2 != v1 && vertexMeshletStamps[cast<usize>(v2)] != currentMeshletStamp)
+        ++missing;
+    return missing;
+}
+
+[cpp_unwind]
+void ExtractSourceMeshPositionAttributes(
+    in Mesh sourceMesh,
+    mut Vector<f32x2u> outPosUv0,
+    mut Vector<f16x4u> outPosColors,
+    mut Vector<u8> outPosHasAttr
+){
+    const usize posCount = sourceMesh.positionStream().size();
+    const f16x4u defaultColor = MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f);
+    outPosUv0.assign(posCount, f32x2u(0.0f, 0.0f));
+    outPosColors.assign(posCount, defaultColor);
+    outPosHasAttr.assign(posCount, 0u);
+    if(posCount == 0u || sourceMesh.meshlets().empty())
+        return;
+
+    const Span<MeshletDesc> meshlets(sourceMesh.meshlets());
+    const Span<MeshletLocalVertexRef> localVertRefs(sourceMesh.meshletLocalVertexRefs());
+    const Span<u8> posDeltas(sourceMesh.meshletPositionRefDeltas());
+    const Span<u8> attrDeltas(sourceMesh.meshletAttributeRefDeltas());
+    const Span<u8> primIndices(sourceMesh.meshletPrimitiveIndices());
+    const Span<f32x2u> srcUv0(sourceMesh.uv0Stream());
+    const Span<f16x4u> srcColors(sourceMesh.colorStream());
+
+    for(usize mIdx = 0u; mIdx < meshlets.size(); ++mIdx){
+        in MeshletDesc m = meshlets[mIdx];
+        const u32 primCount = MeshletPrimitiveCount(m);
+        const usize primBase = cast<usize>(m.primitiveOffset);
+        const usize vertBase = cast<usize>(m.localVertexOffset);
+        for(u32 p = 0u; p < primCount; ++p){
+            const usize triBase = primBase + cast<usize>(p) * cast<usize>(s_MeshletTriangleIndexCount);
+            if(triBase + 2u >= primIndices.size())
+                break;
+            for(usize c = 0u; c < cast<usize>(s_MeshletTriangleIndexCount); ++c){
+                const usize lvSlot = vertBase + cast<usize>(primIndices[triBase + c]);
+                if(lvSlot >= localVertRefs.size())
+                    continue;
+                const MeshletLocalVertexRef lv = localVertRefs[lvSlot];
+                const Expected<MeshletPositionStreamRef> posRef = TryDecodeMeshletPositionRef(posDeltas, m, cast<u32>(lv.localDeformedPosition), false);
+                if(!posRef.has_value())
+                    continue;
+                const u32 posIdx = posRef.value().position;
+                if(cast<usize>(posIdx) >= posCount || outPosHasAttr[cast<usize>(posIdx)] != 0u)
+                    continue;
+                const Expected<MeshletAttributeStreamRef> attrRef = TryDecodeMeshletAttributeRef(attrDeltas, m, cast<u32>(lv.localAttribute));
+                if(!attrRef.has_value())
+                    continue;
+                if(cast<usize>(attrRef.value().uv0) < srcUv0.size())
+                    outPosUv0[cast<usize>(posIdx)] = srcUv0[cast<usize>(attrRef.value().uv0)];
+                if(cast<usize>(attrRef.value().color) < srcColors.size())
+                    outPosColors[cast<usize>(posIdx)] = srcColors[cast<usize>(attrRef.value().color)];
+                outPosHasAttr[cast<usize>(posIdx)] = 1u;
+            }
+        }
+    }
+}
+
+void WriteSoftBodyLocalPositions(
+    in SoftBody sb,
+    in TransformComponent xf,
+    mut Vector<f32x3u> outPositions
+){
+    const usize particleCount = sb.particles.size();
+    outPositions.resize(particleCount);
+    const b8 worldBaked = sb.isWorldSpaceBaked();
+    const VectorSingle xfPos(xf.position.x, xf.position.y, xf.position.z, 0.0f);
+    const VectorSingle xfRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
+    const VectorSingle invScale = ComputeSoftBodyInverseScale(xf);
+
+    for(usize i = 0u; i < particleCount; ++i){
+        VectorSingle pos(sb.particles[i].position);
+        if(worldBaked)
+            pos = InverseTransformPointValues(xfPos, xfRot, pos) * invScale;
+        if(!IsFinite(pos.xyz))
+            pos = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+        outPositions[i] = f32x3u(pos.x, pos.y, pos.z);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SoftBodyRuntimeMeshCpuState{
+    public Vector<f32x3u> positions;
+    public Vector<f16x4u> normals;
+    public Vector<f16x4u> tangents;
+    public Vector<f32x2u> uv0;
+    public Vector<f16x4u> colors;
+    public Vector<MeshletDesc> meshlets;
+    public Vector<MeshletBounds> meshletBounds;
+    public Vector<u8> meshletPositionRefDeltas;
+    public Vector<u8> meshletAttributeRefDeltas;
+    public Vector<MeshletLocalVertexRef> meshletLocalVertexRefs;
+    public Vector<u8> meshletPrimitiveIndices;
+    public Vector<u32> solidTriangleWords;
+    public Vector<u32> triangleIndices;
+    public Vector<AttribGpu> triangleAttributes;
+    public Vector<MeshletPositionStreamRef> meshletPositionStreamRefs;
+    public Vector<MeshletAttributeStreamRef> meshletAttributeStreamRefs;
+    public Vector<u32> meshletPositionRefElementOffsets;
+    public Vector<RuntimeMeshLocalBounds> meshletLocalBounds;
+    public RuntimeMeshLocalBounds localBounds;
+    public u64 cachedTopologyVersion = 0u;
+    public usize cachedParticleCount = 0u;
+    public usize cachedTriangleCount = 0u;
+    public Name cachedSourceMeshName = s_NameNone;
+    public u64 editRevision = 0u;
+    public u64 contentRevision = 0u;
+    public b8 topologyValid = false;
+    public b8 emptySurfaceSentinel = false;
+    private Vector<f32x4> m_accumNormals;
+    private Vector<f32x4> m_accumTangents;
+    private Vector<f32x4> m_accumBitangents;
+
+    public b8 needsTopologyRebuild(in SoftBody sb, in Name sourceMeshName)const{
+        if(!this.topologyValid)
+            return true;
+        if(this.cachedTopologyVersion != sb.topologyVersion)
+            return true;
+        if(this.cachedParticleCount != sb.particles.size())
+            return true;
+        if(this.cachedTriangleCount != sb.surfaceTriangles.size())
+            return true;
+        return this.cachedSourceMeshName != sourceMeshName;
+    }
+
+    public void reset(){
+        this.positions.clear();
+        this.normals.clear();
+        this.tangents.clear();
+        this.uv0.clear();
+        this.colors.clear();
+        this.meshlets.clear();
+        this.meshletBounds.clear();
+        this.meshletPositionRefDeltas.clear();
+        this.meshletAttributeRefDeltas.clear();
+        this.meshletLocalVertexRefs.clear();
+        this.meshletPrimitiveIndices.clear();
+        this.solidTriangleWords.clear();
+        this.triangleIndices.clear();
+        this.triangleAttributes.clear();
+        this.meshletPositionStreamRefs.clear();
+        this.meshletAttributeStreamRefs.clear();
+        this.meshletPositionRefElementOffsets.clear();
+        this.meshletLocalBounds.clear();
+        this.localBounds = RuntimeMeshLocalBounds();
+        this.cachedTopologyVersion = 0u;
+        this.cachedParticleCount = 0u;
+        this.cachedTriangleCount = 0u;
+        this.cachedSourceMeshName = s_NameNone;
+        this.editRevision = 0u;
+        this.contentRevision = 0u;
+        this.topologyValid = false;
+        this.emptySurfaceSentinel = false;
+        this.m_accumNormals.clear();
+        this.m_accumTangents.clear();
+        this.m_accumBitangents.clear();
+    }
+
+    [cpp_unwind]
+    public b8 rebuildTopology(in SoftBody sb, in TransformComponent xf, in Name recordedSourceMeshName){
+        Vector<f32x2u> emptyUv0;
+        Vector<f16x4u> emptyColors;
+        Vector<u8> emptyHasAttr;
+        return this.rebuildTopologyInternal(
+            sb,
+            xf,
+            Span<f32x2u>(emptyUv0),
+            Span<f16x4u>(emptyColors),
+            Span<u8>(emptyHasAttr),
+            recordedSourceMeshName
+        );
+    }
+
+    [cpp_unwind]
+    public b8 rebuildTopology(in SoftBody sb, in TransformComponent xf){
+        return this.rebuildTopology(sb, xf, s_NameNone);
+    }
+
+    [cpp_unwind]
+    public b8 rebuildTopologyFromMesh(
+        in SoftBody sb,
+        in TransformComponent xf,
+        in Mesh sourceMesh,
+        in Name sourceMeshName
+    ){
+        if(!sourceMesh.positionStream().empty() && !sourceMesh.meshlets().empty()){
+            Vector<f32x2u> srcUv0;
+            Vector<f16x4u> srcColors;
+            Vector<u8> srcHasAttr;
+            ExtractSourceMeshPositionAttributes(sourceMesh, srcUv0, srcColors, srcHasAttr);
+            return this.rebuildTopologyInternal(
+                sb,
+                xf,
+                Span<f32x2u>(srcUv0),
+                Span<f16x4u>(srcColors),
+                Span<u8>(srcHasAttr),
+                sourceMeshName
+            );
+        }
+        return this.rebuildTopology(sb, xf, sourceMeshName);
+    }
+
+    [cpp_unwind]
+    private b8 rebuildTopologyInternal(
+        in SoftBody sb,
+        in TransformComponent xf,
+        in Span<f32x2u> srcUv0,
+        in Span<f16x4u> srcColors,
+        in Span<u8> srcHasAttr,
+        in Name recordedSourceMeshName
+    ){
+        this.topologyValid = false;
+        const usize particleCount = sb.particles.size();
+        if(particleCount == 0u)
+            return false;
+
+        WriteSoftBodyLocalPositions(sb, xf, this.positions);
+
+        const f16x4u defaultColor = MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f);
+        this.normals.assign(particleCount, MakeHalf4U(0.0f, 1.0f, 0.0f, 0.0f));
+        this.tangents.assign(particleCount, MakeHalf4U(1.0f, 0.0f, 0.0f, 1.0f));
+        this.uv0.resize(particleCount);
+        this.colors.assign(particleCount, defaultColor);
+
+        f32 minX = f32.max;
+        f32 maxX = -f32.max;
+        f32 minZ = f32.max;
+        f32 maxZ = -f32.max;
+        const b8 useRest = (sb.restLocalPositions.size() == particleCount);
+        for(usize i = 0u; i < particleCount; ++i){
+            f32 px = this.positions[i].x;
+            f32 pz = this.positions[i].z;
+            if(useRest){
+                px = sb.restLocalPositions[i].x;
+                pz = sb.restLocalPositions[i].z;
+            }
+            if(px < minX) minX = px;
+            if(px > maxX) maxX = px;
+            if(pz < minZ) minZ = pz;
+            if(pz > maxZ) maxZ = pz;
+        }
+        f32 spanX = maxX - minX;
+        f32 spanZ = maxZ - minZ;
+        if(spanX < 1.0e-4f) spanX = 1.0f;
+        if(spanZ < 1.0e-4f) spanZ = 1.0f;
+        for(usize i = 0u; i < particleCount; ++i){
+            f32 px = this.positions[i].x;
+            f32 pz = this.positions[i].z;
+            if(useRest){
+                px = sb.restLocalPositions[i].x;
+                pz = sb.restLocalPositions[i].z;
+            }
+            this.uv0[i] = f32x2u((px - minX) / spanX, (pz - minZ) / spanZ);
+        }
+
+        const usize srcPosCount = srcUv0.size();
+        if(srcPosCount > 0u && srcColors.size() == srcPosCount && srcHasAttr.size() == srcPosCount){
+            const b8 hasParticleMap = (sb.particleSourceIndices.size() == particleCount);
+            for(usize i = 0u; i < particleCount; ++i){
+                u32 srcIdx = s_SoftBodyMissingIndex;
+                if(hasParticleMap)
+                    srcIdx = sb.particleSourceIndices[i];
+                else if(i < srcPosCount)
+                    srcIdx = cast<u32>(i);
+                if(cast<usize>(srcIdx) < srcPosCount && srcHasAttr[cast<usize>(srcIdx)] != 0u){
+                    this.uv0[i] = srcUv0[cast<usize>(srcIdx)];
+                    this.colors[i] = srcColors[cast<usize>(srcIdx)];
+                }
+            }
+        }
+
+        Vector<u32> rawIndices;
+        rawIndices.reserve(sb.surfaceTriangles.size() * cast<usize>(s_MeshletTriangleIndexCount) + 3u);
+        this.emptySurfaceSentinel = false;
+        for(usize ti = 0u; ti < sb.surfaceTriangles.size(); ++ti){
+            in SoftBodyTriangle tri = sb.surfaceTriangles[ti];
+            if(
+                cast<usize>(tri.p0) < particleCount
+                && cast<usize>(tri.p1) < particleCount
+                && cast<usize>(tri.p2) < particleCount
+            ){
+                rawIndices.push_back(tri.p0);
+                rawIndices.push_back(tri.p1);
+                rawIndices.push_back(tri.p2);
+            }
+        }
+        if(rawIndices.empty()){
+            this.emptySurfaceSentinel = true;
+            rawIndices.push_back(0u);
+            rawIndices.push_back(0u);
+            rawIndices.push_back(0u);
+        }
+
+        Vector<MeshVertexRef> vertexRefs;
+        vertexRefs.resize(particleCount);
+        for(usize i = 0u; i < particleCount; ++i){
+            const u32 idx = cast<u32>(i);
+            vertexRefs[i].position = idx;
+            vertexRefs[i].normal = idx;
+            vertexRefs[i].tangent = idx;
+            vertexRefs[i].uv0 = idx;
+            vertexRefs[i].color = idx;
+        }
+
+        const usize triCount = rawIndices.size() / cast<usize>(s_MeshletTriangleIndexCount);
+        Vector<u32> localSourceVertexRefs;
+        Vector<u32> frontier;
+        Vector<u8> frontierFlags;
+        PrepareMeshletBuildOutputStreams(
+            rawIndices.size(),
+            triCount,
+            this.meshlets,
+            this.meshletBounds,
+            this.meshletPositionStreamRefs,
+            this.meshletAttributeStreamRefs,
+            this.meshletLocalVertexRefs,
+            this.meshletPrimitiveIndices,
+            localSourceVertexRefs,
+            frontier,
+            frontierFlags
+        );
+
+        Vector<u32> vertexMeshletStamps;
+        vertexMeshletStamps.assign(particleCount, 0u);
+        Vector<u8> vertexLocalIndices;
+        vertexLocalIndices.assign(particleCount, 0u);
+        u32 currentMeshletStamp = 0u;
+        MeshletScoreState scoreState;
+        MeshletDesc current;
+        ResetMeshletBuilderState(
+            this.meshletPrimitiveIndices.size(),
+            current,
+            localSourceVertexRefs,
+            vertexMeshletStamps,
+            currentMeshletStamp,
+            scoreState
+        );
+
+        for(usize t = 0u; t < triCount; ++t){
+            const usize base = t * cast<usize>(s_MeshletTriangleIndexCount);
+            MeshletTriangleData triData;
+            triData.vertexRefs[0u] = rawIndices[base];
+            triData.vertexRefs[1u] = rawIndices[base + 1u];
+            triData.vertexRefs[2u] = rawIndices[base + 2u];
+            triData.positions[0u] = triData.vertexRefs[0u];
+            triData.positions[1u] = triData.vertexRefs[1u];
+            triData.positions[2u] = triData.vertexRefs[2u];
+
+            const u32 missingVerts = CountSoftBodyTriangleMissingVertices(triData, vertexMeshletStamps, currentMeshletStamp);
+            const u32 primCount = MeshletPrimitiveCount(current);
+            if(
+                primCount >= s_MeshMaxMeshletTriangles
+                || localSourceVertexRefs.size() + cast<usize>(missingVerts) > cast<usize>(s_MeshMaxMeshletVertices)
+            ){
+                if(!FlushBuiltMeshlet(
+                    s_SoftBodyMeshMetaKind,
+                    s_SoftBodyMeshContextName,
+                    Span<f32x3u>(this.positions),
+                    Span<MeshVertexRef>(vertexRefs),
+                    Span<u8>(this.meshletPrimitiveIndices),
+                    Span<u32>(localSourceVertexRefs),
+                    current,
+                    this.meshletPositionStreamRefs,
+                    this.meshletAttributeStreamRefs,
+                    this.meshletLocalVertexRefs,
+                    this.meshlets,
+                    this.meshletBounds
+                ))
+                    return false;
+                ResetMeshletBuilderState(
+                    this.meshletPrimitiveIndices.size(),
+                    current,
+                    localSourceVertexRefs,
+                    vertexMeshletStamps,
+                    currentMeshletStamp,
+                    scoreState
+                );
+            }
+
+            if(!AddMeshletTriangleToBuilder(
+                s_SoftBodyMeshMetaKind,
+                s_SoftBodyMeshContextName,
+                triData,
+                localSourceVertexRefs,
+                vertexMeshletStamps,
+                vertexLocalIndices,
+                currentMeshletStamp,
+                current,
+                this.meshletPrimitiveIndices
+            ))
+                return false;
+        }
+
+        if(MeshletPrimitiveCount(current) > 0u){
+            if(!FlushBuiltMeshlet(
+                s_SoftBodyMeshMetaKind,
+                s_SoftBodyMeshContextName,
+                Span<f32x3u>(this.positions),
+                Span<MeshVertexRef>(vertexRefs),
+                Span<u8>(this.meshletPrimitiveIndices),
+                Span<u32>(localSourceVertexRefs),
+                current,
+                this.meshletPositionStreamRefs,
+                this.meshletAttributeStreamRefs,
+                this.meshletLocalVertexRefs,
+                this.meshlets,
+                this.meshletBounds
+            ))
+                return false;
+        }
+
+        if(this.meshlets.empty())
+            return false;
+
+        this.meshletPositionRefElementOffsets.resize(this.meshlets.size());
+        for(usize m = 0u; m < this.meshlets.size(); ++m)
+            this.meshletPositionRefElementOffsets[m] = this.meshlets[m].positionRefOffset;
+
+        this.meshletPositionRefDeltas.clear();
+        this.meshletAttributeRefDeltas.clear();
+        if(!EncodeMeshletRefDeltas(
+            this.meshletPositionStreamRefs,
+            this.meshletAttributeStreamRefs,
+            false,
+            lambda[](in usize meshletIndex, in auto reason) -> b8{
+                error("SoftBodyMesh: runtime meshlet {} {}", meshletIndex, reason);
+                return false;
+            },
+            this.meshlets,
+            this.meshletPositionRefDeltas,
+            this.meshletAttributeRefDeltas
+        ))
+            return false;
+
+        const Expected<Vector<u32>> decodedIndices = BuildMeshletTriangleIndices(
+            Span<MeshletDesc>(this.meshlets),
+            Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
+            Span<u8>(this.meshletPositionRefDeltas),
+            Span<u8>(this.meshletPrimitiveIndices),
+            this.positions.size()
+        );
+        if(!decodedIndices.has_value())
+            return false;
+        this.triangleIndices = decodedIndices.value();
+
+        if(!BuildSolidTriangleWordsInto(Span<f32x3u>(this.positions), Span<u32>(this.triangleIndices), this.solidTriangleWords))
+            return false;
+        if(this.solidTriangleWords.size() != ExpectedMeshletSolidTriangleWordCount(cast<u32>(this.meshletPrimitiveIndices.size())))
+            return false;
+
+        this.cachedTopologyVersion = sb.topologyVersion;
+        this.cachedParticleCount = particleCount;
+        this.cachedTriangleCount = sb.surfaceTriangles.size();
+        this.cachedSourceMeshName = recordedSourceMeshName;
+        this.topologyValid = true;
+        ++this.editRevision;
+        if(this.editRevision == 0u)
+            this.editRevision = 1u;
+
+        return this.updateDeformation(sb, xf);
+    }
+
+    [cpp_unwind]
+    public b8 updateDeformation(in SoftBody sb, in TransformComponent xf){
+        if(!this.topologyValid || sb.particles.size() != this.positions.size() || this.meshlets.empty())
+            return false;
+
+        const usize particleCount = sb.particles.size();
+        WriteSoftBodyLocalPositions(sb, xf, this.positions);
+
+        this.m_accumNormals.assign(particleCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        this.m_accumTangents.assign(particleCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        this.m_accumBitangents.assign(particleCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+
+        if(!this.emptySurfaceSentinel){
+            for(usize ti = 0u; ti < sb.surfaceTriangles.size(); ++ti){
+                in SoftBodyTriangle tri = sb.surfaceTriangles[ti];
+                const usize i0 = cast<usize>(tri.p0);
+                const usize i1 = cast<usize>(tri.p1);
+                const usize i2 = cast<usize>(tri.p2);
+                if(i0 >= particleCount || i1 >= particleCount || i2 >= particleCount)
+                    continue;
+
+                const f32x3u p0u = this.positions[i0];
+                const f32x3u p1u = this.positions[i1];
+                const f32x3u p2u = this.positions[i2];
+                const VectorSingle p0(p0u.x, p0u.y, p0u.z, 0.0f);
+                const VectorSingle p1(p1u.x, p1u.y, p1u.z, 0.0f);
+                const VectorSingle p2(p2u.x, p2u.y, p2u.z, 0.0f);
+                const VectorSingle e1 = p1 - p0;
+                const VectorSingle e2 = p2 - p0;
+                const VectorSingle faceN = Cross(e1.xyz, e2.xyz);
+                if(LengthSq(faceN.xyz) > 1.0e-16f){
+                    this.m_accumNormals[i0] = f32x4(VectorSingle(this.m_accumNormals[i0]) + faceN);
+                    this.m_accumNormals[i1] = f32x4(VectorSingle(this.m_accumNormals[i1]) + faceN);
+                    this.m_accumNormals[i2] = f32x4(VectorSingle(this.m_accumNormals[i2]) + faceN);
+                }
+
+                const f32x2u uv0v = this.uv0[i0];
+                const f32x2u uv1v = this.uv0[i1];
+                const f32x2u uv2v = this.uv0[i2];
+                const f32 du1 = uv1v.x - uv0v.x;
+                const f32 dv1 = uv1v.y - uv0v.y;
+                const f32 du2 = uv2v.x - uv0v.x;
+                const f32 dv2 = uv2v.y - uv0v.y;
+                const f32 det = du1 * dv2 - du2 * dv1;
+                f32 signDet = 1.0f;
+                if(det < 0.0f)
+                    signDet = -1.0f;
+                const VectorSingle tContrib = (e1 * dv2 - e2 * dv1) * signDet;
+                const VectorSingle bContrib = (e2 * du1 - e1 * du2) * signDet;
+                if(LengthSq(tContrib.xyz) > 1.0e-18f){
+                    this.m_accumTangents[i0] = f32x4(VectorSingle(this.m_accumTangents[i0]) + tContrib);
+                    this.m_accumTangents[i1] = f32x4(VectorSingle(this.m_accumTangents[i1]) + tContrib);
+                    this.m_accumTangents[i2] = f32x4(VectorSingle(this.m_accumTangents[i2]) + tContrib);
+                    this.m_accumBitangents[i0] = f32x4(VectorSingle(this.m_accumBitangents[i0]) + bContrib);
+                    this.m_accumBitangents[i1] = f32x4(VectorSingle(this.m_accumBitangents[i1]) + bContrib);
+                    this.m_accumBitangents[i2] = f32x4(VectorSingle(this.m_accumBitangents[i2]) + bContrib);
+                }
+            }
+        }
+
+        const VectorSingle defaultN(0.0f, 1.0f, 0.0f, 0.0f);
+        for(usize i = 0u; i < particleCount; ++i){
+            const VectorSingle n = SafeNormalizeVec3(VectorSingle(this.m_accumNormals[i]), defaultN);
+            this.normals[i] = MakeHalf4U(n.x, n.y, n.z, 0.0f);
+
+            const VectorSingle rawT(this.m_accumTangents[i]);
+            const VectorSingle rawB(this.m_accumBitangents[i]);
+            const VectorSingle projT = rawT - n * Vector3Dot(n, rawT).x;
+            VectorSingle unitT(0.0f);
+            f32 handedness = 1.0f;
+            if(LengthSq(projT.xyz) > 1.0e-12f){
+                unitT = VectorSingle(Normalize(projT.xyz), 0.0f);
+                if(Vector3Dot(VectorSingle(Cross(n.xyz, unitT.xyz), 0.0f), rawB).x < 0.0f)
+                    handedness = -1.0f;
+            }
+            else{
+                VectorSingle fallbackT(0.0f);
+                VectorSingle fallbackB(0.0f);
+                ComputeTangentBasisFromUnitNormal(n, fallbackT, fallbackB);
+                unitT = fallbackT;
+            }
+            this.tangents[i] = MakeHalf4U(unitT.x, unitT.y, unitT.z, handedness);
+        }
+
+        const usize meshletCount = this.meshlets.size();
+        this.meshletBounds.resize(meshletCount);
+        this.meshletLocalBounds.resize(meshletCount);
+        VectorSingle globalMin(f32.max, f32.max, f32.max, 0.0f);
+        VectorSingle globalMax(-f32.max, -f32.max, -f32.max, 0.0f);
+
+        for(usize m = 0u; m < meshletCount; ++m){
+            MeshletDesc boundsDesc = this.meshlets[m];
+            boundsDesc.positionRefOffset = this.meshletPositionRefElementOffsets[m];
+            this.meshletBounds[m] = BuildMeshletBounds(
+                Span<f32x3u>(this.positions),
+                Span<MeshletPositionStreamRef>(this.meshletPositionStreamRefs),
+                Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
+                Span<u8>(this.meshletPrimitiveIndices),
+                boundsDesc
+            );
+
+            const u32 posCount = MeshletPositionCount(boundsDesc);
+            VectorSingle minM(f32.max, f32.max, f32.max, 0.0f);
+            VectorSingle maxM(-f32.max, -f32.max, -f32.max, 0.0f);
+            for(u32 lp = 0u; lp < posCount; ++lp){
+                const MeshletPositionStreamRef ref = this.meshletPositionStreamRefs[cast<usize>(boundsDesc.positionRefOffset + lp)];
+                const f32x3u p3 = this.positions[cast<usize>(ref.position)];
+                const VectorSingle pVec(p3.x, p3.y, p3.z, 0.0f);
+                minM = Min(minM, pVec);
+                maxM = Max(maxM, pVec);
+            }
+            if(posCount == 0u){
+                minM = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+                maxM = minM;
+            }
+            this.meshletLocalBounds[m] = MakeSoftBodyRuntimeLocalBounds(minM, maxM);
+            globalMin = Min(globalMin, minM);
+            globalMax = Max(globalMax, maxM);
+        }
+        this.localBounds = MakeSoftBodyRuntimeLocalBounds(globalMin, globalMax);
+
+        const Expected<Vector<AttribGpu>> builtAttributes = BuildMeshletTriangleAttributes(
+            Span<MeshletDesc>(this.meshlets),
+            Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
+            Span<u8>(this.meshletAttributeRefDeltas),
+            Span<u8>(this.meshletPrimitiveIndices),
+            Span<f16x4u>(this.normals),
+            Span<f32x2u>(this.uv0)
+        );
+        if(!builtAttributes.has_value())
+            return false;
+        this.triangleAttributes = builtAttributes.value();
+
+        ++this.contentRevision;
+        if(this.contentRevision == 0u)
+            this.contentRevision = 1u;
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

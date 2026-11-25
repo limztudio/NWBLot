@@ -30,17 +30,31 @@ class FontSource{
     public in Font font;
     public u64 generation;
     public Optional<in FontAtlas> atlas;
+    public FontDescriptor descriptor;
 
     public FontSource(in AssetRef<Font> identity, in Font font, in u64 generation){
         this.identity = identity;
         this.font = font;
         this.generation = generation;
     }
+    public FontSource(in AssetRef<Font> identity, in Font font, in u64 generation, in FontDescriptor descriptor){
+        this.identity = identity;
+        this.font = font;
+        this.generation = generation;
+        this.descriptor = descriptor;
+    }
     public FontSource(in AssetRef<Font> identity, in Font font, in u64 generation, in borrow FontAtlas atlas){
         this.identity = identity;
         this.font = font;
         this.generation = generation;
         this.atlas = Optional<in FontAtlas>(atlas);
+    }
+    public FontSource(in AssetRef<Font> identity, in Font font, in u64 generation, in borrow FontAtlas atlas, in FontDescriptor descriptor){
+        this.identity = identity;
+        this.font = font;
+        this.generation = generation;
+        this.atlas = Optional<in FontAtlas>(atlas);
+        this.descriptor = descriptor;
     }
 }
 
@@ -62,6 +76,7 @@ class FontFace : NoCopy{
     private b8 m_ready = false;
     private b8 m_allowOutlineBounds = false;
     private b8 m_coverageInkReliable = false;
+    private b8 m_hasColor = false;
 
     [cpp_unwind]
     public void initialize(in SharedPool pool, in FontSource source){
@@ -75,16 +90,19 @@ class FontFace : NoCopy{
         const u32 index = source.font.faceIndex();
         if(!OpenUiFontFace(this.m_freeType, bytes, index))
             return;
+        this.m_hasColor = this.m_freeType.view().hasColor();
         const b8 hbReady = this.m_hbFont.open(bytes, index);
         this.m_unitsPerEm = this.m_hbFont.unitsPerEm();
+        if(this.m_unitsPerEm == 0u && this.m_hasColor)
+            this.m_unitsPerEm = 1024u;
         this.m_ready = this.m_hbFont.glyphCount() != 0u && this.m_unitsPerEm != 0u && hbReady && this.m_shapeBuffer.valid();
         if(!this.m_ready){
             error("UI HarfBuzz font face initialization failed");
             return;
         }
         this.m_hbFont.setOpenTypeFunctions();
-        this.m_allowOutlineBounds = !IsTrickyFace(this.m_freeType.view());
-        this.m_coverageInkReliable = HasReliableFontCoverage(this.m_hbFont, this.m_allowOutlineBounds);
+        this.m_allowOutlineBounds = !this.m_hasColor && !IsTrickyFace(this.m_freeType.view());
+        this.m_coverageInkReliable = !this.m_hasColor && HasReliableFontCoverage(this.m_hbFont, this.m_allowOutlineBounds);
         if(source.atlas.has_value())
             this.installBakedAtlas(pool, source.font, source.atlas.value());
     }
@@ -117,6 +135,7 @@ class FontFace : NoCopy{
     public u64 generation()const{ return this.m_generation; }
     public u32 unitsPerEm()const{ return this.m_unitsPerEm; }
     public b8 coverageInkReliable()const{ return this.m_coverageInkReliable; }
+    public b8 hasColor()const{ return this.m_hasColor; }
     public in SharedBakedFontAtlas bakedAtlas()const{ return this.m_bakedAtlas; }
 
     public Expected<FontMetrics> metrics(in f32 fontSize){
@@ -134,11 +153,11 @@ class FontFace : NoCopy{
     public Expected<Rect> rasterBounds(in u32 glyphId, in u32 pixelSize){
         if(!this.m_ready)
             return MakeUnexpected(Failure());
-        return MeasureRasterFontGlyph(this.m_freeType.view(), glyphId, pixelSize, this.m_lastRasterPixelSize);
+        return MeasureRasterFontGlyph(this.m_freeType.view(), this.m_hasColor, glyphId, pixelSize, this.m_lastRasterPixelSize);
     }
     [cpp_unwind]
     public b8 rasterize(in u32 glyphId, in u32 pixelSize, mut GlyphBitmap output){
-        return this.m_ready && RasterizeFontGlyph(this.m_freeType.view(), glyphId, pixelSize, this.m_lastRasterPixelSize, output);
+        return this.m_ready && RasterizeFontGlyph(this.m_freeType.view(), this.m_hasColor, glyphId, pixelSize, this.m_lastRasterPixelSize, output);
     }
 }
 
@@ -210,53 +229,148 @@ GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 
     return ComputeOutlineCoverageBounds(box.xMin, box.yMin, box.xMax, box.yMax, fontSize, face.unitsPerEm());
 }
 
-b8 LoadRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize){
-    if(pixelSize != inOutLastPixelSize){
+void ConvertPremulBgraToStraightRgba(in Span<u8> srcBgraRow, in u32 width, mut Vector<u8> outPixels){
+    for(u32 col = 0u; col < width; ++col){
+        const usize base = cast<usize>(col) * 4u;
+        const u32 b = cast<u32>(srcBgraRow[base + 0u]);
+        const u32 g = cast<u32>(srcBgraRow[base + 1u]);
+        const u32 r = cast<u32>(srcBgraRow[base + 2u]);
+        const u32 a = cast<u32>(srcBgraRow[base + 3u]);
+        if(a == 0u){
+            outPixels.push_back(0u);
+            outPixels.push_back(0u);
+            outPixels.push_back(0u);
+            outPixels.push_back(0u);
+        }
+        else if(a == 255u){
+            outPixels.push_back(cast<u8>(r));
+            outPixels.push_back(cast<u8>(g));
+            outPixels.push_back(cast<u8>(b));
+            outPixels.push_back(255u);
+        }
+        else{
+            const u32 halfA = a / 2u;
+            u32 ur = (r * 255u + halfA) / a;
+            u32 ug = (g * 255u + halfA) / a;
+            u32 ub = (b * 255u + halfA) / a;
+            if(ur > 255u)
+                ur = 255u;
+            if(ug > 255u)
+                ug = 255u;
+            if(ub > 255u)
+                ub = 255u;
+            outPixels.push_back(cast<u8>(ur));
+            outPixels.push_back(cast<u8>(ug));
+            outPixels.push_back(cast<u8>(ub));
+            outPixels.push_back(cast<u8>(a));
+        }
+    }
+}
+
+b8 LoadRasterFontGlyph(
+    mut FreeTypeFaceView face,
+    in b8 hasColor,
+    in u32 glyph,
+    in u32 pixelSize,
+    mut u32 inOutLastPixelSize,
+    mut f32 outBitmapScale
+){
+    outBitmapScale = 1.0f;
+    if(hasColor && !face.isScalable()){
+        u32 strikePpem = pixelSize;
+        if(face.selectBestStrike(pixelSize, strikePpem) != 0){
+            inOutLastPixelSize = 0u;
+            return false;
+        }
+        inOutLastPixelSize = 0u;
+        if(strikePpem > 0u)
+            outBitmapScale = cast<f32>(strikePpem) / cast<f32>(pixelSize);
+    }
+    else if(pixelSize != inOutLastPixelSize){
         if(face.setPixelSizes(0u, pixelSize) != 0){
             inOutLastPixelSize = 0u;
             return false;
         }
         inOutLastPixelSize = pixelSize;
     }
-    return face.loadGlyph(glyph, s_FreeTypeLoadNoHinting | s_FreeTypeLoadNoBitmap) == 0;
+    i32 loadFlags = s_FreeTypeLoadNoHinting;
+    if(hasColor)
+        loadFlags = loadFlags | s_FreeTypeLoadColor;
+    else
+        loadFlags = loadFlags | s_FreeTypeLoadNoBitmap;
+    return face.loadGlyph(glyph, loadFlags) == 0;
 }
 
 [cpp_unwind]
-Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize){
+Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in b8 hasColor, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize){
     if(!IsValidTextRasterPixelSize(pixelSize))
         return MakeUnexpected(Failure());
-    if(!LoadRasterFontGlyph(face, glyph, pixelSize, inOutLastPixelSize)){
+    f32 bitmapScale = 1.0f;
+    if(!LoadRasterFontGlyph(face, hasColor, glyph, pixelSize, inOutLastPixelSize, bitmapScale)){
         error("UI glyph raster measurement failed");
         return MakeUnexpected(Failure());
     }
     const FreeTypeBitmapView bitmap = face.bitmap();
-    if(!face.hasOutline() || (!bitmap.grayscale && bitmap.width != 0u && bitmap.rows != 0u)){
+    if(!hasColor && (!face.hasOutline() || (!bitmap.grayscale && bitmap.width != 0u && bitmap.rows != 0u))){
         error("UI glyph measurement requires a grayscale outline");
         return MakeUnexpected(Failure());
     }
-    return MakeRasterGlyphBoundsRect(bitmap.left, bitmap.top, bitmap.width, bitmap.rows);
+    if(hasColor && bitmap.width != 0u && bitmap.rows != 0u && !bitmap.grayscale && !bitmap.colorBgra && !face.hasOutline()){
+        error("UI glyph measurement requires a supported bitmap or outline");
+        return MakeUnexpected(Failure());
+    }
+    Rect bounds = MakeRasterGlyphBoundsRect(bitmap.left, bitmap.top, bitmap.width, bitmap.rows);
+    if(bitmapScale != 1.0f && bitmapScale > 0.0f){
+        const f32 invScale = 1.0f / bitmapScale;
+        bounds = Rect(bounds.x * invScale, bounds.y * invScale, bounds.width * invScale, bounds.height * invScale);
+    }
+    return bounds;
 }
 
 [cpp_unwind]
-b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize, mut GlyphBitmap output){
+b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in b8 hasColor, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize, mut GlyphBitmap output){
     if(!IsValidTextRasterPixelSize(pixelSize))
         return false;
-    if(!LoadRasterFontGlyph(face, glyph, pixelSize, inOutLastPixelSize) || face.renderNormal() != 0){
+    f32 bitmapScale = 1.0f;
+    if(!LoadRasterFontGlyph(face, hasColor, glyph, pixelSize, inOutLastPixelSize, bitmapScale)){
         error("UI glyph rasterization failed");
         return false;
     }
-    const FreeTypeBitmapView bitmap = face.bitmap();
-    if(!bitmap.grayscale && bitmap.width != 0u && bitmap.rows != 0u){
-        error("UI glyph rasterizer requires grayscale coverage");
-        return false;
+    const FreeTypeBitmapView loaded = face.bitmap();
+    if(face.hasOutline() || (!hasColor && !loaded.grayscale) || (hasColor && !loaded.colorBgra && !loaded.grayscale)){
+        if(face.renderNormal() != 0){
+            error("UI glyph rasterization failed");
+            return false;
+        }
     }
+    const FreeTypeBitmapView bitmap = face.bitmap();
     output.width = bitmap.width;
     output.height = bitmap.rows;
     output.bearingX = bitmap.left;
     output.bearingY = bitmap.top;
+    output.bitmapScale = bitmapScale;
     if(!FitsCoverageAtlasGlyphBitmap(bitmap.width, bitmap.rows))
         return false;
     const usize pitch = cast<usize>(Abs(cast<i64>(bitmap.pitch)));
+    if(bitmap.colorBgra){
+        output.isColor = true;
+        if(bitmap.width != 0u && bitmap.rows != 0u && (pitch < cast<usize>(bitmap.width) * 4u || pitch > bitmap.pixels.size() / bitmap.rows))
+            return false;
+        output.pixels.clear();
+        output.pixels.reserve(cast<usize>(bitmap.width) * bitmap.rows * 4u);
+        if(bitmap.width != 0u){
+            for(u32 row = 0u; row < bitmap.rows; ++row){
+                const usize sourceRow = ResolveRasterBitmapSourceRow(bitmap.pitch, bitmap.rows, row);
+                ConvertPremulBgraToStraightRgba(bitmap.pixels.subspan(sourceRow * pitch, cast<usize>(bitmap.width) * 4u), bitmap.width, output.pixels);
+            }
+        }
+        return true;
+    }
+    if(!bitmap.grayscale && bitmap.width != 0u && bitmap.rows != 0u){
+        error("UI glyph rasterizer requires grayscale coverage");
+        return false;
+    }
+    output.isColor = false;
     if(bitmap.width != 0u && bitmap.rows != 0u && (pitch < bitmap.width || pitch > bitmap.pixels.size() / bitmap.rows))
         return false;
     output.pixels.clear();
@@ -281,7 +395,7 @@ b8 OpenUiFontFace(mut UiFreeTypeFace face, in Span<u8> bytes, in u32 index){
         error("UI font face initialization failed");
         return false;
     }
-    if(!face.view().isScalable() || face.view().unitsPerEm() == 0u){
+    if((!face.view().isScalable() && (!face.view().hasColor() || face.view().strikeCount() <= 0)) || (face.view().unitsPerEm() == 0u && !face.view().hasColor())){
         error("UI font must have scalable horizontal metrics");
         return false;
     }
@@ -351,7 +465,19 @@ b8 ShapeFontGlyphRun(
     buffer.setClusterLevel(s_HarfBuzzMonotoneGraphemes);
     if(!buffer.addUtf8(request.text, byteBegin, byteEnd - byteBegin))
         return false;
-    buffer.shape(font);
+    if(request.featureCount > 0u){
+        Array<HarfBuzzOpenTypeFeature, s_TextMaxOpenTypeFeatures> hbFeatures;
+        const usize featureCount = Min(cast<usize>(request.featureCount), s_TextMaxOpenTypeFeatures);
+        for(usize fi = 0u; fi < featureCount; ++fi){
+            hbFeatures[fi].tag = request.features[fi].tag;
+            hbFeatures[fi].value = request.features[fi].value;
+            hbFeatures[fi].start = request.features[fi].start;
+            hbFeatures[fi].end = request.features[fi].end;
+        }
+        buffer.shapeWithFeatures(font, Span<HarfBuzzOpenTypeFeature>(hbFeatures.data(), featureCount));
+    }
+    else
+        buffer.shape(font);
     if(!buffer.valid()){
         error("UI HarfBuzz run allocation failed");
         return false;

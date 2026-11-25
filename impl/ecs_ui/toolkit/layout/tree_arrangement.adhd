@@ -8,13 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class LayoutTreeArrangementStart{
-    public Rect childClip = Rect();
-    public f64 available = 0.0;
-    public f64 invWeight = 0.0;
-    public f64 cursor = 0.0;
-}
-
 Rect IntersectLayoutRectsScalar(in Rect lhs, in Rect rhs){
     const VectorSingle lhsBox(lhs.x, lhs.y, lhs.x + lhs.width, lhs.y + lhs.height);
     const VectorSingle rhsBox(rhs.x, rhs.y, rhs.x + rhs.width, rhs.y + rhs.height);
@@ -26,149 +19,832 @@ Rect IntersectLayoutRectsScalar(in Rect lhs, in Rect rhs){
     return Rect(origin.x, origin.y, size.x, size.y);
 }
 
-Expected<LayoutTreeArrangementStart> TryBeginArrangeLayoutTreeNode(
+void ComputeJustifyOffsetsF64(in LayoutJustify justify, in f64 freeSpace, in u32 count, mut f64 outLead, mut f64 outExtraGap){
+    outLead = 0.0;
+    outExtraGap = 0.0;
+    if(freeSpace <= 0.0 || count == 0u)
+        return;
+    switch(justify){
+    case LayoutJustify::Center:
+        outLead = freeSpace * 0.5;
+        break;
+    case LayoutJustify::End:
+        outLead = freeSpace;
+        break;
+    case LayoutJustify::SpaceBetween:
+        if(count > 1u)
+            outExtraGap = freeSpace / cast<f64>(count - 1u);
+        break;
+    case LayoutJustify::SpaceAround:{
+        const f64 step = freeSpace / cast<f64>(count);
+        outLead = step * 0.5;
+        outExtraGap = step;
+        break;
+    }
+    case LayoutJustify::SpaceEvenly:{
+        const f64 step = freeSpace / cast<f64>(count + 1u);
+        outLead = step;
+        outExtraGap = step;
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+b8 TryUpdateScrollContainerBox(
+    in LayoutNodeDesc description,
+    in VectorDouble contentOrigin,
+    in VectorDouble contentExtent,
+    in Rect inheritedClip,
+    in Point contentSize,
+    mut LayoutBox inoutBox,
+    mut Rect outChildClip
+){
+    inoutBox.contentSize = contentSize;
+    if(description.scrollable){
+        b8 hasHorizontal = false;
+        b8 hasVertical = false;
+        f64 barWidth = 0.0;
+        f64 barHeight = 0.0;
+        ReserveScrollViewportAxes(
+            contentExtent.x,
+            contentExtent.y,
+            cast<f64>(inoutBox.contentSize.x),
+            cast<f64>(inoutBox.contentSize.y),
+            cast<f64>(description.scrollbarThickness),
+            description.horizontalScrollbar,
+            description.verticalScrollbar,
+            hasHorizontal,
+            hasVertical,
+            barWidth,
+            barHeight
+        );
+        const VectorDouble viewportSize = contentExtent - VectorDouble(barWidth, barHeight, 0.0, 0.0);
+        const Expected<Rect> viewportRect = TryMakeUiRect(contentOrigin.x, contentOrigin.y, viewportSize.x, viewportSize.y, UiRectPrecision::RoundedEndpoints);
+        if(!viewportRect.has_value())
+            return false;
+        inoutBox.content = viewportRect.value();
+        f64 maxScrollX = 0.0;
+        if(description.horizontalScrollbar != ScrollbarPolicy::Never)
+            maxScrollX = UiSimdMaxF64(0.0, cast<f64>(inoutBox.contentSize.x) - cast<f64>(inoutBox.content.width));
+        f64 maxScrollY = 0.0;
+        if(description.verticalScrollbar != ScrollbarPolicy::Never)
+            maxScrollY = UiSimdMaxF64(0.0, cast<f64>(inoutBox.contentSize.y) - cast<f64>(inoutBox.content.height));
+        inoutBox.scrollOffset = Point(
+            cast<f32>(UiSimdMinF64(cast<f64>(description.scrollOffset.x), maxScrollX)),
+            cast<f32>(UiSimdMinF64(cast<f64>(description.scrollOffset.y), maxScrollY))
+        );
+    }
+    else{
+        inoutBox.content = Rect(
+            cast<f32>(contentOrigin.x),
+            cast<f32>(contentOrigin.y),
+            cast<f32>(contentExtent.x),
+            cast<f32>(contentExtent.y)
+        );
+        inoutBox.scrollOffset = Point();
+    }
+    inoutBox.clip = IntersectLayoutRectsScalar(inoutBox.rectangle, inheritedClip);
+    inoutBox.hit = inoutBox.clip;
+    if(!IsValidUiRect(inoutBox.content) || !IsValidUiRect(inoutBox.clip))
+        return false;
+    if(description.clipChildren || description.scrollable)
+        outChildClip = IntersectLayoutRectsScalar(inheritedClip, inoutBox.content);
+    else
+        outChildClip = inheritedClip;
+    return true;
+}
+
+b8 TryComputeFlowChildEffectiveMeasured(
     in Span<LayoutTreeNode> nodes,
     in Span<LayoutBox> boxes,
-    in Span<Rect> inheritedClips,
-    in u32 index,
-    mut LayoutBox inoutBox
+    in u32 child,
+    in b8 parentIsRow,
+    in f64 parentCrossExtent,
+    mut f64 outMain,
+    mut f64 outCross
 ){
-    LayoutTreeArrangementStart result;
-    if(!IsValidUiRect(inoutBox.rectangle))
-        return MakeUnexpected(Failure());
+    in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
+    const Point baseMeasured = boxes[cast<usize>(child)].measuredSize;
+    if(parentIsRow){
+        outMain = cast<f64>(baseMeasured.x);
+        outCross = cast<f64>(baseMeasured.y);
+        if(
+            childDesc.height.policy == LayoutSizePolicy::Stretch
+            && childDesc.width.policy == LayoutSizePolicy::Content
+            && childDesc.direction == LayoutDirection::Column
+            && childDesc.flexWrap
+        ){
+            const f64 marginY = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+            const f64 borderH = ClampLayoutAxisF64(UiSimdMaxF64(0.0, parentCrossExtent - marginY), childDesc.minHeight, childDesc.maxHeight);
+            const f64 innerH = UiSimdMaxF64(0.0, (borderH - cast<f64>(childDesc.padding.top)) - cast<f64>(childDesc.padding.bottom));
+            f64 extX = 0.0;
+            f64 extY = 0.0;
+            if(!MeasureLayoutWrappedNodeF64(nodes, boxes, child, innerH, extX, extY))
+                return false;
+            extX = UiSimdMaxF64(extX, cast<f64>(childDesc.intrinsicSize.x));
+            const f64 rawW = (extX + cast<f64>(childDesc.padding.left)) + cast<f64>(childDesc.padding.right);
+            if(rawW > s_UiMaxFloatF64)
+                return false;
+            const VectorDouble constrained = ResolveLayoutConstrainedSizeF64(childDesc, rawW, borderH, false, true);
+            outMain = constrained.x;
+            outCross = constrained.y;
+        }
+        return true;
+    }
+    outMain = cast<f64>(baseMeasured.y);
+    outCross = cast<f64>(baseMeasured.x);
+    if(
+        childDesc.width.policy == LayoutSizePolicy::Stretch
+        && childDesc.height.policy == LayoutSizePolicy::Content
+        && (childDesc.direction == LayoutDirection::Grid || (childDesc.direction == LayoutDirection::Row && childDesc.flexWrap))
+    ){
+        const f64 marginX = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+        const f64 borderW = ClampLayoutAxisF64(UiSimdMaxF64(0.0, parentCrossExtent - marginX), childDesc.minWidth, childDesc.maxWidth);
+        const f64 innerW = UiSimdMaxF64(0.0, (borderW - cast<f64>(childDesc.padding.left)) - cast<f64>(childDesc.padding.right));
+        f64 extX = 0.0;
+        f64 extY = 0.0;
+        if(childDesc.direction == LayoutDirection::Grid){
+            Vector<LayoutGridCellPlacement> placements;
+            Vector<f64> colWidths;
+            Vector<f64> rowHeights;
+            if(!MeasureLayoutGridTracksF64(nodes, boxes, child, true, innerW, false, 0.0, placements, colWidths, rowHeights, extX, extY))
+                return false;
+        }
+        else{
+            if(!MeasureLayoutWrappedNodeF64(nodes, boxes, child, innerW, extX, extY))
+                return false;
+        }
+        extY = UiSimdMaxF64(extY, cast<f64>(childDesc.intrinsicSize.y));
+        const f64 rawH = (extY + cast<f64>(childDesc.padding.top)) + cast<f64>(childDesc.padding.bottom);
+        if(rawH > s_UiMaxFloatF64)
+            return false;
+        const VectorDouble constrained = ResolveLayoutConstrainedSizeF64(childDesc, borderW, rawH, true, false);
+        outMain = constrained.y;
+        outCross = constrained.x;
+    }
+    return true;
+}
+
+b8 TryArrangeFlexLineChildren(
+    in Span<LayoutTreeNode> nodes,
+    in Rect childClip,
+    in b8 row,
+    in LayoutNodeDesc parentDesc,
+    in f64 lineMainStart,
+    in f64 lineMainExtent,
+    in f64 lineCrossStart,
+    in f64 lineCrossExtent,
+    in Span<u32> lineChildren,
+    in Span<f64> measuredMain,
+    in Span<f64> measuredCross,
+    mut Vector<LayoutBox> boxes,
+    mut Vector<Rect> inheritedClips,
+    mut f64 outUsedMain,
+    mut f64 outUsedCross
+){
+    outUsedMain = 0.0;
+    outUsedCross = 0.0;
+    const u32 count = cast<u32>(lineChildren.size());
+    if(count == 0u)
+        return true;
+    Vector<f64> itemMain;
+    Vector<f64> minMains;
+    Vector<f64> maxMains;
+    Vector<f64> mainWeights;
+    Vector<f64> marginMains;
+    Vector<b8> frozenMain;
+    itemMain.resize(cast<usize>(count), 0.0);
+    minMains.resize(cast<usize>(count), 0.0);
+    maxMains.resize(cast<usize>(count), 0.0);
+    mainWeights.resize(cast<usize>(count), 0.0);
+    marginMains.resize(cast<usize>(count), 0.0);
+    frozenMain.resize(cast<usize>(count), false);
+    for(u32 i = 0u; i < count; ++i){
+        const u32 child = lineChildren[cast<usize>(i)];
+        in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
+        LayoutSize mainSpec = childDesc.height;
+        LayoutSize crossSpec = childDesc.width;
+        f32 minM = childDesc.minHeight;
+        f32 maxM = childDesc.maxHeight;
+        f32 minC = childDesc.minWidth;
+        f32 maxC = childDesc.maxWidth;
+        f64 marginM = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+        f64 marginC = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+        if(row){
+            mainSpec = childDesc.width;
+            crossSpec = childDesc.height;
+            minM = childDesc.minWidth;
+            maxM = childDesc.maxWidth;
+            minC = childDesc.minHeight;
+            maxC = childDesc.maxHeight;
+            marginM = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+            marginC = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+        }
+        minMains[cast<usize>(i)] = cast<f64>(minM);
+        maxMains[cast<usize>(i)] = cast<f64>(maxM);
+        mainWeights[cast<usize>(i)] = cast<f64>(mainSpec.value);
+        marginMains[cast<usize>(i)] = marginM;
+        const LayoutAlign align = ResolveEffectiveLayoutAlign(parentDesc.alignItems, childDesc.alignSelf);
+        const b8 stretchCross = (crossSpec.policy == LayoutSizePolicy::Stretch) || (align == LayoutAlign::Stretch && crossSpec.policy == LayoutSizePolicy::Content);
+        if(mainSpec.policy == LayoutSizePolicy::Stretch){
+            frozenMain[cast<usize>(i)] = false;
+        }
+        else{
+            frozenMain[cast<usize>(i)] = true;
+            if(mainSpec.policy == LayoutSizePolicy::Content && stretchCross && childDesc.aspectRatio > 0.0f){
+                const f64 crossAvail = ClampLayoutAxisF64(UiSimdMaxF64(0.0, lineCrossExtent - marginC), minC, maxC);
+                VectorDouble derived(0.0);
+                if(row)
+                    derived = ResolveLayoutConstrainedSizeF64(childDesc, measuredMain[cast<usize>(i)], crossAvail, false, true);
+                else
+                    derived = ResolveLayoutConstrainedSizeF64(childDesc, crossAvail, measuredMain[cast<usize>(i)], true, false);
+                itemMain[cast<usize>(i)] = derived.y;
+                if(row)
+                    itemMain[cast<usize>(i)] = derived.x;
+            }
+            else{
+                itemMain[cast<usize>(i)] = ClampLayoutAxisF64(measuredMain[cast<usize>(i)], minM, maxM);
+            }
+        }
+    }
+    const f64 gap = cast<f64>(parentDesc.gap);
+    const f64 spacing = gap * cast<f64>(count - 1u);
+    for(u32 pass = 0u; pass < count; ++pass){
+        f64 fixedSum = 0.0;
+        f64 totalMargin = 0.0;
+        f64 activeWeight = 0.0;
+        for(u32 i = 0u; i < count; ++i){
+            totalMargin += marginMains[cast<usize>(i)];
+            if(frozenMain[cast<usize>(i)])
+                fixedSum += itemMain[cast<usize>(i)];
+            else
+                activeWeight += mainWeights[cast<usize>(i)];
+        }
+        if(activeWeight <= 0.0)
+            break;
+        const f64 remaining = UiSimdMaxF64(0.0, (lineMainExtent - spacing) - (fixedSum + totalMargin));
+        const f64 invActiveWeight = 1.0 / activeWeight;
+        b8 newlyFrozen = false;
+        for(u32 i = 0u; i < count; ++i){
+            if(frozenMain[cast<usize>(i)])
+                continue;
+            const f64 share = remaining * (mainWeights[cast<usize>(i)] * invActiveWeight);
+            const f64 clamped = ClampLayoutAxisF64(share, cast<f32>(minMains[cast<usize>(i)]), cast<f32>(maxMains[cast<usize>(i)]));
+            if(clamped != share){
+                itemMain[cast<usize>(i)] = clamped;
+                frozenMain[cast<usize>(i)] = true;
+                newlyFrozen = true;
+            }
+        }
+        if(!newlyFrozen){
+            for(u32 i = 0u; i < count; ++i){
+                if(!frozenMain[cast<usize>(i)])
+                    itemMain[cast<usize>(i)] = remaining * (mainWeights[cast<usize>(i)] * invActiveWeight);
+            }
+            break;
+        }
+    }
+    f64 totalOuterMain = spacing;
+    for(u32 i = 0u; i < count; ++i)
+        totalOuterMain += itemMain[cast<usize>(i)] + marginMains[cast<usize>(i)];
+    const f64 freeMain = UiSimdMaxF64(0.0, lineMainExtent - totalOuterMain);
+    f64 leadMain = 0.0;
+    f64 extraGap = 0.0;
+    ComputeJustifyOffsetsF64(parentDesc.justifyContent, freeMain, count, leadMain, extraGap);
+    outUsedMain = totalOuterMain;
+    f64 cursor = lineMainStart + leadMain;
+    for(u32 i = 0u; i < count; ++i){
+        const u32 child = lineChildren[cast<usize>(i)];
+        in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
+        const LayoutAlign align = ResolveEffectiveLayoutAlign(parentDesc.alignItems, childDesc.alignSelf);
+        LayoutSize mainSpec = childDesc.height;
+        LayoutSize crossSpec = childDesc.width;
+        f64 marginMainStart = cast<f64>(childDesc.margin.top);
+        f64 marginMainEnd = cast<f64>(childDesc.margin.bottom);
+        f64 marginCrossStart = cast<f64>(childDesc.margin.left);
+        f64 marginCrossEnd = cast<f64>(childDesc.margin.right);
+        if(row){
+            mainSpec = childDesc.width;
+            crossSpec = childDesc.height;
+            marginMainStart = cast<f64>(childDesc.margin.left);
+            marginMainEnd = cast<f64>(childDesc.margin.right);
+            marginCrossStart = cast<f64>(childDesc.margin.top);
+            marginCrossEnd = cast<f64>(childDesc.margin.bottom);
+        }
+        const f64 marginCross = marginCrossStart + marginCrossEnd;
+        const b8 stretchCross = (crossSpec.policy == LayoutSizePolicy::Stretch) || (align == LayoutAlign::Stretch && crossSpec.policy == LayoutSizePolicy::Content);
+        const f64 rawMain = itemMain[cast<usize>(i)];
+        f64 rawCross = measuredCross[cast<usize>(i)];
+        if(stretchCross)
+            rawCross = UiSimdMaxF64(0.0, lineCrossExtent - marginCross);
+        const b8 mainDriven = mainSpec.policy != LayoutSizePolicy::Content;
+        const b8 crossDriven = stretchCross || (crossSpec.policy == LayoutSizePolicy::Fixed);
+        VectorDouble resolvedSize(0.0);
+        if(row)
+            resolvedSize = ResolveLayoutConstrainedSizeF64(childDesc, rawMain, rawCross, mainDriven, crossDriven);
+        else
+            resolvedSize = ResolveLayoutConstrainedSizeF64(childDesc, rawCross, rawMain, crossDriven, mainDriven);
+        f64 actualMain = resolvedSize.y;
+        f64 actualCross = resolvedSize.x;
+        if(row){
+            actualMain = resolvedSize.x;
+            actualCross = resolvedSize.y;
+        }
+        outUsedCross = UiSimdMaxF64(outUsedCross, actualCross + marginCross);
+        const f64 mainCoord = cursor + marginMainStart;
+        const f64 availCross = UiSimdMaxF64(0.0, lineCrossExtent - marginCross);
+        f64 crossCoord = lineCrossStart + marginCrossStart;
+        if(align == LayoutAlign::Center)
+            crossCoord += (availCross - actualCross) * 0.5;
+        else if(align == LayoutAlign::End)
+            crossCoord += availCross - actualCross;
+        f32 rectX = cast<f32>(crossCoord);
+        f32 rectY = cast<f32>(mainCoord);
+        if(row){
+            rectX = cast<f32>(mainCoord);
+            rectY = cast<f32>(crossCoord);
+        }
+        const Rect rect(rectX, rectY, cast<f32>(resolvedSize.x), cast<f32>(resolvedSize.y));
+        if(!IsValidUiRect(rect))
+            return false;
+        boxes[cast<usize>(child)].rectangle = rect;
+        inheritedClips[cast<usize>(child)] = childClip;
+        cursor += ((marginMainStart + actualMain) + marginMainEnd) + gap + extraGap;
+    }
+    return true;
+}
+
+b8 TryArrangeAbsoluteLayoutChild(
+    in Rect parentContent,
+    in Rect childClip,
+    in LayoutNodeDesc childDesc,
+    in Point childMeasured,
+    mut LayoutBox outChildBox,
+    mut Rect outChildClip
+){
+    const f64 marginW = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+    const f64 marginH = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+    const b8 pinSpanX = childDesc.pinLeft && childDesc.pinRight && childDesc.width.policy != LayoutSizePolicy::Fixed;
+    const b8 pinSpanY = childDesc.pinTop && childDesc.pinBottom && childDesc.height.policy != LayoutSizePolicy::Fixed;
+    f64 rawW = cast<f64>(childMeasured.x);
+    if(pinSpanX)
+        rawW = UiSimdMaxF64(0.0, (cast<f64>(parentContent.width) - cast<f64>(childDesc.absoluteInsets.left) - cast<f64>(childDesc.absoluteInsets.right)) - marginW);
+    else if(childDesc.width.policy == LayoutSizePolicy::Stretch)
+        rawW = UiSimdMaxF64(0.0, cast<f64>(parentContent.width) - marginW);
+    f64 rawH = cast<f64>(childMeasured.y);
+    if(pinSpanY)
+        rawH = UiSimdMaxF64(0.0, (cast<f64>(parentContent.height) - cast<f64>(childDesc.absoluteInsets.top) - cast<f64>(childDesc.absoluteInsets.bottom)) - marginH);
+    else if(childDesc.height.policy == LayoutSizePolicy::Stretch)
+        rawH = UiSimdMaxF64(0.0, cast<f64>(parentContent.height) - marginH);
+    const b8 widthDriven = pinSpanX || childDesc.width.policy != LayoutSizePolicy::Content;
+    const b8 heightDriven = pinSpanY || childDesc.height.policy != LayoutSizePolicy::Content;
+    const VectorDouble size = ResolveLayoutConstrainedSizeF64(childDesc, rawW, rawH, widthDriven, heightDriven);
+    const f64 availW = UiSimdMaxF64(0.0, cast<f64>(parentContent.width) - marginW);
+    const f64 availH = UiSimdMaxF64(0.0, cast<f64>(parentContent.height) - marginH);
+    f64 x = cast<f64>(parentContent.x) + cast<f64>(childDesc.margin.left);
+    if(childDesc.pinLeft){
+        x += cast<f64>(childDesc.absoluteInsets.left);
+    }
+    else if(childDesc.pinRight){
+        x = (cast<f64>(parentContent.x) + cast<f64>(parentContent.width)) - cast<f64>(childDesc.absoluteInsets.right) - cast<f64>(childDesc.margin.right) - size.x;
+    }
+    else{
+        if(
+            childDesc.anchor == LayoutAnchor::TopCenter
+            || childDesc.anchor == LayoutAnchor::Center
+            || childDesc.anchor == LayoutAnchor::BottomCenter
+        )
+            x += (availW - size.x) * 0.5;
+        else if(
+            childDesc.anchor == LayoutAnchor::TopRight
+            || childDesc.anchor == LayoutAnchor::CenterRight
+            || childDesc.anchor == LayoutAnchor::BottomRight
+        )
+            x += availW - size.x;
+    }
+    x += cast<f64>(childDesc.absoluteOffset.x);
+    f64 y = cast<f64>(parentContent.y) + cast<f64>(childDesc.margin.top);
+    if(childDesc.pinTop){
+        y += cast<f64>(childDesc.absoluteInsets.top);
+    }
+    else if(childDesc.pinBottom){
+        y = (cast<f64>(parentContent.y) + cast<f64>(parentContent.height)) - cast<f64>(childDesc.absoluteInsets.bottom) - cast<f64>(childDesc.margin.bottom) - size.y;
+    }
+    else{
+        if(
+            childDesc.anchor == LayoutAnchor::CenterLeft
+            || childDesc.anchor == LayoutAnchor::Center
+            || childDesc.anchor == LayoutAnchor::CenterRight
+        )
+            y += (availH - size.y) * 0.5;
+        else if(
+            childDesc.anchor == LayoutAnchor::BottomLeft
+            || childDesc.anchor == LayoutAnchor::BottomCenter
+            || childDesc.anchor == LayoutAnchor::BottomRight
+        )
+            y += availH - size.y;
+    }
+    y += cast<f64>(childDesc.absoluteOffset.y);
+    const Rect rect(cast<f32>(x), cast<f32>(y), cast<f32>(size.x), cast<f32>(size.y));
+    if(!IsValidUiRect(rect))
+        return false;
+    outChildBox.rectangle = rect;
+    outChildClip = childClip;
+    return true;
+}
+
+b8 TryArrangeGridContainer(
+    in Span<LayoutTreeNode> nodes,
+    in u32 index,
+    in Rect childClip,
+    in VectorDouble contentOrigin,
+    in VectorDouble contentExtent,
+    in Rect inheritedClip,
+    mut Vector<LayoutBox> boxes,
+    mut Vector<Rect> inheritedClips
+){
+    in LayoutNodeDesc description = nodes[cast<usize>(index)].description;
+    u32 passLimit = 1u;
+    if(description.scrollable)
+        passLimit = s_ScrollbarReservationPassLimit;
+    Vector<LayoutGridCellPlacement> placements;
+    Vector<f64> colWidths;
+    Vector<f64> rowHeights;
+    f64 gridExtentX = 0.0;
+    f64 gridExtentY = 0.0;
+    Rect activeChildClip = childClip;
+    for(u32 pass = 0u; pass < passLimit; ++pass){
+        const Rect parentContent = boxes[cast<usize>(index)].content;
+        const b8 hasAvailW = (description.width.policy != LayoutSizePolicy::Content) || parentContent.width > 0.0f;
+        const b8 hasAvailH = (description.height.policy != LayoutSizePolicy::Content) || parentContent.height > 0.0f;
+        if(!MeasureLayoutGridTracksF64(
+            nodes,
+            Span<LayoutBox>(boxes),
+            index,
+            hasAvailW,
+            cast<f64>(parentContent.width),
+            hasAvailH,
+            cast<f64>(parentContent.height),
+            placements,
+            colWidths,
+            rowHeights,
+            gridExtentX,
+            gridExtentY
+        ))
+            return false;
+        if(!description.scrollable)
+            break;
+        const Point nextContentSize(
+            cast<f32>(UiSimdMaxF64(gridExtentX, cast<f64>(description.intrinsicSize.x))),
+            cast<f32>(UiSimdMaxF64(gridExtentY, cast<f64>(description.intrinsicSize.y)))
+        );
+        const Point prevContentSize = boxes[cast<usize>(index)].contentSize;
+        if(nextContentSize.x == prevContentSize.x && nextContentSize.y == prevContentSize.y)
+            break;
+        if(!TryUpdateScrollContainerBox(description, contentOrigin, contentExtent, inheritedClip, nextContentSize, boxes[cast<usize>(index)], activeChildClip))
+            return false;
+    }
+    if(placements.empty())
+        return true;
+    const u32 usedCols = cast<u32>(colWidths.size());
+    const u32 usedRows = cast<u32>(rowHeights.size());
+    const f64 colGap = cast<f64>(description.gap);
+    const f64 rowGap = ResolveLayoutCrossGapF64(description);
+    Rect scrolled = boxes[cast<usize>(index)].content;
+    if(description.scrollable){
+        scrolled.x -= boxes[cast<usize>(index)].scrollOffset.x;
+        scrolled.y -= boxes[cast<usize>(index)].scrollOffset.y;
+    }
+    const f64 freeX = UiSimdMaxF64(0.0, cast<f64>(scrolled.width) - gridExtentX);
+    f64 leadX = 0.0;
+    f64 extraGapX = 0.0;
+    ComputeJustifyOffsetsF64(description.justifyContent, freeX, usedCols, leadX, extraGapX);
+    Vector<f64> colX;
+    Vector<f64> rowY;
+    colX.resize(cast<usize>(usedCols), 0.0);
+    rowY.resize(cast<usize>(usedRows), 0.0);
+    f64 xCur = cast<f64>(scrolled.x) + leadX;
+    for(u32 c = 0u; c < usedCols; ++c){
+        colX[cast<usize>(c)] = xCur;
+        xCur += colWidths[cast<usize>(c)] + colGap + extraGapX;
+    }
+    f64 yCur = cast<f64>(scrolled.y);
+    for(u32 r = 0u; r < usedRows; ++r){
+        rowY[cast<usize>(r)] = yCur;
+        yCur += rowHeights[cast<usize>(r)] + rowGap;
+    }
+    for(in auto p : placements){
+        in LayoutNodeDesc childDesc = nodes[cast<usize>(p.child)].description;
+        const Point childMeasured = boxes[cast<usize>(p.child)].measuredSize;
+        const usize lastCol = cast<usize>(p.col + p.colSpan - 1u);
+        const usize lastRow = cast<usize>(p.row + p.rowSpan - 1u);
+        const f64 cellX = colX[cast<usize>(p.col)];
+        const f64 cellW = (colX[lastCol] + colWidths[lastCol]) - cellX;
+        const f64 cellY = rowY[cast<usize>(p.row)];
+        const f64 cellH = (rowY[lastRow] + rowHeights[lastRow]) - cellY;
+        const f64 marginW = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+        const f64 marginH = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+        const f64 availCellW = UiSimdMaxF64(0.0, cellW - marginW);
+        const f64 availCellH = UiSimdMaxF64(0.0, cellH - marginH);
+        const LayoutAlign alignY = ResolveEffectiveLayoutAlign(description.alignItems, childDesc.alignSelf);
+        const b8 stretchX = childDesc.width.policy == LayoutSizePolicy::Stretch;
+        const b8 stretchY = (childDesc.height.policy == LayoutSizePolicy::Stretch) || (alignY == LayoutAlign::Stretch && childDesc.height.policy == LayoutSizePolicy::Content);
+        f64 rawW = cast<f64>(childMeasured.x);
+        if(stretchX)
+            rawW = availCellW;
+        f64 rawH = cast<f64>(childMeasured.y);
+        if(stretchY)
+            rawH = availCellH;
+        const VectorDouble size = ResolveLayoutConstrainedSizeF64(
+            childDesc,
+            rawW,
+            rawH,
+            stretchX || childDesc.width.policy == LayoutSizePolicy::Fixed,
+            stretchY || childDesc.height.policy == LayoutSizePolicy::Fixed
+        );
+        const f64 rectX = cellX + cast<f64>(childDesc.margin.left);
+        f64 rectY = cellY + cast<f64>(childDesc.margin.top);
+        if(alignY == LayoutAlign::Center)
+            rectY += (availCellH - size.y) * 0.5;
+        else if(alignY == LayoutAlign::End)
+            rectY += availCellH - size.y;
+        const Rect rect(cast<f32>(rectX), cast<f32>(rectY), cast<f32>(size.x), cast<f32>(size.y));
+        if(!IsValidUiRect(rect))
+            return false;
+        boxes[cast<usize>(p.child)].rectangle = rect;
+        inheritedClips[cast<usize>(p.child)] = activeChildClip;
+    }
+    return true;
+}
+
+b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vector<LayoutBox> boxes, mut Vector<Rect> inheritedClips){
+    if(!IsValidUiRect(boxes[cast<usize>(index)].rectangle))
+        return false;
     in LayoutTreeNode node = nodes[cast<usize>(index)];
     in LayoutNodeDesc description = node.description;
     in Rect inheritedClip = inheritedClips[cast<usize>(index)];
-    const VectorDouble boxSize(cast<f64>(inoutBox.rectangle.width), cast<f64>(inoutBox.rectangle.height), 0.0, 0.0);
+    const VectorDouble boxSize(cast<f64>(boxes[cast<usize>(index)].rectangle.width), cast<f64>(boxes[cast<usize>(index)].rectangle.height), 0.0, 0.0);
     const VectorDouble padLeadingRaw(cast<f64>(description.padding.left), cast<f64>(description.padding.top), 0.0, 0.0);
     const VectorDouble padLeading = VectorDoubleSelect(boxSize, padLeadingRaw, VectorDoubleLess(padLeadingRaw, boxSize));
     const VectorDouble remSize = boxSize - padLeading;
     const VectorDouble padTrailingRaw(cast<f64>(description.padding.right), cast<f64>(description.padding.bottom), 0.0, 0.0);
     const VectorDouble padTrailing = VectorDoubleSelect(remSize, padTrailingRaw, VectorDoubleLess(padTrailingRaw, remSize));
-    const VectorDouble contentOrigin = VectorDouble(cast<f64>(inoutBox.rectangle.x), cast<f64>(inoutBox.rectangle.y), 0.0, 0.0) + padLeading;
+    const VectorDouble contentOrigin = VectorDouble(cast<f64>(boxes[cast<usize>(index)].rectangle.x), cast<f64>(boxes[cast<usize>(index)].rectangle.y), 0.0, 0.0) + padLeading;
     const VectorDouble contentExtent = remSize - padTrailing;
-    inoutBox.content = Rect(
-        cast<f32>(contentOrigin.x),
-        cast<f32>(contentOrigin.y),
-        cast<f32>(contentExtent.x),
-        cast<f32>(contentExtent.y)
-    );
-    inoutBox.clip = IntersectLayoutRectsScalar(inoutBox.rectangle, inheritedClip);
-    inoutBox.hit = inoutBox.clip;
-    if(!IsValidUiRect(inoutBox.content) || !IsValidUiRect(inoutBox.clip))
-        return MakeUnexpected(Failure());
-    if(node.firstChild == s_LayoutNoParent)
-        return result;
-    if(description.clipChildren)
-        result.childClip = IntersectLayoutRectsScalar(inheritedClip, inoutBox.content);
-    else
-        result.childClip = inheritedClip;
-    const b8 row = description.direction == LayoutDirection::Row;
-    const b8 column = description.direction == LayoutDirection::Column;
-    if(!row && !column)
-        return result;
-    f64 consumed = 0.0;
-    f64 weight = 0.0;
-    u32 childCount = 0u;
-    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
-        in LayoutNodeDesc childDescription = nodes[cast<usize>(child)].description;
-        LayoutSize main = childDescription.height;
-        if(row)
-            main = childDescription.width;
-        if(main.policy == LayoutSizePolicy::Stretch)
-            weight += cast<f64>(main.value);
-        else{
-            f32 measuredMain = boxes[cast<usize>(child)].measuredSize.y;
-            if(row)
-                measuredMain = boxes[cast<usize>(child)].measuredSize.x;
-            consumed += cast<f64>(measuredMain);
-        }
-        ++childCount;
-    }
-    f64 spacing = 0.0;
-    if(childCount > 1u)
-        spacing = cast<f64>(description.gap) * cast<f64>(childCount - 1u);
-    f32 mainExtent = inoutBox.content.height;
-    if(row)
-        mainExtent = inoutBox.content.width;
-    result.available = UiSimdMaxF64(0.0, (cast<f64>(mainExtent) - consumed) - spacing);
-    if(weight > 0.0)
-        result.invWeight = 1.0 / weight;
-    f32 startCoord = inoutBox.content.y;
-    if(row)
-        startCoord = inoutBox.content.x;
-    result.cursor = cast<f64>(startCoord);
-    return result;
-}
-
-Expected<Rect> TryArrangeLayoutTreeChild(
-    in LayoutDirection parentDirection,
-    in f32 parentGap,
-    in Rect parentContent,
-    in LayoutNodeDesc childDescription,
-    in Point childMeasured,
-    in f64 available,
-    in f64 invWeight,
-    mut f64 inoutCursor
-){
-    const b8 row = parentDirection == LayoutDirection::Row;
-    const b8 column = parentDirection == LayoutDirection::Column;
-    f32 width = childMeasured.x;
-    f32 height = childMeasured.y;
-    if(childDescription.width.policy == LayoutSizePolicy::Stretch){
-        if(row)
-            width = cast<f32>(available * (cast<f64>(childDescription.width.value) * invWeight));
-        else
-            width = parentContent.width;
-    }
-    if(childDescription.height.policy == LayoutSizePolicy::Stretch){
-        if(column)
-            height = cast<f32>(available * (cast<f64>(childDescription.height.value) * invWeight));
-        else
-            height = parentContent.height;
-    }
-    f32 x = parentContent.x;
-    if(row)
-        x = cast<f32>(inoutCursor);
-    f32 y = parentContent.y;
-    if(column)
-        y = cast<f32>(inoutCursor);
-    const Rect rectangle(x, y, width, height);
-    if(!IsValidUiRect(rectangle))
-        return MakeUnexpected(Failure());
-    const f64 gap = cast<f64>(parentGap);
-    if(row)
-        inoutCursor += cast<f64>(width) + gap;
-    else if(column)
-        inoutCursor += cast<f64>(height) + gap;
-    return rectangle;
-}
-
-b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vector<LayoutBox> boxes, mut Vector<Rect> inheritedClips){
-    const Expected<LayoutTreeArrangementStart> arrangement = TryBeginArrangeLayoutTreeNode(nodes, Span<LayoutBox>(boxes), Span<Rect>(inheritedClips), index, boxes[cast<usize>(index)]);
-    if(!arrangement.has_value())
+    Rect childClip;
+    if(!TryUpdateScrollContainerBox(description, contentOrigin, contentExtent, inheritedClip, boxes[cast<usize>(index)].contentSize, boxes[cast<usize>(index)], childClip))
         return false;
-    in LayoutTreeNode node = nodes[cast<usize>(index)];
     if(node.firstChild == s_LayoutNoParent)
         return true;
-    f64 cursor = arrangement.value().cursor;
-    in LayoutNodeDesc description = node.description;
-    in Rect content = boxes[cast<usize>(index)].content;
-    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
-        const Expected<Rect> childRect = TryArrangeLayoutTreeChild(
-            description.direction,
-            description.gap,
-            content,
-            nodes[cast<usize>(child)].description,
-            boxes[cast<usize>(child)].measuredSize,
-            arrangement.value().available,
-            arrangement.value().invWeight,
-            cursor
-        );
-        if(!childRect.has_value())
+    const b8 row = description.direction == LayoutDirection::Row;
+    const b8 column = description.direction == LayoutDirection::Column;
+    if(description.direction == LayoutDirection::Grid){
+        if(!TryArrangeGridContainer(nodes, index, childClip, contentOrigin, contentExtent, inheritedClip, boxes, inheritedClips))
             return false;
-        boxes[cast<usize>(child)].rectangle = childRect.value();
-        inheritedClips[cast<usize>(child)] = arrangement.value().childClip;
+    }
+    else if(row || column){
+        Vector<u32> flowChildren;
+        Vector<f64> measuredMain;
+        Vector<f64> measuredCross;
+        for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+            in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
+            if(childDesc.positionMode == LayoutPositionMode::Absolute)
+                continue;
+            f64 effMain = 0.0;
+            f64 effCross = 0.0;
+            f64 crossLimit = cast<f64>(boxes[cast<usize>(index)].content.width);
+            if(row)
+                crossLimit = cast<f64>(boxes[cast<usize>(index)].content.height);
+            if(!TryComputeFlowChildEffectiveMeasured(nodes, Span<LayoutBox>(boxes), child, row, crossLimit, effMain, effCross))
+                return false;
+            flowChildren.push_back(child);
+            measuredMain.push_back(effMain);
+            measuredCross.push_back(effCross);
+        }
+        if(!flowChildren.empty()){
+            if(!description.flexWrap){
+                Rect scrolled = boxes[cast<usize>(index)].content;
+                if(description.scrollable){
+                    scrolled.x -= boxes[cast<usize>(index)].scrollOffset.x;
+                    scrolled.y -= boxes[cast<usize>(index)].scrollOffset.y;
+                }
+                f64 mainStart = cast<f64>(scrolled.y);
+                f64 mainExt = cast<f64>(scrolled.height);
+                f64 crossStart = cast<f64>(scrolled.x);
+                f64 crossExt = cast<f64>(scrolled.width);
+                if(row){
+                    mainStart = cast<f64>(scrolled.x);
+                    mainExt = cast<f64>(scrolled.width);
+                    crossStart = cast<f64>(scrolled.y);
+                    crossExt = cast<f64>(scrolled.height);
+                }
+                f64 unusedMain = 0.0;
+                f64 unusedCross = 0.0;
+                if(!TryArrangeFlexLineChildren(
+                    nodes,
+                    childClip,
+                    row,
+                    description,
+                    mainStart,
+                    mainExt,
+                    crossStart,
+                    crossExt,
+                    Span<u32>(flowChildren),
+                    Span<f64>(measuredMain),
+                    Span<f64>(measuredCross),
+                    boxes,
+                    inheritedClips,
+                    unusedMain,
+                    unusedCross
+                ))
+                    return false;
+            }
+            else{
+                u32 passLimit = 1u;
+                if(description.scrollable)
+                    passLimit = s_ScrollbarReservationPassLimit;
+                const f64 mainGap = cast<f64>(description.gap);
+                const f64 crossGap = ResolveLayoutCrossGapF64(description);
+                for(u32 pass = 0u; pass < passLimit; ++pass){
+                    Rect scrolled = boxes[cast<usize>(index)].content;
+                    if(description.scrollable){
+                        scrolled.x -= boxes[cast<usize>(index)].scrollOffset.x;
+                        scrolled.y -= boxes[cast<usize>(index)].scrollOffset.y;
+                    }
+                    f64 lineMainStart = cast<f64>(scrolled.y);
+                    f64 lineMainLimit = cast<f64>(scrolled.height);
+                    f64 lineCrossStart = cast<f64>(scrolled.x);
+                    f64 lineCrossTotal = cast<f64>(scrolled.width);
+                    if(row){
+                        lineMainStart = cast<f64>(scrolled.x);
+                        lineMainLimit = cast<f64>(scrolled.width);
+                        lineCrossStart = cast<f64>(scrolled.y);
+                        lineCrossTotal = cast<f64>(scrolled.height);
+                    }
+                    Vector<u32> lineStarts;
+                    Vector<u32> lineEnds;
+                    Vector<f64> lineCrossHeights;
+                    u32 curStart = 0u;
+                    f64 curMain = 0.0;
+                    f64 curCross = 0.0;
+                    const u32 flowCount = cast<u32>(flowChildren.size());
+                    for(u32 fi = 0u; fi < flowCount; ++fi){
+                        in LayoutNodeDesc childDesc = nodes[cast<usize>(flowChildren[cast<usize>(fi)])].description;
+                        f64 marginM = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+                        f64 marginC = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+                        if(row){
+                            marginM = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+                            marginC = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+                        }
+                        const f64 itemOuterMain = measuredMain[cast<usize>(fi)] + marginM;
+                        const f64 itemOuterCross = measuredCross[cast<usize>(fi)] + marginC;
+                        if(fi > curStart && ((curMain + mainGap) + itemOuterMain) > lineMainLimit){
+                            lineStarts.push_back(curStart);
+                            lineEnds.push_back(fi);
+                            lineCrossHeights.push_back(curCross);
+                            curStart = fi;
+                            curMain = itemOuterMain;
+                            curCross = itemOuterCross;
+                        }
+                        else{
+                            if(fi > curStart)
+                                curMain += mainGap;
+                            curMain += itemOuterMain;
+                            curCross = UiSimdMaxF64(curCross, itemOuterCross);
+                        }
+                    }
+                    lineStarts.push_back(curStart);
+                    lineEnds.push_back(flowCount);
+                    lineCrossHeights.push_back(curCross);
+                    const u32 lineCount = cast<u32>(lineStarts.size());
+                    if(lineCount == 1u && !description.scrollable)
+                        lineCrossHeights[0u] = UiSimdMaxF64(lineCrossHeights[0u], lineCrossTotal);
+                    f64 crossCursor = lineCrossStart;
+                    f64 maxUsedMain = 0.0;
+                    f64 totalUsedCross = 0.0;
+                    Vector<u32> sliceIds;
+                    Vector<f64> sliceMain;
+                    Vector<f64> sliceCross;
+                    for(u32 li = 0u; li < lineCount; ++li){
+                        const u32 ls = lineStarts[cast<usize>(li)];
+                        const u32 le = lineEnds[cast<usize>(li)];
+                        sliceIds.clear();
+                        sliceMain.clear();
+                        sliceCross.clear();
+                        for(u32 k = ls; k < le; ++k){
+                            sliceIds.push_back(flowChildren[cast<usize>(k)]);
+                            sliceMain.push_back(measuredMain[cast<usize>(k)]);
+                            sliceCross.push_back(measuredCross[cast<usize>(k)]);
+                        }
+                        f64 lineCrossExt = lineCrossHeights[cast<usize>(li)];
+                        f64 usedMain = 0.0;
+                        f64 usedCross = 0.0;
+                        if(!TryArrangeFlexLineChildren(
+                            nodes,
+                            childClip,
+                            row,
+                            description,
+                            lineMainStart,
+                            lineMainLimit,
+                            crossCursor,
+                            lineCrossExt,
+                            Span<u32>(sliceIds),
+                            Span<f64>(sliceMain),
+                            Span<f64>(sliceCross),
+                            boxes,
+                            inheritedClips,
+                            usedMain,
+                            usedCross
+                        ))
+                            return false;
+                        const f64 effectiveLineCross = UiSimdMaxF64(lineCrossExt, usedCross);
+                        maxUsedMain = UiSimdMaxF64(maxUsedMain, usedMain);
+                        totalUsedCross += effectiveLineCross;
+                        if(li > 0u)
+                            totalUsedCross += crossGap;
+                        crossCursor += effectiveLineCross + crossGap;
+                    }
+                    if(!description.scrollable)
+                        break;
+                    f64 wrapContentX = totalUsedCross;
+                    f64 wrapContentY = maxUsedMain;
+                    if(row){
+                        wrapContentX = maxUsedMain;
+                        wrapContentY = totalUsedCross;
+                    }
+                    const Point nextContentSize(
+                        cast<f32>(UiSimdMaxF64(wrapContentX, cast<f64>(description.intrinsicSize.x))),
+                        cast<f32>(UiSimdMaxF64(wrapContentY, cast<f64>(description.intrinsicSize.y)))
+                    );
+                    const Point prevContentSize = boxes[cast<usize>(index)].contentSize;
+                    if(nextContentSize.x == prevContentSize.x && nextContentSize.y == prevContentSize.y)
+                        break;
+                    if(!TryUpdateScrollContainerBox(description, contentOrigin, contentExtent, inheritedClip, nextContentSize, boxes[cast<usize>(index)], childClip))
+                        return false;
+                }
+            }
+        }
+    }
+    else{
+        Rect scrolled = boxes[cast<usize>(index)].content;
+        if(description.scrollable){
+            scrolled.x -= boxes[cast<usize>(index)].scrollOffset.x;
+            scrolled.y -= boxes[cast<usize>(index)].scrollOffset.y;
+        }
+        for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+            in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
+            if(childDesc.positionMode == LayoutPositionMode::Absolute)
+                continue;
+            const LayoutAlign alignY = ResolveEffectiveLayoutAlign(description.alignItems, childDesc.alignSelf);
+            const f64 marginW = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
+            const f64 marginH = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
+            const f64 availW = UiSimdMaxF64(0.0, cast<f64>(scrolled.width) - marginW);
+            const f64 availH = UiSimdMaxF64(0.0, cast<f64>(scrolled.height) - marginH);
+            const b8 stretchX = childDesc.width.policy == LayoutSizePolicy::Stretch;
+            const b8 stretchY = (childDesc.height.policy == LayoutSizePolicy::Stretch) || (alignY == LayoutAlign::Stretch && childDesc.height.policy == LayoutSizePolicy::Content);
+            f64 rawW = cast<f64>(boxes[cast<usize>(child)].measuredSize.x);
+            if(stretchX)
+                rawW = availW;
+            f64 rawH = cast<f64>(boxes[cast<usize>(child)].measuredSize.y);
+            if(stretchY)
+                rawH = availH;
+            const VectorDouble size = ResolveLayoutConstrainedSizeF64(
+                childDesc,
+                rawW,
+                rawH,
+                stretchX || childDesc.width.policy == LayoutSizePolicy::Fixed,
+                stretchY || childDesc.height.policy == LayoutSizePolicy::Fixed
+            );
+            f64 x = cast<f64>(scrolled.x) + cast<f64>(childDesc.margin.left);
+            if(description.justifyContent == LayoutJustify::Center)
+                x += (availW - size.x) * 0.5;
+            else if(description.justifyContent == LayoutJustify::End)
+                x += availW - size.x;
+            f64 y = cast<f64>(scrolled.y) + cast<f64>(childDesc.margin.top);
+            if(alignY == LayoutAlign::Center)
+                y += (availH - size.y) * 0.5;
+            else if(alignY == LayoutAlign::End)
+                y += availH - size.y;
+            const Rect rect(cast<f32>(x), cast<f32>(y), cast<f32>(size.x), cast<f32>(size.y));
+            if(!IsValidUiRect(rect))
+                return false;
+            boxes[cast<usize>(child)].rectangle = rect;
+            inheritedClips[cast<usize>(child)] = childClip;
+        }
+    }
+    Rect scrolledAbs = boxes[cast<usize>(index)].content;
+    if(description.scrollable){
+        scrolledAbs.x -= boxes[cast<usize>(index)].scrollOffset.x;
+        scrolledAbs.y -= boxes[cast<usize>(index)].scrollOffset.y;
+    }
+    for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
+        in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
+        if(childDesc.positionMode != LayoutPositionMode::Absolute)
+            continue;
+        if(!TryArrangeAbsoluteLayoutChild(scrolledAbs, childClip, childDesc, boxes[cast<usize>(child)].measuredSize, boxes[cast<usize>(child)], inheritedClips[cast<usize>(child)]))
+            return false;
     }
     return true;
 }
@@ -191,13 +867,24 @@ b8 ArrangeLayoutTree(
         return false;
     in LayoutNodeDesc root = nodes[0u].description;
     const Point measured = stagedBoxes[0u].measuredSize;
-    f32 width = measured.x;
+    f64 rawW = cast<f64>(measured.x);
     if(root.width.policy == LayoutSizePolicy::Stretch)
-        width = viewport.width;
-    f32 height = measured.y;
+        rawW = UiSimdMaxF64(0.0, (cast<f64>(viewport.width) - cast<f64>(root.margin.left)) - cast<f64>(root.margin.right));
+    f64 rawH = cast<f64>(measured.y);
     if(root.height.policy == LayoutSizePolicy::Stretch)
-        height = viewport.height;
-    stagedBoxes[0u].rectangle = Rect(viewport.x, viewport.y, width, height);
+        rawH = UiSimdMaxF64(0.0, (cast<f64>(viewport.height) - cast<f64>(root.margin.top)) - cast<f64>(root.margin.bottom));
+    const VectorDouble rootSize = ResolveLayoutConstrainedSizeF64(
+        root,
+        rawW,
+        rawH,
+        root.width.policy != LayoutSizePolicy::Content,
+        root.height.policy != LayoutSizePolicy::Content
+    );
+    if(rootSize.x > s_UiMaxFloatF64 || rootSize.y > s_UiMaxFloatF64)
+        return false;
+    const f64 rootX = cast<f64>(viewport.x) + cast<f64>(root.margin.left);
+    const f64 rootY = cast<f64>(viewport.y) + cast<f64>(root.margin.top);
+    stagedBoxes[0u].rectangle = Rect(cast<f32>(rootX), cast<f32>(rootY), cast<f32>(rootSize.x), cast<f32>(rootSize.y));
     inheritedClips[0u] = viewport;
     for(u32 index = 0u; cast<usize>(index) < nodes.size(); ++index){
         if(!ArrangeLayoutTreeNodeAt(nodes, index, stagedBoxes, inheritedClips))

@@ -4,6 +4,7 @@
 
 #include "module.h"
 #include "frame_detail.h"
+#include "win32_gamepad.h"
 #include "win32_input.h"
 
 
@@ -19,6 +20,8 @@
 #include <windows.h>
 
 #include <core/common/log.h>
+#include <core/os/win32/accessibility.h>
+#include <core/os/win32/cursor.h>
 #include <core/os/win32/text_input.h>
 
 #include <global/compile.h>
@@ -205,6 +208,20 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(const Optional<LRESULT> inputResult = input.handleMessage(uMsg, wParam, lParam))
             return *inputResult;
 
+        if(uMsg == WM_SETCURSOR){
+            if(ICursorService* const cursorService = frame->tryCursor()){
+                if(const Optional<isize> cursorResult = DispatchWin32CursorMessage(*cursorService, uMsg, wParam, lParam))
+                    return static_cast<LRESULT>(*cursorResult);
+            }
+        }
+
+        if(uMsg == WM_GETOBJECT){
+            if(IAccessibilityService* const accessibilityService = frame->tryAccessibility()){
+                if(const Optional<isize> a11yResult = DispatchWin32AccessibilityMessage(*accessibilityService, uMsg, wParam, lParam))
+                    return static_cast<LRESULT>(*a11yResult);
+            }
+        }
+
         if(uMsg == WM_SYSCOMMAND && (wParam & __hidden_frame_win32::s_SysCommandTypeMask) == SC_MINIMIZE && frame->graphics().shouldRenderUnfocused())
             return 0;
 
@@ -378,6 +395,7 @@ b8 Frame::mainLoop(){
     if(quitRequested())
         return true;
 
+    FrameDetail::Win32GamepadPoller gamepadPoller;
     Timer lateTime(TimerNow());
     for(;;){
         b8 checkedRenderUnfocused = false;
@@ -434,6 +452,7 @@ b8 Frame::mainLoop(){
         }
 
         const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
+        gamepadPoller.poll(m_input, timeDifference, data<Common::WinFrame>().isActive() && GetFocus() == hwnd);
         if(!update(timeDifference))
             return false;
         if(quitRequested())
@@ -453,6 +472,14 @@ Expected<GlobalUniquePtr<ITextInputService>> Frame::createPlatformTextInputServi
     if(!(*service)->setFocused(GetFocus() == hwnd))
         return MakeUnexpected(Failure{});
     return service;
+}
+
+Expected<GlobalUniquePtr<ICursorService>> Frame::createPlatformCursorService(){
+    return CreateCursorService(m_projectObjectArena, data<Common::WinFrame>().hwnd());
+}
+
+Expected<GlobalUniquePtr<IAccessibilityService>> Frame::createPlatformAccessibilityService(){
+    return CreateAccessibilityService(m_projectObjectArena, data<Common::WinFrame>().hwnd());
 }
 
 void Frame::setupPlatform(void* inst)noexcept{
@@ -505,4 +532,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

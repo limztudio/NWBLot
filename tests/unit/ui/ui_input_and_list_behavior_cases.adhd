@@ -1686,6 +1686,52 @@ void VerifyUiListBuilderScrollbarTests_FullHeightMinimumThumbFocusesItsHostWitho
     EXPECT_FALSE(self.m_context.failed());
 }
 
+void VerifyUiListBuilderScrollbarTests_TrackPageTargetsScrollWithoutRowCollisionAndThumbUsesPressedDisabledSkins(mut UiListBuilderTests self){
+    self.m_builder.listStyle().thumbPressed = s_UiCaseButtonPressed;
+    self.m_builder.listStyle().thumbDisabled = s_UiCaseButtonDisabled;
+    ASSERT_TRUE(self.accept(1u));
+    const WidgetId host = self.id(s_UiListScrollbarListKey, s_UiListScrollbarPanelKey);
+    const WidgetId beforeTrack = RequireUiWidgetId(host, s_WidgetPartScrollVerticalBefore);
+    const WidgetId afterTrack = RequireUiWidgetId(host, s_WidgetPartScrollVerticalAfter);
+    const WidgetId thumb = RequireUiWidgetId(host, s_UiListScrollbarKey);
+
+    const Expected<HitTarget> initialBefore = self.tryTarget(beforeTrack);
+    const Expected<HitTarget> initialAfter = self.tryTarget(afterTrack);
+    ASSERT_TRUE(initialBefore.has_value());
+    ASSERT_TRUE(initialAfter.has_value());
+    EXPECT_FLOAT_EQ(initialBefore.value().rectangle.height, 0.0f);
+    EXPECT_GT(initialAfter.value().rectangle.height, 0.0f);
+
+    self.click(CenterUiRect(initialAfter.value().rectangle));
+    ASSERT_TRUE(self.accept(2u));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), cast<f64>(self.m_state.placement().viewport.height));
+    EXPECT_FALSE(self.m_result.activated);
+    EXPECT_EQ(self.m_state.selectedKey(), 0u);
+
+    const Expected<HitTarget> movedBefore = self.tryTarget(beforeTrack);
+    ASSERT_TRUE(movedBefore.has_value());
+    EXPECT_GT(movedBefore.value().rectangle.height, 0.0f);
+    self.click(CenterUiRect(movedBefore.value().rectangle));
+    ASSERT_TRUE(self.accept(3u));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), 0.0);
+
+    const Expected<HitTarget> thumbTarget = self.tryTarget(thumb);
+    ASSERT_TRUE(thumbTarget.has_value());
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, CenterUiRect(thumbTarget.value().rectangle))).pointerConsumed);
+    ASSERT_TRUE(self.accept(4u));
+    const Expected<UiFixtureSkinPaintSample> pressedSample = self.sampleSkinPaint(self.m_paint.freeze(), s_UiCaseButtonPressed);
+    ASSERT_TRUE(pressedSample.has_value());
+    EXPECT_GE(pressedSample.value().quads, 1u);
+
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, CenterUiRect(thumbTarget.value().rectangle))).pointerConsumed);
+    ListOptions disabledOpts = MakeListFixtureOptions();
+    disabledOpts.enabled = false;
+    ASSERT_TRUE(self.accept(5u, disabledOpts));
+    const Expected<UiFixtureSkinPaintSample> disabledSample = self.sampleSkinPaint(self.m_paint.freeze(), s_UiCaseButtonDisabled);
+    ASSERT_TRUE(disabledSample.has_value());
+    EXPECT_GE(disabledSample.value().quads, 1u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1761,6 +1807,7 @@ NWB_ADHD_GTEST_F(UiListBuilderTests, SmallDatasetBoundsPageSizeByRows, VerifyUiL
 NWB_ADHD_GTEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost, VerifyUiListBuilderScrollbarTests_PopupListsAutofocusAndRestoreEachCoveredListHost)
 NWB_ADHD_GTEST_F(UiListBuilderTests, TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline, VerifyUiListBuilderScrollbarTests_TwoCompletedThumbDragsAreConsumedInOneDeclarationUsingTheirOwnBaseline)
 NWB_ADHD_GTEST_F(UiListBuilderTests, FullHeightMinimumThumbFocusesItsHostWithoutStartingAnUnusableGesture, VerifyUiListBuilderScrollbarTests_FullHeightMinimumThumbFocusesItsHostWithoutStartingAnUnusableGesture)
+NWB_ADHD_GTEST_F(UiListBuilderTests, TrackPageTargetsScrollWithoutRowCollisionAndThumbUsesPressedDisabledSkins, VerifyUiListBuilderScrollbarTests_TrackPageTargetsScrollWithoutRowCollisionAndThumbUsesPressedDisabledSkins)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

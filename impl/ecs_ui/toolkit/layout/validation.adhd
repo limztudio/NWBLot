@@ -83,12 +83,183 @@ b8 IsValidLayoutSize(in LayoutSize size){
     return size.policy <= LayoutSizePolicy::Stretch && IsFinite(VectorSingle(size.value)) && size.value >= 0.0f && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
 }
 
+const u32 s_ScrollbarReservationPassLimit = 3u;
+
+
+void ApplyLayoutItemOptions(in LayoutItemOptions item, mut LayoutNodeDesc description){
+    description.minWidth = item.minWidth;
+    description.maxWidth = item.maxWidth;
+    description.minHeight = item.minHeight;
+    description.maxHeight = item.maxHeight;
+    description.aspectRatio = item.aspectRatio;
+    description.margin = item.margin;
+    description.alignSelf = item.alignSelf;
+    description.gridColumnSpan = item.gridColumnSpan;
+    description.gridRowSpan = item.gridRowSpan;
+    description.positionMode = item.positionMode;
+    description.anchor = item.anchor;
+    description.pinLeft = item.pinLeft;
+    description.pinTop = item.pinTop;
+    description.pinRight = item.pinRight;
+    description.pinBottom = item.pinBottom;
+    description.absoluteInsets = item.absoluteInsets;
+    description.absoluteOffset = item.absoluteOffset;
+    description.zIndex = item.zIndex;
+}
+
+f64 ClampLayoutAxisF64(in f64 value, in f32 minimum, in f32 maximum){
+    f64 result = UiSimdMaxF64(value, cast<f64>(minimum));
+    if(maximum > 0.0f)
+        result = UiSimdMinF64(result, cast<f64>(maximum));
+    return result;
+}
+
+VectorDouble ResolveLayoutConstrainedSizeF64(
+    in LayoutNodeDesc description,
+    in f64 rawWidth,
+    in f64 rawHeight,
+    in b8 widthDriven,
+    in b8 heightDriven
+){
+    f64 width = ClampLayoutAxisF64(rawWidth, description.minWidth, description.maxWidth);
+    f64 height = ClampLayoutAxisF64(rawHeight, description.minHeight, description.maxHeight);
+    if(description.aspectRatio > 0.0f){
+        const f64 ratio = cast<f64>(description.aspectRatio);
+        if(widthDriven && !heightDriven){
+            height = ClampLayoutAxisF64(width / ratio, description.minHeight, description.maxHeight);
+            if(description.width.policy != LayoutSizePolicy::Fixed)
+                width = ClampLayoutAxisF64(height * ratio, description.minWidth, description.maxWidth);
+        }
+        else if(!widthDriven && heightDriven){
+            width = ClampLayoutAxisF64(height * ratio, description.minWidth, description.maxWidth);
+            if(description.height.policy != LayoutSizePolicy::Fixed)
+                height = ClampLayoutAxisF64(width / ratio, description.minHeight, description.maxHeight);
+        }
+        else if(description.width.policy == LayoutSizePolicy::Stretch && description.height.policy == LayoutSizePolicy::Stretch){
+            if(width > height * ratio)
+                width = height * ratio;
+            else
+                height = width / ratio;
+            width = ClampLayoutAxisF64(width, description.minWidth, description.maxWidth);
+            height = ClampLayoutAxisF64(height, description.minHeight, description.maxHeight);
+        }
+        else if(description.width.policy != LayoutSizePolicy::Fixed || description.height.policy != LayoutSizePolicy::Fixed){
+            if(width > 0.0){
+                height = ClampLayoutAxisF64(width / ratio, description.minHeight, description.maxHeight);
+                width = ClampLayoutAxisF64(height * ratio, description.minWidth, description.maxWidth);
+            }
+            else if(height > 0.0){
+                width = ClampLayoutAxisF64(height * ratio, description.minWidth, description.maxWidth);
+                height = ClampLayoutAxisF64(width / ratio, description.minHeight, description.maxHeight);
+            }
+        }
+    }
+    return VectorDouble(width, height, 0.0, 0.0);
+}
+
+LayoutAlign ResolveEffectiveLayoutAlign(in LayoutAlign parentAlign, in LayoutAlignSelf childSelf){
+    switch(childSelf){
+    case LayoutAlignSelf::Start:
+        return LayoutAlign::Start;
+    case LayoutAlignSelf::Center:
+        return LayoutAlign::Center;
+    case LayoutAlignSelf::End:
+        return LayoutAlign::End;
+    case LayoutAlignSelf::Stretch:
+        return LayoutAlign::Stretch;
+    default:
+        break;
+    }
+    return parentAlign;
+}
+
+f64 ResolveLayoutCrossGapF64(in LayoutNodeDesc description){
+    if(description.hasCrossGap)
+        return cast<f64>(description.crossGap);
+    return cast<f64>(description.gap);
+}
+
 b8 IsValidLayoutNodeDesc(in LayoutNodeDesc description){
     return
-        description.direction <= LayoutDirection::Overlay && IsValidLayoutSize(description.width) && IsValidLayoutSize(description.height)
-        && IsValidUiPadding(description.padding) && IsFinite(VectorSingle(description.padding.left + description.padding.right, description.padding.top + description.padding.bottom, description.gap, 0.0f))
-        && description.gap >= 0.0f && IsValidUiExtent(description.intrinsicSize)
+        description.direction <= LayoutDirection::Grid && IsValidLayoutSize(description.width) && IsValidLayoutSize(description.height)
+        && description.horizontalScrollbar <= ScrollbarPolicy::Never
+        && description.verticalScrollbar <= ScrollbarPolicy::Never
+        && description.alignItems <= LayoutAlign::Stretch
+        && description.justifyContent <= LayoutJustify::SpaceEvenly
+        && description.alignSelf <= LayoutAlignSelf::Stretch
+        && description.positionMode <= LayoutPositionMode::Absolute
+        && description.anchor <= LayoutAnchor::BottomRight
+        && IsValidUiPadding(description.padding)
+        && IsValidUiPadding(description.margin)
+        && IsFinite(VectorSingle(description.padding.left + description.padding.right, description.padding.top + description.padding.bottom, description.gap, description.scrollbarThickness))
+        && IsFinite(VectorSingle(description.margin.left + description.margin.right, description.margin.top + description.margin.bottom, description.aspectRatio, description.crossGap))
+        && IsFinite(VectorSingle(description.minWidth, description.maxWidth, description.minHeight, description.maxHeight))
+        && IsFinite(VectorSingle(description.absoluteInsets.left, description.absoluteInsets.top, description.absoluteInsets.right, description.absoluteInsets.bottom))
+        && IsFinite(VectorSingle(description.absoluteOffset.x, description.absoluteOffset.y, 0.0f, 0.0f))
+        && description.minWidth >= 0.0f && description.maxWidth >= 0.0f
+        && (description.maxWidth == 0.0f || description.maxWidth >= description.minWidth)
+        && description.minHeight >= 0.0f && description.maxHeight >= 0.0f
+        && (description.maxHeight == 0.0f || description.maxHeight >= description.minHeight)
+        && description.aspectRatio >= 0.0f
+        && description.gap >= 0.0f && description.crossGap >= 0.0f && description.scrollbarThickness >= 0.0f
+        && description.gridColumns >= 1u && description.gridColumnSpan >= 1u && description.gridRowSpan >= 1u
+        && IsValidUiExtent(description.scrollOffset)
+        && IsValidUiExtent(description.intrinsicSize)
     ;
+}
+
+void ReserveScrollViewportAxes(
+    in f64 availableWidth,
+    in f64 availableHeight,
+    in f64 contentWidth,
+    in f64 contentHeight,
+    in f64 thickness,
+    in ScrollbarPolicy horizontalPolicy,
+    in ScrollbarPolicy verticalPolicy,
+    mut b8 outHorizontal,
+    mut b8 outVertical,
+    mut f64 outBarWidth,
+    mut f64 outBarHeight
+){
+    const VectorDouble barExtent = Min(VectorDouble(thickness), VectorDouble(availableWidth, availableHeight, 0.0, 0.0));
+    const f64 verticalWidth = barExtent.x;
+    const f64 horizontalHeight = barExtent.y;
+    b8 horizontal = false;
+    b8 vertical = false;
+    for(u32 iteration = 0u; iteration < s_ScrollbarReservationPassLimit; ++iteration){
+        f64 reservedWidth = 0.0;
+        if(vertical)
+            reservedWidth = verticalWidth;
+        f64 reservedHeight = 0.0;
+        if(horizontal)
+            reservedHeight = horizontalHeight;
+        const VectorDouble available = VectorDouble(availableWidth, availableHeight, availableWidth, availableHeight) - VectorDouble(reservedWidth, reservedHeight, reservedWidth, reservedHeight);
+        const VectorSingle rounded(cast<f32>(available.x), cast<f32>(available.y), cast<f32>(available.x), cast<f32>(available.y));
+        const f64 viewportWidth = cast<f64>(rounded.x);
+        const f64 viewportHeight = cast<f64>(rounded.y);
+        b8 nextHorizontal = false;
+        if(horizontalPolicy == ScrollbarPolicy::Always)
+            nextHorizontal = horizontalHeight > 0.0 && availableWidth > 0.0;
+        else if(horizontalPolicy == ScrollbarPolicy::Auto)
+            nextHorizontal = horizontal || (horizontalHeight > 0.0 && availableWidth > 0.0 && contentWidth > viewportWidth);
+        b8 nextVertical = false;
+        if(verticalPolicy == ScrollbarPolicy::Always)
+            nextVertical = verticalWidth > 0.0 && availableHeight > 0.0;
+        else if(verticalPolicy == ScrollbarPolicy::Auto)
+            nextVertical = vertical || (verticalWidth > 0.0 && availableHeight > 0.0 && contentHeight > viewportHeight);
+        if(nextHorizontal == horizontal && nextVertical == vertical)
+            break;
+        horizontal = nextHorizontal;
+        vertical = nextVertical;
+    }
+    outHorizontal = horizontal;
+    outVertical = vertical;
+    outBarWidth = 0.0;
+    if(vertical)
+        outBarWidth = verticalWidth;
+    outBarHeight = 0.0;
+    if(horizontal)
+        outBarHeight = horizontalHeight;
 }
 
 Expected<Rect> TryMakeUiRect(in f64 x, in f64 y, in f64 width, in f64 height, in UiRectPrecision precision){

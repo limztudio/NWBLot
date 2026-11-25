@@ -1,0 +1,210 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_SplitterDefaultThickness = 6.0f;
+const f32 s_SplitterDefaultMinPane = 40.0f;
+const f32 s_SplitterDefaultKeyboardStep = 0.05f;
+const Color s_SplitterDefaultHandleColor = Color(0.22f, 0.25f, 0.30f, 1.0f);
+const Color s_SplitterDefaultGripColor = Color(0.55f, 0.60f, 0.68f, 1.0f);
+const Name s_SplitterHandleRegionName = "splitter.handle";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> SplitterOrientation{
+    Horizontal,
+    Vertical,
+    kCount,
+}
+
+class SplitterStyle{
+    public Name handle = s_SplitterHandleRegionName;
+    public Name handleHover = s_StyleButtonHoverRegionName;
+    public Name handlePressed = s_StyleButtonPressedRegionName;
+    public Name handleDisabled = s_StyleButtonDisabledRegionName;
+    public Name handleFallback = s_StyleSeparatorRegionName;
+    public Color handleColor = s_SplitterDefaultHandleColor;
+    public Color gripColor = s_SplitterDefaultGripColor;
+    public Color hoverTint = s_StyleHoverTint;
+    public Color pressedTint = s_StylePressedTint;
+    public Color disabledTint = s_StyleDisabledTint;
+    public f32 handleThickness = s_SplitterDefaultThickness;
+}
+
+class SplitterOptions{
+    public SplitterOrientation orientation = SplitterOrientation::Horizontal;
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public f32 minFirst = s_SplitterDefaultMinPane;
+    public f32 minSecond = s_SplitterDefaultMinPane;
+    public f32 handleThickness = s_SplitterDefaultThickness;
+    public f32 keyboardStep = s_SplitterDefaultKeyboardStep;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class SplitterResult{
+    public b8 valid = false;
+    public b8 ratioChanged = false;
+    public b8 dragging = false;
+}
+
+class SplitterState : NoCopy{
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public f32 m_ratio = 0.5f;
+    public f32 m_dragStartRatio = 0.5f;
+    public u64 m_activeGestureSequence = 0u;
+    public Rect m_bounds;
+    public Rect m_handleRect;
+    public Rect m_firstRect;
+    public Rect m_secondRect;
+
+    public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
+    public u64 inputGeneration()const{ return this.m_inputGeneration; }
+    public u64 revision()const{ return this.m_revision; }
+    public f32 ratio()const{ return this.m_ratio; }
+    public Rect bounds()const{ return this.m_bounds; }
+    public Rect handleRect()const{ return this.m_handleRect; }
+    public Rect firstRect()const{ return this.m_firstRect; }
+    public Rect secondRect()const{ return this.m_secondRect; }
+
+    public b8 setRatio(in f32 ratio){
+        if(!IsFinite(VectorSingle(ratio)))
+            return false;
+        const f32 clamped = UiSimdMax(0.0f, UiSimdMin(1.0f, ratio));
+        if(clamped != this.m_ratio){
+            this.m_ratio = clamped;
+            AdvanceNonWrappingRevision(this.m_revision);
+        }
+        this.m_inputGeneration = AllocateServiceIdentity();
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidSplitterOptions(in SplitterOptions options){
+    return options.orientation < SplitterOrientation::kCount
+        && IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsFinite(VectorSingle(options.minFirst, options.minSecond, options.handleThickness, options.keyboardStep))
+        && options.minFirst >= 0.0f
+        && options.minSecond >= 0.0f
+        && options.handleThickness > 0.0f
+        && options.keyboardStep > 0.0f
+        && options.keyboardStep <= 1.0f;
+}
+
+b8 IsValidSplitterStyle(in SplitterStyle style){
+    return IsValidPaintColor(style.handleColor)
+        && IsValidPaintColor(style.gripColor)
+        && IsValidPaintColor(style.hoverTint)
+        && IsValidPaintColor(style.pressedTint)
+        && IsValidPaintColor(style.disabledTint)
+        && IsFinite(VectorSingle(style.handleThickness))
+        && style.handleThickness > 0.0f;
+}
+
+f32 ResolveClampedSplitterRatio(in f32 ratio, in f32 available, in f32 minFirst, in f32 minSecond){
+    if(!IsFinite(VectorSingle(ratio, available, minFirst, minSecond)))
+        return 0.5f;
+    const f32 unitClamped = UiSimdMax(0.0f, UiSimdMin(1.0f, ratio));
+    if(available <= 0.0f)
+        return unitClamped;
+    const f32 sumMin = minFirst + minSecond;
+    if(sumMin >= available){
+        if(sumMin <= 0.0f)
+            return 0.5f;
+        return UiSimdMax(0.0f, UiSimdMin(1.0f, minFirst / sumMin));
+    }
+    const f32 minRatio = minFirst / available;
+    const f32 maxRatio = (available - minSecond) / available;
+    return UiSimdMax(minRatio, UiSimdMin(maxRatio, unitClamped));
+}
+
+f32 ResolveSplitterAvailableExtent(in Rect bounds, in SplitterOrientation orientation, in f32 handleThickness){
+    f32 total = bounds.width;
+    if(orientation == SplitterOrientation::Vertical)
+        total = bounds.height;
+    return UiSimdMax(0.0f, total - handleThickness);
+}
+
+b8 ApplySplitterDragDelta(in PointerGesture gesture, in SplitterOptions options, mut SplitterState state){
+    if(
+        !gesture.id.valid()
+        || !IsValidUiRect(gesture.referenceRectangle)
+        || !IsValidSplitterOptions(options)
+        || !IsFinite(VectorSingle(gesture.origin.x, gesture.origin.y, gesture.position.x, gesture.position.y))
+        || gesture.state > PointerGestureState::Completed
+    )
+        return false;
+    const f32 available = ResolveSplitterAvailableExtent(gesture.referenceRectangle, options.orientation, options.handleThickness);
+    if(available <= 0.0f)
+        return false;
+    f32 delta = gesture.position.x - gesture.origin.x;
+    if(options.orientation == SplitterOrientation::Vertical)
+        delta = gesture.position.y - gesture.origin.y;
+    if(state.m_activeGestureSequence != gesture.id.sequence){
+        state.m_activeGestureSequence = gesture.id.sequence;
+        state.m_dragStartRatio = state.m_ratio;
+    }
+    const f32 candidate = ResolveClampedSplitterRatio(state.m_dragStartRatio + (delta / available), available, options.minFirst, options.minSecond);
+    if(candidate != state.m_ratio){
+        state.m_ratio = candidate;
+        AdvanceNonWrappingRevision(state.m_revision);
+    }
+    return true;
+}
+
+b8 ApplySplitterKeyboardStep(in ControlAction action, in SplitterOptions options, mut SplitterState state){
+    if(!IsValidSplitterOptions(options))
+        return false;
+    f32 rawRatio = state.m_ratio;
+    if(action.kind == ControlActionKind::Home)
+        rawRatio = 0.0f;
+    else if(action.kind == ControlActionKind::End)
+        rawRatio = 1.0f;
+    else if(options.orientation == SplitterOrientation::Horizontal && (action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right)){
+        f32 dir = 1.0f;
+        if(action.kind == ControlActionKind::Left)
+            dir = -1.0f;
+        rawRatio = state.m_ratio + dir * options.keyboardStep;
+    }
+    else if(options.orientation == SplitterOrientation::Vertical && (action.kind == ControlActionKind::Up || action.kind == ControlActionKind::Down)){
+        f32 dir = 1.0f;
+        if(action.kind == ControlActionKind::Up)
+            dir = -1.0f;
+        rawRatio = state.m_ratio + dir * options.keyboardStep;
+    }
+    else
+        return true;
+    const f32 available = ResolveSplitterAvailableExtent(state.m_bounds, options.orientation, options.handleThickness);
+    const f32 next = ResolveClampedSplitterRatio(rawRatio, available, options.minFirst, options.minSecond);
+    if(next != state.m_ratio){
+        state.m_ratio = next;
+        AdvanceNonWrappingRevision(state.m_revision);
+    }
+    return true;
+}
+
+void ApplySkinPaletteToSplitterStyle(in UiSkinPalette palette, mut SplitterStyle style){
+    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
+    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
+    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

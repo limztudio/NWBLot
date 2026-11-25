@@ -8,6 +8,7 @@
 #include <core/assets/auto_registration.h>
 #include <core/assets/manager.h>
 #include <core/assets/registry.h>
+#include <impl/assets_mesh/asset.adhd.h>
 #include <impl/assets_physics/physics_assets.adhd.h>
 
 
@@ -57,7 +58,9 @@ public:
         , m_manager(m_arena, m_registry, m_source)
     {
         Core::Assets::RegisterAutoCollectedAssetCodecs(m_registry);
+        (void)m_registry.registerCodec(MakeUnique<Core::Assets::DeclaredAssetCodec<Impl::Mesh>>(), true);
         (void)m_registry.registerCodec(MakeUnique<Impl::HeightfieldAssetCodec>(), true);
+        (void)m_registry.registerCodec(MakeUnique<Impl::CompoundHullAssetCodec>(), true);
     }
 
     void setBinary(const Name& path, const Span<const u8> bytes){
@@ -85,4 +88,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

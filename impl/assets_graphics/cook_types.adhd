@@ -32,9 +32,37 @@ const StringView s_RendererComponentOpticalVolumeGroupField = "optical_volume_gr
 const StringView s_RendererComponentOpticalVolumePriorityField = "optical_volume_priority";
 const StringView s_RendererComponentOpticalBoundaryModeField = "optical_boundary_mode";
 const StringView s_RendererComponentOpticalMediumPriorityField = "optical_medium_priority";
+const StringView s_MaterialInstanceInterfaceField = "material_interface";
+const StringView s_MaterialInstanceOverridesField = "overrides";
+const StringView s_SkeletonSkinningModeField = "skinning_mode";
+const StringView s_SkeletonJointPaletteJointsField = "joints";
+const StringView s_SkeletonPoseParentJointsField = "parent_joints";
+const StringView s_SkeletonPoseLocalJointsField = "local_joints";
+const StringView s_SkinnedMeshBindingSkinField = "skin";
+const StringView s_SkinnedMeshBindingSkeletonEntityNameField = "skeleton_entity_name";
+const StringView s_CsgReceiverGroupField = "receiver_group";
+const StringView s_CsgReceiverEnabledField = "enabled";
+const StringView s_CsgReceiverAffectOpaquePassField = "affect_opaque_pass";
+const StringView s_CsgReceiverAffectTransparentPassField = "affect_transparent_pass";
+const StringView s_CsgCutterShapeTypeField = "shape_type";
+const StringView s_CsgCutterWorldToShapeField = "world_to_shape";
+const StringView s_CsgCutterShapeToWorldField = "shape_to_world";
+const StringView s_CsgCutterParameterBytesField = "parameter_bytes";
+const StringView s_CsgCutterActiveField = "active";
+const StringView s_CsgCutterSyncFromTransformField = "sync_from_transform";
+const StringView s_SkeletonSkinningModeLinearBlendText = "linear_blend";
+const StringView s_SkeletonSkinningModeDualQuaternionText = "dual_quaternion";
 const StringView s_ModelComponentDiagnosticPrefix = "Model component meta";
 const StringView s_MeshComponentDiagnosticPrefix = "Mesh component meta";
 const StringView s_RendererComponentDiagnosticPrefix = "Renderer component meta";
+const StringView s_MaterialInstanceComponentDiagnosticPrefix = "Material instance component meta";
+const StringView s_SkeletonJointPaletteComponentDiagnosticPrefix = "Skeleton joint palette component meta";
+const StringView s_SkeletonPoseComponentDiagnosticPrefix = "Skeleton pose component meta";
+const StringView s_SkinnedMeshBindingComponentDiagnosticPrefix = "Skinned mesh binding component meta";
+const StringView s_CsgReceiverComponentDiagnosticPrefix = "CSG receiver component meta";
+const StringView s_StaticCsgMeshComponentDiagnosticPrefix = "Static CSG mesh component meta";
+const StringView s_SkinnedCsgMeshComponentDiagnosticPrefix = "Skinned CSG mesh component meta";
+const StringView s_CsgCutterComponentDiagnosticPrefix = "CSG cutter component meta";
 const StringView s_OpticalVolumeCoincidenceIndependentText = "independent";
 const StringView s_OpticalVolumeCoincidenceIdenticalMaterialText = "identical_material";
 const StringView s_OpticalVolumeCoincidenceSharedGroupText = "shared_group";
@@ -191,6 +219,43 @@ b8 IsAllowedRendererComponentMetadataField(in StringView field){
         || field == s_RendererComponentOpticalVolumePriorityField
         || field == s_RendererComponentOpticalBoundaryModeField
         || field == s_RendererComponentOpticalMediumPriorityField
+    ;
+}
+
+b8 IsAllowedMaterialInstanceComponentMetadataField(in StringView field){
+    return field == s_MaterialInstanceInterfaceField || field == s_MaterialInstanceOverridesField;
+}
+
+b8 IsAllowedSkeletonJointPaletteComponentMetadataField(in StringView field){
+    return field == s_SkeletonJointPaletteJointsField || field == s_SkeletonSkinningModeField;
+}
+
+b8 IsAllowedSkeletonPoseComponentMetadataField(in StringView field){
+    return field == s_SkeletonPoseParentJointsField || field == s_SkeletonPoseLocalJointsField || field == s_SkeletonSkinningModeField;
+}
+
+b8 IsAllowedSkinnedMeshBindingComponentMetadataField(in StringView field){
+    return field == s_SkinnedMeshBindingSkinField || field == s_SkinnedMeshBindingSkeletonEntityNameField;
+}
+
+b8 IsAllowedCsgReceiverComponentMetadataField(in StringView field){
+    return
+        field == s_CsgReceiverGroupField
+        || field == s_CsgReceiverEnabledField
+        || field == s_CsgReceiverAffectOpaquePassField
+        || field == s_CsgReceiverAffectTransparentPassField
+    ;
+}
+
+b8 IsAllowedCsgCutterComponentMetadataField(in StringView field){
+    return
+        field == s_CsgReceiverGroupField
+        || field == s_CsgCutterShapeTypeField
+        || field == s_CsgCutterWorldToShapeField
+        || field == s_CsgCutterShapeToWorldField
+        || field == s_CsgCutterParameterBytesField
+        || field == s_CsgCutterActiveField
+        || field == s_CsgCutterSyncFromTransformField
     ;
 }
 

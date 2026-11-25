@@ -15,6 +15,9 @@ class VhacdParams{
     public u32 maxVerticesPerHull = 32u;
     public f32 hullRadius = 0.0f;
     public f32 minVolumeRatio = 0.001f;
+    public b8 enableArbitraryPlanes = true;
+    public b8 enableHullMerging = true;
+    public f32 mergeVolumeTolerance = 0.05f;
 }
 
 class VhacdResult{
@@ -47,25 +50,26 @@ f32 ComputeAabbBoxVolume(in Aabb3D box){
     return ext.x * ext.y * ext.z;
 }
 
-void ClipVhacdTriangleByAxis(
+void ClipVhacdTriangleByPlane(
     in VhacdTri tri,
-    in usize axis,
-    in f32 splitPos,
+    in VectorSingle planeNormal,
+    in f32 planeOffset,
     mut Vector<VhacdTri> outNeg,
     mut Vector<VhacdTri> outPos
 ){
-    const isize ax = cast<isize>(axis);
-    const f32 c0 = VectorGetByIndex(VectorSingle(tri.v0), ax);
-    const f32 c1 = VectorGetByIndex(VectorSingle(tri.v1), ax);
-    const f32 c2 = VectorGetByIndex(VectorSingle(tri.v2), ax);
-    const VectorSingle cVec(c0, c1, c2, 0.0f);
-    const f32 minC = -Vector3MaxComponent(-cVec).x;
-    const f32 maxC = Vector3MaxComponent(cVec).x;
-    if(maxC < splitPos - 1.0e-5f){
+    const VectorSingle p0 = VectorSingle(tri.v0);
+    const VectorSingle p1 = VectorSingle(tri.v1);
+    const VectorSingle p2 = VectorSingle(tri.v2);
+    const f32 d0 = Vector3Dot(planeNormal, p0).x - planeOffset;
+    const f32 d1 = Vector3Dot(planeNormal, p1).x - planeOffset;
+    const f32 d2 = Vector3Dot(planeNormal, p2).x - planeOffset;
+    const f32 minD = SimdMin(d0, SimdMin(d1, d2));
+    const f32 maxD = SimdMax(d0, SimdMax(d1, d2));
+    if(maxD < -1.0e-5f){
         outNeg.push_back(tri);
         return;
     }
-    if(minC > splitPos + 1.0e-5f){
+    if(minD > 1.0e-5f){
         outPos.push_back(tri);
         return;
     }
@@ -74,19 +78,23 @@ void ClipVhacdTriangleByAxis(
     pts[0u] = tri.v0;
     pts[1u] = tri.v1;
     pts[2u] = tri.v2;
+    Array<f32, 3u> dists;
+    dists[0u] = d0;
+    dists[1u] = d1;
+    dists[2u] = d2;
 
     FixedVector<f32x4, 6u> polyNeg;
     FixedVector<f32x4, 6u> polyPos;
 
     for(usize side = 0u; side < 2u; ++side){
         VectorSingle prev = VectorSingle(pts[2u]);
-        f32 prevVal = VectorGetByIndex(prev, ax) - splitPos;
+        f32 prevVal = dists[2u];
         if(side == 1u)
             prevVal = -prevVal;
 
         for(usize i = 0u; i < 3u; ++i){
             const VectorSingle cur = VectorSingle(pts[i]);
-            f32 curVal = VectorGetByIndex(cur, ax) - splitPos;
+            f32 curVal = dists[i];
             if(side == 1u)
                 curVal = -curVal;
 
@@ -120,10 +128,10 @@ void ClipVhacdTriangleByAxis(
 
     if(polyNeg.size() >= 3u){
         for(usize i = 1u; i + 1u < polyNeg.size(); ++i){
-            const VectorSingle p0 = VectorSingle(polyNeg[0u]);
-            const VectorSingle p1 = VectorSingle(polyNeg[i]);
-            const VectorSingle p2 = VectorSingle(polyNeg[i + 1u]);
-            if(Vector3LengthSq(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(p2 - p0, 0.0f))).x > 1.0e-12f){
+            const VectorSingle np0 = VectorSingle(polyNeg[0u]);
+            const VectorSingle np1 = VectorSingle(polyNeg[i]);
+            const VectorSingle np2 = VectorSingle(polyNeg[i + 1u]);
+            if(Vector3LengthSq(Cross(VectorSingle(np1 - np0, 0.0f), VectorSingle(np2 - np0, 0.0f))).x > 1.0e-12f){
                 VhacdTri nt;
                 nt.v0 = polyNeg[0u];
                 nt.v1 = polyNeg[i];
@@ -134,10 +142,10 @@ void ClipVhacdTriangleByAxis(
     }
     if(polyPos.size() >= 3u){
         for(usize i = 1u; i + 1u < polyPos.size(); ++i){
-            const VectorSingle p0 = VectorSingle(polyPos[0u]);
-            const VectorSingle p1 = VectorSingle(polyPos[i]);
-            const VectorSingle p2 = VectorSingle(polyPos[i + 1u]);
-            if(Vector3LengthSq(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(p2 - p0, 0.0f))).x > 1.0e-12f){
+            const VectorSingle pp0 = VectorSingle(polyPos[0u]);
+            const VectorSingle pp1 = VectorSingle(polyPos[i]);
+            const VectorSingle pp2 = VectorSingle(polyPos[i + 1u]);
+            if(Vector3LengthSq(Cross(VectorSingle(pp1 - pp0, 0.0f), VectorSingle(pp2 - pp0, 0.0f))).x > 1.0e-12f){
                 VhacdTri pt;
                 pt.v0 = polyPos[0u];
                 pt.v1 = polyPos[i];
@@ -146,6 +154,179 @@ void ClipVhacdTriangleByAxis(
             }
         }
     }
+}
+
+void ComputeCovariancePrincipalAxes3x3(
+    in Span<VhacdTri> triangles,
+    mut Array<f32x4, 3u> outAxes
+){
+    outAxes[0u] = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    outAxes[1u] = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    outAxes[2u] = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    if(triangles.empty())
+        return;
+
+    VectorSingle meanSum(0.0f);
+    f32 totalWeight = 0.0f;
+    for(usize ti = 0u; ti < triangles.size(); ++ti){
+        in VhacdTri t = triangles[ti];
+        const VectorSingle p0 = VectorSingle(t.v0);
+        const VectorSingle p1 = VectorSingle(t.v1);
+        const VectorSingle p2 = VectorSingle(t.v2);
+        const f32 w = SimdMax(Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x, 1.0e-5f);
+        const VectorSingle cen = (p0 + p1 + p2) * (1.0f / 3.0f);
+        meanSum = meanSum + cen * w;
+        totalWeight += w;
+    }
+    if(totalWeight <= 1.0e-8f)
+        return;
+    const VectorSingle mean = meanSum * (1.0f / totalWeight);
+
+    f32 c00 = 0.0f;
+    f32 c01 = 0.0f;
+    f32 c02 = 0.0f;
+    f32 c11 = 0.0f;
+    f32 c12 = 0.0f;
+    f32 c22 = 0.0f;
+    for(usize ti = 0u; ti < triangles.size(); ++ti){
+        in VhacdTri t = triangles[ti];
+        const VectorSingle p0 = VectorSingle(t.v0);
+        const VectorSingle p1 = VectorSingle(t.v1);
+        const VectorSingle p2 = VectorSingle(t.v2);
+        const f32 w = SimdMax(Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x, 1.0e-5f) / 3.0f;
+        const VectorSingle d0 = p0 - mean;
+        const VectorSingle d1 = p1 - mean;
+        const VectorSingle d2 = p2 - mean;
+        c00 += (d0.x * d0.x + d1.x * d1.x + d2.x * d2.x) * w;
+        c01 += (d0.x * d0.y + d1.x * d1.y + d2.x * d2.y) * w;
+        c02 += (d0.x * d0.z + d1.x * d1.z + d2.x * d2.z) * w;
+        c11 += (d0.y * d0.y + d1.y * d1.y + d2.y * d2.y) * w;
+        c12 += (d0.y * d0.z + d1.y * d1.z + d2.y * d2.z) * w;
+        c22 += (d0.z * d0.z + d1.z * d1.z + d2.z * d2.z) * w;
+    }
+
+    Array<f32, 9u> a;
+    a[0u] = c00; a[1u] = c01; a[2u] = c02;
+    a[3u] = c01; a[4u] = c11; a[5u] = c12;
+    a[6u] = c02; a[7u] = c12; a[8u] = c22;
+
+    Array<f32, 9u> v;
+    v[0u] = 1.0f; v[1u] = 0.0f; v[2u] = 0.0f;
+    v[3u] = 0.0f; v[4u] = 1.0f; v[5u] = 0.0f;
+    v[6u] = 0.0f; v[7u] = 0.0f; v[8u] = 1.0f;
+
+    Array<usize, 3u> pairP;
+    Array<usize, 3u> pairQ;
+    pairP[0u] = 0u; pairQ[0u] = 1u;
+    pairP[1u] = 0u; pairQ[1u] = 2u;
+    pairP[2u] = 1u; pairQ[2u] = 2u;
+
+    for(u32 sweep = 0u; sweep < 6u; ++sweep){
+        for(usize k = 0u; k < 3u; ++k){
+            const usize p = pairP[k];
+            const usize q = pairQ[k];
+            const f32 apq = a[p * 3u + q];
+            if(Abs(VectorSingle(apq)).x <= 1.0e-12f)
+                continue;
+            const f32 app = a[p * 3u + p];
+            const f32 aqq = a[q * 3u + q];
+            const f32 tau = (aqq - app) / (2.0f * apq);
+            f32 t = 0.0f;
+            if(tau >= 0.0f)
+                t = 1.0f / (tau + SqrtFast(1.0f + tau * tau));
+            else
+                t = -1.0f / (-tau + SqrtFast(1.0f + tau * tau));
+            const f32 c = 1.0f / SqrtFast(1.0f + t * t);
+            const f32 s = t * c;
+
+            a[p * 3u + p] = app - t * apq;
+            a[q * 3u + q] = aqq + t * apq;
+            a[p * 3u + q] = 0.0f;
+            a[q * 3u + p] = 0.0f;
+
+            for(usize r = 0u; r < 3u; ++r){
+                if(r == p || r == q)
+                    continue;
+                const f32 arp = a[r * 3u + p];
+                const f32 arq = a[r * 3u + q];
+                const f32 nrp = c * arp - s * arq;
+                const f32 nrq = s * arp + c * arq;
+                a[r * 3u + p] = nrp;
+                a[p * 3u + r] = nrp;
+                a[r * 3u + q] = nrq;
+                a[q * 3u + r] = nrq;
+            }
+            for(usize r = 0u; r < 3u; ++r){
+                const f32 vrp = v[r * 3u + p];
+                const f32 vrq = v[r * 3u + q];
+                v[r * 3u + p] = c * vrp - s * vrq;
+                v[r * 3u + q] = s * vrp + c * vrq;
+            }
+        }
+    }
+
+    for(usize col = 0u; col < 3u; ++col){
+        const VectorSingle axis = SafeNormalizeVec3(VectorSingle(v[col], v[3u + col], v[6u + col], 0.0f), VectorSingle(0.0f));
+        if(Vector3LengthSq(VectorSingle(axis, 0.0f)).x > 0.5f)
+            outAxes[col] = f32x4(axis, 0.0f);
+    }
+}
+
+void AccumulateHullTriangleConcavityDepth(
+    in HullShape hull,
+    in Span<VhacdTri> triangles,
+    in VectorSingle fallbackMid,
+    mut f32 outMaxDepth,
+    mut VectorSingle outDeepestPt
+){
+    outMaxDepth = 0.0f;
+    outDeepestPt = fallbackMid;
+    for(usize ti = 0u; ti < triangles.size(); ++ti){
+        in VhacdTri tr = triangles[ti];
+        const VectorSingle cen = (VectorSingle(tr.v0) + VectorSingle(tr.v1) + VectorSingle(tr.v2)) * (1.0f / 3.0f);
+        for(usize k = 0u; k < 4u; ++k){
+            VectorSingle pt = cen;
+            if(k == 0u) pt = VectorSingle(tr.v0);
+            else if(k == 1u) pt = VectorSingle(tr.v1);
+            else if(k == 2u) pt = VectorSingle(tr.v2);
+            f32 maxFaceSigned = -s_MaxF32;
+            for(usize fi = 0u; fi < hull.facePlanes.size(); ++fi){
+                const VectorSingle n(hull.facePlanes[fi].normalOffset.x, hull.facePlanes[fi].normalOffset.y, hull.facePlanes[fi].normalOffset.z, 0.0f);
+                const f32 sd = Vector3Dot(n, pt).x - hull.facePlanes[fi].normalOffset.w;
+                if(sd > maxFaceSigned)
+                    maxFaceSigned = sd;
+            }
+            const f32 depth = -maxFaceSigned;
+            if(depth > outMaxDepth){
+                outMaxDepth = depth;
+                outDeepestPt = pt;
+            }
+        }
+    }
+}
+
+void CollectHullShapeRawVertices(in HullShape hull, mut Vector<f32x4> outVerts){
+    if(hull.isBox()){
+        const VectorSingle c = hull.centroid();
+        const VectorSingle he = hull.halfExtents();
+        const VectorSingle q = SafeNormalizeQuat(VectorSingle(hull.boxRotation));
+        for(u32 iz = 0u; iz < 2u; ++iz){
+            f32 sz = -he.z;
+            if(iz != 0u) sz = he.z;
+            for(u32 iy = 0u; iy < 2u; ++iy){
+                f32 sy = -he.y;
+                if(iy != 0u) sy = he.y;
+                for(u32 ix = 0u; ix < 2u; ++ix){
+                    f32 sx = -he.x;
+                    if(ix != 0u) sx = he.x;
+                    outVerts.push_back(f32x4(c + Vector3Rotate(VectorSingle(sx, sy, sz, 0.0f), q), 0.0f));
+                }
+            }
+        }
+        return;
+    }
+    for(usize vi = 0u; vi < hull.vertices.size(); ++vi)
+        outVerts.push_back(f32x4(VectorSingle(hull.vertices[vi], 0.0f), 0.0f));
 }
 
 void EvaluateVhacdPartitionWithScratch(
@@ -206,37 +387,9 @@ void EvaluateVhacdPartitionWithScratch(
     part.hasHull = true;
 
     f32 maxInteriorDepth = 0.0f;
-    for(usize pi = 0u; pi < samplePts.size(); ++pi){
-        const VectorSingle pt = VectorSingle(samplePts[pi]);
-        f32 maxFaceSigned = -s_MaxF32;
-        for(usize fi = 0u; fi < part.hull.facePlanes.size(); ++fi){
-            const VectorSingle n(part.hull.facePlanes[fi].normalOffset.x, part.hull.facePlanes[fi].normalOffset.y, part.hull.facePlanes[fi].normalOffset.z, 0.0f);
-            const f32 sd = Vector3Dot(n, pt).x - part.hull.facePlanes[fi].normalOffset.w;
-            if(sd > maxFaceSigned)
-                maxFaceSigned = sd;
-        }
-        const f32 depth = -maxFaceSigned;
-        if(depth > maxInteriorDepth){
-            maxInteriorDepth = depth;
-            part.deepestPt = f32x4(pt, 0.0f);
-        }
-    }
-    for(usize ti = 0u; ti < part.triangles.size(); ++ti){
-        in VhacdTri t = part.triangles[ti];
-        const VectorSingle pt = (VectorSingle(t.v0) + VectorSingle(t.v1) + VectorSingle(t.v2)) * (1.0f / 3.0f);
-        f32 maxFaceSigned = -s_MaxF32;
-        for(usize fi = 0u; fi < part.hull.facePlanes.size(); ++fi){
-            const VectorSingle n(part.hull.facePlanes[fi].normalOffset.x, part.hull.facePlanes[fi].normalOffset.y, part.hull.facePlanes[fi].normalOffset.z, 0.0f);
-            const f32 sd = Vector3Dot(n, pt).x - part.hull.facePlanes[fi].normalOffset.w;
-            if(sd > maxFaceSigned)
-                maxFaceSigned = sd;
-        }
-        const f32 depth = -maxFaceSigned;
-        if(depth > maxInteriorDepth){
-            maxInteriorDepth = depth;
-            part.deepestPt = f32x4(pt, 0.0f);
-        }
-    }
+    VectorSingle deepestPtOut = VectorSingle(part.deepestPt);
+    AccumulateHullTriangleConcavityDepth(part.hull, Span<VhacdTri>(part.triangles), VectorSingle(part.deepestPt), maxInteriorDepth, deepestPtOut);
+    part.deepestPt = f32x4(deepestPtOut, 0.0f);
     part.concavity = maxInteriorDepth / SimdMax(rootDiag, 1.0e-4f);
 }
 
@@ -258,7 +411,13 @@ Expected<VhacdResult> ComputeConvexDecomposition(
 ){
     if(vertices.size() < 3u || indices.size() < 3u || (indices.size() % 3u) != 0u)
         return MakeUnexpected(Failure());
-    if(params.maxConvexHulls == 0u || !IsFinite(VectorSingle(params.hullRadius, params.concavityThreshold, 0.0f, 0.0f).xy) || params.hullRadius < 0.0f)
+    if(
+        params.maxConvexHulls == 0u
+        || !IsFinite(VectorSingle(params.hullRadius, params.concavityThreshold, params.minVolumeRatio, params.mergeVolumeTolerance))
+        || params.hullRadius < 0.0f
+        || params.minVolumeRatio < 0.0f
+        || params.mergeVolumeTolerance < 0.0f
+    )
         return MakeUnexpected(Failure());
 
     for(usize i = 0u; i < vertices.size(); ++i){
@@ -302,11 +461,18 @@ Expected<VhacdResult> ComputeConvexDecomposition(
 
     EvaluateVhacdPartition(rootDiag, params.hullRadius, maxVerts, root);
 
+    u32 splitCap = params.maxConvexHulls;
+    if(params.enableHullMerging)
+        splitCap = Min(Max(params.maxConvexHulls, params.maxConvexHulls * 2u), 64u);
+
     Vector<VhacdPartition> partitions;
-    partitions.reserve(Min(cast<usize>(params.maxConvexHulls), cast<usize>(64u)));
+    partitions.reserve(Min(cast<usize>(splitCap), cast<usize>(64u)));
     partitions.push_back(root);
 
-    while(partitions.size() < cast<usize>(params.maxConvexHulls)){
+    Vector<f32x4> rawVertsScratch;
+    Vector<f32x4> samplePtsScratch;
+
+    while(partitions.size() < cast<usize>(splitCap)){
         usize bestIdx = s_NullIndex;
         f32 bestScore = params.concavityThreshold;
         for(usize i = 0u; i < partitions.size(); ++i){
@@ -327,18 +493,49 @@ Expected<VhacdResult> ComputeConvexDecomposition(
         VhacdPartition bestPos;
         VhacdPartition candNeg;
         VhacdPartition candPos;
-        Vector<f32x4> rawVertsScratch;
-        Vector<f32x4> samplePtsScratch;
         const f32 minAllowedVol = params.minVolumeRatio * rootVol;
 
-        for(usize axis = 0u; axis < 3u; ++axis){
-            const f32 lo = VectorGetByIndex(VectorSingle(target.aabb.lowerBound), cast<isize>(axis));
-            const f32 hi = VectorGetByIndex(VectorSingle(target.aabb.upperBound), cast<isize>(axis));
+        FixedVector<f32x4, 6u> candNormals;
+        candNormals.push_back(f32x4(1.0f, 0.0f, 0.0f, 0.0f));
+        candNormals.push_back(f32x4(0.0f, 1.0f, 0.0f, 0.0f));
+        candNormals.push_back(f32x4(0.0f, 0.0f, 1.0f, 0.0f));
+        if(params.enableArbitraryPlanes){
+            Array<f32x4, 3u> pcaAxes;
+            ComputeCovariancePrincipalAxes3x3(Span<VhacdTri>(target.triangles), pcaAxes);
+            for(usize ai = 0u; ai < 3u; ++ai){
+                const VectorSingle pa = VectorSingle(pcaAxes[ai]);
+                if(Vector3LengthSq(VectorSingle(pa, 0.0f)).x <= 0.5f)
+                    continue;
+                b8 dupAxis = false;
+                for(usize ei = 0u; ei < candNormals.size(); ++ei){
+                    if(Abs(Vector3Dot(pa, VectorSingle(candNormals[ei]))).x > 0.985f){
+                        dupAxis = true;
+                        break;
+                    }
+                }
+                if(!dupAxis && candNormals.size() < 6u)
+                    candNormals.push_back(f32x4(pa, 0.0f));
+            }
+        }
+
+        for(usize ni = 0u; ni < candNormals.size(); ++ni){
+            const VectorSingle planeN = VectorSingle(candNormals[ni]);
+            f32 lo = s_MaxF32;
+            f32 hi = -s_MaxF32;
+            for(usize ti = 0u; ti < target.triangles.size(); ++ti){
+                in VhacdTri tr = target.triangles[ti];
+                const f32 p0 = Vector3Dot(planeN, VectorSingle(tr.v0)).x;
+                const f32 p1 = Vector3Dot(planeN, VectorSingle(tr.v1)).x;
+                const f32 p2 = Vector3Dot(planeN, VectorSingle(tr.v2)).x;
+                lo = SimdMin(lo, SimdMin(p0, SimdMin(p1, p2)));
+                hi = SimdMax(hi, SimdMax(p0, SimdMax(p1, p2)));
+            }
             if(hi - lo <= 1.0e-4f)
                 continue;
+
             Array<f32, 2u> candSplits;
             candSplits[0u] = 0.5f * (lo + hi);
-            candSplits[1u] = SimdClamp(VectorGetByIndex(VectorSingle(target.deepestPt), cast<isize>(axis)), lo + 1.0e-4f, hi - 1.0e-4f);
+            candSplits[1u] = SimdClamp(Vector3Dot(planeN, VectorSingle(target.deepestPt)).x, lo + 1.0e-4f, hi - 1.0e-4f);
 
             for(usize si = 0u; si < 2u; ++si){
                 if(si == 1u && Abs(VectorSingle(candSplits[1u] - candSplits[0u])).x <= 1.0e-4f)
@@ -349,7 +546,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 candNeg.depth = target.depth + 1u;
                 candPos.depth = target.depth + 1u;
                 for(usize ti = 0u; ti < target.triangles.size(); ++ti)
-                    ClipVhacdTriangleByAxis(target.triangles[ti], axis, sp, candNeg.triangles, candPos.triangles);
+                    ClipVhacdTriangleByPlane(target.triangles[ti], planeN, sp, candNeg.triangles, candPos.triangles);
 
                 if(candNeg.triangles.size() < 2u || candPos.triangles.size() < 2u)
                     continue;
@@ -370,14 +567,12 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 }
                 const Aabb3D negBox(negMin, negMax);
                 const Aabb3D posBox(posMin, posMax);
-                if(ComputeAabbBoxVolume(negBox) < minAllowedVol && ComputeAabbBoxVolume(posBox) < minAllowedVol)
+                if(ComputeAabbBoxVolume(negBox) < minAllowedVol || ComputeAabbBoxVolume(posBox) < minAllowedVol)
                     continue;
 
                 EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, true, negBox, rawVertsScratch, samplePtsScratch, candNeg);
                 EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, true, posBox, rawVertsScratch, samplePtsScratch, candPos);
-                if(!candNeg.hasHull && !candPos.hasHull)
-                    continue;
-                if(candNeg.volume < minAllowedVol && candPos.volume < minAllowedVol)
+                if(!candNeg.hasHull || !candPos.hasHull)
                     continue;
 
                 const f32 score = SimdMax(candNeg.concavity, candPos.concavity);
@@ -427,6 +622,146 @@ Expected<VhacdResult> ComputeConvexDecomposition(
         dstPos.hasHull = bestPos.hasHull;
         dstPos.hull = bestPos.hull;
         dstPos.triangles.swap(bestPos.triangles);
+    }
+
+    usize writePart = 0u;
+    for(usize pi = 0u; pi < partitions.size(); ++pi){
+        if(!partitions[pi].hasHull)
+            continue;
+        if(writePart != pi){
+            partitions[writePart].aabb = partitions[pi].aabb;
+            partitions[writePart].deepestPt = partitions[pi].deepestPt;
+            partitions[writePart].volume = partitions[pi].volume;
+            partitions[writePart].concavity = partitions[pi].concavity;
+            partitions[writePart].depth = partitions[pi].depth;
+            partitions[writePart].hasHull = partitions[pi].hasHull;
+            partitions[writePart].hull = partitions[pi].hull;
+            partitions[writePart].triangles.swap(partitions[pi].triangles);
+        }
+        ++writePart;
+    }
+    partitions.resize(writePart);
+
+    if(params.enableHullMerging && partitions.size() > 1u){
+        Vector<f32> hullVols;
+        hullVols.resize(partitions.size(), 0.0f);
+        for(usize pi = 0u; pi < partitions.size(); ++pi){
+            f32 hv = ComputeHullBuoyancyVolume(partitions[pi].hull);
+            if(hv <= 1.0e-7f)
+                hv = partitions[pi].volume;
+            hullVols[pi] = hv;
+        }
+
+        const f32 overlapPadScalar = 0.05f * rootDiag;
+        const VectorSingle overlapPad(overlapPadScalar, overlapPadScalar, overlapPadScalar, 0.0f);
+        const f32 invRootDiag = 1.0f / SimdMax(rootDiag, 1.0e-4f);
+
+        while(partitions.size() > 1u){
+            const b8 mustMerge = partitions.size() > cast<usize>(params.maxConvexHulls);
+            b8 foundMerge = false;
+            usize bestI = 0u;
+            usize bestJ = 0u;
+            f32 bestMergeCost = s_MaxF32;
+            HullShape bestMergedHull;
+            f32 bestMergedVol = 0.0f;
+            f32 bestMergedConcavity = 0.0f;
+            f32x4 bestMergedDeepest(0.0f, 0.0f, 0.0f, 0.0f);
+
+            for(usize i = 0u; i + 1u < partitions.size(); ++i){
+                in Aabb3D boxI = partitions[i].aabb;
+                const VectorSingle minI = VectorSingle(boxI.lowerBound) - overlapPad;
+                const VectorSingle maxI = VectorSingle(boxI.upperBound) + overlapPad;
+                for(usize j = i + 1u; j < partitions.size(); ++j){
+                    if(!mustMerge){
+                        in Aabb3D boxJ = partitions[j].aabb;
+                        if(!AabbOverlapsValues(minI, maxI, VectorSingle(boxJ.lowerBound), VectorSingle(boxJ.upperBound)))
+                            continue;
+                    }
+                    rawVertsScratch.clear();
+                    CollectHullShapeRawVertices(partitions[i].hull, rawVertsScratch);
+                    CollectHullShapeRawVertices(partitions[j].hull, rawVertsScratch);
+                    samplePtsScratch.clear();
+                    if(!DeduplicateConvexPoints(Span<f32x4>(rawVertsScratch), samplePtsScratch))
+                        samplePtsScratch.swap(rawVertsScratch);
+                    const Vector<f32x4> mergedPts = DecimateHullPoints(Span<f32x4>(samplePtsScratch), Max(cast<usize>(4u), maxVerts));
+                    const Expected<HullShape> mergedRes = BuildConvexHull(Span<f32x4>(mergedPts), params.hullRadius);
+                    if(!mergedRes.has_value())
+                        continue;
+
+                    in HullShape mergedHull = mergedRes.value();
+                    f32 mergedVol = ComputeHullBuoyancyVolume(mergedHull);
+                    if(mergedVol <= 1.0e-7f)
+                        mergedVol = partitions[i].volume + partitions[j].volume;
+                    const f32 volCost = SimdMax(0.0f, mergedVol - (hullVols[i] + hullVols[j])) / rootVol;
+
+                    const VectorSingle mergedMin = Min(VectorSingle(partitions[i].aabb.lowerBound), VectorSingle(partitions[j].aabb.lowerBound));
+                    const VectorSingle mergedMax = Max(VectorSingle(partitions[i].aabb.upperBound), VectorSingle(partitions[j].aabb.upperBound));
+                    const VectorSingle mergedMid = (mergedMin + mergedMax) * 0.5f;
+                    f32 depthI = 0.0f;
+                    f32 depthJ = 0.0f;
+                    VectorSingle deepI(0.0f);
+                    VectorSingle deepJ(0.0f);
+                    AccumulateHullTriangleConcavityDepth(mergedHull, Span<VhacdTri>(partitions[i].triangles), mergedMid, depthI, deepI);
+                    AccumulateHullTriangleConcavityDepth(mergedHull, Span<VhacdTri>(partitions[j].triangles), mergedMid, depthJ, deepJ);
+                    f32 maxDepth = depthI;
+                    VectorSingle maxDeep = deepI;
+                    if(depthJ > depthI){
+                        maxDepth = depthJ;
+                        maxDeep = deepJ;
+                    }
+                    const f32 mergedConcavity = maxDepth * invRootDiag;
+
+                    if(!mustMerge && (volCost > params.mergeVolumeTolerance || mergedConcavity > params.concavityThreshold))
+                        continue;
+
+                    const f32 mergeScore = volCost + mergedConcavity;
+                    if(!foundMerge || mergeScore < bestMergeCost){
+                        foundMerge = true;
+                        bestI = i;
+                        bestJ = j;
+                        bestMergeCost = mergeScore;
+                        bestMergedHull = mergedHull;
+                        bestMergedVol = mergedVol;
+                        bestMergedConcavity = mergedConcavity;
+                        bestMergedDeepest = f32x4(maxDeep, 0.0f);
+                    }
+                }
+            }
+
+            if(!foundMerge)
+                break;
+
+            mut VhacdPartition dst = partitions[bestI];
+            in VhacdPartition src = partitions[bestJ];
+            dst.hull = bestMergedHull;
+            dst.aabb = Aabb3D(
+                Min(VectorSingle(dst.aabb.lowerBound), VectorSingle(src.aabb.lowerBound)),
+                Max(VectorSingle(dst.aabb.upperBound), VectorSingle(src.aabb.upperBound))
+            );
+            dst.volume = ComputeAabbBoxVolume(dst.aabb);
+            dst.concavity = bestMergedConcavity;
+            dst.deepestPt = bestMergedDeepest;
+            dst.depth = Min(dst.depth, src.depth);
+            dst.triangles.reserve(dst.triangles.size() + src.triangles.size());
+            for(usize ti = 0u; ti < src.triangles.size(); ++ti)
+                dst.triangles.push_back(src.triangles[ti]);
+            hullVols[bestI] = bestMergedVol;
+
+            const usize lastIdx = partitions.size() - 1u;
+            if(bestJ != lastIdx){
+                partitions[bestJ].aabb = partitions[lastIdx].aabb;
+                partitions[bestJ].deepestPt = partitions[lastIdx].deepestPt;
+                partitions[bestJ].volume = partitions[lastIdx].volume;
+                partitions[bestJ].concavity = partitions[lastIdx].concavity;
+                partitions[bestJ].depth = partitions[lastIdx].depth;
+                partitions[bestJ].hasHull = partitions[lastIdx].hasHull;
+                partitions[bestJ].hull = partitions[lastIdx].hull;
+                partitions[bestJ].triangles.swap(partitions[lastIdx].triangles);
+                hullVols[bestJ] = hullVols[lastIdx];
+            }
+            partitions.pop_back();
+            hullVols.pop_back();
+        }
     }
 
     VhacdResult out;

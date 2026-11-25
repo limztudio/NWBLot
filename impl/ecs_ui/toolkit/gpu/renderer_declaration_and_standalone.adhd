@@ -61,6 +61,56 @@ GpuTaskTimingMetadata GpuLayerTiming(in u32 resolutionClass, in GpuTaskTimingPol
     return timing;
 }
 
+Name ResolveGpuRasterPipelineName(in usize modeIndex){
+    if(modeIndex == cast<usize>(PaintBlendMode::Additive))
+        return s_GpuRasterPipelineAdditiveName;
+    if(modeIndex == cast<usize>(PaintBlendMode::Multiply))
+        return s_GpuRasterPipelineMultiplyName;
+    if(modeIndex == cast<usize>(PaintBlendMode::Screen))
+        return s_GpuRasterPipelineScreenName;
+    if(modeIndex == cast<usize>(PaintBlendMode::Erase))
+        return s_GpuRasterPipelineEraseName;
+    if(modeIndex == cast<usize>(PaintBlendMode::Replace))
+        return s_GpuRasterPipelineReplaceName;
+    return s_GpuRasterPipelineName;
+}
+
+Expected<Name> MakeGpuIndexedTaskName(in Name prefix, in usize index){
+    CompactString suffix = CompactString("");
+    AppendUnsignedU64Text(suffix, cast<u64>(index));
+    return DeriveName(prefix, suffix.view());
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> ImportGpuScratchTarget(
+    mut GpuTaskGraph graph,
+    in GpuVersion<GpuTargetVersion> target,
+    in Name readyIdentity,
+    in StringView readyLabel,
+    in Name textureIdentity,
+    in StringView textureLabel,
+    mut GpuGraphResourceId outTexture
+){
+    GpuExternalCompletionDesc readyDesc;
+    readyDesc.setIdentity(readyIdentity);
+    readyDesc.setMarkerLabel(readyLabel);
+    readyDesc.setToken(target.deref().m_readinessToken);
+    const auto readyResult = graph.importExternalCompletion(readyDesc);
+    if(!readyResult.has_value())
+        return MakeUnexpected(Failure());
+    GpuGraphResourceDesc texDesc;
+    texDesc.setIdentity(textureIdentity);
+    texDesc.setMarkerLabel(textureLabel);
+    texDesc.setType(GpuGraphResourceType::Texture);
+    texDesc.setInitialAvailabilityCompletion(readyResult.value());
+    texDesc.setExternalFinalState(ResourceStates::ShaderResource);
+    const auto texResult = graph.importTexture(target.deref().m_color, texDesc);
+    if(!texResult.has_value())
+        return MakeUnexpected(Failure());
+    outTexture = texResult.value();
+    return GpuTaskId();
+}
+
 [cpp_unwind]
 Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph graph, in b8 allowEmptySceneLayer){
     mut GraphicsRuntime graphics = this.m_graphics;
@@ -86,10 +136,17 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
     mut GpuFrameData data = frame.deref();
     data.m_vertexUpload = QueueSubmissionToken();
     data.m_indexUpload = QueueSubmissionToken();
+    data.m_effectUpload = QueueSubmissionToken();
     data.m_clear = QueueSubmissionToken();
     data.m_raster = QueueSubmissionToken();
+    data.m_extraTokens.clear();
     in DrawSnapshot snapshot = data.m_snapshot;
-    if(allowEmptySceneLayer && IsEmptyGpuSceneSnapshot(snapshot.commands().size(), snapshot.vertices().size(), snapshot.indices().size(), snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size())){
+    if(
+        allowEmptySceneLayer
+        && IsEmptyGpuSceneSnapshot(snapshot.commands().size(), snapshot.vertices().size(), snapshot.indices().size(), snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size())
+        && snapshot.effectWords().empty()
+        && snapshot.effectLayers().empty()
+    ){
         layer.frameGeneration = snapshot.generation();
         this.m_declaredLayer = layer;
         this.m_declaredGraph = Optional<in GpuTaskGraph>(graph);
@@ -138,34 +195,41 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
     versionDesc.setResource(color);
     versionDesc.setOrigin(GpuGraphResourceVersionOrigin::TaskProduced);
     const auto versionResult = graph.declareResourceVersion(versionDesc);
-    GpuGraphPipelineDesc pipelineDesc;
-    pipelineDesc.setIdentity(s_GpuRasterPipelineName);
-    pipelineDesc.setMarkerLabel(s_GpuRasterPipelineMarkerLabel);
-    pipelineDesc.setType(GpuGraphPipelineType::Graphics);
-    const auto pipelineResult = graph.importGraphicsPipeline(data.m_resources.deref().m_pipeline, pipelineDesc);
-    if(!skinResult.has_value() || !versionResult.has_value() || !pipelineResult.has_value())
+    if(!skinResult.has_value() || !versionResult.has_value())
         return MakeUnexpected(Failure());
     const GpuGraphResourceVersionId version = versionResult.value();
-    const GpuGraphPipelineId pipeline = pipelineResult.value();
     const GpuGraphResourceId skin = skinResult.value();
+
+    Array<GpuGraphPipelineId, s_PaintBlendModeCount> pipelines;
+    for(usize modeIdx = 0u; modeIdx < s_PaintBlendModeCount; ++modeIdx){
+        GpuGraphPipelineDesc pipelineDesc;
+        pipelineDesc.setIdentity(ResolveGpuRasterPipelineName(modeIdx));
+        pipelineDesc.setMarkerLabel(s_GpuRasterPipelineMarkerLabel);
+        pipelineDesc.setType(GpuGraphPipelineType::Graphics);
+        const auto pipelineResult = graph.importGraphicsPipeline(data.m_resources.deref().m_pipelines[modeIdx], pipelineDesc);
+        if(!pipelineResult.has_value())
+            return MakeUnexpected(Failure());
+        pipelines[modeIdx] = pipelineResult.value();
+    }
+
     GpuTaskSchedulingHint layerScheduling;
     layerScheduling.cost = GpuTaskCostHint::Small;
     layerScheduling.allowParallelRecording = true;
     layerScheduling.allowSameClassQueueRouting = true;
     layerScheduling.preferNonPrimarySameClassQueue = true;
-    FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> dependencies;
-    GpuRasterResourceUses uses;
+    FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> uploadDeps;
+    GpuRasterResourceUses commonUses;
     GpuGraphResourceId vertices;
     GpuGraphResourceId indices;
-    uses.push_back(GpuLayerResourceUse(color, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
-    uses.push_back(GpuLayerResourceUse(skin, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
-    auto glyphPages = DeclareGpuGlyphPages(graph, snapshot, data.m_glyphPages, this.m_sampledTextureNames, uses);
+    GpuGraphResourceId effectBuffer;
+    commonUses.push_back(GpuLayerResourceUse(skin, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
+    auto glyphPages = DeclareGpuGlyphPages(graph, snapshot, data.m_glyphPages, this.m_sampledTextureNames, commonUses);
     if(!glyphPages.has_value())
         return MakeUnexpected(Failure());
-    auto sdfPages = DeclareGpuSdfPages(graph, snapshot, data.m_sdfPages, this.m_sampledTextureNames, uses);
+    auto sdfPages = DeclareGpuSdfPages(graph, snapshot, data.m_sdfPages, this.m_sampledTextureNames, commonUses);
     if(!sdfPages.has_value())
         return MakeUnexpected(Failure());
-    auto textureImages = DeclareGpuTextureImages(graph, snapshot, data.m_textureImages, this.m_sampledTextureNames, uses);
+    auto textureImages = DeclareGpuTextureImages(graph, snapshot, data.m_textureImages, this.m_sampledTextureNames, commonUses);
     if(!textureImages.has_value())
         return MakeUnexpected(Failure());
     if(!snapshot.vertices().empty()){
@@ -215,13 +279,38 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
         const auto indexUploadResult = graph.addUploadBufferTask(indexUploadTaskDesc, indexUploadDesc);
         if(!vertexUploadResult.has_value() || !indexUploadResult.has_value())
             return MakeUnexpected(Failure());
-        const GpuTaskId vertexUpload = vertexUploadResult.value();
-        const GpuTaskId indexUpload = indexUploadResult.value();
-        dependencies.push_back(vertexUpload);
-        dependencies.push_back(indexUpload);
-        uses.push_back(GpuLayerResourceUse(vertices, ResourceStates::VertexBuffer, GpuTaskResourceAccess::Read));
-        uses.push_back(GpuLayerResourceUse(indices, ResourceStates::IndexBuffer, GpuTaskResourceAccess::Read));
+        uploadDeps.push_back(vertexUploadResult.value());
+        uploadDeps.push_back(indexUploadResult.value());
+        commonUses.push_back(GpuLayerResourceUse(vertices, ResourceStates::VertexBuffer, GpuTaskResourceAccess::Read));
+        commonUses.push_back(GpuLayerResourceUse(indices, ResourceStates::IndexBuffer, GpuTaskResourceAccess::Read));
     }
+    if(!snapshot.effectWords().empty()){
+        if(!data.m_effectBuffer.valid())
+            return MakeUnexpected(Failure());
+        GpuGraphResourceDesc effectDesc;
+        effectDesc.setIdentity(s_GpuEffectBufferName);
+        effectDesc.setMarkerLabel(s_GpuEffectsMarkerLabel);
+        effectDesc.setType(GpuGraphResourceType::Buffer);
+        effectDesc.setExternalFinalState(ResourceStates::Common);
+        const auto effectBufResult = graph.importBuffer(data.m_effectBuffer.deref().m_buffer, effectDesc);
+        const auto effectBytesResult = graph.copyUploadElements<u32>(Span<u32>(snapshot.effectWords()));
+        if(!effectBufResult.has_value() || !effectBytesResult.has_value())
+            return MakeUnexpected(Failure());
+        effectBuffer = effectBufResult.value();
+        GpuUploadBufferTaskDesc effectUploadDesc;
+        effectUploadDesc.source = effectBytesResult.value();
+        effectUploadDesc.destination = effectBuffer;
+        effectUploadDesc.finalState = ResourceStates::Common;
+        effectUploadDesc.publishAcceptedToken(data.m_effectUpload);
+        GpuTaskDesc effectUploadTaskDesc;
+        effectUploadTaskDesc.setIdentity(s_GpuEffectUploadTaskName).setMarkerLabel(s_GpuEffectUploadMarkerLabel).setScheduling(layerScheduling);
+        const auto effectUploadResult = graph.addUploadBufferTask(effectUploadTaskDesc, effectUploadDesc);
+        if(!effectUploadResult.has_value())
+            return MakeUnexpected(Failure());
+        uploadDeps.push_back(effectUploadResult.value());
+        commonUses.push_back(GpuLayerResourceUse(effectBuffer, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
+    }
+
     GpuClearTextureTaskDesc clearDesc;
     clearDesc.publishAcceptedToken(data.m_clear);
     clearDesc.destination = color;
@@ -232,31 +321,330 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
     if(!clearResult.has_value())
         return MakeUnexpected(Failure());
     const GpuTaskId clear = clearResult.value();
-    dependencies.push_back(clear);
-    GpuTaskResourceVersionUse produce;
-    produce.version = version;
-    produce.role = GpuTaskResourceVersionRole::Produce;
-    const Array<GpuTaskResourceVersionUse, 1u> versions(produce);
-    GpuRasterTask rasterPayload;
-    rasterPayload.frame = frame;
-    rasterPayload.color = color;
-    rasterPayload.skin = skin;
-    rasterPayload.pipeline = pipeline;
-    rasterPayload.vertices = vertices;
-    rasterPayload.indices = indices;
-    rasterPayload.glyphPages = glyphPages.value();
-    rasterPayload.sdfPages = sdfPages.value();
-    rasterPayload.textureImages = textureImages.value();
-    GpuTaskDesc rasterDesc;
-    rasterDesc.setIdentity(s_GpuRasterTaskName).setMarkerLabel(s_GpuRasterMarkerLabel)
-        .setScheduling(layerScheduling).setDependencies(dependencies).setResourceUses(uses)
-        .setResourceVersionUses(versions)
-        .setTiming(GpuLayerTiming(ComputeGpuTimingResolutionHash(this.m_width, this.m_height), GpuTaskTimingPolicy::Task));
-    const auto rasterResult = graph.addPayloadTask(rasterDesc, rasterPayload);
-    if(!rasterResult.has_value())
-        return MakeUnexpected(Failure());
-    const GpuTaskId raster = rasterResult.value();
-    layer.readyTask = raster;
+
+    GpuTaskId readyTask = clear;
+    if(snapshot.effectLayers().empty()){
+        FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> dependencies = uploadDeps;
+        dependencies.push_back(clear);
+        GpuRasterResourceUses uses;
+        uses.push_back(GpuLayerResourceUse(color, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
+        for(in GpuTaskResourceUse u : commonUses)
+            uses.push_back(u);
+        GpuTaskResourceVersionUse produce;
+        produce.version = version;
+        produce.role = GpuTaskResourceVersionRole::Produce;
+        const Array<GpuTaskResourceVersionUse, 1u> versions(produce);
+        GpuRasterTask rasterPayload;
+        rasterPayload.frame = frame;
+        rasterPayload.color = color;
+        rasterPayload.skin = skin;
+        rasterPayload.pipelines = pipelines;
+        rasterPayload.vertices = vertices;
+        rasterPayload.indices = indices;
+        rasterPayload.effectBuffer = effectBuffer;
+        rasterPayload.glyphPages = glyphPages.value();
+        rasterPayload.sdfPages = sdfPages.value();
+        rasterPayload.textureImages = textureImages.value();
+        rasterPayload.commandBegin = 0u;
+        rasterPayload.commandEnd = snapshot.commands().size();
+        rasterPayload.captureIndex = usize.max;
+        rasterPayload.tokenSlotIndex = usize.max;
+        rasterPayload.sampledScratchSlot = s_ShaderUiInvalidHeapSlot;
+        rasterPayload.targetKind = 0u;
+        rasterPayload.passMode = 0u;
+        GpuTaskDesc rasterDesc;
+        rasterDesc.setIdentity(s_GpuRasterTaskName).setMarkerLabel(s_GpuRasterMarkerLabel)
+            .setScheduling(layerScheduling).setDependencies(dependencies).setResourceUses(uses)
+            .setResourceVersionUses(versions)
+            .setTiming(GpuLayerTiming(ComputeGpuTimingResolutionHash(this.m_width, this.m_height), GpuTaskTimingPolicy::Task));
+        const auto rasterResult = graph.addPayloadTask(rasterDesc, rasterPayload);
+        if(!rasterResult.has_value())
+            return MakeUnexpected(Failure());
+        readyTask = rasterResult.value();
+    }
+    else{
+        if(!data.m_scratchA.valid() || !data.m_scratchB.valid())
+            return MakeUnexpected(Failure());
+        GpuGraphResourceId scratchA;
+        GpuGraphResourceId scratchB;
+        if(
+            !ImportGpuScratchTarget(graph, data.m_scratchA, s_GpuScratchAReadyName, s_GpuScratchAReadyMarkerLabel, s_GpuScratchATextureName, s_GpuScratchAMarkerLabel, scratchA).has_value()
+            || !ImportGpuScratchTarget(graph, data.m_scratchB, s_GpuScratchBReadyName, s_GpuScratchBReadyMarkerLabel, s_GpuScratchBTextureName, s_GpuScratchBMarkerLabel, scratchB).has_value()
+        )
+            return MakeUnexpected(Failure());
+
+        in Vector<DrawCommand> mainCmds = snapshot.commands();
+        in Vector<PaintEffectLayer> effectLayers = snapshot.effectLayers();
+        data.m_extraTokens.resize(effectLayers.size() * 5u + 1u, QueueSubmissionToken());
+        usize mainCursor = 0u;
+        usize nextCaptureIdx = 0u;
+        usize nextTokenIdx = 0u;
+        usize passSeq = 0u;
+        usize layerSeq = 0u;
+        GpuTaskId prevMainTask = clear;
+        b8 hasPendingScratch = false;
+        GpuTaskId scratchProducerTask;
+        u32 scratchSamplerSlot = s_ShaderUiInvalidHeapSlot;
+        const u32 scratchASlot = data.m_scratchA.deref().m_sampledImage.slot();
+        const u32 scratchBSlot = data.m_scratchB.deref().m_sampledImage.slot();
+
+        for(usize cmdIdx = 0u; cmdIdx <= mainCmds.size(); ++cmdIdx){
+            const b8 isEnd = cmdIdx == mainCmds.size();
+            const b8 isLayerComposite = !isEnd && mainCmds[cmdIdx].material == PaintMaterial::EffectLayerComposite;
+            if(!isEnd && !isLayerComposite)
+                continue;
+
+            if(cmdIdx > mainCursor || isEnd){
+                FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> dependencies = uploadDeps;
+                dependencies.push_back(prevMainTask);
+                if(hasPendingScratch)
+                    dependencies.push_back(scratchProducerTask);
+                GpuRasterResourceUses uses;
+                uses.push_back(GpuLayerResourceUse(color, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
+                for(in GpuTaskResourceUse u : commonUses)
+                    uses.push_back(u);
+                if(hasPendingScratch)
+                    uses.push_back(GpuLayerResourceUse(scratchA, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
+
+                GpuRasterTask segPayload;
+                segPayload.frame = frame;
+                segPayload.color = color;
+                segPayload.skin = skin;
+                segPayload.pipelines = pipelines;
+                segPayload.vertices = vertices;
+                segPayload.indices = indices;
+                segPayload.effectBuffer = effectBuffer;
+                segPayload.glyphPages = glyphPages.value();
+                segPayload.sdfPages = sdfPages.value();
+                segPayload.textureImages = textureImages.value();
+                segPayload.commandBegin = mainCursor;
+                segPayload.commandEnd = cmdIdx;
+                segPayload.targetKind = 0u;
+                segPayload.passMode = 0u;
+                if(hasPendingScratch){
+                    segPayload.sampledScratch = scratchA;
+                    segPayload.sampledScratchSlot = scratchSamplerSlot;
+                }
+
+                Name taskName = s_GpuRasterTaskName;
+                if(!isEnd){
+                    const auto genName = MakeGpuIndexedTaskName(s_GpuRasterPassPrefix, passSeq);
+                    if(!genName.has_value())
+                        return MakeUnexpected(Failure());
+                    taskName = genName.value();
+                    segPayload.captureIndex = nextCaptureIdx;
+                    segPayload.tokenSlotIndex = nextTokenIdx;
+                    ++nextCaptureIdx;
+                    ++nextTokenIdx;
+                    ++passSeq;
+                }
+                else{
+                    segPayload.captureIndex = usize.max;
+                    segPayload.tokenSlotIndex = usize.max;
+                }
+
+                GpuTaskDesc segDesc;
+                segDesc.setIdentity(taskName).setMarkerLabel(s_GpuRasterMarkerLabel)
+                    .setScheduling(layerScheduling).setDependencies(dependencies).setResourceUses(uses)
+                    .setTiming(GpuLayerTiming(ComputeGpuTimingResolutionHash(this.m_width, this.m_height), GpuTaskTimingPolicy::Task));
+                if(isEnd){
+                    GpuTaskResourceVersionUse produce;
+                    produce.version = version;
+                    produce.role = GpuTaskResourceVersionRole::Produce;
+                    const Array<GpuTaskResourceVersionUse, 1u> versions(produce);
+                    segDesc.setResourceVersionUses(versions);
+                }
+                const auto segResult = graph.addPayloadTask(segDesc, segPayload);
+                if(!segResult.has_value())
+                    return MakeUnexpected(Failure());
+                prevMainTask = segResult.value();
+                hasPendingScratch = false;
+                scratchSamplerSlot = s_ShaderUiInvalidHeapSlot;
+                if(isEnd){
+                    readyTask = prevMainTask;
+                    break;
+                }
+            }
+
+            if(isLayerComposite){
+                const usize layerIdx = cast<usize>(mainCmds[cmdIdx].effectOffset);
+                if(layerIdx >= effectLayers.size())
+                    return MakeUnexpected(Failure());
+                in PaintEffectLayer effectLayer = effectLayers[layerIdx];
+
+                const auto clearAName = MakeGpuIndexedTaskName(s_GpuEffectClearPrefix, layerSeq);
+                const auto capName = MakeGpuIndexedTaskName(s_GpuEffectCapturePrefix, layerSeq);
+                if(!clearAName.has_value() || !capName.has_value())
+                    return MakeUnexpected(Failure());
+
+                const Array<GpuTaskId, 1u> clearADeps(prevMainTask);
+                GpuClearTextureTaskDesc clearADesc;
+                clearADesc.destination = scratchA;
+                clearADesc.valueType = GpuClearTextureTaskValueType::Float;
+                GpuTaskDesc clearATaskDesc;
+                clearATaskDesc.setIdentity(clearAName.value()).setMarkerLabel(s_GpuEffectClearMarkerLabel)
+                    .setScheduling(layerScheduling).setDependencies(clearADeps);
+                const auto clearAResult = graph.addClearTextureTask(clearATaskDesc, clearADesc);
+                if(!clearAResult.has_value())
+                    return MakeUnexpected(Failure());
+
+                FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> capDeps = uploadDeps;
+                capDeps.push_back(clearAResult.value());
+                GpuRasterResourceUses capUses;
+                capUses.push_back(GpuLayerResourceUse(scratchA, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
+                for(in GpuTaskResourceUse u : commonUses)
+                    capUses.push_back(u);
+                GpuRasterTask capPayload;
+                capPayload.frame = frame;
+                capPayload.color = scratchA;
+                capPayload.skin = skin;
+                capPayload.pipelines = pipelines;
+                capPayload.vertices = vertices;
+                capPayload.indices = indices;
+                capPayload.effectBuffer = effectBuffer;
+                capPayload.glyphPages = glyphPages.value();
+                capPayload.sdfPages = sdfPages.value();
+                capPayload.textureImages = textureImages.value();
+                capPayload.commandBegin = cast<usize>(effectLayer.commandBegin);
+                capPayload.commandEnd = cast<usize>(effectLayer.commandEnd);
+                capPayload.captureIndex = nextCaptureIdx;
+                capPayload.tokenSlotIndex = nextTokenIdx;
+                capPayload.targetKind = 1u;
+                capPayload.passMode = 1u;
+                ++nextCaptureIdx;
+                ++nextTokenIdx;
+                GpuTaskDesc capDesc;
+                capDesc.setIdentity(capName.value()).setMarkerLabel(s_GpuEffectCaptureMarkerLabel)
+                    .setScheduling(layerScheduling).setDependencies(capDeps).setResourceUses(capUses);
+                const auto capResult = graph.addPayloadTask(capDesc, capPayload);
+                if(!capResult.has_value())
+                    return MakeUnexpected(Failure());
+
+                GpuTaskId readyScratch = capResult.value();
+                if(effectLayer.blurRadius > 0.0f){
+                    const auto clearBName = MakeGpuIndexedTaskName(s_GpuEffectClearBPrefix, layerSeq);
+                    const auto blurHName = MakeGpuIndexedTaskName(s_GpuEffectBlurHPrefix, layerSeq);
+                    const auto clearA2Name = MakeGpuIndexedTaskName(s_GpuEffectClearA2Prefix, layerSeq);
+                    const auto blurVName = MakeGpuIndexedTaskName(s_GpuEffectBlurVPrefix, layerSeq);
+                    if(!clearBName.has_value() || !blurHName.has_value() || !clearA2Name.has_value() || !blurVName.has_value())
+                        return MakeUnexpected(Failure());
+
+                    const Array<GpuTaskId, 1u> clearBDeps(readyScratch);
+                    GpuClearTextureTaskDesc clearBDesc;
+                    clearBDesc.destination = scratchB;
+                    clearBDesc.valueType = GpuClearTextureTaskValueType::Float;
+                    GpuTaskDesc clearBTaskDesc;
+                    clearBTaskDesc.setIdentity(clearBName.value()).setMarkerLabel(s_GpuEffectClearMarkerLabel)
+                        .setScheduling(layerScheduling).setDependencies(clearBDeps);
+                    const auto clearBResult = graph.addClearTextureTask(clearBTaskDesc, clearBDesc);
+                    if(!clearBResult.has_value())
+                        return MakeUnexpected(Failure());
+
+                    FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> blurHDeps = uploadDeps;
+                    blurHDeps.push_back(clearBResult.value());
+                    blurHDeps.push_back(readyScratch);
+                    GpuRasterResourceUses blurHUses;
+                    blurHUses.push_back(GpuLayerResourceUse(scratchB, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
+                    blurHUses.push_back(GpuLayerResourceUse(scratchA, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
+                    for(in GpuTaskResourceUse u : commonUses)
+                        blurHUses.push_back(u);
+                    DrawCommand blurHCmd;
+                    blurHCmd.clip = effectLayer.expandedBounds;
+                    blurHCmd.firstIndex = effectLayer.blurFirstIndex;
+                    blurHCmd.indexCount = s_PaintQuadIndexCount;
+                    blurHCmd.material = PaintMaterial::Blur;
+                    blurHCmd.effectOffset = effectLayer.blurHorizontalOffset;
+                    blurHCmd.blendMode = PaintBlendMode::Replace;
+                    GpuRasterTask blurHPayload;
+                    blurHPayload.frame = frame;
+                    blurHPayload.color = scratchB;
+                    blurHPayload.skin = skin;
+                    blurHPayload.pipelines = pipelines;
+                    blurHPayload.vertices = vertices;
+                    blurHPayload.indices = indices;
+                    blurHPayload.effectBuffer = effectBuffer;
+                    blurHPayload.sampledScratch = scratchA;
+                    blurHPayload.sampledScratchSlot = scratchASlot;
+                    blurHPayload.glyphPages = glyphPages.value();
+                    blurHPayload.sdfPages = sdfPages.value();
+                    blurHPayload.textureImages = textureImages.value();
+                    blurHPayload.syntheticCommand = blurHCmd;
+                    blurHPayload.captureIndex = nextCaptureIdx;
+                    blurHPayload.tokenSlotIndex = nextTokenIdx;
+                    blurHPayload.targetKind = 2u;
+                    blurHPayload.passMode = 2u;
+                    ++nextCaptureIdx;
+                    ++nextTokenIdx;
+                    GpuTaskDesc blurHDesc;
+                    blurHDesc.setIdentity(blurHName.value()).setMarkerLabel(s_GpuEffectBlurHMarkerLabel)
+                        .setScheduling(layerScheduling).setDependencies(blurHDeps).setResourceUses(blurHUses);
+                    const auto blurHResult = graph.addPayloadTask(blurHDesc, blurHPayload);
+                    if(!blurHResult.has_value())
+                        return MakeUnexpected(Failure());
+
+                    const Array<GpuTaskId, 1u> clearA2Deps(blurHResult.value());
+                    GpuClearTextureTaskDesc clearA2Desc;
+                    clearA2Desc.destination = scratchA;
+                    clearA2Desc.valueType = GpuClearTextureTaskValueType::Float;
+                    GpuTaskDesc clearA2TaskDesc;
+                    clearA2TaskDesc.setIdentity(clearA2Name.value()).setMarkerLabel(s_GpuEffectClearMarkerLabel)
+                        .setScheduling(layerScheduling).setDependencies(clearA2Deps);
+                    const auto clearA2Result = graph.addClearTextureTask(clearA2TaskDesc, clearA2Desc);
+                    if(!clearA2Result.has_value())
+                        return MakeUnexpected(Failure());
+
+                    FixedVector<GpuTaskId, s_GpuRasterDependencyCapacity> blurVDeps = uploadDeps;
+                    blurVDeps.push_back(clearA2Result.value());
+                    blurVDeps.push_back(blurHResult.value());
+                    GpuRasterResourceUses blurVUses;
+                    blurVUses.push_back(GpuLayerResourceUse(scratchA, ResourceStates::RenderTarget, GpuTaskResourceAccess::Write));
+                    blurVUses.push_back(GpuLayerResourceUse(scratchB, ResourceStates::ShaderResource, GpuTaskResourceAccess::Read));
+                    for(in GpuTaskResourceUse u : commonUses)
+                        blurVUses.push_back(u);
+                    DrawCommand blurVCmd;
+                    blurVCmd.clip = effectLayer.expandedBounds;
+                    blurVCmd.firstIndex = effectLayer.blurFirstIndex;
+                    blurVCmd.indexCount = s_PaintQuadIndexCount;
+                    blurVCmd.material = PaintMaterial::Blur;
+                    blurVCmd.effectOffset = effectLayer.blurVerticalOffset;
+                    blurVCmd.blendMode = PaintBlendMode::Replace;
+                    GpuRasterTask blurVPayload;
+                    blurVPayload.frame = frame;
+                    blurVPayload.color = scratchA;
+                    blurVPayload.skin = skin;
+                    blurVPayload.pipelines = pipelines;
+                    blurVPayload.vertices = vertices;
+                    blurVPayload.indices = indices;
+                    blurVPayload.effectBuffer = effectBuffer;
+                    blurVPayload.sampledScratch = scratchB;
+                    blurVPayload.sampledScratchSlot = scratchBSlot;
+                    blurVPayload.glyphPages = glyphPages.value();
+                    blurVPayload.sdfPages = sdfPages.value();
+                    blurVPayload.textureImages = textureImages.value();
+                    blurVPayload.syntheticCommand = blurVCmd;
+                    blurVPayload.captureIndex = nextCaptureIdx;
+                    blurVPayload.tokenSlotIndex = nextTokenIdx;
+                    blurVPayload.targetKind = 1u;
+                    blurVPayload.passMode = 2u;
+                    ++nextCaptureIdx;
+                    ++nextTokenIdx;
+                    GpuTaskDesc blurVDesc;
+                    blurVDesc.setIdentity(blurVName.value()).setMarkerLabel(s_GpuEffectBlurVMarkerLabel)
+                        .setScheduling(layerScheduling).setDependencies(blurVDeps).setResourceUses(blurVUses);
+                    const auto blurVResult = graph.addPayloadTask(blurVDesc, blurVPayload);
+                    if(!blurVResult.has_value())
+                        return MakeUnexpected(Failure());
+                    readyScratch = blurVResult.value();
+                }
+                hasPendingScratch = true;
+                scratchProducerTask = readyScratch;
+                scratchSamplerSlot = scratchASlot;
+                mainCursor = cmdIdx;
+                ++layerSeq;
+            }
+        }
+    }
+    layer.readyTask = readyTask;
     layer.color = color;
     layer.colorVersion = version;
     layer.sampledImage = data.m_target.deref().m_sampledImage;

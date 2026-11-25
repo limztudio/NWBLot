@@ -1,0 +1,148 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "style.adhd"
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_HyperlinkDefaultUnderlineThickness = 1.0f;
+const f32 s_RichTextDefaultLineSpacing = 2.0f;
+const f32 s_RichTextStrikeHeightFraction = 0.45f;
+const Color s_HyperlinkDefaultNormalColor = Color(0.36f, 0.68f, 0.98f, 1.0f);
+const Color s_HyperlinkDefaultHoverColor = Color(0.56f, 0.80f, 1.0f, 1.0f);
+const Color s_HyperlinkDefaultPressedColor = Color(0.24f, 0.52f, 0.86f, 1.0f);
+const Color s_HyperlinkDefaultVisitedColor = Color(0.68f, 0.48f, 0.90f, 1.0f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class HyperlinkStyle{
+    public Color normalColor = s_HyperlinkDefaultNormalColor;
+    public Color hoverColor = s_HyperlinkDefaultHoverColor;
+    public Color pressedColor = s_HyperlinkDefaultPressedColor;
+    public Color visitedColor = s_HyperlinkDefaultVisitedColor;
+    public Color disabledColor = s_StyleDisabledTextColor;
+    public f32 underlineThickness = s_HyperlinkDefaultUnderlineThickness;
+    public b8 underlineOnHoverOnly = false;
+}
+
+class HyperlinkOptions{
+    public LayoutSize width;
+    public LayoutSize height;
+    public b8 enabled = true;
+    public b8 visited = false;
+    public LayoutItemOptions layout;
+}
+
+class RichTextSpan{
+    public StringView text = "";
+    public Color color;
+    public b8 hasColor = false;
+    public Color backgroundColor;
+    public b8 hasBackground = false;
+    public FontDescriptor font;
+    public b8 hasFont = false;
+    public f32 fontSize = 0.0f;
+    public f32 letterSpacing = 0.0f;
+    public f32 wordSpacing = 0.0f;
+    public Array<OpenTypeFeature, s_TextMaxOpenTypeFeatures> features;
+    public u8 featureCount = 0u;
+    public b8 underline = false;
+    public b8 strikethrough = false;
+    public u64 linkKey = 0u;
+}
+
+class RichTextOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height;
+    public TextAlignment alignment = TextAlignment::Leading;
+    public TextBidiMode bidiMode = TextBidiMode::None;
+    public b8 wrap = true;
+    public f32 maxWidth = 0.0f;
+    public f32 lineSpacing = s_RichTextDefaultLineSpacing;
+    public f32 lineHeightMultiplier = 1.0f;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class RichTextResult{
+    public b8 valid = false;
+    public b8 linkActivated = false;
+    public u64 activatedLinkKey = 0u;
+    public u64 hoveredLinkKey = 0u;
+}
+
+class RichTextRun{
+    public u32 lineIndex = 0u;
+    public f32 x = 0.0f;
+    public f32 y = 0.0f;
+    public f32 width = 0.0f;
+    public f32 height = 0.0f;
+    public SharedTextLayout layout;
+    public Rect textBounds;
+    public Color color;
+    public Color backgroundColor;
+    public b8 hasBackground = false;
+    public b8 underline = false;
+    public b8 strikethrough = false;
+    public u64 linkKey = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidHyperlinkOptions(in HyperlinkOptions options){
+    return IsValidLayoutSize(options.width) && IsValidLayoutSize(options.height);
+}
+
+b8 IsValidHyperlinkStyle(in HyperlinkStyle style){
+    return IsValidPaintColor(style.normalColor)
+        && IsValidPaintColor(style.hoverColor)
+        && IsValidPaintColor(style.pressedColor)
+        && IsValidPaintColor(style.visitedColor)
+        && IsValidPaintColor(style.disabledColor)
+        && IsFinite(VectorSingle(style.underlineThickness))
+        && style.underlineThickness > 0.0f;
+}
+
+b8 IsValidRichTextSpans(in Span<RichTextSpan> spans, in HyperlinkStyle linkStyle){
+    for(in RichTextSpan span : spans){
+        if(span.hasColor && !IsValidPaintColor(span.color))
+            return false;
+        if(span.hasBackground && !IsValidPaintColor(span.backgroundColor))
+            return false;
+        if(span.hasFont && !IsValidFontDescriptor(span.font))
+            return false;
+        if(!IsFinite(VectorSingle(span.fontSize, span.letterSpacing, span.wordSpacing, 0.0f).xyz) || span.fontSize < 0.0f)
+            return false;
+        if(!IsValidOpenTypeFeatures(span.features, span.featureCount))
+            return false;
+    }
+    return IsValidHyperlinkStyle(linkStyle);
+}
+
+b8 IsValidRichTextOptions(in RichTextOptions options){
+    return options.alignment <= TextAlignment::Trailing
+        && options.bidiMode <= TextBidiMode::ForceRightToLeft
+        && IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsFinite(VectorSingle(options.maxWidth, options.lineSpacing, options.lineHeightMultiplier, 0.0f).xyz)
+        && options.maxWidth >= 0.0f
+        && options.lineSpacing >= 0.0f
+        && options.lineHeightMultiplier > 0.0f
+        && options.lineHeightMultiplier <= s_TextMaxLineHeightMultiplier;
+}
+
+void ApplySkinPaletteToHyperlinkStyle(in UiSkinPalette palette, mut HyperlinkStyle style){
+    style.disabledColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -52,6 +52,8 @@ class PopupScope{
     public Rect bounds;
     public Rect viewport;
     public u32 layer = 0u;
+    public b8 modal = false;
+    public b8 blockOutsideInput = true;
     public b8 dismissOutside = true;
     public b8 dismissCancel = true;
     public b8 dismissFocusTraversal = false;
@@ -88,6 +90,18 @@ b8 HasValidPopupScopeGeometry(in PopupScope scope){
         return false;
     const VectorSingle ends = VectorSingle(scope.bounds.x, scope.bounds.y, scope.viewport.x, scope.viewport.y) + VectorSingle(scope.bounds.width, scope.bounds.height, scope.viewport.width, scope.viewport.height);
     return IsFinite(ends) && scope.bounds.x >= scope.viewport.x && scope.bounds.y >= scope.viewport.y && ends.x <= ends.z && ends.y <= ends.w;
+}
+
+b8 IsPopupScopeBlockingOutside(in PopupScope scope){
+    return scope.modal || scope.blockOutsideInput;
+}
+
+b8 HasBlockingRouterPopup(in Span<PopupRecord> popups){
+    for(usize index = 0u; index < popups.size(); ++index){
+        if(IsPopupScopeBlockingOutside(popups[index].scope))
+            return true;
+    }
+    return false;
 }
 
 b8 CanDismissPopupScope(in PopupScope scope, in b8 closing, in PopupDismissReason reason){

@@ -9,6 +9,8 @@
 
 
 type TransformComponentCodec = TypedComponentAssetCodec<TransformComponentAsset>;
+type LocalTransformComponentCodec = TypedComponentAssetCodec<LocalTransformComponentAsset>;
+type SceneParentComponentCodec = TypedComponentAssetCodec<SceneParentComponentAsset>;
 type CameraComponentCodec = TypedComponentAssetCodec<CameraComponentAsset>;
 type LightComponentCodec = TypedComponentAssetCodec<LightComponentAsset>;
 type ActiveCameraComponentCodec = TypedComponentAssetCodec<ActiveCameraComponentAsset>;
@@ -68,6 +70,24 @@ Expected<TransformComponentAsset> CookTransformVolumeEntry(in TransformComponent
 
 b8 ExtractTransformComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
     return ReadCookDependencyEntry<TransformComponentCookEntry>(context, s_TransformDiagnosticPrefix, ParseTransformComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_LocalTransformDiagnosticPrefix, ParseLocalTransformComponentCookMetadata, document_and_value, log_failure, LocalTransformComponentCodec)]
+Expected<LocalTransformComponentAsset> CookLocalTransformVolumeEntry(in LocalTransformComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<LocalTransformComponentAsset, LocalTransformComponentCookEntry>(entry);
+}
+
+b8 ExtractLocalTransformComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<LocalTransformComponentCookEntry>(context, s_LocalTransformDiagnosticPrefix, ParseLocalTransformComponentCookMetadata).has_value();
+}
+
+[cook_entry("component", s_SceneParentDiagnosticPrefix, ParseSceneParentComponentCookMetadata, document_and_value, log_failure, SceneParentComponentCodec)]
+Expected<SceneParentComponentAsset> CookSceneParentVolumeEntry(in SceneParentComponentCookEntry entry){
+    return BuildComponentAssetFromEntry<SceneParentComponentAsset, SceneParentComponentCookEntry>(entry);
+}
+
+b8 ExtractSceneParentComponentDependencies(in CookDependencyItemContext context, mut ICookDependencyCollector collector){
+    return ReadCookDependencyEntry<SceneParentComponentCookEntry>(context, s_SceneParentDiagnosticPrefix, ParseSceneParentComponentCookMetadata).has_value();
 }
 
 [cook_entry("component", s_CameraDiagnosticPrefix, ParseCameraComponentCookMetadata, document_and_value, log_failure, CameraComponentCodec)]
@@ -155,6 +175,8 @@ b8 ExtractSceneDependencies(in CookDependencyItemContext context, mut ICookDepen
 b8 RegisterSceneCookDependencies(mut CookDependencyRegistry registry){
     return registry.registerDefaultEntryAsset(s_DefaultProjectVirtualPath, ProjectAsset::AssetTypeName(), s_DefaultProjectVirtualPathText)
         && registry.registerType(TransformComponentAsset::AssetTypeName(), ExtractTransformComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(LocalTransformComponentAsset::AssetTypeName(), ExtractLocalTransformComponentDependencies, IComponent::AssetTypeName())
+        && registry.registerType(SceneParentComponentAsset::AssetTypeName(), ExtractSceneParentComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(CameraComponentAsset::AssetTypeName(), ExtractCameraComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(LightComponentAsset::AssetTypeName(), ExtractLightComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(ActiveCameraComponentAsset::AssetTypeName(), ExtractActiveCameraComponentDependencies, IComponent::AssetTypeName())

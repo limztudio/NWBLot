@@ -102,6 +102,7 @@ class ForceField{
     public f32 minDistance = 0.5f;
     public f32 radius = 20.0f;
     public f32 falloffPower = 2.0f;
+    public f32 inwardSuction = 0.0f;
     public f32 turbulenceAmplitude = 0.0f;
     public f32 turbulenceFrequency = 1.0f;
     public Filter filter;
@@ -113,6 +114,39 @@ class FluidSubmersionResult{
     public f32 submergedVolume = 0.0f;
     public f32x4 centerOfBuoyancy(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 surfaceAreaEstimate = 0.0f;
+}
+
+[reflect]
+enum<u8> FluidSplashEventType{
+    EnteredFluid = 0u,
+    Splashed = 1u,
+    ExitedFluid = 2u,
+    kCount
+}
+
+class FluidSplashEvent{
+    public FluidSplashEventType type = FluidSplashEventType::EnteredFluid;
+    public BodyId bodyId;
+    public u32 fluidIndex = 0u;
+    public f32 submergedFraction = 0.0f;
+    public f32 impactSpeed = 0.0f;
+    public f32x4 point(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
+class FluidImmersionRecord{
+    public u32 fluidIndex = 0u;
+    public BodyId bodyId;
+    public f32 submergedFraction = 0.0f;
+    public f32x4 lastPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 lastNormal(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
+class FluidCandidateSample{
+    public BodyId bodyId;
+    public f32 submergedFraction = 0.0f;
+    public f32 impactSpeed = 0.0f;
+    public f32x4 cob(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 
@@ -223,6 +257,312 @@ f32 ComputeBuoyancyShapeVolume(in PhysicsWorld world, in Shape shape, in VectorS
     if(shapeVol <= 1.0e-7f)
         shapeVol = aabbSpan.x * aabbSpan.y * aabbSpan.z * 0.65f;
     return shapeVol;
+}
+
+void ClipAndAccumulateSubmergedTriangle(
+    in VectorSingle v0,
+    in VectorSingle v1,
+    in VectorSingle v2,
+    in VectorSingle surfNorm,
+    in f32 surfOffEff,
+    in VectorSingle apex,
+    in b8 solidVolume,
+    in f32 sheetThickness,
+    mut f32 inOutVol,
+    mut VectorSingle inOutWeightedCob,
+    mut f32 inOutArea
+){
+    const f32 d0 = surfOffEff - Vector3Dot(v0, surfNorm).x;
+    const f32 d1 = surfOffEff - Vector3Dot(v1, surfNorm).x;
+    const f32 d2 = surfOffEff - Vector3Dot(v2, surfNorm).x;
+    if(d0 <= 0.0f && d1 <= 0.0f && d2 <= 0.0f)
+        return;
+
+    if(d0 >= 0.0f && d1 >= 0.0f && d2 >= 0.0f){
+        const f32 triArea = 0.5f * Vector3Length(VectorSingle(Cross(v1 - v0, v2 - v0), 0.0f)).x;
+        inOutArea += triArea;
+        if(solidVolume){
+            const f32 dV = Vector3Dot(v0 - apex, Cross(v1 - apex, v2 - apex)).x * (1.0f / 6.0f);
+            inOutVol += dV;
+            inOutWeightedCob = inOutWeightedCob + (apex + v0 + v1 + v2) * (0.25f * dV);
+        }
+        else{
+            const f32 dV = triArea * sheetThickness;
+            inOutVol += dV;
+            inOutWeightedCob = inOutWeightedCob + (v0 + v1 + v2) * ((1.0f / 3.0f) * dV);
+        }
+        return;
+    }
+
+    Array<f32x4, 3u> verts;
+    verts[0u] = f32x4(v0, d0);
+    verts[1u] = f32x4(v1, d1);
+    verts[2u] = f32x4(v2, d2);
+    FixedVector<f32x4, 4u> clipped;
+    for(usize ei = 0u; ei < 3u; ++ei){
+        const usize nextEi = (ei + 1u) % 3u;
+        const VectorSingle a(verts[ei].x, verts[ei].y, verts[ei].z, 0.0f);
+        const VectorSingle b(verts[nextEi].x, verts[nextEi].y, verts[nextEi].z, 0.0f);
+        const f32 da = verts[ei].w;
+        const f32 db = verts[nextEi].w;
+        const b8 inA = da >= 0.0f;
+        const b8 inB = db >= 0.0f;
+        if(inA)
+            clipped.push_back(f32x4(a, 0.0f));
+        if(inA != inB){
+            const f32 denom = da - db;
+            f32 t = 0.0f;
+            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+                t = SimdClamp(da / denom, 0.0f, 1.0f);
+            clipped.push_back(f32x4(a + (b - a) * t, 0.0f));
+        }
+    }
+    if(clipped.size() < 3u)
+        return;
+
+    const VectorSingle p0 = VectorSingle(clipped[0u]);
+    for(usize k = 1u; k + 1u < clipped.size(); ++k){
+        const VectorSingle p1 = VectorSingle(clipped[k]);
+        const VectorSingle p2 = VectorSingle(clipped[k + 1u]);
+        const f32 triArea = 0.5f * Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x;
+        inOutArea += triArea;
+        if(solidVolume){
+            const f32 dV = Vector3Dot(p0 - apex, Cross(p1 - apex, p2 - apex)).x * (1.0f / 6.0f);
+            inOutVol += dV;
+            inOutWeightedCob = inOutWeightedCob + (apex + p0 + p1 + p2) * (0.25f * dV);
+        }
+        else{
+            const f32 dV = triArea * sheetThickness;
+            inOutVol += dV;
+            inOutWeightedCob = inOutWeightedCob + (p0 + p1 + p2) * ((1.0f / 3.0f) * dV);
+        }
+    }
+}
+
+b8 TryComputeExactPlaneSubmersionForShape(
+    in PhysicsWorld world,
+    in Shape shape,
+    in VectorSingle shapePos,
+    in VectorSingle shapeRot,
+    in VectorSingle bMin,
+    in VectorSingle bMax,
+    in f32 shapeVol,
+    in FluidVolume fluid,
+    in VectorSingle surfNorm,
+    in VectorSingle waveT1,
+    in VectorSingle waveT2,
+    in f32 timeSec,
+    mut f32 outSubVol,
+    mut VectorSingle outWeightedCob,
+    mut f32 outArea
+){
+    outSubVol = 0.0f;
+    outWeightedCob = VectorSingle(0.0f);
+    outArea = 0.0f;
+
+    const VectorSingle shapeMid = (bMin + bMax) * 0.5f;
+    const f32 depthMid = fluid.signedDepthWithWaveBasis(shapeMid, surfNorm, waveT1, waveT2, timeSec);
+    const f32 surfOffEff = Vector3Dot(shapeMid, surfNorm).x + depthMid;
+    const VectorSingle apex = shapeMid + surfNorm * depthMid;
+
+    if(shape.type == ShapeType::Hull && shape.geometryIndex < world.m_hullShapes.size()){
+        in HullShape hull = world.m_hullShapes[shape.geometryIndex];
+        f32 accVol = 0.0f;
+        VectorSingle accCob(0.0f);
+        f32 accArea = 0.0f;
+        f32 coreVol = 0.0f;
+
+        if(hull.isBox()){
+            const VectorSingle he = hull.halfExtents();
+            coreVol = 8.0f * he.x * he.y * he.z;
+            const VectorSingle boxPos = TransformPointValues(shapePos, shapeRot, hull.centroid());
+            const VectorSingle boxRot = SafeNormalizeQuat(QuaternionMultiply(shapeRot, SafeNormalizeQuat(VectorSingle(hull.boxRotation))));
+            Array<f32x4, 8u> corners;
+            for(u32 iz = 0u; iz < 2u; ++iz){
+                f32 sz = -he.z;
+                if(iz != 0u)
+                    sz = he.z;
+                for(u32 iy = 0u; iy < 2u; ++iy){
+                    f32 sy = -he.y;
+                    if(iy != 0u)
+                        sy = he.y;
+                    for(u32 ix = 0u; ix < 2u; ++ix){
+                        f32 sx = -he.x;
+                        if(ix != 0u)
+                            sx = he.x;
+                        const usize idx = cast<usize>((iz << 2u) | (iy << 1u) | ix);
+                        corners[idx] = f32x4(TransformPointValues(boxPos, boxRot, VectorSingle(sx, sy, sz, 0.0f)), 0.0f);
+                    }
+                }
+            }
+            Array<u32, 36u> boxTris;
+            boxTris[0u] = 0u; boxTris[1u] = 2u; boxTris[2u] = 3u;
+            boxTris[3u] = 0u; boxTris[4u] = 3u; boxTris[5u] = 1u;
+            boxTris[6u] = 4u; boxTris[7u] = 5u; boxTris[8u] = 7u;
+            boxTris[9u] = 4u; boxTris[10u] = 7u; boxTris[11u] = 6u;
+            boxTris[12u] = 0u; boxTris[13u] = 1u; boxTris[14u] = 5u;
+            boxTris[15u] = 0u; boxTris[16u] = 5u; boxTris[17u] = 4u;
+            boxTris[18u] = 2u; boxTris[19u] = 6u; boxTris[20u] = 7u;
+            boxTris[21u] = 2u; boxTris[22u] = 7u; boxTris[23u] = 3u;
+            boxTris[24u] = 0u; boxTris[25u] = 4u; boxTris[26u] = 6u;
+            boxTris[27u] = 0u; boxTris[28u] = 6u; boxTris[29u] = 2u;
+            boxTris[30u] = 1u; boxTris[31u] = 3u; boxTris[32u] = 7u;
+            boxTris[33u] = 1u; boxTris[34u] = 7u; boxTris[35u] = 5u;
+            for(usize ti = 0u; ti < 12u; ++ti){
+                const VectorSingle v0 = VectorSingle(corners[boxTris[ti * 3u + 0u]]);
+                const VectorSingle v1 = VectorSingle(corners[boxTris[ti * 3u + 1u]]);
+                const VectorSingle v2 = VectorSingle(corners[boxTris[ti * 3u + 2u]]);
+                ClipAndAccumulateSubmergedTriangle(v0, v1, v2, surfNorm, surfOffEff, apex, true, 0.0f, accVol, accCob, accArea);
+            }
+        }
+        else{
+            if(hull.faceTopologies.empty() || hull.vertices.empty() || hull.halfEdges.empty())
+                return false;
+            const VectorSingle refW = TransformPointValues(shapePos, shapeRot, VectorSingle(hull.vertices[0u], 0.0f));
+            f32 coreVol6 = 0.0f;
+            for(usize fIdx = 0u; fIdx < hull.faceTopologies.size(); ++fIdx){
+                in HullFaceTopology face = hull.faceTopologies[fIdx];
+                if(face.vertexCount < 3u)
+                    continue;
+                u8 eIdx = face.edge;
+                const VectorSingle w0 = TransformPointValues(shapePos, shapeRot, VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f));
+                eIdx = hull.halfEdges[eIdx].next;
+                VectorSingle wPrev = TransformPointValues(shapePos, shapeRot, VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f));
+                for(u8 t = 2u; t < face.vertexCount; ++t){
+                    eIdx = hull.halfEdges[eIdx].next;
+                    const VectorSingle wCurr = TransformPointValues(shapePos, shapeRot, VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f));
+                    coreVol6 += Vector3Dot(w0 - refW, Cross(wPrev - refW, wCurr - refW)).x;
+                    ClipAndAccumulateSubmergedTriangle(w0, wPrev, wCurr, surfNorm, surfOffEff, apex, true, 0.0f, accVol, accCob, accArea);
+                    wPrev = wCurr;
+                }
+            }
+            if(coreVol6 < 0.0f){
+                accVol = -accVol;
+                accCob = -accCob;
+                coreVol6 = -coreVol6;
+            }
+            coreVol = coreVol6 * (1.0f / 6.0f);
+        }
+
+        if(hull.radius() > 0.0f){
+            if(accVol <= 1.0e-7f)
+                return false;
+            if(coreVol > 1.0e-7f && shapeVol > coreVol){
+                const f32 scale = shapeVol / coreVol;
+                accVol *= scale;
+                accCob = accCob * scale;
+            }
+        }
+        outSubVol = SimdClamp(accVol, 0.0f, shapeVol);
+        outWeightedCob = accCob;
+        outArea = accArea * 0.25f;
+        return true;
+    }
+
+    if(shape.type == ShapeType::Mesh && shape.geometryIndex < world.m_meshShapes.size()){
+        in MeshShape mesh = world.m_meshShapes[shape.geometryIndex];
+        if(mesh.triangles.empty())
+            return false;
+        const b8 closed = mesh.isClosed();
+        b8 flipWinding = false;
+        f32 coreVol = 0.0f;
+        if(closed){
+            const VectorSingle refLocal = VectorSingle(mesh.triangles[0u].v0, 0.0f);
+            f32 vol6 = 0.0f;
+            for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+                in MeshTriangle tri = mesh.triangles[ti];
+                vol6 += Vector3Dot(
+                    VectorSingle(tri.v0, 0.0f) - refLocal,
+                    Cross(VectorSingle(tri.v1, 0.0f) - refLocal, VectorSingle(tri.v2, 0.0f) - refLocal)
+                ).x;
+            }
+            if(vol6 < 0.0f){
+                flipWinding = true;
+                vol6 = -vol6;
+            }
+            coreVol = vol6 * (1.0f / 6.0f);
+        }
+
+        f32 accVol = 0.0f;
+        VectorSingle accCob(0.0f);
+        f32 accArea = 0.0f;
+        const f32 sheetThickness = SimdMax(2.0f * mesh.radius(), 0.02f);
+        for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+            in MeshTriangle tri = mesh.triangles[ti];
+            const VectorSingle tv0 = TransformPointValues(shapePos, shapeRot, VectorSingle(tri.v0, 0.0f));
+            VectorSingle tv1 = TransformPointValues(shapePos, shapeRot, VectorSingle(tri.v1, 0.0f));
+            VectorSingle tv2 = TransformPointValues(shapePos, shapeRot, VectorSingle(tri.v2, 0.0f));
+            if(flipWinding){
+                const VectorSingle tmpV = tv1;
+                tv1 = tv2;
+                tv2 = tmpV;
+            }
+            ClipAndAccumulateSubmergedTriangle(tv0, tv1, tv2, surfNorm, surfOffEff, apex, closed, sheetThickness, accVol, accCob, accArea);
+        }
+        if(closed && mesh.radius() > 0.0f){
+            if(accVol <= 1.0e-7f)
+                return false;
+            if(coreVol > 1.0e-7f && shapeVol > coreVol){
+                const f32 scale = shapeVol / coreVol;
+                accVol *= scale;
+                accCob = accCob * scale;
+            }
+        }
+        outSubVol = SimdClamp(accVol, 0.0f, shapeVol);
+        outWeightedCob = accCob;
+        outArea = accArea * 0.25f;
+        if(!closed)
+            outArea = accArea * 0.5f;
+        return true;
+    }
+
+    if(shape.type == ShapeType::Heightfield && shape.geometryIndex < world.m_heightfieldShapes.size()){
+        in HeightfieldShape hf = world.m_heightfieldShapes[shape.geometryIndex];
+        if(!hf.isValid())
+            return false;
+        const usize w = cast<usize>(hf.cols);
+        const f32 ox = hf.originMaxY.x;
+        const f32 oy = hf.originMaxY.y;
+        const f32 oz = hf.originMaxY.z;
+        const f32 sx = hf.cellSizeX();
+        const f32 sy = hf.scaleMinMaxY.y;
+        const f32 sz = hf.cellSizeZ();
+        const f32 sheetThickness = SimdMax(2.0f * hf.thickness, 0.02f);
+        f32 accVol = 0.0f;
+        VectorSingle accCob(0.0f);
+        f32 accArea = 0.0f;
+        for(u32 cz = 0u; cz + 1u < hf.rows; ++cz){
+            const f32 z0 = oz + cast<f32>(cz) * sz;
+            const f32 z1 = z0 + sz;
+            for(u32 cx = 0u; cx + 1u < hf.cols; ++cx){
+                if(hf.isCellHole(cx, cz))
+                    continue;
+                const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
+                const usize r1 = r0 + w;
+                const VectorSingle rawH(hf.heights[r0], hf.heights[r0 + 1u], hf.heights[r1], hf.heights[r1 + 1u]);
+                const VectorSingle hVec = VectorSingle(oy) + rawH * sy;
+                const f32 x0 = ox + cast<f32>(cx) * sx;
+                const f32 x1 = x0 + sx;
+                const VectorSingle w00 = TransformPointValues(shapePos, shapeRot, VectorSingle(x0, hVec.x, z0, 0.0f));
+                const VectorSingle w10 = TransformPointValues(shapePos, shapeRot, VectorSingle(x1, hVec.y, z0, 0.0f));
+                const VectorSingle w01 = TransformPointValues(shapePos, shapeRot, VectorSingle(x0, hVec.z, z1, 0.0f));
+                const VectorSingle w11 = TransformPointValues(shapePos, shapeRot, VectorSingle(x1, hVec.w, z1, 0.0f));
+                for(usize ti = 0u; ti < 2u; ++ti){
+                    VectorSingle tv0(0.0f);
+                    VectorSingle tv1(0.0f);
+                    VectorSingle tv2(0.0f);
+                    ExtractHeightfieldCellTriangle(hf.flipDiagonal, ti, w00, w10, w01, w11, tv0, tv1, tv2);
+                    ClipAndAccumulateSubmergedTriangle(tv0, tv1, tv2, surfNorm, surfOffEff, apex, false, sheetThickness, accVol, accCob, accArea);
+                }
+            }
+        }
+        outSubVol = SimdClamp(accVol, 0.0f, shapeVol);
+        outWeightedCob = accCob;
+        outArea = accArea * 0.5f;
+        return true;
+    }
+
+    return false;
 }
 
 FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld world, in u32 bodyIdx, in FluidVolume fluid, in VectorSingle surfNorm, in f32 timeSec){
@@ -343,16 +683,34 @@ FluidSubmersionResult ComputeBodySubmersionEstimateWithNormal(in PhysicsWorld wo
             const f32 shapeVol = ComputeBuoyancyShapeVolume(world, shape, span);
             totalVol += shapeVol;
 
-            if(fullSub){
-                subVol += shapeVol;
-                weightedCob = weightedCob + ((bMin + bMax) * 0.5f) * shapeVol;
-                areaEst += 0.5f * (span.x * span.z + span.x * span.y);
-                continue;
-            }
-
             VectorSingle shapePos(0.0f);
             VectorSingle shapeRot(0.0f, 0.0f, 0.0f, 1.0f);
             shape.worldTransformValues(VectorSingle(bodyXf.position), VectorSingle(bodyXf.rotation), shapePos, shapeRot);
+            if(fullSub){
+                VectorSingle fullCob = (bMin + bMax) * 0.5f;
+                if(shape.type == ShapeType::Hull && shape.geometryIndex < world.m_hullShapes.size())
+                    fullCob = TransformPointValues(shapePos, shapeRot, world.m_hullShapes[shape.geometryIndex].centroid());
+                subVol += shapeVol;
+                weightedCob = weightedCob + fullCob * shapeVol;
+                areaEst += 0.5f * (span.x * span.z + span.x * span.y);
+                continue;
+            }
+            if(
+                fluid.shape == FluidVolumeShape::HalfSpacePlane
+                && (shape.type == ShapeType::Hull || shape.type == ShapeType::Mesh || shape.type == ShapeType::Heightfield)
+            ){
+                f32 exactVol = 0.0f;
+                VectorSingle exactCob(0.0f);
+                f32 exactArea = 0.0f;
+                if(TryComputeExactPlaneSubmersionForShape(world, shape, shapePos, shapeRot, bMin, bMax, shapeVol, fluid, surfNorm, waveT1, waveT2, timeSec, exactVol, exactCob, exactArea)){
+                    if(exactVol > 1.0e-7f){
+                        subVol += exactVol;
+                        weightedCob = weightedCob + exactCob;
+                        areaEst += exactArea;
+                    }
+                    continue;
+                }
+            }
             const VectorSingle stepW = span * (1.0f / 3.0f);
             const VectorSingle baseW = bMin + stepW * 0.5f;
             const VectorSingle localBase = InverseTransformPointValues(shapePos, shapeRot, baseW);
@@ -589,7 +947,7 @@ f32 ComputeForceFieldRadialFalloff(in f32 distSq, in f32 invDist, in f32 minDist
     return 1.0f / Pow(VectorSingle(distSq * invDist), VectorSingle(falloffPower)).x;
 }
 
-b8 ComputeFluidBodyWrenchDirect(
+b8 ComputeFluidBodyWrenchWithSubmersion(
     in PhysicsWorld world,
     in BodySim sim,
     in BodyState state,
@@ -599,8 +957,10 @@ b8 ComputeFluidBodyWrenchDirect(
     in f32 timeSec,
     in f32 invDt,
     mut VectorSingle outForce,
-    mut VectorSingle outTorque
+    mut VectorSingle outTorque,
+    mut FluidSubmersionResult outSub
 ){
+    outSub = FluidSubmersionResult();
     const u32 bodyIdx = sim.bodyId;
     if(bodyIdx >= world.m_bodies.size() || !world.m_bodies[bodyIdx].alive || world.m_bodies[bodyIdx].type != BodyType::Dynamic)
         return false;
@@ -608,6 +968,7 @@ b8 ComputeFluidBodyWrenchDirect(
         return false;
 
     const FluidSubmersionResult sub = ComputeBodySubmersionEstimateWithNormal(world, bodyIdx, fluid, surfNorm, timeSec);
+    outSub = sub;
     if(sub.submergedFraction <= 1.0e-5f || sub.submergedVolume <= 1.0e-7f)
         return false;
 
@@ -664,6 +1025,22 @@ b8 ComputeFluidBodyWrenchDirect(
     return IsFiniteVec3(totalForce) && IsFiniteVec3(totalTorque);
 }
 
+b8 ComputeFluidBodyWrenchDirect(
+    in PhysicsWorld world,
+    in BodySim sim,
+    in BodyState state,
+    in FluidVolume fluid,
+    in VectorSingle surfNorm,
+    in VectorSingle grav,
+    in f32 timeSec,
+    in f32 invDt,
+    mut VectorSingle outForce,
+    mut VectorSingle outTorque
+){
+    FluidSubmersionResult unusedSub;
+    return ComputeFluidBodyWrenchWithSubmersion(world, sim, state, fluid, surfNorm, grav, timeSec, invDt, outForce, outTorque, unusedSub);
+}
+
 b8 ComputeForceFieldBodyForceDirect(
     in PhysicsWorld world,
     in BodySim sim,
@@ -672,8 +1049,11 @@ b8 ComputeForceFieldBodyForceDirect(
     in VectorSingle hoistedDir,
     in f32 timeSec,
     in f32 invDt,
-    mut VectorSingle outForce
+    mut VectorSingle outForce,
+    mut VectorSingle outTorque
 ){
+    outForce = VectorSingle(0.0f);
+    outTorque = VectorSingle(0.0f);
     const u32 bodyIdx = sim.bodyId;
     if(bodyIdx >= world.m_bodies.size() || !world.m_bodies[bodyIdx].alive || world.m_bodies[bodyIdx].type != BodyType::Dynamic)
         return false;
@@ -694,6 +1074,7 @@ b8 ComputeForceFieldBodyForceDirect(
 
     const f32 bodyMass = 1.0f / sim.invMass();
     VectorSingle appliedForce(0.0f);
+    VectorSingle appliedTorque(0.0f);
     if(field.type == ForceFieldType::GlobalGravity){
         appliedForce = hoistedDir * (field.strength * bodyMass);
     }
@@ -720,7 +1101,14 @@ b8 ComputeForceFieldBodyForceDirect(
             windVel = windVel + turb * field.turbulenceAmplitude;
         }
         const VectorSingle relWind = windVel - VectorSingle(state.linearVelocity);
-        appliedForce = relWind * (SimdMax(0.05f, sim.maxExtent() * sim.maxExtent()) * 2.0f);
+        const f32 relSq = Vector3LengthSq(VectorSingle(relWind, 0.0f)).x;
+        if(relSq > 1.0e-12f){
+            const f32 invRel = Rsqrt(VectorSingle(relSq)).x;
+            const f32 relSp = relSq * invRel;
+            const f32 windCoeff = SimdMax(0.05f, sim.maxExtent() * sim.maxExtent()) * 2.0f;
+            const f32 clampedMag = SimdMin(relSp * windCoeff, bodyMass * relSp * invDt * 0.9f);
+            appliedForce = relWind * (clampedMag * invRel);
+        }
     }
     else if(field.type == ForceFieldType::Vortex){
         const VectorSingle diff = pos - VectorSingle(field.originOrDirection);
@@ -735,25 +1123,53 @@ b8 ComputeForceFieldBodyForceDirect(
         const VectorSingle swirlDir = SafeNormalizeVec3(Cross(hoistedDir, radialDir), VectorSingle(0.0f));
         const f32 falloff = ComputeForceFieldRadialFalloff(distSq, invDist, field.minDistance, field.falloffPower);
         appliedForce = swirlDir * (field.strength * bodyMass * falloff);
-        if(field.turbulenceAmplitude != 0.0f)
-            appliedForce = appliedForce - radialDir * (field.turbulenceAmplitude * bodyMass * falloff);
+        if(field.inwardSuction != 0.0f)
+            appliedForce = appliedForce - radialDir * (field.inwardSuction * bodyMass * falloff);
+        if(field.turbulenceAmplitude > 0.0f){
+            const f32 phase = timeSec * field.turbulenceFrequency + pos.x * 0.37f + pos.y * 0.53f + pos.z * 0.71f;
+            VectorSingle sinTurb(0.0f);
+            VectorSingle cosTurb(0.0f);
+            VectorSinCos(sinTurb, cosTurb, VectorSingle(phase, phase * 1.31f, phase * 0.79f + 1.1f, 0.0f));
+            const VectorSingle turb(sinTurb.x, cosTurb.y, sinTurb.z, 0.0f);
+            appliedForce = appliedForce + turb * (field.turbulenceAmplitude * bodyMass * falloff);
+        }
     }
     else if(field.type == ForceFieldType::DampingZone){
+        const f32 damp = SimdMax(0.0f, field.strength);
         const VectorSingle linV = VectorSingle(state.linearVelocity);
         const f32 speedSq = Vector3LengthSq(VectorSingle(linV, 0.0f)).x;
-        if(speedSq <= 1.0e-12f)
+        b8 anyDamp = false;
+        if(speedSq > 1.0e-12f && damp > 0.0f){
+            const f32 invSpeed = Rsqrt(VectorSingle(speedSq)).x;
+            const f32 speed = speedSq * invSpeed;
+            const f32 dampMag = SimdMin(damp * bodyMass * speed, bodyMass * speed * invDt * 0.9f);
+            appliedForce = (-linV) * (dampMag * invSpeed);
+            anyDamp = true;
+        }
+        const VectorSingle angV = VectorSingle(state.angularVelocity);
+        const f32 wSq = Vector3LengthSq(VectorSingle(angV, 0.0f)).x;
+        if(wSq > 1.0e-12f && damp > 0.0f){
+            const f32 invW = Rsqrt(VectorSingle(wSq)).x;
+            const f32 wSp = wSq * invW;
+            const VectorSingle wDir = angV * invW;
+            const f32 kInvI = Vector3Dot(wDir, Matrix3MulVec(Matrix3FromSymMat3(sim.invInertiaWorld), wDir)).x;
+            if(kInvI > 1.0e-10f){
+                const f32 effI = 1.0f / kInvI;
+                const f32 angMag = SimdMin(damp * effI * wSp, effI * wSp * invDt * 0.9f);
+                appliedTorque = (-wDir) * angMag;
+                anyDamp = true;
+            }
+        }
+        if(!anyDamp)
             return false;
-        const f32 invSpeed = Rsqrt(VectorSingle(speedSq)).x;
-        const f32 speed = speedSq * invSpeed;
-        const f32 dampMag = SimdMin(SimdMax(0.0f, field.strength) * bodyMass * speed, bodyMass * speed * invDt * 0.9f);
-        appliedForce = (-linV) * (dampMag * invSpeed);
     }
     else if(field.type == ForceFieldType::LocalGravityOverride){
         appliedForce = (hoistedDir * field.strength - world.gravity() * sim.gravityScale) * bodyMass;
     }
 
     outForce = VectorSingle(appliedForce, 0.0f);
-    return IsFiniteVec3(outForce);
+    outTorque = VectorSingle(appliedTorque, 0.0f);
+    return IsFiniteVec3(outForce) && IsFiniteVec3(outTorque);
 }
 
 const usize s_BuoyancyParallelThreshold = 64u;
@@ -864,8 +1280,10 @@ void PrepareForceFieldEnvironmentCandidates(
     outWorkCount = 0u;
     mut Vector<u32> wakeQueue = world.m_cpuScratch.envWakeQueue;
     mut Vector<f32x4> wakeForces = world.m_cpuScratch.envWakeForces;
+    mut Vector<f32x4> wakeTorques = world.m_cpuScratch.envWakeTorques;
     wakeQueue.clear();
     wakeForces.clear();
+    wakeTorques.clear();
 
     if(useBroadphase){
         const u32 queryMask = world.broadPhaseQueryMask(field.filter);
@@ -883,10 +1301,12 @@ void PrepareForceFieldEnvironmentCandidates(
             }
             else if(b.setIndex > s_AwakeSetIndex){
                 VectorSingle wf(0.0f);
+                VectorSingle wt(0.0f);
                 in SolverSet ss = world.m_solverSets[b.setIndex];
-                if(ComputeForceFieldBodyForceDirect(world, ss.sims[b.localIndex], ss.states[b.localIndex], field, hoistedDir, timeSec, invDt, wf)){
+                if(ComputeForceFieldBodyForceDirect(world, ss.sims[b.localIndex], ss.states[b.localIndex], field, hoistedDir, timeSec, invDt, wf, wt)){
                     wakeQueue.push_back(bIdx);
                     wakeForces.push_back(f32x4(wf, 0.0f));
+                    wakeTorques.push_back(f32x4(wt, 0.0f));
                 }
             }
         }
@@ -897,6 +1317,7 @@ void PrepareForceFieldEnvironmentCandidates(
             if(wb.alive && wb.setIndex == s_AwakeSetIndex){
                 mut BodySim sim = world.m_solverSets[s_AwakeSetIndex].sims[wb.localIndex];
                 sim.setForce(sim.force() + VectorSingle(wakeForces[wi]));
+                sim.setTorque(sim.torque() + VectorSingle(wakeTorques[wi]));
             }
         }
         usize awakeCount = 0u;
@@ -917,9 +1338,11 @@ void PrepareForceFieldEnvironmentCandidates(
         in SolverSet ss = world.m_solverSets[sIdx];
         for(usize li = 0u; li < ss.sims.size(); ++li){
             VectorSingle wf(0.0f);
-            if(ComputeForceFieldBodyForceDirect(world, ss.sims[li], ss.states[li], field, hoistedDir, timeSec, invDt, wf)){
+            VectorSingle wt(0.0f);
+            if(ComputeForceFieldBodyForceDirect(world, ss.sims[li], ss.states[li], field, hoistedDir, timeSec, invDt, wf, wt)){
                 wakeQueue.push_back(ss.sims[li].bodyId);
                 wakeForces.push_back(f32x4(wf, 0.0f));
+                wakeTorques.push_back(f32x4(wt, 0.0f));
             }
         }
     }
@@ -930,9 +1353,171 @@ void PrepareForceFieldEnvironmentCandidates(
         if(wb.alive && wb.setIndex == s_AwakeSetIndex){
             mut BodySim sim = world.m_solverSets[s_AwakeSetIndex].sims[wb.localIndex];
             sim.setForce(sim.force() + VectorSingle(wakeForces[wi]));
+            sim.setTorque(sim.torque() + VectorSingle(wakeTorques[wi]));
         }
     }
     outWorkCount = origAwakeCount;
+}
+
+VectorSingle ComputeFluidSplashNormal(in FluidVolume fluid, in VectorSingle surfNorm, in VectorSingle point){
+    if(fluid.shape == FluidVolumeShape::Sphere)
+        return SafeNormalizeVec3(VectorSingle(point - VectorSingle(fluid.surfaceNormalOffset, 0.0f), 0.0f), surfNorm);
+    return surfNorm;
+}
+
+void AppendWokenFluidImmersionSamples(
+    in PhysicsWorld world,
+    in FluidVolume fluid,
+    in VectorSingle surfNorm,
+    in f32 timeSec,
+    mut Vector<FluidCandidateSample> samples
+){
+    for(usize wi = 0u; wi < world.m_cpuScratch.envWakeQueue.size(); ++wi){
+        const u32 bIdx = world.m_cpuScratch.envWakeQueue[wi];
+        if(bIdx >= world.m_bodies.size())
+            continue;
+        in Body wb = world.m_bodies[bIdx];
+        if(!wb.alive || wb.setIndex != s_AwakeSetIndex || wb.type != BodyType::Dynamic)
+            continue;
+        in BodyState st = world.m_solverSets[s_AwakeSetIndex].states[wb.localIndex];
+        const FluidSubmersionResult sub = ComputeBodySubmersionEstimateWithNormal(world, bIdx, fluid, surfNorm, timeSec);
+        if(sub.submergedFraction > 1.0e-5f && sub.submergedVolume > 1.0e-7f){
+            FluidCandidateSample sample;
+            sample.bodyId = world.makeBodyId(bIdx);
+            sample.submergedFraction = sub.submergedFraction;
+            sample.impactSpeed = SimdMax(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), surfNorm).x);
+            sample.cob = sub.centerOfBuoyancy;
+            samples.push_back(sample);
+        }
+    }
+}
+
+void ReconcileFluidImmersionRecords(
+    in FluidVolume fluid,
+    in VectorSingle surfNorm,
+    in u32 fluidIndex,
+    in f32 splashThreshold,
+    in Span<FluidCandidateSample> samples,
+    mut Vector<FluidImmersionRecord> immersionState,
+    mut Vector<FluidSplashEvent> outEvents
+){
+    const usize prevCount = immersionState.size();
+    Vector<u8> seenPrev;
+    seenPrev.resize(prevCount, 0u);
+    const f32 safeSplashThr = SimdMax(0.0f, splashThreshold);
+
+    for(usize si = 0u; si < samples.size(); ++si){
+        in FluidCandidateSample sample = samples[si];
+        if(!sample.bodyId.valid() || sample.submergedFraction <= 1.0e-5f)
+            continue;
+        const VectorSingle evNormal = ComputeFluidSplashNormal(fluid, surfNorm, VectorSingle(sample.cob));
+        usize matchIdx = prevCount;
+        for(usize ri = 0u; ri < prevCount; ++ri){
+            in FluidImmersionRecord rec = immersionState[ri];
+            if(rec.fluidIndex == fluidIndex && rec.bodyId.index == sample.bodyId.index && rec.bodyId.generation == sample.bodyId.generation){
+                matchIdx = ri;
+                break;
+            }
+        }
+        if(matchIdx < prevCount){
+            seenPrev[matchIdx] = 1u;
+            mut FluidImmersionRecord rec = immersionState[matchIdx];
+            const f32 prevFrac = rec.submergedFraction;
+            if(prevFrac < 0.25f && sample.submergedFraction >= 0.45f && sample.impactSpeed >= safeSplashThr){
+                FluidSplashEvent splashEv;
+                splashEv.type = FluidSplashEventType::Splashed;
+                splashEv.bodyId = sample.bodyId;
+                splashEv.fluidIndex = fluidIndex;
+                splashEv.submergedFraction = sample.submergedFraction;
+                splashEv.impactSpeed = sample.impactSpeed;
+                splashEv.point = sample.cob;
+                splashEv.normal = f32x4(evNormal, 0.0f);
+                outEvents.push_back(splashEv);
+            }
+            rec.submergedFraction = sample.submergedFraction;
+            rec.lastPoint = sample.cob;
+            rec.lastNormal = f32x4(evNormal, 0.0f);
+        }
+        else{
+            FluidSplashEvent enterEv;
+            enterEv.type = FluidSplashEventType::EnteredFluid;
+            enterEv.bodyId = sample.bodyId;
+            enterEv.fluidIndex = fluidIndex;
+            enterEv.submergedFraction = sample.submergedFraction;
+            enterEv.impactSpeed = sample.impactSpeed;
+            enterEv.point = sample.cob;
+            enterEv.normal = f32x4(evNormal, 0.0f);
+            outEvents.push_back(enterEv);
+            if(sample.impactSpeed >= safeSplashThr){
+                FluidSplashEvent splashEv = enterEv;
+                splashEv.type = FluidSplashEventType::Splashed;
+                outEvents.push_back(splashEv);
+            }
+            FluidImmersionRecord newRec;
+            newRec.fluidIndex = fluidIndex;
+            newRec.bodyId = sample.bodyId;
+            newRec.submergedFraction = sample.submergedFraction;
+            newRec.lastPoint = sample.cob;
+            newRec.lastNormal = f32x4(evNormal, 0.0f);
+            immersionState.push_back(newRec);
+        }
+    }
+
+    usize writeIdx = 0u;
+    for(usize ri = 0u; ri < immersionState.size(); ++ri){
+        if(ri < prevCount && immersionState[ri].fluidIndex == fluidIndex && seenPrev[ri] == 0u){
+            in FluidImmersionRecord exRec = immersionState[ri];
+            FluidSplashEvent exitEv;
+            exitEv.type = FluidSplashEventType::ExitedFluid;
+            exitEv.bodyId = exRec.bodyId;
+            exitEv.fluidIndex = fluidIndex;
+            exitEv.submergedFraction = 0.0f;
+            exitEv.impactSpeed = 0.0f;
+            exitEv.point = exRec.lastPoint;
+            exitEv.normal = exRec.lastNormal;
+            outEvents.push_back(exitEv);
+            continue;
+        }
+        if(writeIdx != ri)
+            immersionState[writeIdx] = immersionState[ri];
+        ++writeIdx;
+    }
+    immersionState.resize(writeIdx);
+}
+
+void ApplyFluidVolumeAndSampleRange(
+    in FluidVolume fluid,
+    in VectorSingle surfNorm,
+    in VectorSingle grav,
+    in f32 timeSec,
+    in f32 invDt,
+    in b8 useBroadphase,
+    in usize workCount,
+    mut PhysicsWorld world,
+    mut Vector<FluidCandidateSample> outSamples
+){
+    outSamples.clear();
+    outSamples.resize(workCount);
+    mut SolverSet awakeSet = world.m_solverSets[s_AwakeSetIndex];
+    for(usize k = 0u; k < workCount; ++k){
+        usize localIdx = k;
+        if(useBroadphase)
+            localIdx = cast<usize>(world.m_cpuScratch.envCandidateBodies[k]);
+        mut BodySim sim = awakeSet.sims[localIdx];
+        in BodyState st = awakeSet.states[localIdx];
+        VectorSingle f(0.0f);
+        VectorSingle t(0.0f);
+        FluidSubmersionResult sub;
+        if(ComputeFluidBodyWrenchWithSubmersion(world, sim, st, fluid, surfNorm, grav, timeSec, invDt, f, t, sub)){
+            sim.setForce(sim.force() + f);
+            sim.setTorque(sim.torque() + t);
+            mut FluidCandidateSample cs = outSamples[k];
+            cs.bodyId = world.makeBodyId(sim.bodyId);
+            cs.submergedFraction = sub.submergedFraction;
+            cs.impactSpeed = SimdMax(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), surfNorm).x);
+            cs.cob = sub.centerOfBuoyancy;
+        }
+    }
 }
 
 void ApplyFluidVolumeRange(
@@ -958,6 +1543,142 @@ void ApplyFluidVolumeRange(
             sim.setTorque(sim.torque() + t);
         }
     }
+}
+
+void StepFluidVolumeWithEvents(
+    mut PhysicsWorld world,
+    in FluidVolume fluid,
+    in u32 fluidIndex,
+    in f32 timeSec,
+    in f32 dt,
+    in f32 splashThreshold,
+    mut Vector<FluidCandidateSample> scratchSamples,
+    mut Vector<FluidImmersionRecord> immersionState,
+    mut Vector<FluidSplashEvent> outEvents
+){
+    if(dt <= 0.0f)
+        return;
+    const VectorSingle surfNorm = fluid.normalizedSurfaceNormal();
+    if(!fluid.enabled){
+        scratchSamples.clear();
+        ReconcileFluidImmersionRecords(fluid, surfNorm, fluidIndex, splashThreshold, Span<FluidCandidateSample>(), immersionState, outEvents);
+        return;
+    }
+
+    world.flushDirtyBodyMasses();
+    const VectorSingle grav = world.gravity();
+    const f32 invDt = 1.0f / SimdMax(dt, 1.0e-4f);
+    Aabb3D queryBox;
+    const b8 useBroadphase = TryBuildFluidQueryAabb(fluid, surfNorm, queryBox);
+    usize workCount = 0u;
+    PrepareFluidEnvironmentCandidates(fluid, surfNorm, grav, timeSec, invDt, queryBox, useBroadphase, world, workCount);
+
+    scratchSamples.clear();
+    if(workCount > 0u)
+        ApplyFluidVolumeAndSampleRange(fluid, surfNorm, grav, timeSec, invDt, useBroadphase, workCount, world, scratchSamples);
+    AppendWokenFluidImmersionSamples(world, fluid, surfNorm, timeSec, scratchSamples);
+    ReconcileFluidImmersionRecords(
+        fluid,
+        surfNorm,
+        fluidIndex,
+        splashThreshold,
+        Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()),
+        immersionState,
+        outEvents
+    );
+}
+
+void StepFluidVolumeWithEventsWithScheduler(
+    mut PhysicsWorld world,
+    in FluidVolume fluid,
+    in u32 fluidIndex,
+    in f32 timeSec,
+    in f32 dt,
+    in f32 splashThreshold,
+    mut CpuTaskScheduler cpuScheduler,
+    mut Vector<FluidCandidateSample> scratchSamples,
+    mut Vector<FluidImmersionRecord> immersionState,
+    mut Vector<FluidSplashEvent> outEvents
+){
+    if(dt <= 0.0f)
+        return;
+    if(!cpuScheduler.isParallelEnabled() || !fluid.enabled){
+        StepFluidVolumeWithEvents(world, fluid, fluidIndex, timeSec, dt, splashThreshold, scratchSamples, immersionState, outEvents);
+        return;
+    }
+
+    world.flushDirtyBodyMasses();
+    const VectorSingle surfNorm = fluid.normalizedSurfaceNormal();
+    const VectorSingle grav = world.gravity();
+    const f32 invDt = 1.0f / SimdMax(dt, 1.0e-4f);
+    Aabb3D queryBox;
+    const b8 useBroadphase = TryBuildFluidQueryAabb(fluid, surfNorm, queryBox);
+    usize workCount = 0u;
+    PrepareFluidEnvironmentCandidates(fluid, surfNorm, grav, timeSec, invDt, queryBox, useBroadphase, world, workCount);
+
+    if(workCount < s_BuoyancyParallelThreshold){
+        scratchSamples.clear();
+        if(workCount > 0u)
+            ApplyFluidVolumeAndSampleRange(fluid, surfNorm, grav, timeSec, invDt, useBroadphase, workCount, world, scratchSamples);
+        AppendWokenFluidImmersionSamples(world, fluid, surfNorm, timeSec, scratchSamples);
+        ReconcileFluidImmersionRecords(
+            fluid,
+            surfNorm,
+            fluidIndex,
+            splashThreshold,
+            Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()),
+            immersionState,
+            outEvents
+        );
+        return;
+    }
+
+    scratchSamples.clear();
+    scratchSamples.resize(workCount);
+    in PhysicsWorld worldRef = world;
+    in FluidVolume fluidRef = fluid;
+    in Vector<BodyState> awakeStates = world.m_solverSets[s_AwakeSetIndex].states;
+    mut Vector<BodySim> awakeSimsMut = world.m_solverSets[s_AwakeSetIndex].sims;
+    in Vector<u32> candRef = world.m_cpuScratch.envCandidateBodies;
+    mut Vector<FluidCandidateSample> samplesMut = scratchSamples;
+    const auto res = cpuScheduler.parallelFor(
+        0u,
+        workCount,
+        16u,
+        lambda[in worldRef, in awakeStates, in fluidRef, in candRef, in useBroadphase, in surfNorm, in grav, in timeSec, in invDt, mut awakeSimsMut, mut samplesMut](in usize k) -> void{
+            usize localIdx = k;
+            if(useBroadphase)
+                localIdx = cast<usize>(candRef[k]);
+            mut BodySim sim = awakeSimsMut[localIdx];
+            in BodyState st = awakeStates[localIdx];
+            VectorSingle f(0.0f);
+            VectorSingle t(0.0f);
+            FluidSubmersionResult sub;
+            if(ComputeFluidBodyWrenchWithSubmersion(worldRef, sim, st, fluidRef, surfNorm, grav, timeSec, invDt, f, t, sub)){
+                sim.setForce(sim.force() + f);
+                sim.setTorque(sim.torque() + t);
+                mut FluidCandidateSample cs = samplesMut[k];
+                cs.bodyId = worldRef.makeBodyId(sim.bodyId);
+                cs.submergedFraction = sub.submergedFraction;
+                cs.impactSpeed = SimdMax(0.0f, -Vector3Dot(VectorSingle(st.linearVelocity), surfNorm).x);
+                cs.cob = sub.centerOfBuoyancy;
+            }
+        },
+        CpuTaskOptions()
+    );
+    if(!res.has_value()){
+        ApplyFluidVolumeAndSampleRange(fluid, surfNorm, grav, timeSec, invDt, useBroadphase, workCount, world, scratchSamples);
+    }
+    AppendWokenFluidImmersionSamples(world, fluid, surfNorm, timeSec, scratchSamples);
+    ReconcileFluidImmersionRecords(
+        fluid,
+        surfNorm,
+        fluidIndex,
+        splashThreshold,
+        Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()),
+        immersionState,
+        outEvents
+    );
 }
 
 void ApplyFluidVolume(mut PhysicsWorld world, in FluidVolume fluid, in f32 timeSec, in f32 dt){
@@ -1070,8 +1791,11 @@ void ApplyForceFieldRange(
             localIdx = cast<usize>(world.m_cpuScratch.envCandidateBodies[k]);
         mut BodySim sim = awakeSet.sims[localIdx];
         VectorSingle f(0.0f);
-        if(ComputeForceFieldBodyForceDirect(world, sim, awakeSet.states[localIdx], field, hoistedDir, timeSec, invDt, f))
+        VectorSingle t(0.0f);
+        if(ComputeForceFieldBodyForceDirect(world, sim, awakeSet.states[localIdx], field, hoistedDir, timeSec, invDt, f, t)){
             sim.setForce(sim.force() + f);
+            sim.setTorque(sim.torque() + t);
+        }
     }
 }
 
@@ -1131,8 +1855,11 @@ void ApplyForceFieldWithScheduler(mut PhysicsWorld world, in ForceField field, i
                 localIdx = cast<usize>(candRef[k]);
             mut BodySim sim = awakeSimsMut[localIdx];
             VectorSingle f(0.0f);
-            if(ComputeForceFieldBodyForceDirect(worldRef, sim, awakeStates[localIdx], fieldRef, hoistedDir, timeSec, invDt, f))
+            VectorSingle t(0.0f);
+            if(ComputeForceFieldBodyForceDirect(worldRef, sim, awakeStates[localIdx], fieldRef, hoistedDir, timeSec, invDt, f, t)){
                 sim.setForce(sim.force() + f);
+                sim.setTorque(sim.torque() + t);
+            }
         },
         CpuTaskOptions()
     );
@@ -1146,27 +1873,97 @@ class PhysicsEnvironment{
     public Vector<FluidVolume> fluids;
     public Vector<ForceField> forceFields;
     public f32 elapsedTimeSec = 0.0f;
+    public Vector<FluidSplashEvent> stepSplashEvents;
+    public f32 splashImpulseThreshold = 1.5f;
+    private Vector<FluidImmersionRecord> m_immersionState;
+    private Vector<FluidCandidateSample> m_scratchSamples;
+
+    public void resetTracking(){
+        this.m_immersionState.clear();
+        this.stepSplashEvents.clear();
+    }
+
+    public Span<FluidImmersionRecord> activeImmersions()const{
+        return this.m_immersionState;
+    }
+
+    private void pruneRemovedFluidImmersions(){
+        if(this.m_immersionState.empty())
+            return;
+        const u32 activeFluidCount = cast<u32>(this.fluids.size());
+        usize writeIdx = 0u;
+        for(usize i = 0u; i < this.m_immersionState.size(); ++i){
+            in FluidImmersionRecord rec = this.m_immersionState[i];
+            if(rec.fluidIndex >= activeFluidCount){
+                FluidSplashEvent exitEv;
+                exitEv.type = FluidSplashEventType::ExitedFluid;
+                exitEv.bodyId = rec.bodyId;
+                exitEv.fluidIndex = rec.fluidIndex;
+                exitEv.submergedFraction = 0.0f;
+                exitEv.impactSpeed = 0.0f;
+                exitEv.point = rec.lastPoint;
+                exitEv.normal = rec.lastNormal;
+                this.stepSplashEvents.push_back(exitEv);
+                continue;
+            }
+            if(writeIdx != i)
+                this.m_immersionState[writeIdx] = rec;
+            ++writeIdx;
+        }
+        this.m_immersionState.resize(writeIdx);
+    }
 
     public void step(mut PhysicsWorld world, in f32 dt){
+        this.stepSplashEvents.clear();
         if(dt <= 0.0f)
             return;
         this.elapsedTimeSec += dt;
-        if(this.fluids.empty() && this.forceFields.empty())
+        if(this.fluids.empty() && this.forceFields.empty()){
+            this.pruneRemovedFluidImmersions();
             return;
-        for(usize i = 0u; i < this.fluids.size(); ++i)
-            ApplyFluidVolume(world, this.fluids[i], this.elapsedTimeSec, dt);
+        }
+        for(usize i = 0u; i < this.fluids.size(); ++i){
+            StepFluidVolumeWithEvents(
+                world,
+                this.fluids[i],
+                cast<u32>(i),
+                this.elapsedTimeSec,
+                dt,
+                this.splashImpulseThreshold,
+                this.m_scratchSamples,
+                this.m_immersionState,
+                this.stepSplashEvents
+            );
+        }
+        this.pruneRemovedFluidImmersions();
         for(usize i = 0u; i < this.forceFields.size(); ++i)
             ApplyForceField(world, this.forceFields[i], this.elapsedTimeSec, dt);
     }
 
     public void stepWithScheduler(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
+        this.stepSplashEvents.clear();
         if(dt <= 0.0f)
             return;
         this.elapsedTimeSec += dt;
-        if(this.fluids.empty() && this.forceFields.empty())
+        if(this.fluids.empty() && this.forceFields.empty()){
+            this.pruneRemovedFluidImmersions();
             return;
-        for(usize i = 0u; i < this.fluids.size(); ++i)
-            ApplyFluidVolumeWithScheduler(world, this.fluids[i], this.elapsedTimeSec, dt, cpuScheduler);
+        }
+        for(usize i = 0u; i < this.fluids.size(); ++i){
+            StepFluidVolumeWithEventsWithScheduler(
+                world,
+                this.fluids[i],
+                cast<u32>(i),
+                this.elapsedTimeSec,
+                dt,
+                this.splashImpulseThreshold,
+                cpuScheduler,
+                this.m_scratchSamples,
+                this.m_immersionState,
+                this.stepSplashEvents
+            );
+        }
+        this.pruneRemovedFluidImmersions();
         for(usize i = 0u; i < this.forceFields.size(); ++i)
             ApplyForceFieldWithScheduler(world, this.forceFields[i], this.elapsedTimeSec, dt, cpuScheduler);
     }

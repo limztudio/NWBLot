@@ -24,8 +24,8 @@ TextInputAdmission::Enum QueuedTextInputService::emitCommit(const TextInputSessi
     return admitEvent(token, TextInputEventKind::Commit, text, 0u, 0u, 0u, 0u, true);
 }
 
-TextInputAdmission::Enum QueuedTextInputService::emitPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const b8 caretVisible){
-    return admitEvent(token, TextInputEventKind::Preedit, text, anchorByte, caretByte, 0u, 0u, caretVisible);
+TextInputAdmission::Enum QueuedTextInputService::emitPreedit(const TextInputSessionToken token, const AStringView text, const usize anchorByte, const usize caretByte, const b8 caretVisible, const Span<const TextInputPreeditClause> clauses){
+    return admitEvent(token, TextInputEventKind::Preedit, text, anchorByte, caretByte, 0u, 0u, caretVisible, TextInputDeletionBasis::Caret, clauses);
 }
 
 TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(const TextInputSessionToken token, const usize beforeBytes, const usize afterBytes, const u64 revision, const TextInputDeletionBasis::Enum basis){
@@ -80,7 +80,8 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     const usize beforeBytes,
     const usize afterBytes,
     const b8 caretVisible,
-    const TextInputDeletionBasis::Enum basis
+    const TextInputDeletionBasis::Enum basis,
+    const Span<const TextInputPreeditClause> clauses
 ){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
@@ -92,6 +93,16 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     if(kind == TextInputEventKind::Preedit){
         if(!IsUtf8ScalarBoundary(text, anchorByte) || !IsUtf8ScalarBoundary(text, caretByte))
             return TextInputAdmission::InvalidRange;
+        usize prevClauseEnd = 0u;
+        for(const TextInputPreeditClause& clause : clauses){
+            if(clause.beginByte >= clause.endByte || clause.endByte > text.size() || clause.beginByte < prevClauseEnd)
+                return TextInputAdmission::InvalidRange;
+            if(!IsUtf8ScalarBoundary(text, clause.beginByte) || !IsUtf8ScalarBoundary(text, clause.endByte))
+                return TextInputAdmission::InvalidRange;
+            if(static_cast<u8>(clause.style) >= static_cast<u8>(TextInputPreeditClauseStyle::kCount))
+                return TextInputAdmission::InvalidRange;
+            prevClauseEnd = clause.endByte;
+        }
     }
     else if(kind == TextInputEventKind::Commit && text.empty())
         return TextInputAdmission::Accepted;
@@ -108,7 +119,14 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
         if(!replace)
             m_events.pop_back();
     });
+    if(kind == TextInputEventKind::Preedit && !clauses.empty())
+        event.preeditClauses.reserve(clauses.size());
     event.text.assign(text.data(), text.size());
+    event.preeditClauses.clear();
+    if(kind == TextInputEventKind::Preedit){
+        for(const TextInputPreeditClause& clause : clauses)
+            event.preeditClauses.push_back(clause);
+    }
     event.token = token;
     event.sequence = m_nextSequence;
     AdvanceNonWrappingRevision(m_nextSequence);
@@ -147,4 +165,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

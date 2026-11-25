@@ -1286,6 +1286,30 @@ void VerifyEditModelTests_AllocationFailurePreservesModelState(){
     EXPECT_TRUE(EditModelUnwindCases());
 }
 
+void VerifyUiEditModelTests_LineRangeAtCoversSingleLineMultilineMiddleEmptyAndInvalidOffsets(mut UiEditModelTests self){
+    ASSERT_TRUE(self.m_model.setText("ab cd"));
+    const Expected<EditWordRange> single = self.m_model.lineRangeAt(2u);
+    ASSERT_TRUE(single.has_value());
+    EXPECT_EQ(single.value().begin, 0u);
+    EXPECT_EQ(single.value().end, 5u);
+
+    EditModel multi = EditModel(EditLimits(), EditTextMode::Multiline);
+    ASSERT_TRUE(multi.setText("one\n\ntwo three"));
+    const Expected<EditWordRange> line0 = multi.lineRangeAt(3u);
+    ASSERT_TRUE(line0.has_value());
+    EXPECT_EQ(line0.value().begin, 0u);
+    EXPECT_EQ(line0.value().end, 3u);
+    const Expected<EditWordRange> emptyLine = multi.lineRangeAt(4u);
+    ASSERT_TRUE(emptyLine.has_value());
+    EXPECT_EQ(emptyLine.value().begin, 4u);
+    EXPECT_EQ(emptyLine.value().end, 4u);
+    const Expected<EditWordRange> line2 = multi.lineRangeAt(8u);
+    ASSERT_TRUE(line2.has_value());
+    EXPECT_EQ(line2.value().begin, 5u);
+    EXPECT_EQ(line2.value().end, 14u);
+    EXPECT_FALSE(multi.lineRangeAt(99u).has_value());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1367,6 +1391,7 @@ NWB_ADHD_GTEST_F(FloatModelTests, ExtremeSubnormalAndAdjacentUlpValuesRoundtripW
 NWB_ADHD_GTEST_F(FloatModelTests, ExternalFiniteValueCanRemainOutsideUserBounds, VerifyFloatModelTests_ExternalFiniteValueCanRemainOutsideUserBounds)
 
 NWB_ADHD_GTEST(EditModelTests, AllocationFailurePreservesModelState, VerifyEditModelTests_AllocationFailurePreservesModelState)
+NWB_ADHD_GTEST_F(UiEditModelTests, LineRangeAtCoversSingleLineMultilineMiddleEmptyAndInvalidOffsets, VerifyUiEditModelTests_LineRangeAtCoversSingleLineMultilineMiddleEmptyAndInvalidOffsets)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

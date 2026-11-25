@@ -1,0 +1,713 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/assets_physics/volume_entry.adhd>
+#include <tests/common/capturing_logger.adhd>
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/test_context.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void AppendBe16Bytes(mut Vector<u8> dst, in u16 val){
+    dst.push_back(cast<u8>((val >> 8u) & 0xFFu));
+    dst.push_back(cast<u8>(val & 0xFFu));
+}
+
+void AppendLe16Bytes(mut Vector<u8> dst, in u16 val){
+    dst.push_back(cast<u8>(val & 0xFFu));
+    dst.push_back(cast<u8>((val >> 8u) & 0xFFu));
+}
+
+void AppendBe32Bytes(mut Vector<u8> dst, in u32 val){
+    dst.push_back(cast<u8>((val >> 24u) & 0xFFu));
+    dst.push_back(cast<u8>((val >> 16u) & 0xFFu));
+    dst.push_back(cast<u8>((val >> 8u) & 0xFFu));
+    dst.push_back(cast<u8>(val & 0xFFu));
+}
+
+void AppendLe32Bytes(mut Vector<u8> dst, in u32 val){
+    dst.push_back(cast<u8>(val & 0xFFu));
+    dst.push_back(cast<u8>((val >> 8u) & 0xFFu));
+    dst.push_back(cast<u8>((val >> 16u) & 0xFFu));
+    dst.push_back(cast<u8>((val >> 24u) & 0xFFu));
+}
+
+void AppendLeF32Bytes(mut Vector<u8> dst, in f32 val){
+    AppendLe32Bytes(dst, bit_cast<u32>(val));
+}
+
+u32 ComputeCrc32Bytes(in Span<u8> data){
+    u32 crc = 0xFFFFFFFFu;
+    for(usize i = 0u; i < data.size(); ++i){
+        crc ^= cast<u32>(data[i]);
+        for(u32 b = 0u; b < 8u; ++b){
+            if((crc & 1u) != 0u)
+                crc = (crc >> 1u) ^ 0xEDB88320u;
+            else
+                crc >>= 1u;
+        }
+    }
+    return crc ^ 0xFFFFFFFFu;
+}
+
+u32 ComputeAdler32Bytes(in Span<u8> data){
+    u32 s1 = 1u;
+    u32 s2 = 0u;
+    for(usize i = 0u; i < data.size(); ++i){
+        s1 = (s1 + cast<u32>(data[i])) % 65521u;
+        s2 = (s2 + s1) % 65521u;
+    }
+    return (s2 << 16u) | s1;
+}
+
+void AppendPngChunkBytes(mut Vector<u8> out, in StringView chunkTag, in Span<u8> payload){
+    AppendBe32Bytes(out, cast<u32>(payload.size()));
+    Vector<u8> crcBuf;
+    crcBuf.reserve(4u + payload.size());
+    for(usize i = 0u; i < 4u; ++i)
+        crcBuf.push_back(cast<u8>(chunkTag[i]));
+    for(usize i = 0u; i < payload.size(); ++i)
+        crcBuf.push_back(payload[i]);
+    for(usize i = 0u; i < crcBuf.size(); ++i)
+        out.push_back(crcBuf[i]);
+    AppendBe32Bytes(out, ComputeCrc32Bytes(Span<u8>(crcBuf.data(), crcBuf.size())));
+}
+
+b8 WriteTestGray16Png(in Path filePath, in u32 width, in u32 height, in Span<u16> pixels){
+    if(pixels.size() != cast<usize>(width) * cast<usize>(height))
+        return false;
+    Vector<u8> png;
+    png.push_back(0x89u);
+    png.push_back(0x50u);
+    png.push_back(0x4Eu);
+    png.push_back(0x47u);
+    png.push_back(0x0Du);
+    png.push_back(0x0Au);
+    png.push_back(0x1Au);
+    png.push_back(0x0Au);
+
+    Vector<u8> ihdr;
+    AppendBe32Bytes(ihdr, width);
+    AppendBe32Bytes(ihdr, height);
+    ihdr.push_back(16u);
+    ihdr.push_back(0u);
+    ihdr.push_back(0u);
+    ihdr.push_back(0u);
+    ihdr.push_back(0u);
+    AppendPngChunkBytes(png, "IHDR", Span<u8>(ihdr.data(), ihdr.size()));
+
+    Vector<u8> rawScanlines;
+    rawScanlines.reserve(cast<usize>(height) * (1u + cast<usize>(width) * 2u));
+    for(u32 y = 0u; y < height; ++y){
+        rawScanlines.push_back(0u);
+        for(u32 x = 0u; x < width; ++x)
+            AppendBe16Bytes(rawScanlines, pixels[cast<usize>(y) * cast<usize>(width) + cast<usize>(x)]);
+    }
+
+    const u16 rawLen = cast<u16>(rawScanlines.size());
+    const u16 invRawLen = rawLen ^ 0xFFFFu;
+    Vector<u8> idat;
+    idat.push_back(0x78u);
+    idat.push_back(0x01u);
+    idat.push_back(0x01u);
+    AppendLe16Bytes(idat, rawLen);
+    AppendLe16Bytes(idat, invRawLen);
+    for(usize i = 0u; i < rawScanlines.size(); ++i)
+        idat.push_back(rawScanlines[i]);
+    AppendBe32Bytes(idat, ComputeAdler32Bytes(Span<u8>(rawScanlines.data(), rawScanlines.size())));
+    AppendPngChunkBytes(png, "IDAT", Span<u8>(idat.data(), idat.size()));
+
+    Vector<u8> empty;
+    AppendPngChunkBytes(png, "IEND", Span<u8>(empty.data(), 0u));
+    return WriteBinaryFile(filePath, png);
+}
+
+b8 WriteTestTetrahedronGlb(in Path filePath){
+    const StringView jsonRaw =
+        "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":72}],\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":48},{\"buffer\":0,\"byteOffset\":48,\"byteLength\":24}],\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":4,\"type\":\"VEC3\"},{\"bufferView\":1,\"componentType\":5123,\"count\":12,\"type\":\"SCALAR\"}],\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"indices\":1}]}]}";
+    usize jsonLen = jsonRaw.size();
+    while((jsonLen % 4u) != 0u)
+        ++jsonLen;
+
+    const u32 binLen = 72u;
+    const u32 totalLen = 12u + 8u + cast<u32>(jsonLen) + 8u + binLen;
+
+    Vector<u8> glb;
+    glb.reserve(totalLen);
+    AppendLe32Bytes(glb, 0x46546C67u);
+    AppendLe32Bytes(glb, 2u);
+    AppendLe32Bytes(glb, totalLen);
+
+    AppendLe32Bytes(glb, cast<u32>(jsonLen));
+    AppendLe32Bytes(glb, 0x4E4F534Au);
+    for(usize i = 0u; i < jsonRaw.size(); ++i)
+        glb.push_back(cast<u8>(jsonRaw[i]));
+    for(usize i = jsonRaw.size(); i < jsonLen; ++i)
+        glb.push_back(cast<u8>(' '));
+
+    AppendLe32Bytes(glb, binLen);
+    AppendLe32Bytes(glb, 0x004E4942u);
+    AppendLeF32Bytes(glb, 0.0f); AppendLeF32Bytes(glb, 0.0f); AppendLeF32Bytes(glb, 0.0f);
+    AppendLeF32Bytes(glb, 2.0f); AppendLeF32Bytes(glb, 0.0f); AppendLeF32Bytes(glb, 0.0f);
+    AppendLeF32Bytes(glb, 0.0f); AppendLeF32Bytes(glb, 2.0f); AppendLeF32Bytes(glb, 0.0f);
+    AppendLeF32Bytes(glb, 0.0f); AppendLeF32Bytes(glb, 0.0f); AppendLeF32Bytes(glb, 2.0f);
+    AppendLe16Bytes(glb, 0u); AppendLe16Bytes(glb, 2u); AppendLe16Bytes(glb, 1u);
+    AppendLe16Bytes(glb, 0u); AppendLe16Bytes(glb, 1u); AppendLe16Bytes(glb, 3u);
+    AppendLe16Bytes(glb, 1u); AppendLe16Bytes(glb, 2u); AppendLe16Bytes(glb, 3u);
+    AppendLe16Bytes(glb, 2u); AppendLe16Bytes(glb, 0u); AppendLe16Bytes(glb, 3u);
+    return WriteBinaryFile(filePath, glb);
+}
+
+b8 ParseAssetValueFromScript(
+    in StringView scriptText,
+    mut HeapStorage testArena,
+    mut MetascriptDocument outDoc,
+    mut MetascriptValue outValue
+){
+    if(!outDoc.parse(scriptText))
+        return false;
+    const Optional<in MetascriptValue> optVal = outDoc.borrowVariable("asset");
+    if(!optVal.has_value())
+        return false;
+    outValue = MetascriptValue(optVal.value());
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_TestArena);
+    const Path metaFile("tests/physics/cook_diag.nwb");
+    const Name vPath("tests/physics/diag_comp");
+
+    {
+        Vector<StringView> badVehicleScripts;
+        badVehicleScripts.push_back("vehicle_component asset; asset.wheels = [1];");
+        badVehicleScripts.push_back("vehicle_component asset; asset.torque_curve_points = [1];");
+        for(usize i = 0u; i < badVehicleScripts.size(); ++i){
+            MetascriptDocument doc(testArena);
+            MetascriptValue val(testArena);
+            ASSERT_TRUE(ParseAssetValueFromScript(badVehicleScripts[i], testArena, doc, val));
+            const u32 beforeErr = logger.errorCount();
+            EXPECT_FALSE(ParseVehicleComponentCookMetadata(vPath, metaFile, val).has_value());
+            EXPECT_GT(logger.errorCount(), beforeErr);
+        }
+
+        Vector<StringView> badRagdollScripts;
+        badRagdollScripts.push_back("ragdoll_component asset; asset.bones = [1];");
+        badRagdollScripts.push_back("ragdoll_component asset; asset.bones = [{ \"extra_shapes\": [1] }];");
+        badRagdollScripts.push_back("ragdoll_component asset; asset.bones = [{ \"six_dof_axes\": [1] }];");
+        badRagdollScripts.push_back("ragdoll_component asset; asset.bones = [{ \"six_dof_axes\": [{},{},{},{},{},{},{}] }];");
+        badRagdollScripts.push_back("ragdoll_component asset; asset.disabled_self_collision_pairs = [1];");
+        for(usize i = 0u; i < badRagdollScripts.size(); ++i){
+            MetascriptDocument doc(testArena);
+            MetascriptValue val(testArena);
+            ASSERT_TRUE(ParseAssetValueFromScript(badRagdollScripts[i], testArena, doc, val));
+            const u32 beforeErr = logger.errorCount();
+            EXPECT_FALSE(ParseRagdollComponentCookMetadata(vPath, metaFile, val).has_value());
+            EXPECT_GT(logger.errorCount(), beforeErr);
+        }
+
+        Vector<StringView> badArtScripts;
+        badArtScripts.push_back("articulation_component asset; asset.links = [1];");
+        badArtScripts.push_back("articulation_component asset; asset.mimic_constraints = [1];");
+        badArtScripts.push_back("articulation_component asset; asset.tendon_constraints = [1];");
+        badArtScripts.push_back("articulation_component asset; asset.loop_constraints = [1];");
+        for(usize i = 0u; i < badArtScripts.size(); ++i){
+            MetascriptDocument doc(testArena);
+            MetascriptValue val(testArena);
+            ASSERT_TRUE(ParseAssetValueFromScript(badArtScripts[i], testArena, doc, val));
+            const u32 beforeErr = logger.errorCount();
+            EXPECT_FALSE(ParseArticulationComponentCookMetadata(vPath, metaFile, val).has_value());
+            EXPECT_GT(logger.errorCount(), beforeErr);
+        }
+
+        Vector<StringView> badSbScripts;
+        badSbScripts.push_back("soft_body_component asset; asset.particles = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.distance_constraints = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.bending_constraints = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.dihedral_bending_constraints = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.volume_constraints = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.surface_triangles = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.attachments = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.backstop_constraints = [1];");
+        badSbScripts.push_back("soft_body_component asset; asset.goal_constraints = [1];");
+        for(usize i = 0u; i < badSbScripts.size(); ++i){
+            MetascriptDocument doc(testArena);
+            MetascriptValue val(testArena);
+            ASSERT_TRUE(ParseAssetValueFromScript(badSbScripts[i], testArena, doc, val));
+            const u32 beforeErr = logger.errorCount();
+            EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, val).has_value());
+            EXPECT_GT(logger.errorCount(), beforeErr);
+        }
+    }
+
+    {
+        const StringView colScriptA =
+            "collider_component asset;\nasset.shape_type = \"mesh\";\nasset.is_box = 0;\nasset.compound_hull_asset = \"project/physics/my_compound\";\nasset.vhacd_max_hulls = 12;\nasset.vhacd_max_recursion_depth = 5;\nasset.vhacd_concavity_threshold = 0.04;\nasset.vhacd_max_vertices_per_hull = 24;\nasset.vhacd_min_volume_ratio = 0.01;\nasset.vhacd_enable_arbitrary_planes = 0;\nasset.vhacd_enable_hull_merging = 0;\nasset.vhacd_merge_volume_tolerance = 0.12;\n";
+        MetascriptDocument docA(testArena);
+        MetascriptValue valA(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(colScriptA, testArena, docA, valA));
+        const auto colResA = ParseColliderComponentCookMetadata(vPath, metaFile, valA);
+        ASSERT_TRUE(colResA.has_value());
+        in ColliderComponent cA = colResA.value().component;
+        EXPECT_EQ(cA.compoundHullAsset.name(), Name("project/physics/my_compound"));
+        EXPECT_EQ(cA.vhacdMaxHulls, 12u);
+        EXPECT_EQ(cA.vhacdMaxRecursionDepth, 5u);
+        EXPECT_NEAR(cA.vhacdConcavityThreshold, 0.04f, 1.0e-5f);
+        EXPECT_EQ(cA.vhacdMaxVerticesPerHull, 24u);
+        EXPECT_NEAR(cA.vhacdMinVolumeRatio, 0.01f, 1.0e-5f);
+        EXPECT_FALSE(cA.vhacdEnableArbitraryPlanes);
+        EXPECT_FALSE(cA.vhacdEnableHullMerging);
+        EXPECT_NEAR(cA.vhacdMergeVolumeTolerance, 0.12f, 1.0e-5f);
+
+        const StringView colHfPairs =
+            "collider_component asset;\nasset.shape_type = \"heightfield\";\nasset.heightfield_rows = 3;\nasset.heightfield_cols = 3;\nasset.heightfield_heights = [0,0,0,0,0,0,0,0,0];\nasset.heightfield_flip_diagonal = 1;\nasset.heightfield_cell_holes = [[1, 0]];\n";
+        MetascriptDocument docHfP(testArena);
+        MetascriptValue valHfP(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(colHfPairs, testArena, docHfP, valHfP));
+        const auto colHfPRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfP);
+        ASSERT_TRUE(colHfPRes.has_value());
+        EXPECT_TRUE(colHfPRes.value().component.heightfieldFlipDiagonal);
+        ASSERT_EQ(colHfPRes.value().component.heightfieldCellHoles.size(), cast<usize>(1u));
+        EXPECT_EQ(colHfPRes.value().component.heightfieldCellHoles[0u], 0x02u);
+
+        const StringView colHfFlat =
+            "collider_component asset;\nasset.shape_type = \"heightfield\";\nasset.heightfield_rows = 3;\nasset.heightfield_cols = 3;\nasset.heightfield_heights = [0,0,0,0,0,0,0,0,0];\nasset.heightfield_cell_holes = [0, 1, 0, 1];\n";
+        MetascriptDocument docHfF(testArena);
+        MetascriptValue valHfF(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(colHfFlat, testArena, docHfF, valHfF));
+        const auto colHfFRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfF);
+        ASSERT_TRUE(colHfFRes.has_value());
+        ASSERT_EQ(colHfFRes.value().component.heightfieldCellHoles.size(), cast<usize>(1u));
+        EXPECT_EQ(colHfFRes.value().component.heightfieldCellHoles[0u], 0x0Au);
+
+        const StringView jointScript =
+            "joint_component asset;\nasset.type = \"six_dof\";\nasset.enable_twist_limit = 1;\nasset.enable_slerp_drive = 1;\nasset.target_orientation_euler_degrees = [0.0, 90.0, 0.0];\nasset.slerp_hertz = 6.5;\nasset.slerp_damping_ratio = 0.85;\nasset.slerp_max_torque = 120.0;\nasset.six_dof_swing_limit_mode = \"cone\";\nasset.six_dof_swing_limit_y = 0.6;\nasset.six_dof_swing_limit_z = 0.45;\n";
+        MetascriptDocument docJ(testArena);
+        MetascriptValue valJ(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(jointScript, testArena, docJ, valJ));
+        const auto jRes = ParseJointComponentCookMetadata(vPath, metaFile, valJ);
+        ASSERT_TRUE(jRes.has_value());
+        in JointComponent jOut = jRes.value().component;
+        EXPECT_TRUE(jOut.enableTwistLimit);
+        EXPECT_TRUE(jOut.enableSlerpDrive);
+        EXPECT_NEAR(jOut.targetOrientation.y, 0.70710678f, 1.0e-4f);
+        EXPECT_NEAR(jOut.targetOrientation.w, 0.70710678f, 1.0e-4f);
+        EXPECT_NEAR(jOut.slerpHertz, 6.5f, 1.0e-5f);
+        EXPECT_NEAR(jOut.slerpDampingRatio, 0.85f, 1.0e-5f);
+        EXPECT_NEAR(jOut.slerpMaxTorque, 120.0f, 1.0e-5f);
+        EXPECT_EQ(cast<u8>(jOut.sixDofSwingLimitMode), cast<u8>(SixDofSwingLimitMode::Cone));
+        EXPECT_NEAR(jOut.sixDofSwingLimitY, 0.6f, 1.0e-5f);
+        EXPECT_NEAR(jOut.sixDofSwingLimitZ, 0.45f, 1.0e-5f);
+    }
+
+    {
+        const StringView ccScript = "character_controller_component asset; asset.collision_layer = \"layer_cc\";";
+        MetascriptDocument docCc(testArena); MetascriptValue valCc(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(ccScript, testArena, docCc, valCc));
+        const auto ccRes = ParseCharacterControllerComponentCookMetadata(vPath, metaFile, valCc);
+        ASSERT_TRUE(ccRes.has_value());
+        EXPECT_EQ(ccRes.value().component.collisionLayer, Name("layer_cc"));
+
+        const StringView fvScript = "fluid_volume_component asset; asset.collision_layer = \"layer_fv\";";
+        MetascriptDocument docFv(testArena); MetascriptValue valFv(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(fvScript, testArena, docFv, valFv));
+        const auto fvRes = ParseFluidVolumeComponentCookMetadata(vPath, metaFile, valFv);
+        ASSERT_TRUE(fvRes.has_value());
+        EXPECT_EQ(fvRes.value().component.collisionLayer, Name("layer_fv"));
+
+        const StringView ffScript = "force_field_component asset; asset.collision_layer = \"layer_ff\";";
+        MetascriptDocument docFf(testArena); MetascriptValue valFf(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(ffScript, testArena, docFf, valFf));
+        const auto ffRes = ParseForceFieldComponentCookMetadata(vPath, metaFile, valFf);
+        ASSERT_TRUE(ffRes.has_value());
+        EXPECT_EQ(ffRes.value().component.collisionLayer, Name("layer_ff"));
+
+        const StringView vehScript =
+            "vehicle_component asset;\nasset.collision_layer = \"layer_veh\";\nasset.center_differential_mode = \"locked\";\nasset.axle_differential_mode = \"open\";\nasset.torque_curve_points = [[1000.0, 220.0], [4500.0, 410.0]];\nasset.wheels = [{ \"anti_roll_pair_index\": 1 }, { \"anti_roll_pair_index\": 0 }];\n";
+        MetascriptDocument docVeh(testArena); MetascriptValue valVeh(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(vehScript, testArena, docVeh, valVeh));
+        const auto vehRes = ParseVehicleComponentCookMetadata(vPath, metaFile, valVeh);
+        ASSERT_TRUE(vehRes.has_value());
+        EXPECT_EQ(vehRes.value().component.collisionLayer, Name("layer_veh"));
+        EXPECT_EQ(cast<u8>(vehRes.value().component.engine.centerDifferentialMode), cast<u8>(VehicleDifferentialMode::Locked));
+        EXPECT_EQ(cast<u8>(vehRes.value().component.engine.axleDifferentialMode), cast<u8>(VehicleDifferentialMode::Open));
+        ASSERT_EQ(vehRes.value().component.engine.torqueCurvePoints.size(), cast<usize>(2u));
+        EXPECT_NEAR(vehRes.value().component.engine.torqueCurvePoints[1u].y, 410.0f, 1.0e-5f);
+
+        const StringView ragScript =
+            "ragdoll_component asset;\nasset.collision_layer = \"layer_rag\";\nasset.bones = [\n  {\n    \"shape_type\": \"sphere\",\n    \"sphere\": { \"center\": [0.0, 0.0, 0.0], \"radius\": 0.3 },\n    \"extra_shapes\": [{ \"shape_type\": \"box\", \"box_half_extents\": [0.1, 0.2, 0.1], \"local_offset\": [0.1, 0.0, 0.0] }]\n  },\n  {\n    \"parent_index\": 0,\n    \"shape_type\": \"hull\",\n    \"hull_vertices\": [[0.0, 0.0, 0.0], [0.2, 0.0, 0.0], [0.0, 0.2, 0.0], [0.0, 0.0, 0.2]]\n  }\n];\nasset.disabled_self_collision_pairs = [[0, 1]];\n";
+        MetascriptDocument docRag(testArena); MetascriptValue valRag(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(ragScript, testArena, docRag, valRag));
+        const auto ragRes = ParseRagdollComponentCookMetadata(vPath, metaFile, valRag);
+        ASSERT_TRUE(ragRes.has_value());
+        EXPECT_EQ(ragRes.value().component.collisionLayer, Name("layer_rag"));
+        ASSERT_EQ(ragRes.value().component.bones.size(), cast<usize>(2u));
+        EXPECT_EQ(cast<u8>(ragRes.value().component.bones[0u].shapeType), cast<u8>(RagdollBoneShapeType::Sphere));
+        ASSERT_EQ(ragRes.value().component.bones[0u].extraShapes.size(), cast<usize>(1u));
+        EXPECT_EQ(cast<u8>(ragRes.value().component.bones[1u].shapeType), cast<u8>(RagdollBoneShapeType::Hull));
+        EXPECT_EQ(ragRes.value().component.bones[1u].hullVertices.size(), cast<usize>(4u));
+        ASSERT_EQ(ragRes.value().component.disabledSelfCollisionPairs.size(), cast<usize>(1u));
+
+        const StringView artScript =
+            "articulation_component asset;\nasset.collision_layer = \"layer_art\";\nasset.links = [\n  { \"joint_type\": \"fixed\", \"use_full_inertia_tensor\": 1, \"inertia_tensor\": [0.2, 0.01, 0.02, 0.3, 0.03, 0.4] },\n  { \"parent_index\": 0, \"joint_type\": \"universal\", \"joint_axis_local\": [1.0, 0.0, 0.0], \"joint_axis_secondary_local\": [0.0, 1.0, 0.0] },\n  { \"parent_index\": 1, \"joint_type\": \"spherical\" }\n];\nasset.mimic_constraints = [{ \"link_index\": 1, \"dof_index\": 0, \"target_link_index\": 2, \"target_dof_index\": 0, \"gear_ratio\": 0.5 }];\nasset.tendon_constraints = [{ \"link_indices\": [1, 2], \"dof_indices\": [0, 0], \"coefficients\": [1.0, -1.0] }];\nasset.loop_constraints = [{ \"link_index_a\": 0, \"link_index_b\": 2, \"lock_orientation\": 1 }];\n";
+        MetascriptDocument docArt(testArena); MetascriptValue valArt(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(artScript, testArena, docArt, valArt));
+        const auto artRes = ParseArticulationComponentCookMetadata(vPath, metaFile, valArt);
+        ASSERT_TRUE(artRes.has_value());
+        EXPECT_EQ(artRes.value().component.collisionLayer, Name("layer_art"));
+        ASSERT_EQ(artRes.value().component.links.size(), cast<usize>(3u));
+        EXPECT_TRUE(artRes.value().component.links[0u].useFullInertiaTensor);
+        EXPECT_NEAR(artRes.value().component.links[0u].inertiaTensor.m02, 0.02f, 1.0e-5f);
+        EXPECT_EQ(cast<u8>(artRes.value().component.links[1u].jointType), cast<u8>(ArticulationJointType::Universal));
+        EXPECT_EQ(cast<u8>(artRes.value().component.links[2u].jointType), cast<u8>(ArticulationJointType::Spherical));
+        ASSERT_EQ(artRes.value().component.mimicConstraints.size(), cast<usize>(1u));
+        ASSERT_EQ(artRes.value().component.tendonConstraints.size(), cast<usize>(1u));
+        ASSERT_EQ(artRes.value().component.loopConstraints.size(), cast<usize>(1u));
+
+        const StringView sbManualScript =
+            "soft_body_component asset;\nasset.collision_layer = \"layer_sb\";\nasset.particles = [{ \"position\": [0.0, 0.0, 0.0] }, { \"position\": [1.0, 0.0, 0.0] }, { \"position\": [0.0, 1.0, 0.0] }, { \"position\": [0.0, 0.0, 1.0] }];\nasset.dihedral_bending_constraints = [{ \"p0\": 0, \"p1\": 1, \"p2\": 2, \"p3\": 3, \"rest_angle\": 0.25 }];\nasset.goal_constraints = [{ \"particle_index\": 0, \"target_position\": [1.0, 2.0, 3.0], \"stiffness\": 0.75 }];\nasset.volume_constraints = [{\n  \"p0\": 0, \"p1\": 1, \"p2\": 2, \"p3\": 3, \"rest_volume\": 1.0,\n  \"youngs_modulus\": 5000.0, \"poissons_ratio\": 0.35,\n  \"plastic_yield\": 0.05, \"plastic_creep\": 0.2, \"plastic_max_strain\": 0.6,\n  \"rest_col0\": [1.0, 0.0, 0.0], \"rest_col1\": [0.0, 1.0, 0.0], \"rest_col2\": [0.0, 0.0, 1.0]\n}];\n";
+        MetascriptDocument docSbM(testArena); MetascriptValue valSbM(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(sbManualScript, testArena, docSbM, valSbM));
+        const auto sbMRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, valSbM);
+        ASSERT_TRUE(sbMRes.has_value());
+        EXPECT_EQ(sbMRes.value().component.collisionLayer, Name("layer_sb"));
+        ASSERT_EQ(sbMRes.value().component.softBody.dihedralBendingConstraints.size(), cast<usize>(1u));
+        ASSERT_EQ(sbMRes.value().component.softBody.goalConstraints.size(), cast<usize>(1u));
+        ASSERT_EQ(sbMRes.value().component.softBody.volumeConstraints.size(), cast<usize>(1u));
+        EXPECT_NEAR(sbMRes.value().component.softBody.volumeConstraints[0u].plasticYield, 0.05f, 1.0e-5f);
+        EXPECT_NEAR(sbMRes.value().component.softBody.volumeConstraints[0u].restCol2.z, 1.0f, 1.0e-5f);
+
+        const StringView clothScript =
+            "soft_body_component asset;\nasset.damping = 0.12;\nasset.lift_coeff = 0.45;\nasset.cloth_grid = {\n  \"rows\": 3, \"cols\": 3, \"spacing\": 0.5,\n  \"origin\": [0.0, 2.0, 0.0], \"fixed_particles\": [0, 2]\n};\n";
+        MetascriptDocument docCloth(testArena); MetascriptValue valCloth(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(clothScript, testArena, docCloth, valCloth));
+        const auto clothRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, valCloth);
+        ASSERT_TRUE(clothRes.has_value());
+        in SoftBody clothSb = clothRes.value().component.softBody;
+        EXPECT_EQ(clothSb.particles.size(), cast<usize>(9u));
+        EXPECT_FALSE(clothSb.distanceConstraints.empty());
+        EXPECT_FALSE(clothSb.surfaceTriangles.empty());
+        EXPECT_TRUE(clothSb.particles[0u].isFixed);
+        EXPECT_TRUE(clothSb.particles[2u].isFixed);
+        EXPECT_NEAR(clothSb.damping, 0.12f, 1.0e-5f);
+        EXPECT_NEAR(clothSb.liftCoeff, 0.45f, 1.0e-5f);
+
+        const StringView tetraScript =
+            "soft_body_component asset;\nasset.damping = 0.08;\nasset.tetrahedral_box = { \"center\": [0.0, 1.0, 0.0], \"half_extents\": [0.5, 0.5, 0.5], \"fixed_particles\": [0] };\n";
+        MetascriptDocument docTetra(testArena); MetascriptValue valTetra(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(tetraScript, testArena, docTetra, valTetra));
+        const auto tetraRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, valTetra);
+        ASSERT_TRUE(tetraRes.has_value());
+        in SoftBody tetraSb = tetraRes.value().component.softBody;
+        EXPECT_EQ(tetraSb.particles.size(), cast<usize>(8u));
+        EXPECT_FALSE(tetraSb.volumeConstraints.empty());
+        EXPECT_TRUE(tetraSb.particles[0u].isFixed);
+        EXPECT_NEAR(tetraSb.damping, 0.08f, 1.0e-5f);
+
+        const StringView badCombo1 = "soft_body_component asset; asset.particles = [{ \"position\": [0.0, 0.0, 0.0] }]; asset.cloth_grid = { \"rows\": 2, \"cols\": 2 };";
+        MetascriptDocument docBc1(testArena); MetascriptValue valBc1(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(badCombo1, testArena, docBc1, valBc1));
+        EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, valBc1).has_value());
+
+        const StringView badCombo2 = "soft_body_component asset; asset.cloth_grid = { \"rows\": 2, \"cols\": 2 }; asset.tetrahedral_box = { \"half_extents\": [0.5, 0.5, 0.5] };";
+        MetascriptDocument docBc2(testArena); MetascriptValue valBc2(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(badCombo2, testArena, docBc2, valBc2));
+        EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, valBc2).has_value());
+    }
+
+    {
+        const StringView col4B =
+            "collider_component asset;\nasset.shape_type = \"hull\";\nasset.is_box = 0;\nasset.sync_csg_cuts = 1;\nasset.use_mesh_component_fallback = 1;\nasset.extra_shapes = [{ \"shape_type\": \"mesh\", \"is_box\": 0, \"sync_csg_cuts\": 1, \"use_mesh_component_fallback\": 1 }];\n";
+        MetascriptDocument docCol4B(testArena); MetascriptValue valCol4B(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(col4B, testArena, docCol4B, valCol4B));
+        const auto resCol4B = ParseColliderComponentCookMetadata(vPath, metaFile, valCol4B);
+        ASSERT_TRUE(resCol4B.has_value());
+        EXPECT_TRUE(resCol4B.value().component.syncCsgCuts);
+        EXPECT_TRUE(resCol4B.value().component.useMeshComponentFallback);
+        ASSERT_EQ(resCol4B.value().component.extraShapes.size(), cast<usize>(1u));
+        EXPECT_TRUE(resCol4B.value().component.extraShapes[0u].syncCsgCuts);
+        EXPECT_TRUE(resCol4B.value().component.extraShapes[0u].useMeshComponentFallback);
+
+        const StringView cfg4B =
+            "physics_world_config_component asset;\nasset.publish_events_to_message_bus = 1;\nasset.publish_continuous_events_to_message_bus = 1;\n";
+        MetascriptDocument docCfg4B(testArena); MetascriptValue valCfg4B(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(cfg4B, testArena, docCfg4B, valCfg4B));
+        const auto resCfg4B = ParsePhysicsWorldConfigComponentCookMetadata(vPath, metaFile, valCfg4B);
+        ASSERT_TRUE(resCfg4B.has_value());
+        EXPECT_TRUE(resCfg4B.value().component.publishEventsToMessageBus);
+        EXPECT_TRUE(resCfg4B.value().component.publishContinuousEventsToMessageBus);
+
+        const StringView veh4B =
+            "vehicle_component asset;\nasset.skeleton_entity = \"veh_skel\";\nasset.wheel_joint_indices = [2, 3];\nasset.write_back_to_skeleton = 1;\n";
+        MetascriptDocument docVeh4B(testArena); MetascriptValue valVeh4B(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(veh4B, testArena, docVeh4B, valVeh4B));
+        const auto resVeh4B = ParseVehicleComponentCookMetadata(vPath, metaFile, valVeh4B);
+        ASSERT_TRUE(resVeh4B.has_value());
+        EXPECT_EQ(resVeh4B.value().component.skeletonEntityName, Name("veh_skel"));
+        ASSERT_EQ(resVeh4B.value().component.wheelJointIndices.size(), cast<usize>(2u));
+        EXPECT_EQ(resVeh4B.value().component.wheelJointIndices[0u], 2u);
+        EXPECT_EQ(resVeh4B.value().component.wheelJointIndices[1u], 3u);
+        EXPECT_TRUE(resVeh4B.value().component.writeBackToSkeleton);
+
+        const StringView rag4B =
+            "ragdoll_component asset;\nasset.skeleton_entity = \"rag_skel\";\nasset.bone_joint_indices = [0, 2];\nasset.drive_from_skeleton = 1;\nasset.write_back_to_skeleton = 1;\nasset.auto_generate_from_skeleton = 1;\n";
+        MetascriptDocument docRag4B(testArena); MetascriptValue valRag4B(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(rag4B, testArena, docRag4B, valRag4B));
+        const auto resRag4B = ParseRagdollComponentCookMetadata(vPath, metaFile, valRag4B);
+        ASSERT_TRUE(resRag4B.has_value());
+        EXPECT_EQ(resRag4B.value().component.skeletonEntityName, Name("rag_skel"));
+        ASSERT_EQ(resRag4B.value().component.boneJointIndices.size(), cast<usize>(2u));
+        EXPECT_EQ(resRag4B.value().component.boneJointIndices[1u], 2u);
+        EXPECT_TRUE(resRag4B.value().component.driveFromSkeleton);
+        EXPECT_TRUE(resRag4B.value().component.writeBackToSkeleton);
+        EXPECT_TRUE(resRag4B.value().component.autoGenerateFromSkeleton);
+
+        const StringView art4B =
+            "articulation_component asset;\nasset.link_entity_names = [\"link_0\", \"link_1\"];\nasset.skeleton_entity = \"art_skel\";\nasset.link_joint_indices = [1, 4];\nasset.write_back_to_skeleton = 1;\nasset.write_back_link_transforms = 0;\n";
+        MetascriptDocument docArt4B(testArena); MetascriptValue valArt4B(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript(art4B, testArena, docArt4B, valArt4B));
+        const auto resArt4B = ParseArticulationComponentCookMetadata(vPath, metaFile, valArt4B);
+        ASSERT_TRUE(resArt4B.has_value());
+        ASSERT_EQ(resArt4B.value().component.linkEntityNames.size(), cast<usize>(2u));
+        EXPECT_EQ(resArt4B.value().component.linkEntityNames[0u], Name("link_0"));
+        EXPECT_EQ(resArt4B.value().component.linkEntityNames[1u], Name("link_1"));
+        EXPECT_EQ(resArt4B.value().component.skeletonEntityName, Name("art_skel"));
+        ASSERT_EQ(resArt4B.value().component.linkJointIndices.size(), cast<usize>(2u));
+        EXPECT_EQ(resArt4B.value().component.linkJointIndices[0u], 1u);
+        EXPECT_EQ(resArt4B.value().component.linkJointIndices[1u], 4u);
+        EXPECT_TRUE(resArt4B.value().component.writeBackToSkeleton);
+        EXPECT_FALSE(resArt4B.value().component.writeBackLinkTransforms);
+    }
+}
+
+void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
+    CapturingLogger logger = CapturingLogger();
+    LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
+    HeapStorage testArena(s_TestArena);
+
+    const Expected<Path, ErrorCode> cwdRes = GetCurrentPath();
+    ASSERT_TRUE(cwdRes.has_value());
+    const Path tempRoot = cwdRes.value() / "__nwb_physics_cook_test_tmp";
+    ASSERT_TRUE(EnsureEmptyDirectory(tempRoot).has_value());
+
+    const StringView cubeNwbText =
+        "mesh mesh;\nmesh.positions = [\n  [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],\n  [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]\n];\nmesh.vertex_refs = [[0],[1],[2],[3],[4],[5],[6],[7]];\nmesh.indices = [\n  [0,1,2],[0,2,3],[4,6,5],[4,7,6],\n  [0,4,5],[0,5,1],[1,5,6],[1,6,2],\n  [2,6,7],[2,7,3],[3,7,4],[3,4,0]\n];\n";
+    ASSERT_TRUE(WriteTextFile(tempRoot / "cube.nwb", cubeNwbText));
+
+    const StringView lshapeObjText =
+        "v 0 0 0\nv 2 0 0\nv 2 1 0\nv 1 1 0\nv 1 2 0\nv 0 2 0\nv 0 0 1\nv 2 0 1\nv 2 1 1\nv 1 1 1\nv 1 2 1\nv 0 2 1\nf 1 4 2\nf 2 4 3\nf 1 6 4\nf 4 6 5\nf 7 8 10\nf 8 9 10\nf 7 10 12\nf 10 11 12\nf 1 2 8\nf 1 8 7\nf 2 3 9\nf 2 9 8\nf 3 4 10\nf 3 10 9\nf 4 5 11\nf 4 11 10\nf 5 6 12\nf 5 12 11\nf 6 1 7\nf 6 7 12\n";
+    ASSERT_TRUE(WriteTextFile(tempRoot / "lshape.obj", lshapeObjText));
+
+    ASSERT_TRUE(WriteTestTetrahedronGlb(tempRoot / "tri.glb"));
+
+    Vector<u8> r16Bytes;
+    for(u32 i = 0u; i < 16u; ++i){
+        const u16 sample = cast<u16>(i * 4096u);
+        AppendLe16Bytes(r16Bytes, sample);
+    }
+    ASSERT_TRUE(WriteBinaryFile(tempRoot / "grid.r16", r16Bytes));
+
+    Vector<u8> r8Bytes;
+    for(u32 i = 0u; i < 16u; ++i)
+        r8Bytes.push_back(cast<u8>(i * 17u));
+    ASSERT_TRUE(WriteBinaryFile(tempRoot / "grid_u8.raw", r8Bytes));
+
+    Vector<u8> u32LeBytes;
+    Vector<u8> u32BeBytes;
+    for(u32 i = 0u; i < 16u; ++i){
+        const u32 sample = (i * 0x11111111u);
+        AppendLe32Bytes(u32LeBytes, sample);
+        AppendBe32Bytes(u32BeBytes, sample);
+    }
+    ASSERT_TRUE(WriteBinaryFile(tempRoot / "grid_u32_le.raw", u32LeBytes));
+    ASSERT_TRUE(WriteBinaryFile(tempRoot / "grid_u32_be.r32", u32BeBytes));
+
+    Vector<u16> pngHeights;
+    pngHeights.resize(16u, 32768u);
+    pngHeights[0u] = 0u;
+    pngHeights[15u] = 65535u;
+    ASSERT_TRUE(WriteTestGray16Png(tempRoot / "grid16.png", 4u, 4u, Span<u16>(pngHeights.data(), pngHeights.size())));
+
+    Vector<u16> holeMaskPixels;
+    holeMaskPixels.resize(9u, 65535u);
+    holeMaskPixels[1u] = 0u;
+    ASSERT_TRUE(WriteTestGray16Png(tempRoot / "holes16.png", 3u, 3u, Span<u16>(holeMaskPixels.data(), holeMaskPixels.size())));
+
+    {
+        const Path hullNwbPath = tempRoot / "hull_nwb.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("convex_hull asset; asset.source_mesh = \"cube.nwb\";", testArena, doc, val));
+        const auto entryRes = ParseConvexHullCookMetadata(Name("tests/physics/hull_nwb"), hullNwbPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildConvexHullAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        EXPECT_GE(built.value().hullShape().vertices.size(), cast<usize>(4u));
+    }
+
+    {
+        const Path hullObjPath = tempRoot / "hull_obj.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("convex_hull asset; asset.source_mesh = \"lshape.obj\";", testArena, doc, val));
+        const auto entryRes = ParseConvexHullCookMetadata(Name("tests/physics/hull_obj"), hullObjPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildConvexHullAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+    }
+
+    {
+        const Path meshObjPath = tempRoot / "mesh_obj.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("collision_mesh asset; asset.source_mesh = \"lshape.obj\";", testArena, doc, val));
+        const auto entryRes = ParseCollisionMeshCookMetadata(Name("tests/physics/mesh_obj"), meshObjPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildCollisionMeshAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        EXPECT_EQ(built.value().meshShape().triangles.size(), cast<usize>(20u));
+    }
+
+    {
+        const Path meshGlbPath = tempRoot / "mesh_glb.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        ASSERT_TRUE(ParseAssetValueFromScript("collision_mesh asset; asset.source_mesh = \"tri.glb\";", testArena, doc, val));
+        const auto entryRes = ParseCollisionMeshCookMetadata(Name("tests/physics/mesh_glb"), meshGlbPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildCollisionMeshAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        EXPECT_EQ(built.value().meshShape().triangles.size(), cast<usize>(4u));
+    }
+
+    {
+        const Path compPath = tempRoot / "lshape_compound.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        const StringView compScript =
+            "compound_hull asset;\nasset.source_mesh = \"lshape.obj\";\nasset.vhacd_max_hulls = 4;\nasset.vhacd_concavity_threshold = 0.01;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(compScript, testArena, doc, val));
+        const auto entryRes = ParseCompoundHullCookMetadata(Name("tests/physics/lshape_compound"), compPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildCompoundHullAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        EXPECT_GE(built.value().hullShapes().size(), cast<usize>(1u));
+        Vector<u8> serialized;
+        ASSERT_TRUE(SerializeCompoundHullAsset(built.value(), serialized));
+        CompoundHullAsset reloaded(Name("tests/physics/lshape_compound"));
+        ASSERT_TRUE(reloaded.loadBinary(Span<u8>(serialized.data(), serialized.size())));
+        EXPECT_EQ(reloaded.hullShapes().size(), built.value().hullShapes().size());
+    }
+
+    {
+        const Path hfRawPath = tempRoot / "hf_raw.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        const StringView hfRawScript =
+            "heightfield asset;\nasset.source_heightmap = \"grid.r16\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 16;\nasset.height_min = 0.0;\nasset.height_max = 10.0;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRawScript, testArena, doc, val));
+        const auto entryRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw"), hfRawPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildHeightfieldAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        in HeightfieldShape hf = built.value().heightfieldShape();
+        EXPECT_EQ(hf.cols, 4u);
+        EXPECT_EQ(hf.rows, 4u);
+        EXPECT_FALSE(hf.hierarchy.empty());
+        EXPECT_NEAR(hf.heights[0u], 0.0f, 1.0e-3f);
+        EXPECT_GT(hf.heights[15u], 9.0f);
+    }
+
+    {
+        const Path hfRaw8Path = tempRoot / "hf_raw8.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        const StringView hfRaw8Script =
+            "heightfield asset;\nasset.source_heightmap = \"grid_u8.raw\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 8;\nasset.height_min = -4.0;\nasset.height_max = 6.0;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw8Script, testArena, doc, val));
+        const auto entryRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw8"), hfRaw8Path, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildHeightfieldAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        in HeightfieldShape hf = built.value().heightfieldShape();
+        EXPECT_NEAR(hf.heights[0u], -4.0f, 1.0e-3f);
+        EXPECT_NEAR(hf.heights[15u], 6.0f, 1.0e-3f);
+    }
+
+    {
+        const Path hfRaw32LePath = tempRoot / "hf_raw32_le.nwb";
+        MetascriptDocument docLe(testArena); MetascriptValue valLe(testArena);
+        const StringView hfRaw32LeScript =
+            "heightfield asset;\nasset.source_heightmap = \"grid_u32_le.raw\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 32;\nasset.raw_float = 0;\nasset.raw_big_endian = 0;\nasset.height_min = 0.0;\nasset.height_max = 15.0;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw32LeScript, testArena, docLe, valLe));
+        const auto entryLeRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw32_le"), hfRaw32LePath, valLe);
+        ASSERT_TRUE(entryLeRes.has_value());
+        const auto builtLe = BuildHeightfieldAsset(entryLeRes.value());
+        ASSERT_TRUE(builtLe.has_value());
+        EXPECT_NEAR(builtLe.value().heightfieldShape().heights[0u], 0.0f, 1.0e-3f);
+        EXPECT_NEAR(builtLe.value().heightfieldShape().heights[15u], 15.0f, 1.0e-3f);
+
+        const Path hfRaw32BePath = tempRoot / "hf_raw32_be.nwb";
+        MetascriptDocument docBe(testArena); MetascriptValue valBe(testArena);
+        const StringView hfRaw32BeScript =
+            "heightfield asset;\nasset.source_heightmap = \"grid_u32_be.r32\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 32;\nasset.raw_float = 0;\nasset.raw_big_endian = 1;\nasset.height_min = 0.0;\nasset.height_max = 15.0;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw32BeScript, testArena, docBe, valBe));
+        const auto entryBeRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw32_be"), hfRaw32BePath, valBe);
+        ASSERT_TRUE(entryBeRes.has_value());
+        const auto builtBe = BuildHeightfieldAsset(entryBeRes.value());
+        ASSERT_TRUE(builtBe.has_value());
+        EXPECT_NEAR(builtBe.value().heightfieldShape().heights[0u], 0.0f, 1.0e-3f);
+        EXPECT_NEAR(builtBe.value().heightfieldShape().heights[15u], 15.0f, 1.0e-3f);
+    }
+
+    {
+        const Path hfPngPath = tempRoot / "hf_png.nwb";
+        MetascriptDocument doc(testArena); MetascriptValue val(testArena);
+        const StringView hfPngScript =
+            "heightfield asset;\nasset.source_heightmap = \"grid16.png\";\nasset.hole_mask_image = \"holes16.png\";\nasset.hole_mask_threshold = 0.5;\nasset.flip_diagonal = 1;\nasset.height_min = -2.0;\nasset.height_max = 8.0;\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(hfPngScript, testArena, doc, val));
+        const auto entryRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_png"), hfPngPath, val);
+        ASSERT_TRUE(entryRes.has_value());
+        const auto built = BuildHeightfieldAsset(entryRes.value());
+        ASSERT_TRUE(built.has_value());
+        in HeightfieldShape hf = built.value().heightfieldShape();
+        EXPECT_EQ(hf.cols, 4u);
+        EXPECT_EQ(hf.rows, 4u);
+        EXPECT_TRUE(hf.flipDiagonal);
+        EXPECT_TRUE(hf.isCellHole(1u, 0u));
+        EXPECT_FALSE(hf.isCellHole(0u, 0u));
+        EXPECT_FALSE(hf.hierarchy.empty());
+        EXPECT_NEAR(hf.heights[0u], -2.0f, 1.0e-3f);
+        EXPECT_NEAR(hf.heights[15u], 8.0f, 1.0e-3f);
+    }
+
+    {
+        MetascriptDocument depDoc(testArena); MetascriptValue depVal(testArena);
+        const StringView depScript =
+            "collider_component asset;\nasset.compound_hull_asset = \"project/physics/lshape_compound\";\nasset.extra_shapes = [{ \"compound_hull_asset\": \"project/physics/extra_compound\" }];\n";
+        ASSERT_TRUE(ParseAssetValueFromScript(depScript, testArena, depDoc, depVal));
+        const auto depRes = ParseColliderDepEntry(Name("tests/physics/col_dep"), tempRoot / "col_dep.nwb", depVal);
+        ASSERT_TRUE(depRes.has_value());
+        EXPECT_EQ(depRes.value().compoundHullAsset.name(), Name("project/physics/lshape_compound"));
+        ASSERT_EQ(depRes.value().extraCompoundHullAssets.size(), cast<usize>(1u));
+        EXPECT_EQ(depRes.value().extraCompoundHullAssets[0u].name(), Name("project/physics/extra_compound"));
+
+        CookDependencyRegistry depReg(testArena);
+        ASSERT_TRUE(RegisterPhysicsComponentCookDependencies(depReg));
+    }
+
+    EXPECT_TRUE(RemoveAllIfExists(tempRoot).has_value());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(PhysicsCookCases, SubsystemDiagnosticsNewFieldsAndGenerators, VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators)
+NWB_ADHD_GTEST(PhysicsCookCases, OfflineMeshCompoundHullAndHeightmapSources, VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

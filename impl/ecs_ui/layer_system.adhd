@@ -5,6 +5,7 @@
 #include <impl/ecs_ui/components.adhd>
 #include <impl/assets_ui_skin/types.adhd>
 #include <impl/ecs_ui/toolkit/input/pointer.adhd>
+#include <impl/ecs_ui/toolkit/input/gamepad.adhd>
 #include <impl/ecs_ui/toolkit/gpu/renderer.adhd>
 #include <impl/ecs_ui/edit_geometry.adhd>
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
@@ -48,6 +49,8 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private mut InputDispatcher m_input;
     private mut IClipboardService m_clipboard;
     private mut ITextInputService m_textInput;
+    private mut ICursorService m_cursor;
+    private mut IAccessibilityService m_accessibility;
     private mut AssetManager m_assetManager;
     private ActiveSceneSubsystems m_defaultSceneSubsystems;
     private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
@@ -58,19 +61,24 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private UiContext m_context;
     private UiEditBoxHost m_editHost;
     private UiBuilder m_ui;
+    private GamepadNavigationAdapter m_gamepad;
     private UiLiveRootVector m_liveRoots;
     private UiWidgetRootVector m_rootIdentities;
     private UiGpuRenderer m_renderer;
     private UiDisplayMetrics m_display;
     private UiPoint m_pointer;
     private u64 m_frameGeneration = 0u;
+    private u64 m_lastPublishedA11yGeneration = 0u;
+    private WidgetId m_lastPublishedA11yFocus;
     private UiFrameDelta m_frameDelta;
     private u32 m_pressedButtons = 0u;
     private u32 m_width = 0u;
     private u32 m_height = 0u;
     private Array<u8, s_UiNativeKeySlotCount> m_nativeKeyOwners;
     private UiLayerPresentation m_presentation;
+    private CursorShape m_lastAppliedCursor = CursorShape::Default;
     private u8 m_pointerOwner = 0u;
+    private b8 m_cursorApplied = false;
     private b8 m_blockNativeChars = false;
     private b8 m_blockCommandChars = false;
     private b8 m_resourcesReady = false;
@@ -82,6 +90,8 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
         mut InputDispatcher input,
         mut IClipboardService clipboard,
         mut ITextInputService textInput,
+        mut ICursorService cursor,
+        mut IAccessibilityService accessibility,
         mut AssetManager assetManager,
         in UiLayerShaderPathResolveCallback shaderPathResolver,
         in AssetRef<UiSkin> skin,
@@ -92,6 +102,8 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
         this.m_input = input;
         this.m_clipboard = clipboard;
         this.m_textInput = textInput;
+        this.m_cursor = cursor;
+        this.m_accessibility = accessibility;
         this.m_assetManager = assetManager;
         this.m_skinSelection = MakeUiSkinSelectionState(skin);
         this.m_editHost = UiEditBoxHost(this.m_context, textInput, clipboard);
@@ -133,6 +145,16 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     [cpp_unwind]
     public b8 setInputBindings(in Span<UiInputKeyBinding> bindings);
     [cpp_unwind]
+    public b8 dispatchInputEvent(in UiInputEvent event);
+    [cpp_unwind]
+    public b8 dispatchInputEvent(in UiInputEvent event, mut b8 outBlockText);
+    [cpp_unwind]
+    public b8 dispatchPointerInput(in UiPointerInput input);
+    [cpp_unwind]
+    public b8 dispatchPointerInput(in UiPointerInput input, mut b8 outConsumed);
+    [cpp_unwind]
+    public void cancelPointerDevice(in u64 device);
+    [cpp_unwind]
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
     [cpp_unwind]
     public b8 keyboardCharInput(in u32 unicode, in i32 mods)override;
@@ -148,6 +170,12 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     public void pointerLeave()override;
     [cpp_unwind]
     public void pointerCaptureLost()override;
+    [cpp_unwind]
+    public void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected)override;
+    [cpp_unwind]
+    public b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action)override;
+    [cpp_unwind]
+    public b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value)override;
     public b8 wantsKeyboard()const;
     public b8 wantsPointer()const;
 
@@ -157,14 +185,21 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private void commitAcceptedFrameIfReady();
     [cpp_unwind]
     private void synchronizeInput();
+    private void synchronizeCursor();
+    [cpp_unwind]
+    private void synchronizeAccessibility();
+    [cpp_unwind]
+    private void pollAccessibilityActions();
     [cpp_unwind]
     private void routeInput(in UiInputEvent event);
     [cpp_unwind]
-    private void routeInput(in UiInputEvent event, mut b8 outBlockText);
+    private b8 routeInput(in UiInputEvent event, mut b8 outBlockText);
     [cpp_unwind]
     private void routePointerInput(in UiPointerInput input);
     [cpp_unwind]
-    private void routePointerInput(in UiPointerInput input, mut b8 outConsumed);
+    private b8 routePointerInput(in UiPointerInput input, mut b8 outConsumed);
+    [cpp_unwind]
+    private b8 routeInputCore(in WidgetId previousCapture, in Expected<InputEvent> normalized, in b8 pointerMode, mut b8 outBlockText, mut b8 outConsumed);
     [cpp_unwind]
     private void synchronizeNativeInput();
     [cpp_unwind]
@@ -172,6 +207,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     [cpp_unwind]
     private void abandonPendingFrame(in b8 resetUi);
     private void resetNormalizedInput();
+    [cpp_unwind]
     private void resetNativeInputState();
     [cpp_unwind]
     private b8 loadFonts();
@@ -229,6 +265,26 @@ b8 CanBeginUiLayerPaintFrame(in b8 resourcesReady, in b8 rendererHasPendingFrame
     return resourcesReady && !rendererHasPendingFrame && !contextReady;
 }
 
+CursorShape MapPointerCursorToCoreCursor(in PointerCursor cursor){
+    switch(cursor){
+    case PointerCursor::TextInput: return CursorShape::TextInput;
+    case PointerCursor::Hand: return CursorShape::Hand;
+    case PointerCursor::Crosshair: return CursorShape::Crosshair;
+    case PointerCursor::ResizeEW: return CursorShape::ResizeEW;
+    case PointerCursor::ResizeNS: return CursorShape::ResizeNS;
+    case PointerCursor::ResizeNWSE: return CursorShape::ResizeNWSE;
+    case PointerCursor::ResizeNESW: return CursorShape::ResizeNESW;
+    case PointerCursor::Move: return CursorShape::Move;
+    case PointerCursor::NotAllowed: return CursorShape::NotAllowed;
+    case PointerCursor::Wait: return CursorShape::Wait;
+    case PointerCursor::Progress: return CursorShape::Progress;
+    case PointerCursor::Grab: return CursorShape::Grab;
+    case PointerCursor::Grabbing: return CursorShape::Grabbing;
+    case PointerCursor::Hidden: return CursorShape::Hidden;
+    default: return CursorShape::Default;
+    }
+}
+
 CpuTaskOptions UiLayerSystem::taskOptions()const{
     CpuTaskOptions options;
     options.cost = CpuTaskCost::Light;
@@ -259,14 +315,17 @@ void UiLayerSystem::resetNormalizedInput(){
     this.m_editHost.reset();
 }
 
+[cpp_unwind]
 void UiLayerSystem::resetNativeInputState(){
     this.m_context.input().cancelDeviceInput(0u);
+    this.m_gamepad.reset(this.m_context.input());
     for(mut u8 owner : this.m_nativeKeyOwners)
         owner = 0u;
     this.m_pressedButtons = 0u;
     this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
     this.m_blockNativeChars = false;
     this.m_blockCommandChars = false;
+    this.synchronizeCursor();
 }
 
 void UiLayerSystem::displayScaleChanged(in f32 scaleX, in f32 scaleY){
@@ -318,7 +377,7 @@ KeyboardInputResult UiLayerSystem::keyboardUpdate(in i32 key, in i32 scancode, i
         else
             this.routeInput(event, this.m_blockCommandChars);
     }
-    const b8 routerClaimsKey = this.m_context.input().hasPopup() || this.m_context.input().focus().valid() || this.m_context.input().ownsKey(key);
+    const b8 routerClaimsKey = this.m_context.input().hasBlockingPopup() || this.m_context.input().focus().valid() || this.m_context.input().ownsKey(key);
     b8 consumed = false;
     FinalizeUiNativeKeyState(isRelease, held, previousOwner, routerClaimsKey, this.m_nativeKeyOwners[slot], this.m_blockNativeChars, consumed);
     KeyboardInputResult result;
@@ -336,7 +395,7 @@ b8 UiLayerSystem::keyboardCharInput(in u32 unicode, in i32 mods){
             return true;
         return this.m_editHost.character(unicode);
     }
-    if(this.m_blockNativeChars || this.m_context.input().hasPopup() || this.m_context.input().focus().valid())
+    if(this.m_blockNativeChars || this.m_context.input().hasBlockingPopup() || this.m_context.input().focus().valid())
         return true;
     return false;
 }
@@ -376,7 +435,7 @@ b8 UiLayerSystem::mouseButtonUpdate(in i32 button, in i32 action, in i32 mods){
         this.m_pointerOwner = ResolveUiPointerPressOwner(
             nativeActive,
             nativeActive && this.m_context.input().wouldConsumePointer(this.m_pointer),
-            this.m_context.input().hasPopup(),
+            this.m_context.input().hasBlockingPopup(),
             !nativeActive && this.m_context.input().hitTest(this.m_pointer).valid()
         );
         if(acceptsSource && this.m_pointerOwner != cast<u8>(UiInputOwner::Custom))
@@ -389,6 +448,7 @@ b8 UiLayerSystem::mouseButtonUpdate(in i32 button, in i32 action, in i32 mods){
     event.source = s_NativePointerSource;
     event.position = this.m_pointer;
     event.extend = (mods & cast<i32>(InputModifier::Shift)) != 0;
+    event.toggle = (mods & cast<i32>(InputModifier::Control)) != 0;
     event.hoverCapable = true;
     if(owner == cast<u8>(UiInputOwner::Custom) && (button == cast<i32>(MouseButton::Left) || button == cast<i32>(MouseButton::Right))){
         if(action == s_InputActionReleaseBase)
@@ -480,6 +540,32 @@ void UiLayerSystem::pointerCaptureLost(){
     this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
 }
 
+[cpp_unwind]
+void UiLayerSystem::gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected){
+    this.synchronizeNativeInput();
+    this.m_gamepad.onConnection(gamepadIndex, connected, this.m_context.input());
+    this.synchronizeCursor();
+    this.synchronizeAccessibility();
+}
+
+[cpp_unwind]
+b8 UiLayerSystem::gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action){
+    this.synchronizeNativeInput();
+    const b8 consumed = this.m_gamepad.onButton(gamepadIndex, button, action, this.m_context.input());
+    this.synchronizeCursor();
+    this.synchronizeAccessibility();
+    return consumed;
+}
+
+[cpp_unwind]
+b8 UiLayerSystem::gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value){
+    this.synchronizeNativeInput();
+    const b8 consumed = this.m_gamepad.onAxis(gamepadIndex, axis, value, this.m_context.input());
+    this.synchronizeCursor();
+    this.synchronizeAccessibility();
+    return consumed;
+}
+
 b8 UiLayerSystem::wantsKeyboard()const{
     return this.m_resourcesReady && this.m_context.input().wantsCommands();
 }
@@ -491,27 +577,81 @@ b8 UiLayerSystem::wantsPointer()const{
 }
 
 [cpp_unwind]
+b8 UiLayerSystem::dispatchInputEvent(in UiInputEvent event){
+    b8 unusedBlockText = false;
+    return this.dispatchInputEvent(event, unusedBlockText);
+}
+
+[cpp_unwind]
+b8 UiLayerSystem::dispatchInputEvent(in UiInputEvent event, mut b8 outBlockText){
+    this.synchronizeNativeInput();
+    return this.routeInput(event, outBlockText);
+}
+
+[cpp_unwind]
+b8 UiLayerSystem::dispatchPointerInput(in UiPointerInput input){
+    b8 unusedConsumed = false;
+    return this.dispatchPointerInput(input, unusedConsumed);
+}
+
+[cpp_unwind]
+b8 UiLayerSystem::dispatchPointerInput(in UiPointerInput input, mut b8 outConsumed){
+    this.synchronizeNativeInput();
+    return this.routePointerInput(input, outConsumed);
+}
+
+[cpp_unwind]
+void UiLayerSystem::cancelPointerDevice(in u64 device){
+    this.synchronizeNativeInput();
+    this.m_context.input().cancelDeviceInput(device);
+    if(device == 0u){
+        this.m_pressedButtons = 0u;
+        this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
+    }
+}
+
+[cpp_unwind]
+b8 UiLayerSystem::routeInputCore(in WidgetId previousCapture, in Expected<InputEvent> normalized, in b8 pointerMode, mut b8 outBlockText, mut b8 outConsumed){
+    outBlockText = false;
+    outConsumed = false;
+    if(!normalized.has_value()){
+        if(pointerMode)
+            error("UiLayerSystem: invalid or overflowing pointer input");
+        else
+            error("UiLayerSystem: invalid or overflowing normalized input");
+        this.resetNormalizedInput();
+        return false;
+    }
+    const b8 isPointer = pointerMode || IsPointerInputEventType(normalized.value().type);
+    b8 submit = false;
+    if(!isPointer)
+        submit = this.m_editHost.prepareSubmit(normalized.value());
+    const InputRoutingResult result = this.m_context.input().process();
+    if(!isPointer){
+        this.m_editHost.input(normalized.value(), previousCapture, submit);
+        outBlockText = ShouldBlockRoutedCommandText(normalized.value().type == InputEventType::CommandDown, normalized.value().command != InputCommand::None, normalized.value().allowText);
+    }
+    else if(result.pointerRouted)
+        this.m_editHost.input(normalized.value(), previousCapture, false);
+    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
+    outConsumed = result.pointerConsumed;
+    this.synchronizeCursor();
+    this.synchronizeAccessibility();
+    return true;
+}
+
+[cpp_unwind]
 void UiLayerSystem::routeInput(in UiInputEvent event){
     b8 unusedBlockText = false;
     this.routeInput(event, unusedBlockText);
 }
 
 [cpp_unwind]
-void UiLayerSystem::routeInput(in UiInputEvent event, mut b8 outBlockText){
-    outBlockText = false;
+b8 UiLayerSystem::routeInput(in UiInputEvent event, mut b8 outBlockText){
     this.m_editHost.collectNative();
     const WidgetId previousCapture = this.m_context.input().capture();
-    const auto normalized = this.m_context.input().queue(event);
-    if(!normalized.has_value()){
-        error("UiLayerSystem: invalid or overflowing normalized input");
-        this.resetNormalizedInput();
-        return;
-    }
-    const b8 submit = this.m_editHost.prepareSubmit(normalized.value());
-    const InputRoutingResult result = this.m_context.input().process();
-    this.m_editHost.input(normalized.value(), previousCapture, submit);
-    outBlockText = ShouldBlockRoutedCommandText(normalized.value().type == InputEventType::CommandDown, normalized.value().command != InputCommand::None, normalized.value().allowText);
-    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
+    b8 unusedConsumed = false;
+    return this.routeInputCore(previousCapture, this.m_context.input().queue(event), false, outBlockText, unusedConsumed);
 }
 
 [cpp_unwind]
@@ -521,21 +661,11 @@ void UiLayerSystem::routePointerInput(in UiPointerInput input){
 }
 
 [cpp_unwind]
-void UiLayerSystem::routePointerInput(in UiPointerInput input, mut b8 outConsumed){
-    outConsumed = false;
+b8 UiLayerSystem::routePointerInput(in UiPointerInput input, mut b8 outConsumed){
     this.m_editHost.collectNative();
     const WidgetId previousCapture = this.m_context.input().capture();
-    const auto normalized = this.m_context.input().queuePointer(input);
-    if(!normalized.has_value()){
-        error("UiLayerSystem: invalid or overflowing pointer input");
-        this.resetNormalizedInput();
-        return;
-    }
-    const InputRoutingResult result = this.m_context.input().process();
-    if(result.pointerRouted)
-        this.m_editHost.input(normalized.value(), previousCapture, false);
-    LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
-    outConsumed = result.pointerConsumed;
+    b8 unusedBlockText = false;
+    return this.routeInputCore(previousCapture, this.m_context.input().queuePointer(input), true, unusedBlockText, outConsumed);
 }
 
 [cpp_unwind]
@@ -686,6 +816,13 @@ AssetRef<UiSkin> UiLayerSystem::resolveSkin(in AssetRef<UiSkin> ref)const{
 Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in f32 delta){
     this.m_frameDelta.add(delta);
     this.synchronizeInput();
+    this.pollAccessibilityActions();
+    if(this.m_context.input().windowFocused()){
+        if(this.m_gamepad.tick(delta, this.m_context.input())){
+            this.synchronizeCursor();
+            this.synchronizeAccessibility();
+        }
+    }
     if(!CanBeginUiLayerPaintFrame(this.m_resourcesReady, this.m_renderer.hasPendingFrame(), this.m_context.ready()))
         return Expected<void, CpuTaskAdmissionError>();
     AdvanceUiLayerFrameGeneration(this.m_frameGeneration);
@@ -703,7 +840,7 @@ Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in 
     this.m_paint.reserve(s_UiLayerPaintReserveQuads);
     this.m_ui.setDeltaSeconds(frameDelta);
     this.m_ui.setPointerBusy(this.m_pressedButtons != 0u || this.m_context.input().primaryDown() || this.m_context.input().secondaryDown());
-    UiPaintContext context(this.m_world, this.m_clipboard, this.m_textInput, this.m_paint, this.m_text, this.m_display, this.m_ui);
+    UiPaintContext context(this.m_world, this.m_clipboard, this.m_textInput, this.m_cursor, this.m_accessibility, this.m_paint, this.m_text, this.m_display, this.m_ui);
     context.deltaSeconds = frameDelta;
     SortSequence<UiLiveRoot>(this.m_liveRoots, IsUiLiveRootOrderedBefore);
     for(in UiLiveRoot root : this.m_liveRoots){
@@ -766,10 +903,78 @@ void UiLayerSystem::commitAcceptedFrameIfReady(){
         [essential] assert(committed);
         this.m_editHost.commitFrame(this.m_renderer.lastAcceptedGeneration());
         this.m_editHost.synchronizeFocus();
+        this.synchronizeCursor();
+        this.synchronizeAccessibility();
     }
     else if(status == PresentationReceiptStatus::Rejected){
         this.abandonPendingFrame();
         this.m_editHost.synchronizeFocus();
+        this.synchronizeCursor();
+    }
+}
+
+void UiLayerSystem::synchronizeCursor(){
+    const CursorShape desired = MapPointerCursorToCoreCursor(this.m_context.resolveCursor());
+    if(!this.m_cursorApplied || desired != this.m_lastAppliedCursor){
+        if(this.m_cursor.setCursor(desired)){
+            this.m_lastAppliedCursor = desired;
+            this.m_cursorApplied = true;
+        }
+    }
+}
+
+void UiLayerSystem::synchronizeAccessibility(){
+    mut AccessibleTree tree = this.m_context.accessibility();
+    const u64 gen = tree.generation();
+    if(gen == 0u)
+        return;
+    in InputRouter input = this.m_context.input();
+    const WidgetId focused = input.focus();
+    const WidgetId hovered = input.hover();
+    WidgetId pressed;
+    if(input.pressed(focused))
+        pressed = focused;
+    else if(input.pressed(input.capture()))
+        pressed = input.capture();
+    if(focused != tree.focusedId() || hovered != tree.hoveredId() || pressed != tree.pressedId())
+        tree.updateInteractionState(focused, hovered, pressed);
+    if(gen == this.m_lastPublishedA11yGeneration && focused == this.m_lastPublishedA11yFocus)
+        return;
+    if(!this.m_accessibility.publishTree(
+        Span<AccessibilityNodeData>(tree.nodes()),
+        tree.textStorage(),
+        focused.value,
+        gen,
+        this.m_display.pixelScaleX,
+        this.m_display.pixelScaleY
+    ))
+        return;
+    const b8 generationAdvanced = gen != this.m_lastPublishedA11yGeneration;
+    this.m_lastPublishedA11yGeneration = gen;
+    this.m_lastPublishedA11yFocus = focused;
+    if(generationAdvanced){
+        const usize count = tree.announcementCount();
+        for(usize index = 0u; index < count; ++index){
+            in AccessibleAnnouncement entry = tree.announcementAt(index);
+            const StringView text = tree.announcementText(entry);
+            if(!text.empty() && !this.m_accessibility.announce(text, entry.liveMode))
+                warning("UiLayerSystem: accessibility announcement failed");
+        }
+    }
+}
+
+void UiLayerSystem::pollAccessibilityActions(){
+    b8 appliedAny = false;
+    AccessibilityActionEvent action;
+    for(usize count = 0u; count < s_AccessibilityMaxActions; ++count){
+        if(!this.m_accessibility.pollAction(action))
+            break;
+        if(this.m_context.applyAccessibleAction(action))
+            appliedAny = true;
+    }
+    if(appliedAny){
+        this.synchronizeCursor();
+        this.synchronizeAccessibility();
     }
 }
 

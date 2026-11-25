@@ -17,6 +17,13 @@ const usize s_FlyCameraKeyStateCount = 349u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> TestbedCameraMode{
+    Fly = 0u,
+    Chase = 1u,
+    Orbit = 2u,
+    kCount
+}
+
 class FlyCameraPointerDelta{
     public f32 x = 0.0f;
     public f32 y = 0.0f;
@@ -50,10 +57,22 @@ class FlyCameraMotion{
     }
 
     public VectorSingle buildMoveAxes(in b8 keyboardCaptured, in b8 moveRight, in b8 moveLeft, in b8 moveForward, in b8 moveBackward)const{
+        return this.buildMoveAxes(keyboardCaptured, moveRight, moveLeft, moveForward, moveBackward, false, false);
+    }
+
+    public VectorSingle buildMoveAxes(
+        in b8 keyboardCaptured,
+        in b8 moveRight,
+        in b8 moveLeft,
+        in b8 moveForward,
+        in b8 moveBackward,
+        in b8 moveUp,
+        in b8 moveDown
+    )const{
         if(keyboardCaptured)
             return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-        const VectorSingle positive(cast<f32>(moveRight), cast<f32>(moveForward), 0.0f, 0.0f);
-        const VectorSingle negative(cast<f32>(moveLeft), cast<f32>(moveBackward), 0.0f, 0.0f);
+        const VectorSingle positive(cast<f32>(moveRight), cast<f32>(moveForward), cast<f32>(moveUp), 0.0f);
+        const VectorSingle negative(cast<f32>(moveLeft), cast<f32>(moveBackward), cast<f32>(moveDown), 0.0f);
         const VectorSingle difference = positive - negative;
         f32 moveX = 0.0f;
         if(moveRight || moveLeft)
@@ -61,7 +80,10 @@ class FlyCameraMotion{
         f32 moveY = 0.0f;
         if(moveForward || moveBackward)
             moveY = difference.y;
-        return VectorSingle(moveX, moveY, 0.0f, 0.0f);
+        f32 moveZ = 0.0f;
+        if(moveUp || moveDown)
+            moveZ = difference.z;
+        return VectorSingle(moveX, moveY, moveZ, 0.0f);
     }
 
     public void updateMousePosition(
@@ -171,6 +193,17 @@ class FlyCameraMotion{
         in f32 deltaSeconds,
         in b8 boosted
     )const{
+        return this.resolvePosition(currentPosition, moveAxes, rotation, deltaSeconds, boosted, 1.0f);
+    }
+
+    public VectorSingle resolvePosition(
+        in VectorSingle currentPosition,
+        in VectorSingle moveAxes,
+        in VectorSingle rotation,
+        in f32 deltaSeconds,
+        in b8 boosted,
+        in f32 speedScale
+    )const{
         VectorSingle outPosition(0.0f, 0.0f, 0.0f, 0.0f);
         if(IsFinite(currentPosition.xyz))
             outPosition = currentPosition;
@@ -181,8 +214,11 @@ class FlyCameraMotion{
         f32 rawAxisY = 0.0f;
         if(IsFinite(VectorSingle(moveAxes.y)))
             rawAxisY = moveAxes.y;
-        const VectorSingle axes = Clamp(VectorSingle(rawAxisX, rawAxisY, 0.0f, 0.0f), VectorSingle(-1.0f), VectorSingle(1.0f));
-        const f32 moveLengthSq = LengthSq(axes.xy);
+        f32 rawAxisZ = 0.0f;
+        if(IsFinite(VectorSingle(moveAxes.z)))
+            rawAxisZ = moveAxes.z;
+        const VectorSingle axes = Clamp(VectorSingle(rawAxisX, rawAxisY, rawAxisZ, 0.0f), VectorSingle(-1.0f), VectorSingle(1.0f));
+        const f32 moveLengthSq = LengthSq(axes.xyz);
         if(!(moveLengthSq > s_CameraMoveEpsilon))
             return outPosition;
 
@@ -190,13 +226,17 @@ class FlyCameraMotion{
         f32 boost = 1.0f;
         if(boosted)
             boost = s_FlyCameraBoostMultiplier;
-        const f32 speedDelta = (s_FlyCameraMoveSpeed * boost) * safeDelta;
+        f32 clampedScale = 1.0f;
+        if(IsFinite(VectorSingle(speedScale)))
+            clampedScale = Clamp(VectorSingle(speedScale), VectorSingle(0.1f), VectorSingle(10.0f)).x;
+        const f32 speedDelta = (s_FlyCameraMoveSpeed * boost * clampedScale) * safeDelta;
         const VectorSingle moveScale = VectorSingle(speedDelta) * Rsqrt(VectorSingle(moveLengthSq));
         if(!IsFinite(moveScale))
             return outPosition;
 
         const VectorSingle localMove = VectorSingle(axes.x, 0.0f, axes.y, 0.0f) * moveScale;
-        const VectorSingle worldMove = this.rotateVector3(localMove, rotation);
+        const VectorSingle rotatedHoriz = this.rotateVector3(localMove, rotation);
+        const VectorSingle worldMove = rotatedHoriz + VectorSingle(0.0f, axes.z, 0.0f, 0.0f) * moveScale;
         if(!IsFinite(worldMove.xyz))
             return outPosition;
 
@@ -206,7 +246,7 @@ class FlyCameraMotion{
         return outPosition;
     }
 
-    private VectorSingle resolveAnglesFromRotation(in VectorSingle rotation)const{
+    public VectorSingle resolveAnglesFromRotation(in VectorSingle rotation)const{
         const VectorSingle forwardVector = this.resolveForwardVector(rotation);
         const f32 yaw = ATan2(VectorSingle(forwardVector.x), VectorSingle(forwardVector.z)).x;
         const f32 pitch = -ASin(VectorSingle(forwardVector.y)).x;
@@ -218,6 +258,62 @@ class FlyCameraMotion{
         const VectorSingle rotationAngles = this.resolveRotationAngles(angles, mouseDelta);
         return QuaternionRotationRollPitchYawFromVector(rotationAngles);
     }
+
+    public void resolveOrbitRotation(
+        in VectorSingle mouseDelta,
+        mut f32 inOutYawRadians,
+        mut f32 inOutPitchRadians
+    )const{
+        const VectorSingle nextAngles = this.resolveRotationAngles(VectorSingle(inOutYawRadians, inOutPitchRadians, 0.0f, 0.0f), mouseDelta);
+        inOutPitchRadians = nextAngles.x;
+        inOutYawRadians = nextAngles.y;
+    }
+}
+
+void ResolveChaseCameraPose(
+    in VectorSingle targetPos,
+    in VectorSingle targetForward,
+    in f32 distance,
+    in f32 height,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
+){
+    VectorSingle flatFwd(targetForward.x, 0.0f, targetForward.z, 0.0f);
+    const f32 fLenSq = LengthSq(flatFwd.xyz);
+    if(!IsFinite(VectorSingle(fLenSq)) || fLenSq <= s_CameraMoveEpsilon)
+        flatFwd = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
+    else
+        flatFwd = flatFwd * Rsqrt(VectorSingle(fLenSq));
+    const f32 safeDist = Clamp(VectorSingle(distance), VectorSingle(1.0f), VectorSingle(40.0f)).x;
+    outPos = VectorSingle(targetPos.x, targetPos.y, targetPos.z, 0.0f) - flatFwd * safeDist + VectorSingle(0.0f, height, 0.0f, 0.0f);
+    const VectorSingle lookTarget = VectorSingle(targetPos.x, targetPos.y + height * 0.3f, targetPos.z, 0.0f);
+    const VectorSingle toTarget = VectorSingle(lookTarget - outPos, 0.0f);
+    const f32 lSq = LengthSq(toTarget.xyz);
+    VectorSingle lookDir(0.0f, 0.0f, -1.0f, 0.0f);
+    if(IsFinite(VectorSingle(lSq)) && lSq > s_CameraMoveEpsilon)
+        lookDir = toTarget * Rsqrt(VectorSingle(lSq));
+    const f32 yaw = ATan2(VectorSingle(lookDir.x), VectorSingle(lookDir.z)).x;
+    const f32 pitch = -ASin(Clamp(VectorSingle(lookDir.y), VectorSingle(-0.99f), VectorSingle(0.99f))).x;
+    outRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(pitch, yaw, 0.0f, 0.0f));
+}
+
+void ResolveOrbitCameraPose(
+    in VectorSingle targetPos,
+    in f32 yawRadians,
+    in f32 pitchRadians,
+    in f32 distance,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
+){
+    const f32 clampedPitch = Clamp(VectorSingle(pitchRadians), VectorSingle(-s_FlyCameraPitchLimitRadians), VectorSingle(s_FlyCameraPitchLimitRadians)).x;
+    f32 safeYaw = 0.0f;
+    if(IsFinite(VectorSingle(yawRadians)))
+        safeYaw = yawRadians;
+    outRot = QuaternionRotationRollPitchYawFromVector(VectorSingle(clampedPitch, safeYaw, 0.0f, 0.0f));
+    const VectorSingle t = Cross(outRot.xyz, VectorSingle(0.0f, 0.0f, 1.0f, 0.0f).xyz) * 2.0f;
+    const VectorSingle fwd = VectorSingle(0.0f, 0.0f, 1.0f, 0.0f) + t * VectorSingle(outRot.w) + Cross(outRot.xyz, t.xyz);
+    const f32 safeDist = Clamp(VectorSingle(distance), VectorSingle(0.5f), VectorSingle(80.0f)).x;
+    outPos = VectorSingle(targetPos.x, targetPos.y, targetPos.z, 0.0f) - VectorSingle(fwd, 0.0f) * safeDist;
 }
 
 

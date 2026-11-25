@@ -394,9 +394,9 @@ void VerifyUiMultilineText_ControlsAndPrintableAsciiBoundariesRespectCanonicalLf
         const ScopedTestTrace trace = ScopedTestTrace(scalar);
         const UiMultilineTextBytes<3u> bytes = MakeUiMultilineTextAsciiSandwich(scalar);
         const StringView text = bytes.view();
-        const b8 canonical = scalar == s_UiMultilineTextUnicodeLineFeed || (scalar >= s_UiMultilineTextUnicodeSpace && scalar < s_UiMultilineTextUnicodeDelete);
+        const b8 canonical = scalar == s_UiMultilineTextUnicodeTab || scalar == s_UiMultilineTextUnicodeLineFeed || (scalar >= s_UiMultilineTextUnicodeSpace && scalar < s_UiMultilineTextUnicodeDelete);
         EXPECT_EQ(ValidateMultilineText(text), canonical);
-        const b8 normalizable = canonical || scalar == s_UiMultilineTextUnicodeTab || scalar == s_UiMultilineTextUnicodeCarriageReturn;
+        const b8 normalizable = canonical || scalar == s_UiMultilineTextUnicodeCarriageReturn;
         auto normalized = NormalizeMultilineText(text, 3u);
         EXPECT_EQ(normalized.has_value(), normalizable);
         if(normalizable){
@@ -404,9 +404,7 @@ void VerifyUiMultilineText_ControlsAndPrintableAsciiBoundariesRespectCanonicalLf
             String output = String();
             TestMoveAssign<String>(output, normalized.value());
             u32 replacement = scalar;
-            if(scalar == s_UiMultilineTextUnicodeTab)
-                replacement = s_UiMultilineTextUnicodeSpace;
-            else if(scalar == s_UiMultilineTextUnicodeCarriageReturn)
+            if(scalar == s_UiMultilineTextUnicodeCarriageReturn)
                 replacement = s_UiMultilineTextUnicodeLineFeed;
             const UiMultilineTextBytes<3u> expected = MakeUiMultilineTextAsciiSandwich(replacement);
             const StringView outputView = StringView(output.data(), output.size());
@@ -438,13 +436,17 @@ void VerifyUiMultilineText_RejectsEveryC1ControlExceptNelDuringNormalization(){
 }
 
 void VerifyUiMultilineText_RequiresNormalizationForTabsAndEveryNoncanonicalLineSeparator(){
-    Array<UiMultilineTextExpectationCase, 6u> cases = Array<UiMultilineTextExpectationCase, 6u>();
-    cases[0u] = UiMultilineTextExpectationCase("\t", " ");
-    cases[1u] = UiMultilineTextExpectationCase("\r", "\n");
-    cases[2u] = UiMultilineTextExpectationCase("\r\n", "\n");
-    cases[3u] = UiMultilineTextExpectationCase(s_UiMultilineTextNextLine, "\n");
-    cases[4u] = UiMultilineTextExpectationCase(s_UiMultilineTextLineSeparator, "\n");
-    cases[5u] = UiMultilineTextExpectationCase(s_UiMultilineTextParagraphSeparator, "\n");
+    EXPECT_TRUE(ValidateMultilineText("\t"));
+    const auto tabNormalized = NormalizeMultilineText("\t", 1u);
+    ASSERT_TRUE(tabNormalized.has_value());
+    EXPECT_EQ(StringView(tabNormalized.value().data(), tabNormalized.value().size()), "\t");
+
+    Array<UiMultilineTextExpectationCase, 5u> cases = Array<UiMultilineTextExpectationCase, 5u>();
+    cases[0u] = UiMultilineTextExpectationCase("\r", "\n");
+    cases[1u] = UiMultilineTextExpectationCase("\r\n", "\n");
+    cases[2u] = UiMultilineTextExpectationCase(s_UiMultilineTextNextLine, "\n");
+    cases[3u] = UiMultilineTextExpectationCase(s_UiMultilineTextLineSeparator, "\n");
+    cases[4u] = UiMultilineTextExpectationCase(s_UiMultilineTextParagraphSeparator, "\n");
     for(in UiMultilineTextExpectationCase test : cases){
         const ScopedTestTrace trace = ScopedTestTrace(test.source);
         EXPECT_FALSE(ValidateMultilineText(test.source));
@@ -557,10 +559,10 @@ void VerifyUiMultilineText_LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars(){
     cases[0u] = UiMultilineTextExpectationCase("a\r\nb", "a\nb");
     cases[1u] = UiMultilineTextExpectationCase("\r\n\r\n", "\n\n");
     cases[2u] = UiMultilineTextExpectationCase("\xE2\x80\xA8\xE2\x80\xA9", "\n\n");
-    cases[3u] = UiMultilineTextExpectationCase("\xC2\x85\t", "\n ");
+    cases[3u] = UiMultilineTextExpectationCase("\xC2\x85\t", "\n\t");
     cases[4u] = UiMultilineTextExpectationCase(s_UiMultilineTextThreeByteScalar, s_UiMultilineTextThreeByteScalar);
     cases[5u] = UiMultilineTextExpectationCase(s_UiMultilineTextFourByteScalar, s_UiMultilineTextFourByteScalar);
-    cases[6u] = UiMultilineTextExpectationCase("\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n ");
+    cases[6u] = UiMultilineTextExpectationCase("\xED\x95\x9C\r\n\xE2\x80\xA8\t", "\xED\x95\x9C\n\n\t");
     for(in UiMultilineTextExpectationCase test : cases){
         const ScopedTestTrace trace = ScopedTestTrace(test.source);
         const auto normalized = NormalizeMultilineText(test.source, test.expected.size());
@@ -600,14 +602,14 @@ void VerifyUiMultilineText_SupportsBorrowedWholeAndSubviewSourcesAtExactBudgets(
     auto normalizedWhole = NormalizeMultilineText(whole, 8u);
     ASSERT_TRUE(normalizedWhole.has_value());
     TestMoveAssign<String>(output, normalizedWhole.value());
-    EXPECT_EQ(output, "a\nb \xED\x95\x9C\n");
+    EXPECT_EQ(output, "a\nb\t\xED\x95\x9C\n");
 
     output.assign(s_UiMultilineTextBorrowedSourceText);
     const StringView middle = StringView(output.data(), output.size()).substr(7u, 6u);
     auto normalizedMiddle = NormalizeMultilineText(middle, 5u);
     ASSERT_TRUE(normalizedMiddle.has_value());
     TestMoveAssign<String>(output, normalizedMiddle.value());
-    EXPECT_EQ(output, "a\nb z");
+    EXPECT_EQ(output, "a\nb\tz");
 
     output.assign("prefix\xE2\x80\xA8");
     const StringView trailing = StringView(output.data(), output.size()).substr(6u, 3u);
@@ -863,9 +865,6 @@ void VerifyUiMultilineViewTests_FailedLayoutAdoptionRetainsMultilineGeometryAndP
     auto wrong = self.buildLayout("other\ntext");
     ASSERT_TRUE(wrong.has_value());
     EXPECT_FALSE(self.adoptBuiltLayout(wrong));
-    auto rtl = self.buildDirectionalLayout(self.m_view.displayText(), TextDirection::RightToLeft);
-    ASSERT_TRUE(rtl.has_value());
-    EXPECT_FALSE(self.adoptBuiltLayout(rtl));
     EXPECT_EQ(self.m_view.layout().utf8(), "ab\ncd");
     EXPECT_EQ(self.m_view.caretGeometry().lines().size(), 2u);
     EXPECT_TRUE(self.m_view.ready());

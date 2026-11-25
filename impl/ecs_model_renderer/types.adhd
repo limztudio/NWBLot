@@ -22,7 +22,49 @@ Expected<RendererComponent> TryResolveModelObjectRendererComponent(in AssetRef<M
     RendererComponent renderer;
     renderer.material = resolvedMaterial;
     renderer.visible = visible;
+    if(hasOwnerRenderer){
+        renderer.opticalVolumeCoincidence = ownerRenderer.opticalVolumeCoincidence;
+        renderer.opticalVolumeGroup = ownerRenderer.opticalVolumeGroup;
+        renderer.opticalVolumePriority = ownerRenderer.opticalVolumePriority;
+        renderer.opticalBoundaryMode = ownerRenderer.opticalBoundaryMode;
+        renderer.opticalMediumPriority = ownerRenderer.opticalMediumPriority;
+    }
     return renderer;
+}
+
+b8 ModelObjectRendererComponentsEqual(in RendererComponent lhs, in RendererComponent rhs){
+    return
+        lhs.material.name() == rhs.material.name()
+        && lhs.visible == rhs.visible
+        && lhs.opticalVolumeCoincidence == rhs.opticalVolumeCoincidence
+        && lhs.opticalVolumeGroup == rhs.opticalVolumeGroup
+        && lhs.opticalVolumePriority == rhs.opticalVolumePriority
+        && lhs.opticalBoundaryMode == rhs.opticalBoundaryMode
+        && lhs.opticalMediumPriority == rhs.opticalMediumPriority
+    ;
+}
+
+b8 ModelObjectMaterialInstanceParametersEqual(in MaterialInstanceParameter lhs, in MaterialInstanceParameter rhs){
+    return
+        lhs.parameterName == rhs.parameterName
+        && lhs.blockName == rhs.blockName
+        && lhs.fieldName == rhs.fieldName
+        && lhs.fieldType == rhs.fieldType
+        && lhs.value.x == rhs.value.x
+        && lhs.value.y == rhs.value.y
+        && lhs.value.z == rhs.value.z
+        && lhs.value.w == rhs.value.w
+    ;
+}
+
+b8 ModelObjectMaterialInstancesEqual(in MaterialInstanceComponent lhs, in MaterialInstanceComponent rhs){
+    if(lhs.materialInterface != rhs.materialInterface || lhs.revision != rhs.revision || lhs.overrides.size() != rhs.overrides.size())
+        return false;
+    for(usize i = 0u; i < lhs.overrides.size(); ++i){
+        if(!ModelObjectMaterialInstanceParametersEqual(lhs.overrides[i], rhs.overrides[i]))
+            return false;
+    }
+    return true;
 }
 
 void CopyModelObjectMaterialInstance(in MaterialInstanceComponent ownerMaterialInstance, mut MaterialInstanceComponent outMaterialInstance){

@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<impl/assets_physics/cook_source_io.h>"), cpp_name("::NWB::PhysicsCookIO::ResolvePhysicsSourcePath")]
+extern void ResolvePhysicsSourcePath(in Path baseFile, in StringView relativeOrAbs, mut Path outPath);
+
+[cpp_header("<impl/assets_physics/cook_source_io.h>"), cpp_name("::NWB::PhysicsCookIO::LoadExternalMeshFile")]
+extern b8 LoadExternalMeshFile(in Path filePath, mut Vector<f32x4> outVertices, mut Vector<u32> outIndices);
+
+[cpp_header("<impl/assets_physics/cook_source_io.h>"), cpp_name("::NWB::PhysicsCookIO::LoadHeightmapImage")]
+extern b8 LoadHeightmapImage(in Path filePath, in u32 channelMode, in f32 heightMin, in f32 heightMax, mut u32 outCols, mut u32 outRows, mut Vector<f32> outHeights);
+
+[cpp_header("<impl/assets_physics/cook_source_io.h>"), cpp_name("::NWB::PhysicsCookIO::LoadHeightmapRawBinary")]
+extern b8 LoadHeightmapRawBinary(in Path filePath, in u32 cols, in u32 rows, in u32 bitsPerSample, in b8 bigEndian, in b8 isFloat, in f32 heightMin, in f32 heightMax, mut Vector<f32> outHeights);
+
+[cpp_header("<impl/assets_physics/cook_source_io.h>"), cpp_name("::NWB::PhysicsCookIO::LoadHeightmapHoleMask")]
+extern b8 LoadHeightmapHoleMask(in Path filePath, in u32 expectedCols, in u32 expectedRows, in f32 threshold, mut Vector<u8> outCellHoles);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

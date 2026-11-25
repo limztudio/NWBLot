@@ -5,6 +5,7 @@
 #include <impl/assets_scene/asset.adhd>
 #include <impl/assets_scene/component_asset_binary_codec.adhd>
 #include <impl/assets_scene/scene_asset_binary_codec.adhd>
+#include <impl/ecs_scene/hierarchy.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -260,6 +261,66 @@ b8 ActiveCameraComponentAsset::appendValidatedComponentPayload(mut Vector<u8> ou
     return true;
 }
 
+b8 LocalTransformComponentAsset::loadBinary(in Span<u8> binary){
+    LocalTransformComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
+}
+
+b8 LocalTransformComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<LocalTransformComponent> component = ComponentAssetBinaryCodec().deserializeLocalTransform(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 LocalTransformComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("LocalTransformComponentAsset::validatePayload"))
+        return false;
+    return ValidateLocalTransformComponentAssetPayload(this.component, this.virtualPath());
+}
+
+b8 LocalTransformComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return ComponentAssetBinaryCodec().serializeLocalTransform(this.component, outPayload);
+}
+
+b8 LocalTransformComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return ComponentAssetBinaryCodec().appendLocalTransform(this.component, outBinary);
+}
+
+b8 SceneParentComponentAsset::loadBinary(in Span<u8> binary){
+    SceneParentComponentAsset candidate(this.virtualPath());
+    if(!ComponentAssetBinaryCodec().loadBinary(binary, candidate))
+        return false;
+    this.component = candidate.component;
+    return true;
+}
+
+b8 SceneParentComponentAsset::loadComponentPayload(in Span<u8> payload){
+    const Expected<SceneParentComponent> component = ComponentAssetBinaryCodec().deserializeSceneParent(payload);
+    if(!component.has_value())
+        return false;
+    this.component = component.value();
+    return true;
+}
+
+b8 SceneParentComponentAsset::validatePayload()const{
+    if(!this.checkVirtualPath("SceneParentComponentAsset::validatePayload"))
+        return false;
+    return ValidateSceneParentComponentAssetPayload(this.component, this.virtualPath());
+}
+
+b8 SceneParentComponentAsset::serializeComponentPayload(mut Vector<u8> outPayload)const{
+    return ComponentAssetBinaryCodec().serializeSceneParent(this.component, outPayload);
+}
+
+b8 SceneParentComponentAsset::appendValidatedComponentPayload(mut Vector<u8> outBinary)const{
+    return ComponentAssetBinaryCodec().appendSceneParent(this.component, outBinary);
+}
+
 EntityID InstantiateSceneLoadedEntityWithResult(in Name entityName, in Span<UniquePtr<IComponent>> components, mut World world){
     if(!ValidateSceneLoadedEntityHasComponents(!components.empty(), entityName))
         return s_InvalidEntityId;
@@ -282,6 +343,8 @@ EntityID InstantiateSceneLoadedEntityWithResult(in Name entityName, in Span<Uniq
 
 register_asset IComponent using AssetCodecRegistration<ComponentAssetCodec>;
 register_asset TransformComponentAsset using TypedComponentAutoRegistrar<TransformComponentAsset>;
+register_asset LocalTransformComponentAsset using TypedComponentAutoRegistrar<LocalTransformComponentAsset>;
+register_asset SceneParentComponentAsset using TypedComponentAutoRegistrar<SceneParentComponentAsset>;
 register_asset CameraComponentAsset using TypedComponentAutoRegistrar<CameraComponentAsset>;
 register_asset LightComponentAsset using TypedComponentAutoRegistrar<LightComponentAsset>;
 register_asset ActiveCameraComponentAsset using TypedComponentAutoRegistrar<ActiveCameraComponentAsset>;
@@ -432,19 +495,28 @@ b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedS
         return false;
     outInstantiated.entities.reserve(this.m_contents.entities.size());
     outInstantiated.names.reserve(this.m_contents.entities.size());
-    if(this.m_contents.namedEntityCount > 0u)
+    u32 sceneScopeId = 0u;
+    if(this.m_contents.namedEntityCount > 0u){
         outInstantiated.namedEntities.reserve(this.m_contents.namedEntityCount);
+        sceneScopeId = AllocateSceneNameScopeId(world);
+    }
     for(in LoadedSceneEntity entity : this.m_contents.entities){
         const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
         if(!createdId.valid()){
             this.destroyEntities(world, outInstantiated);
             return false;
         }
+        if(sceneScopeId != 0u){
+            mut SceneEntityNameComponent nameComp = world.entity(createdId).addComponent<SceneEntityNameComponent>();
+            nameComp.name = entity.name;
+            nameComp.scopeId = sceneScopeId;
+        }
         outInstantiated.entities.push_back(createdId);
         outInstantiated.names.push_back(entity.name);
         if(entity.name != s_NameNone)
             outInstantiated.namedEntities.insert_or_assign(entity.name, createdId);
     }
+    ResolveSceneParentNames(world);
     return true;
 }
 
@@ -456,23 +528,8 @@ Expected<InstantiatedSceneEntities> ActiveSceneSubsystems::instantiateEntitiesWi
 }
 
 b8 ActiveSceneSubsystems::instantiateEntities(mut World world)const{
-    if(!ValidateSceneEntityInstantiationReady(this.valid()))
-        return false;
-    Vector<EntityID> created;
-    created.reserve(this.m_contents.entities.size());
-    for(in LoadedSceneEntity entity : this.m_contents.entities){
-        const EntityID createdId = InstantiateSceneLoadedEntityWithResult(entity.entity.name(), Span<UniquePtr<IComponent>>(entity.components), world);
-        if(!createdId.valid()){
-            for(isize i = cast<isize>(created.size()) - 1; i >= 0; --i){
-                const EntityID ent = created[cast<usize>(i)];
-                if(ent.valid() && world.alive(ent))
-                    world.destroyEntity(ent);
-            }
-            return false;
-        }
-        created.push_back(createdId);
-    }
-    return true;
+    InstantiatedSceneEntities discarded;
+    return this.instantiateEntities(world, discarded);
 }
 
 

@@ -1,0 +1,229 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "list.adhd"
+#include "popup.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_MenuBarDefaultHeight = 26.0f;
+const f32 s_MenuBarDefaultItemPaddingX = 10.0f;
+const f32 s_MenuBarDefaultItemGap = 2.0f;
+const f32 s_MenuBarDefaultDropdownWidth = 200.0f;
+const f32 s_MenuBarDefaultDropdownHeight = 180.0f;
+const f32 s_ToolbarDefaultPaddingX = 4.0f;
+const f32 s_ToolbarDefaultPaddingY = 3.0f;
+const f32 s_ToolbarDefaultGap = 4.0f;
+const f32 s_StatusBarDefaultHeight = 24.0f;
+const f32 s_StatusBarDefaultPaddingX = 8.0f;
+const f32 s_StatusBarDefaultPaddingY = 2.0f;
+const f32 s_StatusBarDefaultGap = 8.0f;
+const Color s_MenuBarDefaultBorderColor = Color(0.28f, 0.32f, 0.38f, 0.85f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MenuBarMenu{
+    public u64 key = 0u;
+    public StringView label = "";
+    public Optional<in IListDataSource> items;
+    public b8 enabled = true;
+}
+
+class MenuBarStyle{
+    public Name background = s_StyleHeaderNormalRegionName;
+    public Name backgroundFallback = s_StylePanelNormalRegionName;
+    public Name itemHover = s_StyleButtonHoverRegionName;
+    public Name itemOpen = s_StyleButtonPressedRegionName;
+    public Name itemFallback = s_StyleButtonNormalRegionName;
+    public Color borderColor = s_MenuBarDefaultBorderColor;
+    public f32 height = s_MenuBarDefaultHeight;
+    public f32 itemPaddingX = s_MenuBarDefaultItemPaddingX;
+    public f32 itemGap = s_MenuBarDefaultItemGap;
+    public Point dropdownSize = Point(s_MenuBarDefaultDropdownWidth, s_MenuBarDefaultDropdownHeight);
+}
+
+class MenuBarOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public f32 wheelRows = s_StyleScrollWheelStep;
+    public b8 enabled = true;
+    public LayoutItemOptions layout;
+}
+
+class MenuBarResult{
+    public b8 valid = false;
+    public b8 activated = false;
+    public u64 menuKey = 0u;
+    public u64 itemKey = 0u;
+    public u64 openMenuKey = 0u;
+}
+
+class MenuBarState : NoCopy{
+    public PopupState m_popup;
+    public ListState m_list;
+    public u64 m_instanceGeneration = AllocateServiceIdentity();
+    public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_revision = 1u;
+    public u64 m_openMenuKey = 0u;
+    public u64 m_focusedMenuKey = 0u;
+    public WidgetId m_owner;
+    public u64 m_ownerDeclaration = 0u;
+    public Vector<Rect> m_itemRects;
+    public Vector<u64> m_itemKeys;
+
+    public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
+    public u64 inputGeneration()const{ return this.m_inputGeneration; }
+    public u64 revision()const{ return this.m_revision; }
+    public b8 isOpen()const{ return this.m_popup.isOpen() && this.m_openMenuKey != 0u; }
+    public u64 openMenuKey()const{
+        if(!this.m_popup.isOpen())
+            return 0u;
+        return this.m_openMenuKey;
+    }
+
+    public void openMenu(in u64 key){
+        if(key == 0u){
+            this.close();
+            return;
+        }
+        this.m_popup.close();
+        this.m_popup.open();
+        this.m_openMenuKey = key;
+        this.m_focusedMenuKey = key;
+        this.m_list.select(0u);
+        if(!this.m_list.scrollTo(0.0))
+            TerminateInvariant();
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+    }
+
+    public void close(){
+        this.m_popup.close();
+        this.m_openMenuKey = 0u;
+        this.m_list.select(0u);
+        AdvanceNonWrappingRevision(this.m_revision);
+        this.m_inputGeneration = AllocateServiceIdentity();
+    }
+}
+
+class ToolbarOptions{
+    public LayoutDirection direction = LayoutDirection::Row;
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public LayoutSize height = LayoutSize(LayoutSizePolicy::Content, 0.0f);
+    public Insets padding = Insets(s_ToolbarDefaultPaddingX, s_ToolbarDefaultPaddingY, s_ToolbarDefaultPaddingX, s_ToolbarDefaultPaddingY);
+    public f32 gap = s_ToolbarDefaultGap;
+    public LayoutItemOptions layout;
+}
+
+class StatusBarOptions{
+    public LayoutSize width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
+    public f32 height = s_StatusBarDefaultHeight;
+    public Insets padding = Insets(s_StatusBarDefaultPaddingX, s_StatusBarDefaultPaddingY, s_StatusBarDefaultPaddingX, s_StatusBarDefaultPaddingY);
+    public f32 gap = s_StatusBarDefaultGap;
+    public LayoutItemOptions layout;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidMenuBarMenus(in Span<MenuBarMenu> menus){
+    for(usize idx = 0u; idx < menus.size(); ++idx){
+        if(menus[idx].key == 0u)
+            return false;
+        for(usize prev = 0u; prev < idx; ++prev){
+            if(menus[prev].key == menus[idx].key)
+                return false;
+        }
+    }
+    return true;
+}
+
+b8 IsValidMenuBarOptions(in MenuBarOptions options){
+    return IsValidLayoutSize(options.width)
+        && IsFinite(VectorSingle(options.wheelRows))
+        && options.wheelRows > 0.0f;
+}
+
+b8 IsValidMenuBarStyle(in MenuBarStyle style){
+    return IsValidPaintColor(style.borderColor)
+        && IsFinite(VectorSingle(style.height, style.itemPaddingX, style.itemGap, style.dropdownSize.x))
+        && IsFinite(VectorSingle(style.dropdownSize.y))
+        && style.height > 0.0f
+        && style.itemPaddingX >= 0.0f
+        && style.itemGap >= 0.0f
+        && style.dropdownSize.x > 0.0f
+        && style.dropdownSize.y > 0.0f;
+}
+
+b8 IsValidToolbarOptions(in ToolbarOptions options){
+    return (options.direction == LayoutDirection::Row || options.direction == LayoutDirection::Column)
+        && IsValidLayoutSize(options.width)
+        && IsValidLayoutSize(options.height)
+        && IsBoundedUiPadding(options.padding)
+        && IsFinite(VectorSingle(options.gap))
+        && options.gap >= 0.0f;
+}
+
+b8 IsValidStatusBarOptions(in StatusBarOptions options){
+    return IsValidLayoutSize(options.width)
+        && IsBoundedUiPadding(options.padding)
+        && IsFinite(VectorSingle(options.height, options.gap, 0.0f, 0.0f))
+        && options.height > 0.0f
+        && options.gap >= 0.0f;
+}
+
+Expected<usize> FindMenuBarIndexByKey(in Span<MenuBarMenu> menus, in u64 key){
+    if(key == 0u)
+        return MakeUnexpected(Failure());
+    for(usize idx = 0u; idx < menus.size(); ++idx){
+        if(menus[idx].key == key)
+            return idx;
+    }
+    return MakeUnexpected(Failure());
+}
+
+u64 FindAdjacentEnabledMenuKey(in Span<u64> keys, in Span<u8> enabledFlags, in u64 currentKey, in b8 forward){
+    const usize count = keys.size();
+    if(count == 0u || enabledFlags.size() != count)
+        return 0u;
+    usize start = 0u;
+    if(currentKey == 0u){
+        if(!forward)
+            start = count - 1u;
+        for(usize step = 0u; step < count; ++step){
+            usize idx = step;
+            if(!forward)
+                idx = count - 1u - step;
+            if(enabledFlags[idx] != 0u)
+                return keys[idx];
+        }
+        return 0u;
+    }
+    for(usize idx = 0u; idx < count; ++idx){
+        if(keys[idx] == currentKey){
+            start = idx;
+            break;
+        }
+    }
+    for(usize step = 1u; step <= count; ++step){
+        usize idx = (start + step) % count;
+        if(!forward)
+            idx = (start + count - (step % count)) % count;
+        if(enabledFlags[idx] != 0u)
+            return keys[idx];
+    }
+    return 0u;
+}
+
+void ApplySkinPaletteToMenuBarStyle(in UiSkinPalette palette, mut MenuBarStyle style){
+    style.borderColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -75,9 +75,8 @@ class CsgBoxShape : ICsgShape{
         const VectorSingle zero(s_CsgZeroShapeParameter);
         const VectorSingle q = Abs(shapePosition) - halfExtents;
         const f32 outside = Length(Max(q, zero).xyz);
-        const VectorSingle minYZ = VectorSelect(q.zzzz, q.yyyy, VectorLess(q.yyyy, q.zzzz));
-        const VectorSingle minXYZ = VectorSelect(minYZ, q.xxxx, VectorLess(q.xxxx, minYZ));
-        const f32 inside = VectorSelect(zero, minXYZ, VectorLess(minXYZ, zero)).x;
+        const VectorSingle maxXYZ = Max(q.xxxx, Max(q.yyyy, q.zzzz));
+        const f32 inside = Min(maxXYZ, zero).x;
         return outside + inside;
     }
 }

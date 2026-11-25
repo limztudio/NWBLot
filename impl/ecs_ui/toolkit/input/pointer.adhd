@@ -23,11 +23,30 @@ enum<u8> PointerIntent{
     ContextMenu,
 }
 
+enum<u8> PointerCursor{
+    Default,
+    TextInput,
+    Hand,
+    Crosshair,
+    ResizeEW,
+    ResizeNS,
+    ResizeNWSE,
+    ResizeNESW,
+    Move,
+    NotAllowed,
+    Wait,
+    Progress,
+    Grab,
+    Grabbing,
+    Hidden,
+}
+
 class PointerInput{
     public InputSource source;
     public PointerPhase phase = PointerPhase::Move;
     public PointerIntent intent = PointerIntent::Activate;
     public b8 extend = false;
+    public b8 toggle = false;
     public b8 hoverCapable = false;
     public Point position;
     public f64 scrollX = 0.0;

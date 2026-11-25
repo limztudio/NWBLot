@@ -1,0 +1,649 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_mesh/components.adhd>
+#include <impl/ecs_mesh/soft_body/cpu_mesh.adhd>
+#include <impl/ecs_physics/subsystem_components.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const StringView s_SoftBodyAssetOwnerName = "SoftBodyMeshSystem";
+const Name s_SoftBodyFallbackName = "soft_body";
+const Name s_SoftBodyUploadName = "soft_body_upload";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class SoftBodyBatchUploadReadyTask{
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
+    }
+
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return !commands.commandRecordingFailed();
+    }
+}
+
+class SoftBodyRuntimeMeshGpuBuffers{
+    public Name meshKey = s_NameNone;
+    public u64 uploadedEditRevision = 0u;
+    public BufferHandle positionBuffer;
+    public BufferHandle normalBuffer;
+    public BufferHandle tangentBuffer;
+    public BufferHandle uv0Buffer;
+    public BufferHandle colorBuffer;
+    public BufferHandle meshletDescBuffer;
+    public BufferHandle meshletBoundsBuffer;
+    public BufferHandle meshletPositionRefDeltaBuffer;
+    public BufferHandle meshletAttributeRefDeltaBuffer;
+    public BufferHandle meshletLocalVertexRefBuffer;
+    public BufferHandle meshletPrimitiveIndexBuffer;
+    public BufferHandle triangleIndexBuffer;
+    public BufferHandle attributeBuffer;
+    public BufferHandle meshletLocalBoundsBuffer;
+    public BufferHandle localBoundsBuffer;
+
+    public void reset(){
+        this.meshKey = s_NameNone;
+        this.uploadedEditRevision = 0u;
+        this.positionBuffer.reset();
+        this.normalBuffer.reset();
+        this.tangentBuffer.reset();
+        this.uv0Buffer.reset();
+        this.colorBuffer.reset();
+        this.meshletDescBuffer.reset();
+        this.meshletBoundsBuffer.reset();
+        this.meshletPositionRefDeltaBuffer.reset();
+        this.meshletAttributeRefDeltaBuffer.reset();
+        this.meshletLocalVertexRefBuffer.reset();
+        this.meshletPrimitiveIndexBuffer.reset();
+        this.triangleIndexBuffer.reset();
+        this.attributeBuffer.reset();
+        this.meshletLocalBoundsBuffer.reset();
+        this.localBoundsBuffer.reset();
+    }
+
+    public b8 valid()const{
+        return this.meshKey != s_NameNone
+            && this.positionBuffer.valid()
+            && this.normalBuffer.valid()
+            && this.tangentBuffer.valid()
+            && this.uv0Buffer.valid()
+            && this.colorBuffer.valid()
+            && this.meshletDescBuffer.valid()
+            && this.meshletBoundsBuffer.valid()
+            && this.meshletPositionRefDeltaBuffer.valid()
+            && this.meshletAttributeRefDeltaBuffer.valid()
+            && this.meshletLocalVertexRefBuffer.valid()
+            && this.meshletPrimitiveIndexBuffer.valid()
+            && this.triangleIndexBuffer.valid()
+            && this.attributeBuffer.valid()
+            && this.meshletLocalBoundsBuffer.valid()
+            && this.localBoundsBuffer.valid();
+    }
+}
+
+class SoftBodyRuntimeMeshEntry{
+    public EntityID entity = s_InvalidEntityId;
+    public SoftBodyRuntimeMeshCpuState cpu;
+    public SoftBodyRuntimeMeshGpuBuffers gpu;
+    public u64 lastDeformHash = 0u;
+    public b8 pendingTopologyUpload = false;
+    public b8 pendingDeformUpload = false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComputeSoftBodyDeformHash(in SoftBody sb, in TransformComponent xf){
+    usize h = HashValue(sb.particles.size());
+    h = HashCombineValue(h, sb.topologyVersion);
+    u32 bakedFlag = 0u;
+    if(sb.isWorldSpaceBaked())
+        bakedFlag = 1u;
+    h = HashCombineValue(h, bakedFlag);
+    h = HashCombineValue(h, BitCast<u32>(xf.position.x));
+    h = HashCombineValue(h, BitCast<u32>(xf.position.y));
+    h = HashCombineValue(h, BitCast<u32>(xf.position.z));
+    h = HashCombineValue(h, BitCast<u32>(xf.rotation.x));
+    h = HashCombineValue(h, BitCast<u32>(xf.rotation.y));
+    h = HashCombineValue(h, BitCast<u32>(xf.rotation.z));
+    h = HashCombineValue(h, BitCast<u32>(xf.rotation.w));
+    h = HashCombineValue(h, BitCast<u32>(xf.scale.x));
+    h = HashCombineValue(h, BitCast<u32>(xf.scale.y));
+    h = HashCombineValue(h, BitCast<u32>(xf.scale.z));
+    for(usize i = 0u; i < sb.particles.size(); ++i){
+        in f32x4 p = sb.particles[i].position;
+        h = HashCombineValue(h, BitCast<u32>(p.x));
+        h = HashCombineValue(h, BitCast<u32>(p.y));
+        h = HashCombineValue(h, BitCast<u32>(p.z));
+    }
+    return cast<u64>(h);
+}
+
+GpuTaskSchedulingHint MakeSoftBodyUploadScheduling(){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Small;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    return scheduling;
+}
+
+Expected<BufferHandle> CreateSoftBodyRuntimeBuffer(
+    mut GraphicsRuntime graphics,
+    in Name baseName,
+    in u64 entityId,
+    in u32 editRevision,
+    in StringView suffix,
+    in u64 byteSize,
+    in u32 structStride,
+    in b8 canHaveUavs,
+    in b8 canHaveRawViews,
+    in b8 isIndexBuffer,
+    in b8 accelStructBuildInput
+){
+    const Name bufferName = DeriveRuntimeResourceName(baseName, entityId, editRevision, suffix);
+    if(bufferName == s_NameNone || byteSize == 0u)
+        return MakeUnexpected(Failure());
+
+    BufferDesc desc = BufferDesc();
+    desc
+        .setByteSize(byteSize)
+        .setStructStride(structStride)
+        .setCanHaveUAVs(canHaveUavs)
+        .setCanHaveRawViews(canHaveRawViews)
+        .setIsIndexBuffer(isIndexBuffer)
+        .setIsAccelStructBuildInput(accelStructBuildInput)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(bufferName)
+    ;
+    return graphics.createBuffer(desc);
+}
+
+[cpp_unwind]
+b8 CreateSoftBodyEntryGpuBuffers(
+    mut GraphicsRuntime graphics,
+    in EntityID entity,
+    in Name baseName,
+    in SoftBodyRuntimeMeshCpuState cpu,
+    mut SoftBodyRuntimeMeshGpuBuffers outGpu
+){
+    outGpu.reset();
+    if(!cpu.topologyValid || cpu.meshlets.empty() || cpu.positions.empty())
+        return false;
+
+    const u32 rev = cast<u32>(cpu.editRevision);
+    const Name meshKey = DeriveRuntimeResourceName(baseName, entity.id, rev, "soft_body_mesh");
+    if(meshKey == s_NameNone)
+        return false;
+
+    const Expected<usize> posDeltaBytes = TryComputePaddedRawByteCount(cpu.meshletPositionRefDeltas.size());
+    const Expected<usize> attrDeltaBytes = TryComputePaddedRawByteCount(cpu.meshletAttributeRefDeltas.size());
+    const Expected<usize> primBytes = TryComputePaddedRawByteCount(cpu.meshletPrimitiveIndices.size());
+    if(!posDeltaBytes.has_value() || !attrDeltaBytes.has_value() || !primBytes.has_value())
+        return false;
+
+    const b8 rtSupported = graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
+
+    const Expected<BufferHandle> localBoundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_LocalBoundsSuffix, cast<u64>(s_RuntimeMeshBoundsByteSize), 0u, true, true, false, false);
+    const Expected<BufferHandle> meshletLocalBoundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletLocalBoundsSuffix, cast<u64>(cpu.meshletLocalBounds.size()) * cast<u64>(s_RuntimeMeshBoundsByteSize), 0u, true, true, false, false);
+    const Expected<BufferHandle> posRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedPositionsSuffix, cast<u64>(cpu.positions.size()) * cast<u64>(size_of<f32x3u>()), cast<u32>(size_of<f32x3u>()), true, true, false, rtSupported);
+    const Expected<BufferHandle> normRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedNormalsSuffix, cast<u64>(cpu.normals.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), true, false, false, false);
+    const Expected<BufferHandle> tanRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedTangentsSuffix, cast<u64>(cpu.tangents.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), true, false, false, false);
+    const Expected<BufferHandle> uvRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_Uv0Suffix, cast<u64>(cpu.uv0.size()) * cast<u64>(size_of<f32x2u>()), cast<u32>(size_of<f32x2u>()), false, false, false, false);
+    const Expected<BufferHandle> colRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_ColorsSuffix, cast<u64>(cpu.colors.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), false, false, false, false);
+    const Expected<BufferHandle> meshletRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletsSuffix, cast<u64>(cpu.meshlets.size()) * cast<u64>(size_of<MeshletDesc>()), cast<u32>(size_of<MeshletDesc>()), false, false, false, false);
+    const Expected<BufferHandle> boundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletBoundsSuffix, cast<u64>(cpu.meshletBounds.size()) * cast<u64>(size_of<MeshletBounds>()), cast<u32>(size_of<MeshletBounds>()), true, true, false, false);
+    const Expected<BufferHandle> posDeltaRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletPositionRefDeltasSuffix, cast<u64>(posDeltaBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
+    const Expected<BufferHandle> attrDeltaRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletAttributeRefDeltasSuffix, cast<u64>(attrDeltaBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
+    const Expected<BufferHandle> localVertRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletLocalVertexRefsSuffix, cast<u64>(cpu.meshletLocalVertexRefs.size()) * cast<u64>(size_of<MeshletLocalVertexRef>()), cast<u32>(size_of<MeshletLocalVertexRef>()), false, false, false, false);
+    const Expected<BufferHandle> primRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletPrimitiveIndicesSuffix, cast<u64>(primBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
+    const Expected<BufferHandle> triIdxRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_RtTriangleIndicesBufferName, cast<u64>(cpu.triangleIndices.size()) * cast<u64>(size_of<u32>()), cast<u32>(size_of<u32>()), false, true, true, rtSupported);
+    const Expected<BufferHandle> triAttrRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_RtTriangleAttributesBufferName, cast<u64>(cpu.triangleAttributes.size()) * cast<u64>(size_of<AttribGpu>()), cast<u32>(size_of<AttribGpu>()), true, true, false, false);
+
+    if(
+        !localBoundsRes.has_value()
+        || !meshletLocalBoundsRes.has_value()
+        || !posRes.has_value()
+        || !normRes.has_value()
+        || !tanRes.has_value()
+        || !uvRes.has_value()
+        || !colRes.has_value()
+        || !meshletRes.has_value()
+        || !boundsRes.has_value()
+        || !posDeltaRes.has_value()
+        || !attrDeltaRes.has_value()
+        || !localVertRes.has_value()
+        || !primRes.has_value()
+        || !triIdxRes.has_value()
+        || !triAttrRes.has_value()
+    )
+        return false;
+
+    outGpu.meshKey = meshKey;
+    outGpu.uploadedEditRevision = cpu.editRevision;
+    outGpu.localBoundsBuffer = localBoundsRes.value();
+    outGpu.meshletLocalBoundsBuffer = meshletLocalBoundsRes.value();
+    outGpu.positionBuffer = posRes.value();
+    outGpu.normalBuffer = normRes.value();
+    outGpu.tangentBuffer = tanRes.value();
+    outGpu.uv0Buffer = uvRes.value();
+    outGpu.colorBuffer = colRes.value();
+    outGpu.meshletDescBuffer = meshletRes.value();
+    outGpu.meshletBoundsBuffer = boundsRes.value();
+    outGpu.meshletPositionRefDeltaBuffer = posDeltaRes.value();
+    outGpu.meshletAttributeRefDeltaBuffer = attrDeltaRes.value();
+    outGpu.meshletLocalVertexRefBuffer = localVertRes.value();
+    outGpu.meshletPrimitiveIndexBuffer = primRes.value();
+    outGpu.triangleIndexBuffer = triIdxRes.value();
+    outGpu.attributeBuffer = triAttrRes.value();
+    return true;
+}
+
+[cpp_unwind]
+b8 DeclareSoftBodyBlobUpload(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView label,
+    in Expected<GpuUploadBlobId> blob,
+    mut Vector<GpuTaskId> outTasks
+){
+    if(!buffer.valid() || !blob.has_value())
+        return false;
+
+    in BufferDesc description = buffer.deref().getCreationDescription();
+    GpuGraphResourceDesc resourceDesc = GpuGraphResourceDesc();
+    resourceDesc
+        .setIdentity(description.debugName)
+        .setMarkerLabel(label)
+        .setType(GpuGraphResourceType::Buffer)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(description.queueSharing)
+    ;
+    const Expected<GpuGraphResourceId> destination = graph.importBuffer(buffer, resourceDesc);
+    if(!destination.has_value())
+        return false;
+
+    GpuTaskDesc taskDesc = GpuTaskDesc();
+    taskDesc
+        .setIdentity(description.debugName)
+        .setMarkerLabel(label)
+        .setScheduling(MakeSoftBodyUploadScheduling())
+    ;
+    GpuUploadBufferTaskDesc upload = GpuUploadBufferTaskDesc();
+    upload.source = blob.value();
+    upload.destination = destination.value();
+    upload.finalState = ResourceStates::Common;
+    const Expected<GpuTaskId> task = graph.addUploadBufferTask(taskDesc, upload);
+    if(!task.has_value())
+        return false;
+
+    outTasks.push_back(task.value());
+    return true;
+}
+
+[cpp_unwind]
+b8 DeclareSoftBodyTypedUpload<T>(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView label,
+    in Span<T> elements,
+    mut Vector<GpuTaskId> outTasks
+){
+    if(elements.empty())
+        return false;
+    return DeclareSoftBodyBlobUpload(graph, buffer, label, graph.copyUploadElements<T>(elements), outTasks);
+}
+
+[cpp_unwind]
+b8 DeclareSoftBodyPaddedRawUpload(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView label,
+    in Span<u8> bytes,
+    mut Vector<GpuTaskId> outTasks
+){
+    if(bytes.empty())
+        return false;
+    const Expected<usize> paddedCount = TryComputePaddedRawByteCount(bytes.size());
+    if(!paddedCount.has_value())
+        return false;
+    if(paddedCount.value() == bytes.size())
+        return DeclareSoftBodyBlobUpload(graph, buffer, label, graph.copyUploadBytes<u8>(bytes), outTasks);
+
+    Vector<u8> padded;
+    padded.reserve(paddedCount.value());
+    for(usize i = 0u; i < bytes.size(); ++i)
+        padded.push_back(bytes[i]);
+    while(padded.size() < paddedCount.value())
+        padded.push_back(0u);
+    return DeclareSoftBodyBlobUpload(graph, buffer, label, graph.copyUploadBytes<u8>(Span<u8>(padded)), outTasks);
+}
+
+[cpp_unwind]
+b8 DeclareSoftBodyDynamicUploads(
+    mut GpuTaskGraph graph,
+    in SoftBodyRuntimeMeshEntry entry,
+    mut Vector<GpuTaskId> outTasks
+){
+    b8 ok = DeclareSoftBodyBlobUpload(graph, entry.gpu.localBoundsBuffer, s_LocalBoundsSuffix, graph.copyUploadValue<RuntimeMeshLocalBounds>(entry.cpu.localBounds), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<RuntimeMeshLocalBounds>(graph, entry.gpu.meshletLocalBoundsBuffer, s_MeshletLocalBoundsSuffix, Span<RuntimeMeshLocalBounds>(entry.cpu.meshletLocalBounds), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<f32x3u>(graph, entry.gpu.positionBuffer, s_RuntimeCacheSkinnedPositionLabel, Span<f32x3u>(entry.cpu.positions), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<f16x4u>(graph, entry.gpu.normalBuffer, s_RuntimeCacheSkinnedNormalLabel, Span<f16x4u>(entry.cpu.normals), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<f16x4u>(graph, entry.gpu.tangentBuffer, s_RuntimeCacheSkinnedTangentLabel, Span<f16x4u>(entry.cpu.tangents), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<MeshletBounds>(graph, entry.gpu.meshletBoundsBuffer, s_RuntimeCacheMeshletBoundsLabel, Span<MeshletBounds>(entry.cpu.meshletBounds), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<AttribGpu>(graph, entry.gpu.attributeBuffer, s_RuntimeCacheRtTriangleAttributeLabel, Span<AttribGpu>(entry.cpu.triangleAttributes), outTasks);
+    return ok;
+}
+
+[cpp_unwind]
+b8 DeclareSoftBodyTopologyUploads(
+    mut GpuTaskGraph graph,
+    in SoftBodyRuntimeMeshEntry entry,
+    mut Vector<GpuTaskId> outTasks
+){
+    b8 ok = DeclareSoftBodyTypedUpload<f32x2u>(graph, entry.gpu.uv0Buffer, s_RuntimeCacheUv0Label, Span<f32x2u>(entry.cpu.uv0), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<f16x4u>(graph, entry.gpu.colorBuffer, s_RuntimeCacheColorLabel, Span<f16x4u>(entry.cpu.colors), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<MeshletDesc>(graph, entry.gpu.meshletDescBuffer, s_RuntimeCacheMeshletDescriptorLabel, Span<MeshletDesc>(entry.cpu.meshlets), outTasks);
+    ok = ok && DeclareSoftBodyPaddedRawUpload(graph, entry.gpu.meshletPositionRefDeltaBuffer, s_RuntimeCacheMeshletPositionRefDeltaLabel, Span<u8>(entry.cpu.meshletPositionRefDeltas), outTasks);
+    ok = ok && DeclareSoftBodyPaddedRawUpload(graph, entry.gpu.meshletAttributeRefDeltaBuffer, s_RuntimeCacheMeshletAttributeRefDeltaLabel, Span<u8>(entry.cpu.meshletAttributeRefDeltas), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<MeshletLocalVertexRef>(graph, entry.gpu.meshletLocalVertexRefBuffer, s_RuntimeCacheMeshletLocalVertexRefLabel, Span<MeshletLocalVertexRef>(entry.cpu.meshletLocalVertexRefs), outTasks);
+    ok = ok && DeclareSoftBodyPaddedRawUpload(graph, entry.gpu.meshletPrimitiveIndexBuffer, s_RuntimeCacheMeshletPrimitiveIndexLabel, Span<u8>(entry.cpu.meshletPrimitiveIndices), outTasks);
+    ok = ok && DeclareSoftBodyTypedUpload<u32>(graph, entry.gpu.triangleIndexBuffer, s_RuntimeCacheRtTriangleIndexLabel, Span<u32>(entry.cpu.triangleIndices), outTasks);
+    ok = ok && DeclareSoftBodyDynamicUploads(graph, entry, outTasks);
+    return ok;
+}
+
+RuntimeMeshDesc BuildSoftBodyRuntimeMeshDesc(in SoftBodyRuntimeMeshEntry entry){
+    RuntimeMeshDesc desc;
+    desc.meshKey = entry.gpu.meshKey;
+    desc.version = entry.cpu.editRevision;
+    desc.entity = entry.entity;
+    desc.geometryContentRevision = entry.cpu.contentRevision;
+    desc.localBoundsBuffer = entry.gpu.localBoundsBuffer;
+    desc.meshletLocalBoundsBuffer = entry.gpu.meshletLocalBoundsBuffer;
+    desc.buffers.positionBuffer = entry.gpu.positionBuffer;
+    desc.buffers.normalBuffer = entry.gpu.normalBuffer;
+    desc.buffers.tangentBuffer = entry.gpu.tangentBuffer;
+    desc.buffers.uv0Buffer = entry.gpu.uv0Buffer;
+    desc.buffers.colorBuffer = entry.gpu.colorBuffer;
+    desc.buffers.meshletDescBuffer = entry.gpu.meshletDescBuffer;
+    desc.buffers.meshletBoundsBuffer = entry.gpu.meshletBoundsBuffer;
+    desc.buffers.meshletPositionRefDeltaBuffer = entry.gpu.meshletPositionRefDeltaBuffer;
+    desc.buffers.meshletAttributeRefDeltaBuffer = entry.gpu.meshletAttributeRefDeltaBuffer;
+    desc.buffers.meshletLocalVertexRefBuffer = entry.gpu.meshletLocalVertexRefBuffer;
+    desc.buffers.meshletPrimitiveIndexBuffer = entry.gpu.meshletPrimitiveIndexBuffer;
+    desc.triangleIndexBuffer = entry.gpu.triangleIndexBuffer;
+    desc.attributeBuffer = entry.gpu.attributeBuffer;
+    desc.solidTriangleWords = Span<u32>(entry.cpu.solidTriangleWords);
+    desc.localBounds = entry.cpu.localBounds;
+    desc.meshletCount = cast<u32>(entry.cpu.meshlets.size());
+    desc.meshletPrimitiveIndexCount = cast<u32>(entry.cpu.meshletPrimitiveIndices.size());
+    desc.dynamicMeshletBoundsFresh = true;
+    desc.dynamicMeshletConesFresh = true;
+    return desc;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[arena, system("soft_body_mesh")]
+class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
+    private mut World m_world;
+    private mut GraphicsRuntime m_graphics;
+    private mut AssetManager m_assetManager;
+    private mut IRuntimeMeshRegistry m_runtimeMeshRegistry;
+    private HashMap<EntityID, SoftBodyRuntimeMeshEntry> m_entries;
+    private Vector<EntityID> m_staleEntities;
+    private u64 m_uploadBatchSequence = 0u;
+
+    public SoftBodyMeshSystem(
+        mut World world,
+        mut GraphicsRuntime graphics,
+        mut AssetManager assetManager,
+        mut IRuntimeMeshRegistry runtimeMeshRegistry
+    ){
+        this.m_world = world;
+        this.m_graphics = graphics;
+        this.m_assetManager = assetManager;
+        this.m_runtimeMeshRegistry = runtimeMeshRegistry;
+        this.readAccess<SoftBodyComponent>();
+        this.readAccess<MeshComponent>();
+        this.readAccess<TransformComponent>();
+        this.readAccess<SceneEntityNameComponent>();
+        runtimeMeshRegistry.registerRuntimeMeshProvider(this);
+    }
+
+    public ~SoftBodyMeshSystem(){
+        this.invalidateResources();
+        this.m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(this);
+    }
+
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        return Expected<void, CpuTaskAdmissionError>();
+    }
+
+    public b8 prepareResources(in FramebufferPtr framebuffer)override{
+        this.syncEntities();
+        return this.uploadPendingBatches(true, false);
+    }
+
+    public void render(in FramebufferPtr framebuffer)override{
+        if(!this.uploadPendingBatches(true, true))
+            warning("SoftBodyMeshSystem: skipped runtime mesh upload because standalone graph submission failed");
+    }
+
+    public void invalidateResources()override{
+        this.m_entries.clear();
+        this.m_staleEntities.clear();
+    }
+
+    public Expected<RuntimeMeshDesc> resolveRuntimeMesh(in EntityID entity)override{
+        const auto found = this.m_entries.find(entity);
+        if(found == this.m_entries.end())
+            return MakeUnexpected(Failure());
+
+        if(!found.value().cpu.topologyValid || !found.value().gpu.valid())
+            return MakeUnexpected(Failure());
+
+        const RuntimeMeshDesc desc = BuildSoftBodyRuntimeMeshDesc(found.value());
+        if(!desc.valid())
+            return MakeUnexpected(Failure());
+        return desc;
+    }
+
+    public b8 hasRuntimeMeshBinding(in EntityID entity)const override{
+        if(!this.m_world.hasComponent<SoftBodyComponent>(entity))
+            return false;
+        in SoftBodyComponent sbComp = this.m_world.getComponent<SoftBodyComponent>(entity);
+        return sbComp.enabled && !sbComp.softBody.particles.empty();
+    }
+
+    public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)override{
+        for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
+            if(requests.complete())
+                return;
+            if(it.value().cpu.topologyValid && it.value().gpu.valid())
+                requests.markLive(it.value().gpu.meshKey, it.value().cpu.editRevision);
+        }
+    }
+
+    private Name resolveEntityBaseName(in EntityID entity, in Name sourceMeshName)const{
+        if(this.m_world.hasComponent<SceneEntityNameComponent>(entity)){
+            in SceneEntityNameComponent nameComp = this.m_world.getComponent<SceneEntityNameComponent>(entity);
+            if(nameComp.name != s_NameNone)
+                return nameComp.name;
+        }
+        if(sourceMeshName != s_NameNone)
+            return sourceMeshName;
+        return s_SoftBodyFallbackName;
+    }
+
+    [cpp_unwind]
+    private void syncEntities(){
+        this.m_staleEntities.clear();
+        for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
+            const EntityID entity = it.key();
+            if(!this.hasRuntimeMeshBinding(entity))
+                this.m_staleEntities.push_back(entity);
+        }
+        for(usize i = 0u; i < this.m_staleEntities.size(); ++i)
+            this.m_entries.erase(this.m_staleEntities[i]);
+        this.m_staleEntities.clear();
+
+        for(in auto row : this.m_world.view<SoftBodyComponent>()){
+            const EntityID entity = Get<0>(row);
+            in SoftBodyComponent sbComp = this.m_world.getComponent<SoftBodyComponent>(entity);
+            if(!sbComp.enabled || sbComp.softBody.particles.empty())
+                continue;
+
+            TransformComponent xf;
+            if(this.m_world.hasComponent<TransformComponent>(entity))
+                xf = this.m_world.getComponent<TransformComponent>(entity);
+
+            Name sourceMeshName = s_NameNone;
+            if(this.m_world.hasComponent<MeshComponent>(entity)){
+                in MeshComponent meshComp = this.m_world.getComponent<MeshComponent>(entity);
+                if(meshComp.mesh.valid())
+                    sourceMeshName = meshComp.mesh.name();
+            }
+
+            mut SoftBodyRuntimeMeshEntry entry = this.m_entries[entity];
+            entry.entity = entity;
+
+            const u64 deformHash = ComputeSoftBodyDeformHash(sbComp.softBody, xf);
+            if(entry.cpu.needsTopologyRebuild(sbComp.softBody, sourceMeshName)){
+                b8 rebuilt = false;
+                if(sourceMeshName != s_NameNone){
+                    auto loadedAsset = LoadTypedAssetSync<Mesh>(this.m_assetManager, sourceMeshName, s_SoftBodyAssetOwnerName);
+                    if(loadedAsset.has_value())
+                        rebuilt = entry.cpu.rebuildTopologyFromMesh(sbComp.softBody, xf, loadedAsset.value().deref(), sourceMeshName);
+                    else
+                        rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
+                }
+                else{
+                    rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, s_NameNone);
+                }
+
+                if(!rebuilt){
+                    entry.cpu.reset();
+                    entry.gpu.reset();
+                    entry.pendingTopologyUpload = false;
+                    entry.pendingDeformUpload = false;
+                    continue;
+                }
+
+                const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
+                if(!CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
+                    entry.gpu.reset();
+                    entry.pendingTopologyUpload = false;
+                    entry.pendingDeformUpload = false;
+                    continue;
+                }
+
+                entry.lastDeformHash = deformHash;
+                entry.pendingTopologyUpload = true;
+                entry.pendingDeformUpload = false;
+                continue;
+            }
+
+            if(deformHash != entry.lastDeformHash || !entry.gpu.valid()){
+                if(entry.cpu.updateDeformation(sbComp.softBody, xf)){
+                    entry.lastDeformHash = deformHash;
+                    if(!entry.gpu.valid() || entry.gpu.uploadedEditRevision != entry.cpu.editRevision){
+                        const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
+                        if(CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
+                            entry.pendingTopologyUpload = true;
+                            entry.pendingDeformUpload = false;
+                        }
+                    }
+                    else if(!entry.pendingTopologyUpload){
+                        entry.pendingDeformUpload = true;
+                    }
+                }
+            }
+        }
+    }
+
+    [cpp_unwind]
+    private b8 uploadPendingBatches(in b8 uploadTopologies, in b8 uploadDeformations){
+        b8 hasPending = false;
+        for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
+            if(!it.value().cpu.topologyValid || !it.value().gpu.valid())
+                continue;
+            if((uploadTopologies && it.value().pendingTopologyUpload) || (uploadDeformations && it.value().pendingDeformUpload)){
+                hasPending = true;
+                break;
+            }
+        }
+        if(!hasPending)
+            return true;
+
+        ++this.m_uploadBatchSequence;
+        const Name batchReadyName = DeriveRuntimeResourceName(s_SoftBodyUploadName, this.m_uploadBatchSequence, 0u, "batch_ready");
+        if(batchReadyName == s_NameNone)
+            return false;
+
+        in HashMap<EntityID, SoftBodyRuntimeMeshEntry> entriesRef = this.m_entries;
+        const GpuPhysicalQueueId graphicsQueue = this.m_graphics.getDevice().getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        const Expected<QueueSubmissionToken> uploaded = this.m_graphics.standaloneGraph().submitStandaloneTaskGraph(
+            lambda[in entriesRef, in batchReadyName, in uploadTopologies, in uploadDeformations](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+                Vector<GpuTaskId> uploadTasks;
+                uploadTasks.reserve(entriesRef.size() * 15u);
+
+                for(auto it = entriesRef.begin(); it != entriesRef.end(); ++it){
+                    if(!it.value().cpu.topologyValid || !it.value().gpu.valid())
+                        continue;
+
+                    if(uploadTopologies && it.value().pendingTopologyUpload){
+                        if(!DeclareSoftBodyTopologyUploads(graph, it.value(), uploadTasks))
+                            return MakeUnexpected(Failure());
+                    }
+                    else if(uploadDeformations && it.value().pendingDeformUpload){
+                        if(!DeclareSoftBodyDynamicUploads(graph, it.value(), uploadTasks))
+                            return MakeUnexpected(Failure());
+                    }
+                }
+
+                if(uploadTasks.empty())
+                    return MakeUnexpected(Failure());
+
+                GpuTaskDesc readyDesc = GpuTaskDesc();
+                readyDesc
+                    .setIdentity(batchReadyName)
+                    .setMarkerLabel("SoftBody Runtime Batch Upload Ready")
+                    .setDependencies(Span<GpuTaskId>(uploadTasks))
+                ;
+                SoftBodyBatchUploadReadyTask readyTask;
+                return graph.addPayloadTask(readyDesc, readyTask);
+            },
+            graphicsQueue
+        );
+        if(!uploaded.has_value() || !uploaded.value().valid())
+            return false;
+
+        for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
+            if(uploadTopologies && it.value().pendingTopologyUpload)
+                it.value().pendingTopologyUpload = false;
+            if(uploadDeformations && it.value().pendingDeformUpload)
+                it.value().pendingDeformUpload = false;
+        }
+        return true;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

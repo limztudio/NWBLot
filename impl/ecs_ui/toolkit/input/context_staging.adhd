@@ -8,10 +8,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ContextScrollOwnerEntry{
+    public WidgetId id;
+    public u64 declarationGeneration = 0u;
+    public PopupToken popup;
+}
+
+class ContextFocusGroupEntry{
+    public u32 id = 0u;
+    public b8 trapDirectional = false;
+    public PopupToken popup;
+}
+
+b8 LessWindowPressSequence(in WindowPressRecord lhs, in WindowPressRecord rhs){
+    return lhs.sequence < rhs.sequence;
+}
+
 b8 TryAppendContextTarget(
     in WidgetState state,
     in PopupToken currentPopup,
     in u32 popupLayer,
+    in u32 windowZOrder,
+    in WidgetId windowId,
+    in u64 windowDeclarationGeneration,
+    in WidgetId scrollOwnerId,
+    in u64 scrollOwnerDeclarationGeneration,
     in HitTarget target,
     mut Vector<HitTarget> targets,
     mut Vector<WidgetRoot> targetRoots
@@ -24,6 +45,24 @@ b8 TryAppendContextTarget(
     admitted.paintOrder = cast<u32>(targets.size());
     admitted.popup = currentPopup;
     admitted.layer = popupLayer;
+    if(!currentPopup.valid()){
+        admitted.zOrder = windowZOrder;
+        admitted.windowId = windowId;
+        admitted.windowDeclarationGeneration = windowDeclarationGeneration;
+    }
+    else{
+        admitted.zOrder = 0u;
+        admitted.windowId = WidgetId();
+        admitted.windowDeclarationGeneration = 0u;
+    }
+    if(scrollOwnerId.valid() && scrollOwnerId != admitted.id && scrollOwnerId != admitted.owner){
+        admitted.scrollOwner = scrollOwnerId;
+        admitted.scrollOwnerDeclarationGeneration = scrollOwnerDeclarationGeneration;
+    }
+    else{
+        admitted.scrollOwner = WidgetId();
+        admitted.scrollOwnerDeclarationGeneration = 0u;
+    }
     targets.push_back(admitted);
     targetRoots.push_back(state.root);
     return true;
@@ -34,6 +73,11 @@ b8 TryAppendContextPartTarget(
     in WidgetId part,
     in PopupToken currentPopup,
     in u32 popupLayer,
+    in u32 windowZOrder,
+    in WidgetId windowId,
+    in u64 windowDeclarationGeneration,
+    in WidgetId scrollOwnerId,
+    in u64 scrollOwnerDeclarationGeneration,
     in HitTarget target,
     mut Vector<HitTarget> targets,
     mut Vector<WidgetRoot> targetRoots
@@ -48,6 +92,24 @@ b8 TryAppendContextPartTarget(
     admitted.paintOrder = cast<u32>(targets.size());
     admitted.popup = currentPopup;
     admitted.layer = popupLayer;
+    if(!currentPopup.valid()){
+        admitted.zOrder = windowZOrder;
+        admitted.windowId = windowId;
+        admitted.windowDeclarationGeneration = windowDeclarationGeneration;
+    }
+    else{
+        admitted.zOrder = 0u;
+        admitted.windowId = WidgetId();
+        admitted.windowDeclarationGeneration = 0u;
+    }
+    if(scrollOwnerId.valid() && scrollOwnerId != admitted.id && scrollOwnerId != admitted.owner){
+        admitted.scrollOwner = scrollOwnerId;
+        admitted.scrollOwnerDeclarationGeneration = scrollOwnerDeclarationGeneration;
+    }
+    else{
+        admitted.scrollOwner = WidgetId();
+        admitted.scrollOwnerDeclarationGeneration = 0u;
+    }
     targets.push_back(admitted);
     targetRoots.push_back(owner.root);
     return true;

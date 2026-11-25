@@ -10,7 +10,6 @@
 
 const Color s_ScrollbarThumbColor = Color(0.35f, 0.40f, 0.48f, 1.0f);
 const Color s_ScrollbarDisabledColor = Color(0.25f, 0.28f, 0.32f, 1.0f);
-const u32 s_ScrollbarReservationPassLimit = 3u;
 const u32 s_TextAreaScrollHorizontalBefore = 1u;
 const u32 s_TextAreaScrollHorizontalAfter = 2u;
 const u32 s_TextAreaScrollVerticalBefore = 3u;
@@ -73,6 +72,11 @@ class ScrollPlacement{
     public u64 endRow = 0u;
     public u64 rowCount = 0u;
     public b8 scrollbarVisible = false;
+}
+
+class ListScrollPlacementResult{
+    public ScrollPlacement placement;
+    public ScrollViewportPlacement scrollbars;
 }
 
 class MovedScrollbarThumb{

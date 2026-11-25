@@ -176,6 +176,7 @@ b8 PrepareContactConstraintSetup(
     in Vector<Body> bodies,
     in Vector<SolverSet> sets,
     in Contact contact,
+    in Manifold manifold,
     in Softness dynamicSoftness,
     in Softness staticSoftness,
     in f32 contactHertz,
@@ -201,7 +202,7 @@ b8 PrepareContactConstraintSetup(
     mut f32 outWarmTwistImpulse
 ){
     outConstraint.contactId = contact.contactId;
-    outConstraint.pointCount = Min(contact.manifold.rollingImpulseMeta.w & 0xffu, cast<u32>(s_MaxManifoldPoints));
+    outConstraint.pointCount = Min(manifold.rollingImpulseMeta.w & 0xffu, cast<u32>(s_MaxManifoldPoints));
     if(outConstraint.pointCount == 0u)
         return false;
 
@@ -291,7 +292,7 @@ b8 PrepareContactConstraintSetup(
         outConstraint.softness = dynamicSoftness;
     }
 
-    outN = SafeNormalizeVec3(VectorSingle(contact.manifold.normalTwist, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    outN = SafeNormalizeVec3(VectorSingle(manifold.normalTwist, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     outT1 = VectorSingle(0.0f);
     outT2 = VectorSingle(0.0f);
     outConstraint.tangentVelocity1 = contact.tangentSpeed;
@@ -350,10 +351,10 @@ b8 PrepareContactConstraintSetup(
 
     outWarmTwistImpulse = 0.0f;
     if(enableWarmStarting){
-        outConstraint.frictionImpulse = contact.manifold.frictionImpulse;
-        outWarmTwistImpulse = contact.manifold.normalTwist.w;
+        outConstraint.frictionImpulse = manifold.frictionImpulse;
+        outWarmTwistImpulse = manifold.normalTwist.w;
         if(contact.rollingResistance > 0.0f)
-            outConstraint.rollingImpulse = f32x3u(contact.manifold.rollingImpulseMeta.x, contact.manifold.rollingImpulseMeta.y, contact.manifold.rollingImpulseMeta.z);
+            outConstraint.rollingImpulse = f32x3u(manifold.rollingImpulseMeta.x, manifold.rollingImpulseMeta.y, manifold.rollingImpulseMeta.z);
         else
             outConstraint.rollingImpulse = f32x3u(0.0f, 0.0f, 0.0f);
     }
@@ -554,10 +555,11 @@ void FinalizeContactConstraintFrame(
     outConstraint.centerBTwistImpulse = f32x4(centerB, clampedWarmTwist);
 }
 
-void PrepareContactConstraintWithCache(
+void PrepareContactConstraintWithCacheForManifold(
     in Vector<Body> bodies,
     in Vector<SolverSet> sets,
     in Contact contact,
+    in Manifold manifold,
     in Softness dynamicSoftness,
     in Softness staticSoftness,
     in f32 contactHertz,
@@ -587,6 +589,7 @@ void PrepareContactConstraintWithCache(
         bodies,
         sets,
         contact,
+        manifold,
         dynamicSoftness,
         staticSoftness,
         contactHertz,
@@ -628,7 +631,7 @@ void PrepareContactConstraintWithCache(
         VectorSingle invIArnA(0.0f);
         VectorSingle invIBrnB(0.0f);
         PrepareContactConstraintPoint(
-            contact.manifold.points[i],
+            manifold.points[i],
             n,
             effInvIAMat,
             effInvIBMat,
@@ -704,6 +707,37 @@ void PrepareContactConstraintWithCache(
     }
 }
 
+void PrepareContactConstraintWithCache(
+    in Vector<Body> bodies,
+    in Vector<SolverSet> sets,
+    in Contact contact,
+    in Softness dynamicSoftness,
+    in Softness staticSoftness,
+    in f32 contactHertz,
+    in f32 contactDampingRatio,
+    in f32 h,
+    in b8 enableContactSoftening,
+    in b8 enableWarmStarting,
+    mut ContactConstraint outConstraint,
+    mut ContactConstraintStepCache outCache
+){
+    PrepareContactConstraintWithCacheForManifold(
+        bodies,
+        sets,
+        contact,
+        contact.manifold,
+        dynamicSoftness,
+        staticSoftness,
+        contactHertz,
+        contactDampingRatio,
+        h,
+        enableContactSoftening,
+        enableWarmStarting,
+        outConstraint,
+        outCache
+    );
+}
+
 void PrepareContactConstraint(
     in Vector<Body> bodies,
     in Vector<SolverSet> sets,
@@ -736,6 +770,7 @@ void PrepareContactConstraint(
         bodies,
         sets,
         contact,
+        contact.manifold,
         dynamicSoftness,
         staticSoftness,
         contactHertz,
@@ -1433,7 +1468,9 @@ void ApplyRestitutionContactConstraintCached(
         if(hasA)
             angRel -= Vector3Dot(wA, VectorSingle(ptCache.rnACachedSep, 0.0f)).x;
         const f32 vn = vnLin + angRel;
-        const f32 impulse = -pt.normalMass * (vn + restitution * relVel);
+        f32 impulse = -pt.normalMass * (vn + restitution * relVel);
+        if(c.maxNormalImpulse < s_MaxF32 * 0.5f)
+            impulse = SimdMin(impulse, SimdMax(c.maxNormalImpulse - pt.totalNormalImpulse - pt.restitutionImpulse, 0.0f));
         if(impulse > 0.0f){
             anyApplied = true;
             pt.restitutionImpulse += impulse;
@@ -1475,28 +1512,32 @@ void ApplyRestitutionContactConstraintCached(
     }
 }
 
-void StoreContactConstraintImpulses(in ContactConstraint c, mut Contact contact){
+void StoreContactConstraintImpulsesToManifold(in ContactConstraint c, mut Manifold manifold){
     b8 anyRestitution = false;
     f32 remainingNormal = 0.0f;
-    const u32 count = Min(c.pointCount, contact.manifold.rollingImpulseMeta.w & 0xffu);
+    const u32 count = Min(c.pointCount, manifold.rollingImpulseMeta.w & 0xffu);
     for(u32 i = 0u; i < count; ++i){
-        contact.manifold.points[i].anchorANormalImpulse.w = c.points[i].normalImpulse;
-        contact.manifold.points[i].anchorBTotalImpulse.w = c.points[i].totalNormalImpulse;
+        manifold.points[i].anchorANormalImpulse.w = c.points[i].normalImpulse;
+        manifold.points[i].anchorBTotalImpulse.w = c.points[i].totalNormalImpulse;
         if(c.points[i].restitutionImpulse > 0.0f)
             anyRestitution = true;
         remainingNormal += c.points[i].normalImpulse;
     }
 
     if(anyRestitution && remainingNormal <= 0.0f){
-        contact.manifold.frictionImpulse = f32x2u(0.0f, 0.0f);
-        contact.manifold.normalTwist.w = 0.0f;
-        contact.manifold.rollingImpulseMeta = f32x3_u32(0.0f, 0.0f, 0.0f, contact.manifold.rollingImpulseMeta.w);
+        manifold.frictionImpulse = f32x2u(0.0f, 0.0f);
+        manifold.normalTwist.w = 0.0f;
+        manifold.rollingImpulseMeta = f32x3_u32(0.0f, 0.0f, 0.0f, manifold.rollingImpulseMeta.w);
     }
     else{
-        contact.manifold.frictionImpulse = c.frictionImpulse;
-        contact.manifold.normalTwist.w = c.centerBTwistImpulse.w;
-        contact.manifold.rollingImpulseMeta = f32x3_u32(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, contact.manifold.rollingImpulseMeta.w);
+        manifold.frictionImpulse = c.frictionImpulse;
+        manifold.normalTwist.w = c.centerBTwistImpulse.w;
+        manifold.rollingImpulseMeta = f32x3_u32(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, manifold.rollingImpulseMeta.w);
     }
+}
+
+void StoreContactConstraintImpulses(in ContactConstraint c, mut Contact contact){
+    StoreContactConstraintImpulsesToManifold(c, contact.manifold);
 }
 
 

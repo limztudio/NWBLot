@@ -21,6 +21,7 @@ class GraphicsPrefixGraphContext{
     public mut RendererMaterialSystem material;
     public mut RendererMeshSystem mesh;
     public mut RendererRayTracingSystem rayTracing;
+    public Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor;
     public in GpuTaskId shadowVisibilityTask;
 
     public GraphicsPrefixGraphContext(

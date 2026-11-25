@@ -63,6 +63,7 @@ private:
 private:
     Display& m_display;
     const Window m_window;
+    Vector<TextInputPreeditClauseStyle::Enum, Alloc::GlobalArena> m_insertionStyles;
     X11PreeditBuffer m_preedit;
     AString<Alloc::GlobalArena> m_insertion;
     AString<Alloc::GlobalArena> m_lookup;
@@ -88,4 +89,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

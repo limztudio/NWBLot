@@ -49,17 +49,30 @@ Expected<RadioGroupChoices> CollectRadioGroupChoices(in IListDataSource source, 
     if(!IsRadioGroupStateCurrent(state, snapshot, guard) || candidate.sourceRevision == 0u)
         return MakeUnexpected(Failure());
     const u64 count = source.rowCount();
-    if(!IsRadioGroupStateCurrent(state, snapshot, guard) || count > s_RadioGroupMaxChoices)
+    if(!IsRadioGroupStateCurrent(state, snapshot, guard) || count > cast<u64>(u32.max))
         return MakeUnexpected(Failure());
     candidate.count = cast<u32>(count);
+    candidate.rows.resize(cast<usize>(candidate.count));
+    HashSet<u64> seenKeys;
+    if(candidate.count > 16u)
+        seenKeys.reserve(cast<usize>(candidate.count));
     if(!MatchesRadioGroupSource(source, state, snapshot, candidate, guard))
         return MakeUnexpected(Failure());
     for(u32 index = 0u; index < candidate.count; ++index){
         if(!IsRadioGroupStateCurrent(state, snapshot, guard))
             return MakeUnexpected(Failure());
         const u64 key = source.key(index);
-        if(!IsUniqueRadioGroupChoiceKey(candidate, index, key) || !MatchesRadioGroupSource(source, state, snapshot, candidate, guard))
+        b8 duplicateKey = key == 0u;
+        if(!duplicateKey){
+            if(candidate.count > 16u)
+                duplicateKey = seenKeys.find(key) != seenKeys.end();
+            else
+                duplicateKey = !IsUniqueRadioGroupChoiceKey(candidate, index, key);
+        }
+        if(duplicateKey || !MatchesRadioGroupSource(source, state, snapshot, candidate, guard))
             return MakeUnexpected(Failure());
+        if(candidate.count > 16u)
+            seenKeys.insert(key);
         const Expected<u64> resolved = source.indexOf(key);
         if(!MatchesRadioGroupSource(source, state, snapshot, candidate, guard) || !resolved.has_value() || resolved.value() != index)
             return MakeUnexpected(Failure());

@@ -177,7 +177,7 @@ b8 TryRouteRouterControlNavigation(
         && inOutHeld.focusOwner.target == source.id && inOutHeld.focusOwner.declarationGeneration == source.declarationGeneration
         && inOutHeld.focusOwner.popup == source.popup && inOutHeld.focusOwner.control == source.control
     )
-        AppendRouterControlAction(host, source, layoutGeneration, kind.value(), 0.0, 0.0, controlActions, inOutNextActionSequence, inOutResult);
+        AppendRouterControlAction(host, source, layoutGeneration, kind.value(), 0.0, 0.0, event.extend || event.shift, event.control, controlActions, inOutNextActionSequence, inOutResult);
     return true;
 }
 
@@ -202,12 +202,36 @@ void RouteRouterWheel(
     else if(secondaryDown)
         inOutResult.pointerConsumed = inOutResult.pointerConsumed || secondarySequenceConsumed;
     else
-        inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || hasHit;
+        inOutResult.pointerConsumed = inOutResult.pointerConsumed || HasBlockingRouterPopup(popups) || hasHit;
     if((primaryDown && !pointerSequenceConsumed) || (secondaryDown && !secondarySequenceConsumed) || !hasHit || (event.scrollX == 0.0 && event.scrollY == 0.0))
         return;
-    const Expected<HitTarget> host = TryResolveRouterControlHost(targets, lookup, popups, hit);
-    if(host.has_value() && host.value().scrollable && (event.scrollY != 0.0 || host.value().scrollStepX > 0.0))
-        AppendRouterControlAction(host.value(), hit, layoutGeneration, ControlActionKind::Wheel, event.scrollY, event.scrollX, controlActions, inOutNextActionSequence, inOutResult);
+    HitTarget current = hit;
+    for(u32 depth = 0u; depth < s_ContextMaxScopeDepth; ++depth){
+        const Expected<HitTarget> host = TryResolveRouterControlHost(targets, lookup, popups, current);
+        const b8 hasScrollAncestor = current.scrollOwner.valid() || (host.has_value() && host.value().scrollOwner.valid());
+        if(host.has_value() && host.value().scrollable){
+            const b8 canScrollY = event.scrollY != 0.0 && host.value().scrollStep > 0.0 && (!hasScrollAncestor || host.value().gestureMaximum > 0.0);
+            const b8 canScrollX = event.scrollX != 0.0 && host.value().scrollStepX > 0.0 && (!hasScrollAncestor || host.value().gestureMaximumX > 0.0);
+            if(canScrollY || canScrollX){
+                AppendRouterControlAction(host.value(), hit, layoutGeneration, ControlActionKind::Wheel, event.scrollY, event.scrollX, false, false, controlActions, inOutNextActionSequence, inOutResult);
+                return;
+            }
+            if(!hasScrollAncestor)
+                return;
+        }
+        WidgetId nextId = current.scrollOwner;
+        u64 nextGeneration = current.scrollOwnerDeclarationGeneration;
+        if(host.has_value() && host.value().scrollOwner.valid()){
+            nextId = host.value().scrollOwner;
+            nextGeneration = host.value().scrollOwnerDeclarationGeneration;
+        }
+        if(!nextId.valid())
+            return;
+        const Expected<usize> nextIndex = FindTargetIndexInTable(targets, lookup, nextId, nextGeneration);
+        if(!nextIndex.has_value())
+            return;
+        current = targets[nextIndex.value()];
+    }
 }
 
 

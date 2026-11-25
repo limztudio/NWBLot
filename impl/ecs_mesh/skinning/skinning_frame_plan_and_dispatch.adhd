@@ -22,9 +22,18 @@ class SkinningFramePlanFlags{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EntityID ResolveSkinningSkeletonEntity(in EntityID fallbackEntity, in EntityID skeletonEntity){
-    if(skeletonEntity.valid())
-        return skeletonEntity;
+EntityID ResolveSkinningSkeletonEntity(in EntityID fallbackEntity, in SkinnedMeshBindingComponent binding, mut World world){
+    if(binding.skeletonEntity.valid())
+        return binding.skeletonEntity;
+    if(binding.skeletonEntityName != s_NameNone){
+        const EntityID resolved = FindSceneEntityByName(fallbackEntity, binding.skeletonEntityName, world);
+        if(resolved.valid()){
+            const Optional<mut SkinnedMeshBindingComponent> borrowed = world.borrowComponent<SkinnedMeshBindingComponent>(fallbackEntity);
+            if(borrowed.has_value())
+                borrowed.value().skeletonEntity = resolved;
+            return resolved;
+        }
+    }
     return fallbackEntity;
 }
 
@@ -177,7 +186,7 @@ b8 MeshSkinningFramePlanBuilder::declare(in EntityID entity, in SkinnedMeshBindi
         return true;
     mut MeshSkinningRuntimeInstance instance = entry.value();
     assert(instance.valid());
-    const EntityID skeletonEntity = ResolveSkinningSkeletonEntity(entity, binding.skeletonEntity);
+    const EntityID skeletonEntity = ResolveSkinningSkeletonEntity(entity, binding, this.m_system.m_world);
     const auto jointPalette = FindSkinningComponent<SkeletonJointPaletteComponent>(this.m_system.m_world, skeletonEntity);
     const auto skeletonPose = FindSkinningComponent<SkeletonPoseComponent>(this.m_system.m_world, skeletonEntity);
     mut RuntimeSkinPayloadScratch payload = this.m_system.m_framePayloadScratch;

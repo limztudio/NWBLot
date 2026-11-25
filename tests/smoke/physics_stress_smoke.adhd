@@ -5,6 +5,9 @@
 #include <loader/project_entry.adhd>
 #include <loader/runtime_constants.adhd>
 #include <impl/assets_scene/asset.adhd>
+#include <impl/ecs_mesh/soft_body/system.adhd>
+#include <impl/ecs_mesh/system.adhd>
+#include <impl/ecs_physics/system.adhd>
 #include <impl/physics/gpu/gpu_dispatcher.adhd>
 #include "smoke_environment.adhd"
 #include "smoke_project_helpers.adhd"
@@ -76,7 +79,7 @@ class PhysicsStressProject : IProjectEntryCallbacks{
         u32 completedCases = 0u;
 
         if(mode == "smoke"){
-            if(!RunPhysicsGpuParitySmoke(this.m_context.graphics, this.m_gpuDispatcher, this.m_context.cpuTasks))
+            if(!RunPhysicsGpuParitySmoke(this.m_context.graphics, this.m_gpuDispatcher, this.m_context.cpuTasks, this.m_context, ActiveSceneSubsystemsRef(this.m_sceneSubsystems)))
                 return false;
             if(!RunPhysicsStressTier(256u, 10u, 20u, false, this.m_gpuDispatcher, this.m_context.cpuTasks, serialScheduler, completedCases))
                 return false;
@@ -1335,10 +1338,1051 @@ b8 RunGpuParitySpatialQueriesSubtest(mut PhysicsGpuDispatcher gpuDispatcher){
     return true;
 }
 
+b8 RunGpuParityZeroReadbackResidentSubtest(mut PhysicsGpuDispatcher gpuDispatcher){
+    const f32 dt = 1.0f / 60.0f;
+    WorldDef resDef;
+    resDef.enableSleep = true;
+    resDef.hitEventThreshold = 1.0f;
+    PhysicsWorld resWorld(resDef);
+    ConfigureGpuParityWorld(resWorld, false, true);
+
+    const Expected<HullShape> floorHull = MakeBoxHull(12.0f, 0.5f, 12.0f, 0.0f);
+    const Expected<HullShape> boxHull = MakeBoxHull(0.48f, 0.48f, 0.48f, 0.0f);
+    const Expected<SphereShape> sensorSph = MakeSphereShape(VectorSingle(0.0f), 0.8f);
+    const Expected<SphereShape> overlapSph = MakeSphereShape(VectorSingle(0.0f), 0.45f);
+    const Expected<SphereShape> fastSph = MakeSphereShape(VectorSingle(0.0f), 0.4f);
+    if(!floorHull.has_value() || !boxHull.has_value() || !sensorSph.has_value() || !overlapSph.has_value() || !fastSph.has_value())
+        return false;
+
+    ShapeDef floorSd;
+    BodyDef floorBd;
+    floorBd.type = BodyType::Static;
+    floorBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+    const BodyId floorBody = resWorld.createBody(floorBd).value();
+    if(!resWorld.createHullShape(floorBody, floorSd, floorHull.value()).has_value())
+        return false;
+
+    ShapeDef stackSd;
+    stackSd.density = 1.0f;
+    stackSd.enableHitEvents = true;
+    Vector<BodyId> stackBoxes;
+    for(u32 i = 0u; i < 3u; ++i){
+        BodyDef bd;
+        bd.type = BodyType::Dynamic;
+        bd.position = f32x4(0.0f, 0.5f + cast<f32>(i) * 1.0f, 0.0f, 0.0f);
+        const BodyId b = resWorld.createBody(bd).value();
+        if(!resWorld.createHullShape(b, stackSd, boxHull.value()).has_value())
+            return false;
+        stackBoxes.push_back(b);
+    }
+
+    ShapeDef senSd;
+    senSd.isSensor = true;
+    senSd.enableSensorEvents = true;
+    BodyDef senBd;
+    senBd.type = BodyType::Static;
+    senBd.position = f32x4(4.0f, 0.5f, 0.0f, 0.0f);
+    const BodyId senBody = resWorld.createBody(senBd).value();
+    if(!resWorld.createSphereShape(senBody, senSd, sensorSph.value()).has_value())
+        return false;
+
+    ShapeDef ovSd;
+    ovSd.density = 1.0f;
+    ovSd.enableSensorEvents = true;
+    BodyDef ovBd;
+    ovBd.type = BodyType::Dynamic;
+    ovBd.enableSleep = false;
+    ovBd.gravityScale = 0.0f;
+    ovBd.position = f32x4(4.0f, 0.55f, 0.0f, 0.0f);
+    const BodyId ovBody = resWorld.createBody(ovBd).value();
+    if(!resWorld.createSphereShape(ovBody, ovSd, overlapSph.value()).has_value())
+        return false;
+
+    ShapeDef fastSd;
+    fastSd.density = 1.0f;
+    fastSd.enableHitEvents = true;
+    BodyDef fastBd;
+    fastBd.type = BodyType::Dynamic;
+    fastBd.enableSleep = false;
+    fastBd.position = f32x4(-4.0f, 2.0f, 0.0f, 0.0f);
+    fastBd.linearVelocity = f32x4(0.0f, -15.0f, 0.0f, 0.0f);
+    const BodyId fastBody = resWorld.createBody(fastBd).value();
+    if(!resWorld.createSphereShape(fastBody, fastSd, fastSph.value()).has_value())
+        return false;
+
+    b8 sawHitEvent = false;
+    b8 sawSensorEvent = false;
+    Vector<GpuPhysicsEvent> events;
+    for(u32 step = 0u; step < 30u; ++step){
+        if(!gpuDispatcher.stepGpuResidentBodies(resWorld, dt, 4u, false)){
+            error("PhysicsStressSmoke: zero-readback resident step {} failed", step);
+            return false;
+        }
+        if(step <= 12u || step == 29u){
+            if(!gpuDispatcher.readbackGpuResidentEvents(resWorld, events)){
+                error("PhysicsStressSmoke: zero-readback resident event readback failed at step {}", step);
+                return false;
+            }
+            for(usize ei = 0u; ei < events.size(); ++ei){
+                if(events[ei].header.x == s_GpuEventContactHit)
+                    sawHitEvent = true;
+                else if(events[ei].header.x == s_GpuEventSensorOverlap)
+                    sawSensorEvent = true;
+            }
+        }
+    }
+
+    if(!sawHitEvent || !sawSensorEvent){
+        error(
+            "PhysicsStressSmoke: zero-readback event parity missing (hit={} sensor={})"
+            , cast<u32>(sawHitEvent)
+            , cast<u32>(sawSensorEvent)
+        );
+        return false;
+    }
+
+    if(!gpuDispatcher.stepGpuResidentBodies(resWorld, dt, 4u, true)){
+        error("PhysicsStressSmoke: zero-readback resident final readback failed");
+        return false;
+    }
+    for(usize bi = 0u; bi < stackBoxes.size(); ++bi){
+        const Transform3D xf = resWorld.tryGetBodyTransform(stackBoxes[bi]).value();
+        if(!IsFinite(VectorSingle(xf.position)) || xf.position.y <= 0.2f){
+            error("PhysicsStressSmoke: zero-readback stack box {} fell through (y={:.3f})", bi, xf.position.y);
+            return false;
+        }
+    }
+    const Transform3D topXf = resWorld.tryGetBodyTransform(stackBoxes[2u]).value();
+    if(topXf.position.y <= 1.8f){
+        error("PhysicsStressSmoke: zero-readback stack top box collapsed (y={:.3f})", topXf.position.y);
+        return false;
+    }
+
+    PhysicsWorld bulletWorld;
+    ConfigureGpuParityWorld(bulletWorld, false, true);
+    const Expected<HullShape> thinWall = MakeBoxHull(10.0f, 0.05f, 10.0f, 0.0f);
+    const Expected<SphereShape> bSph = MakeSphereShape(VectorSingle(0.0f), 0.2f);
+    if(!thinWall.has_value() || !bSph.has_value())
+        return false;
+
+    ShapeDef wallSd;
+    BodyDef wallBd;
+    wallBd.type = BodyType::Static;
+    wallBd.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    const BodyId wallBody = bulletWorld.createBody(wallBd).value();
+    if(!bulletWorld.createHullShape(wallBody, wallSd, thinWall.value()).has_value())
+        return false;
+
+    ShapeDef bulSd;
+    bulSd.density = 1.0f;
+    BodyDef bulBd;
+    bulBd.type = BodyType::Dynamic;
+    bulBd.isBullet = true;
+    bulBd.enableSleep = false;
+    bulBd.position = f32x4(0.0f, 1.5f, 0.0f, 0.0f);
+    bulBd.linearVelocity = f32x4(0.0f, -240.0f, 0.0f, 0.0f);
+    const BodyId bulBody = bulletWorld.createBody(bulBd).value();
+    if(!bulletWorld.createSphereShape(bulBody, bulSd, bSph.value()).has_value())
+        return false;
+
+    if(!gpuDispatcher.stepGpuResidentBodies(bulletWorld, dt, 1u, false)){
+        error("PhysicsStressSmoke: resident bullet TOI base step failed");
+        return false;
+    }
+    if(!gpuDispatcher.stepGpuBulletToiResident(bulletWorld, dt)){
+        error("PhysicsStressSmoke: stepGpuBulletToiResident failed");
+        return false;
+    }
+    Array<GpuPhysicsRenderTransformBinding, 1u> bulBinds;
+    bulBinds[0u].bodyDestFlags = u32x4(bulBody.index, 0u, 77u, 1u);
+    bulBinds[0u].scalePad = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+    Vector<GpuPhysicsRenderTransformOut> bulExported;
+    if(!gpuDispatcher.exportRenderTransforms(bulletWorld, Span<GpuPhysicsRenderTransformBinding>(bulBinds.data(), 1u), bulExported) || bulExported.size() != 1u){
+        error("PhysicsStressSmoke: resident bullet TOI export failed");
+        return false;
+    }
+    if(!IsFinite(VectorSingle(bulExported[0u].translationFlags)) || bulExported[0u].translationFlags.y <= 0.05f){
+        error("PhysicsStressSmoke: resident bullet TOI tunneled thin wall (y={:.3f})", bulExported[0u].translationFlags.y);
+        return false;
+    }
+    return true;
+}
+
+[cpp_unwind]
+Expected<GpuTaskId> DeclareSmokePhysicsExportTask(
+    mut PhysicsGpuDispatcher gpuDispatcher,
+    in PhysicsWorld world,
+    in Span<GpuPhysicsRenderTransformBinding> bindings,
+    in BufferHandle targetBuffer,
+    in u32 targetUavSlot,
+    mut GpuTaskGraph graph
+){
+    GpuGraphResourceDesc targetDesc;
+    targetDesc
+        .setIdentity(Name("physics/smoke/export_tg"))
+        .setMarkerLabel("Physics smoke taskgraph export")
+        .setType(GpuGraphResourceType::Buffer)
+        .setInitialState(ResourceStates::UnorderedAccess)
+        .setExternalFinalState(ResourceStates::UnorderedAccess)
+    ;
+    const auto importedRes = graph.importBuffer(targetBuffer, targetDesc);
+    if(!importedRes.has_value())
+        return MakeUnexpected(Failure());
+
+    GpuTaskId exportTaskId;
+    if(!gpuDispatcher.declareExportRenderTransformsTask(graph, world, bindings, importedRes.value(), targetUavSlot, 4u, Name("physics/smoke/export_tg"), false, GpuTaskId(), exportTaskId))
+        return MakeUnexpected(Failure());
+    return Expected<GpuTaskId>(exportTaskId);
+}
+
+b8 RunGpuParityAsyncAndTaskGraphExportSubtest(mut GraphicsRuntime graphics, mut PhysicsGpuDispatcher gpuDispatcher){
+    const f32 dt = 1.0f / 60.0f;
+    PhysicsWorld w;
+    ConfigureGpuParityWorld(w, false, true);
+
+    const Expected<SphereShape> sph = MakeSphereShape(VectorSingle(0.0f), 0.35f);
+    if(!sph.has_value())
+        return false;
+
+    ShapeDef sd;
+    sd.density = 1.0f;
+    BodyDef bd0;
+    bd0.type = BodyType::Dynamic;
+    bd0.enableSleep = false;
+    bd0.gravityScale = 0.0f;
+    bd0.linearDamping = 0.0f;
+    bd0.angularDamping = 0.0f;
+    bd0.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
+    bd0.linearVelocity = f32x4(1.5f, 0.0f, 0.0f, 0.0f);
+    const BodyId b0 = w.createBody(bd0).value();
+    if(!w.createSphereShape(b0, sd, sph.value()).has_value())
+        return false;
+
+    BodyDef bd1 = bd0;
+    bd1.position = f32x4(5.0f, 2.0f, 0.0f, 0.0f);
+    const BodyId b1 = w.createBody(bd1).value();
+    if(!w.createSphereShape(b1, sd, sph.value()).has_value())
+        return false;
+
+    for(u32 s = 0u; s < 2u; ++s){
+        if(!gpuDispatcher.stepGpuResidentBodies(w, dt, 1u, true)){
+            error("PhysicsStressSmoke: async/taskgraph export step {} failed", s);
+            return false;
+        }
+    }
+
+    mut Device device = graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    QueueSubmissionToken unusedToken;
+    PhysicsGpuBufferSlot targetSlot;
+    if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/export_async_tg"), cast<u32>(size_of<f32x4>()), 8u, false, true, targetSlot)){
+        error("PhysicsStressSmoke: failed to allocate async/taskgraph target buffer");
+        return false;
+    }
+
+    Array<GpuPhysicsRenderTransformBinding, 2u> bindings;
+    bindings[0u].bodyDestFlags = u32x4(b0.index, 0u, 301u, 1u);
+    bindings[0u].scalePad = f32x4(1.0f, 1.5f, 2.0f, 0.0f);
+    bindings[1u].bodyDestFlags = u32x4(b1.index, 1u, 302u, 1u);
+    bindings[1u].scalePad = f32x4(2.5f, 1.0f, 0.5f, 0.0f);
+    const Span<GpuPhysicsRenderTransformBinding> bindSpan(bindings.data(), 2u);
+
+    QueueSubmissionToken asyncToken;
+    b8 ok = gpuDispatcher.exportRenderTransformsToBufferAsync(w, bindSpan, targetSlot.buffer, targetSlot.descriptor.slot(), 4u, asyncToken) && asyncToken.valid();
+    Vector<f32x4> patched;
+    patched.resize(8u);
+    if(ok)
+        ok = device.waitForSubmissionToken(asyncToken) && device.readMappedBuffer(targetSlot.buffer.deref(), patched);
+    if(ok){
+        const Transform3D xf0 = w.tryGetBodyTransform(b0).value();
+        const Transform3D xf1 = w.tryGetBodyTransform(b1).value();
+        if(
+            ComputeQuatAbsDot(VectorSingle(patched[0u]), VectorSingle(xf0.rotation)) <= 0.999f
+            || ComputeVec3MaxDiff(VectorSingle(patched[1u]), VectorSingle(xf0.position)) >= 0.02f
+            || ComputeVec3MaxDiff(VectorSingle(patched[2u]), VectorSingle(bindings[0u].scalePad)) >= 1.0e-4f
+            || ComputeQuatAbsDot(VectorSingle(patched[4u]), VectorSingle(xf1.rotation)) <= 0.999f
+            || ComputeVec3MaxDiff(VectorSingle(patched[5u]), VectorSingle(xf1.position)) >= 0.02f
+            || ComputeVec3MaxDiff(VectorSingle(patched[6u]), VectorSingle(bindings[1u].scalePad)) >= 1.0e-4f
+        ){
+            error("PhysicsStressSmoke: exportRenderTransformsToBufferAsync TRS mismatch");
+            ok = false;
+        }
+    }
+    else{
+        error("PhysicsStressSmoke: exportRenderTransformsToBufferAsync dispatch or readback failed");
+    }
+
+    if(ok){
+        if(!gpuDispatcher.stepGpuResidentBodies(w, dt, 1u, true)){
+            error("PhysicsStressSmoke: post-async step failed");
+            ok = false;
+        }
+    }
+
+    if(ok){
+        in PhysicsWorld wRef = w;
+        in BufferHandle targetBuf = targetSlot.buffer;
+        const u32 targetUavSlot = targetSlot.descriptor.slot();
+        const auto tgToken = graphics.standaloneGraph().submitStandaloneTaskGraph(
+            lambda[mut gpuDispatcher, in wRef, in bindSpan, in targetBuf, in targetUavSlot](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+                return DeclareSmokePhysicsExportTask(gpuDispatcher, wRef, bindSpan, targetBuf, targetUavSlot, graph);
+            },
+            GpuPhysicalQueueId()
+        );
+        if(!tgToken.has_value() || !device.waitForSubmissionToken(tgToken.value()) || !device.readMappedBuffer(targetSlot.buffer.deref(), patched)){
+            error("PhysicsStressSmoke: declareExportRenderTransformsTask graph submission or readback failed");
+            ok = false;
+        }
+        else{
+            const Transform3D xf0 = w.tryGetBodyTransform(b0).value();
+            const Transform3D xf1 = w.tryGetBodyTransform(b1).value();
+            if(
+                ComputeQuatAbsDot(VectorSingle(patched[0u]), VectorSingle(xf0.rotation)) <= 0.999f
+                || ComputeVec3MaxDiff(VectorSingle(patched[1u]), VectorSingle(xf0.position)) >= 0.02f
+                || ComputeVec3MaxDiff(VectorSingle(patched[2u]), VectorSingle(bindings[0u].scalePad)) >= 1.0e-4f
+                || ComputeQuatAbsDot(VectorSingle(patched[4u]), VectorSingle(xf1.rotation)) <= 0.999f
+                || ComputeVec3MaxDiff(VectorSingle(patched[5u]), VectorSingle(xf1.position)) >= 0.02f
+                || ComputeVec3MaxDiff(VectorSingle(patched[6u]), VectorSingle(bindings[1u].scalePad)) >= 1.0e-4f
+            ){
+                error("PhysicsStressSmoke: declareExportRenderTransformsTask TRS mismatch");
+                ok = false;
+            }
+        }
+    }
+
+    if(targetSlot.descriptor.valid() && heap.isInitialized())
+        heap.free(targetSlot.descriptor);
+    targetSlot.descriptor = GpuDescriptorHandle();
+    targetSlot.buffer.reset();
+    return ok;
+}
+
+b8 RunGpuParitySubsystemsSubtest(mut PhysicsGpuDispatcher gpuDispatcher, mut CpuTaskScheduler scheduler){
+    const f32 dt = 1.0f / 60.0f;
+
+    {
+        PhysicsWorld softWorld;
+        softWorld.setBackendMode(PhysicsBackendMode::CpuOnly);
+        const Expected<HullShape> floorHull = MakeBoxHull(10.0f, 0.5f, 10.0f, 0.0f);
+        if(!floorHull.has_value())
+            return false;
+        BodyDef floorBd;
+        floorBd.type = BodyType::Static;
+        floorBd.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        const BodyId floorId = softWorld.createBody(floorBd).value();
+        if(!softWorld.createHullShape(floorId, ShapeDef(), floorHull.value()).has_value())
+            return false;
+
+        SoftBody cpuSb;
+        SoftBody gpuSb;
+        cpuSb.particles.resize(4u);
+        cpuSb.particles[0u].position = f32x4(-0.5f, 3.0f, 0.0f, 0.0f);
+        cpuSb.particles[0u].prevPosition = cpuSb.particles[0u].position;
+        cpuSb.particles[0u].isFixed = true;
+        cpuSb.particles[1u].position = f32x4(0.5f, 3.0f, 0.0f, 0.0f);
+        cpuSb.particles[1u].prevPosition = cpuSb.particles[1u].position;
+        cpuSb.particles[1u].isFixed = true;
+        cpuSb.particles[2u].position = f32x4(-0.5f, 2.0f, 0.0f, 0.0f);
+        cpuSb.particles[2u].prevPosition = cpuSb.particles[2u].position;
+        cpuSb.particles[2u].isFixed = false;
+        cpuSb.particles[3u].position = f32x4(0.5f, 2.0f, 0.0f, 0.0f);
+        cpuSb.particles[3u].prevPosition = cpuSb.particles[3u].position;
+        cpuSb.particles[3u].isFixed = false;
+        cpuSb.aerodynamicDrag = 0.25f;
+        cpuSb.subSteps = 4u;
+        cpuSb.solverIterations = 4u;
+
+        SoftBodyDistanceConstraint dc;
+        dc.p0 = 0u; dc.p1 = 2u; dc.restLength = 1.0f;
+        cpuSb.distanceConstraints.push_back(dc);
+        dc.p0 = 1u; dc.p1 = 3u; dc.restLength = 1.0f;
+        cpuSb.distanceConstraints.push_back(dc);
+        dc.p0 = 2u; dc.p1 = 3u; dc.restLength = 1.0f;
+        cpuSb.distanceConstraints.push_back(dc);
+
+        SoftBodyBackstopConstraint bs;
+        bs.particleIndex = 2u;
+        bs.center = f32x4(-0.5f, 2.0f, 0.0f, 0.0f);
+        bs.normal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        bs.maxDistance = 1.5f;
+        bs.backstopRadius = 0.25f;
+        cpuSb.backstopConstraints.push_back(bs);
+
+        gpuSb.particles = cpuSb.particles;
+        gpuSb.distanceConstraints = cpuSb.distanceConstraints;
+        gpuSb.backstopConstraints = cpuSb.backstopConstraints;
+        gpuSb.aerodynamicDrag = cpuSb.aerodynamicDrag;
+        gpuSb.subSteps = cpuSb.subSteps;
+        gpuSb.solverIterations = cpuSb.solverIterations;
+
+        ForceField windField;
+        windField.type = ForceFieldType::BoxWind;
+        windField.originOrDirection = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        windField.strength = 6.0f;
+        windField.useBounds = false;
+        windField.enabled = true;
+        PhysicsEnvironment softEnv;
+        softEnv.forceFields.push_back(windField);
+        const Optional<in PhysicsEnvironment> softEnvOpt(softEnv);
+
+        for(u32 s = 0u; s < 15u; ++s){
+            cpuSb.applyForceField(windField, softWorld.gravity(), softEnv.elapsedTimeSec + dt, dt);
+            cpuSb.step(softWorld, dt);
+            if(!gpuDispatcher.stepSoftBodyGpu(gpuSb, softWorld, softEnvOpt, dt, true)){
+                error("PhysicsStressSmoke: stepSoftBodyGpu failed at step {}", s);
+                return false;
+            }
+            softEnv.elapsedTimeSec += dt;
+        }
+
+        if(
+            ComputeVec3MaxDiff(VectorSingle(gpuSb.particles[0u].position), VectorSingle(-0.5f, 3.0f, 0.0f, 0.0f)) >= 1.0e-5f
+            || ComputeVec3MaxDiff(VectorSingle(gpuSb.particles[1u].position), VectorSingle(0.5f, 3.0f, 0.0f, 0.0f)) >= 1.0e-5f
+        ){
+            error("PhysicsStressSmoke: stepSoftBodyGpu moved fixed anchor particles");
+            return false;
+        }
+        if(gpuSb.particles[2u].position.x <= -0.45f || gpuSb.particles[3u].position.x <= 0.55f){
+            error(
+                "PhysicsStressSmoke: stepSoftBodyGpu wind displacement too small (p2X={:.3f} p3X={:.3f})"
+                , gpuSb.particles[2u].position.x
+                , gpuSb.particles[3u].position.x
+            );
+            return false;
+        }
+        for(usize pi = 0u; pi < 4u; ++pi){
+            if(
+                !IsFinite(VectorSingle(gpuSb.particles[pi].position))
+                || gpuSb.particles[pi].position.y <= 0.0f
+                || ComputeVec3MaxDiff(VectorSingle(gpuSb.particles[pi].position), VectorSingle(cpuSb.particles[pi].position)) >= 0.35f
+            ){
+                error(
+                    "PhysicsStressSmoke: stepSoftBodyGpu particle {} parity mismatch (gpuX={:.3f} cpuX={:.3f} gpuY={:.3f} cpuY={:.3f})"
+                    , pi
+                    , gpuSb.particles[pi].position.x
+                    , cpuSb.particles[pi].position.x
+                    , gpuSb.particles[pi].position.y
+                    , cpuSb.particles[pi].position.y
+                );
+                return false;
+            }
+        }
+    }
+
+    {
+        PhysicsWorld cpuEnvW;
+        cpuEnvW.setBackendMode(PhysicsBackendMode::CpuOnly);
+        PhysicsWorld gpuEnvW;
+        ConfigureGpuParityWorld(gpuEnvW, false, true);
+
+        const Expected<SphereShape> floatSph = MakeSphereShape(VectorSingle(0.0f), 0.4f);
+        const Expected<SphereShape> orbSph = MakeSphereShape(VectorSingle(0.0f), 0.25f);
+        if(!floatSph.has_value() || !orbSph.has_value())
+            return false;
+
+        BodyDef staticSentBd;
+        staticSentBd.type = BodyType::Static;
+        staticSentBd.position = f32x4(100.0f, -50.0f, 0.0f, 0.0f);
+        const BodyId cpuSent = cpuEnvW.createBody(staticSentBd).value();
+        const BodyId gpuSent = gpuEnvW.createBody(staticSentBd).value();
+        if(!cpuEnvW.createSphereShape(cpuSent, ShapeDef(), orbSph.value()).has_value() || !gpuEnvW.createSphereShape(gpuSent, ShapeDef(), orbSph.value()).has_value())
+            return false;
+
+        BodyDef floatBd;
+        floatBd.type = BodyType::Dynamic;
+        floatBd.enableSleep = false;
+        floatBd.position = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
+        const BodyId cpuFloat = cpuEnvW.createBody(floatBd).value();
+        const BodyId gpuFloat = gpuEnvW.createBody(floatBd).value();
+        ShapeDef floatSd;
+        floatSd.density = 350.0f;
+        if(!cpuEnvW.createSphereShape(cpuFloat, floatSd, floatSph.value()).has_value() || !gpuEnvW.createSphereShape(gpuFloat, floatSd, floatSph.value()).has_value())
+            return false;
+
+        BodyDef orbBd;
+        orbBd.type = BodyType::Dynamic;
+        orbBd.enableSleep = false;
+        orbBd.gravityScale = 0.0f;
+        orbBd.position = f32x4(10.0f, 5.0f, 0.0f, 0.0f);
+        const BodyId cpuOrb = cpuEnvW.createBody(orbBd).value();
+        const BodyId gpuOrb = gpuEnvW.createBody(orbBd).value();
+        if(!cpuEnvW.createSphereShape(cpuOrb, ShapeDef(), orbSph.value()).has_value() || !gpuEnvW.createSphereShape(gpuOrb, ShapeDef(), orbSph.value()).has_value())
+            return false;
+
+        FluidVolume water;
+        water.shape = FluidVolumeShape::HalfSpacePlane;
+        water.surfaceNormalOffset = f32x4(0.0f, 1.0f, 0.0f, 2.0f);
+        water.density = 1000.0f;
+        water.angularDrag = 1.5f;
+
+        ForceField ptField;
+        ptField.type = ForceFieldType::PointGravity;
+        ptField.originOrDirection = f32x4(12.0f, 5.0f, 0.0f, 0.0f);
+        ptField.strength = 80.0f;
+        ptField.radius = 10.0f;
+
+        PhysicsEnvironment cpuEnv;
+        cpuEnv.fluids.push_back(water);
+        cpuEnv.forceFields.push_back(ptField);
+        PhysicsEnvironment gpuEnv = cpuEnv;
+
+        for(u32 s = 0u; s < 25u; ++s){
+            cpuEnv.step(cpuEnvW, dt);
+            StepPhysicsWorld(cpuEnvW, dt, 1u, scheduler);
+            if(!gpuDispatcher.applyEnvironmentGpu(gpuEnvW, gpuEnv, dt)){
+                error("PhysicsStressSmoke: applyEnvironmentGpu failed at step {}", s);
+                return false;
+            }
+            gpuEnv.elapsedTimeSec += dt;
+            if(!gpuDispatcher.stepGpuResidentBodies(gpuEnvW, dt, 1u, s == 24u)){
+                error("PhysicsStressSmoke: environment resident step failed at step {}", s);
+                return false;
+            }
+        }
+
+        const Transform3D cpuFloatXf = cpuEnvW.tryGetBodyTransform(cpuFloat).value();
+        const Transform3D gpuFloatXf = gpuEnvW.tryGetBodyTransform(gpuFloat).value();
+        const Transform3D cpuOrbXf = cpuEnvW.tryGetBodyTransform(cpuOrb).value();
+        const Transform3D gpuOrbXf = gpuEnvW.tryGetBodyTransform(gpuOrb).value();
+        if(
+            gpuFloatXf.position.y <= 0.85f
+            || gpuOrbXf.position.x <= 10.15f
+            || ComputeVec3MaxDiff(VectorSingle(cpuFloatXf.position), VectorSingle(gpuFloatXf.position)) >= 0.25f
+            || ComputeVec3MaxDiff(VectorSingle(cpuOrbXf.position), VectorSingle(gpuOrbXf.position)) >= 0.25f
+        ){
+            error(
+                "PhysicsStressSmoke: applyEnvironmentGpu parity mismatch (gpuFloatY={:.3f} cpuFloatY={:.3f} gpuOrbX={:.3f} cpuOrbX={:.3f})"
+                , gpuFloatXf.position.y
+                , cpuFloatXf.position.y
+                , gpuOrbXf.position.x
+                , cpuOrbXf.position.x
+            );
+            return false;
+        }
+    }
+
+    {
+        PhysicsWorld expW;
+        ConfigureGpuParityWorld(expW, false, true);
+        const Expected<SphereShape> sph = MakeSphereShape(VectorSingle(0.0f), 0.35f);
+        if(!sph.has_value())
+            return false;
+
+        BodyDef bdNear;
+        bdNear.type = BodyType::Dynamic;
+        bdNear.enableSleep = false;
+        bdNear.gravityScale = 0.0f;
+        bdNear.position = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
+        const BodyId nearBody = expW.createBody(bdNear).value();
+        if(!expW.createSphereShape(nearBody, ShapeDef(), sph.value()).has_value())
+            return false;
+
+        BodyDef bdFar = bdNear;
+        bdFar.position = f32x4(10.0f, 0.0f, 0.0f, 0.0f);
+        const BodyId farBody = expW.createBody(bdFar).value();
+        if(!expW.createSphereShape(farBody, ShapeDef(), sph.value()).has_value())
+            return false;
+
+        if(!gpuDispatcher.applyExplosionGpu(expW, VectorSingle(0.0f), 6.0f, 20.0f, 0.5f, 1.0f, true)){
+            error("PhysicsStressSmoke: applyExplosionGpu failed");
+            return false;
+        }
+        const f32x4 nearVel = expW.tryGetLinearVelocity(nearBody).value();
+        const f32x4 farVel = expW.tryGetLinearVelocity(farBody).value();
+        if(
+            !IsFinite(VectorSingle(nearVel))
+            || nearVel.x <= 1.0f
+            || nearVel.y <= 0.4f
+            || Vector3Length(VectorSingle(farVel)).x >= 1.0e-4f
+        ){
+            error(
+                "PhysicsStressSmoke: applyExplosionGpu velocity check failed (near=({:.3f},{:.3f}) farMag={:.4f})"
+                , nearVel.x
+                , nearVel.y
+                , Vector3Length(VectorSingle(farVel)).x
+            );
+            return false;
+        }
+    }
+
+    return true;
+}
+
+b8 VerifyWave4CInstancePatchBuffer(
+    in Span<f32x4> buf,
+    in TransformComponent xf0,
+    in TransformComponent xf1,
+    in Span<u32> entIds,
+    in u32 passIdx
+){
+    for(u32 idx = 0u; idx < 2u; ++idx){
+        TransformComponent expectedXf = xf0;
+        if(idx == 1u)
+            expectedXf = xf1;
+        f32x4 expectedScale(1.5f, 2.0f, 0.75f, 0.0f);
+        if(idx == 1u)
+            expectedScale = f32x4(2.5f, 1.0f, 0.5f, 0.0f);
+
+        const usize fBase = cast<usize>(idx) * 6u;
+        if(
+            ComputeQuatAbsDot(VectorSingle(buf[fBase + 0u]), VectorSingle(expectedXf.rotation)) <= 0.999f
+            || ComputeVec3MaxDiff(VectorSingle(buf[fBase + 1u]), VectorSingle(expectedXf.position)) >= 0.02f
+            || ComputeVec3MaxDiff(VectorSingle(buf[fBase + 2u]), VectorSingle(expectedScale)) >= 1.0e-4f
+            || BitCast<u32>(buf[fBase + 1u].w) != (0x12345000u + idx)
+            || BitCast<u32>(buf[fBase + 2u].w) != entIds[idx]
+        ){
+            error("PhysicsStressSmoke: Wave4C pass {} instance {} transform/sentinel mismatch", passIdx, idx);
+            return false;
+        }
+        for(u32 g = 0u; g < 3u; ++g){
+            const f32x4 gw = buf[fBase + 3u + cast<usize>(g)];
+            const u32 slotBase = 0xA0000000u + idx * 32u + g * 4u;
+            if(
+                BitCast<u32>(gw.x) != (slotBase + 0u)
+                || BitCast<u32>(gw.y) != (slotBase + 1u)
+                || BitCast<u32>(gw.z) != (slotBase + 2u)
+                || BitCast<u32>(gw.w) != (slotBase + 3u)
+            ){
+                error("PhysicsStressSmoke: Wave4C pass {} instance {} geometryHeapSlots clobbered", passIdx, idx);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
+    mut ProjectRuntimeContext context,
+    in ActiveSceneSubsystemsRef activeSubsystems
+){
+    mut GraphicsRuntime graphics = context.graphics;
+    mut Device device = graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
+        error("PhysicsStressSmoke: Wave4C subtest requires initialized descriptor heap");
+        return false;
+    }
+
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+
+    {
+        World world(context.objectArena, context.cpuTasks);
+        mut PhysicsSystem physSys = world.addSystem<PhysicsSystem>(world, graphics, context.assetManager, context.shaderPathResolver);
+        physSys.setActiveSceneSubsystems(activeSubsystems);
+        if(!physSys.validateResources()){
+            error("PhysicsStressSmoke: Wave4C PhysicsSystem GPU pipelines failed validation");
+            return false;
+        }
+
+        Entity cfgEnt = world.createEntity();
+        {
+            mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
+            cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            cfg.backendMode = PhysicsBackendMode::GpuPreferred;
+            cfg.enableGpuCollision = true;
+            cfg.gpuResidentMode = true;
+            cfg.useGpuLbvhBroadphase = true;
+            cfg.gpuDispatchThreshold = 1u;
+            cfg.gpuWorkloadFraction = 1.0f;
+            cfg.interpolateTransforms = false;
+            cfg.dirty = true;
+        }
+
+        Entity e0 = world.createEntity();
+        {
+            mut TransformComponent xf = e0.addComponent<TransformComponent>();
+            xf.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
+            mut RigidBodyComponent rb = e0.addComponent<RigidBodyComponent>();
+            rb.type = BodyType::Dynamic;
+            rb.enableSleep = false;
+            rb.gravityScale = 0.0f;
+            rb.linearDamping = 0.0f;
+            rb.angularDamping = 0.0f;
+            rb.linearVelocity = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
+            mut ColliderComponent col = e0.addComponent<ColliderComponent>();
+            col.shapeType = ShapeType::Sphere;
+            col.isBox = false;
+            col.radius = 0.35f;
+            mut GpuRenderTransformExportComponent exp = e0.addComponent<GpuRenderTransformExportComponent>();
+            exp.enabled = true;
+            exp.instanceIndex = 0u;
+            exp.flags = 1u;
+            exp.localScale = f32x4(1.5f, 2.0f, 0.75f, 0.0f);
+        }
+
+        Entity e1 = world.createEntity();
+        {
+            mut TransformComponent xf = e1.addComponent<TransformComponent>();
+            xf.position = f32x4(5.0f, 2.0f, 0.0f, 0.0f);
+            mut RigidBodyComponent rb = e1.addComponent<RigidBodyComponent>();
+            rb.type = BodyType::Dynamic;
+            rb.enableSleep = false;
+            rb.gravityScale = 0.0f;
+            rb.linearDamping = 0.0f;
+            rb.angularDamping = 0.0f;
+            rb.linearVelocity = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
+            mut ColliderComponent col = e1.addComponent<ColliderComponent>();
+            col.shapeType = ShapeType::Sphere;
+            col.isBox = false;
+            col.radius = 0.35f;
+            mut GpuRenderTransformExportComponent exp = e1.addComponent<GpuRenderTransformExportComponent>();
+            exp.enabled = true;
+            exp.instanceIndex = 1u;
+            exp.flags = 1u;
+            exp.localScale = f32x4(2.5f, 1.0f, 0.5f, 0.0f);
+        }
+
+        const f32 dt = 1.0f / 60.0f;
+        for(u32 s = 0u; s < 4u; ++s){
+            if(!world.tick(dt).has_value()){
+                error("PhysicsStressSmoke: Wave4C zero-readback tick {} failed", s);
+                physSys.invalidateResources();
+                world.taskScope().wait();
+                return false;
+            }
+        }
+
+        if(e0.getComponent<TransformComponent>().position.x >= 0.01f){
+            error("PhysicsStressSmoke: expected zero-readback gpuResidentMode to keep ECS transform unchanged before sync (x={})", e0.getComponent<TransformComponent>().position.x);
+            physSys.invalidateResources();
+            world.taskScope().wait();
+            return false;
+        }
+
+        QueueSubmissionToken unusedToken;
+        PhysicsGpuBufferSlot opaqueSlot;
+        PhysicsGpuBufferSlot avboitSlot;
+        b8 subOk =
+            EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/wave4c_opaque"), cast<u32>(size_of<f32x4>()), 12u, false, true, opaqueSlot)
+            && EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, unusedToken, Name("physics/smoke/wave4c_avboit"), cast<u32>(size_of<f32x4>()), 12u, false, true, avboitSlot)
+            && physSys.prepareInstanceTransformPatches();
+        if(!subOk){
+            error("PhysicsStressSmoke: Wave4C failed to prepare contributor buffers");
+        }
+
+        Array<u32, 2u> entIds;
+        entIds[0u] = cast<u32>(e0.id().id);
+        entIds[1u] = cast<u32>(e1.id().id);
+
+        Vector<u32> initWords;
+        initWords.assign(48u, 0u);
+        for(u32 idx = 0u; idx < 2u; ++idx){
+            const usize wBase = cast<usize>(idx) * 24u;
+            initWords[wBase + 7u] = 0x12345000u + idx;
+            initWords[wBase + 11u] = entIds[idx];
+            for(u32 slot = 0u; slot < 12u; ++slot)
+                initWords[wBase + 12u + cast<usize>(slot)] = 0xA0000000u + idx * 32u + slot;
+        }
+
+        if(subOk){
+            in BufferHandle opaqueBuf = opaqueSlot.buffer;
+            in BufferHandle avboitBuf = avboitSlot.buffer;
+            const u32 opaqueUavSlot = opaqueSlot.descriptor.slot();
+            const u32 avboitUavSlot = avboitSlot.descriptor.slot();
+            const Span<u32> entityIdSpan(entIds.data(), 2u);
+            const Span<u32> initWordSpan(initWords.data(), initWords.size());
+
+            const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(
+                lambda[mut physSys, in entityIdSpan, in initWordSpan, in opaqueBuf, in avboitBuf, in opaqueUavSlot, in avboitUavSlot](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+                    const auto opaqueBlob = graph.copyUploadElements<u32>(initWordSpan);
+                    const auto avboitBlob = graph.copyUploadElements<u32>(initWordSpan);
+                    if(!opaqueBlob.has_value() || !avboitBlob.has_value()){
+                        error("PhysicsStressSmoke: Wave4C copyUploadElements failed");
+                        return MakeUnexpected(Failure());
+                    }
+
+                    GpuGraphResourceDesc opaqueDesc;
+                    opaqueDesc
+                        .setIdentity(Name("physics/smoke/wave4c_opaque_res"))
+                        .setMarkerLabel("Wave4C Opaque Instances")
+                        .setType(GpuGraphResourceType::Buffer)
+                        .setInitialState(ResourceStates::UnorderedAccess)
+                        .setExternalFinalState(ResourceStates::UnorderedAccess)
+                        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+                    ;
+                    GpuGraphResourceDesc avboitDesc;
+                    avboitDesc
+                        .setIdentity(Name("physics/smoke/wave4c_avboit_res"))
+                        .setMarkerLabel("Wave4C AVBOIT Instances")
+                        .setType(GpuGraphResourceType::Buffer)
+                        .setInitialState(ResourceStates::UnorderedAccess)
+                        .setExternalFinalState(ResourceStates::UnorderedAccess)
+                        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+                    ;
+                    const auto opaqueRes = graph.importBuffer(opaqueBuf, opaqueDesc);
+                    const auto avboitRes = graph.importBuffer(avboitBuf, avboitDesc);
+                    if(!opaqueRes.has_value() || !avboitRes.has_value()){
+                        error("PhysicsStressSmoke: Wave4C importBuffer failed (opaque={} avboit={})", opaqueRes.has_value(), avboitRes.has_value());
+                        return MakeUnexpected(Failure());
+                    }
+
+                    GpuTaskSchedulingHint uploadSched;
+                    uploadSched.cost = GpuTaskCostHint::Small;
+                    uploadSched.overlapPreferred = false;
+                    uploadSched.avoidQueueCrossing = true;
+                    uploadSched.forceSubmissionBoundary = false;
+                    uploadSched.allowPacketMerge = true;
+                    uploadSched.mergeWithPrevious = false;
+
+                    GpuTaskDesc upOpaqueDesc;
+                    upOpaqueDesc
+                        .setIdentity(Name("physics/smoke/wave4c_up_opaque"))
+                        .setMarkerLabel("Wave4C Init Opaque")
+                        .setScheduling(uploadSched)
+                    ;
+                    GpuUploadBufferTaskDesc upOpaque;
+                    upOpaque.source = opaqueBlob.value();
+                    upOpaque.destination = opaqueRes.value();
+                    upOpaque.finalState = ResourceStates::UnorderedAccess;
+                    const auto upOpaqueTask = graph.addUploadBufferTask(upOpaqueDesc, upOpaque);
+                    if(!upOpaqueTask.has_value()){
+                        error("PhysicsStressSmoke: Wave4C addUploadBufferTask opaque failed");
+                        return MakeUnexpected(Failure());
+                    }
+
+                    uploadSched.mergeWithPrevious = true;
+                    Array<GpuTaskId, 1u> upDeps;
+                    upDeps[0u] = upOpaqueTask.value();
+                    GpuTaskDesc upAvboitDesc;
+                    upAvboitDesc
+                        .setIdentity(Name("physics/smoke/wave4c_up_avboit"))
+                        .setMarkerLabel("Wave4C Init AVBOIT")
+                        .setScheduling(uploadSched)
+                        .setDependencies(Span<GpuTaskId>(upDeps))
+                    ;
+                    GpuUploadBufferTaskDesc upAvboit;
+                    upAvboit.source = avboitBlob.value();
+                    upAvboit.destination = avboitRes.value();
+                    upAvboit.finalState = ResourceStates::UnorderedAccess;
+                    const auto upAvboitTask = graph.addUploadBufferTask(upAvboitDesc, upAvboit);
+                    if(!upAvboitTask.has_value()){
+                        error("PhysicsStressSmoke: Wave4C addUploadBufferTask avboit failed");
+                        return MakeUnexpected(Failure());
+                    }
+
+                    GpuTaskGraphInstanceTransformPatchRequest reqOpaque;
+                    reqOpaque.instanceBufferResource = opaqueRes.value();
+                    reqOpaque.instanceBufferUavSlot = opaqueUavSlot;
+                    reqOpaque.instanceStrideFloat4 = 6u;
+                    reqOpaque.passIdentityPrefix = Name("smoke.opaque.physics_patch");
+                    reqOpaque.dependency = upAvboitTask.value();
+                    reqOpaque.mergeWithPrevious = true;
+                    const auto patchedOpaque = physSys.declareInstanceTransformPatch(reqOpaque, entityIdSpan, graph);
+                    if(!patchedOpaque.has_value()){
+                        error("PhysicsStressSmoke: Wave4C declareInstanceTransformPatch opaque failed");
+                        return MakeUnexpected(Failure());
+                    }
+
+                    GpuTaskGraphInstanceTransformPatchRequest reqAvboit;
+                    reqAvboit.instanceBufferResource = avboitRes.value();
+                    reqAvboit.instanceBufferUavSlot = avboitUavSlot;
+                    reqAvboit.instanceStrideFloat4 = 6u;
+                    reqAvboit.passIdentityPrefix = Name("smoke.avboit.physics_patch");
+                    reqAvboit.dependency = patchedOpaque.value();
+                    reqAvboit.mergeWithPrevious = true;
+                    const auto patchedAvboit = physSys.declareInstanceTransformPatch(reqAvboit, entityIdSpan, graph);
+                    if(!patchedAvboit.has_value()){
+                        error("PhysicsStressSmoke: Wave4C declareInstanceTransformPatch avboit failed");
+                        return MakeUnexpected(Failure());
+                    }
+                    return patchedAvboit;
+                },
+                graphicsQueue
+            );
+
+            Vector<f32x4> readOpaque;
+            Vector<f32x4> readAvboit;
+            readOpaque.resize(12u);
+            readAvboit.resize(12u);
+            if(!token.has_value()){
+                error("PhysicsStressSmoke: Wave4C submitStandaloneTaskGraph failed");
+                subOk = false;
+            }
+            else if(!device.waitForSubmissionToken(token.value())){
+                error("PhysicsStressSmoke: Wave4C waitForSubmissionToken failed");
+                subOk = false;
+            }
+            else if(!physSys.syncGpuResidentToWorld()){
+                error("PhysicsStressSmoke: Wave4C syncGpuResidentToWorld failed");
+                subOk = false;
+            }
+            else if(!device.readMappedBuffer(opaqueSlot.buffer.deref(), readOpaque)){
+                error("PhysicsStressSmoke: Wave4C readMappedBuffer opaque failed");
+                subOk = false;
+            }
+            else if(!device.readMappedBuffer(avboitSlot.buffer.deref(), readAvboit)){
+                error("PhysicsStressSmoke: Wave4C readMappedBuffer avboit failed");
+                subOk = false;
+            }
+            else{
+                const TransformComponent xf0 = e0.getComponent<TransformComponent>();
+                const TransformComponent xf1 = e1.getComponent<TransformComponent>();
+                if(xf0.position.x <= 0.1f || xf1.position.x <= 5.1f){
+                    error("PhysicsStressSmoke: Wave4C syncGpuResidentToWorld did not advance ECS transforms (x0={} x1={})", xf0.position.x, xf1.position.x);
+                    subOk = false;
+                }
+
+                if(
+                    !VerifyWave4CInstancePatchBuffer(Span<f32x4>(readOpaque), xf0, xf1, entityIdSpan, 0u)
+                    || !VerifyWave4CInstancePatchBuffer(Span<f32x4>(readAvboit), xf0, xf1, entityIdSpan, 1u)
+                )
+                    subOk = false;
+            }
+        }
+
+        if(opaqueSlot.descriptor.valid() && heap.isInitialized())
+            heap.free(opaqueSlot.descriptor);
+        if(avboitSlot.descriptor.valid() && heap.isInitialized())
+            heap.free(avboitSlot.descriptor);
+        physSys.invalidateResources();
+        world.taskScope().wait();
+        if(!subOk)
+            return false;
+    }
+
+    {
+        World world(context.objectArena, context.cpuTasks);
+        mut MeshSystem meshSystem = world.addSystem<MeshSystem>(world);
+        mut SoftBodyMeshSystem softBodyMeshSystem = world.addSystem<SoftBodyMeshSystem>(world, graphics, context.assetManager, meshSystem);
+
+        Vector<f32x3u> gridPos;
+        gridPos.reserve(9u);
+        for(u32 iz = 0u; iz < 3u; ++iz){
+            for(u32 ix = 0u; ix < 3u; ++ix)
+                gridPos.push_back(f32x3u(cast<f32>(ix), 0.0f, cast<f32>(iz)));
+        }
+        Vector<u32> gridIndices;
+        for(u32 iz = 0u; iz < 2u; ++iz){
+            for(u32 ix = 0u; ix < 2u; ++ix){
+                const u32 v0 = iz * 3u + ix;
+                const u32 v1 = v0 + 1u;
+                const u32 v2 = v0 + 3u;
+                const u32 v3 = v2 + 1u;
+                gridIndices.push_back(v0);
+                gridIndices.push_back(v2);
+                gridIndices.push_back(v1);
+                gridIndices.push_back(v1);
+                gridIndices.push_back(v2);
+                gridIndices.push_back(v3);
+            }
+        }
+        SoftBodyMeshCreateParams sbParams;
+        sbParams.weldEpsilon = 0.0f;
+
+        Entity sbEnt = world.createEntity();
+        sbEnt.addComponent<TransformComponent>();
+        {
+            mut SoftBodyComponent sbComp = sbEnt.addComponent<SoftBodyComponent>();
+            sbComp.softBody = CreateSoftBodyFromTriangles(Span<f32x3u>(gridPos), Span<u32>(gridIndices), sbParams);
+            sbComp.enabled = true;
+        }
+
+        const FramebufferPtr fb = graphics.getFramebuffer(0u);
+        b8 sbOk = softBodyMeshSystem.prepareResources(fb);
+        if(sbOk)
+            softBodyMeshSystem.render(fb);
+
+        Name meshKey1 = s_NameNone;
+        u64 version1 = 0u;
+        u64 contentRev1 = 0u;
+        if(sbOk){
+            const auto r1 = meshSystem.resolveRenderableMeshStatus(sbEnt.id());
+            if(!r1.has_value() || !r1.value().runtime || !r1.value().runtimeMesh.valid() || r1.value().runtimeMesh.version != 1u || r1.value().runtimeMesh.geometryContentRevision < 1u){
+                error("PhysicsStressSmoke: Wave4C SoftBodyMeshSystem initial resolve failed");
+                sbOk = false;
+            }
+            else{
+                meshKey1 = r1.value().runtimeMesh.meshKey;
+                version1 = r1.value().runtimeMesh.version;
+                contentRev1 = r1.value().runtimeMesh.geometryContentRevision;
+            }
+        }
+
+        if(sbOk){
+            mut SoftBodyComponent sbComp = sbEnt.getComponent<SoftBodyComponent>();
+            sbComp.softBody.particles[4u].position.y += 1.5f;
+            sbComp.softBody.particles[4u].prevPosition = sbComp.softBody.particles[4u].position;
+            sbOk = softBodyMeshSystem.prepareResources(fb);
+            if(sbOk)
+                softBodyMeshSystem.render(fb);
+            const auto r2 = meshSystem.resolveRenderableMeshStatus(sbEnt.id());
+            if(
+                !r2.has_value()
+                || !r2.value().runtime
+                || !r2.value().runtimeMesh.valid()
+                || r2.value().runtimeMesh.meshKey != meshKey1
+                || r2.value().runtimeMesh.version != version1
+                || r2.value().runtimeMesh.geometryContentRevision <= contentRev1
+            ){
+                error("PhysicsStressSmoke: Wave4C SoftBodyMeshSystem deformation update mismatch");
+                sbOk = false;
+            }
+        }
+
+        if(sbOk){
+            mut SoftBodyComponent sbComp = sbEnt.getComponent<SoftBodyComponent>();
+            sbComp.softBody.surfaceTriangles.pop_back();
+            ++sbComp.softBody.topologyVersion;
+            sbOk = softBodyMeshSystem.prepareResources(fb);
+            if(sbOk)
+                softBodyMeshSystem.render(fb);
+            const auto r3 = meshSystem.resolveRenderableMeshStatus(sbEnt.id());
+            if(
+                !r3.has_value()
+                || !r3.value().runtime
+                || !r3.value().runtimeMesh.valid()
+                || r3.value().runtimeMesh.meshKey == meshKey1
+                || r3.value().runtimeMesh.version <= version1
+            ){
+                error("PhysicsStressSmoke: Wave4C SoftBodyMeshSystem topology rebuild mismatch");
+                sbOk = false;
+            }
+        }
+
+        if(sbOk){
+            mut SoftBodyComponent sbComp = sbEnt.getComponent<SoftBodyComponent>();
+            sbComp.softBody.surfaceTriangles.clear();
+            ++sbComp.softBody.topologyVersion;
+            sbOk = softBodyMeshSystem.prepareResources(fb);
+            if(sbOk)
+                softBodyMeshSystem.render(fb);
+            const auto r4 = meshSystem.resolveRenderableMeshStatus(sbEnt.id());
+            if(
+                !r4.has_value()
+                || !r4.value().runtime
+                || !r4.value().runtimeMesh.valid()
+                || r4.value().runtimeMesh.meshletCount != 1u
+                || r4.value().runtimeMesh.meshletPrimitiveIndexCount != 3u
+            ){
+                error("PhysicsStressSmoke: Wave4C SoftBodyMeshSystem sentinel fallback failed");
+                sbOk = false;
+            }
+            else{
+                RuntimeMeshRequestSet liveReq(4u);
+                liveReq.add(r4.value().runtimeMesh.meshKey, r4.value().runtimeMesh.version);
+                meshSystem.markLiveRuntimeMeshes(liveReq);
+                if(!liveReq.containsLive(r4.value().runtimeMesh.meshKey, r4.value().runtimeMesh.version) || !liveReq.complete()){
+                    error("PhysicsStressSmoke: Wave4C SoftBodyMeshSystem markLiveRuntimeMeshes failed");
+                    sbOk = false;
+                }
+            }
+        }
+
+        softBodyMeshSystem.invalidateResources();
+        world.taskScope().wait();
+        if(!sbOk)
+            return false;
+    }
+
+    return true;
+}
+
 b8 RunPhysicsGpuParitySmoke(
     mut GraphicsRuntime graphics,
     mut PhysicsGpuDispatcher gpuDispatcher,
-    mut CpuTaskScheduler scheduler
+    mut CpuTaskScheduler scheduler,
+    mut ProjectRuntimeContext context,
+    in ActiveSceneSubsystemsRef activeSubsystems
 ){
     f32 hullY = 0.0f;
     if(!RunGpuParityCoreSubtest(gpuDispatcher, scheduler, hullY))
@@ -1351,6 +2395,14 @@ b8 RunPhysicsGpuParitySmoke(
     if(!RunGpuParityResidentAndExportSubtest(graphics, gpuDispatcher, scheduler))
         return false;
     if(!RunGpuParitySpatialQueriesSubtest(gpuDispatcher))
+        return false;
+    if(!RunGpuParityZeroReadbackResidentSubtest(gpuDispatcher))
+        return false;
+    if(!RunGpuParityAsyncAndTaskGraphExportSubtest(graphics, gpuDispatcher))
+        return false;
+    if(!RunGpuParitySubsystemsSubtest(gpuDispatcher, scheduler))
+        return false;
+    if(!RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(context, activeSubsystems))
         return false;
 
     [essential] info("PhysicsStressSmoke: gpu_parity_passed hull_y={:.3f} bullet_y={:.3f}", hullY, bulletY);

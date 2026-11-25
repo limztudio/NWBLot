@@ -17,6 +17,7 @@ const usize s_EditMaxBytes = 1048576u;
 const usize s_EditMaxHistoryRecords = 256u;
 const usize s_EditMaxHistoryBytes = 16777216u;
 const StringView s_EditNewlineText = "\n";
+const StringView s_EditTabText = "\t";
 const u32 s_EditUnicodeTab = 0x09u;
 const u32 s_EditUnicodeLineFeed = 0x0Au;
 const u32 s_EditUnicodeCarriageReturn = 0x0Du;
@@ -56,6 +57,7 @@ enum<u8> EditCommand{
     DocumentHome,
     DocumentEnd,
     Newline,
+    InsertTab,
 }
 
 enum<u8> EditClipboardAction{
@@ -145,6 +147,19 @@ class EditLimits{
     public usize maxHistoryBytes = s_EditDefaultMaxHistoryBytes;
 }
 
+enum<u8> EditPreeditClauseStyle{
+    Raw = 0u,
+    Converted = 1u,
+    Target = 2u,
+    Selected = 3u,
+}
+
+class EditPreeditClause{
+    public usize beginByte = 0u;
+    public usize endByte = 0u;
+    public EditPreeditClauseStyle style = EditPreeditClauseStyle::Raw;
+}
+
 class EditCompositionView{
     public StringView text = "";
     public usize anchor = 0u;
@@ -152,6 +167,7 @@ class EditCompositionView{
     public usize replacementStart = 0u;
     public usize replacementEnd = 0u;
     public b8 active = false;
+    public Span<EditPreeditClause> clauses;
 }
 
 class EditCommandRequest{
@@ -241,6 +257,7 @@ b8 IsMutatingEditCommand(in EditCommand command){
         command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
         || command == EditCommand::WordDelete || command == EditCommand::Cut || command == EditCommand::Paste
         || command == EditCommand::Undo || command == EditCommand::Redo || command == EditCommand::Newline
+        || command == EditCommand::InsertTab
     ;
 }
 

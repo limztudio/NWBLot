@@ -243,13 +243,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             maxOut = worldCenter + ext;
         }
         else{
+            const NwbPhysicsGpuShapeProxy shapeProxy = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx];
+            float3 effOrigin = bodyOrigin;
+            float4 effQ = bodyQ;
+            nwbPhysicsResolveShapeWorldPose(shapeProxy, bodyOrigin, bodyQ, effOrigin, effQ);
             const float4 localRotQ = ((bodyMeta.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u)
-                ? g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].localRotationOrMeta
+                ? shapeProxy.localRotationOrMeta
                 : float4(0.0f, 0.0f, 0.0f, 1.0f);
             const float4 worldQ = (localRotQ.w < 0.999999f)
-                ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(bodyQ, localRotQ))
-                : bodyQ;
-            const float3 worldCenter = bodyOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, bodyQ);
+                ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(effQ, localRotQ))
+                : effQ;
+            const float3 worldCenter = effOrigin + nwbPhysicsQuatRotate(localCenterRadius.xyz, effQ);
             float3 axisX;
             float3 axisY;
             float3 axisZ;

@@ -21,6 +21,8 @@ extern class ProjectRuntimeContext{
     InputDispatcher input;
     IClipboardService clipboard;
     ITextInputService textInput;
+    ICursorService cursor;
+    IAccessibilityService accessibility;
     GlobalAllocator objectArena;
     CpuTaskScheduler cpuTasks;
     GpuTaskScheduler gpuTasks;

@@ -233,8 +233,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     reflectionContentStamp.view = s_Fnv64OffsetBasis;
     Fnv64AppendValue(reflectionContentStamp.view, meshViewUpload.viewState);
     ObjectGeometryCacheGraph objectGeometry(this.m_deferredLightingTaskGraph, this.m_materialSystem, this.m_meshSystem);
-    const GraphicsPrefixGraphContext graphicsPrefixContext(this.m_graphics, this.m_deferredLightingTaskGraph, this.m_csgSystem, this.m_deferredSystem, this.m_materialSystem, this.m_meshSystem, this.m_raytracingSystem,
+    GraphicsPrefixGraphContext graphicsPrefixContext(this.m_graphics, this.m_deferredLightingTaskGraph, this.m_csgSystem, this.m_deferredSystem, this.m_materialSystem, this.m_meshSystem, this.m_raytracingSystem,
         this.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask);
+    graphicsPrefixContext.instanceTransformPatchContributor = this.m_instanceTransformPatchContributor;
     auto graphicsPrefixResult = this.m_graphicsPrefixGraph.declareDeferredGraphicsPrefixTasks(
         graphicsPrefixContext,
         shadowPrepareHandoffTask,
@@ -493,6 +494,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitInputs.hasTransparentRenderers = hasTransparentRenderers;
     avboitInputs.clearTargets = clearAvboitTargets;
     avboitInputs.refractionCaptureEnabled = refractionActive && refractionResources.valid();
+    avboitInputs.instanceTransformPatchContributor = this.m_instanceTransformPatchContributor;
     const FrameGraphAvboitStageTiming avboitTiming(
         avboitPreTimingTicket, avboitDepthWarpTimingTicket, avboitExtinctionTimingTicket, avboitIntegrationTimingTicket, avboitAccumulationTimingTicket,
         avboitClearTimingState, transparentCsgIntervalClearTimingState, transparentCsgIntervalsTiming,

@@ -21,6 +21,8 @@ class Builder : NoCopy{
     private WidgetStyle m_style;
     private String m_textLanguage;
     private u32 m_textScriptTag = s_TextDefaultScriptTag;
+    private TextDirection m_textDirection = TextDirection::LeftToRight;
+    private TextBidiMode m_textBidiMode = TextBidiMode::None;
     private f32 m_skinDefaultFontSize = s_TextDefaultFontSize;
     private EditBoxStyle m_editStyle;
     private ScrollbarStyle m_scrollbarStyle;
@@ -31,6 +33,18 @@ class Builder : NoCopy{
     private ProgressStyle m_progressStyle;
     private ComboStyle m_comboStyle;
     private TooltipStyle m_tooltipStyle;
+    private TabBarStyle m_tabBarStyle;
+    private SplitterStyle m_splitterStyle;
+    private TreeStyle m_treeStyle;
+    private TableStyle m_tableStyle;
+    private DialogStyle m_dialogStyle;
+    private MenuBarStyle m_menuBarStyle;
+    private ToastStyle m_toastStyle;
+    private ColorPickerStyle m_colorPickerStyle;
+    private DragDropStyle m_dragDropStyle;
+    private HyperlinkStyle m_hyperlinkStyle;
+    private PlotStyle m_plotStyle;
+    private DockSpaceStyle m_dockSpaceStyle;
     private Optional<mut IEditBoxHost> m_editHost;
     private Vector<WidgetStyle> m_itemStyles;
     private Vector<SelectableStyle> m_itemSelectableStyles;
@@ -57,6 +71,15 @@ class Builder : NoCopy{
     private b8 m_checkboxExtentValid = false;
     private b8 m_selectableMetricsCached = false;
     private b8 m_selectableMetricsValid = false;
+    private PointerCursor m_pendingCursor = PointerCursor::Default;
+    private WidgetId m_pendingFocusUp;
+    private WidgetId m_pendingFocusDown;
+    private WidgetId m_pendingFocusLeft;
+    private WidgetId m_pendingFocusRight;
+    private AccessibleOverride m_pendingAccessibleOverride;
+    private HashSet<u64> m_announcedToastIds;
+    private b8 m_hasPendingCursor = false;
+    private b8 m_hasPendingFocusNeighbors = false;
     private b8 m_editMinSizeCached = false;
     private b8 m_editPaddingCached = false;
 
@@ -82,8 +105,6 @@ class Builder : NoCopy{
         else
             this.m_editHost.reset();
     }
-
-    private BuilderItem makeItem()const{ return BuilderItem(); }
 
     private BuilderEditBoxFrame makeEditBoxFrame()const{ return BuilderEditBoxFrame(); }
 
@@ -141,6 +162,7 @@ class Builder : NoCopy{
 
     [cpp_unwind]
     public b8 endWindow();
+    public void bringWindowToFront(mut WindowState state){ state.zOrder = this.m_context.allocateWindowZOrder(); }
 
     [cpp_unwind]
     public b8 beginPopup(in StringView stableKey, mut PopupState state){ return this.beginPopup(stableKey, state, PopupOptions()); }
@@ -149,6 +171,111 @@ class Builder : NoCopy{
 
     [cpp_unwind]
     public b8 endPopup();
+
+    [cpp_unwind]
+    public b8 beginModalDialog(in StringView stableKey, in StringView title, mut DialogState state){ return this.beginModalDialog(stableKey, title, state, DialogOptions()); }
+    [cpp_unwind]
+    public b8 beginModalDialog(in StringView stableKey, in StringView title, mut DialogState state, in DialogOptions options);
+    [cpp_unwind]
+    public b8 endModalDialog();
+
+    [cpp_unwind]
+    public MenuBarResult menuBar(in StringView stableKey, in Span<MenuBarMenu> menus, mut MenuBarState state){ return this.menuBar(stableKey, menus, state, MenuBarOptions()); }
+    [cpp_unwind]
+    public MenuBarResult menuBar(in StringView stableKey, in Span<MenuBarMenu> menus, mut MenuBarState state, in MenuBarOptions options);
+
+    [cpp_unwind]
+    public b8 beginToolbar(in StringView stableKey){ return this.beginToolbar(stableKey, ToolbarOptions()); }
+    [cpp_unwind]
+    public b8 beginToolbar(in StringView stableKey, in ToolbarOptions options);
+    [cpp_unwind]
+    public b8 toolbarButton(in StringView stableKey, in StringView text){ return this.toolbarButton(stableKey, text, WidgetOptions()); }
+    [cpp_unwind]
+    public b8 toolbarButton(in StringView stableKey, in StringView text, in WidgetOptions options);
+    [cpp_unwind]
+    public b8 toolbarToggle(in StringView stableKey, in StringView text, mut b8 active){ return this.toolbarToggle(stableKey, text, active, WidgetOptions()); }
+    [cpp_unwind]
+    public b8 toolbarToggle(in StringView stableKey, in StringView text, mut b8 active, in WidgetOptions options);
+    [cpp_unwind]
+    public b8 toolbarSeparator(in StringView stableKey);
+    [cpp_unwind]
+    public b8 endToolbar();
+
+    [cpp_unwind]
+    public b8 beginStatusBar(in StringView stableKey){ return this.beginStatusBar(stableKey, StatusBarOptions()); }
+    [cpp_unwind]
+    public b8 beginStatusBar(in StringView stableKey, in StatusBarOptions options);
+    [cpp_unwind]
+    public b8 statusBarSection(in StringView stableKey, in StringView text){ return this.statusBarSection(stableKey, text, LabelOptions()); }
+    [cpp_unwind]
+    public b8 statusBarSection(in StringView stableKey, in StringView text, in LabelOptions options);
+    [cpp_unwind]
+    public b8 endStatusBar();
+
+    [cpp_unwind]
+    public ToastResult toastStack(in StringView stableKey, mut ToastState state){ return this.toastStack(stableKey, state, ToastOptions()); }
+    [cpp_unwind]
+    public ToastResult toastStack(in StringView stableKey, mut ToastState state, in ToastOptions options);
+
+    [cpp_unwind]
+    public ColorPickerResult colorPicker(in StringView stableKey, mut ColorPickerState state){ return this.colorPicker(stableKey, state, ColorPickerOptions()); }
+    [cpp_unwind]
+    public ColorPickerResult colorPicker(in StringView stableKey, mut ColorPickerState state, in ColorPickerOptions options);
+
+    [cpp_unwind]
+    public DragDropResult dragSource(in StringView stableKey, in StringView anchorKey, in DragDropPayload payload, mut DragDropState state){
+        return this.dragSource(stableKey, anchorKey, payload, state, DragDropOptions());
+    }
+    [cpp_unwind]
+    public DragDropResult dragSource(in StringView stableKey, in StringView anchorKey, in DragDropPayload payload, mut DragDropState state, in DragDropOptions options);
+
+    [cpp_unwind]
+    public DragDropResult dropTarget(in StringView stableKey, in StringView anchorKey, in Name acceptType, mut DragDropState state){
+        return this.dropTarget(stableKey, anchorKey, acceptType, state, DragDropOptions());
+    }
+    [cpp_unwind]
+    public DragDropResult dropTarget(in StringView stableKey, in StringView anchorKey, in Name acceptType, mut DragDropState state, in DragDropOptions options);
+
+    [cpp_unwind]
+    public b8 hyperlink(in StringView stableKey, in StringView text){ return this.hyperlink(stableKey, text, HyperlinkOptions()); }
+    [cpp_unwind]
+    public b8 hyperlink(in StringView stableKey, in StringView text, in HyperlinkOptions options);
+
+    [cpp_unwind]
+    public RichTextResult richText(in StringView stableKey, in Span<RichTextSpan> spans){ return this.richText(stableKey, spans, RichTextOptions()); }
+    [cpp_unwind]
+    public RichTextResult richText(in StringView stableKey, in Span<RichTextSpan> spans, in RichTextOptions options);
+
+    [cpp_unwind]
+    public PlotResult plot(in StringView stableKey, in Span<PlotSeries> series){ return this.plot(stableKey, series, PlotOptions()); }
+    [cpp_unwind]
+    public PlotResult plot(in StringView stableKey, in Span<PlotSeries> series, in PlotOptions options);
+
+    [cpp_unwind]
+    public PlotResult plotLine(in StringView stableKey, in Span<f32> values){ return this.plotLine(stableKey, values, PlotOptions()); }
+    [cpp_unwind]
+    public PlotResult plotLine(in StringView stableKey, in Span<f32> values, in PlotOptions options);
+
+    [cpp_unwind]
+    public PlotResult plotHistogram(in StringView stableKey, in Span<f32> values){ return this.plotHistogram(stableKey, values, PlotOptions()); }
+    [cpp_unwind]
+    public PlotResult plotHistogram(in StringView stableKey, in Span<f32> values, in PlotOptions options);
+
+    [cpp_unwind]
+    public CanvasResult canvas(in StringView stableKey, mut ICanvasPainter painter){ return this.canvas(stableKey, painter, CanvasOptions()); }
+    [cpp_unwind]
+    public CanvasResult canvas(in StringView stableKey, mut ICanvasPainter painter, in CanvasOptions options);
+
+    [cpp_unwind]
+    public b8 beginDockSpace(in StringView stableKey, mut DockSpaceState state){ return this.beginDockSpace(stableKey, state, DockSpaceOptions()); }
+    [cpp_unwind]
+    public b8 beginDockSpace(in StringView stableKey, mut DockSpaceState state, in DockSpaceOptions options);
+    [cpp_unwind]
+    public b8 beginDockedPanel(in StringView stableKey, in u64 panelKey, in StringView title);
+    [cpp_unwind]
+    public b8 endDockedPanel();
+    [cpp_unwind]
+    public b8 endDockSpace();
 
     [cpp_unwind]
     public b8 beginRow(in StringView stableKey){ return this.beginRow(stableKey, ContainerOptions()); }
@@ -160,12 +287,37 @@ class Builder : NoCopy{
     [cpp_unwind]
     public b8 beginColumn(in StringView stableKey, in ContainerOptions options){ return this.beginContainer(stableKey, LayoutDirection::Column, options); }
 
+    [cpp_unwind]
+    public b8 beginOverlay(in StringView stableKey){ return this.beginOverlay(stableKey, ContainerOptions()); }
+    [cpp_unwind]
+    public b8 beginOverlay(in StringView stableKey, in ContainerOptions options){ return this.beginContainer(stableKey, LayoutDirection::Overlay, options); }
+
+    [cpp_unwind]
+    public b8 beginGrid(in StringView stableKey){ return this.beginGrid(stableKey, ContainerOptions()); }
+    [cpp_unwind]
+    public b8 beginGrid(in StringView stableKey, in u32 columns){
+        ContainerOptions options;
+        options.gridColumns = columns;
+        return this.beginContainer(stableKey, LayoutDirection::Grid, options);
+    }
+    [cpp_unwind]
+    public b8 beginGrid(in StringView stableKey, in ContainerOptions options){ return this.beginContainer(stableKey, LayoutDirection::Grid, options); }
+
     public b8 endContainer();
+
+    [cpp_unwind]
+    public b8 beginScrollArea(in StringView stableKey, mut ScrollAreaState state){ return this.beginScrollArea(stableKey, state, ScrollAreaOptions()); }
+    [cpp_unwind]
+    public b8 beginScrollArea(in StringView stableKey, mut ScrollAreaState state, in ScrollAreaOptions options);
+
+    public b8 endScrollArea();
 
     [cpp_unwind]
     public b8 label(in StringView stableKey, in StringView text){ return this.label(stableKey, text, WidgetOptions()); }
     [cpp_unwind]
     public b8 label(in StringView stableKey, in StringView text, in WidgetOptions options){ return this.addItem(stableKey, text, WidgetKind::Label, options).has_value(); }
+    [cpp_unwind]
+    public b8 label(in StringView stableKey, in StringView text, in LabelOptions options);
 
     [cpp_unwind]
     public b8 button(in StringView stableKey, in StringView text){ return this.button(stableKey, text, WidgetOptions()); }
@@ -178,6 +330,16 @@ class Builder : NoCopy{
     public b8 checkbox(in StringView stableKey, in StringView text, mut b8 checked, in WidgetOptions options);
 
     [cpp_unwind]
+    public b8 collapsibleHeader(in StringView stableKey, in StringView text, mut b8 expanded){ return this.collapsibleHeader(stableKey, text, expanded, CollapsibleHeaderOptions()); }
+    [cpp_unwind]
+    public b8 collapsibleHeader(in StringView stableKey, in StringView text, mut b8 expanded, in CollapsibleHeaderOptions options);
+
+    [cpp_unwind]
+    public TabBarResult tabBar(in StringView stableKey, in Span<TabBarItem> tabs, mut TabBarState state){ return this.tabBar(stableKey, tabs, state, TabBarOptions()); }
+    [cpp_unwind]
+    public TabBarResult tabBar(in StringView stableKey, in Span<TabBarItem> tabs, mut TabBarState state, in TabBarOptions options);
+
+    [cpp_unwind]
     public b8 selectable(in StringView stableKey, in StringView text, in b8 selected){ return this.selectable(stableKey, text, selected, WidgetOptions()); }
     [cpp_unwind]
     public b8 selectable(in StringView stableKey, in StringView text, in b8 selected, in WidgetOptions options);
@@ -186,6 +348,39 @@ class Builder : NoCopy{
     public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state){ return this.virtualList(stableKey, source, state, ListOptions()); }
     [cpp_unwind]
     public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options);
+    [cpp_unwind]
+    public ListResult virtualList(in StringView stableKey, in borrow IListDataSource source, in borrow IListRowHeightProvider rowHeights, mut ListState state, in ListOptions options);
+
+    [cpp_unwind]
+    public b8 beginVirtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, mut ListResult outResult){
+        return this.beginVirtualList(stableKey, source, state, ListOptions(), outResult);
+    }
+    [cpp_unwind]
+    public b8 beginVirtualList(in StringView stableKey, in borrow IListDataSource source, mut ListState state, in ListOptions options, mut ListResult outResult);
+    [cpp_unwind]
+    public b8 beginVirtualList(in StringView stableKey, in borrow IListDataSource source, in borrow IListRowHeightProvider rowHeights, mut ListState state, in ListOptions options, mut ListResult outResult);
+    [cpp_unwind]
+    public b8 beginVirtualListRow(in u64 index);
+    public b8 endVirtualListRow();
+    public b8 endVirtualList();
+
+    [cpp_unwind]
+    public b8 beginSplitter(in StringView stableKey, mut SplitterState state){ return this.beginSplitter(stableKey, state, SplitterOptions()); }
+    [cpp_unwind]
+    public b8 beginSplitter(in StringView stableKey, mut SplitterState state, in SplitterOptions options);
+    public b8 splitterSecondPane();
+    [cpp_unwind]
+    public b8 endSplitter();
+
+    [cpp_unwind]
+    public TreeResult treeView(in StringView stableKey, in borrow ITreeDataSource source, mut TreeState state){ return this.treeView(stableKey, source, state, TreeOptions()); }
+    [cpp_unwind]
+    public TreeResult treeView(in StringView stableKey, in borrow ITreeDataSource source, mut TreeState state, in TreeOptions options);
+
+    [cpp_unwind]
+    public TableResult dataTable(in StringView stableKey, in Span<TableColumn> columns, in borrow ITableDataSource source, mut TableState state){ return this.dataTable(stableKey, columns, source, state, TableOptions()); }
+    [cpp_unwind]
+    public TableResult dataTable(in StringView stableKey, in Span<TableColumn> columns, in borrow ITableDataSource source, mut TableState state, in TableOptions options);
 
     [cpp_unwind]
     public RadioGroupResult radioGroup(in StringView stableKey, in borrow IListDataSource source, mut RadioGroupState state){ return this.radioGroup(stableKey, source, state, RadioGroupOptions()); }
@@ -260,6 +455,16 @@ class Builder : NoCopy{
     [cpp_unwind]
     public NumericEditBoxResult floatEdit(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state, in FloatEditOptions options);
 
+    [cpp_unwind]
+    public NumericEditBoxResult integerSpinBox(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state){ return this.integerSpinBox(stableKey, model, state, IntegerSpinBoxOptions()); }
+    [cpp_unwind]
+    public NumericEditBoxResult integerSpinBox(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerSpinBoxOptions options);
+
+    [cpp_unwind]
+    public NumericEditBoxResult floatSpinBox(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state){ return this.floatSpinBox(stableKey, model, state, FloatSpinBoxOptions()); }
+    [cpp_unwind]
+    public NumericEditBoxResult floatSpinBox(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state, in FloatSpinBoxOptions options);
+
     public b8 balanced()const{ return !this.declarationBlocked() && !this.m_scope.value().m_panelActive && !this.m_scope.value().m_windowActive && !this.m_scope.value().m_popupState.has_value(); }
 
     public void reset();
@@ -272,6 +477,12 @@ class Builder : NoCopy{
 
     [cpp_unwind]
     public b8 setTextShaping(in u32 scriptTag, in StringView language);
+    [cpp_unwind]
+    public b8 setTextShaping(in u32 scriptTag, in StringView language, in TextDirection direction);
+    public b8 setTextDirection(in TextDirection direction);
+    public TextDirection textDirection()const{ return this.m_textDirection; }
+    public b8 setTextBidiMode(in TextBidiMode mode);
+    public TextBidiMode textBidiMode()const{ return this.m_textBidiMode; }
 
     public mut WidgetStyle style(){
         this.checkStyleAccess();
@@ -338,6 +549,80 @@ class Builder : NoCopy{
         return this.m_tooltipStyle;
     }
 
+    public mut TabBarStyle tabBarStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_tabBarStyle;
+    }
+
+    public mut SplitterStyle splitterStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_splitterStyle;
+    }
+
+    public mut TreeStyle treeStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        this.m_selectableMetricsCached = false;
+        return this.m_treeStyle;
+    }
+
+    public mut TableStyle tableStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        this.m_selectableMetricsCached = false;
+        return this.m_tableStyle;
+    }
+
+    public mut DialogStyle dialogStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_dialogStyle;
+    }
+
+    public mut MenuBarStyle menuBarStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_menuBarStyle;
+    }
+
+    public mut ToastStyle toastStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_toastStyle;
+    }
+
+    public mut ColorPickerStyle colorPickerStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_colorPickerStyle;
+    }
+
+    public mut DragDropStyle dragDropStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_dragDropStyle;
+    }
+
+    public mut HyperlinkStyle hyperlinkStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_hyperlinkStyle;
+    }
+
+    public mut PlotStyle plotStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_plotStyle;
+    }
+
+    public mut DockSpaceStyle dockSpaceStyle(){
+        this.checkStyleAccess();
+        this.m_customPaletteStyleDirty = true;
+        return this.m_dockSpaceStyle;
+    }
+
     public void setDeltaSeconds(in f32 delta){
         if(this.declarationBlocked())
             this.m_context.fail();
@@ -352,11 +637,107 @@ class Builder : NoCopy{
             this.m_pointerBusy = busy;
     }
 
+    public void setFrameCursor(in PointerCursor cursor){
+        if(this.declarationBlocked())
+            this.m_context.fail();
+        else
+            this.m_context.setFrameCursor(cursor);
+    }
+
+    public void setNextCursor(in PointerCursor cursor){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return;
+        }
+        if(cursor <= PointerCursor::Hidden){
+            this.m_pendingCursor = cursor;
+            this.m_hasPendingCursor = true;
+        }
+    }
+
+    [cpp_unwind]
+    public b8 beginFocusScope(in StringView stableKey){
+        return this.beginFocusScope(stableKey, false);
+    }
+
+    [cpp_unwind]
+    public b8 beginFocusScope(in StringView stableKey, in b8 trapDirectional);
+
+    public b8 endFocusScope();
+
+    public void setNextFocusNeighbors(in WidgetId up, in WidgetId down, in WidgetId left, in WidgetId right){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return;
+        }
+        this.m_pendingFocusUp = up;
+        this.m_pendingFocusDown = down;
+        this.m_pendingFocusLeft = left;
+        this.m_pendingFocusRight = right;
+        this.m_hasPendingFocusNeighbors = true;
+    }
+
+    [cpp_unwind]
+    public void setNextAccessibleLabel(in StringView label){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return;
+        }
+        this.m_pendingAccessibleOverride.label.assign(label);
+        this.m_pendingAccessibleOverride.hasLabel = true;
+    }
+
+    [cpp_unwind]
+    public void setNextAccessibleDescription(in StringView description){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return;
+        }
+        this.m_pendingAccessibleOverride.description.assign(description);
+        this.m_pendingAccessibleOverride.hasDescription = true;
+    }
+
+    public void setNextAccessibleRole(in AccessibilityRole role){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return;
+        }
+        if(role < AccessibilityRole::kCount){
+            this.m_pendingAccessibleOverride.role = role;
+            this.m_pendingAccessibleOverride.hasRole = true;
+        }
+    }
+
+    public void setNextAccessibleLiveMode(in AccessibilityLiveMode mode){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return;
+        }
+        if(mode <= AccessibilityLiveMode::Assertive){
+            this.m_pendingAccessibleOverride.liveMode = mode;
+            this.m_pendingAccessibleOverride.hasLiveMode = true;
+        }
+    }
+
+    [cpp_unwind]
+    public b8 announce(in StringView text){
+        return this.announce(text, AccessibilityLiveMode::Polite);
+    }
+
+    [cpp_unwind]
+    public b8 announce(in StringView text, in AccessibilityLiveMode liveMode){
+        if(this.declarationBlocked()){
+            this.m_context.fail();
+            return false;
+        }
+        return this.m_context.announce(text, liveMode);
+    }
+
     public in WindowMetrics windowMetrics()const{ return this.m_scope.value().m_window.metrics; }
 
     private b8 declarationBlocked()const{ return this.m_finalizing || this.m_declaring; }
 
-    private b8 panelDeclarationBlocked()const{ return this.declarationBlocked() || !this.m_scope.value().m_panelActive || (this.m_scope.value().m_windowActive && this.m_scope.value().m_window.state.value().collapsed) || this.m_context.failed(); }
+    private b8 panelDeclarationBlocked()const{ return this.declarationBlocked() || !this.m_scope.value().m_panelActive || (this.m_scope.value().m_windowActive && (!this.m_scope.value().m_window.state.value().open || this.m_scope.value().m_window.state.value().collapsed)) || this.m_context.failed(); }
 
     private b8 itemDeclarationBlocked()const{ return this.panelDeclarationBlocked() || this.m_scope.value().m_items.size() >= s_LayoutMaxNodes; }
 
@@ -364,8 +745,11 @@ class Builder : NoCopy{
         ShapeRequest request;
         request.text = text;
         request.language = StringView(this.m_textLanguage);
+        request.font = this.m_style.font;
         request.fontSize = fontSize;
         request.scriptTag = this.m_textScriptTag;
+        request.direction = this.m_textDirection;
+        request.bidiMode = this.m_textBidiMode;
         return request;
     }
 
@@ -374,6 +758,24 @@ class Builder : NoCopy{
 
     [cpp_unwind]
     private Expected<mut BuilderItem> addItem(in StringView stableKey, in StringView text, in WidgetKind kind, in WidgetOptions options);
+
+    [cpp_unwind]
+    private Expected<u32> addTextItemInternal(
+        in StringView stableKey,
+        in StringView text,
+        in WidgetKind kind,
+        in WidgetOptions options,
+        in TextAlignment alignment,
+        in TextWrapMode wrapMode,
+        in f32 maxWidth,
+        in b8 ellipsis
+    );
+
+    [cpp_unwind]
+    private Expected<CachedMeasuredText> resolveEllipsisLabel(in TextLayout layout, in f32 maxWidth);
+
+    [cpp_unwind]
+    private b8 paintLabel(in BuilderItem item, in LayoutBox box);
 
     [cpp_unwind]
     private b8 addItemNode(in LayoutNodeDesc description, mut BuilderItem item);
@@ -421,6 +823,20 @@ class Builder : NoCopy{
 
     [cpp_unwind]
     private b8 paintItems();
+    [cpp_unwind]
+    private b8 paintItemsSortedByZIndex();
+
+    [cpp_unwind]
+    private BuilderItem makeItem();
+
+    [cpp_unwind]
+    private b8 emitAccessibleNode(in WidgetState state, in AccessibilityRole role, in Rect bounds, in StringView name, in StringView valueText, in u32 stateBits, in u32 actionBits);
+
+    [cpp_unwind]
+    private b8 emitAccessibleRangeNode(in WidgetState state, in AccessibilityRole role, in Rect bounds, in StringView name, in StringView valueText, in f64 value, in f64 minValue, in f64 maxValue, in f64 stepValue, in u32 stateBits, in u32 actionBits);
+
+    [cpp_unwind]
+    private b8 emitAccessiblePartNode(in WidgetId id, in WidgetId parentId, in AccessibilityRole role, in Rect bounds, in StringView name, in u32 stateBits, in u32 actionBits, in i32 positionInSet, in i32 setSize, in i32 level);
 
     [cpp_unwind]
     private b8 paintItem(in BuilderItem item, in LayoutBox box);
@@ -461,7 +877,17 @@ class Builder : NoCopy{
     [cpp_unwind]
     private b8 paintTextAreaScrollbars(in BuilderItem item, in ScrollViewportPlacement placement, in Rect clip, in ControlToken token);
     [cpp_unwind]
-    private b8 paintTextAreaScrollbarAxis(in BuilderItem item, in ScrollbarPlacement bar, in Rect clip, in ControlToken token, in b8 horizontal, in u32 beforeAction, in u32 afterAction, in StringView beforeKey, in StringView afterKey, in StringView thumbKey);
+    private b8 applyScrollAreaInput(in WidgetState widget, mut ScrollAreaState state, in ScrollAreaOptions options);
+    [cpp_unwind]
+    private b8 paintScrollAreaBegin(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintScrollAreaEnd(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintScrollbarsForHost(in WidgetState owner, in ScrollbarStyle scrollbarStyle, in ScrollViewportPlacement placement, in Rect clip, in ControlToken token, in b8 enabled);
+    [cpp_unwind]
+    private b8 paintScrollbarAxisForHost(in WidgetState owner, in ScrollbarPlacement bar, in Rect clip, in ControlToken token, in b8 horizontal, in u32 beforeAction, in u32 afterAction, in StringView beforeKey, in StringView afterKey, in StringView thumbKey);
+    [cpp_unwind]
+    private b8 paintTabBar(in BuilderItem item, in LayoutBox box);
 
     private b8 textAreaMatches(in BuilderTextAreaFrame frame)const;
 
@@ -477,6 +903,19 @@ class Builder : NoCopy{
     private b8 prepareEditBox(in EditBoxResult result, mut EditModel model, mut EditBoxState state, mut BuilderItem item, mut BuilderEditBoxFrame editFrame);
 
     [cpp_unwind]
+    private b8 prepareEditBox(
+        in EditBoxResult result,
+        mut EditModel model,
+        mut EditBoxState state,
+        mut BuilderItem item,
+        mut BuilderEditBoxFrame editFrame,
+        in TextWrapMode wrapMode,
+        in f32 wrapWidth,
+        in u32 tabStopSpaces,
+        in b8 preserveWrapSpaces
+    );
+
+    [cpp_unwind]
     private b8 paintEditBox(in BuilderItem item, in LayoutBox box){ return this.paintEditBox(item, box, Optional<in HitTarget>()); }
     [cpp_unwind]
     private b8 paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in HitTarget> navigation);
@@ -485,15 +924,78 @@ class Builder : NoCopy{
     private b8 paintSelectable(in BuilderItem item, in LayoutBox box);
 
     [cpp_unwind]
+    private ListResult declareVirtualList(
+        in StringView stableKey,
+        in borrow IListDataSource source,
+        in Optional<in IListRowHeightProvider> rowHeights,
+        mut ListState state,
+        in ListOptions options
+    );
+    [cpp_unwind]
+    private b8 beginVirtualListInternal(
+        in StringView stableKey,
+        in borrow IListDataSource source,
+        in Optional<in IListRowHeightProvider> rowHeights,
+        mut ListState state,
+        in ListOptions options,
+        mut ListResult outResult
+    );
+    [cpp_unwind]
     private b8 prepareListMetrics(mut BuilderListFrame frame);
     [cpp_unwind]
-    private b8 paintListRows(in BuilderItem item, in BuilderListFrame frame, in ScrollPlacement placement);
+    private b8 paintListRows(in BuilderItem item, in BuilderListFrame frame, in ScrollPlacement placement, in Span<f64> rowOffsets);
+    [cpp_unwind]
+    private b8 paintScrollbarsAndTargets(in WidgetState widget, in b8 enabled, in ControlToken token, in ListStyle style, in ScrollViewportPlacement scrollbars, in Rect clip);
+    [cpp_unwind]
+    private b8 paintListScrollbarsAndTargets(in BuilderItem item, in BuilderListFrame frame, in ScrollViewportPlacement scrollbars, in Rect clip);
 
     [cpp_unwind]
-    private Optional<in UiSkinRegion> prepareListFrame(in borrow IListDataSource source, mut ListState state, in ListOptions options, in ControlToken token, in u64 rowCount, in b8 focusOnCommit, in WidgetId commandFocus, mut BuilderListFrame outFrame);
+    private Optional<in UiSkinRegion> prepareListFrame(
+        in borrow IListDataSource source,
+        in Optional<in IListRowHeightProvider> rowHeights,
+        mut ListState state,
+        in ListOptions options,
+        in ControlToken token,
+        in u64 rowCount,
+        in b8 focusOnCommit,
+        in WidgetId commandFocus,
+        mut BuilderListFrame outFrame
+    );
+
+    [cpp_unwind]
+    private Optional<in UiSkinRegion> prepareListFrame(in borrow IListDataSource source, mut ListState state, in ListOptions options, in ControlToken token, in u64 rowCount, in b8 focusOnCommit, in WidgetId commandFocus, mut BuilderListFrame outFrame){
+        return this.prepareListFrame(source, Optional<in IListRowHeightProvider>(), state, options, token, rowCount, focusOnCommit, commandFocus, outFrame);
+    }
 
     [cpp_unwind]
     private b8 paintList(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintVirtualListBegin(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintVirtualListRow(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintVirtualListEnd(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintSplitterHandle(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 pushSpinBoxScope(in StringView stableKey, in LayoutSize width, in LayoutSize height, in LayoutItemOptions layoutOptions, mut u32 outContainerNode);
+    [cpp_unwind]
+    private b8 appendSpinBoxStepButtons(in u32 containerNode, in f32 buttonWidth, mut u32 outDecNode, mut u32 outIncNode);
+    private void popSpinBoxScope();
+    [cpp_unwind]
+    private b8 paintSpinBoxBegin(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintSpinBoxEnd(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintTreeView(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintDataTable(in BuilderItem item, in LayoutBox box);
+    private b8 treeStateMatches(in BuilderTreeFrame frame)const{ return this.m_scope.value().treeStateMatches(this.m_context, frame); }
+    [cpp_unwind]
+    private b8 treeMatches(in BuilderTreeFrame frame)const{ return this.m_scope.value().treeMatches(this.m_context, frame); }
+    private b8 tableStateMatches(in BuilderTableFrame frame)const{ return this.m_scope.value().tableStateMatches(this.m_context, frame); }
+    [cpp_unwind]
+    private b8 tableMatches(in BuilderTableFrame frame)const{ return this.m_scope.value().tableMatches(this.m_context, frame); }
 
     [cpp_unwind]
     private b8 paintRadioGroup(in BuilderItem item, in LayoutBox box);
@@ -583,7 +1085,13 @@ class Builder : NoCopy{
         if(id.has_value()){
             in Vector<BuilderItem> items = this.m_scope.value().m_items;
             for(usize index = 0u; index < items.size(); ++index){
-                if(items[index].state.id == id.value() && items[index].state.kind != WidgetKind::Separator)
+                if(
+                    items[index].state.id == id.value()
+                    && items[index].state.kind != WidgetKind::Separator
+                    && !(items[index].state.kind == WidgetKind::ScrollArea && items[index].checked)
+                    && !(items[index].state.kind == WidgetKind::VirtualList && (items[index].checked || items[index].listRow != s_LayoutNoParent))
+                    && !(items[index].state.kind == WidgetKind::SpinBox && items[index].checked)
+                )
                     return index;
             }
         }
@@ -593,8 +1101,57 @@ class Builder : NoCopy{
     [cpp_unwind]
     private b8 paintDeferred(){ return this.paintDeferredContents() && this.validateDeferredSources() && this.validateDeferredStates(); }
 
+    private b8 menuBarStateMatches(in BuilderMenuBarFrame frame)const;
+    private b8 menuBarMatches(in BuilderMenuBarFrame frame)const;
+    private void snapshotMenuBar(mut BuilderMenuBarFrame frame);
     [cpp_unwind]
-    private b8 paintDeferredContents(){ return this.paintContextMenus() && this.paintCombos() && this.paintTooltips(); }
+    private b8 applyMenuBarListInput(mut BuilderMenuBarFrame frame, mut MenuBarResult result);
+    [cpp_unwind]
+    private b8 paintMenuBar(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintMenuBars();
+    [cpp_unwind]
+    private b8 paintMenuBarPopup(mut BuilderMenuBarFrame frame);
+
+    private b8 toastStateMatches(in BuilderToastFrame frame)const;
+    [cpp_unwind]
+    private b8 paintToasts();
+
+    private b8 colorPickerStateMatches(in BuilderColorPickerFrame frame)const;
+    [cpp_unwind]
+    private b8 paintColorPicker(in BuilderItem item, in LayoutBox box);
+
+    private b8 dragSourceStateMatches(in BuilderDragSourceFrame frame)const;
+    private b8 dropTargetStateMatches(in BuilderDropTargetFrame frame)const;
+    [cpp_unwind]
+    private b8 paintDragDrops();
+
+    [cpp_unwind]
+    private b8 paintHyperlink(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintRichText(in BuilderItem item, in LayoutBox box);
+
+    [cpp_unwind]
+    private b8 paintPlot(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintCanvas(in BuilderItem item, in LayoutBox box);
+
+    private b8 dockSpaceStateMatches(in BuilderDockSpaceFrame frame)const;
+    [cpp_unwind]
+    private b8 paintDockSpace(in BuilderItem item, in LayoutBox box);
+    [cpp_unwind]
+    private b8 paintDockSpaceOverlays();
+
+    [cpp_unwind]
+    private b8 paintDeferredContents(){
+        return this.paintContextMenus()
+            && this.paintCombos()
+            && this.paintMenuBars()
+            && this.paintTooltips()
+            && this.paintToasts()
+            && this.paintDragDrops()
+            && this.paintDockSpaceOverlays();
+    }
 
     [cpp_unwind]
     private b8 validateDeferredSources()const;

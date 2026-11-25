@@ -541,7 +541,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                 "${CMAKE_CURRENT_LIST_DIR}/physics_stress_scene.adhd"
                 "${CMAKE_CURRENT_LIST_DIR}/physics_stress_smoke.adhd"
             )
-            nwb_configure_runtime_smoke_target(nwb_physics_stress_smoke "${_nwb_physics_stress_runtime_root}" physics_stress_smoke nwb_physics nwb_physics_gpu)
+            nwb_configure_runtime_smoke_target(nwb_physics_stress_smoke "${_nwb_physics_stress_runtime_root}" physics_stress_smoke nwb_physics nwb_physics_gpu nwb_ecs_physics nwb_ecs_mesh nwb_ecs_mesh_soft_body)
             nwb_target_link_libraries_whole_archive(nwb_physics_stress_smoke nwb_assets_physics nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas)
             add_dependencies(nwb_physics_stress_smoke nwb_testbed_smoke_assets)
             if(TARGET nwb_logserver)

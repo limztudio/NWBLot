@@ -3,11 +3,14 @@
 
 
 #include "linux_platform.h"
+#include "linux_gamepad.h"
 #include "linux_wayland_input.h"
 #include "frame_detail.h"
 
 #include <core/common/log.h>
+#include <core/os/accessibility.h>
 #include <core/os/linux/wayland/clipboard.h>
+#include <core/os/linux/wayland/cursor.h>
 #include <core/os/linux/wayland/text_input.h>
 
 #include <global/scope_exit.h>
@@ -496,6 +499,14 @@ Expected<GlobalUniquePtr<ITextInputService>> CreateWaylandFrameTextInput(Frame& 
     return service;
 }
 
+Expected<GlobalUniquePtr<ICursorService>> CreateWaylandFrameCursor(Frame& frame){
+    return CreateWaylandCursorService(frame.projectObjectArena());
+}
+
+Expected<GlobalUniquePtr<IAccessibilityService>> CreateWaylandFrameAccessibility(Frame& frame){
+    return CreateAccessibilityService(frame.projectObjectArena(), nullptr);
+}
+
 b8 ShowWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     if(auto* const display = static_cast<wl_display*>(frameData.nativeDisplay())){
@@ -515,6 +526,7 @@ b8 RunWaylandFrame(Frame& frame){
         return false;
     }
 
+    LinuxGamepadPoller gamepadPoller;
     Timer lateTime(TimerNow());
 
     for(;;){
@@ -551,6 +563,7 @@ b8 RunWaylandFrame(Frame& frame){
         const f32 delta = DurationInSeconds<f32>(currentTime, lateTime);
         lateTime = currentTime;
 
+        gamepadPoller.poll(frame.input(), delta, windowIsInFocus);
         if(!frame.update(delta))
             return false;
         if(frame.quitRequested())
@@ -633,4 +646,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

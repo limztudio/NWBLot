@@ -26,6 +26,7 @@ b8 RouteRouterPrimary(
     mut Vector<InputAction> actions,
     mut Vector<ControlAction> controlActions,
     mut Vector<PointerGestureRecord> pointerGestures,
+    mut Vector<WindowPressRecord> windowPresses,
     mut u64 inOutActiveGestureSequence,
     mut u64 inOutNextActionSequence,
     mut b8 inOutPrimaryDown,
@@ -54,7 +55,7 @@ b8 RouteRouterPrimary(
         else if(secondaryDown)
             inOutResult.pointerConsumed = inOutResult.pointerConsumed || secondarySequenceConsumed;
         else
-            inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || hasHit;
+            inOutResult.pointerConsumed = inOutResult.pointerConsumed || HasBlockingRouterPopup(popups) || hasHit;
         return true;
     }
     if(event.type == InputEventType::PrimaryDown){
@@ -68,9 +69,17 @@ b8 RouteRouterPrimary(
         if(secondaryDown)
             inOutPointerSequenceConsumed = secondarySequenceConsumed;
         else
-            inOutPointerSequenceConsumed = !popups.empty() || hasHit;
+            inOutPointerSequenceConsumed = HasBlockingRouterPopup(popups) || hasHit;
         inOutResult.pointerConsumed = inOutResult.pointerConsumed || inOutPointerSequenceConsumed;
         if(!inOutPointerSequenceConsumed){
+            if(!secondaryDown && !popups.empty()){
+                const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
+                outDismissedPopup = dismissal.has_value();
+                if(outDismissedPopup){
+                    popupDismissRequest = dismissal.value();
+                    popupDismissRequest.replaceRestore = true;
+                }
+            }
             RetireRouterCommandFocus(commandSources);
             inOutFocus = WidgetId();
             inOutFocusDeclaration = 0u;
@@ -94,6 +103,8 @@ b8 RouteRouterPrimary(
             inOutCapturePopup = hit.popup;
             inOutCaptureControl = hit.control;
             inOutPointerSubmitArmed = hit.activatable;
+            if(!secondaryDown)
+                RecordRouterWindowPress(hit, inOutNextActionSequence, windowPresses);
         }
         else{
             inOutCapture = WidgetId();
@@ -117,6 +128,18 @@ b8 RouteRouterPrimary(
             inOutFocus = WidgetId();
             inOutFocusDeclaration = 0u;
             inOutFocusControl = ControlToken();
+        }
+        if(hasHit && !popups.empty() && hit.popup != popups.back().scope.token){
+            const Expected<PopupDismissRequest> dismissal = TryPrepareRouterPopupDismissal(popups, canAppendPopupDismissal, PopupDismissReason::OutsideClick);
+            outDismissedPopup = dismissal.has_value();
+            if(outDismissedPopup){
+                popupDismissRequest = dismissal.value();
+                popupDismissRequest.replaceRestore = true;
+                popupDismissRequest.restoreFocus = inOutFocus;
+                popupDismissRequest.restoreDeclaration = inOutFocusDeclaration;
+                if(hasFocused && focused.focusable)
+                    popupDismissRequest.restorePopup = focused.popup;
+            }
         }
         if(hasHit && hit.pointerGesture){
             AppendRouterPointerGesture(
@@ -158,7 +181,7 @@ b8 RouteRouterPrimary(
                 host = resolvedHost.value();
         }
         if(hasHost)
-            AppendRouterControlAction(host, hit, layoutGeneration, ControlActionKind::Activate, 0.0, 0.0, controlActions, inOutNextActionSequence, inOutResult);
+            AppendRouterControlAction(host, hit, layoutGeneration, ControlActionKind::Activate, 0.0, 0.0, event.extend || event.shift, event.control, controlActions, inOutNextActionSequence, inOutResult);
         else
             AppendRouterActivation(hit, layoutGeneration, InputActionSource::Pointer, event.source, actions, inOutNextActionSequence, inOutResult);
     }
@@ -193,6 +216,7 @@ InputPointerRouteEffects RouteRouterPrimaryWithEffects(
     mut Vector<InputAction> actions,
     mut Vector<ControlAction> controlActions,
     mut Vector<PointerGestureRecord> pointerGestures,
+    mut Vector<WindowPressRecord> windowPresses,
     mut u64 inOutActiveGestureSequence,
     mut u64 inOutNextActionSequence,
     mut b8 inOutPrimaryDown,
@@ -226,6 +250,7 @@ InputPointerRouteEffects RouteRouterPrimaryWithEffects(
         actions,
         controlActions,
         pointerGestures,
+        windowPresses,
         inOutActiveGestureSequence,
         inOutNextActionSequence,
         inOutPrimaryDown,
@@ -258,6 +283,7 @@ InputPointerRouteEffects RouteRouterSecondaryWithEffects(
     in Span<PopupRecord> popups,
     in b8 canAppendPopupDismissal,
     mut Vector<ContextMenuAction> contextMenuActions,
+    mut Vector<WindowPressRecord> windowPresses,
     mut u64 inOutNextActionSequence,
     mut b8 inOutSecondaryDown,
     mut b8 inOutSecondarySequenceConsumed,
@@ -280,6 +306,7 @@ InputPointerRouteEffects RouteRouterSecondaryWithEffects(
         canAppendPopupDismissal,
         effects.popupDismissal,
         contextMenuActions,
+        windowPresses,
         inOutNextActionSequence,
         inOutSecondaryDown,
         inOutSecondarySequenceConsumed,

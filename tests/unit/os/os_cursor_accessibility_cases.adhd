@@ -1,0 +1,168 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/common/memory.adhd>
+#include <tests/unit/os/suite.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class FakeTrackedCursor : TrackedCursorService{
+    [cpp_base(TrackedCursorService, storage)]
+    public FakeTrackedCursor(mut HeapStorage storage){}
+
+    public u32 applyCount = 0u;
+    public CursorShape lastApplied = CursorShape::Default;
+    public b8 rejectNative = false;
+
+    public CursorCapabilities capabilities()const override{
+        CursorCapabilities caps;
+        caps.setShape = true;
+        caps.hide = true;
+        caps.backend = CursorBackend::Win32;
+        return caps;
+    }
+
+    public b8 applyNativeCursor(in CursorShape shape)override{
+        if(this.rejectNative)
+            return false;
+        this.lastApplied = shape;
+        ++this.applyCount;
+        return true;
+    }
+}
+
+class FakeTrackedAccessibility : TrackedAccessibilityService{
+    [cpp_base(TrackedAccessibilityService, storage)]
+    public FakeTrackedAccessibility(mut HeapStorage storage){}
+
+    public usize callbackTrees = 0u;
+    public usize callbackAnnouncements = 0u;
+
+    public AccessibilityCapabilities capabilities()const override{
+        AccessibilityCapabilities caps;
+        caps.tree = true;
+        caps.announcements = true;
+        caps.actions = true;
+        caps.backend = AccessibilityBackend::Win32Uia;
+        return caps;
+    }
+
+    public b8 pushTestAction(in u64 targetId, in AccessibilityActionKind kind, in f64 numericValue){
+        AccessibilityActionEvent ev;
+        ev.targetId = targetId;
+        ev.kind = kind;
+        ev.numericValue = numericValue;
+        return this.enqueueAction(ev);
+    }
+
+    [cpp_unwind]
+    public void onTreePublished(in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY)override{
+        ++this.callbackTrees;
+    }
+
+    [cpp_unwind]
+    public void onAnnouncement(in StringView text, in AccessibilityLiveMode politeness)override{
+        ++this.callbackAnnouncements;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyOsCursor_ValidationDeduplicationAndThreadGuard(){
+    HeapStorage arena = HeapStorage();
+    FakeTrackedCursor cursor = FakeTrackedCursor(arena);
+    EXPECT_TRUE(cursor.isOwnerThread());
+    EXPECT_EQ(cursor.currentCursor(), CursorShape::Default);
+
+    const CursorShape invalid = cast<CursorShape>(cast<u8>(CursorShape::kCount));
+    EXPECT_FALSE(cursor.setCursor(invalid));
+    EXPECT_EQ(cursor.applyCount, 0u);
+
+    EXPECT_TRUE(cursor.setCursor(CursorShape::Hand));
+    EXPECT_EQ(cursor.applyCount, 1u);
+    EXPECT_EQ(cursor.lastApplied, CursorShape::Hand);
+    EXPECT_EQ(cursor.currentCursor(), CursorShape::Hand);
+
+    EXPECT_TRUE(cursor.setCursor(CursorShape::Hand));
+    EXPECT_EQ(cursor.applyCount, 1u);
+
+    cursor.rejectNative = true;
+    EXPECT_FALSE(cursor.setCursor(CursorShape::Wait));
+    EXPECT_EQ(cursor.currentCursor(), CursorShape::Hand);
+    cursor.rejectNative = false;
+
+    b8 otherThreadResult = true;
+    Thread other = Thread(lambda[mut cursor, mut otherThreadResult]() -> void{
+        otherThreadResult = cursor.setCursor(CursorShape::TextInput);
+    });
+    other.join();
+    EXPECT_FALSE(otherThreadResult);
+    EXPECT_EQ(cursor.currentCursor(), CursorShape::Hand);
+}
+
+void VerifyOsAccessibility_ValidationQueueBoundsAndThreadGuard(){
+    HeapStorage arena = HeapStorage();
+    FakeTrackedAccessibility a11y = FakeTrackedAccessibility(arena);
+    EXPECT_TRUE(a11y.isOwnerThread());
+
+    Vector<AccessibilityNodeData> nodes;
+    AccessibilityNodeData root;
+    root.id = 1u;
+    root.role = AccessibilityRole::Window;
+    root.nameOffset = 0u;
+    root.nameLength = 4u;
+    nodes.push_back(root);
+
+    EXPECT_FALSE(a11y.publishTree(Span<AccessibilityNodeData>(nodes), "Root", cast<u64>(1u), cast<u64>(1u), 0.0f, 1.0f));
+    EXPECT_FALSE(a11y.publishTree(Span<AccessibilityNodeData>(nodes), "R", cast<u64>(1u), cast<u64>(1u), 1.0f, 1.0f));
+    EXPECT_TRUE(a11y.publishTree(Span<AccessibilityNodeData>(nodes), "Root", cast<u64>(1u), cast<u64>(1u), 1.0f, 1.0f));
+    EXPECT_EQ(a11y.publishedVersion(), 1u);
+    EXPECT_EQ(a11y.publishedNodeCount(), 1u);
+    EXPECT_EQ(a11y.publishedFocusedId(), 1u);
+    EXPECT_EQ(a11y.callbackTrees, 1u);
+
+    EXPECT_FALSE(a11y.announce("", AccessibilityLiveMode::Polite));
+    EXPECT_FALSE(a11y.announce("Ignored", AccessibilityLiveMode::Off));
+    EXPECT_TRUE(a11y.announce("Ready", AccessibilityLiveMode::Polite));
+    EXPECT_EQ(a11y.announcementCount(), 1u);
+    EXPECT_EQ(a11y.callbackAnnouncements, 1u);
+
+    b8 otherPublish = true;
+    b8 otherAnnounce = true;
+    Thread other = Thread(lambda[mut a11y, mut nodes, mut otherPublish, mut otherAnnounce]() -> void{
+        otherPublish = a11y.publishTree(Span<AccessibilityNodeData>(nodes), "Root", cast<u64>(1u), cast<u64>(2u), 1.0f, 1.0f);
+        otherAnnounce = a11y.announce("Cross", AccessibilityLiveMode::Assertive);
+    });
+    other.join();
+    EXPECT_FALSE(otherPublish);
+    EXPECT_FALSE(otherAnnounce);
+    EXPECT_EQ(a11y.publishedVersion(), 1u);
+
+    for(usize idx = 0u; idx < s_AccessibilityMaxActions; ++idx)
+        EXPECT_TRUE(a11y.pushTestAction(cast<u64>(idx + 100u), AccessibilityActionKind::Invoke, 0.0));
+    EXPECT_FALSE(a11y.pushTestAction(cast<u64>(9999u), AccessibilityActionKind::Invoke, 0.0));
+
+    AccessibilityActionEvent polled;
+    for(usize idx = 0u; idx < s_AccessibilityMaxActions; ++idx){
+        ASSERT_TRUE(a11y.pollAction(polled));
+        EXPECT_EQ(polled.targetId, cast<u64>(idx + 100u));
+    }
+    EXPECT_FALSE(a11y.pollAction(polled));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST(OsCursorService, ValidationDeduplicationAndThreadGuard, VerifyOsCursor_ValidationDeduplicationAndThreadGuard)
+NWB_ADHD_GTEST(OsAccessibilityService, ValidationQueueBoundsAndThreadGuard, VerifyOsAccessibility_ValidationQueueBoundsAndThreadGuard)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

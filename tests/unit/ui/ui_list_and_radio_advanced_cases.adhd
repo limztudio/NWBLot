@@ -1,0 +1,686 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <tests/common/gtest_macros.adhd>
+#include <tests/unit/ui/ui_fixture_combo_and_list.adhd>
+#include <tests/unit/ui/ui_fixture_radio.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AdvancedListSource : IListDataSource{
+    public Vector<u64> m_keys;
+    public Vector<b8> m_enabled;
+    public u64 m_generation = 911u;
+    public u64 m_revision = 1u;
+    public u64 m_longTextIndex = 0xffffffffffffffffu;
+    public b8 m_wideAll = false;
+    public TestObserved<String> m_temporary;
+    public TestObserved<u64> m_textCalls;
+
+    public void initRange(in u64 count){
+        this.m_keys.clear();
+        this.m_enabled.clear();
+        this.m_keys.reserve(cast<usize>(count));
+        this.m_enabled.reserve(cast<usize>(count));
+        for(u64 index = 0u; index < count; ++index){
+            this.m_keys.push_back(index + 1u);
+            this.m_enabled.push_back(true);
+        }
+    }
+
+    public u64 instanceGeneration()const override{ return this.m_generation; }
+    public u64 revision()const override{ return this.m_revision; }
+    public u64 rowCount()const override{ return cast<u64>(this.m_keys.size()); }
+    public u64 key(in u64 index)const override{
+        if(index >= this.m_keys.size())
+            return 0u;
+        return this.m_keys[cast<usize>(index)];
+    }
+    public Expected<u64> indexOf(in u64 value)const override{
+        for(usize index = 0u; index < this.m_keys.size(); ++index){
+            if(this.m_keys[index] == value)
+                return cast<u64>(index);
+        }
+        return MakeUnexpected(Failure());
+    }
+    public Expected<u64> findEnabled(in u64 start, in b8 backwards)const override{
+        if(this.m_keys.empty() || start >= this.m_keys.size())
+            return MakeUnexpected(Failure());
+        usize index = cast<usize>(start);
+        for(usize visited = 0u; visited < this.m_keys.size(); ++visited){
+            if(this.m_enabled[index])
+                return cast<u64>(index);
+            if(backwards){
+                if(index == 0u)
+                    return MakeUnexpected(Failure());
+                --index;
+            }
+            else{
+                if(index + 1u == this.m_keys.size())
+                    return MakeUnexpected(Failure());
+                ++index;
+            }
+        }
+        return MakeUnexpected(Failure());
+    }
+    public StringView text(in u64 index)const override{
+        ++this.m_textCalls.value();
+        mut String buffer = this.m_temporary.value();
+        if(this.m_wideAll || index == this.m_longTextIndex){
+            buffer.assign("WideHorizontalScrollRowLabelContent_ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789_Tail");
+            return StringView(buffer);
+        }
+        buffer.assign("Row");
+        return StringView(buffer);
+    }
+    public b8 enabled(in u64 index)const override{
+        return index < this.m_enabled.size() && this.m_enabled[cast<usize>(index)];
+    }
+}
+
+class VariableRowHeightProvider : IListRowHeightProvider{
+    public u64 m_revision = 1u;
+    public Vector<f32> m_heights;
+    public b8 m_emitZero = false;
+    public b8 m_emitNaN = false;
+
+    public u64 rowHeightRevision()const override{ return this.m_revision; }
+    public f32 rowHeight(in u64 index, in f32 defaultRowHeight)const override{
+        if(this.m_emitNaN)
+            return bit_cast<f32>(0x7fc00000u);
+        if(this.m_emitZero)
+            return 0.0f;
+        if(index < this.m_heights.size())
+            return this.m_heights[cast<usize>(index)];
+        return defaultRowHeight;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+type UiAdvancedListTests = UiListBuilderTests;
+type UiAdvancedRadioTests = RadioGroupFixture;
+
+void TapUiModifiedKey(mut WidgetFixture self, in KeyEnum keyValue, in b8 shift, in b8 control){
+    InputEvent down = InputEvent();
+    down.type = InputEventType::KeyDown;
+    down.key = keyValue;
+    down.shift = shift;
+    down.control = control;
+    EXPECT_TRUE(self.send(down).commandConsumed);
+    InputEvent up = InputEvent();
+    up.type = InputEventType::KeyUp;
+    up.key = keyValue;
+    up.shift = shift;
+    up.control = control;
+    EXPECT_TRUE(self.send(up).commandConsumed);
+}
+
+void ModifiedInputClick(mut WidgetFixture self, in Point pos, in b8 shift, in b8 control){
+    InputEvent down = InputEvent();
+    down.type = InputEventType::PrimaryDown;
+    down.position = pos;
+    down.shift = shift;
+    down.extend = shift;
+    down.control = control;
+    EXPECT_TRUE(self.send(down).pointerConsumed);
+    InputEvent up = InputEvent();
+    up.type = InputEventType::PrimaryUp;
+    up.position = pos;
+    up.shift = shift;
+    up.extend = shift;
+    up.control = control;
+    EXPECT_TRUE(self.send(up).pointerConsumed);
+}
+
+void RawModifiedPointerClick(mut WidgetFixture self, in Point pos, in b8 extend, in b8 toggle){
+    PointerInput down = PointerInput();
+    down.source = s_NativePointerSource;
+    down.phase = PointerPhase::Press;
+    down.intent = PointerIntent::Activate;
+    down.position = pos;
+    down.hoverCapable = true;
+    down.extend = extend;
+    down.toggle = toggle;
+    ASSERT_TRUE(self.m_context.input().queuePointer(down).has_value());
+    EXPECT_TRUE(self.m_context.input().process().pointerConsumed);
+
+    PointerInput up = down;
+    up.phase = PointerPhase::Release;
+    ASSERT_TRUE(self.m_context.input().queuePointer(up).has_value());
+    EXPECT_TRUE(self.m_context.input().process().pointerConsumed);
+}
+
+Point AdvancedRowCenter(in UiListBuilderTests self, in u64 keyValue){
+    const Expected<HitTarget> found = self.tryTarget(self.row(keyValue));
+    EXPECT_TRUE(found.has_value());
+    if(!found.has_value())
+        return Point();
+    return CenterUiRect(found.value().rectangle);
+}
+
+RadioGroupChoices MakeAdvancedRadioChoices(in u32 count, in u64 disabledKey){
+    RadioGroupChoices choices = RadioGroupChoices();
+    choices.sourceGeneration = 101u;
+    choices.sourceRevision = 1u;
+    choices.count = count;
+    choices.rows.resize(cast<usize>(count));
+    for(u32 index = 0u; index < count; ++index){
+        RadioGroupChoice row = RadioGroupChoice();
+        row.key = cast<u64>(index + 1u);
+        row.enabled = row.key != disabledKey;
+        choices.rows[index] = row;
+    }
+    return choices;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void VerifyUiAdvancedListTests_MultiSelectionModesShiftCtrlAndSourcePruning(mut UiAdvancedListTests self){
+    AdvancedListSource source;
+    source.initRange(10u);
+    source.m_enabled[2u] = false;
+
+    ListOptions singleOpts = MakeListFixtureOptions();
+    singleOpts.selectionMode = ListSelectionMode::Single;
+    singleOpts.height.value = 260.0f;
+    ASSERT_TRUE(self.prepareSource(1u, source, self.m_state, singleOpts) && self.m_context.commitFrame(1u));
+    self.click(AdvancedRowCenter(self, 2u));
+    ASSERT_TRUE(self.prepareSource(2u, source, self.m_state, singleOpts) && self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_state.selectedCount(), 1u);
+    EXPECT_EQ(self.m_state.selectedKey(), 2u);
+    ModifiedInputClick(self, AdvancedRowCenter(self, 5u), true, false);
+    ASSERT_TRUE(self.prepareSource(3u, source, self.m_state, singleOpts) && self.m_context.commitFrame(3u));
+    EXPECT_EQ(self.m_state.selectedCount(), 1u);
+    EXPECT_EQ(self.m_state.selectedKey(), 5u);
+    RawModifiedPointerClick(self, AdvancedRowCenter(self, 4u), false, true);
+    ASSERT_TRUE(self.prepareSource(4u, source, self.m_state, singleOpts) && self.m_context.commitFrame(4u));
+    EXPECT_EQ(self.m_state.selectedCount(), 1u);
+    EXPECT_EQ(self.m_state.selectedKey(), 4u);
+
+    self.m_state.clearSelection();
+    ListOptions multiOpts = MakeListFixtureOptions();
+    multiOpts.selectionMode = ListSelectionMode::Multiple;
+    ASSERT_TRUE(self.prepareSource(5u, source, self.m_state, multiOpts) && self.m_context.commitFrame(5u));
+    self.click(AdvancedRowCenter(self, 1u));
+    ASSERT_TRUE(self.prepareSource(6u, source, self.m_state, multiOpts) && self.m_context.commitFrame(6u));
+    self.click(AdvancedRowCenter(self, 2u));
+    ASSERT_TRUE(self.prepareSource(7u, source, self.m_state, multiOpts) && self.m_context.commitFrame(7u));
+    EXPECT_EQ(self.m_state.selectedCount(), 2u);
+    EXPECT_TRUE(self.m_state.isSelected(1u));
+    EXPECT_TRUE(self.m_state.isSelected(2u));
+    self.click(AdvancedRowCenter(self, 1u));
+    ASSERT_TRUE(self.prepareSource(8u, source, self.m_state, multiOpts) && self.m_context.commitFrame(8u));
+    EXPECT_EQ(self.m_state.selectedCount(), 1u);
+    EXPECT_FALSE(self.m_state.isSelected(1u));
+    EXPECT_TRUE(self.m_state.isSelected(2u));
+
+    self.m_state.clearSelection();
+    ListOptions extOpts = MakeListFixtureOptions();
+    extOpts.selectionMode = ListSelectionMode::Extended;
+    extOpts.height.value = 260.0f;
+    ASSERT_TRUE(self.prepareSource(9u, source, self.m_state, extOpts) && self.m_context.commitFrame(9u));
+
+    self.click(AdvancedRowCenter(self, 2u));
+    ASSERT_TRUE(self.prepareSource(10u, source, self.m_state, extOpts) && self.m_context.commitFrame(10u));
+    EXPECT_EQ(self.m_state.selectedCount(), 1u);
+    EXPECT_EQ(self.m_state.anchorKey(), 2u);
+    EXPECT_EQ(self.m_state.cursorKey(), 2u);
+
+    ModifiedInputClick(self, AdvancedRowCenter(self, 5u), true, false);
+    ASSERT_TRUE(self.prepareSource(11u, source, self.m_state, extOpts) && self.m_context.commitFrame(11u));
+    EXPECT_EQ(self.m_state.selectedCount(), 3u);
+    EXPECT_TRUE(self.m_state.isSelected(2u));
+    EXPECT_FALSE(self.m_state.isSelected(3u));
+    EXPECT_TRUE(self.m_state.isSelected(4u));
+    EXPECT_TRUE(self.m_state.isSelected(5u));
+
+    ModifiedInputClick(self, AdvancedRowCenter(self, 7u), false, true);
+    ASSERT_TRUE(self.prepareSource(12u, source, self.m_state, extOpts) && self.m_context.commitFrame(12u));
+    EXPECT_EQ(self.m_state.selectedCount(), 4u);
+    EXPECT_TRUE(self.m_state.isSelected(7u));
+
+    RawModifiedPointerClick(self, AdvancedRowCenter(self, 4u), false, true);
+    ASSERT_TRUE(self.prepareSource(13u, source, self.m_state, extOpts) && self.m_context.commitFrame(13u));
+    EXPECT_EQ(self.m_state.selectedCount(), 3u);
+    EXPECT_FALSE(self.m_state.isSelected(4u));
+    EXPECT_TRUE(self.m_state.isSelected(2u));
+    EXPECT_TRUE(self.m_state.isSelected(5u));
+    EXPECT_TRUE(self.m_state.isSelected(7u));
+
+    ModifiedInputClick(self, AdvancedRowCenter(self, 9u), true, true);
+    ASSERT_TRUE(self.prepareSource(14u, source, self.m_state, extOpts) && self.m_context.commitFrame(14u));
+    EXPECT_EQ(self.m_state.selectedCount(), 7u);
+    EXPECT_TRUE(self.m_state.isSelected(2u));
+    EXPECT_TRUE(self.m_state.isSelected(4u));
+    EXPECT_TRUE(self.m_state.isSelected(5u));
+    EXPECT_TRUE(self.m_state.isSelected(6u));
+    EXPECT_TRUE(self.m_state.isSelected(7u));
+    EXPECT_TRUE(self.m_state.isSelected(8u));
+    EXPECT_TRUE(self.m_state.isSelected(9u));
+
+    ASSERT_EQ(self.m_context.input().focus(), self.id("list", "panel"));
+    TapUiModifiedKey(self, Key::Down, false, true);
+    ASSERT_TRUE(self.prepareSource(15u, source, self.m_state, extOpts) && self.m_context.commitFrame(15u));
+    EXPECT_EQ(self.m_state.cursorKey(), 10u);
+    EXPECT_EQ(self.m_state.selectedCount(), 7u);
+    EXPECT_FALSE(self.m_state.isSelected(10u));
+
+    TapUiModifiedKey(self, Key::Space, false, true);
+    ASSERT_TRUE(self.prepareSource(16u, source, self.m_state, extOpts) && self.m_context.commitFrame(16u));
+    EXPECT_EQ(self.m_state.selectedCount(), 8u);
+    EXPECT_TRUE(self.m_state.isSelected(10u));
+
+    TapUiModifiedKey(self, Key::Up, true, false);
+    ASSERT_TRUE(self.prepareSource(17u, source, self.m_state, extOpts) && self.m_context.commitFrame(17u));
+    EXPECT_EQ(self.m_state.selectedCount(), 2u);
+    EXPECT_TRUE(self.m_state.isSelected(9u));
+    EXPECT_TRUE(self.m_state.isSelected(10u));
+
+    ++source.m_revision;
+    source.m_keys.erase(source.m_keys.begin() + 8);
+    source.m_enabled.erase(source.m_enabled.begin() + 8);
+    ASSERT_TRUE(self.prepareSource(18u, source, self.m_state, extOpts) && self.m_context.commitFrame(18u));
+    EXPECT_TRUE(self.m_result.selectionChanged);
+    EXPECT_EQ(self.m_state.selectedCount(), 1u);
+    EXPECT_FALSE(self.m_state.isSelected(9u));
+    EXPECT_TRUE(self.m_state.isSelected(10u));
+}
+
+void VerifyUiAdvancedListTests_VariableRowHeightsSeekRevealCacheAndInvalidRejection(mut UiAdvancedListTests self){
+    self.m_source.count = 12u;
+    VariableRowHeightProvider heights;
+    heights.m_heights.push_back(20.0f);
+    heights.m_heights.push_back(40.0f);
+    heights.m_heights.push_back(30.0f);
+    heights.m_heights.push_back(80.0f);
+    heights.m_heights.push_back(24.0f);
+    heights.m_heights.push_back(50.0f);
+    heights.m_heights.push_back(18.0f);
+    heights.m_heights.push_back(60.0f);
+    heights.m_heights.push_back(28.0f);
+    heights.m_heights.push_back(35.0f);
+    heights.m_heights.push_back(22.0f);
+    heights.m_heights.push_back(90.0f);
+
+    const ListOptions opts = MakeListFixtureOptions();
+    ASSERT_TRUE(self.begin(1u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_result = self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts);
+    ASSERT_TRUE(self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(1u));
+    EXPECT_EQ(self.m_state.visibleFirstRow(), 0u);
+    EXPECT_EQ(self.m_state.visibleEndRow(), 4u);
+
+    ASSERT_TRUE(self.m_state.scrollTo(90.0));
+    ASSERT_TRUE(self.begin(2u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_result = self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts);
+    ASSERT_TRUE(self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(2u));
+    EXPECT_EQ(self.m_state.visibleFirstRow(), 3u);
+
+    ASSERT_TRUE(self.m_state.scrollTo(89.5));
+    ASSERT_TRUE(self.begin(3u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_result = self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts);
+    ASSERT_TRUE(self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(3u));
+    EXPECT_EQ(self.m_state.visibleFirstRow(), 2u);
+
+    ASSERT_TRUE(self.m_state.scrollTo(0.0));
+    ASSERT_TRUE(self.begin(4u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_result = self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts);
+    ASSERT_TRUE(self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(4u));
+    self.press(Key::Tab);
+    self.press(Key::End);
+    ASSERT_TRUE(self.begin(5u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_result = self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts);
+    ASSERT_TRUE(self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(5u));
+    EXPECT_EQ(self.m_state.selectedKey(), 12u);
+    EXPECT_DOUBLE_EQ(self.m_state.placement().contentHeight, 497.0);
+    EXPECT_DOUBLE_EQ(self.m_state.placement().maxOffset, 497.0 - cast<f64>(self.m_state.placement().viewport.height));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffset(), self.m_state.placement().maxOffset);
+    const Expected<HitTarget> bottomRow = self.tryTarget(self.row(12u));
+    ASSERT_TRUE(bottomRow.has_value());
+    EXPECT_FLOAT_EQ(bottomRow.value().rectangle.height, 90.0f);
+    EXPECT_LE(bottomRow.value().rectangle.y + bottomRow.value().rectangle.height, bottomRow.value().clip.y + bottomRow.value().clip.height + 0.01f);
+
+    heights.m_heights[0u] = 75.0f;
+    ++heights.m_revision;
+    ASSERT_TRUE(self.begin(6u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    self.m_result = self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts);
+    ASSERT_TRUE(self.m_result.valid && self.finishPanel() && self.m_context.commitFrame(6u));
+    EXPECT_DOUBLE_EQ(self.m_state.placement().contentHeight, 552.0);
+    EXPECT_DOUBLE_EQ(self.m_state.placement().maxOffset, 552.0 - cast<f64>(self.m_state.placement().viewport.height));
+
+    heights.m_emitZero = true;
+    ++heights.m_revision;
+    ASSERT_TRUE(self.begin(7u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    EXPECT_FALSE(self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts).valid);
+    EXPECT_FALSE(self.finishPanel());
+    EXPECT_DOUBLE_EQ(self.m_state.placement().contentHeight, 552.0);
+    EXPECT_TRUE(self.tryTarget(self.row(12u)).has_value());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    heights.m_emitZero = false;
+    heights.m_emitNaN = true;
+    ++heights.m_revision;
+    ASSERT_TRUE(self.begin(8u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    EXPECT_FALSE(self.m_builder.virtualList("list", self.m_source, heights, self.m_state, opts).valid);
+    EXPECT_FALSE(self.finishPanel());
+    EXPECT_DOUBLE_EQ(self.m_state.placement().contentHeight, 552.0);
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+}
+
+void VerifyUiAdvancedListTests_HorizontalScrollAutoExplicitWheelDragTrackKeysAndCorner(mut UiAdvancedListTests self){
+    AdvancedListSource source;
+    source.initRange(20u);
+
+    ListOptions autoOpts = MakeListFixtureOptions();
+    autoOpts.width.value = 140.0f;
+    autoOpts.height.value = 96.0f;
+    autoOpts.horizontalScrollbar = ScrollbarPolicy::Auto;
+    autoOpts.verticalScrollbar = ScrollbarPolicy::Auto;
+    ASSERT_TRUE(self.prepareSource(1u, source, self.m_state, autoOpts) && self.m_context.commitFrame(1u));
+    EXPECT_TRUE(self.m_state.scrollbars().vertical.visible);
+    EXPECT_FALSE(self.m_state.scrollbars().horizontal.visible);
+
+    source.m_longTextIndex = 0u;
+    ++source.m_revision;
+    ASSERT_TRUE(self.prepareSource(2u, source, self.m_state, autoOpts) && self.m_context.commitFrame(2u));
+    EXPECT_TRUE(self.m_state.scrollbars().vertical.visible);
+    EXPECT_TRUE(self.m_state.scrollbars().horizontal.visible);
+    EXPECT_GT(self.m_state.scrollbars().horizontal.maximum, 0.0);
+    EXPECT_GT(self.m_state.scrollbars().corner.width, 0.0f);
+    EXPECT_GT(self.m_state.scrollbars().corner.height, 0.0f);
+
+    const WidgetId listId = self.id("list", "panel");
+    const WidgetId hThumbId = RequireUiWidgetId(listId, s_WidgetPartScrollHorizontalThumb);
+    const WidgetId hAfterId = RequireUiWidgetId(listId, s_WidgetPartScrollHorizontalAfter);
+    const WidgetId hBeforeId = RequireUiWidgetId(listId, s_WidgetPartScrollHorizontalBefore);
+    EXPECT_TRUE(self.hasTarget(hThumbId));
+    EXPECT_TRUE(self.hasTarget(hAfterId));
+
+    ListOptions explicitOpts = autoOpts;
+    explicitOpts.contentWidth = 400.0f;
+    explicitOpts.wheelColumns = 32.0f;
+    ASSERT_TRUE(self.prepareSource(3u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(3u));
+    const Expected<HitTarget> listTarget = self.tryTarget(listId);
+    ASSERT_TRUE(listTarget.has_value());
+    EXPECT_TRUE(listTarget.value().horizontalNavigation);
+
+    InputEvent wheelLeft = InputEvent();
+    wheelLeft.type = InputEventType::PointerWheel;
+    wheelLeft.position = CenterUiRect(listTarget.value().rectangle);
+    wheelLeft.scrollX = 1.0;
+    EXPECT_TRUE(self.send(wheelLeft).pointerConsumed);
+    ASSERT_TRUE(self.prepareSource(4u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(4u));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffsetX(), 32.0);
+
+    InputEvent wheelHome = wheelLeft;
+    wheelHome.scrollX = -4.0;
+    EXPECT_TRUE(self.send(wheelHome).pointerConsumed);
+    ASSERT_TRUE(self.prepareSource(5u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(5u));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffsetX(), 0.0);
+
+    const Expected<HitTarget> hAfter = self.tryTarget(hAfterId);
+    ASSERT_TRUE(hAfter.has_value());
+    self.click(CenterUiRect(hAfter.value().rectangle));
+    ASSERT_TRUE(self.prepareSource(6u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(6u));
+    EXPECT_GT(self.m_state.scrollOffsetX(), 0.0);
+    const f64 pagedX = self.m_state.scrollOffsetX();
+
+    const Expected<HitTarget> hBefore = self.tryTarget(hBeforeId);
+    ASSERT_TRUE(hBefore.has_value());
+    self.click(CenterUiRect(hBefore.value().rectangle));
+    ASSERT_TRUE(self.prepareSource(7u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(7u));
+    EXPECT_LT(self.m_state.scrollOffsetX(), pagedX);
+
+    const Expected<HitTarget> hThumb = self.tryTarget(hThumbId);
+    ASSERT_TRUE(hThumb.has_value());
+    const Point dragStart = CenterUiRect(hThumb.value().rectangle);
+    const f32 trackEnd = hThumb.value().gestureReference.x + hThumb.value().gestureReference.width;
+    const Point dragEnd = Point(trackEnd - hThumb.value().rectangle.width * 0.5f, dragStart.y);
+    self.drag(dragStart, dragEnd);
+    ASSERT_TRUE(self.prepareSource(8u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(8u));
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffsetX(), hThumb.value().gestureMaximum);
+
+    ASSERT_EQ(self.m_context.input().focus(), listId);
+    self.press(Key::Left);
+    ASSERT_TRUE(self.prepareSource(9u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(9u));
+    const f64 afterLeft = self.m_state.scrollOffsetX();
+    EXPECT_LT(afterLeft, hThumb.value().gestureMaximum);
+    self.press(Key::Right);
+    ASSERT_TRUE(self.prepareSource(10u, source, self.m_state, explicitOpts) && self.m_context.commitFrame(10u));
+    EXPECT_GT(self.m_state.scrollOffsetX(), afterLeft);
+
+    ListOptions neverOpts = explicitOpts;
+    neverOpts.horizontalScrollbar = ScrollbarPolicy::Never;
+    ASSERT_TRUE(self.prepareSource(11u, source, self.m_state, neverOpts) && self.m_context.commitFrame(11u));
+    EXPECT_FALSE(self.m_state.scrollbars().horizontal.visible);
+    EXPECT_DOUBLE_EQ(self.m_state.scrollOffsetX(), 0.0);
+}
+
+void VerifyUiAdvancedListTests_CustomChildWidgetRowsInteractiveWheelBoundedAndInvalidNesting(mut UiAdvancedListTests self){
+    self.m_source.count = 1000u;
+    self.m_builder.style().checkbox = Name("white");
+    self.m_builder.style().checkboxHover = Name("white");
+    self.m_builder.style().checkboxChecked = Name("white");
+    self.m_builder.style().checkboxDisabled = Name("white");
+    ListOptions opts = MakeListFixtureOptions();
+    opts.height.value = 120.0f;
+
+    WidgetOptions chkOpts = WidgetOptions();
+    chkOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 72.0f);
+    WidgetOptions btnOpts = WidgetOptions();
+    btnOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 64.0f);
+
+    const WidgetId listId = self.id("list", "panel");
+    const WidgetId btn1Id = RequireUiWidgetId(RequireUiWidgetId(listId, "row.1"), "btn");
+    const WidgetId chk2Id = RequireUiWidgetId(RequireUiWidgetId(listId, "row.2"), "chk");
+    const WidgetId btn2Id = RequireUiWidgetId(RequireUiWidgetId(listId, "row.2"), "btn");
+
+    b8 row1Checked = false;
+    b8 row2Checked = false;
+    u32 row1Clicks = 0u;
+
+    for(u64 frame = 1u; frame <= 5u; ++frame){
+        ASSERT_TRUE(self.begin(frame) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+        ListResult result = ListResult();
+        ASSERT_TRUE(self.m_builder.beginVirtualList("list", self.m_source, self.m_state, opts, result));
+        for(u64 rowIndex = self.m_state.visibleFirstRow(); rowIndex < self.m_state.visibleEndRow(); ++rowIndex){
+            ASSERT_TRUE(self.m_builder.beginVirtualListRow(rowIndex));
+            b8 dummy = false;
+            if(rowIndex == 0u){
+                if(self.m_builder.checkbox("chk", "Pick", row1Checked, chkOpts))
+                    EXPECT_EQ(row1Checked, true);
+                if(self.m_builder.button("btn", "Act", btnOpts))
+                    ++row1Clicks;
+            }
+            else if(rowIndex == 1u){
+                self.m_builder.checkbox("chk", "Pick", row2Checked, chkOpts);
+                self.m_builder.button("btn", "Act", btnOpts);
+            }
+            else{
+                self.m_builder.checkbox("chk", "Pick", dummy, chkOpts);
+                self.m_builder.button("btn", "Act", btnOpts);
+            }
+            ASSERT_TRUE(self.m_builder.endVirtualListRow());
+        }
+        ASSERT_TRUE(self.m_builder.endVirtualList());
+        ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(frame));
+        self.m_result = result;
+
+        if(frame == 1u){
+            EXPECT_LT(self.m_state.visibleEndRow() - self.m_state.visibleFirstRow(), 15u);
+            const Expected<HitTarget> btn1 = self.tryTarget(btn1Id);
+            ASSERT_TRUE(btn1.has_value());
+            self.click(CenterUiRect(btn1.value().rectangle));
+        }
+        else if(frame == 2u){
+            EXPECT_EQ(row1Clicks, 1u);
+            EXPECT_EQ(self.m_state.selectedKey(), 0u);
+            const Expected<HitTarget> chk2 = self.tryTarget(chk2Id);
+            ASSERT_TRUE(chk2.has_value());
+            self.click(CenterUiRect(chk2.value().rectangle));
+        }
+        else if(frame == 3u){
+            EXPECT_TRUE(row2Checked);
+            const Expected<HitTarget> row2 = self.tryTarget(self.row(2u));
+            ASSERT_TRUE(row2.has_value());
+            const Point emptyRightEdge = Point(row2.value().rectangle.x + row2.value().rectangle.width - 6.0f, row2.value().rectangle.y + row2.value().rectangle.height * 0.5f);
+            self.click(emptyRightEdge);
+        }
+        else if(frame == 4u){
+            EXPECT_EQ(self.m_state.selectedKey(), 2u);
+            EXPECT_TRUE(self.m_result.selectionChanged);
+            const Expected<HitTarget> btn2 = self.tryTarget(btn2Id);
+            ASSERT_TRUE(btn2.has_value());
+            InputEvent wheel = InputEvent();
+            wheel.type = InputEventType::PointerWheel;
+            wheel.position = CenterUiRect(btn2.value().rectangle);
+            wheel.scrollY = -1.0;
+            EXPECT_TRUE(self.send(wheel).pointerConsumed);
+        }
+        else{
+            EXPECT_GT(self.m_state.scrollOffset(), 0.0);
+        }
+    }
+
+    ASSERT_TRUE(self.begin(6u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    ListResult badResult = ListResult();
+    ASSERT_TRUE(self.m_builder.beginVirtualList("list", self.m_source, self.m_state, opts, badResult));
+    ASSERT_TRUE(self.m_builder.beginVirtualListRow(self.m_state.visibleFirstRow()));
+    EXPECT_FALSE(self.m_builder.endVirtualList());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    ASSERT_TRUE(self.begin(7u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    EXPECT_FALSE(self.m_builder.beginVirtualListRow(0u));
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+
+    ASSERT_TRUE(self.begin(8u) && self.m_builder.beginPanel("panel", Rect(10.0f, 10.0f, 320.0f, 260.0f)));
+    EXPECT_FALSE(self.m_builder.endVirtualListRow());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+}
+
+void VerifyUiAdvancedRadioLayoutTests_OneHundredChoicesHorizontalAndGridPlacement(mut UiAdvancedRadioTests self){
+    const RadioGroupChoices hundredChoices = MakeAdvancedRadioChoices(100u, 0u);
+    RadioGroupOptions gridOpts = RadioGroupOptions();
+    gridOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 340.0f);
+    gridOpts.orientation = RadioGroupOrientation::Grid;
+    gridOpts.columns = 4u;
+    RadioGroupStyle style = RadioGroupStyle();
+    style.columnGap = 8.0f;
+
+    const auto measuredGrid = MeasureRadioGroup(100u, Point(60.0f, 18.0f), gridOpts, style);
+    ASSERT_TRUE(measuredGrid.has_value());
+    EXPECT_EQ(measuredGrid.value().columns, 4u);
+    EXPECT_EQ(measuredGrid.value().rowCount, 25u);
+
+    const auto placedGrid = PlaceRadioGroup(Rect(0.0f, 0.0f, 340.0f, 800.0f), Rect(0.0f, 0.0f, 340.0f, 800.0f), hundredChoices, measuredGrid.value());
+    ASSERT_TRUE(placedGrid.has_value());
+    EXPECT_EQ(placedGrid.value().rows.size(), 100u);
+    EXPECT_FLOAT_EQ(placedGrid.value().rows[0u].rectangle.y, placedGrid.value().rows[3u].rectangle.y);
+    EXPECT_GT(placedGrid.value().rows[4u].rectangle.y, placedGrid.value().rows[0u].rectangle.y);
+    EXPECT_FLOAT_EQ(placedGrid.value().rows[0u].rectangle.x, placedGrid.value().rows[4u].rectangle.x);
+
+    RadioGroupOptions invalidZeroCols = gridOpts;
+    invalidZeroCols.columns = 0u;
+    EXPECT_FALSE(MeasureRadioGroup(4u, Point(60.0f, 18.0f), invalidZeroCols, style).has_value());
+
+    RadioGroupStyle negativeColGap = style;
+    negativeColGap.columnGap = -1.0f;
+    EXPECT_FALSE(MeasureRadioGroup(4u, Point(60.0f, 18.0f), gridOpts, negativeColGap).has_value());
+
+    RadioGroupOptions horizOpts = RadioGroupOptions();
+    horizOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 340.0f);
+    horizOpts.orientation = RadioGroupOrientation::Horizontal;
+    const auto measuredHoriz = MeasureRadioGroup(100u, Point(20.0f, 16.0f), horizOpts, style);
+    ASSERT_TRUE(measuredHoriz.has_value());
+    EXPECT_EQ(measuredHoriz.value().columns, 100u);
+    EXPECT_EQ(measuredHoriz.value().rowCount, 1u);
+}
+
+void VerifyUiAdvancedRadioTests_Grid2DNavigationUnevenRowAndHorizontalSelection(mut UiAdvancedRadioTests self){
+    self.m_source.m_count = 10u;
+    self.m_source.m_disabled = 60u;
+    RadioGroupOptions gridOpts = RadioGroupOptions();
+    gridOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 320.0f);
+    gridOpts.orientation = RadioGroupOrientation::Grid;
+    gridOpts.columns = 4u;
+
+    ASSERT_TRUE(self.accept(1u, gridOpts));
+    EXPECT_TRUE(self.hasChoice(100u, self.m_state));
+
+    self.click(self.choicePoint(20u));
+    ASSERT_TRUE(self.accept(2u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 20u);
+
+    self.press(Key::Down);
+    ASSERT_TRUE(self.accept(3u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 100u);
+
+    self.press(Key::Down);
+    ASSERT_TRUE(self.accept(4u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 20u);
+
+    self.press(Key::Up);
+    ASSERT_TRUE(self.accept(5u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 100u);
+
+    self.click(self.choicePoint(40u));
+    ASSERT_TRUE(self.accept(6u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 40u);
+
+    self.press(Key::Down);
+    ASSERT_TRUE(self.accept(7u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 80u);
+
+    self.press(Key::Down);
+    ASSERT_TRUE(self.accept(8u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 40u);
+
+    self.press(Key::Right);
+    ASSERT_TRUE(self.accept(9u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 50u);
+
+    self.press(Key::Right);
+    ASSERT_TRUE(self.accept(10u, gridOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 70u);
+
+    self.m_source.m_count = 100u;
+    ++self.m_source.m_contentRevision.value();
+    RadioGroupOptions horizOpts = RadioGroupOptions();
+    horizOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 340.0f);
+    horizOpts.orientation = RadioGroupOrientation::Horizontal;
+    ASSERT_TRUE(self.accept(11u, horizOpts));
+    EXPECT_TRUE(self.hasChoice(1000u, self.m_state));
+    self.press(Key::End);
+    ASSERT_TRUE(self.accept(12u, horizOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 1000u);
+    self.press(Key::Home);
+    ASSERT_TRUE(self.accept(13u, horizOpts));
+    EXPECT_EQ(self.m_state.selectedKey(), 10u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ADHD_GTEST_F(UiAdvancedListTests, MultiSelectionModesShiftCtrlAndSourcePruning, VerifyUiAdvancedListTests_MultiSelectionModesShiftCtrlAndSourcePruning)
+NWB_ADHD_GTEST_F(UiAdvancedListTests, VariableRowHeightsSeekRevealCacheAndInvalidRejection, VerifyUiAdvancedListTests_VariableRowHeightsSeekRevealCacheAndInvalidRejection)
+NWB_ADHD_GTEST_F(UiAdvancedListTests, HorizontalScrollAutoExplicitWheelDragTrackKeysAndCorner, VerifyUiAdvancedListTests_HorizontalScrollAutoExplicitWheelDragTrackKeysAndCorner)
+NWB_ADHD_GTEST_F(UiAdvancedListTests, CustomChildWidgetRowsInteractiveWheelBoundedAndInvalidNesting, VerifyUiAdvancedListTests_CustomChildWidgetRowsInteractiveWheelBoundedAndInvalidNesting)
+NWB_ADHD_GTEST_F(UiAdvancedRadioTests, OneHundredChoicesHorizontalAndGridPlacement, VerifyUiAdvancedRadioLayoutTests_OneHundredChoicesHorizontalAndGridPlacement)
+NWB_ADHD_GTEST_F(UiAdvancedRadioTests, Grid2DNavigationUnevenRowAndHorizontalSelection, VerifyUiAdvancedRadioTests_Grid2DNavigationUnevenRowAndHorizontalSelection)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

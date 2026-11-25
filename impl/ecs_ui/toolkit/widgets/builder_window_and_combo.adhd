@@ -21,6 +21,63 @@ Rect ResolveWindowFirstUseViewport(in Rect bounds, in DisplayMetrics display){
     return Rect(bounds.x, bounds.y, size.x, size.y);
 }
 
+const Array<StringView, 7u> s_WindowResizeEdgeKeys(
+    s_WindowChromeResizeLeftKey,
+    s_WindowChromeResizeRightKey,
+    s_WindowChromeResizeTopKey,
+    s_WindowChromeResizeBottomKey,
+    s_WindowChromeResizeTopLeftKey,
+    s_WindowChromeResizeTopRightKey,
+    s_WindowChromeResizeBottomLeftKey
+);
+
+WindowResizeEdge ResolveWindowResizeEdgeBySlot(in usize slot){
+    switch(slot){
+    case 0u: return WindowResizeEdge::Left;
+    case 1u: return WindowResizeEdge::Right;
+    case 2u: return WindowResizeEdge::Top;
+    case 3u: return WindowResizeEdge::Bottom;
+    case 4u: return WindowResizeEdge::TopLeft;
+    case 5u: return WindowResizeEdge::TopRight;
+    case 6u: return WindowResizeEdge::BottomLeft;
+    default: return WindowResizeEdge::None;
+    }
+}
+
+b8 ApplyWindowEdgeResizeGestures(
+    in WidgetState target,
+    in b8 enabled,
+    in Point minimumSize,
+    in Point maximumSize,
+    in WindowResizeEdge edge,
+    mut Context context,
+    mut WindowState candidate
+){
+    while(true){
+        auto gesture = context.takePointerGesture(target, enabled);
+        if(!gesture.has_value())
+            break;
+        if(!TryApplyWindowResize(gesture.value(), minimumSize, maximumSize, edge, candidate))
+            return false;
+    }
+    return true;
+}
+
+b8 AddWindowResizeEdgeTarget(
+    in WidgetState target,
+    in WindowState state,
+    in WindowMetrics metrics,
+    in WindowResizeEdge edge,
+    in Rect clip,
+    mut Context context
+){
+    const Rect handle = ResolveWindowResizeEdgeBounds(state, metrics, edge);
+    if(handle.width <= 0.0f || handle.height <= 0.0f)
+        return true;
+    HitTargetFactory targets;
+    return context.addTarget(target, targets.makeWindowResizeHitTarget(handle, clip, state.bounds, edge));
+}
+
 Rect ResolveWindowHeaderBounds(in Rect windowBounds, in f32 titleHeight){
     return Rect(windowBounds.x, windowBounds.y, windowBounds.width, titleHeight);
 }
@@ -85,26 +142,48 @@ b8 Builder::beginWindow(in StringView stableKey, in StringView title, mut Window
     this.m_scope.value().m_window.options = options;
     this.m_scope.value().m_window.firstUse = !state.initialized;
     WindowState candidate = state;
+    candidate.closeRequested = false;
     if(!TryInitializeWindow(options, this.m_scope.value().m_window.metrics, candidate) || !this.m_context.pushScope(stableKey)){
         this.m_context.fail();
         return false;
     }
     const auto titleState = this.m_context.declare(s_WindowChromeTitleKey, WidgetKind::Window);
     const auto collapseState = this.m_context.declare(s_WindowChromeCollapseKey, WidgetKind::Button);
+    const auto closeState = this.m_context.declare(s_WindowChromeCloseKey, WidgetKind::Button);
     const auto resizeState = this.m_context.declare(s_WindowChromeResizeKey, WidgetKind::Window);
-    if(!titleState.has_value() || !collapseState.has_value() || !resizeState.has_value()){
+    if(!titleState.has_value() || !collapseState.has_value() || !closeState.has_value() || !resizeState.has_value()){
         this.m_context.fail();
         return false;
     }
     this.m_scope.value().m_window.titleState = titleState.value();
     this.m_scope.value().m_window.collapseState = collapseState.value();
+    this.m_scope.value().m_window.closeState = closeState.value();
     this.m_scope.value().m_window.resizeState = resizeState.value();
+    for(usize slot = 0u; slot < 7u; ++slot){
+        const auto edgeState = this.m_context.declare(s_WindowResizeEdgeKeys[slot], WidgetKind::Window);
+        if(!edgeState.has_value()){
+            this.m_context.fail();
+            return false;
+        }
+        this.m_scope.value().m_window.resizeEdgeStates[slot] = edgeState.value();
+    }
+    if(candidate.zOrder == 0u)
+        candidate.zOrder = this.m_context.allocateWindowZOrder();
+    else
+        this.m_context.observeWindowZOrder(candidate.zOrder);
+    const u32 promotedZOrder = this.m_context.takeWindowPromotion(window.value());
+    if(promotedZOrder != 0u && options.bringToFrontOnPress)
+        candidate.zOrder = promotedZOrder;
+    if(this.m_context.takeActivation(this.m_scope.value().m_window.closeState, options.closable && candidate.open)){
+        candidate.closeRequested = true;
+        candidate.open = false;
+    }
     if(!options.collapsible)
         candidate.collapsed = false;
-    if(this.m_context.takeActivation(this.m_scope.value().m_window.collapseState, options.collapsible))
+    if(this.m_context.takeActivation(this.m_scope.value().m_window.collapseState, options.collapsible && candidate.open))
         candidate.collapsed = !candidate.collapsed;
     while(true){
-        auto gesture = this.m_context.takePointerGesture(this.m_scope.value().m_window.titleState, options.movable);
+        auto gesture = this.m_context.takePointerGesture(this.m_scope.value().m_window.titleState, options.movable && candidate.open);
         if(!gesture.has_value())
             break;
         if(!TryApplyWindowMove(gesture.value(), candidate)){
@@ -112,11 +191,29 @@ b8 Builder::beginWindow(in StringView stableKey, in StringView title, mut Window
             return false;
         }
     }
-    while(true){
-        auto gesture = this.m_context.takePointerGesture(this.m_scope.value().m_window.resizeState, options.resizable && !candidate.collapsed);
-        if(!gesture.has_value())
-            break;
-        if(!TryApplyWindowResize(gesture.value(), this.m_scope.value().m_window.metrics.minimumSize, candidate)){
+    const b8 resizeEnabled = options.resizable && candidate.open && !candidate.collapsed;
+    if(!ApplyWindowEdgeResizeGestures(
+        this.m_scope.value().m_window.resizeState,
+        resizeEnabled,
+        this.m_scope.value().m_window.metrics.minimumSize,
+        this.m_scope.value().m_window.metrics.maximumSize,
+        WindowResizeEdge::BottomRight,
+        this.m_context,
+        candidate
+    )){
+        this.m_context.fail();
+        return false;
+    }
+    for(usize slot = 0u; slot < 7u; ++slot){
+        if(!ApplyWindowEdgeResizeGestures(
+            this.m_scope.value().m_window.resizeEdgeStates[slot],
+            resizeEnabled,
+            this.m_scope.value().m_window.metrics.minimumSize,
+            this.m_scope.value().m_window.metrics.maximumSize,
+            ResolveWindowResizeEdgeBySlot(slot),
+            this.m_context,
+            candidate
+        )){
             this.m_context.fail();
             return false;
         }
@@ -135,10 +232,14 @@ b8 Builder::beginWindow(in StringView stableKey, in StringView title, mut Window
     }
     node = admittedNode.value();
     this.m_scope.value().m_stack.push_back(node);
+    this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_scopeKinds.push_back(BuilderScopeKind::Root);
+    this.m_scope.value().m_virtualListStack.push_back(s_LayoutNoParent);
+    this.m_scope.value().m_splitterStack.push_back(s_LayoutNoParent);
     this.m_scope.value().m_panelActive = true;
     this.m_scope.value().m_windowActive = true;
     state = candidate;
-    return !state.collapsed;
+    return state.open && !state.collapsed;
 }
 
 b8 Builder::endWindow(){
@@ -150,44 +251,63 @@ b8 Builder::endWindow(){
     BuilderOperationEnd finish(this.m_finalizing);
     mut WindowState state = this.m_scope.value().m_window.state.value();
     b8 arranged = true;
-    if(!state.collapsed){
-        in DisplayMetrics display = this.m_paint.displayMetrics();
-        const b8 needsContentProbe =
-            this.m_scope.value().m_window.firstUse
-            && (this.m_scope.value().m_window.options.contentWidthFirstUse || this.m_scope.value().m_window.options.contentHeightFirstUse);
-        if(needsContentProbe){
-            const Rect viewport = ResolveWindowFirstUseViewport(this.m_scope.value().m_bounds, display);
-            arranged = this.m_scope.value().m_layout.arrange(viewport);
-            const Optional<LayoutBox> root = this.m_scope.value().m_layout.box(0u);
-            if(arranged && root.has_value()){
-                arranged = TryFinalizeWindowFirstUseArrangement(
-                    this.m_scope.value().m_window.options,
-                    this.m_scope.value().m_window.metrics,
-                    root.value().rectangle,
-                    this.m_scope.value().m_window.firstUse,
-                    display,
-                    state,
-                    this.m_scope.value().m_bounds
-                );
+    b8 painted = true;
+    if(state.open){
+        if(!state.collapsed){
+            in DisplayMetrics display = this.m_paint.displayMetrics();
+            const b8 needsContentProbe =
+                this.m_scope.value().m_window.firstUse
+                && (this.m_scope.value().m_window.options.contentWidthFirstUse || this.m_scope.value().m_window.options.contentHeightFirstUse);
+            if(needsContentProbe){
+                const Rect viewport = ResolveWindowFirstUseViewport(this.m_scope.value().m_bounds, display);
+                arranged = this.m_scope.value().m_layout.arrange(viewport);
+                const Optional<LayoutBox> root = this.m_scope.value().m_layout.box(0u);
+                if(arranged && root.has_value()){
+                    arranged = TryFinalizeWindowFirstUseArrangement(
+                        this.m_scope.value().m_window.options,
+                        this.m_scope.value().m_window.metrics,
+                        root.value().rectangle,
+                        this.m_scope.value().m_window.firstUse,
+                        display,
+                        state,
+                        this.m_scope.value().m_bounds
+                    );
+                    if(arranged)
+                        arranged = this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds);
+                }
+                else
+                    arranged = false;
+            }
+            else{
+                arranged = TryConstrainWindow(display, this.m_scope.value().m_window.metrics.titleHeight, state);
+                this.m_scope.value().m_bounds = ResolveWindowContentBounds(state, this.m_scope.value().m_window.metrics);
                 if(arranged)
                     arranged = this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds);
             }
-            else
-                arranged = false;
         }
-        else{
-            arranged = TryConstrainWindow(display, this.m_scope.value().m_window.metrics.titleHeight, state);
-            this.m_scope.value().m_bounds = ResolveWindowContentBounds(state, this.m_scope.value().m_window.metrics);
-            if(arranged)
-                arranged = this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds);
+        if(arranged){
+            const b8 beganPaint = this.m_paint.beginZOrder(state.zOrder);
+            const b8 beganContext = beganPaint && this.m_context.beginWindowLayer(this.m_scope.value().m_panelState, state.zOrder);
+            const b8 bodyPainted = beganContext && this.paintWindow();
+            this.m_context.endWindowLayer();
+            b8 endedPaint = true;
+            if(beganPaint)
+                endedPaint = this.m_paint.endZOrder();
+            painted = beganContext && bodyPainted && endedPaint;
         }
+        else
+            painted = false;
     }
-    const b8 painted = arranged && this.paintWindow();
     const b8 popped = this.m_context.popScope();
     this.m_scope.value().m_panelActive = false;
     this.m_scope.value().m_windowActive = false;
     this.m_scope.value().m_window.state.reset();
     this.m_scope.value().m_stack.clear();
+    this.m_scope.value().m_scrollAreaStack.clear();
+    this.m_scope.value().m_scopeKinds.clear();
+    this.m_scope.value().m_virtualListStack.clear();
+    this.m_scope.value().m_splitterStack.clear();
+    this.m_scope.value().m_dockSpaceStack.clear();
     const b8 combosPainted = painted && popped && this.paintDeferred();
     this.publishSliderResults(combosPainted);
     this.releaseDeferredLoans();
@@ -204,17 +324,57 @@ b8 Builder::paintWindow(){
     HitTargetFactory targets;
     in WindowState state = this.m_scope.value().m_window.state.value();
     in WidgetStyle style = this.m_scope.value().m_window.style;
-    const Rect bounds = ResolveVisibleWindowBounds(state, this.m_scope.value().m_window.metrics);
+    in WindowMetrics metrics = this.m_scope.value().m_window.metrics;
+    const Rect bounds = ResolveVisibleWindowBounds(state, metrics);
     const Rect clip = this.visibleClip(bounds);
     this.m_paint.pushClip(clip);
     const b8 painted = this.m_paint.drawRegion(style.window, bounds);
     const b8 popped = this.m_paint.popClip();
     const HitTarget barrier = targets.makeBarrierHitTarget(bounds, clip);
-    if(!painted || !popped || !this.m_context.addTarget(this.m_scope.value().m_panelState, barrier) || !this.paintWindowTitle())
+    if(!painted || !popped || !this.m_context.addTarget(this.m_scope.value().m_panelState, barrier))
         return false;
+    StringView titleName = StringView();
+    if(this.m_scope.value().m_window.title.valid())
+        titleName = this.m_scope.value().m_window.title.deref().utf8();
+    u32 winState = ResolveAccessibleVisibilityStateBits(true, clip);
     if(state.collapsed)
+        winState |= s_AccessibilityStateCollapsed;
+    else
+        winState |= s_AccessibilityStateExpanded;
+    this.emitAccessibleNode(
+        this.m_scope.value().m_panelState,
+        AccessibilityRole::Window,
+        bounds,
+        titleName,
+        StringView(),
+        winState,
+        s_AccessibilityActionFocus
+    );
+    const b8 pushedParent = this.m_context.pushAccessibleParent(this.m_scope.value().m_panelState.id);
+    if(!this.paintWindowTitle()){
+        if(pushedParent)
+            this.m_context.popAccessibleParent();
+        return false;
+    }
+    if(state.collapsed){
+        if(pushedParent)
+            this.m_context.popAccessibleParent();
         return true;
-    return this.paintItems() && this.paintWindowResize();
+    }
+    if(this.m_scope.value().m_window.options.resizable){
+        const Array<usize, 4u> bodySlots(0u, 1u, 3u, 6u);
+        for(in usize slot : bodySlots){
+            if(!AddWindowResizeEdgeTarget(this.m_scope.value().m_window.resizeEdgeStates[slot], state, metrics, ResolveWindowResizeEdgeBySlot(slot), clip, this.m_context)){
+                if(pushedParent)
+                    this.m_context.popAccessibleParent();
+                return false;
+            }
+        }
+    }
+    const b8 bodyOk = this.paintItems() && this.paintWindowResize();
+    if(pushedParent)
+        this.m_context.popAccessibleParent();
+    return bodyOk;
 }
 
 b8 Builder::paintWindowTitle(){
@@ -223,12 +383,16 @@ b8 Builder::paintWindowTitle(){
     in WindowState state = this.m_scope.value().m_window.state.value();
     in WidgetStyle style = this.m_scope.value().m_window.style;
     in WindowMetrics metrics = this.m_scope.value().m_window.metrics;
+    in WindowOptions options = this.m_scope.value().m_window.options;
     const Rect header = ResolveWindowHeaderBounds(state.bounds, metrics.titleHeight);
     const Rect clip = this.visibleClip(header);
     in InputRouter input = this.m_context.input();
     const b8 collapseHovered = input.hover() == this.m_scope.value().m_window.collapseState.id;
     const b8 collapsePressed = input.pressed(this.m_scope.value().m_window.collapseState.id);
     const b8 collapseFocused = input.focus() == this.m_scope.value().m_window.collapseState.id;
+    const b8 closeHovered = input.hover() == this.m_scope.value().m_window.closeState.id;
+    const b8 closePressed = input.pressed(this.m_scope.value().m_window.closeState.id);
+    const b8 closeFocused = input.focus() == this.m_scope.value().m_window.closeState.id;
     if(!this.m_scope.value().m_window.title.valid())
         return false;
     const b8 painted = painter.paintWindowTitleHeader(
@@ -238,21 +402,63 @@ b8 Builder::paintWindowTitle(){
         state,
         style,
         metrics,
-        this.m_scope.value().m_window.options.collapsible,
+        options.collapsible,
         collapseHovered,
         collapsePressed,
         collapseFocused,
+        options.closable,
+        closeHovered,
+        closePressed,
+        closeFocused,
         this.m_scope.value().m_window.title.deref(),
         this.m_scope.value().m_window.titleBounds,
         header,
         clip
     );
-    const HitTarget title = targets.makeWindowTitleHitTarget(header, clip, state.bounds, this.m_scope.value().m_window.options.movable);
+    const HitTarget title = targets.makeWindowTitleHitTarget(header, clip, state.bounds, options.movable);
     if(!painted || !this.m_context.addTarget(this.m_scope.value().m_window.titleState, title))
         return false;
-    if(this.m_scope.value().m_window.options.collapsible){
+    if(options.resizable && !state.collapsed){
+        const Array<usize, 3u> headerSlots(4u, 5u, 2u);
+        for(in usize slot : headerSlots){
+            if(!AddWindowResizeEdgeTarget(this.m_scope.value().m_window.resizeEdgeStates[slot], state, metrics, ResolveWindowResizeEdgeBySlot(slot), clip, this.m_context))
+                return false;
+        }
+    }
+    if(options.collapsible){
         const HitTarget collapse = targets.makeWindowCollapseHitTarget(state, metrics, clip);
-        return this.m_context.addTarget(this.m_scope.value().m_window.collapseState, collapse);
+        if(!this.m_context.addTarget(this.m_scope.value().m_window.collapseState, collapse))
+            return false;
+        const Rect collapseRect = ResolveWindowCollapseBounds(state, metrics);
+        u32 collapseStateBits = ResolveAccessibleVisibilityStateBits(true, clip) | s_AccessibilityStateFocusable;
+        if(state.collapsed)
+            collapseStateBits |= s_AccessibilityStateCollapsed;
+        else
+            collapseStateBits |= s_AccessibilityStateExpanded;
+        this.emitAccessibleNode(
+            this.m_scope.value().m_window.collapseState,
+            AccessibilityRole::ToggleButton,
+            collapseRect,
+            StringView("Collapse"),
+            StringView(),
+            collapseStateBits,
+            s_AccessibilityActionToggle | s_AccessibilityActionFocus
+        );
+    }
+    if(options.closable){
+        const HitTarget closeTarget = targets.makeWindowCloseHitTarget(state, metrics, clip);
+        if(!this.m_context.addTarget(this.m_scope.value().m_window.closeState, closeTarget))
+            return false;
+        const Rect closeRect = ResolveWindowCloseBounds(state, metrics);
+        this.emitAccessibleNode(
+            this.m_scope.value().m_window.closeState,
+            AccessibilityRole::Button,
+            closeRect,
+            StringView("Close"),
+            StringView(),
+            ResolveAccessibleVisibilityStateBits(true, clip) | s_AccessibilityStateFocusable,
+            s_AccessibilityActionInvoke | s_AccessibilityActionFocus
+        );
     }
     return true;
 }
@@ -267,7 +473,7 @@ b8 Builder::paintWindowResize(){
     const Rect corner = ResolveWindowResizeBounds(state, this.m_scope.value().m_window.metrics);
     const Rect clip = this.visibleClip(ResolveVisibleWindowBounds(state, this.m_scope.value().m_window.metrics));
     const b8 painted = painter.paintWindowResizeCorner(this.m_paint, this.m_skin.value(), style, corner, clip);
-    const HitTarget target = targets.makeWindowResizeHitTarget(corner, clip, state.bounds);
+    const HitTarget target = targets.makeWindowResizeHitTarget(corner, clip, state.bounds, WindowResizeEdge::BottomRight);
     return painted && this.m_context.addTarget(this.m_scope.value().m_window.resizeState, target);
 }
 
@@ -437,6 +643,7 @@ ComboResult Builder::declareCombo(
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = ComputeComboFieldIntrinsicSize(minimumSize, measured, frame.arrowExtent, frame.style.arrowGap, item.padding);
+    ApplyLayoutItemOptions(options.layout, description);
     if(!this.addItemNode(description, item))
         return ComboResult();
     frame.list = cast<u32>(this.m_scope.value().m_lists.size());
@@ -722,6 +929,27 @@ b8 Builder::paintCombo(in BuilderItem item, in LayoutBox box){
     const HitTarget target = targets.makeComboFieldHitTarget(box.rectangle, clip, item.enabled, item.contextMenu, frame.token, frame.focusOnCommit);
     if(!this.m_context.addTarget(item.state, target))
         return false;
+    u32 comboState = ResolveAccessibleVisibilityStateBits(item.enabled, clip) | s_AccessibilityStateFocusable | s_AccessibilityStateHasPopup;
+    u32 comboActions = s_AccessibilityActionFocus;
+    if(frame.open){
+        comboState |= s_AccessibilityStateExpanded;
+        comboActions |= s_AccessibilityActionCollapse;
+    }
+    else{
+        comboState |= s_AccessibilityStateCollapsed;
+        comboActions |= s_AccessibilityActionExpand;
+    }
+    if(item.contextMenu)
+        comboActions |= s_AccessibilityActionContextMenu;
+    this.emitAccessibleNode(
+        item.state,
+        AccessibilityRole::ComboBox,
+        box.rectangle,
+        StringView(),
+        item.text.deref().utf8(),
+        comboState,
+        comboActions
+    );
     frame.state.value().m_bounds = box.rectangle;
     frame.visibleField = IntersectUiRectsBounds(box.rectangle, clip);
     return true;
@@ -776,6 +1004,16 @@ b8 Builder::paintComboPopup(mut BuilderComboFrame frame){
     const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
     b8 painted = backgroundPainted && clipPopped && this.m_context.addTarget(frame.popup, barrier);
     if(painted){
+        this.emitAccessibleNode(
+            frame.popup,
+            AccessibilityRole::Menu,
+            placement.value().bounds,
+            StringView(),
+            StringView(),
+            ResolveAccessibleVisibilityStateBits(frame.options.enabled, placement.value().bounds),
+            s_AccessibilityActionNone
+        );
+        const b8 pushedParent = this.m_context.pushAccessibleParent(frame.popup.id);
         auto listItem = this.makeItem();
         listItem.state = frame.rows;
         listItem.list = frame.list;
@@ -783,6 +1021,8 @@ b8 Builder::paintComboPopup(mut BuilderComboFrame frame){
         box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
         box.clip = placement.value().bounds;
         painted = (!frame.search.has_value() || this.paintComboQuery(frame, box)) && this.paintList(listItem, box) && this.comboMatches(frame);
+        if(pushedParent)
+            this.m_context.popAccessibleParent();
     }
     const b8 overlayEnded = this.m_paint.endOverlay();
     const b8 scopeEnded = this.m_context.endPopupScope(painted);

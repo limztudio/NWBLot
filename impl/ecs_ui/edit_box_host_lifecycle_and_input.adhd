@@ -212,7 +212,7 @@ void UiEditBoxHost::input(in InputEvent input, in WidgetId previousCapture, in b
         this.m_clickTracker.cancel();
         for(mut auto entry : this.m_entries){
             entry.dragging = false;
-            entry.wordDragging = false;
+            entry.dragMode = UiEditClickKind::Caret;
         }
         for(usize index = this.m_events.size(); index > 0u; --index){
             in UiEditBoxEvent event = this.m_events[index - 1u];
@@ -227,13 +227,19 @@ void UiEditBoxHost::input(in InputEvent input, in WidgetId previousCapture, in b
         this.m_clickTracker.cancel();
         auto entry = this.findEntry(this.m_context.input().focus());
         const b8 released = input.type == InputEventType::CommandUp;
-        if(!input.edit || !entry.has_value() || !this.hasTextFocus() || ((released && !submit) || (!released && !this.m_context.input().canEditCommand(input))))
+        const b8 acceptTab = !released && input.command == InputCommand::FocusNext && entry.has_value() && entry.value().acceptTab && entry.value().displayed.options.acceptTab;
+        if((!input.edit && !acceptTab) || !entry.has_value() || !this.hasTextFocus() || ((released && !submit) || (!released && !this.m_context.input().canEditCommand(input))))
             return;
         UiEditBoxEvent event = this.makeEvent();
         event.owner = entry.value().owner;
         event.focusGeneration = entry.value().focusGeneration;
         if(released)
             event.command.command = EditCommand::Submit;
+        else if(acceptTab){
+            event.command = EditCommandRequest();
+            event.command.command = EditCommand::InsertTab;
+            event.command.repeat = input.repeat;
+        }
         else{
             InputCommandIntent intent;
             intent.command = input.command;
@@ -305,7 +311,7 @@ void UiEditBoxHost::input(in InputEvent input, in WidgetId previousCapture, in b
             u64 clickTimestampMs = 0u;
             if(input.hoverCapable)
                 clickTimestampMs = input.timestampMs;
-            event.wordSelect = this.m_clickTracker.press(entry.value().owner, entry.value().popup, entry.value().displayed.revision, entry.value().displayed.externalRevision, input.position, clickTimestampMs, input.extend) == UiEditClickKind::Word;
+            event.clickKind = this.m_clickTracker.press(entry.value().owner, entry.value().popup, entry.value().displayed.revision, entry.value().displayed.externalRevision, input.position, clickTimestampMs, input.extend);
         }
         else if(input.type == InputEventType::PrimaryUp)
             this.m_clickTracker.release(entry.value().owner);
@@ -425,7 +431,7 @@ void UiEditBoxHost::synchronizeFocus(){
         if(!candidate.actionCapable && !this.m_events.empty())
             this.discard(candidate.owner);
         candidate.dragging = false;
-        candidate.wordDragging = false;
+        candidate.dragMode = UiEditClickKind::Caret;
     }
     if(ShouldCancelUnfocusedUiEditTransfers(focused, focusedOwner, this.m_session.token().valid(), this.m_session.owner(), this.m_clipboard.pending(), this.m_clipboardOwner, this.m_primary.pending(), this.m_primaryOwner))
         this.cancelTransfers();

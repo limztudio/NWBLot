@@ -8,15 +8,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class HeightfieldMipLevel{
+    public Vector<f32x2u> minMaxY;
+    public u32 cols = 0u;
+    public u32 rows = 0u;
+}
+
 class HeightfieldShape{
     public Vector<f32> heights;
     public Vector<u16> cellMaterialIndices;
     public Vector<SurfaceMaterial> materials;
+    public Vector<u8> cellHoles;
+    public Vector<HeightfieldMipLevel> hierarchy;
     public u32 rows = 0u;
     public u32 cols = 0u;
     public f32x4 scaleMinMaxY(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 originMaxY(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 thickness = 0.0f;
+    public b8 flipDiagonal = false;
 
     public f32 cellSizeX()const{
         return this.scaleMinMaxY.x;
@@ -58,8 +67,20 @@ class HeightfieldShape{
         return this.originMaxY.y + raw * this.scaleMinMaxY.y;
     }
 
+    public b8 isCellHoleBitSet(in u32 cx, in u32 cz)const{
+        if(this.cellHoles.empty() || cx + 1u >= this.cols || cz + 1u >= this.rows)
+            return false;
+        const u32 cellIdx = cz * (this.cols - 1u) + cx;
+        const usize byteIdx = cast<usize>(cellIdx >> 3u);
+        if(byteIdx >= this.cellHoles.size())
+            return false;
+        return (this.cellHoles[byteIdx] & cast<u8>(1u << (cellIdx & 7u))) != 0u;
+    }
+
     public b8 isCellHole(in u32 cx, in u32 cz)const{
         if(cx + 1u >= this.cols || cz + 1u >= this.rows)
+            return true;
+        if(this.isCellHoleBitSet(cx, cz))
             return true;
         const usize w = cast<usize>(this.cols);
         const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
@@ -71,6 +92,158 @@ class HeightfieldShape{
             this.heights[r1 + 1u]
         ))
         ;
+    }
+
+    public void updateHierarchyCell(in u32 cx, in u32 cz){
+        if(this.hierarchy.empty() || !this.isValid())
+            return;
+        const u32 cellCols = this.cols - 1u;
+        const u32 cellRows = this.rows - 1u;
+        if(cx >= cellCols || cz >= cellRows)
+            return;
+
+        u32 bx = cx >> 1u;
+        u32 bz = cz >> 1u;
+        f32 loY = s_MaxF32;
+        f32 hiY = -s_MaxF32;
+        const usize w = cast<usize>(this.cols);
+        const f32 oy = this.originMaxY.y;
+        const f32 sy = this.scaleMinMaxY.y;
+        const u32 cStart = bx * 2u;
+        const u32 rStart = bz * 2u;
+        const u32 cEnd = Min(cStart + 2u, cellCols);
+        const u32 rEnd = Min(rStart + 2u, cellRows);
+        for(u32 rr = rStart; rr < rEnd; ++rr){
+            for(u32 cc = cStart; cc < cEnd; ++cc){
+                if(this.isCellHole(cc, rr))
+                    continue;
+                const usize p0 = cast<usize>(rr) * w + cast<usize>(cc);
+                const usize p1 = p0 + w;
+                const VectorSingle hv = VectorSingle(oy) + VectorSingle(this.heights[p0], this.heights[p0 + 1u], this.heights[p1], this.heights[p1 + 1u]) * sy;
+                const f32 cLo = SimdMin(SimdMin(hv.x, hv.y), SimdMin(hv.z, hv.w));
+                const f32 cHi = SimdMax(SimdMax(hv.x, hv.y), SimdMax(hv.z, hv.w));
+                loY = SimdMin(loY, cLo);
+                hiY = SimdMax(hiY, cHi);
+            }
+        }
+        mut HeightfieldMipLevel lvl0 = this.hierarchy[0u];
+        if(bx < lvl0.cols && bz < lvl0.rows)
+            lvl0.minMaxY[cast<usize>(bz) * cast<usize>(lvl0.cols) + cast<usize>(bx)] = f32x2u(loY, hiY);
+
+        for(usize li = 1u; li < this.hierarchy.size(); ++li){
+            bx >>= 1u;
+            bz >>= 1u;
+            f32 pLo = s_MaxF32;
+            f32 pHi = -s_MaxF32;
+            in HeightfieldMipLevel prevL = this.hierarchy[li - 1u];
+            const u32 x0 = bx * 2u;
+            const u32 z0 = bz * 2u;
+            const u32 x1 = Min(x0 + 2u, prevL.cols);
+            const u32 z1 = Min(z0 + 2u, prevL.rows);
+            for(u32 pz = z0; pz < z1; ++pz){
+                for(u32 px = x0; px < x1; ++px){
+                    const f32x2u ch = prevL.minMaxY[cast<usize>(pz) * cast<usize>(prevL.cols) + cast<usize>(px)];
+                    if(ch.x <= ch.y){
+                        pLo = SimdMin(pLo, ch.x);
+                        pHi = SimdMax(pHi, ch.y);
+                    }
+                }
+            }
+            mut HeightfieldMipLevel curL = this.hierarchy[li];
+            if(bx < curL.cols && bz < curL.rows)
+                curL.minMaxY[cast<usize>(bz) * cast<usize>(curL.cols) + cast<usize>(bx)] = f32x2u(pLo, pHi);
+        }
+    }
+
+    public void buildHierarchy(){
+        this.hierarchy.clear();
+        if(!this.isValid())
+            return;
+        const u32 cellCols = this.cols - 1u;
+        const u32 cellRows = this.rows - 1u;
+        HeightfieldMipLevel lvl0;
+        lvl0.cols = (cellCols + 1u) >> 1u;
+        lvl0.rows = (cellRows + 1u) >> 1u;
+        lvl0.minMaxY.resize(cast<usize>(lvl0.cols) * cast<usize>(lvl0.rows), f32x2u(s_MaxF32, -s_MaxF32));
+        const usize w = cast<usize>(this.cols);
+        const f32 oy = this.originMaxY.y;
+        const f32 sy = this.scaleMinMaxY.y;
+        for(u32 bz = 0u; bz < lvl0.rows; ++bz){
+            const u32 rStart = bz * 2u;
+            const u32 rEnd = Min(rStart + 2u, cellRows);
+            for(u32 bx = 0u; bx < lvl0.cols; ++bx){
+                const u32 cStart = bx * 2u;
+                const u32 cEnd = Min(cStart + 2u, cellCols);
+                f32 loY = s_MaxF32;
+                f32 hiY = -s_MaxF32;
+                for(u32 rr = rStart; rr < rEnd; ++rr){
+                    for(u32 cc = cStart; cc < cEnd; ++cc){
+                        if(this.isCellHole(cc, rr))
+                            continue;
+                        const usize p0 = cast<usize>(rr) * w + cast<usize>(cc);
+                        const usize p1 = p0 + w;
+                        const VectorSingle hv = VectorSingle(oy) + VectorSingle(this.heights[p0], this.heights[p0 + 1u], this.heights[p1], this.heights[p1 + 1u]) * sy;
+                        loY = SimdMin(loY, SimdMin(SimdMin(hv.x, hv.y), SimdMin(hv.z, hv.w)));
+                        hiY = SimdMax(hiY, SimdMax(SimdMax(hv.x, hv.y), SimdMax(hv.z, hv.w)));
+                    }
+                }
+                lvl0.minMaxY[cast<usize>(bz) * cast<usize>(lvl0.cols) + cast<usize>(bx)] = f32x2u(loY, hiY);
+            }
+        }
+        this.hierarchy.push_back(lvl0);
+
+        while(this.hierarchy.back().cols > 2u || this.hierarchy.back().rows > 2u){
+            in HeightfieldMipLevel prev = this.hierarchy.back();
+            HeightfieldMipLevel next;
+            next.cols = (prev.cols + 1u) >> 1u;
+            next.rows = (prev.rows + 1u) >> 1u;
+            next.minMaxY.resize(cast<usize>(next.cols) * cast<usize>(next.rows), f32x2u(s_MaxF32, -s_MaxF32));
+            for(u32 bz = 0u; bz < next.rows; ++bz){
+                const u32 z0 = bz * 2u;
+                const u32 z1 = Min(z0 + 2u, prev.rows);
+                for(u32 bx = 0u; bx < next.cols; ++bx){
+                    const u32 x0 = bx * 2u;
+                    const u32 x1 = Min(x0 + 2u, prev.cols);
+                    f32 loY = s_MaxF32;
+                    f32 hiY = -s_MaxF32;
+                    for(u32 pz = z0; pz < z1; ++pz){
+                        for(u32 px = x0; px < x1; ++px){
+                            const f32x2u ch = prev.minMaxY[cast<usize>(pz) * cast<usize>(prev.cols) + cast<usize>(px)];
+                            if(ch.x <= ch.y){
+                                loY = SimdMin(loY, ch.x);
+                                hiY = SimdMax(hiY, ch.y);
+                            }
+                        }
+                    }
+                    next.minMaxY[cast<usize>(bz) * cast<usize>(next.cols) + cast<usize>(bx)] = f32x2u(loY, hiY);
+                }
+            }
+            this.hierarchy.push_back(next);
+        }
+    }
+
+    public void setCellHole(in u32 cx, in u32 cz, in b8 isHole){
+        if(cx + 1u >= this.cols || cz + 1u >= this.rows)
+            return;
+        const u32 cellCols = this.cols - 1u;
+        const u32 cellRows = this.rows - 1u;
+        const usize byteCount = (cast<usize>(cellCols) * cast<usize>(cellRows) + 7u) >> 3u;
+        if(this.cellHoles.empty()){
+            if(!isHole)
+                return;
+            this.cellHoles.resize(byteCount, 0u);
+        }
+        else if(this.cellHoles.size() < byteCount){
+            this.cellHoles.resize(byteCount, 0u);
+        }
+        const u32 cellIdx = cz * cellCols + cx;
+        const usize byteIdx = cast<usize>(cellIdx >> 3u);
+        const u8 bit = cast<u8>(1u << (cellIdx & 7u));
+        if(isHole)
+            this.cellHoles[byteIdx] |= bit;
+        else
+            this.cellHoles[byteIdx] &= ~bit;
+        this.updateHierarchyCell(cx, cz);
     }
 
     public void updateHeightRange(){
@@ -100,6 +273,16 @@ class HeightfieldShape{
         this.originMaxY.w = hiY;
     }
 
+    public void updateHierarchyAroundVertex(in u32 col, in u32 row){
+        if(col > 0u && row > 0u)
+            this.updateHierarchyCell(col - 1u, row - 1u);
+        if(row > 0u)
+            this.updateHierarchyCell(col, row - 1u);
+        if(col > 0u)
+            this.updateHierarchyCell(col - 1u, row);
+        this.updateHierarchyCell(col, row);
+    }
+
     public void setHeight(in u32 col, in u32 row, in f32 rawHeight){
         if(col >= this.cols || row >= this.rows)
             return;
@@ -110,6 +293,7 @@ class HeightfieldShape{
         const b8 newFinite = IsFinite(VectorSingle(rawHeight));
         if(!oldFinite || !newFinite){
             this.updateHeightRange();
+            this.updateHierarchyAroundVertex(col, row);
             return;
         }
         const f32 oldY = this.originMaxY.y + oldRaw * this.scaleMinMaxY.y;
@@ -119,12 +303,14 @@ class HeightfieldShape{
         const VectorSingle diffBounds = Abs(VectorSingle(oldY - loY, oldY - hiY, 0.0f, 0.0f));
         if((diffBounds.x <= 1.0e-5f && newY > loY) || (diffBounds.y <= 1.0e-5f && newY < hiY)){
             this.updateHeightRange();
+            this.updateHierarchyAroundVertex(col, row);
             return;
         }
         if(newY < loY)
             this.scaleMinMaxY.w = newY;
         if(newY > hiY)
             this.originMaxY.w = newY;
+        this.updateHierarchyAroundVertex(col, row);
     }
 
     public Aabb3D computeLocalAabb()const{
@@ -176,12 +362,22 @@ class HeightfieldShape{
         const VectorSingle v10(x1, h10, z0, 0.0f);
         const VectorSingle v01(x0, h01, z1, 0.0f);
         const VectorSingle v11(x1, h11, z1, 0.0f);
-        outA0 = v00;
-        outA1 = v01;
-        outA2 = v10;
-        outB0 = v10;
-        outB1 = v01;
-        outB2 = v11;
+        if(!this.flipDiagonal){
+            outA0 = v00;
+            outA1 = v01;
+            outA2 = v10;
+            outB0 = v10;
+            outB1 = v01;
+            outB2 = v11;
+        }
+        else{
+            outA0 = v00;
+            outA1 = v01;
+            outA2 = v11;
+            outB0 = v00;
+            outB1 = v11;
+            outB2 = v10;
+        }
     }
 }
 
@@ -216,7 +412,64 @@ Expected<HeightfieldShape> MakeHeightfieldShape(
         hf.heights.push_back(h);
     }
     hf.updateHeightRange();
+    hf.buildHierarchy();
     return hf;
+}
+
+void ExtractHeightfieldCellTriangle(
+    in b8 flipDiag,
+    in usize ti,
+    in VectorSingle v00,
+    in VectorSingle v10,
+    in VectorSingle v01,
+    in VectorSingle v11,
+    mut VectorSingle outV0,
+    mut VectorSingle outV1,
+    mut VectorSingle outV2
+){
+    if(!flipDiag){
+        if(ti == 0u){
+            outV0 = v00;
+            outV1 = v01;
+            outV2 = v10;
+        }
+        else{
+            outV0 = v10;
+            outV1 = v01;
+            outV2 = v11;
+        }
+    }
+    else{
+        if(ti == 0u){
+            outV0 = v00;
+            outV1 = v01;
+            outV2 = v11;
+        }
+        else{
+            outV0 = v00;
+            outV1 = v11;
+            outV2 = v10;
+        }
+    }
+}
+
+b8 IsHeightfieldBlockOverlappingY(
+    in HeightfieldShape hf,
+    in u32 levelIdx,
+    in u32 bx,
+    in u32 bz,
+    in f32 qLoY,
+    in f32 qHiY
+){
+    if(levelIdx >= cast<u32>(hf.hierarchy.size()))
+        return true;
+    in HeightfieldMipLevel lvl = hf.hierarchy[levelIdx];
+    if(bx >= lvl.cols || bz >= lvl.rows)
+        return true;
+    const f32x2u mm = lvl.minMaxY[cast<usize>(bz) * cast<usize>(lvl.cols) + cast<usize>(bx)];
+    if(mm.x > mm.y)
+        return false;
+    return (mm.y + hf.thickness >= qLoY) && (mm.x - hf.thickness <= qHiY);
 }
 
 void ComputeHeightfieldAabbValues(in HeightfieldShape hf, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
@@ -249,14 +502,12 @@ void TestHeightfieldCellRay(
         return;
 
     const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+    const b8 flipDiag = hf.flipDiagonal;
     for(usize ti = 0u; ti < 2u; ++ti){
-        VectorSingle tv0 = v00;
-        const VectorSingle tv1 = v01;
-        VectorSingle tv2 = v10;
-        if(ti != 0u){
-            tv0 = v10;
-            tv2 = v11;
-        }
+        VectorSingle tv0(0.0f);
+        VectorSingle tv1(0.0f);
+        VectorSingle tv2(0.0f);
+        ExtractHeightfieldCellTriangle(flipDiag, ti, v00, v10, v01, v11, tv0, tv1, tv2);
         f32 hitU = 0.0f;
         f32 hitV = 0.0f;
         const LocalRayHit h = RayCastTriangleDetailed(tv0, tv1, tv2, localOrigin, localDir, curMax, cullBackFaces, hitU, hitV);
@@ -266,6 +517,206 @@ void TestHeightfieldCellRay(
             outBarycentrics = f32x2u(hitU, hitV);
             outBest.pointFraction = f32x4(h.point(), curMax);
             outBest.normalHit = f32x3_u32(h.normal().x, h.normal().y, h.normal().z, 1u);
+        }
+    }
+}
+
+void PushHeightfieldHierNodeWithSpill(
+    in u32x3u nodeCoord,
+    in f32 nodeT,
+    mut Array<u32x3u, 64u> fixedNodes,
+    mut Array<f32, 64u> fixedTs,
+    mut u32 fixedCount,
+    mut Vector<u32x3u> overflowNodes,
+    mut Vector<f32> overflowTs,
+    mut b8 useOverflow
+){
+    if(!useOverflow && fixedCount < 64u){
+        fixedNodes[fixedCount] = nodeCoord;
+        fixedTs[fixedCount] = nodeT;
+        ++fixedCount;
+        return;
+    }
+    if(!useOverflow){
+        overflowNodes.reserve(128u);
+        overflowTs.reserve(128u);
+        for(u32 i = 0u; i < fixedCount; ++i){
+            overflowNodes.push_back(fixedNodes[i]);
+            overflowTs.push_back(fixedTs[i]);
+        }
+        fixedCount = 0u;
+        useOverflow = true;
+    }
+    overflowNodes.push_back(nodeCoord);
+    overflowTs.push_back(nodeT);
+}
+
+void ComputeHeightfieldMipBlockBounds(
+    in HeightfieldShape hf,
+    in u32 levelIdx,
+    in u32 bx,
+    in u32 bz,
+    in u32 cellCols,
+    in u32 cellRows,
+    in f32x2u mm,
+    mut u32 outC0,
+    mut u32 outC1,
+    mut u32 outR0,
+    mut u32 outR1,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax
+){
+    const u32 shift = levelIdx + 1u;
+    outC0 = bx << shift;
+    outR0 = bz << shift;
+    outC1 = Min(((bx + 1u) << shift) - 1u, cellCols - 1u);
+    outR1 = Min(((bz + 1u) << shift) - 1u, cellRows - 1u);
+    const f32 ox = hf.originMaxY.x;
+    const f32 oz = hf.originMaxY.z;
+    const f32 sx = hf.scaleMinMaxY.x;
+    const f32 sz = hf.scaleMinMaxY.z;
+    outMin = VectorSingle(ox + cast<f32>(outC0) * sx, mm.x - hf.thickness, oz + cast<f32>(outR0) * sz, 0.0f);
+    outMax = VectorSingle(ox + cast<f32>(outC1 + 1u) * sx, mm.y + hf.thickness, oz + cast<f32>(outR1 + 1u) * sz, 0.0f);
+}
+
+void RayCastHeightfieldHierarchy(
+    in HeightfieldShape hf,
+    in VectorSingle localOrigin,
+    in VectorSingle localDir,
+    in VectorSingle invDir,
+    in u32 parallelMask,
+    in b8 cullBackFaces,
+    mut f32 curMax,
+    mut LocalRayHit best,
+    mut u32 outCellIndex,
+    mut f32x2u outBarycentrics
+){
+    const u32 cellCols = hf.cols - 1u;
+    const u32 cellRows = hf.rows - 1u;
+    const u32 topLevel = cast<u32>(hf.hierarchy.size() - 1u);
+    in HeightfieldMipLevel rootLvl = hf.hierarchy[topLevel];
+
+    Array<u32x3u, 64u> fixedNodes;
+    Array<f32, 64u> fixedTs;
+    u32 fixedCount = 0u;
+    Vector<u32x3u> overflowNodes;
+    Vector<f32> overflowTs;
+    b8 useOverflow = false;
+
+    Array<u32x3u, 4u> candCoords;
+    Array<f32, 4u> candTs;
+    u32 candCount = 0u;
+    for(u32 rz = 0u; rz < rootLvl.rows; ++rz){
+        for(u32 rx = 0u; rx < rootLvl.cols; ++rx){
+            const f32x2u mm = rootLvl.minMaxY[cast<usize>(rz) * cast<usize>(rootLvl.cols) + cast<usize>(rx)];
+            if(mm.x > mm.y)
+                continue;
+            u32 dummy0 = 0u;
+            u32 dummy1 = 0u;
+            u32 dummy2 = 0u;
+            u32 dummy3 = 0u;
+            VectorSingle bMin(0.0f);
+            VectorSingle bMax(0.0f);
+            ComputeHeightfieldMipBlockBounds(hf, topLevel, rx, rz, cellCols, cellRows, mm, dummy0, dummy1, dummy2, dummy3, bMin, bMax);
+            f32 tHit = 0.0f;
+            if(AabbRayCastValues(bMin, bMax, localOrigin, invDir, parallelMask, curMax, tHit)){
+                candCoords[candCount] = u32x3u(topLevel, rx, rz);
+                candTs[candCount] = tHit;
+                ++candCount;
+            }
+        }
+    }
+    for(u32 a = 0u; a < candCount; ++a){
+        for(u32 b = a + 1u; b < candCount; ++b){
+            if(candTs[b] > candTs[a]){
+                const f32 tmpT = candTs[a];
+                candTs[a] = candTs[b];
+                candTs[b] = tmpT;
+                const u32x3u tmpC = candCoords[a];
+                candCoords[a] = candCoords[b];
+                candCoords[b] = tmpC;
+            }
+        }
+        PushHeightfieldHierNodeWithSpill(candCoords[a], candTs[a], fixedNodes, fixedTs, fixedCount, overflowNodes, overflowTs, useOverflow);
+    }
+
+    while(fixedCount > 0u || (useOverflow && !overflowNodes.empty())){
+        u32x3u cur(0u, 0u, 0u);
+        f32 nodeT = 0.0f;
+        if(useOverflow){
+            cur = overflowNodes.back();
+            overflowNodes.pop_back();
+            nodeT = overflowTs.back();
+            overflowTs.pop_back();
+        }
+        else{
+            --fixedCount;
+            cur = fixedNodes[fixedCount];
+            nodeT = fixedTs[fixedCount];
+        }
+        if(nodeT > curMax)
+            continue;
+        if(cur.x == 0u){
+            const u32 c0 = cur.y * 2u;
+            const u32 r0 = cur.z * 2u;
+            const u32 c1 = Min(c0 + 1u, cellCols - 1u);
+            const u32 r1 = Min(r0 + 1u, cellRows - 1u);
+            const u32 cSpan = c1 - c0 + 1u;
+            const u32 rSpan = r1 - r0 + 1u;
+            const b8 revX = (localDir.x < 0.0f);
+            const b8 revZ = (localDir.z < 0.0f);
+            for(u32 dz = 0u; dz < rSpan; ++dz){
+                u32 cz = r0 + dz;
+                if(revZ)
+                    cz = r1 - dz;
+                for(u32 dx = 0u; dx < cSpan; ++dx){
+                    u32 cx = c0 + dx;
+                    if(revX)
+                        cx = c1 - dx;
+                    TestHeightfieldCellRay(hf, cx, cz, localOrigin, localDir, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
+                }
+            }
+            continue;
+        }
+        const u32 childLvl = cur.x - 1u;
+        in HeightfieldMipLevel cLvl = hf.hierarchy[childLvl];
+        const u32 bx0 = cur.y * 2u;
+        const u32 bz0 = cur.z * 2u;
+        const u32 bx1 = Min(bx0 + 2u, cLvl.cols);
+        const u32 bz1 = Min(bz0 + 2u, cLvl.rows);
+        candCount = 0u;
+        for(u32 cz = bz0; cz < bz1; ++cz){
+            for(u32 cx = bx0; cx < bx1; ++cx){
+                const f32x2u mm = cLvl.minMaxY[cast<usize>(cz) * cast<usize>(cLvl.cols) + cast<usize>(cx)];
+                if(mm.x > mm.y)
+                    continue;
+                u32 dummy0 = 0u;
+                u32 dummy1 = 0u;
+                u32 dummy2 = 0u;
+                u32 dummy3 = 0u;
+                VectorSingle bMin(0.0f);
+                VectorSingle bMax(0.0f);
+                ComputeHeightfieldMipBlockBounds(hf, childLvl, cx, cz, cellCols, cellRows, mm, dummy0, dummy1, dummy2, dummy3, bMin, bMax);
+                f32 tChild = 0.0f;
+                if(AabbRayCastValues(bMin, bMax, localOrigin, invDir, parallelMask, curMax, tChild)){
+                    candCoords[candCount] = u32x3u(childLvl, cx, cz);
+                    candTs[candCount] = tChild;
+                    ++candCount;
+                }
+            }
+        }
+        for(u32 a = 0u; a < candCount; ++a){
+            for(u32 b = a + 1u; b < candCount; ++b){
+                if(candTs[b] > candTs[a]){
+                    const f32 tmpT = candTs[a];
+                    candTs[a] = candTs[b];
+                    candTs[b] = tmpT;
+                    const u32x3u tmpC = candCoords[a];
+                    candCoords[a] = candCoords[b];
+                    candCoords[b] = tmpC;
+                }
+            }
+            PushHeightfieldHierNodeWithSpill(candCoords[a], candTs[a], fixedNodes, fixedTs, fixedCount, overflowNodes, overflowTs, useOverflow);
         }
     }
 }
@@ -301,8 +752,18 @@ LocalRayHit RayCastHeightfieldDetailed(
     const f32 sz = hf.cellSizeZ();
     const u32 cellCols = hf.cols - 1u;
     const u32 cellRows = hf.rows - 1u;
-    const VectorSingle startPt = localOrigin + localDir * tEntry;
     f32 curMax = maxFraction;
+    if(!hf.hierarchy.empty() && cellCols * cellRows > 64u){
+        RayCastHeightfieldHierarchy(hf, localOrigin, localDir, invDir, parallelMask, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
+        if(best.hit()){
+            const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(best.normal(), xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            best.pointFraction = f32x4(TransformPointValues(xfPos, xfRot, best.point()), best.fraction());
+            best.normalHit = f32x3_u32(worldN.x, worldN.y, worldN.z, 1u);
+        }
+        return best;
+    }
+
+    const VectorSingle startPt = localOrigin + localDir * tEntry;
 
     const VectorSingle gxz = Clamp(
         VectorSingle((startPt.x - hf.originMaxY.x) / sx, (startPt.z - hf.originMaxY.z) / sz, 0.0f, 0.0f),
@@ -396,14 +857,12 @@ void EvalClosestHeightfieldCell(
     if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
         return;
 
+    const b8 flipDiag = hf.flipDiagonal;
     for(usize ti = 0u; ti < 2u; ++ti){
-        VectorSingle v0 = v00;
-        const VectorSingle v1 = v01;
-        VectorSingle v2 = v10;
-        if(ti != 0u){
-            v0 = v10;
-            v2 = v11;
-        }
+        VectorSingle v0(0.0f);
+        VectorSingle v1(0.0f);
+        VectorSingle v2(0.0f);
+        ExtractHeightfieldCellTriangle(flipDiag, ti, v00, v10, v01, v11, v0, v1, v2);
         const VectorSingle cp = ClosestPointOnTriangleLocal(localPoint, v0, v1, v2);
         const VectorSingle diff = VectorSingle(localPoint - cp, 0.0f);
         const f32 dSq = Vector3LengthSq(diff).x;
@@ -502,6 +961,28 @@ b8 ClosestPointOnHeightfield(
     return true;
 }
 
+void PushHeightfieldOverlapNodeWithSpill(
+    in u32x3u nodeCoord,
+    mut Array<u32x3u, 64u> fixedNodes,
+    mut u32 fixedCount,
+    mut Vector<u32x3u> overflowNodes,
+    mut b8 useOverflow
+){
+    if(!useOverflow && fixedCount < 64u){
+        fixedNodes[fixedCount] = nodeCoord;
+        ++fixedCount;
+        return;
+    }
+    if(!useOverflow){
+        overflowNodes.reserve(128u);
+        for(u32 i = 0u; i < fixedCount; ++i)
+            overflowNodes.push_back(fixedNodes[i]);
+        fixedCount = 0u;
+        useOverflow = true;
+    }
+    overflowNodes.push_back(nodeCoord);
+}
+
 void ComputeHeightfieldOverlappedCells(
     in HeightfieldShape hf,
     in Aabb3D localQueryBox,
@@ -527,12 +1008,99 @@ void ComputeHeightfieldOverlappedCells(
     const f32 sz = hf.cellSizeZ();
     const isize maxC = cast<isize>(hf.cols - 2u);
     const isize maxR = cast<isize>(hf.rows - 2u);
-    const isize c0 = Max(cast<isize>(0), cast<isize>((localQueryBox.lowerBound.x - hf.originMaxY.x) / sx));
-    const isize c1 = Min(maxC, cast<isize>((localQueryBox.upperBound.x - hf.originMaxY.x) / sx));
-    const isize r0 = Max(cast<isize>(0), cast<isize>((localQueryBox.lowerBound.z - hf.originMaxY.z) / sz));
-    const isize r1 = Min(maxR, cast<isize>((localQueryBox.upperBound.z - hf.originMaxY.z) / sz));
+    isize c0 = Max(cast<isize>(0), cast<isize>((localQueryBox.lowerBound.x - hf.originMaxY.x) / sx));
+    isize c1 = Min(maxC, cast<isize>((localQueryBox.upperBound.x - hf.originMaxY.x) / sx));
+    isize r0 = Max(cast<isize>(0), cast<isize>((localQueryBox.lowerBound.z - hf.originMaxY.z) / sz));
+    isize r1 = Min(maxR, cast<isize>((localQueryBox.upperBound.z - hf.originMaxY.z) / sz));
     if(c0 > c1 || r0 > r1)
         return;
+
+    if(!hf.hierarchy.empty() && ((c1 - c0 + 1) * (r1 - r0 + 1) > 16 || !hf.cellHoles.empty())){
+        const u32 cellCols = hf.cols - 1u;
+        const u32 cellRows = hf.rows - 1u;
+        const VectorSingle qMin(localQueryBox.lowerBound);
+        const VectorSingle qMax(localQueryBox.upperBound);
+        const u32 topLevel = cast<u32>(hf.hierarchy.size() - 1u);
+        in HeightfieldMipLevel rootLvl = hf.hierarchy[topLevel];
+        Array<u32x3u, 64u> fixedNodes;
+        u32 fixedCount = 0u;
+        Vector<u32x3u> overflowNodes;
+        b8 useOverflow = false;
+        for(u32 rz = 0u; rz < rootLvl.rows; ++rz){
+            for(u32 rx = 0u; rx < rootLvl.cols; ++rx){
+                const f32x2u mm = rootLvl.minMaxY[cast<usize>(rz) * cast<usize>(rootLvl.cols) + cast<usize>(rx)];
+                if(mm.x <= mm.y)
+                    PushHeightfieldOverlapNodeWithSpill(u32x3u(topLevel, rx, rz), fixedNodes, fixedCount, overflowNodes, useOverflow);
+            }
+        }
+        b8 foundTight = false;
+        u32 tightC0 = cellCols;
+        u32 tightC1 = 0u;
+        u32 tightR0 = cellRows;
+        u32 tightR1 = 0u;
+        while(fixedCount > 0u || (useOverflow && !overflowNodes.empty())){
+            u32x3u cur(0u, 0u, 0u);
+            if(useOverflow){
+                cur = overflowNodes.back();
+                overflowNodes.pop_back();
+            }
+            else{
+                --fixedCount;
+                cur = fixedNodes[fixedCount];
+            }
+            in HeightfieldMipLevel curLvl = hf.hierarchy[cur.x];
+            const f32x2u mm = curLvl.minMaxY[cast<usize>(cur.z) * cast<usize>(curLvl.cols) + cast<usize>(cur.y)];
+            if(mm.x > mm.y)
+                continue;
+            u32 bc0 = 0u;
+            u32 bc1 = 0u;
+            u32 br0 = 0u;
+            u32 br1 = 0u;
+            VectorSingle bMin(0.0f);
+            VectorSingle bMax(0.0f);
+            ComputeHeightfieldMipBlockBounds(hf, cur.x, cur.y, cur.z, cellCols, cellRows, mm, bc0, bc1, br0, br1, bMin, bMax);
+            if(!AabbOverlapsValues(bMin, bMax, qMin, qMax))
+                continue;
+            if(cast<isize>(bc1) < c0 || cast<isize>(bc0) > c1 || cast<isize>(br1) < r0 || cast<isize>(br0) > r1)
+                continue;
+            if(cur.x == 0u){
+                const u32 cl0 = Max(bc0, cast<u32>(c0));
+                const u32 cl1 = Min(bc1, cast<u32>(c1));
+                const u32 rl0 = Max(br0, cast<u32>(r0));
+                const u32 rl1 = Min(br1, cast<u32>(r1));
+                if(!foundTight){
+                    foundTight = true;
+                    tightC0 = cl0;
+                    tightC1 = cl1;
+                    tightR0 = rl0;
+                    tightR1 = rl1;
+                }
+                else{
+                    tightC0 = Min(tightC0, cl0);
+                    tightC1 = Max(tightC1, cl1);
+                    tightR0 = Min(tightR0, rl0);
+                    tightR1 = Max(tightR1, rl1);
+                }
+                continue;
+            }
+            const u32 childLvl = cur.x - 1u;
+            in HeightfieldMipLevel cLvl = hf.hierarchy[childLvl];
+            const u32 bx0 = cur.y * 2u;
+            const u32 bz0 = cur.z * 2u;
+            const u32 bx1 = Min(bx0 + 2u, cLvl.cols);
+            const u32 bz1 = Min(bz0 + 2u, cLvl.rows);
+            for(u32 cz = bz0; cz < bz1; ++cz){
+                for(u32 cx = bx0; cx < bx1; ++cx)
+                    PushHeightfieldOverlapNodeWithSpill(u32x3u(childLvl, cx, cz), fixedNodes, fixedCount, overflowNodes, useOverflow);
+            }
+        }
+        if(!foundTight)
+            return;
+        c0 = cast<isize>(tightC0);
+        c1 = cast<isize>(tightC1);
+        r0 = cast<isize>(tightR0);
+        r1 = cast<isize>(tightR1);
+    }
 
     outMinCx = cast<u32>(c0);
     outMaxCx = cast<u32>(c1);
@@ -559,6 +1127,10 @@ void EvalHeightfieldShapeCastCell(
     mut f32x2u outBarycentrics,
     mut u32 bestKey
 ){
+    if(hf.isCellHoleBitSet(cx, cz))
+        return;
+    if(!IsHeightfieldBlockOverlappingY(hf, 0u, cx >> 1u, cz >> 1u, minY, maxY))
+        return;
     const usize w = cast<usize>(hf.cols);
     const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
     const usize r1 = r0 + w;
@@ -587,23 +1159,21 @@ void EvalHeightfieldShapeCastCell(
     const f32 x1 = x0 + hf.scaleMinMaxY.x;
     const f32 z0 = hf.originMaxY.z + cast<f32>(cz) * hf.scaleMinMaxY.z;
     const f32 z1 = z0 + hf.scaleMinMaxY.z;
-    const f32x3u v00(x0, h00, z0);
-    const f32x3u v10(x1, h10, z0);
-    const f32x3u v01(x0, h01, z1);
-    const f32x3u v11(x1, h11, z1);
+    const VectorSingle v00(x0, h00, z0, 0.0f);
+    const VectorSingle v10(x1, h10, z0, 0.0f);
+    const VectorSingle v01(x0, h01, z1, 0.0f);
+    const VectorSingle v11(x1, h11, z1, 0.0f);
     const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+    const b8 flipDiag = hf.flipDiagonal;
     for(usize ti = 0u; ti < 2u; ++ti){
+        VectorSingle tv0(0.0f);
+        VectorSingle tv1(0.0f);
+        VectorSingle tv2(0.0f);
+        ExtractHeightfieldCellTriangle(flipDiag, ti, v00, v10, v01, v11, tv0, tv1, tv2);
         Array<f32x3u, 3u> triPts;
-        if(ti == 0u){
-            triPts[0u] = v00;
-            triPts[1u] = v01;
-            triPts[2u] = v10;
-        }
-        else{
-            triPts[0u] = v10;
-            triPts[1u] = v01;
-            triPts[2u] = v11;
-        }
+        triPts[0u] = f32x3u(tv0);
+        triPts[1u] = f32x3u(tv1);
+        triPts[2u] = f32x3u(tv2);
         const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
         const LocalRayHit triHit = ShapeCastProxyViews(queryProxy, posQuery, rotQuery, translation, triView, posHf, rotHf, VectorSingle(0.0f), curMax);
         if(triHit.hit()){
@@ -846,6 +1416,10 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsPrecomputed(
         const f32 z0 = oz + cast<f32>(cz) * sz;
         const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            if(hfB.isCellHoleBitSet(cx, cz))
+                continue;
+            if(!IsHeightfieldBlockOverlappingY(hfB, 0u, cx >> 1u, cz >> 1u, qLoY, qHiY))
+                continue;
             const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
             const usize r1 = r0 + w;
             const VectorSingle rawHeights(
@@ -872,23 +1446,21 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsPrecomputed(
             const f32 h11 = hVec.w;
             const f32 x0 = ox + cast<f32>(cx) * sx;
             const f32 x1 = x0 + sx;
-            const f32x3u v00(x0, h00, z0);
-            const f32x3u v10(x1, h10, z0);
-            const f32x3u v01(x0, h01, z1);
-            const f32x3u v11(x1, h11, z1);
+            const VectorSingle v00(x0, h00, z0, 0.0f);
+            const VectorSingle v10(x1, h10, z0, 0.0f);
+            const VectorSingle v01(x0, h01, z1, 0.0f);
+            const VectorSingle v11(x1, h11, z1, 0.0f);
             const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
+            const b8 flipDiag = hfB.flipDiagonal;
             for(usize ti = 0u; ti < 2u; ++ti){
+                VectorSingle tv0(0.0f);
+                VectorSingle tv1(0.0f);
+                VectorSingle tv2(0.0f);
+                ExtractHeightfieldCellTriangle(flipDiag, ti, v00, v10, v01, v11, tv0, tv1, tv2);
                 Array<f32x3u, 3u> triPts;
-                if(ti == 0u){
-                    triPts[0u] = v00;
-                    triPts[1u] = v01;
-                    triPts[2u] = v10;
-                }
-                else{
-                    triPts[0u] = v10;
-                    triPts[1u] = v01;
-                    triPts[2u] = v11;
-                }
+                triPts[0u] = f32x3u(tv0);
+                triPts[1u] = f32x3u(tv1);
+                triPts[2u] = f32x3u(tv2);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfB.thickness);
                 const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(proxyA, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angBound);
                 if(toi.hit()){
@@ -1030,6 +1602,10 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
         const f32 z0 = oz + cast<f32>(cz) * sz;
         const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            if(hf.isCellHoleBitSet(cx, cz))
+                continue;
+            if(!IsHeightfieldBlockOverlappingY(hf, 0u, cx >> 1u, cz >> 1u, qLoY, qHiY))
+                continue;
             const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
             const usize r1 = r0 + w;
             const VectorSingle rawHeights(
@@ -1052,23 +1628,21 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
 
             const f32 x0 = ox + cast<f32>(cx) * sx;
             const f32 x1 = x0 + sx;
-            const f32x3u v00(x0, h00, z0);
-            const f32x3u v10(x1, h10, z0);
-            const f32x3u v01(x0, h01, z1);
-            const f32x3u v11(x1, h11, z1);
+            const VectorSingle v00(x0, h00, z0, 0.0f);
+            const VectorSingle v10(x1, h10, z0, 0.0f);
+            const VectorSingle v01(x0, h01, z1, 0.0f);
+            const VectorSingle v11(x1, h11, z1, 0.0f);
             const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+            const b8 flipDiag = hf.flipDiagonal;
             for(usize ti = 0u; ti < 2u; ++ti){
+                VectorSingle tv0(0.0f);
+                VectorSingle tv1(0.0f);
+                VectorSingle tv2(0.0f);
+                ExtractHeightfieldCellTriangle(flipDiag, ti, v00, v10, v01, v11, tv0, tv1, tv2);
                 Array<f32x3u, 3u> triPts;
-                if(ti == 0u){
-                    triPts[0u] = v00;
-                    triPts[1u] = v01;
-                    triPts[2u] = v10;
-                }
-                else{
-                    triPts[0u] = v10;
-                    triPts[1u] = v01;
-                    triPts[2u] = v11;
-                }
+                triPts[0u] = f32x3u(tv0);
+                triPts[1u] = f32x3u(tv1);
+                triPts[2u] = f32x3u(tv2);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
                 const TimeOfImpactOutput toi = ComputeTimeOfImpactViewsWithBounds(queryProxy, sweepA, triView, sweepB, curMax, toiTargetPadding, toiTol, angSpeedBound);
                 if(toi.hit() && (!best.hit() || toi.fraction() < curMax)){
@@ -1097,7 +1671,7 @@ b8 LoadHeightfieldCellVertices(
     mut VectorSingle outV01,
     mut VectorSingle outV11
 ){
-    if(cx + 1u >= hf.cols || cz + 1u >= hf.rows)
+    if(cx + 1u >= hf.cols || cz + 1u >= hf.rows || hf.isCellHoleBitSet(cx, cz))
         return false;
     const usize w = cast<usize>(hf.cols);
     const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
@@ -1128,6 +1702,8 @@ b8 IsHeightfieldDihedralSmooth(in VectorSingle nA, in VectorSingle edgePt, in Ve
 b8 IsHeightfieldGridVertexSmooth(in HeightfieldShape hf, in u32 vx, in u32 vz){
     if(vx == 0u || vx + 1u >= hf.cols || vz == 0u || vz + 1u >= hf.rows)
         return false;
+    if(hf.isCellHoleBitSet(vx - 1u, vz - 1u) || hf.isCellHoleBitSet(vx, vz - 1u) || hf.isCellHoleBitSet(vx - 1u, vz) || hf.isCellHoleBitSet(vx, vz))
+        return false;
     const usize w = cast<usize>(hf.cols);
     const usize colM = cast<usize>(vx - 1u);
     const usize row0Idx = cast<usize>(vz) * w + colM;
@@ -1154,6 +1730,7 @@ b8 IsHeightfieldGridVertexSmooth(in HeightfieldShape hf, in u32 vx, in u32 vz){
     const f32 z0 = zm + sz;
     const f32 zp = z0 + sz;
 
+    const VectorSingle p00(xm, hM.x, zm, 0.0f);
     const VectorSingle p10(x0, hM.y, zm, 0.0f);
     const VectorSingle p20(xp, hM.z, zm, 0.0f);
     const VectorSingle p01(xm, h0.x, z0, 0.0f);
@@ -1161,20 +1738,37 @@ b8 IsHeightfieldGridVertexSmooth(in HeightfieldShape hf, in u32 vx, in u32 vz){
     const VectorSingle p21(xp, h0.z, z0, 0.0f);
     const VectorSingle p02(xm, hP.x, zp, 0.0f);
     const VectorSingle p12(x0, hP.y, zp, 0.0f);
+    const VectorSingle p22(xp, hP.z, zp, 0.0f);
 
-    const VectorSingle nNW1 = ComputeHeightfieldTriNormal(p10, p01, p11);
-    const VectorSingle nNE0 = ComputeHeightfieldTriNormal(p10, p11, p20);
-    const VectorSingle nNE1 = ComputeHeightfieldTriNormal(p20, p11, p21);
-    const VectorSingle nSW0 = ComputeHeightfieldTriNormal(p01, p02, p11);
-    const VectorSingle nSW1 = ComputeHeightfieldTriNormal(p11, p02, p12);
-    const VectorSingle nSE0 = ComputeHeightfieldTriNormal(p11, p12, p21);
+    if(!hf.flipDiagonal){
+        const VectorSingle nNW1 = ComputeHeightfieldTriNormal(p10, p01, p11);
+        const VectorSingle nNE0 = ComputeHeightfieldTriNormal(p10, p11, p20);
+        const VectorSingle nNE1 = ComputeHeightfieldTriNormal(p20, p11, p21);
+        const VectorSingle nSW0 = ComputeHeightfieldTriNormal(p01, p02, p11);
+        const VectorSingle nSW1 = ComputeHeightfieldTriNormal(p11, p02, p12);
+        const VectorSingle nSE0 = ComputeHeightfieldTriNormal(p11, p12, p21);
 
-    return IsHeightfieldDihedralSmooth(nNW1, p11, p20, nNE0)
-        && IsHeightfieldDihedralSmooth(nNE0, p11, p21, nNE1)
-        && IsHeightfieldDihedralSmooth(nNE1, p11, p21, nSE0)
-        && IsHeightfieldDihedralSmooth(nSE0, p11, p12, nSW1)
-        && IsHeightfieldDihedralSmooth(nSW1, p11, p01, nSW0)
-        && IsHeightfieldDihedralSmooth(nSW0, p11, p01, nNW1);
+        return IsHeightfieldDihedralSmooth(nNW1, p11, p20, nNE0)
+            && IsHeightfieldDihedralSmooth(nNE0, p11, p21, nNE1)
+            && IsHeightfieldDihedralSmooth(nNE1, p11, p12, nSE0)
+            && IsHeightfieldDihedralSmooth(nSE0, p11, p02, nSW1)
+            && IsHeightfieldDihedralSmooth(nSW1, p11, p01, nSW0)
+            && IsHeightfieldDihedralSmooth(nSW0, p11, p10, nNW1);
+    }
+
+    const VectorSingle mNW0 = ComputeHeightfieldTriNormal(p00, p01, p11);
+    const VectorSingle mNW1 = ComputeHeightfieldTriNormal(p00, p11, p10);
+    const VectorSingle mNE0 = ComputeHeightfieldTriNormal(p10, p11, p21);
+    const VectorSingle mSE1 = ComputeHeightfieldTriNormal(p11, p22, p21);
+    const VectorSingle mSE0 = ComputeHeightfieldTriNormal(p11, p12, p22);
+    const VectorSingle mSW1 = ComputeHeightfieldTriNormal(p01, p12, p11);
+
+    return IsHeightfieldDihedralSmooth(mNW0, p11, p10, mNW1)
+        && IsHeightfieldDihedralSmooth(mNW1, p11, p21, mNE0)
+        && IsHeightfieldDihedralSmooth(mNE0, p11, p22, mSE1)
+        && IsHeightfieldDihedralSmooth(mSE1, p11, p12, mSE0)
+        && IsHeightfieldDihedralSmooth(mSE0, p11, p01, mSW1)
+        && IsHeightfieldDihedralSmooth(mSW1, p11, p00, mNW0);
 }
 
 u8 ComputeHeightfieldTriangleEdgeFlags(
@@ -1193,46 +1787,92 @@ u8 ComputeHeightfieldTriangleEdgeFlags(
     VectorSingle nb10(0.0f);
     VectorSingle nb01(0.0f);
     VectorSingle nb11(0.0f);
+    if(!hf.flipDiagonal){
+        if(ti == 0u){
+            if(cx > 0u && LoadHeightfieldCellVertices(hf, cx - 1u, cz, nb00, nb10, nb01, nb11)){
+                const VectorSingle nbN = ComputeHeightfieldTriNormal(nb10, nb01, nb11);
+                if(IsHeightfieldDihedralSmooth(triN, v00, nb01, nbN))
+                    flags |= 0x01u;
+            }
+            const VectorSingle diagN = ComputeHeightfieldTriNormal(v10, v01, v11);
+            if(IsHeightfieldDihedralSmooth(triN, v01, v11, diagN))
+                flags |= 0x02u;
+            if(cz > 0u && LoadHeightfieldCellVertices(hf, cx, cz - 1u, nb00, nb10, nb01, nb11)){
+                const VectorSingle nbN = ComputeHeightfieldTriNormal(nb10, nb01, nb11);
+                if(IsHeightfieldDihedralSmooth(triN, v10, nb10, nbN))
+                    flags |= 0x04u;
+            }
+            if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx, cz))
+                flags |= 0x08u;
+            if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx, cz + 1u))
+                flags |= 0x10u;
+            if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
+                flags |= 0x20u;
+        }
+        else{
+            const VectorSingle diagN = ComputeHeightfieldTriNormal(v00, v01, v10);
+            if(IsHeightfieldDihedralSmooth(triN, v10, v00, diagN))
+                flags |= 0x01u;
+            if(cz + 2u < hf.rows && LoadHeightfieldCellVertices(hf, cx, cz + 1u, nb00, nb10, nb01, nb11)){
+                const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb10);
+                if(IsHeightfieldDihedralSmooth(triN, v01, nb01, nbN))
+                    flags |= 0x02u;
+            }
+            if(cx + 2u < hf.cols && LoadHeightfieldCellVertices(hf, cx + 1u, cz, nb00, nb10, nb01, nb11)){
+                const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb10);
+                if(IsHeightfieldDihedralSmooth(triN, v11, nb10, nbN))
+                    flags |= 0x04u;
+            }
+            if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
+                flags |= 0x08u;
+            if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx, cz + 1u))
+                flags |= 0x10u;
+            if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz + 1u))
+                flags |= 0x20u;
+        }
+        return flags;
+    }
+
     if(ti == 0u){
         if(cx > 0u && LoadHeightfieldCellVertices(hf, cx - 1u, cz, nb00, nb10, nb01, nb11)){
-            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb10, nb01, nb11);
-            if(IsHeightfieldDihedralSmooth(triN, v00, nb01, nbN))
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb11, nb10);
+            if(IsHeightfieldDihedralSmooth(triN, v00, nb00, nbN))
                 flags |= 0x01u;
         }
-        const VectorSingle diagN = ComputeHeightfieldTriNormal(v10, v01, v11);
-        if(IsHeightfieldDihedralSmooth(triN, v01, v11, diagN))
-            flags |= 0x02u;
-        if(cz > 0u && LoadHeightfieldCellVertices(hf, cx, cz - 1u, nb00, nb10, nb01, nb11)){
-            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb10, nb01, nb11);
-            if(IsHeightfieldDihedralSmooth(triN, v10, nb10, nbN))
-                flags |= 0x04u;
+        if(cz + 2u < hf.rows && LoadHeightfieldCellVertices(hf, cx, cz + 1u, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb11, nb10);
+            if(IsHeightfieldDihedralSmooth(triN, v01, nb11, nbN))
+                flags |= 0x02u;
         }
+        const VectorSingle diagN = ComputeHeightfieldTriNormal(v00, v11, v10);
+        if(IsHeightfieldDihedralSmooth(triN, v11, v10, diagN))
+            flags |= 0x04u;
         if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx, cz))
             flags |= 0x08u;
         if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx, cz + 1u))
             flags |= 0x10u;
-        if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
+        if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz + 1u))
             flags |= 0x20u;
     }
     else{
-        const VectorSingle diagN = ComputeHeightfieldTriNormal(v00, v01, v10);
-        if(IsHeightfieldDihedralSmooth(triN, v10, v00, diagN))
+        const VectorSingle diagN = ComputeHeightfieldTriNormal(v00, v01, v11);
+        if(IsHeightfieldDihedralSmooth(triN, v00, v01, diagN))
             flags |= 0x01u;
-        if(cz + 2u < hf.rows && LoadHeightfieldCellVertices(hf, cx, cz + 1u, nb00, nb10, nb01, nb11)){
-            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb10);
-            if(IsHeightfieldDihedralSmooth(triN, v01, nb01, nbN))
+        if(cx + 2u < hf.cols && LoadHeightfieldCellVertices(hf, cx + 1u, cz, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb11);
+            if(IsHeightfieldDihedralSmooth(triN, v11, nb11, nbN))
                 flags |= 0x02u;
         }
-        if(cx + 2u < hf.cols && LoadHeightfieldCellVertices(hf, cx + 1u, cz, nb00, nb10, nb01, nb11)){
-            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb10);
-            if(IsHeightfieldDihedralSmooth(triN, v11, nb10, nbN))
+        if(cz > 0u && LoadHeightfieldCellVertices(hf, cx, cz - 1u, nb00, nb10, nb01, nb11)){
+            const VectorSingle nbN = ComputeHeightfieldTriNormal(nb00, nb01, nb11);
+            if(IsHeightfieldDihedralSmooth(triN, v10, nb00, nbN))
                 flags |= 0x04u;
         }
-        if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
+        if((flags & 0x05u) == 0x05u && IsHeightfieldGridVertexSmooth(hf, cx, cz))
             flags |= 0x08u;
-        if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx, cz + 1u))
+        if((flags & 0x03u) == 0x03u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz + 1u))
             flags |= 0x10u;
-        if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz + 1u))
+        if((flags & 0x06u) == 0x06u && IsHeightfieldGridVertexSmooth(hf, cx + 1u, cz))
             flags |= 0x20u;
     }
     return flags;
@@ -1303,7 +1943,7 @@ void PushHeightfieldSmoothedPoint(
     );
 }
 
-Manifold CollideConvexProxyAndHeightfieldWithRelative(
+void CollideConvexProxyAndHeightfieldWithRelativeMulti(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
     in VectorSingle rotA,
@@ -1313,11 +1953,14 @@ Manifold CollideConvexProxyAndHeightfieldWithRelative(
     in VectorSingle localPosA,
     in VectorSingle localRotA,
     in VectorSingle worldUp,
-    in f32 maxDistance
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Manifold outSecondaryManifold
 ){
-    Manifold m;
+    outManifold = Manifold();
+    outSecondaryManifold = Manifold();
     if(!hfB.isValid() || IsProxyViewEmpty(proxyA))
-        return m;
+        return;
 
     VectorSingle lMin(0.0f);
     VectorSingle lMax(0.0f);
@@ -1335,7 +1978,7 @@ Manifold CollideConvexProxyAndHeightfieldWithRelative(
     b8 anyOverlap = false;
     ComputeHeightfieldOverlappedCells(hfB, queryBox, minCx, maxCx, minCz, maxCz, anyOverlap);
     if(!anyOverlap)
-        return m;
+        return;
 
     const b8 isSphereA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u);
     const b8 isCapsuleA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 2u);
@@ -1367,11 +2010,16 @@ Manifold CollideConvexProxyAndHeightfieldWithRelative(
     const f32 qLoY = queryBox.lowerBound.y;
     const f32 qHiY = queryBox.upperBound.y;
     const f32 sphereLimSq = (totalR + maxDistance) * (totalR + maxDistance);
+    const b8 flipDiag = hfB.flipDiagonal;
 
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         const f32 z0 = oz + cast<f32>(cz) * sz;
         const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            if(hfB.isCellHoleBitSet(cx, cz))
+                continue;
+            if(!IsHeightfieldBlockOverlappingY(hfB, 0u, cx >> 1u, cz >> 1u, qLoY, qHiY))
+                continue;
             const usize r0 = cast<usize>(cz) * w + cast<usize>(cx);
             const usize r1 = r0 + w;
             const VectorSingle rawHeights(
@@ -1404,13 +2052,10 @@ Manifold CollideConvexProxyAndHeightfieldWithRelative(
             const VectorSingle v11(x1, h11, z1, 0.0f);
             const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
-                VectorSingle tv0 = v00;
-                const VectorSingle tv1 = v01;
-                VectorSingle tv2 = v10;
-                if(ti != 0u){
-                    tv0 = v10;
-                    tv2 = v11;
-                }
+                VectorSingle tv0(0.0f);
+                VectorSingle tv1(0.0f);
+                VectorSingle tv2(0.0f);
+                ExtractHeightfieldCellTriangle(flipDiag, ti, v00, v10, v01, v11, tv0, tv1, tv2);
                 const VectorSingle triMin = Min(tv0, Min(tv1, tv2));
                 const VectorSingle triMax = Max(tv0, Max(tv1, tv2));
                 if(!AabbOverlapsValues(triMin, triMax, qMin, qMax))
@@ -1552,8 +2197,48 @@ Manifold CollideConvexProxyAndHeightfieldWithRelative(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
-    return m;
+        ReduceMeshCandidatesMultiPlane(chosenNormal, candidates, maxDistance, outManifold, outSecondaryManifold);
+}
+
+Manifold CollideConvexProxyAndHeightfieldWithRelative(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HeightfieldShape hfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in VectorSingle localPosA,
+    in VectorSingle localRotA,
+    in VectorSingle worldUp,
+    in f32 maxDistance
+){
+    Manifold primary;
+    Manifold secondary;
+    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, primary, secondary);
+    return primary;
+}
+
+void CollideConvexProxyAndHeightfieldMulti(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HeightfieldShape hfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Manifold outSecondaryManifold
+){
+    outManifold = Manifold();
+    outSecondaryManifold = Manifold();
+    if(!hfB.isValid() || IsProxyViewEmpty(proxyA))
+        return;
+
+    VectorSingle localPosA(0.0f);
+    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
+    const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, outManifold, outSecondaryManifold);
 }
 
 Manifold CollideConvexProxyAndHeightfield(
@@ -1565,15 +2250,66 @@ Manifold CollideConvexProxyAndHeightfield(
     in VectorSingle rotB,
     in f32 maxDistance
 ){
-    Manifold m;
-    if(!hfB.isValid() || IsProxyViewEmpty(proxyA))
-        return m;
+    Manifold primary;
+    Manifold secondary;
+    CollideConvexProxyAndHeightfieldMulti(proxyA, posA, rotA, hfB, posB, rotB, maxDistance, primary, secondary);
+    return primary;
+}
 
-    VectorSingle localPosA(0.0f);
-    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
-    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
-    const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    return CollideConvexProxyAndHeightfieldWithRelative(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance);
+void PushHeightfieldASmoothedPoint(
+    in VectorSingle candNInit,
+    in VectorSingle candPtInit,
+    in VectorSingle candAncAInit,
+    in VectorSingle candAncBInit,
+    in f32 sepInit,
+    in u32 featureId,
+    in u32 cellIdxA,
+    in u32 triIdxB,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in VectorSingle posB,
+    in VectorSingle worldUpA,
+    in f32 hfAThickness,
+    in f32 maxDistance,
+    in VectorSingle tv0,
+    in VectorSingle tv1,
+    in VectorSingle tv2,
+    in VectorSingle triN,
+    in VectorSingle triWorldN,
+    in u8 edgeFlagsA,
+    mut f32 inoutDeepestSep,
+    mut VectorSingle inoutChosenNormal,
+    mut FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates
+){
+    VectorSingle candN = candNInit;
+    VectorSingle candPt = candPtInit;
+    VectorSingle candAncA = candAncAInit;
+    VectorSingle candAncB = candAncBInit;
+    f32 sep = sepInit;
+    if(edgeFlagsA != 0u){
+        const VectorSingle worldPtA = posA + candAncA;
+        const VectorSingle worldPtB = posB + candAncB;
+        const VectorSingle rawAToB = Vector3InverseRotate(candN, rotA);
+        const VectorSingle localTriPtA = InverseTransformPointValues(posA, rotA, worldPtA) - rawAToB * hfAThickness;
+        VectorSingle smoothedAToB = rawAToB;
+        if(SmoothMeshContactNormal(tv0, tv1, tv2, triN, edgeFlagsA, localTriPtA, rawAToB, smoothedAToB)){
+            const VectorSingle localPtB = InverseTransformPointValues(posA, rotA, worldPtB);
+            const f32 signedPlane = Vector3Dot(triN, VectorSingle(localPtB - tv0, 0.0f)).x - hfAThickness;
+            if(signedPlane > maxDistance)
+                return;
+            sep = signedPlane;
+            candN = SafeNormalizeVec3(Vector3Rotate(smoothedAToB, rotA), worldUpA);
+            candAncA = (worldPtB - candN * sep) - posA;
+            candPt = (posA + candAncA + worldPtB) * 0.5f;
+        }
+    }
+    if(Vector3Dot(candN, triWorldN).x <= 0.0f)
+        return;
+    if(sep < inoutDeepestSep){
+        inoutDeepestSep = sep;
+        inoutChosenNormal = candN;
+    }
+    PushMeshCandidateWithTris(candPt, candAncA, candAncB, candN, sep, featureId, cellIdxA, triIdxB, candidates);
 }
 
 Manifold CollideHeightfieldAndMesh(
@@ -1608,9 +2344,12 @@ Manifold CollideHeightfieldAndMesh(
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal = -worldUpA;
     f32 deepestSep = s_MaxF32;
+    const b8 flipDiagA = hfA.flipDiagonal;
 
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            if(!IsHeightfieldBlockOverlappingY(hfA, 0u, cx >> 1u, cz >> 1u, qMin.y, qMax.y))
+                continue;
             VectorSingle v00(0.0f); VectorSingle v10(0.0f); VectorSingle v01(0.0f); VectorSingle v11(0.0f);
             if(!LoadHeightfieldCellVertices(hfA, cx, cz, v00, v10, v01, v11))
                 continue;
@@ -1620,41 +2359,46 @@ Manifold CollideHeightfieldAndMesh(
                 continue;
             const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
-                Array<f32x3u, 3u> triPts;
-                if(ti == 0u){
-                    triPts[0u] = f32x3u(v00); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v10);
-                }
-                else{
-                    triPts[0u] = f32x3u(v10); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v11);
-                }
-                const VectorSingle tv0(triPts[0u].x, triPts[0u].y, triPts[0u].z, 0.0f);
-                const VectorSingle tv1(triPts[1u].x, triPts[1u].y, triPts[1u].z, 0.0f);
-                const VectorSingle tv2(triPts[2u].x, triPts[2u].y, triPts[2u].z, 0.0f);
+                VectorSingle tv0(0.0f);
+                VectorSingle tv1(0.0f);
+                VectorSingle tv2(0.0f);
+                ExtractHeightfieldCellTriangle(flipDiagA, ti, v00, v10, v01, v11, tv0, tv1, tv2);
                 if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), qMin, qMax))
                     continue;
-                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(ComputeHeightfieldTriNormal(tv0, tv1, tv2), rotA), worldUpA);
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = f32x3u(tv0); triPts[1u] = f32x3u(tv1); triPts[2u] = f32x3u(tv2);
+                const VectorSingle triN = ComputeHeightfieldTriNormal(tv0, tv1, tv2);
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotA), worldUpA);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfA.thickness);
                 const Manifold triM = CollideConvexProxyAndMesh(triView, posA, rotA, meshB, posB, rotB, maxDistance);
                 if(triM.pointCount() == 0u)
                     continue;
+                const u8 edgeFlagsA = ComputeHeightfieldTriangleEdgeFlags(hfA, cx, cz, ti, v00, v10, v01, v11, triN);
                 const VectorSingle nAtoB = triM.normal();
-                if(Vector3Dot(nAtoB, triWorldN).x <= 0.0f)
-                    continue;
                 for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
-                    const f32 sep = triM.points[pi].separation();
-                    if(sep < deepestSep){
-                        deepestSep = sep;
-                        chosenNormal = nAtoB;
-                    }
-                    PushMeshCandidateWithTris(
+                    PushHeightfieldASmoothedPoint(
+                        nAtoB,
                         triM.points[pi].point(),
                         triM.points[pi].anchorA(),
                         triM.points[pi].anchorB(),
-                        nAtoB,
-                        sep,
+                        triM.points[pi].separation(),
                         triM.pointId(pi),
                         cellIdx,
                         triM.materialTriangleB,
+                        posA,
+                        rotA,
+                        posB,
+                        worldUpA,
+                        hfA.thickness,
+                        maxDistance,
+                        tv0,
+                        tv1,
+                        tv2,
+                        triN,
+                        triWorldN,
+                        edgeFlagsA,
+                        deepestSep,
+                        chosenNormal,
                         candidates
                     );
                 }
@@ -1703,9 +2447,12 @@ Manifold CollideHeightfields(
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal = -worldUpA;
     f32 deepestSep = s_MaxF32;
+    const b8 flipDiagA = hfA.flipDiagonal;
 
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            if(!IsHeightfieldBlockOverlappingY(hfA, 0u, cx >> 1u, cz >> 1u, qMin.y, qMax.y))
+                continue;
             VectorSingle v00(0.0f); VectorSingle v10(0.0f); VectorSingle v01(0.0f); VectorSingle v11(0.0f);
             if(!LoadHeightfieldCellVertices(hfA, cx, cz, v00, v10, v01, v11))
                 continue;
@@ -1719,41 +2466,46 @@ Manifold CollideHeightfields(
                 continue;
             const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
-                Array<f32x3u, 3u> triPts;
-                if(ti == 0u){
-                    triPts[0u] = f32x3u(v00); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v10);
-                }
-                else{
-                    triPts[0u] = f32x3u(v10); triPts[1u] = f32x3u(v01); triPts[2u] = f32x3u(v11);
-                }
-                const VectorSingle tv0(triPts[0u].x, triPts[0u].y, triPts[0u].z, 0.0f);
-                const VectorSingle tv1(triPts[1u].x, triPts[1u].y, triPts[1u].z, 0.0f);
-                const VectorSingle tv2(triPts[2u].x, triPts[2u].y, triPts[2u].z, 0.0f);
+                VectorSingle tv0(0.0f);
+                VectorSingle tv1(0.0f);
+                VectorSingle tv2(0.0f);
+                ExtractHeightfieldCellTriangle(flipDiagA, ti, v00, v10, v01, v11, tv0, tv1, tv2);
                 if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), qMin, qMax))
                     continue;
-                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(ComputeHeightfieldTriNormal(tv0, tv1, tv2), rotA), worldUpA);
+                Array<f32x3u, 3u> triPts;
+                triPts[0u] = f32x3u(tv0); triPts[1u] = f32x3u(tv1); triPts[2u] = f32x3u(tv2);
+                const VectorSingle triN = ComputeHeightfieldTriNormal(tv0, tv1, tv2);
+                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotA), worldUpA);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hfA.thickness);
                 const Manifold triM = CollideConvexProxyAndHeightfieldWithRelative(triView, posA, rotA, hfB, posB, rotB, localPosAInB, localRotAInB, worldUpB, maxDistance);
                 if(triM.pointCount() == 0u)
                     continue;
+                const u8 edgeFlagsA = ComputeHeightfieldTriangleEdgeFlags(hfA, cx, cz, ti, v00, v10, v01, v11, triN);
                 const VectorSingle nAtoB = triM.normal();
-                if(Vector3Dot(nAtoB, triWorldN).x <= 0.0f)
-                    continue;
                 for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
-                    const f32 sep = triM.points[pi].separation();
-                    if(sep < deepestSep){
-                        deepestSep = sep;
-                        chosenNormal = nAtoB;
-                    }
-                    PushMeshCandidateWithTris(
+                    PushHeightfieldASmoothedPoint(
+                        nAtoB,
                         triM.points[pi].point(),
                         triM.points[pi].anchorA(),
                         triM.points[pi].anchorB(),
-                        nAtoB,
-                        sep,
+                        triM.points[pi].separation(),
                         triM.pointId(pi),
                         cellIdx,
                         triM.materialTriangleB,
+                        posA,
+                        rotA,
+                        posB,
+                        worldUpA,
+                        hfA.thickness,
+                        maxDistance,
+                        tv0,
+                        tv1,
+                        tv2,
+                        triN,
+                        triWorldN,
+                        edgeFlagsA,
+                        deepestSep,
+                        chosenNormal,
                         candidates
                     );
                 }

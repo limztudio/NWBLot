@@ -8,12 +8,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bounds, in Rect clip, in Insets padding, in Point contentMeasure, in f32 caretWidth, in Point previousScroll, in f32 thickness, in f32 minThumb){
+Expected<ScrollViewportPlacement> CalculateScrollViewportPlacementCoreF64(
+    in Rect bounds,
+    in Rect clip,
+    in Insets padding,
+    in f64 contentWidth,
+    in f64 contentHeight,
+    in f64 previousScrollX,
+    in f64 previousScrollY,
+    in f32 thickness,
+    in f32 minThumb,
+    in ScrollbarPolicy horizontalPolicy,
+    in ScrollbarPolicy verticalPolicy
+){
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
-        || !IsValidUiExtent(contentMeasure) || !IsValidUiExtent(previousScroll)
-        || !IsFinite(VectorSingle(caretWidth, thickness, minThumb, 0.0f)) || caretWidth <= 0.0f
+        || !IsFinite(VectorDouble(contentWidth, contentHeight, previousScrollX, previousScrollY))
+        || contentWidth < 0.0 || contentHeight < 0.0 || previousScrollX < 0.0 || previousScrollY < 0.0
+        || !IsFinite(VectorSingle(thickness, minThumb, 0.0f, 0.0f))
         || thickness < 0.0f || minThumb < 0.0f
+        || horizontalPolicy > ScrollbarPolicy::Never
+        || verticalPolicy > ScrollbarPolicy::Never
     )
         return MakeUnexpected(Failure());
     const Expected<Rect> paddedOpt = TryInsetUiRect(bounds, padding, UiRectPrecision::RoundedEndpoints);
@@ -22,40 +37,23 @@ Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bound
     const Rect padded = paddedOpt.value();
     const f64 availableWidth = cast<f64>(padded.width);
     const f64 availableHeight = cast<f64>(padded.height);
-    const VectorDouble barExtent = Min(VectorDouble(cast<f64>(thickness)), VectorDouble(availableWidth, availableHeight, 0.0, 0.0));
-    const f64 verticalWidth = barExtent.x;
-    const f64 horizontalHeight = barExtent.y;
-    const VectorDouble contentExtent = VectorDouble(cast<f64>(contentMeasure.x), cast<f64>(contentMeasure.y), 0.0, 0.0) + VectorDouble(cast<f64>(caretWidth), 0.0, 0.0, 0.0);
-    const f64 contentWidth = contentExtent.x;
-    const f64 contentHeight = contentExtent.y;
-    if(!IsFinite(contentExtent.xy))
-        return MakeUnexpected(Failure());
     b8 horizontal = false;
     b8 vertical = false;
-    for(u32 iteration = 0u; iteration < s_ScrollbarReservationPassLimit; ++iteration){
-        f64 reservedWidth = 0.0;
-        if(vertical)
-            reservedWidth = verticalWidth;
-        f64 reservedHeight = 0.0;
-        if(horizontal)
-            reservedHeight = horizontalHeight;
-        const VectorDouble available = VectorDouble(availableWidth, availableHeight, availableWidth, availableHeight) - VectorDouble(reservedWidth, reservedHeight, reservedWidth, reservedHeight);
-        const VectorSingle rounded(cast<f32>(available.x), cast<f32>(available.y), cast<f32>(available.x), cast<f32>(available.y));
-        const f64 viewportWidth = cast<f64>(rounded.x);
-        const f64 viewportHeight = cast<f64>(rounded.y);
-        const b8 nextHorizontal = horizontal || (horizontalHeight > 0.0 && availableWidth > 0.0 && contentWidth > viewportWidth);
-        const b8 nextVertical = vertical || (verticalWidth > 0.0 && availableHeight > 0.0 && contentHeight > viewportHeight);
-        if(nextHorizontal == horizontal && nextVertical == vertical)
-            break;
-        horizontal = nextHorizontal;
-        vertical = nextVertical;
-    }
     f64 barWidth = 0.0;
-    if(vertical)
-        barWidth = verticalWidth;
     f64 barHeight = 0.0;
-    if(horizontal)
-        barHeight = horizontalHeight;
+    ReserveScrollViewportAxes(
+        availableWidth,
+        availableHeight,
+        contentWidth,
+        contentHeight,
+        cast<f64>(thickness),
+        horizontalPolicy,
+        verticalPolicy,
+        horizontal,
+        vertical,
+        barWidth,
+        barHeight
+    );
     ScrollViewportPlacement candidate;
     const f64 paddedX = cast<f64>(padded.x);
     const f64 paddedY = cast<f64>(padded.y);
@@ -95,15 +93,104 @@ Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bound
             return MakeUnexpected(Failure());
         candidate.corner = corner.value();
     }
-    const Expected<ScrollbarPlacement> hPlacement = TryBuildScrollbarPlacement(contentWidth, viewportWidth, horizontalTrack, minThumb, cast<f64>(previousScroll.x), ScrollAxis::Horizontal);
+    f64 hContent = contentWidth;
+    f64 hOffset = previousScrollX;
+    if(horizontalPolicy == ScrollbarPolicy::Never){
+        hContent = viewportWidth;
+        hOffset = 0.0;
+    }
+    f64 vContent = contentHeight;
+    f64 vOffset = previousScrollY;
+    if(verticalPolicy == ScrollbarPolicy::Never){
+        vContent = viewportHeight;
+        vOffset = 0.0;
+    }
+    const Expected<ScrollbarPlacement> hPlacement = TryBuildScrollbarPlacement(hContent, viewportWidth, horizontalTrack, minThumb, hOffset, ScrollAxis::Horizontal);
     if(!hPlacement.has_value())
         return MakeUnexpected(Failure());
     candidate.horizontal = hPlacement.value();
-    const Expected<ScrollbarPlacement> vPlacement = TryBuildScrollbarPlacement(contentHeight, viewportHeight, verticalTrack, minThumb, cast<f64>(previousScroll.y), ScrollAxis::Vertical);
+    const Expected<ScrollbarPlacement> vPlacement = TryBuildScrollbarPlacement(vContent, viewportHeight, verticalTrack, minThumb, vOffset, ScrollAxis::Vertical);
     if(!vPlacement.has_value())
         return MakeUnexpected(Failure());
     candidate.vertical = vPlacement.value();
     return candidate;
+}
+
+Expected<ScrollViewportPlacement> CalculateScrollViewportPlacementCore(
+    in Rect bounds,
+    in Rect clip,
+    in Insets padding,
+    in f64 contentWidth,
+    in f64 contentHeight,
+    in Point previousScroll,
+    in f32 thickness,
+    in f32 minThumb,
+    in ScrollbarPolicy horizontalPolicy,
+    in ScrollbarPolicy verticalPolicy
+){
+    if(!IsValidUiExtent(previousScroll))
+        return MakeUnexpected(Failure());
+    return CalculateScrollViewportPlacementCoreF64(
+        bounds,
+        clip,
+        padding,
+        contentWidth,
+        contentHeight,
+        cast<f64>(previousScroll.x),
+        cast<f64>(previousScroll.y),
+        thickness,
+        minThumb,
+        horizontalPolicy,
+        verticalPolicy
+    );
+}
+
+Expected<ScrollViewportPlacement> CalculateScrollViewportPlacementWithPolicies(
+    in Rect bounds,
+    in Rect clip,
+    in Insets padding,
+    in Point contentMeasure,
+    in Point previousScroll,
+    in f32 thickness,
+    in f32 minThumb,
+    in ScrollbarPolicy horizontalPolicy,
+    in ScrollbarPolicy verticalPolicy
+){
+    if(!IsValidUiExtent(contentMeasure))
+        return MakeUnexpected(Failure());
+    return CalculateScrollViewportPlacementCore(
+        bounds,
+        clip,
+        padding,
+        cast<f64>(contentMeasure.x),
+        cast<f64>(contentMeasure.y),
+        previousScroll,
+        thickness,
+        minThumb,
+        horizontalPolicy,
+        verticalPolicy
+    );
+}
+
+Expected<ScrollViewportPlacement> CalculateScrollViewportPlacement(in Rect bounds, in Rect clip, in Insets padding, in Point contentMeasure, in f32 caretWidth, in Point previousScroll, in f32 thickness, in f32 minThumb){
+    if(
+        !IsValidUiExtent(contentMeasure)
+        || !IsFinite(VectorSingle(caretWidth)) || caretWidth <= 0.0f
+    )
+        return MakeUnexpected(Failure());
+    const VectorDouble contentExtent = VectorDouble(cast<f64>(contentMeasure.x), cast<f64>(contentMeasure.y), 0.0, 0.0) + VectorDouble(cast<f64>(caretWidth), 0.0, 0.0, 0.0);
+    return CalculateScrollViewportPlacementCore(
+        bounds,
+        clip,
+        padding,
+        contentExtent.x,
+        contentExtent.y,
+        previousScroll,
+        thickness,
+        minThumb,
+        ScrollbarPolicy::Auto,
+        ScrollbarPolicy::Auto
+    );
 }
 
 b8 TryUpdateScrollViewportOffsets(in Point scroll, mut ScrollViewportPlacement placement){
@@ -188,21 +275,22 @@ Name ResolveScrollbarThumbRegionName(in ScrollbarStyle style, in b8 enabled, in 
     return style.thumb;
 }
 
-void ResolveScrollbarBeforeAfterRects(
-    in ScrollbarPlacement bar,
+void ResolveScrollTrackBeforeAfterRects(
+    in Rect track,
+    in Rect thumb,
     in b8 horizontal,
     mut Rect outBeforeRect,
     mut Rect outAfterRect
 ){
-    f32 start = bar.track.y;
-    f32 thumbStart = bar.thumb.y;
-    f32 trackExtent = bar.track.height;
-    f32 thumbExtent = bar.thumb.height;
+    f32 start = track.y;
+    f32 thumbStart = thumb.y;
+    f32 trackExtent = track.height;
+    f32 thumbExtent = thumb.height;
     if(horizontal){
-        start = bar.track.x;
-        thumbStart = bar.thumb.x;
-        trackExtent = bar.track.width;
-        thumbExtent = bar.thumb.width;
+        start = track.x;
+        thumbStart = thumb.x;
+        trackExtent = track.width;
+        thumbExtent = thumb.width;
     }
     const VectorSingle zeroVec(0.0f);
     const VectorSingle marginInputs(
@@ -214,8 +302,8 @@ void ResolveScrollbarBeforeAfterRects(
     const VectorSingle clampedMargins = VectorSelect(marginInputs, zeroVec, VectorGreater(zeroVec, marginInputs));
     const f32 before = clampedMargins.x;
     const f32 after = clampedMargins.y;
-    outBeforeRect = bar.track;
-    outAfterRect = bar.track;
+    outBeforeRect = track;
+    outAfterRect = track;
     if(horizontal){
         outBeforeRect.width = before;
         outAfterRect.x = thumbStart + thumbExtent;
@@ -226,6 +314,149 @@ void ResolveScrollbarBeforeAfterRects(
         outAfterRect.y = thumbStart + thumbExtent;
         outAfterRect.height = after;
     }
+}
+
+void ResolveScrollbarBeforeAfterRects(
+    in ScrollbarPlacement bar,
+    in b8 horizontal,
+    mut Rect outBeforeRect,
+    mut Rect outAfterRect
+){
+    ResolveScrollTrackBeforeAfterRects(bar.track, bar.thumb, horizontal, outBeforeRect, outAfterRect);
+}
+
+u8 SelectNextScrollInputStream(
+    in b8 haveHorizontal,
+    in u64 horizontalSequence,
+    in b8 haveVertical,
+    in u64 verticalSequence,
+    in b8 haveAction,
+    in u64 actionSequence
+){
+    if(haveHorizontal && (!haveVertical || horizontalSequence <= verticalSequence) && (!haveAction || horizontalSequence <= actionSequence))
+        return 0u;
+    if(haveVertical && (!haveAction || verticalSequence <= actionSequence))
+        return 1u;
+    return 2u;
+}
+
+Expected<ListScrollPlacementResult> CalculateListScrollPlacement(
+    in Rect bounds,
+    in Rect inheritedClip,
+    in Insets padding,
+    in f32 scrollbarWidth,
+    in f32 minimumThumb,
+    in u64 rowCount,
+    in f32 rowHeight,
+    in Span<f64> rowOffsets,
+    in f64 contentWidth,
+    in f64 offsetX,
+    in f64 offsetY,
+    in ScrollbarPolicy horizontalPolicy,
+    in ScrollbarPolicy verticalPolicy
+){
+    if(
+        (!rowOffsets.empty() && rowOffsets.size() != cast<usize>(rowCount) + 1u)
+        || !IsFinite(VectorDouble(contentWidth, offsetX, offsetY, 0.0))
+        || contentWidth < 0.0 || offsetX < 0.0 || offsetY < 0.0
+    )
+        return MakeUnexpected(Failure());
+    if(horizontalPolicy == ScrollbarPolicy::Never && verticalPolicy == ScrollbarPolicy::Auto && rowOffsets.empty()){
+        const Expected<ScrollPlacement> uniform = CalculateScrollPlacement(
+            bounds,
+            inheritedClip,
+            padding,
+            scrollbarWidth,
+            minimumThumb,
+            rowCount,
+            rowHeight,
+            offsetY
+        );
+        if(!uniform.has_value())
+            return MakeUnexpected(Failure());
+        ListScrollPlacementResult result;
+        result.placement = uniform.value();
+        result.scrollbars.viewport = uniform.value().viewport;
+        result.scrollbars.contentClip = uniform.value().contentClip;
+        result.scrollbars.horizontal.contentExtent = cast<f64>(uniform.value().viewport.width);
+        result.scrollbars.horizontal.viewportExtent = cast<f64>(uniform.value().viewport.width);
+        result.scrollbars.vertical.track = uniform.value().track;
+        result.scrollbars.vertical.thumb = uniform.value().thumb;
+        result.scrollbars.vertical.contentExtent = uniform.value().contentHeight;
+        result.scrollbars.vertical.viewportExtent = cast<f64>(uniform.value().viewport.height);
+        result.scrollbars.vertical.maximum = uniform.value().maxOffset;
+        result.scrollbars.vertical.offset = uniform.value().offset;
+        result.scrollbars.vertical.visible = uniform.value().scrollbarVisible;
+        return result;
+    }
+    if(!IsFinite(VectorSingle(rowHeight)) || rowHeight <= 0.0f)
+        return MakeUnexpected(Failure());
+    f64 contentHeight = 0.0;
+    if(rowOffsets.empty())
+        contentHeight = cast<f64>(rowCount) * cast<f64>(rowHeight);
+    else
+        contentHeight = rowOffsets[cast<usize>(rowCount)];
+    if(!IsFinite(VectorDouble(contentHeight)) || contentHeight < 0.0)
+        return MakeUnexpected(Failure());
+    const Expected<ScrollViewportPlacement> scrollbarsOpt = CalculateScrollViewportPlacementCoreF64(
+        bounds,
+        inheritedClip,
+        padding,
+        contentWidth,
+        contentHeight,
+        offsetX,
+        offsetY,
+        scrollbarWidth,
+        minimumThumb,
+        horizontalPolicy,
+        verticalPolicy
+    );
+    if(!scrollbarsOpt.has_value())
+        return MakeUnexpected(Failure());
+    in ScrollViewportPlacement sb = scrollbarsOpt.value();
+    ListScrollPlacementResult result;
+    result.scrollbars = sb;
+    result.placement.bounds = bounds;
+    result.placement.viewport = sb.viewport;
+    result.placement.contentClip = sb.contentClip;
+    result.placement.track = sb.vertical.track;
+    result.placement.thumb = sb.vertical.thumb;
+    result.placement.contentHeight = sb.vertical.contentExtent;
+    result.placement.maxOffset = sb.vertical.maximum;
+    result.placement.offset = sb.vertical.offset;
+    result.placement.rowCount = rowCount;
+    result.placement.scrollbarVisible = sb.vertical.visible;
+    if(sb.contentClip.width > 0.0f && sb.contentClip.height > 0.0f && rowCount > 0u){
+        const f64 clippedTop = cast<f64>(sb.contentClip.y) - cast<f64>(sb.viewport.y);
+        const f64 startPos = sb.vertical.offset + clippedTop;
+        const f64 endPos = startPos + cast<f64>(sb.contentClip.height);
+        const f64 clampedStart = UiSimdMaxF64(0.0, startPos);
+        const f64 clampedEnd = UiSimdMaxF64(0.0, endPos);
+        if(!rowOffsets.empty()){
+            CalculateVariableRowScrollRange(rowOffsets, clampedStart, clampedEnd, result.placement.firstRow, result.placement.endRow);
+        }
+        else{
+            const f64 rowHeightF64 = cast<f64>(rowHeight);
+            const f64 firstRow = VectorDoubleFloor(VectorDouble(clampedStart / rowHeightF64)).x;
+            const f64 endRow = VectorDoubleCeiling(VectorDouble(clampedEnd / rowHeightF64)).x;
+            const f64 rowCountF64 = cast<f64>(rowCount);
+            if(firstRow >= rowCountF64)
+                result.placement.firstRow = rowCount;
+            else if(firstRow <= 0.0)
+                result.placement.firstRow = 0u;
+            else
+                result.placement.firstRow = cast<u64>(firstRow);
+            u64 boundedEnd = 0u;
+            if(endRow >= rowCountF64)
+                boundedEnd = rowCount;
+            else if(endRow <= 0.0)
+                boundedEnd = 0u;
+            else
+                boundedEnd = cast<u64>(endRow);
+            result.placement.endRow = Max(result.placement.firstRow, boundedEnd);
+        }
+    }
+    return result;
 }
 
 

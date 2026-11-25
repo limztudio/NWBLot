@@ -11,16 +11,25 @@
 
 class ListState : NoCopy{
     public ListMeasureKey m_measureKey;
+    public Vector<u64> m_selectedKeys;
+    public HashSet<u64> m_selectedKeySet;
+    public Vector<f64> m_rowOffsets;
     public f32 m_rowHeight = 0.0f;
     public f32 m_scrollRowHeight = 0.0f;
     public u64 m_scrollSourceGeneration = 0u;
     public ScrollState m_scroll;
+    public ScrollState m_scrollX;
     public ScrollPlacement m_placement;
+    public ScrollViewportPlacement m_scrollbars;
     public u64 m_inputGeneration = AllocateServiceIdentity();
     public u64 m_selected = 0u;
     public u64 m_cursor = 0u;
+    public u64 m_anchor = 0u;
     public u64 m_sourceGeneration = 0u;
     public u64 m_sourceRevision = 0u;
+    public u64 m_visibleFirstRow = 0u;
+    public u64 m_visibleEndRow = 0u;
+    public f64 m_contentWidth = 0.0;
     public b8 m_ensureCursor = false;
 
     public u64 instanceGeneration()const{
@@ -39,19 +48,99 @@ class ListState : NoCopy{
         return this.m_cursor;
     }
 
+    public u64 anchorKey()const{
+        return this.m_anchor;
+    }
+
+    public in Vector<u64> selectedKeys()const{
+        return this.m_selectedKeys;
+    }
+
+    public usize selectedCount()const{
+        return this.m_selectedKeys.size();
+    }
+
+    public b8 isSelected(in u64 key)const{
+        return key != 0u && (this.m_selected == key || this.m_selectedKeySet.find(key) != this.m_selectedKeySet.end());
+    }
+
     public f64 scrollOffset()const{
         return this.m_scroll.offset();
+    }
+
+    public f64 scrollOffsetX()const{
+        return this.m_scrollX.offset();
     }
 
     public in ScrollPlacement placement()const{
         return this.m_placement;
     }
 
+    public in ScrollViewportPlacement scrollbars()const{
+        return this.m_scrollbars;
+    }
+
+    public u64 visibleFirstRow()const{
+        return this.m_visibleFirstRow;
+    }
+
+    public u64 visibleEndRow()const{
+        return this.m_visibleEndRow;
+    }
+
     public void select(in u64 key){
         this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKeys.clear();
+        this.m_selectedKeySet.clear();
+        if(key != 0u){
+            this.m_selectedKeys.push_back(key);
+            this.m_selectedKeySet.insert(key);
+        }
         this.m_selected = key;
         this.m_cursor = key;
+        this.m_anchor = key;
         this.m_ensureCursor = key != 0u;
+    }
+
+    public void setSelected(in u64 key, in b8 selected){
+        if(key == 0u)
+            return;
+        this.m_inputGeneration = AllocateServiceIdentity();
+        if(selected){
+            if(this.m_selectedKeySet.find(key) == this.m_selectedKeySet.end()){
+                this.m_selectedKeys.push_back(key);
+                this.m_selectedKeySet.insert(key);
+            }
+            this.m_selected = key;
+            this.m_cursor = key;
+            this.m_anchor = key;
+            this.m_ensureCursor = true;
+        }
+        else{
+            this.m_selectedKeySet.erase(key);
+            for(usize index = 0u; index < this.m_selectedKeys.size(); ++index){
+                if(this.m_selectedKeys[index] == key){
+                    this.m_selectedKeys.erase(this.m_selectedKeys.begin() + cast<isize>(index));
+                    break;
+                }
+            }
+            if(this.m_selected == key){
+                if(this.m_selectedKeys.empty())
+                    this.m_selected = 0u;
+                else
+                    this.m_selected = this.m_selectedKeys.back();
+            }
+            if(this.m_anchor == key)
+                this.m_anchor = this.m_selected;
+        }
+    }
+
+    public void clearSelection(){
+        this.m_inputGeneration = AllocateServiceIdentity();
+        this.m_selectedKeys.clear();
+        this.m_selectedKeySet.clear();
+        this.m_selected = 0u;
+        this.m_anchor = 0u;
     }
 
     public b8 scrollTo(in f64 offset){
@@ -59,6 +148,13 @@ class ListState : NoCopy{
             return false;
         this.m_inputGeneration = AllocateServiceIdentity();
         this.m_ensureCursor = false;
+        return true;
+    }
+
+    public b8 scrollToX(in f64 offset){
+        if(!this.m_scrollX.setOffset(offset))
+            return false;
+        this.m_inputGeneration = AllocateServiceIdentity();
         return true;
     }
 }
@@ -100,7 +196,7 @@ b8 ValidateListControlActionHeader(in ListOptions options, in ControlToken token
     return IsValidListOptions(options)
         && token.valid()
         && action.control == token
-        && cast<u8>(action.kind) <= cast<u8>(ControlActionKind::Activate)
+        && cast<u8>(action.kind) <= cast<u8>(ControlActionKind::Right)
         && !((action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown) && action.pageRows == 0u);
 }
 
@@ -172,6 +268,25 @@ Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture){
     return fraction * gesture.maximum;
 }
 
+Expected<f64> TryComputeListHorizontalWheelOffset(in f64 current, in f64 deltaX, in f64 stepX, in f64 maximumX){
+    if(!IsFinite(VectorDouble(deltaX, stepX, maximumX, 0.0)) || stepX <= 0.0 || maximumX < 0.0)
+        return MakeUnexpected(Failure());
+    return TryComputeListWheelOffset(current, -deltaX, stepX, maximumX);
+}
+
+Expected<f64> TryComputeListHorizontalGestureScrollOffset(in PointerGesture gesture){
+    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
+    if(!IsFinite(VectorDouble(cast<f64>(travel), cast<f64>(gesture.maximum), 0.0, 0.0)) || travel <= 0.0 || gesture.maximum < 0.0)
+        return MakeUnexpected(Failure());
+    const f64 start = cast<f64>(gesture.targetRectangle.x) - cast<f64>(gesture.referenceRectangle.x);
+    const f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
+    const f64 fractionValue = (start + delta) / travel;
+    f64 fraction = 0.0;
+    if(fractionValue > 0.0)
+        fraction = UiSimdMinF64(1.0, fractionValue);
+    return fraction * gesture.maximum;
+}
+
 Expected<ListMeasureKey> TryBuildListMeasureKey(
     in u64 sourceGeneration,
     in u64 sourceRevision,
@@ -182,7 +297,10 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
     in DisplayMetrics display,
     in SelectableMetrics metrics,
     in u32 scriptTag,
-    in StringView textLanguage
+    in StringView textLanguage,
+    in TextDirection textDirection,
+    in u64 rowHeightRevision,
+    in b8 variableRowHeights
 ){
     ListMeasureKey key;
     if(textLanguage.size() >= key.language.size())
@@ -192,6 +310,8 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
     key.rowCount = rowCount;
     key.textIdentity = textIdentity;
     key.textGeneration = textGeneration;
+    key.rowHeightRevision = rowHeightRevision;
+    key.variableRowHeights = variableRowHeights;
     key.fontSize = fontSize;
     key.pixelScaleX = display.pixelScaleX;
     key.pixelScaleY = display.pixelScaleY;
@@ -202,6 +322,7 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
     key.rowMetrics[4u] = metrics.minimum.x;
     key.rowMetrics[5u] = metrics.minimum.y;
     key.scriptTag = scriptTag;
+    key.direction = textDirection;
     key.languageLength = cast<u8>(textLanguage.size());
     for(usize index = 0u; index < textLanguage.size(); ++index){
         key.language[index] = cast<u8>(textLanguage[index]);
@@ -209,6 +330,36 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
             key.languageLength = cast<u8>(index);
     }
     return key;
+}
+
+Expected<ListMeasureKey> TryBuildListMeasureKey(
+    in u64 sourceGeneration,
+    in u64 sourceRevision,
+    in u64 rowCount,
+    in u64 textIdentity,
+    in u64 textGeneration,
+    in f32 fontSize,
+    in DisplayMetrics display,
+    in SelectableMetrics metrics,
+    in u32 scriptTag,
+    in StringView textLanguage,
+    in TextDirection textDirection
+){
+    return TryBuildListMeasureKey(
+        sourceGeneration,
+        sourceRevision,
+        rowCount,
+        textIdentity,
+        textGeneration,
+        fontSize,
+        display,
+        metrics,
+        scriptTag,
+        textLanguage,
+        textDirection,
+        0u,
+        false
+    );
 }
 
 Rect ResolveListProbeRect(in UiSkinRegion background, in Insets padding, in f32 scrollbarWidth, in f32 rowHeight){

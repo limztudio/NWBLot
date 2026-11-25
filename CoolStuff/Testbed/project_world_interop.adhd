@@ -7,6 +7,7 @@
 #include <impl/assets_ui_skin/asset.adhd>
 #include <impl/assets_ui_skin/types.adhd>
 #include <impl/ecs_mesh/skinning/system.adhd>
+#include <impl/ecs_mesh/soft_body/system.adhd>
 #include <impl/ecs_mesh/system.adhd>
 #include <impl/ecs_model/system.adhd>
 #include <impl/ecs_model_renderer/model_renderer.adhd>
@@ -93,13 +94,124 @@ class TestbedPhysicsHudStats{
     public f32 ccdMs = 0.0f;
 }
 
+enum<u8> TestbedControlMode{
+    Camera = 0u,
+    Character = 1u,
+    Vehicle = 2u,
+    kCount
+}
+
+enum<u8> TestbedUiTab{
+    Sim = 0u,
+    Debug = 1u,
+    Spawn = 2u,
+    Params = 3u,
+    Inspect = 4u,
+    kCount
+}
+
+enum<u8> TestbedSpawnKind{
+    Box = 0u,
+    Sphere = 1u,
+    Capsule = 2u,
+    Cylinder = 3u,
+    Cone = 4u,
+    Stack = 5u,
+    Barrel = 6u,
+    SoftBody = 7u,
+    Ragdoll = 8u,
+    Articulation = 9u,
+    Character = 10u,
+    Vehicle = 11u,
+    kCount
+}
+
+enum<u8> TestbedGrabTargetKind{
+    None = 0u,
+    RigidBody = 1u,
+    RagdollBone = 2u,
+    SoftBodyParticle = 3u,
+    ArticulationLink = 4u,
+    GizmoAxis = 5u,
+    kCount
+}
+
 class TestbedGrabState{
     public b8 active = false;
     public EntityID entity = s_InvalidEntityId;
+    public TestbedGrabTargetKind targetKind = TestbedGrabTargetKind::None;
+    public u32 targetSubIndex = 0u;
     public f32x4 localAnchor(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 grabWorldPoint(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 targetWorldPoint(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 distance = 0.0f;
+    public f32x4 gizmoAxisWorld(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 gizmoStartOrigin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 gizmoStartParam = 0.0f;
+    public b8 hoveredGizmoActive = false;
+    public u32 hoveredGizmoAxis = s_NullIndex;
+}
+
+class TestbedShowcaseRefs{
+    public EntityID characterEntity = s_InvalidEntityId;
+    public EntityID vehicleEntity = s_InvalidEntityId;
+    public EntityID oscKinematicEntity = s_InvalidEntityId;
+    public EntityID sensorEntity = s_InvalidEntityId;
+    public EntityID breakableJointEntity = s_InvalidEntityId;
+    public f32 kinematicPhase = 0.0f;
+    public f32x4 kinematicBasePos(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class TestbedPhysicsRuntimeParams{
+    public f32 gravityY = -9.81f;
+    public u32 subStepCount = 4u;
+    public f32 fixedHz = 60.0f;
+    public f32 contactHertz = s_MaxContactHertz;
+    public f32 gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
+    public b8 enableSleep = true;
+    public b8 enableContinuous = true;
+    public b8 enableWarmStarting = true;
+}
+
+class TestbedSelectedEntityInfo{
+    public EntityID entity = s_InvalidEntityId;
+    public b8 valid = false;
+    public b8 hasBody = false;
+    public b8 isDynamic = false;
+    public b8 isKinematic = false;
+    public b8 isEnabled = true;
+    public b8 isAwake = false;
+    public b8 isBullet = false;
+    public BodyType bodyType = BodyType::Static;
+    public u8 subsystemTag = 0u;
+    public f32 gravityScale = 1.0f;
+    public f32 mass = 0.0f;
+    public f32 speed = 0.0f;
+    public f32 friction = 0.6f;
+    public f32 restitution = 0.0f;
+    public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 angularVelocity(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+interface IProjectPreStepHandler{
+    void onPhysicsPreStep(mut World world, mut PhysicsWorld physicsWorld, in f32 fixedDt);
+}
+
+void BindTestbedPhysicsPreStepCallback(mut NotNullUniquePtr<World> worldHandle, mut IProjectPreStepHandler handler){
+    const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+    EcsPhysicsPreStepCallback cb = lambda[mut handler](mut World world, mut PhysicsWorld pw, in f32 fixedDt) -> void{
+        handler.onPhysicsPreStep(world, pw, fixedDt);
+    };
+    physicsSystem.value().setPreStepCallback(cb);
+}
+
+void ClearTestbedPhysicsPreStepCallback(mut NotNullUniquePtr<World> worldHandle){
+    const Optional<mut PhysicsSystem> physicsSystem = worldHandle.deref().borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().clearPreStepCallback();
 }
 
 class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
@@ -359,24 +471,29 @@ Expected<NotNullUniquePtr<World>> CreateInitialProjectWorld(mut ProjectRuntimeCo
     mut NotNullUniquePtr<World> worldHandle = finalized.value();
     mut World world = worldHandle.deref();
 
-    world.addSystem<PhysicsSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
+    mut PhysicsSystem physicsSystem = world.addSystem<PhysicsSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
     mut MeshSystem meshSystem = world.addSystem<MeshSystem>(world);
     mut RendererSystem rendererSystem = world.addSystem<RendererSystem>(world, context.graphics, context.assetManager, context.shaderPathResolver);
     world.addSystem<ModelSystem>(world, context.assetManager, CreateModelObjectRendererHooks());
     mut MeshSkinningSystem meshSkinningSystem = world.addSystem<MeshSkinningSystem>(world, context.graphics, context.assetManager, meshSystem, context.shaderPathResolver);
+    mut SoftBodyMeshSystem softBodyMeshSystem = world.addSystem<SoftBodyMeshSystem>(world, context.graphics, context.assetManager, meshSystem);
     mut UiLayerSystem uiLayerSystem = world.addSystem<UiLayerSystem>(
         world,
         context.graphics,
         context.input,
         context.clipboard,
         context.textInput,
+        context.cursor,
+        context.accessibility,
         context.assetManager,
         context.shaderPathResolver,
         AssetRef<UiSkin>(),
         UiLayerPresentation::Scene
     );
 
+    rendererSystem.setInstanceTransformPatchContributor(Optional<mut IGpuTaskGraphInstanceTransformPatchContributor>(physicsSystem));
     context.graphics.addRenderPassToBack(meshSkinningSystem);
+    context.graphics.addRenderPassToBack(softBodyMeshSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiLayerSystem);
     mut FrameGraphRegistry registry = context.frameGraphRegistry;
@@ -391,20 +508,27 @@ void DestroyInitialProjectWorld(mut ProjectRuntimeContext context, mut NotNullUn
     mut World world = worldHandle.deref();
     world.taskScope().wait();
 
-    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
-    if(physicsSystem.has_value())
-        physicsSystem.value().invalidateResources();
+    const Optional<mut RendererSystem> rendererSystem = world.borrowSystem<RendererSystem>();
+    if(rendererSystem.has_value()){
+        rendererSystem.value().setInstanceTransformPatchContributor(Optional<mut IGpuTaskGraphInstanceTransformPatchContributor>());
+        mut FrameGraphRegistry registry = context.frameGraphRegistry;
+        registry.unregisterContributor(rendererSystem.value());
+        context.graphics.removeRenderPass(rendererSystem.value());
+    }
+
+    const Optional<mut SoftBodyMeshSystem> softBodyMeshSystem = world.borrowSystem<SoftBodyMeshSystem>();
+    if(softBodyMeshSystem.has_value()){
+        context.graphics.removeRenderPass(softBodyMeshSystem.value());
+        softBodyMeshSystem.value().invalidateResources();
+    }
 
     const Optional<mut MeshSkinningSystem> meshSkinningSystem = world.borrowSystem<MeshSkinningSystem>();
     if(meshSkinningSystem.has_value())
         context.graphics.removeRenderPass(meshSkinningSystem.value());
 
-    const Optional<mut RendererSystem> rendererSystem = world.borrowSystem<RendererSystem>();
-    if(rendererSystem.has_value()){
-        mut FrameGraphRegistry registry = context.frameGraphRegistry;
-        registry.unregisterContributor(rendererSystem.value());
-        context.graphics.removeRenderPass(rendererSystem.value());
-    }
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().invalidateResources();
 
     const Optional<mut UiLayerSystem> uiLayerSystem = world.borrowSystem<UiLayerSystem>();
     if(uiLayerSystem.has_value())
@@ -474,17 +598,51 @@ b8 CreateStartupCameraAndLights(mut NotNullUniquePtr<World> worldHandle){
 void ApplyPhysicsBackendSettings(in TestbedPhysicsBackendChoice choice, mut PhysicsWorldConfigComponent cfg){
     if(choice == TestbedPhysicsBackendChoice::CpuOnly){
         cfg.backendMode = PhysicsBackendMode::CpuOnly;
+        cfg.enableGpuCollision = false;
+        cfg.forceGpuCollision = false;
         cfg.gpuWorkloadFraction = 0.0f;
+        cfg.gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
     }
     else if(choice == TestbedPhysicsBackendChoice::GpuFull){
         cfg.backendMode = PhysicsBackendMode::GpuPreferred;
+        cfg.enableGpuCollision = true;
+        cfg.forceGpuCollision = true;
+        cfg.gpuDispatchThreshold = 1u;
         cfg.gpuWorkloadFraction = 1.0f;
     }
     else{
         cfg.backendMode = PhysicsBackendMode::Auto;
+        cfg.enableGpuCollision = true;
+        cfg.forceGpuCollision = false;
+        cfg.gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
         cfg.gpuWorkloadFraction = s_DefaultGpuWorkloadFraction;
     }
-    cfg.gpuDispatchThreshold = s_DefaultGpuBodyThreshold;
+    cfg.dirty = true;
+}
+
+void ApplyTestbedPhysicsRuntimeParams(
+    mut NotNullUniquePtr<World> worldHandle,
+    in EntityID configEntity,
+    in TestbedPhysicsBackendChoice backendChoice,
+    in TestbedPhysicsRuntimeParams params
+){
+    mut World world = worldHandle.deref();
+    if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
+        return;
+    mut PhysicsWorldConfigComponent cfg = world.getComponent<PhysicsWorldConfigComponent>(configEntity);
+    const f32 safeGravY = SimdClamp(params.gravityY, -50.0f, 50.0f);
+    const f32 safeHz = SimdClamp(params.fixedHz, 15.0f, 240.0f);
+    const f32 safeHertz = SimdClamp(params.contactHertz, 5.0f, 150.0f);
+    const u32 safeSubSteps = Clamp(params.subStepCount, 1u, 12u);
+    cfg.gravity = f32x4(0.0f, safeGravY, 0.0f, 0.0f);
+    cfg.fixedDeltaTime = 1.0f / safeHz;
+    cfg.subStepCount = safeSubSteps;
+    cfg.contactHertz = safeHertz;
+    cfg.enableSleep = params.enableSleep;
+    cfg.enableContinuous = params.enableContinuous;
+    cfg.enableWarmStarting = params.enableWarmStarting;
+    if(backendChoice == TestbedPhysicsBackendChoice::Hybrid)
+        cfg.gpuWorkloadFraction = SimdClamp(params.gpuWorkloadFraction, 0.0f, 1.0f);
     cfg.dirty = true;
 }
 
@@ -599,8 +757,20 @@ EntityID SpawnPhysicsDynamicSphere(
     return sphereEntity.id();
 }
 
+void UnregisterTestbedShowcaseWheelNames(mut World world){
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+    physicsSystem.value().unregisterNamedEntity(Name("showcase_wheel_0"));
+    physicsSystem.value().unregisterNamedEntity(Name("showcase_wheel_1"));
+    physicsSystem.value().unregisterNamedEntity(Name("showcase_wheel_2"));
+    physicsSystem.value().unregisterNamedEntity(Name("showcase_wheel_3"));
+    physicsSystem.value().unregisterNamedEntity(Name("showcase_soft_hook"));
+}
+
 void DestroyPhysicsSceneEntities(mut NotNullUniquePtr<World> worldHandle, mut EntityID configEntity, mut Vector<EntityID> entities){
     mut World world = worldHandle.deref();
+    UnregisterTestbedShowcaseWheelNames(world);
     for(usize i = 0u; i < entities.size(); ++i){
         const EntityID e = entities[i];
         if(e.valid() && world.alive(e))
@@ -610,6 +780,26 @@ void DestroyPhysicsSceneEntities(mut NotNullUniquePtr<World> worldHandle, mut En
     if(configEntity.valid() && world.alive(configEntity))
         world.destroyEntity(configEntity);
     configEntity = EntityID();
+}
+
+void DestroyPostSnapshotEntities(
+    mut NotNullUniquePtr<World> worldHandle,
+    mut Vector<EntityID> allEntities,
+    mut Vector<EntityID> postSnapEntities
+){
+    mut World world = worldHandle.deref();
+    for(usize i = 0u; i < postSnapEntities.size(); ++i){
+        const EntityID pe = postSnapEntities[i];
+        if(pe.valid() && world.alive(pe))
+            world.destroyEntity(pe);
+        for(usize ai = 0u; ai < allEntities.size(); ++ai){
+            if(allEntities[ai] == pe){
+                allEntities[ai] = s_InvalidEntityId;
+                break;
+            }
+        }
+    }
+    postSnapEntities.clear();
 }
 
 void SetStartupGroundPlaneActive(
@@ -703,6 +893,437 @@ b8 ComputeCameraMouseRay(
     return true;
 }
 
+b8 TestbedRaySphereHit(
+    in VectorSingle rayOrigin,
+    in VectorSingle rayDir,
+    in VectorSingle center,
+    in f32 radius,
+    in f32 maxDist,
+    mut f32 outDist,
+    mut VectorSingle outPoint
+){
+    const VectorSingle oc = VectorSingle(rayOrigin - center, 0.0f);
+    const f32 b = Vector3Dot(oc, rayDir).x;
+    const f32 c = Vector3LengthSq(oc).x - radius * radius;
+    const f32 disc = b * b - c;
+    if(disc < 0.0f)
+        return false;
+    const f32 s = SqrtFast(disc);
+    f32 t = -b - s;
+    if(t < 0.0f)
+        t = -b + s;
+    if(t < 0.0f || t > maxDist)
+        return false;
+    outDist = t;
+    outPoint = rayOrigin + rayDir * t;
+    return true;
+}
+
+b8 TryGetTestbedEntityWorldPose(
+    mut World world,
+    in EntityID entity,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
+){
+    if(!entity.valid() || !world.alive(entity))
+        return false;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value()){
+        if(world.hasComponent<CharacterControllerComponent>(entity)){
+            const Expected<Transform3D> chXf = physicsSystem.value().tryGetInterpolatedCharacterTransform(entity);
+            if(chXf.has_value()){
+                outPos = VectorSingle(chXf.value().position);
+                outRot = SafeNormalizeQuat(VectorSingle(chXf.value().rotation));
+                return true;
+            }
+            in CharacterControllerComponent cc = world.getComponent<CharacterControllerComponent>(entity);
+            outPos = VectorSingle(cc.controller.position);
+            outRot = SafeNormalizeQuat(VectorSingle(cc.controller.rotation));
+            return true;
+        }
+        if(world.hasComponent<ArticulationComponent>(entity)){
+            const Expected<Transform3D> artXf = physicsSystem.value().tryGetInterpolatedArticulationBaseTransform(entity);
+            if(artXf.has_value()){
+                outPos = VectorSingle(artXf.value().position);
+                outRot = SafeNormalizeQuat(VectorSingle(artXf.value().rotation));
+                return true;
+            }
+        }
+        if(world.hasComponent<RigidBodyComponent>(entity)){
+            const Expected<Transform3D> rbXf = physicsSystem.value().tryGetBodyTransform(entity);
+            if(rbXf.has_value()){
+                outPos = VectorSingle(rbXf.value().position);
+                outRot = SafeNormalizeQuat(VectorSingle(rbXf.value().rotation));
+                return true;
+            }
+        }
+        if(world.hasComponent<RagdollComponent>(entity)){
+            in RagdollComponent rc = world.getComponent<RagdollComponent>(entity);
+            if(!rc.instance.boneBodies.empty()){
+                const Expected<Transform3D> b0Xf = physicsSystem.value().physicsWorld().tryGetBodyTransform(rc.instance.boneBodies[0u]);
+                if(b0Xf.has_value()){
+                    outPos = VectorSingle(b0Xf.value().position);
+                    outRot = SafeNormalizeQuat(VectorSingle(b0Xf.value().rotation));
+                    return true;
+                }
+            }
+        }
+    }
+    if(world.hasComponent<SoftBodyComponent>(entity)){
+        in SoftBodyComponent sbc = world.getComponent<SoftBodyComponent>(entity);
+        if(!sbc.softBody.particles.empty()){
+            VectorSingle sum(0.0f);
+            for(usize i = 0u; i < sbc.softBody.particles.size(); ++i)
+                sum = sum + VectorSingle(sbc.softBody.particles[i].position);
+            outPos = sum * (1.0f / cast<f32>(sbc.softBody.particles.size()));
+            outRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+            return true;
+        }
+    }
+    if(world.hasComponent<TransformComponent>(entity)){
+        in TransformComponent xf = world.getComponent<TransformComponent>(entity);
+        outPos = VectorSingle(xf.position);
+        outRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
+        return true;
+    }
+    return false;
+}
+
+f32 ComputeScreenPointSegmentDistSq(in f32 px, in f32 py, in VectorSingle seg){
+    const f32 abx = seg.z - seg.x;
+    const f32 aby = seg.w - seg.y;
+    const f32 lenSq = abx * abx + aby * aby;
+    f32 u = 0.0f;
+    if(lenSq > 1.0e-5f)
+        u = SimdClamp(((px - seg.x) * abx + (py - seg.y) * aby) / lenSq, 0.0f, 1.0f);
+    const f32 dx = seg.x + abx * u - px;
+    const f32 dy = seg.y + aby * u - py;
+    return dx * dx + dy * dy;
+}
+
+VectorSingle TestbedGizmoWorldAxisDir(in u32 axisIdx){
+    if(axisIdx == 0u)
+        return VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+    if(axisIdx == 1u)
+        return VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    return VectorSingle(0.0f, 0.0f, 1.0f, 0.0f);
+}
+
+u32 HitTestSelectedTestbedGizmoAxis(
+    mut World world,
+    in EntityID selectedEntity,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY
+){
+    if(!selectedEntity.valid() || !world.alive(selectedEntity))
+        return s_NullIndex;
+    if(vpW <= 0.0f || vpH <= 0.0f)
+        return s_NullIndex;
+    VectorSingle gizmoPos(0.0f);
+    VectorSingle gizmoRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(!TryGetTestbedEntityWorldPose(world, selectedEntity, gizmoPos, gizmoRot))
+        return s_NullIndex;
+    const SceneCameraView cameraView = ResolveSceneCameraView(world, vpW / vpH);
+    if(!cameraView.valid())
+        return s_NullIndex;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    in CameraProjection camProj = cameraView.projection;
+    const PhysicsDebugScreenProjector projector(camXf, camProj, vpW, vpH);
+    if(!projector.valid())
+        return s_NullIndex;
+    f32 bestDistSq = 14.0f * 14.0f;
+    u32 bestAxis = s_NullIndex;
+    const f32 axisLen = 0.75f;
+    for(u32 ai = 0u; ai < 3u; ++ai){
+        const VectorSingle axisEnd = gizmoPos + TestbedGizmoWorldAxisDir(ai) * axisLen;
+        VectorSingle seg(0.0f);
+        if(!projector.projectSegment(gizmoPos, axisEnd, seg))
+            continue;
+        const f32 dSq = ComputeScreenPointSegmentDistSq(mouseX, mouseY, seg);
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestAxis = ai;
+        }
+    }
+    return bestAxis;
+}
+
+b8 ComputeRayToLineClosestParam(
+    in VectorSingle lineOrigin,
+    in VectorSingle lineDir,
+    in VectorSingle rayOrigin,
+    in VectorSingle rayDir,
+    mut f32 outLineParam
+){
+    const VectorSingle w0 = VectorSingle(lineOrigin - rayOrigin, 0.0f);
+    const f32 b = Vector3Dot(lineDir, rayDir).x;
+    const f32 d = Vector3Dot(lineDir, w0).x;
+    const f32 e = Vector3Dot(rayDir, w0).x;
+    const f32 denom = 1.0f - b * b;
+    if(denom <= 1.0e-5f)
+        return false;
+    outLineParam = (b * e - d) / denom;
+    return IsFinite(VectorSingle(outLineParam));
+}
+
+void UpdateTestbedGizmoHover(
+    mut NotNullUniquePtr<World> worldHandle,
+    in EntityID selectedEntity,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    mut TestbedGrabState inOutGrab
+){
+    if(inOutGrab.active && inOutGrab.targetKind == TestbedGrabTargetKind::GizmoAxis){
+        inOutGrab.hoveredGizmoActive = true;
+        inOutGrab.hoveredGizmoAxis = inOutGrab.targetSubIndex;
+        return;
+    }
+    const u32 hitAxis = HitTestSelectedTestbedGizmoAxis(worldHandle.deref(), selectedEntity, vpW, vpH, mouseX, mouseY);
+    inOutGrab.hoveredGizmoAxis = hitAxis;
+    inOutGrab.hoveredGizmoActive = (hitAxis < 3u);
+}
+
+void ClearActiveSubsystemsGrabForce(mut World world, in TestbedGrabState grab){
+    if(grab.targetKind != TestbedGrabTargetKind::ArticulationLink || !grab.entity.valid() || !world.alive(grab.entity))
+        return;
+    if(!world.hasComponent<ArticulationComponent>(grab.entity))
+        return;
+    mut ArticulationComponent ac = world.getComponent<ArticulationComponent>(grab.entity);
+    for(usize i = 0u; i < ac.articulation.linkStates.size(); ++i)
+        ac.articulation.linkStates[i].externalForce = SpatialVec();
+}
+
+void ReleaseTestbedGrab(mut TestbedGrabState outGrab){
+    outGrab.active = false;
+    outGrab.entity = s_InvalidEntityId;
+    outGrab.targetKind = TestbedGrabTargetKind::None;
+    outGrab.targetSubIndex = 0u;
+}
+
+void ReleaseTestbedGrabWithWorld(mut NotNullUniquePtr<World> worldHandle, mut TestbedGrabState outGrab){
+    ClearActiveSubsystemsGrabForce(worldHandle.deref(), outGrab);
+    ReleaseTestbedGrab(outGrab);
+}
+
+b8 BeginTestbedPickOrGrab(
+    mut NotNullUniquePtr<World> worldHandle,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    in b8 allowGrab,
+    mut EntityID inOutSelectedEntity,
+    mut TestbedGrabState outGrab
+){
+    ClearActiveSubsystemsGrabForce(worldHandle.deref(), outGrab);
+    ReleaseTestbedGrab(outGrab);
+    mut World world = worldHandle.deref();
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return false;
+
+    VectorSingle rayOrigin(0.0f);
+    VectorSingle rayDir(0.0f, 0.0f, -1.0f, 0.0f);
+    if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
+        return false;
+
+    const u32 gizmoAxis = HitTestSelectedTestbedGizmoAxis(world, inOutSelectedEntity, vpW, vpH, mouseX, mouseY);
+    if(gizmoAxis < 3u){
+        VectorSingle selPos(0.0f);
+        VectorSingle selRot(0.0f, 0.0f, 0.0f, 1.0f);
+        if(TryGetTestbedEntityWorldPose(world, inOutSelectedEntity, selPos, selRot)){
+            const VectorSingle axisDir = TestbedGizmoWorldAxisDir(gizmoAxis);
+            f32 startParam = 0.0f;
+            if(ComputeRayToLineClosestParam(selPos, axisDir, rayOrigin, rayDir, startParam)){
+                outGrab.active = true;
+                outGrab.entity = inOutSelectedEntity;
+                outGrab.targetKind = TestbedGrabTargetKind::GizmoAxis;
+                outGrab.targetSubIndex = gizmoAxis;
+                outGrab.gizmoAxisWorld = f32x4(axisDir, 0.0f);
+                outGrab.gizmoStartOrigin = f32x4(selPos, 0.0f);
+                outGrab.gizmoStartParam = startParam;
+                outGrab.grabWorldPoint = f32x4(selPos, 0.0f);
+                outGrab.targetWorldPoint = f32x4(selPos, 0.0f);
+                outGrab.hoveredGizmoActive = true;
+                outGrab.hoveredGizmoAxis = gizmoAxis;
+                return true;
+            }
+        }
+    }
+
+    f32 bestDist = 100.0f;
+    EntityID bestEntity = s_InvalidEntityId;
+    TestbedGrabTargetKind bestKind = TestbedGrabTargetKind::None;
+    u32 bestSubIndex = 0u;
+    VectorSingle bestHitPt(0.0f);
+
+    RayCastInput rayInput;
+    rayInput.origin = f32x4(rayOrigin, 0.0f);
+    rayInput.translation = f32x4(rayDir * bestDist, 0.0f);
+    rayInput.useCustomFilter = true;
+    const EcsRayCastHit rbHit = physicsSystem.value().rayCastClosest(rayInput);
+    if(rbHit.hit.hit && rbHit.entity.valid() && world.alive(rbHit.entity)){
+        bestDist = rbHit.hit.fraction * 100.0f;
+        bestEntity = rbHit.entity;
+        bestKind = TestbedGrabTargetKind::RigidBody;
+        bestHitPt = VectorSingle(rbHit.hit.point);
+    }
+
+    in PhysicsWorld pw = physicsSystem.value().physicsWorld();
+    const auto ragView = world.view<RagdollComponent>();
+    ragView.each(
+        lambda[in rayOrigin, in rayDir, in pw, mut bestDist, mut bestEntity, mut bestKind, mut bestSubIndex, mut bestHitPt](in EntityID ent, in RagdollComponent rc) -> void{
+            if(!rc.enabled)
+                return;
+            for(usize bi = 0u; bi < rc.instance.boneBodies.size(); ++bi){
+                const Expected<Transform3D> bXf = pw.tryGetBodyTransform(rc.instance.boneBodies[bi]);
+                if(!bXf.has_value())
+                    continue;
+                f32 t = 0.0f;
+                VectorSingle pt(0.0f);
+                if(TestbedRaySphereHit(rayOrigin, rayDir, VectorSingle(bXf.value().position), 0.22f, bestDist, t, pt)){
+                    bestDist = t;
+                    bestEntity = ent;
+                    bestKind = TestbedGrabTargetKind::RagdollBone;
+                    bestSubIndex = cast<u32>(bi);
+                    bestHitPt = pt;
+                }
+            }
+        }
+    );
+
+    const auto artView = world.view<ArticulationComponent>();
+    artView.each(
+        lambda[in rayOrigin, in rayDir, mut bestDist, mut bestEntity, mut bestKind, mut bestSubIndex, mut bestHitPt](in EntityID ent, in ArticulationComponent ac) -> void{
+            if(!ac.enabled)
+                return;
+            for(usize li = 0u; li < ac.articulation.linkStates.size(); ++li){
+                const VectorSingle lPos(ac.articulation.linkStates[li].worldTransform.position);
+                f32 t = 0.0f;
+                VectorSingle pt(0.0f);
+                if(TestbedRaySphereHit(rayOrigin, rayDir, lPos, 0.24f, bestDist, t, pt)){
+                    bestDist = t;
+                    bestEntity = ent;
+                    bestKind = TestbedGrabTargetKind::ArticulationLink;
+                    bestSubIndex = cast<u32>(li);
+                    bestHitPt = pt;
+                }
+            }
+        }
+    );
+
+    const auto softView = world.view<SoftBodyComponent>();
+    softView.each(
+        lambda[in rayOrigin, in rayDir, mut bestDist, mut bestEntity, mut bestKind, mut bestSubIndex, mut bestHitPt](in EntityID ent, in SoftBodyComponent sbc) -> void{
+            if(!sbc.enabled)
+                return;
+            for(usize pi = 0u; pi < sbc.softBody.particles.size(); ++pi){
+                in SoftBodyParticle p = sbc.softBody.particles[pi];
+                const VectorSingle pPos(p.position);
+                f32 t = 0.0f;
+                VectorSingle pt(0.0f);
+                if(TestbedRaySphereHit(rayOrigin, rayDir, pPos, 0.18f, bestDist, t, pt)){
+                    bestDist = t;
+                    bestEntity = ent;
+                    bestKind = TestbedGrabTargetKind::SoftBodyParticle;
+                    bestSubIndex = cast<u32>(pi);
+                    bestHitPt = pt;
+                }
+            }
+        }
+    );
+
+    const auto charView = world.view<CharacterControllerComponent>();
+    charView.each(
+        lambda[in rayOrigin, in rayDir, mut bestDist, mut bestEntity, mut bestKind, mut bestSubIndex, mut bestHitPt](in EntityID ent, in CharacterControllerComponent cc) -> void{
+            if(!cc.enabled)
+                return;
+            const VectorSingle cPos(cc.controller.position);
+            const f32 cRad = SimdMax(0.35f, cc.def.radius + 0.1f);
+            f32 t = 0.0f;
+            VectorSingle pt(0.0f);
+            if(TestbedRaySphereHit(rayOrigin, rayDir, cPos, cRad, bestDist, t, pt)){
+                bestDist = t;
+                bestEntity = ent;
+                bestKind = TestbedGrabTargetKind::None;
+                bestSubIndex = 0u;
+                bestHitPt = pt;
+            }
+        }
+    );
+
+    if(!bestEntity.valid() || !world.alive(bestEntity))
+        return false;
+
+    inOutSelectedEntity = bestEntity;
+    if(!allowGrab)
+        return true;
+
+    if(bestKind == TestbedGrabTargetKind::RigidBody){
+        if(!world.hasComponent<RigidBodyComponent>(bestEntity) || world.getComponent<RigidBodyComponent>(bestEntity).type != BodyType::Dynamic)
+            return true;
+        const Expected<Transform3D> bodyXfRes = physicsSystem.value().tryGetBodyTransform(bestEntity);
+        if(!bodyXfRes.has_value())
+            return true;
+        in Transform3D bodyXf = bodyXfRes.value();
+        const VectorSingle invRot = QuaternionConjugate(SafeNormalizeQuat(VectorSingle(bodyXf.rotation)));
+        const VectorSingle localAnchor = Vector3Rotate(VectorSingle(bestHitPt - VectorSingle(bodyXf.position), 0.0f), invRot);
+        outGrab.active = true;
+        outGrab.entity = bestEntity;
+        outGrab.targetKind = TestbedGrabTargetKind::RigidBody;
+        outGrab.targetSubIndex = 0u;
+        outGrab.localAnchor = f32x4(localAnchor, 0.0f);
+        outGrab.grabWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.targetWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.distance = bestDist;
+        return true;
+    }
+    if(bestKind == TestbedGrabTargetKind::RagdollBone){
+        in RagdollComponent rc = world.getComponent<RagdollComponent>(bestEntity);
+        if(cast<usize>(bestSubIndex) >= rc.instance.boneBodies.size())
+            return true;
+        const Expected<Transform3D> bXf = pw.tryGetBodyTransform(rc.instance.boneBodies[bestSubIndex]);
+        if(!bXf.has_value())
+            return true;
+        const VectorSingle invRot = QuaternionConjugate(SafeNormalizeQuat(VectorSingle(bXf.value().rotation)));
+        const VectorSingle localAnchor = Vector3Rotate(VectorSingle(bestHitPt - VectorSingle(bXf.value().position), 0.0f), invRot);
+        outGrab.active = true;
+        outGrab.entity = bestEntity;
+        outGrab.targetKind = TestbedGrabTargetKind::RagdollBone;
+        outGrab.targetSubIndex = bestSubIndex;
+        outGrab.localAnchor = f32x4(localAnchor, 0.0f);
+        outGrab.grabWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.targetWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.distance = bestDist;
+        return true;
+    }
+    if(bestKind == TestbedGrabTargetKind::SoftBodyParticle){
+        outGrab.active = true;
+        outGrab.entity = bestEntity;
+        outGrab.targetKind = TestbedGrabTargetKind::SoftBodyParticle;
+        outGrab.targetSubIndex = bestSubIndex;
+        outGrab.grabWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.targetWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.distance = bestDist;
+        return true;
+    }
+    if(bestKind == TestbedGrabTargetKind::ArticulationLink){
+        outGrab.active = true;
+        outGrab.entity = bestEntity;
+        outGrab.targetKind = TestbedGrabTargetKind::ArticulationLink;
+        outGrab.targetSubIndex = bestSubIndex;
+        outGrab.grabWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.targetWorldPoint = f32x4(bestHitPt, 0.0f);
+        outGrab.distance = bestDist;
+        return true;
+    }
+    return true;
+}
+
 b8 BeginTestbedGrab(
     mut NotNullUniquePtr<World> worldHandle,
     in f32 vpW,
@@ -711,88 +1332,30 @@ b8 BeginTestbedGrab(
     in f32 mouseY,
     mut TestbedGrabState outGrab
 ){
-    outGrab.active = false;
-    outGrab.entity = s_InvalidEntityId;
-    mut World world = worldHandle.deref();
-    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
-    if(!physicsSystem.has_value())
-        return false;
-    VectorSingle rayOrigin(0.0f);
-    VectorSingle rayDir(0.0f, 0.0f, -1.0f, 0.0f);
-    if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
-        return false;
-    RayCastInput rayInput;
-    rayInput.origin = f32x4(rayOrigin, 0.0f);
-    rayInput.translation = f32x4(rayDir * 100.0f, 0.0f);
-    rayInput.useCustomFilter = true;
-    const EcsRayCastHit hit = physicsSystem.value().rayCastClosest(rayInput);
-    if(!hit.hit.hit || !hit.entity.valid() || !world.alive(hit.entity))
-        return false;
-    if(!world.hasComponent<RigidBodyComponent>(hit.entity) || world.getComponent<RigidBodyComponent>(hit.entity).type != BodyType::Dynamic)
-        return false;
-    const Expected<Transform3D> bodyXfRes = physicsSystem.value().tryGetBodyTransform(hit.entity);
-    if(!bodyXfRes.has_value())
-        return false;
-    in Transform3D bodyXf = bodyXfRes.value();
-    const VectorSingle hitPt = VectorSingle(hit.hit.point);
-    const VectorSingle invRot = QuaternionConjugate(SafeNormalizeQuat(VectorSingle(bodyXf.rotation)));
-    const VectorSingle localAnchor = Vector3Rotate(VectorSingle(hitPt - VectorSingle(bodyXf.position), 0.0f), invRot);
-    outGrab.active = true;
-    outGrab.entity = hit.entity;
-    outGrab.localAnchor = f32x4(localAnchor, 0.0f);
-    outGrab.grabWorldPoint = f32x4(hitPt, 0.0f);
-    outGrab.targetWorldPoint = f32x4(hitPt, 0.0f);
-    outGrab.distance = Vector3Length(VectorSingle(hitPt - rayOrigin, 0.0f)).x;
-    return true;
+    EntityID dummySelected = s_InvalidEntityId;
+    return BeginTestbedPickOrGrab(worldHandle, vpW, vpH, mouseX, mouseY, true, dummySelected, outGrab);
 }
 
-void UpdateTestbedGrab(
-    mut NotNullUniquePtr<World> worldHandle,
-    in f32 vpW,
-    in f32 vpH,
-    in f32 mouseX,
-    in f32 mouseY,
-    in f32 dt,
-    mut TestbedGrabState inOutGrab
+void ApplyTestbedBodySpringGrab(
+    mut PhysicsWorld pw,
+    in BodyId bodyId,
+    in VectorSingle localAnchor,
+    in VectorSingle targetWorldPoint,
+    in f32 fixedDt,
+    mut VectorSingle outGrabWorldPoint
 ){
-    if(!inOutGrab.active)
+    if(!bodyId.valid() || bodyId.index >= pw.m_bodies.size())
         return;
-    mut World world = worldHandle.deref();
-    if(!inOutGrab.entity.valid() || !world.alive(inOutGrab.entity) || !world.hasComponent<RigidBodyComponent>(inOutGrab.entity)){
-        inOutGrab.active = false;
-        inOutGrab.entity = s_InvalidEntityId;
+    in Body b = pw.m_bodies[bodyId.index];
+    if(!b.alive || b.generation != bodyId.generation || b.setIndex >= pw.m_solverSets.size() || b.localIndex >= pw.m_solverSets[b.setIndex].sims.size())
         return;
-    }
-    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
-    if(!physicsSystem.has_value())
-        return;
-    in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(inOutGrab.entity);
-    in PhysicsWorld pw = physicsSystem.value().physicsWorld();
-    if(!rb.runtimeBodyId.valid() || rb.runtimeBodyId.index >= pw.m_bodies.size()){
-        inOutGrab.active = false;
-        inOutGrab.entity = s_InvalidEntityId;
-        return;
-    }
-    in Body b = pw.m_bodies[rb.runtimeBodyId.index];
-    if(!b.alive || b.generation != rb.runtimeBodyId.generation || b.setIndex >= pw.m_solverSets.size() || b.localIndex >= pw.m_solverSets[b.setIndex].sims.size()){
-        inOutGrab.active = false;
-        inOutGrab.entity = s_InvalidEntityId;
-        return;
-    }
     in BodySim sim = pw.m_solverSets[b.setIndex].sims[b.localIndex];
-    const VectorSingle bodyPos = VectorSingle(sim.transform.position);
+    const VectorSingle bodyOrigin = VectorSingle(sim.transform.position);
     const VectorSingle bodyRot = SafeNormalizeQuat(VectorSingle(sim.transform.rotation));
-    const VectorSingle anchorW = TransformPointValues(bodyPos, bodyRot, VectorSingle(inOutGrab.localAnchor));
-    inOutGrab.grabWorldPoint = f32x4(anchorW, 0.0f);
+    const VectorSingle comW = sim.center();
+    const VectorSingle anchorW = TransformPointValues(bodyOrigin, bodyRot, localAnchor);
+    outGrabWorldPoint = anchorW;
 
-    VectorSingle rayOrigin(0.0f);
-    VectorSingle rayDir(0.0f, 0.0f, -1.0f, 0.0f);
-    if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
-        return;
-    const VectorSingle targetW = rayOrigin + rayDir * inOutGrab.distance;
-    inOutGrab.targetWorldPoint = f32x4(targetW, 0.0f);
-
-    const f32 safeDt = SimdClamp(dt, 1.0e-4f, 0.05f);
     f32 mass = 1.0f;
     const f32 invM = sim.centerInvMass.w;
     if(invM > 1.0e-6f)
@@ -806,19 +1369,752 @@ void UpdateTestbedGrab(
         angVel = VectorSingle(st.angularVelocity);
     }
 
-    const VectorSingle anchorVel = linVel + Cross(angVel, VectorSingle(anchorW - bodyPos, 0.0f));
-    const VectorSingle err = VectorSingle(targetW - anchorW, 0.0f);
-    VectorSingle impulse = (err * 120.0f - anchorVel * 14.0f) * (mass * safeDt);
-    const f32 maxImp = mass * 20.0f * safeDt;
+    const VectorSingle leverW = VectorSingle(anchorW - comW, 0.0f);
+    const VectorSingle anchorVel = linVel + Cross(angVel, leverW);
+    const VectorSingle err = VectorSingle(targetWorldPoint - anchorW, 0.0f);
+    const f32 safeDt = SimdClamp(fixedDt, 1.0e-4f, 0.05f);
+    VectorSingle impulse = (err * 140.0f - anchorVel * 16.0f) * (mass * safeDt);
+    const f32 maxImp = mass * 28.0f * safeDt;
     const f32 impLenSq = Vector3LengthSq(VectorSingle(impulse, 0.0f)).x;
     if(impLenSq > maxImp * maxImp && impLenSq > 1.0e-8f)
         impulse = impulse * (maxImp * Rsqrt(VectorSingle(impLenSq)).x);
-    physicsSystem.value().applyLinearImpulseAtPoint(inOutGrab.entity, impulse, anchorW, true);
+    pw.applyLinearImpulseAtPoint(bodyId, impulse, anchorW, true);
 }
 
-void ReleaseTestbedGrab(mut TestbedGrabState outGrab){
-    outGrab.active = false;
-    outGrab.entity = s_InvalidEntityId;
+void UpdateTestbedPointerDragTarget(
+    mut NotNullUniquePtr<World> worldHandle,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    mut TestbedGrabState inOutGrab
+){
+    if(!inOutGrab.active)
+        return;
+    mut World world = worldHandle.deref();
+    if(!inOutGrab.entity.valid() || !world.alive(inOutGrab.entity)){
+        ReleaseTestbedGrab(inOutGrab);
+        return;
+    }
+    VectorSingle rayOrigin(0.0f);
+    VectorSingle rayDir(0.0f, 0.0f, -1.0f, 0.0f);
+    if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
+        return;
+
+    if(inOutGrab.targetKind == TestbedGrabTargetKind::GizmoAxis){
+        const VectorSingle axisDir = VectorSingle(inOutGrab.gizmoAxisWorld);
+        const VectorSingle startOrigin = VectorSingle(inOutGrab.gizmoStartOrigin);
+        f32 param = 0.0f;
+        if(!ComputeRayToLineClosestParam(startOrigin, axisDir, rayOrigin, rayDir, param))
+            return;
+        const f32 deltaAlongAxis = param - inOutGrab.gizmoStartParam;
+        const VectorSingle newPos = startOrigin + axisDir * deltaAlongAxis;
+        VectorSingle prevPos(0.0f);
+        VectorSingle prevRot(0.0f, 0.0f, 0.0f, 1.0f);
+        TryGetTestbedEntityWorldPose(world, inOutGrab.entity, prevPos, prevRot);
+        const VectorSingle posDelta = VectorSingle(newPos - prevPos, 0.0f);
+
+        const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+        if(world.hasComponent<RigidBodyComponent>(inOutGrab.entity) && physicsSystem.has_value()){
+            physicsSystem.value().setBodyTransform(inOutGrab.entity, newPos, prevRot);
+            physicsSystem.value().setLinearVelocity(inOutGrab.entity, VectorSingle(0.0f));
+            physicsSystem.value().wakeBody(inOutGrab.entity);
+        }
+        if(world.hasComponent<CharacterControllerComponent>(inOutGrab.entity)){
+            mut CharacterControllerComponent cc = world.getComponent<CharacterControllerComponent>(inOutGrab.entity);
+            cc.controller.position = f32x4(newPos, 0.0f);
+            cc.controller.linearVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            cc.syncFromTransform = true;
+        }
+        if(world.hasComponent<SoftBodyComponent>(inOutGrab.entity)){
+            mut SoftBodyComponent sbc = world.getComponent<SoftBodyComponent>(inOutGrab.entity);
+            for(usize i = 0u; i < sbc.softBody.particles.size(); ++i){
+                const VectorSingle np = VectorSingle(sbc.softBody.particles[i].position) + posDelta;
+                sbc.softBody.particles[i].position = f32x4(np, 0.0f);
+                sbc.softBody.particles[i].prevPosition = f32x4(np, 0.0f);
+            }
+        }
+        if(world.hasComponent<TransformComponent>(inOutGrab.entity))
+            world.getComponent<TransformComponent>(inOutGrab.entity).position = f32x4(newPos, 0.0f);
+        if(world.hasComponent<ArticulationComponent>(inOutGrab.entity))
+            world.getComponent<ArticulationComponent>(inOutGrab.entity).articulation.computeForwardKinematics();
+        SyncWorldModelRuntimes(worldHandle);
+        inOutGrab.grabWorldPoint = f32x4(newPos, 0.0f);
+        inOutGrab.targetWorldPoint = f32x4(newPos, 0.0f);
+        return;
+    }
+
+    inOutGrab.targetWorldPoint = f32x4(rayOrigin + rayDir * inOutGrab.distance, 0.0f);
+}
+
+void ApplyTestbedGrabPreStep(
+    mut World world,
+    mut PhysicsWorld pw,
+    in f32 fixedDt,
+    mut TestbedGrabState inOutGrab
+){
+    if(!inOutGrab.active || inOutGrab.targetKind == TestbedGrabTargetKind::GizmoAxis || inOutGrab.targetKind == TestbedGrabTargetKind::None)
+        return;
+    if(!inOutGrab.entity.valid() || !world.alive(inOutGrab.entity)){
+        ReleaseTestbedGrab(inOutGrab);
+        return;
+    }
+    const VectorSingle targetW = VectorSingle(inOutGrab.targetWorldPoint);
+    if(inOutGrab.targetKind == TestbedGrabTargetKind::RigidBody){
+        if(!world.hasComponent<RigidBodyComponent>(inOutGrab.entity)){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        const BodyId bodyId = world.getComponent<RigidBodyComponent>(inOutGrab.entity).runtimeBodyId;
+        VectorSingle grabW(inOutGrab.grabWorldPoint);
+        ApplyTestbedBodySpringGrab(pw, bodyId, VectorSingle(inOutGrab.localAnchor), targetW, fixedDt, grabW);
+        inOutGrab.grabWorldPoint = f32x4(grabW, 0.0f);
+        return;
+    }
+    if(inOutGrab.targetKind == TestbedGrabTargetKind::RagdollBone){
+        if(!world.hasComponent<RagdollComponent>(inOutGrab.entity)){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        in RagdollComponent rc = world.getComponent<RagdollComponent>(inOutGrab.entity);
+        if(cast<usize>(inOutGrab.targetSubIndex) >= rc.instance.boneBodies.size()){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        VectorSingle grabW(inOutGrab.grabWorldPoint);
+        ApplyTestbedBodySpringGrab(pw, rc.instance.boneBodies[inOutGrab.targetSubIndex], VectorSingle(inOutGrab.localAnchor), targetW, fixedDt, grabW);
+        inOutGrab.grabWorldPoint = f32x4(grabW, 0.0f);
+        return;
+    }
+    if(inOutGrab.targetKind == TestbedGrabTargetKind::SoftBodyParticle){
+        if(!world.hasComponent<SoftBodyComponent>(inOutGrab.entity)){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        mut SoftBodyComponent sbc = world.getComponent<SoftBodyComponent>(inOutGrab.entity);
+        if(cast<usize>(inOutGrab.targetSubIndex) >= sbc.softBody.particles.size()){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        mut SoftBodyParticle pt = sbc.softBody.particles[inOutGrab.targetSubIndex];
+        const VectorSingle pPos(pt.position);
+        inOutGrab.grabWorldPoint = f32x4(pPos, 0.0f);
+        if(!pt.isFixed && pt.invMass > 1.0e-8f){
+            const VectorSingle pVel(pt.velocity);
+            const VectorSingle err = VectorSingle(targetW - pPos, 0.0f);
+            const f32 safeDt = SimdClamp(fixedDt, 1.0e-4f, 0.05f);
+            const VectorSingle dv = (err * 90.0f - pVel * 14.0f) * safeDt;
+            const VectorSingle nextV = VectorSingle(pt.velocity) + dv;
+            const f32 maxV = 12.0f;
+            const f32 vSq = Vector3LengthSq(VectorSingle(nextV, 0.0f)).x;
+            if(vSq > maxV * maxV && vSq > 1.0e-8f)
+                pt.velocity = f32x4(nextV * (maxV * Rsqrt(VectorSingle(vSq)).x), 0.0f);
+            else
+                pt.velocity = f32x4(nextV, 0.0f);
+        }
+        return;
+    }
+    if(inOutGrab.targetKind == TestbedGrabTargetKind::ArticulationLink){
+        if(!world.hasComponent<ArticulationComponent>(inOutGrab.entity)){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        mut ArticulationComponent ac = world.getComponent<ArticulationComponent>(inOutGrab.entity);
+        if(cast<usize>(inOutGrab.targetSubIndex) >= ac.articulation.linkStates.size()){
+            ReleaseTestbedGrab(inOutGrab);
+            return;
+        }
+        ac.articulation.isSleeping = false;
+        ac.articulation.sleepTimer = 0.0f;
+        mut ArticulationLinkState ls = ac.articulation.linkStates[inOutGrab.targetSubIndex];
+        const VectorSingle lPos(ls.worldTransform.position);
+        inOutGrab.grabWorldPoint = f32x4(lPos, 0.0f);
+        const VectorSingle err = VectorSingle(targetW - lPos, 0.0f);
+        const VectorSingle lVel(ls.spatialVelocity.lin);
+        VectorSingle force = err * 120.0f - lVel * 14.0f;
+        const f32 fSq = Vector3LengthSq(VectorSingle(force, 0.0f)).x;
+        if(fSq > 150.0f * 150.0f)
+            force = force * (150.0f * Rsqrt(VectorSingle(fSq)).x);
+        ls.externalForce.lin = f32x4(force, 0.0f);
+    }
+}
+
+void StepTestbedShowcasePreStep(
+    mut World world,
+    mut PhysicsWorld pw,
+    in f32 fixedDt,
+    in TestbedControlMode controlMode,
+    in VectorSingle controlAxes,
+    in b8 actionPressed,
+    in VectorSingle camForward,
+    in VectorSingle camRight,
+    mut TestbedShowcaseRefs refs
+){
+    if(refs.oscKinematicEntity.valid() && world.alive(refs.oscKinematicEntity) && world.hasComponent<RigidBodyComponent>(refs.oscKinematicEntity)){
+        in RigidBodyComponent kRb = world.getComponent<RigidBodyComponent>(refs.oscKinematicEntity);
+        if(kRb.type == BodyType::Kinematic && kRb.runtimeBodyId.valid() && pw.isValidBody(kRb.runtimeBodyId)){
+            refs.kinematicPhase += fixedDt;
+            const f32 freq = 1.4f;
+            const f32 amp = 1.15f;
+            const f32 targetX = refs.kinematicBasePos.x + amp * Sin(VectorSingle(refs.kinematicPhase * freq)).x;
+            const f32 targetVx = amp * freq * Cos(VectorSingle(refs.kinematicPhase * freq)).x;
+            const Expected<Transform3D> kXf = pw.tryGetBodyTransform(kRb.runtimeBodyId);
+            f32 corrVx = targetVx;
+            if(kXf.has_value() && fixedDt > 1.0e-5f)
+                corrVx = (targetX - kXf.value().position.x) * 4.0f + targetVx;
+            pw.wakeBody(kRb.runtimeBodyId);
+            pw.setLinearVelocity(kRb.runtimeBodyId, VectorSingle(corrVx, 0.0f, 0.0f, 0.0f));
+        }
+    }
+
+    if(controlMode == TestbedControlMode::Character && refs.characterEntity.valid() && world.alive(refs.characterEntity) && world.hasComponent<CharacterControllerComponent>(refs.characterEntity)){
+        mut CharacterControllerComponent cc = world.getComponent<CharacterControllerComponent>(refs.characterEntity);
+        if(cc.enabled){
+            VectorSingle fwdH = VectorSingle(camForward.x, 0.0f, camForward.z, 0.0f);
+            fwdH = SafeNormalizeVec3(fwdH, VectorSingle(0.0f, 0.0f, -1.0f, 0.0f));
+            VectorSingle rightH = VectorSingle(camRight.x, 0.0f, camRight.z, 0.0f);
+            rightH = SafeNormalizeVec3(rightH, VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+            VectorSingle wishHoriz = rightH * controlAxes.x + fwdH * controlAxes.y;
+            const f32 wSq = Vector3LengthSq(VectorSingle(wishHoriz, 0.0f)).x;
+            if(wSq > 1.0f)
+                wishHoriz = wishHoriz * Rsqrt(VectorSingle(wSq)).x;
+            const f32 moveSpeed = 4.5f;
+            f32 vy = cc.controller.linearVelocity.y;
+            const b8 grounded = (cc.controller.groundState == CharacterGroundState::OnGround);
+            if(grounded && vy < 0.0f)
+                vy = -0.25f;
+            if(grounded && actionPressed)
+                vy = 5.6f;
+            else if(!grounded)
+                vy -= 9.81f * fixedDt;
+            cc.controller.linearVelocity = f32x4(wishHoriz.x * moveSpeed, vy, wishHoriz.z * moveSpeed, 0.0f);
+        }
+    }
+    else if(controlMode == TestbedControlMode::Vehicle && refs.vehicleEntity.valid() && world.alive(refs.vehicleEntity) && world.hasComponent<VehicleComponent>(refs.vehicleEntity)){
+        mut VehicleComponent vc = world.getComponent<VehicleComponent>(refs.vehicleEntity);
+        if(vc.enabled){
+            f32 throttle = 0.0f;
+            f32 brake = 0.0f;
+            if(controlAxes.y > 0.05f){
+                throttle = controlAxes.y;
+            }
+            else if(controlAxes.y < -0.05f){
+                if(vc.controller.currentSpeedMps > 0.8f && vc.controller.currentGear > 0){
+                    brake = -controlAxes.y;
+                }
+                else{
+                    vc.input.requestedGear = 0;
+                    throttle = -controlAxes.y * 0.7f;
+                }
+            }
+            else{
+                vc.input.requestedGear = 1;
+            }
+            if(controlAxes.y > 0.05f)
+                vc.input.requestedGear = 1;
+            vc.input.throttle = throttle;
+            vc.input.brake = brake;
+            vc.input.steer = -controlAxes.x * 0.55f;
+            f32 handbrake = 0.0f;
+            if(actionPressed)
+                handbrake = 1.0f;
+            vc.input.handbrake = handbrake;
+        }
+    }
+}
+
+void UpdateTestbedGrab(
+    mut NotNullUniquePtr<World> worldHandle,
+    in f32 vpW,
+    in f32 vpH,
+    in f32 mouseX,
+    in f32 mouseY,
+    in f32 dt,
+    mut TestbedGrabState inOutGrab
+){
+    UpdateTestbedPointerDragTarget(worldHandle, vpW, vpH, mouseX, mouseY, inOutGrab);
+}
+
+void BindVehicleWheelVisuals(
+    mut World world,
+    mut VehicleComponent vc,
+    in VectorSingle vehPos,
+    in Name boxModelName,
+    in Name whiteMatName,
+    in b8 useFixedShowcaseNames,
+    mut Vector<EntityID> outEntities
+){
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    for(usize wi = 0u; wi < vc.wheels.size(); ++wi){
+        Entity wheelEnt = world.createEntity();
+        mut TransformComponent wXf = wheelEnt.addComponent<TransformComponent>();
+        wXf.position = f32x4(vehPos + VectorSingle(vc.wheels[wi].attachmentPoint), 0.0f);
+        wXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        const f32 rad = vc.wheels[wi].wheelRadius;
+        const f32 wid = vc.wheels[wi].wheelWidth;
+        wXf.scale = f32x4(wid, rad * 2.0f, rad * 2.0f, 0.0f);
+        mut ModelComponent wMdl = wheelEnt.addComponent<ModelComponent>();
+        wMdl.model = AssetRef<Model>(boxModelName);
+        mut RendererComponent wRnd = wheelEnt.addComponent<RendererComponent>();
+        wRnd.material = AssetRef<Material>(whiteMatName);
+        outEntities.push_back(wheelEnt.id());
+        if(useFixedShowcaseNames && physicsSystem.has_value() && wi < 4u){
+            Name wName = Name("showcase_wheel_0");
+            if(wi == 1u) wName = Name("showcase_wheel_1");
+            else if(wi == 2u) wName = Name("showcase_wheel_2");
+            else if(wi == 3u) wName = Name("showcase_wheel_3");
+            physicsSystem.value().registerNamedEntity(wName, wheelEnt.id());
+            vc.wheelEntityNames.push_back(wName);
+        }
+    }
+}
+
+void QueryTestbedSelectedEntityInfo(
+    mut NotNullUniquePtr<World> worldHandle,
+    in EntityID entity,
+    mut TestbedSelectedEntityInfo outInfo
+){
+    outInfo = TestbedSelectedEntityInfo();
+    outInfo.entity = entity;
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity))
+        return;
+    outInfo.valid = true;
+
+    if(world.hasComponent<CharacterControllerComponent>(entity))
+        outInfo.subsystemTag = 1u;
+    else if(world.hasComponent<VehicleComponent>(entity))
+        outInfo.subsystemTag = 2u;
+    else if(world.hasComponent<RagdollComponent>(entity))
+        outInfo.subsystemTag = 3u;
+    else if(world.hasComponent<ArticulationComponent>(entity))
+        outInfo.subsystemTag = 4u;
+    else if(world.hasComponent<SoftBodyComponent>(entity))
+        outInfo.subsystemTag = 5u;
+    else if(world.hasComponent<FluidVolumeComponent>(entity))
+        outInfo.subsystemTag = 6u;
+    else if(world.hasComponent<ForceFieldComponent>(entity))
+        outInfo.subsystemTag = 7u;
+
+    VectorSingle worldPos(0.0f);
+    VectorSingle worldRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(TryGetTestbedEntityWorldPose(world, entity, worldPos, worldRot))
+        outInfo.position = f32x4(worldPos, 0.0f);
+
+    if(world.hasComponent<ColliderComponent>(entity)){
+        in ColliderComponent col = world.getComponent<ColliderComponent>(entity);
+        outInfo.friction = col.friction;
+        outInfo.restitution = col.restitution;
+    }
+
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(world.hasComponent<RigidBodyComponent>(entity)){
+        in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(entity);
+        outInfo.hasBody = true;
+        outInfo.bodyType = rb.type;
+        outInfo.isDynamic = (rb.type == BodyType::Dynamic);
+        outInfo.isKinematic = (rb.type == BodyType::Kinematic);
+        outInfo.isEnabled = rb.isEnabled;
+        outInfo.isBullet = rb.isBullet;
+        outInfo.gravityScale = rb.gravityScale;
+        outInfo.isAwake = rb.isAwake;
+        if(physicsSystem.has_value() && rb.runtimeBodyId.valid()){
+            in PhysicsWorld pw = physicsSystem.value().physicsWorld();
+            if(rb.runtimeBodyId.index < pw.m_bodies.size()){
+                in Body b = pw.m_bodies[rb.runtimeBodyId.index];
+                if(b.alive && b.generation == rb.runtimeBodyId.generation && b.setIndex < pw.m_solverSets.size()){
+                    outInfo.isAwake = (b.setIndex == s_AwakeSetIndex);
+                    if(b.localIndex < pw.m_solverSets[b.setIndex].sims.size()){
+                        in BodySim sim = pw.m_solverSets[b.setIndex].sims[b.localIndex];
+                        outInfo.position = sim.transform.position;
+                        if(sim.centerInvMass.w > 1.0e-6f)
+                            outInfo.mass = 1.0f / sim.centerInvMass.w;
+                    }
+                    if(b.localIndex < pw.m_solverSets[b.setIndex].states.size()){
+                        in BodyState st = pw.m_solverSets[b.setIndex].states[b.localIndex];
+                        outInfo.linearVelocity = st.linearVelocity;
+                        outInfo.angularVelocity = st.angularVelocity;
+                        outInfo.speed = Vector3Length(VectorSingle(st.linearVelocity, 0.0f)).x;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ApplySelectedEntityToggleWake(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+    in RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(entity);
+    in PhysicsWorld pw = physicsSystem.value().physicsWorld();
+    if(rb.runtimeBodyId.valid() && rb.runtimeBodyId.index < pw.m_bodies.size() && pw.m_bodies[rb.runtimeBodyId.index].setIndex == s_AwakeSetIndex)
+        physicsSystem.value().sleepBody(entity);
+    else
+        physicsSystem.value().wakeBody(entity);
+}
+
+void ApplySelectedEntityToggleEnabled(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const b8 nextEnabled = !world.getComponent<RigidBodyComponent>(entity).isEnabled;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().setBodyEnabled(entity, nextEnabled);
+    mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(entity);
+    rb.isEnabled = nextEnabled;
+    rb.dirty = true;
+}
+
+void ApplySelectedEntityCycleBodyType(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const BodyType curType = world.getComponent<RigidBodyComponent>(entity).type;
+    BodyType nextType = BodyType::Dynamic;
+    if(curType == BodyType::Dynamic)
+        nextType = BodyType::Kinematic;
+    else if(curType == BodyType::Kinematic)
+        nextType = BodyType::Static;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().setBodyType(entity, nextType);
+    mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(entity);
+    rb.type = nextType;
+    rb.dirty = true;
+}
+
+void ApplySelectedEntityToggleBullet(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const b8 nextBullet = !world.getComponent<RigidBodyComponent>(entity).isBullet;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().setBodyBullet(entity, nextBullet);
+}
+
+void ApplySelectedEntityGravityScale(mut NotNullUniquePtr<World> worldHandle, in EntityID entity, in f32 gravityScale){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(physicsSystem.has_value())
+        physicsSystem.value().setGravityScale(entity, gravityScale);
+}
+
+void ApplySelectedEntityUpwardImpulse(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+    physicsSystem.value().applyLinearImpulse(entity, VectorSingle(0.0f, 6.5f, 0.0f, 0.0f), true);
+}
+
+void ApplySelectedEntityZeroVelocity(mut NotNullUniquePtr<World> worldHandle, in EntityID entity){
+    if(!entity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(!world.alive(entity) || !world.hasComponent<RigidBodyComponent>(entity))
+        return;
+    const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+    if(!physicsSystem.has_value())
+        return;
+    physicsSystem.value().setLinearVelocity(entity, VectorSingle(0.0f));
+    physicsSystem.value().setAngularVelocity(entity, VectorSingle(0.0f));
+}
+
+void DeleteSelectedTestbedEntity(
+    mut NotNullUniquePtr<World> worldHandle,
+    mut EntityID inOutSelectedEntity,
+    mut TestbedShowcaseRefs refs,
+    mut Vector<EntityID> allEntities,
+    mut Vector<EntityID> postSnapEntities
+){
+    if(!inOutSelectedEntity.valid())
+        return;
+    mut World world = worldHandle.deref();
+    if(inOutSelectedEntity == refs.characterEntity)
+        refs.characterEntity = s_InvalidEntityId;
+    if(inOutSelectedEntity == refs.vehicleEntity)
+        refs.vehicleEntity = s_InvalidEntityId;
+    if(inOutSelectedEntity == refs.oscKinematicEntity)
+        refs.oscKinematicEntity = s_InvalidEntityId;
+    for(usize i = 0u; i < allEntities.size(); ++i){
+        if(allEntities[i] == inOutSelectedEntity)
+            allEntities[i] = s_InvalidEntityId;
+    }
+    for(usize i = 0u; i < postSnapEntities.size(); ++i){
+        if(postSnapEntities[i] == inOutSelectedEntity)
+            postSnapEntities[i] = s_InvalidEntityId;
+    }
+    if(world.alive(inOutSelectedEntity))
+        world.destroyEntity(inOutSelectedEntity);
+    inOutSelectedEntity = s_InvalidEntityId;
+}
+
+void TrackSpawnedTestbedEntity(
+    in EntityID entity,
+    in b8 hasSnapshot,
+    mut Vector<EntityID> allEntities,
+    mut Vector<EntityID> postSnapEntities,
+    mut EntityID outSelectedEntity
+){
+    if(!entity.valid())
+        return;
+    allEntities.push_back(entity);
+    if(hasSnapshot)
+        postSnapEntities.push_back(entity);
+    outSelectedEntity = entity;
+}
+
+EntityID SpawnShowcaseBasicShape(
+    mut World world,
+    in ShapeType shapeType,
+    in VectorSingle pos,
+    in BodyType bodyType
+);
+
+void SpawnTestbedItem(
+    mut NotNullUniquePtr<World> worldHandle,
+    in TestbedSpawnKind kind,
+    in b8 hasSnapshot,
+    mut TestbedShowcaseRefs refs,
+    mut Vector<EntityID> allEntities,
+    mut Vector<EntityID> postSnapEntities,
+    mut EntityID outSelectedEntity
+){
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
+    VectorSingle spawnPos = basis[3u] + basis[2u] * 3.4f;
+    spawnPos.y = SimdMax(0.8f, spawnPos.y);
+
+    const Name boxModelName = Name("project/meshes/physics_box/model");
+    const Name sphereModelName = Name("project/meshes/physics_sphere/model");
+    const Name whiteMatName = Name("project/materials/mat_white_opaque");
+
+    if(kind == TestbedSpawnKind::Box){
+        const EntityID id = SpawnPhysicsDynamicBox(world, spawnPos, VectorSingle(0.45f, 0.45f, 0.45f, 0.0f), 0.6f, 0.1f, boxModelName, whiteMatName);
+        TrackSpawnedTestbedEntity(id, hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Sphere){
+        const EntityID id = SpawnPhysicsDynamicSphere(world, spawnPos, VectorSingle(0.42f, 0.42f, 0.42f, 0.0f), VectorSingle(0.0f), 1.0f, 0.5f, 0.45f, sphereModelName, whiteMatName);
+        TrackSpawnedTestbedEntity(id, hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Capsule){
+        const EntityID id = SpawnShowcaseBasicShape(world, ShapeType::Capsule, spawnPos, BodyType::Dynamic);
+        TrackSpawnedTestbedEntity(id, hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Cylinder){
+        const EntityID id = SpawnShowcaseBasicShape(world, ShapeType::Cylinder, spawnPos, BodyType::Dynamic);
+        TrackSpawnedTestbedEntity(id, hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Cone){
+        const EntityID id = SpawnShowcaseBasicShape(world, ShapeType::Cone, spawnPos, BodyType::Dynamic);
+        TrackSpawnedTestbedEntity(id, hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Stack){
+        for(u32 iy = 0u; iy < 3u; ++iy){
+            for(u32 ix = 0u; ix < 2u; ++ix){
+                const VectorSingle bPos = spawnPos + VectorSingle((cast<f32>(ix) - 0.5f) * 0.44f, cast<f32>(iy) * 0.42f, 0.0f, 0.0f);
+                const EntityID id = SpawnPhysicsDynamicBox(world, bPos, VectorSingle(0.38f, 0.38f, 0.38f, 0.0f), 0.6f, 0.05f, boxModelName, whiteMatName);
+                TrackSpawnedTestbedEntity(id, hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+            }
+        }
+    }
+    else if(kind == TestbedSpawnKind::Barrel){
+        Entity ent = world.createEntity();
+        mut TransformComponent xf = ent.addComponent<TransformComponent>();
+        xf.position = f32x4(spawnPos, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent rb = ent.addComponent<RigidBodyComponent>();
+        rb.type = BodyType::Dynamic;
+        rb.dirty = true;
+        mut ColliderComponent col = ent.addComponent<ColliderComponent>();
+        col.shapeType = ShapeType::Cylinder;
+        col.cylinderHalfHeight = 0.42f;
+        col.radius = 0.28f;
+        col.density = 1.6f;
+        col.friction = 0.65f;
+        col.dirty = true;
+        TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::SoftBody){
+        Entity ent = world.createEntity();
+        ent.addComponent<TransformComponent>();
+        mut SoftBodyComponent sbc = ent.addComponent<SoftBodyComponent>();
+        sbc.softBody = CreateTetrahedralBox(spawnPos, VectorSingle(0.32f, 0.32f, 0.32f, 0.0f), 2.5f, 0.002f, 0.001f);
+        sbc.softBody.pressureCoeff = 0.6f;
+        TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Ragdoll){
+        Entity ent = world.createEntity();
+        mut TransformComponent xf = ent.addComponent<TransformComponent>();
+        xf.position = f32x4(spawnPos, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RagdollComponent rc = ent.addComponent<RagdollComponent>();
+        for(u32 bi = 0u; bi < 3u; ++bi){
+            RagdollBoneDef bone;
+            if(bi == 0u){
+                bone.parentIndex = s_NullIndex;
+                bone.shapeType = RagdollBoneShapeType::Box;
+                bone.boxHalfExtents = f32x4(0.14f, 0.12f, 0.10f, 0.0f);
+            }
+            else if(bi == 1u){
+                bone.parentIndex = 0u;
+                bone.shapeType = RagdollBoneShapeType::Capsule;
+                bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
+                bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
+            }
+            else{
+                bone.parentIndex = 1u;
+                bone.shapeType = RagdollBoneShapeType::Sphere;
+                bone.sphere = MakeSphereShape(VectorSingle(0.0f), 0.14f).value();
+            }
+            const f32 by = cast<f32>(bi) * 0.38f;
+            bone.bodyDef.type = BodyType::Dynamic;
+            bone.bodyDef.position = f32x4(0.0f, by, 0.0f, 0.0f);
+            bone.jointAnchorWorld = f32x4(0.0f, by - 0.18f, 0.0f, 0.0f);
+            rc.bones.push_back(bone);
+        }
+        rc.dirty = true;
+        TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Articulation){
+        Entity ent = world.createEntity();
+        mut TransformComponent xf = ent.addComponent<TransformComponent>();
+        xf.position = f32x4(spawnPos, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut ArticulationComponent ac = ent.addComponent<ArticulationComponent>();
+        ac.isFixedBase = true;
+        for(u32 li = 0u; li < 3u; ++li){
+            ArticulationLinkDef link;
+            if(li == 0u){
+                link.parentIndex = s_NullIndex;
+                link.parentToJoint.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                link.jointType = ArticulationJointType::Revolute;
+            }
+            else{
+                link.parentIndex = li - 1u;
+                link.parentToJoint.position = f32x4(0.0f, -0.45f, 0.0f, 0.0f);
+                link.jointType = ArticulationJointType::Universal;
+            }
+            link.jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+            link.jointAxisSecondaryLocal = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+            link.jointToChild.position = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+            link.mass = 0.8f;
+            ac.links.push_back(link);
+        }
+        ac.dirty = true;
+        TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Character){
+        Entity ent = world.createEntity();
+        mut TransformComponent xf = ent.addComponent<TransformComponent>();
+        xf.position = f32x4(spawnPos, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut CharacterControllerComponent cc = ent.addComponent<CharacterControllerComponent>();
+        cc.def.radius = 0.32f;
+        cc.def.halfHeight = 0.50f;
+        cc.dirty = true;
+        refs.characterEntity = ent.id();
+        TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+    else if(kind == TestbedSpawnKind::Vehicle){
+        Entity ent = world.createEntity();
+        mut TransformComponent xf = ent.addComponent<TransformComponent>();
+        xf.position = f32x4(spawnPos, 0.0f);
+        xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent rb = ent.addComponent<RigidBodyComponent>();
+        rb.type = BodyType::Dynamic;
+        rb.dirty = true;
+        mut ColliderComponent col = ent.addComponent<ColliderComponent>();
+        col.shapeType = ShapeType::Hull;
+        col.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
+        col.density = 3.0f;
+        col.dirty = true;
+        mut VehicleComponent vc = ent.addComponent<VehicleComponent>();
+        for(u32 wi = 0u; wi < 4u; ++wi){
+            VehicleWheelDef wd;
+            f32 wx = -0.7f;
+            if((wi & 1u) != 0u)
+                wx = 0.7f;
+            f32 wz = 0.95f;
+            if(wi >= 2u)
+                wz = -0.95f;
+            wd.attachmentPoint = f32x4(wx, -0.1f, wz, 0.0f);
+            wd.isSteerable = (wi < 2u);
+            wd.isDriven = (wi >= 2u);
+            vc.wheels.push_back(wd);
+        }
+        vc.dirty = true;
+        refs.vehicleEntity = ent.id();
+        TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
+    }
+}
+
+void ShootTestbedProjectileTracked(
+    mut NotNullUniquePtr<World> worldHandle,
+    in b8 hasSnapshot,
+    mut Vector<EntityID> outEntities,
+    mut Vector<EntityID> outPostSnapshotEntities
+){
+    const usize prevCount = outEntities.size();
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
+    const VectorSingle camPos = basis[3u];
+    const VectorSingle camFwd = basis[2u];
+    const Name sphereModelName = Name("project/meshes/physics_sphere/model");
+    const Name whiteMatName = Name("project/materials/mat_white_opaque");
+    const EntityID projId = SpawnPhysicsDynamicSphere(
+        world,
+        camPos + camFwd * 1.1f,
+        VectorSingle(0.24f, 0.24f, 0.24f, 0.0f),
+        camFwd * 18.0f,
+        3.0f,
+        0.4f,
+        0.45f,
+        sphereModelName,
+        whiteMatName
+    );
+    if(projId.valid()){
+        if(world.hasComponent<RigidBodyComponent>(projId)){
+            mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(projId);
+            rb.isBullet = true;
+            rb.dirty = true;
+        }
+        outEntities.push_back(projId);
+        if(hasSnapshot && outEntities.size() > prevCount)
+            outPostSnapshotEntities.push_back(projId);
+    }
 }
 
 void ShootTestbedProjectile(mut NotNullUniquePtr<World> worldHandle, mut Vector<EntityID> outEntities){
@@ -1212,10 +2508,12 @@ void CreateShowcasePhysicsScene(
     mut NotNullUniquePtr<World> worldHandle,
     in TestbedPhysicsBackendChoice backendChoice,
     mut EntityID outConfigEntity,
-    mut Vector<EntityID> outEntities
+    mut Vector<EntityID> outEntities,
+    mut TestbedShowcaseRefs outRefs
 ){
     mut World world = worldHandle.deref();
     outEntities.clear();
+    outRefs = TestbedShowcaseRefs();
 
     {
         Entity cfgEntity = world.createEntity();
@@ -1279,6 +2577,7 @@ void CreateShowcasePhysicsScene(
         hfCol.heightfieldCols = 5u;
         hfCol.heightfieldScale = f32x4(0.7f, 0.35f, 0.7f, 0.0f);
         hfCol.heightfieldThickness = 0.35f;
+        hfCol.heightfieldFlipDiagonal = true;
         hfCol.heightfieldHeights.resize(25u, 0.0f);
         hfCol.heightfieldHeights[6u] = 0.5f;
         hfCol.heightfieldHeights[7u] = 0.75f;
@@ -1289,8 +2588,165 @@ void CreateShowcasePhysicsScene(
         hfCol.heightfieldHeights[16u] = 0.5f;
         hfCol.heightfieldHeights[17u] = 0.75f;
         hfCol.heightfieldHeights[18u] = 0.5f;
+        hfCol.heightfieldCellHoles.resize(16u, 0u);
+        hfCol.heightfieldCellHoles[5u] = 1u;
         hfCol.dirty = true;
         outEntities.push_back(hfEnt.id());
+    }
+
+    {
+        Entity meshEnt = world.createEntity();
+        mut TransformComponent mXf = meshEnt.addComponent<TransformComponent>();
+        mXf.position = f32x4(-3.8f, 0.0f, -1.6f, 0.0f);
+        mXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent mRb = meshEnt.addComponent<RigidBodyComponent>();
+        mRb.type = BodyType::Static;
+        mRb.dirty = true;
+        mut ColliderComponent mCol = meshEnt.addComponent<ColliderComponent>();
+        mCol.shapeType = ShapeType::Mesh;
+        mCol.meshVertices.push_back(f32x4(-0.6f, 0.0f, 0.5f, 0.0f));
+        mCol.meshVertices.push_back(f32x4(0.6f, 0.0f, 0.5f, 0.0f));
+        mCol.meshVertices.push_back(f32x4(0.6f, 0.0f, -0.5f, 0.0f));
+        mCol.meshVertices.push_back(f32x4(-0.6f, 0.0f, -0.5f, 0.0f));
+        mCol.meshVertices.push_back(f32x4(-0.6f, 0.45f, -0.5f, 0.0f));
+        mCol.meshVertices.push_back(f32x4(0.6f, 0.45f, -0.5f, 0.0f));
+        mCol.meshIndices.push_back(0u); mCol.meshIndices.push_back(1u); mCol.meshIndices.push_back(5u);
+        mCol.meshIndices.push_back(0u); mCol.meshIndices.push_back(5u); mCol.meshIndices.push_back(4u);
+        mCol.meshIndices.push_back(3u); mCol.meshIndices.push_back(4u); mCol.meshIndices.push_back(5u);
+        mCol.meshIndices.push_back(3u); mCol.meshIndices.push_back(5u); mCol.meshIndices.push_back(2u);
+        mCol.dirty = true;
+        outEntities.push_back(meshEnt.id());
+    }
+
+    {
+        Entity hullEnt = world.createEntity();
+        mut TransformComponent hXf = hullEnt.addComponent<TransformComponent>();
+        hXf.position = f32x4(2.7f, 0.9f, -3.0f, 0.0f);
+        hXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent hRb = hullEnt.addComponent<RigidBodyComponent>();
+        hRb.type = BodyType::Dynamic;
+        hRb.dirty = true;
+        mut ColliderComponent hCol = hullEnt.addComponent<ColliderComponent>();
+        hCol.shapeType = ShapeType::Hull;
+        hCol.isBox = false;
+        hCol.hullPoints.push_back(f32x4(0.0f, 0.34f, 0.0f, 0.0f));
+        hCol.hullPoints.push_back(f32x4(0.0f, -0.34f, 0.0f, 0.0f));
+        hCol.hullPoints.push_back(f32x4(0.28f, 0.0f, 0.0f, 0.0f));
+        hCol.hullPoints.push_back(f32x4(-0.28f, 0.0f, 0.0f, 0.0f));
+        hCol.hullPoints.push_back(f32x4(0.0f, 0.0f, 0.28f, 0.0f));
+        hCol.hullPoints.push_back(f32x4(0.0f, 0.0f, -0.28f, 0.0f));
+        hCol.density = 1.0f;
+        hCol.dirty = true;
+        outEntities.push_back(hullEnt.id());
+    }
+
+    {
+        Entity chainEnt = world.createEntity();
+        mut TransformComponent chXf = chainEnt.addComponent<TransformComponent>();
+        chXf.position = f32x4(3.6f, 0.25f, -2.2f, 0.0f);
+        chXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent chRb = chainEnt.addComponent<RigidBodyComponent>();
+        chRb.type = BodyType::Static;
+        chRb.dirty = true;
+        mut ColliderComponent chCol = chainEnt.addComponent<ColliderComponent>();
+        chCol.shapeType = ShapeType::Segment;
+        chCol.isChain = true;
+        chCol.chainClosed = false;
+        chCol.chainRadius = 0.06f;
+        chCol.chainPoints.push_back(f32x4(-0.8f, 0.2f, 0.0f, 0.0f));
+        chCol.chainPoints.push_back(f32x4(-0.4f, 0.0f, 0.3f, 0.0f));
+        chCol.chainPoints.push_back(f32x4(0.0f, 0.15f, 0.0f, 0.0f));
+        chCol.chainPoints.push_back(f32x4(0.4f, 0.0f, -0.3f, 0.0f));
+        chCol.chainPoints.push_back(f32x4(0.8f, 0.25f, 0.0f, 0.0f));
+        chCol.dirty = true;
+        outEntities.push_back(chainEnt.id());
+    }
+
+    {
+        Entity cmpEnt = world.createEntity();
+        mut TransformComponent cpXf = cmpEnt.addComponent<TransformComponent>();
+        cpXf.position = f32x4(-3.4f, 1.1f, -3.0f, 0.0f);
+        cpXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent cpRb = cmpEnt.addComponent<RigidBodyComponent>();
+        cpRb.type = BodyType::Dynamic;
+        cpRb.useCustomMass = true;
+        cpRb.customMass = 3.0f;
+        cpRb.customCenterOfMass = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        cpRb.dirty = true;
+        mut ColliderComponent cpCol = cmpEnt.addComponent<ColliderComponent>();
+        cpCol.shapeType = ShapeType::Hull;
+        cpCol.halfExtents = f32x4(0.32f, 0.12f, 0.12f, 0.0f);
+        ColliderShapeEntry leftOrb;
+        leftOrb.shapeType = ShapeType::Sphere;
+        leftOrb.center = f32x4(-0.36f, 0.0f, 0.0f, 0.0f);
+        leftOrb.radius = 0.18f;
+        cpCol.extraShapes.push_back(leftOrb);
+        ColliderShapeEntry rightOrb;
+        rightOrb.shapeType = ShapeType::Sphere;
+        rightOrb.center = f32x4(0.36f, 0.0f, 0.0f, 0.0f);
+        rightOrb.radius = 0.18f;
+        cpCol.extraShapes.push_back(rightOrb);
+        cpCol.dirty = true;
+        outEntities.push_back(cmpEnt.id());
+    }
+
+    {
+        Entity senEnt = world.createEntity();
+        mut TransformComponent sXf = senEnt.addComponent<TransformComponent>();
+        sXf.position = f32x4(0.0f, 0.55f, -3.0f, 0.0f);
+        sXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent sRb = senEnt.addComponent<RigidBodyComponent>();
+        sRb.type = BodyType::Static;
+        sRb.dirty = true;
+        mut ColliderComponent sCol = senEnt.addComponent<ColliderComponent>();
+        sCol.shapeType = ShapeType::Hull;
+        sCol.halfExtents = f32x4(0.7f, 0.55f, 0.7f, 0.0f);
+        sCol.isSensor = true;
+        sCol.enableSensorEvents = true;
+        sCol.dirty = true;
+        outRefs.sensorEntity = senEnt.id();
+        outEntities.push_back(senEnt.id());
+    }
+
+    {
+        Entity disEnt = world.createEntity();
+        mut TransformComponent dXf = disEnt.addComponent<TransformComponent>();
+        dXf.position = f32x4(-4.8f, 0.7f, -2.5f, 0.0f);
+        dXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut RigidBodyComponent dRb = disEnt.addComponent<RigidBodyComponent>();
+        dRb.type = BodyType::Static;
+        dRb.isEnabled = false;
+        dRb.dirty = true;
+        mut ColliderComponent dCol = disEnt.addComponent<ColliderComponent>();
+        dCol.shapeType = ShapeType::Hull;
+        dCol.halfExtents = f32x4(0.3f, 0.3f, 0.3f, 0.0f);
+        dCol.dirty = true;
+        outEntities.push_back(disEnt.id());
+    }
+
+    {
+        Entity kinEnt = world.createEntity();
+        mut TransformComponent kXf = kinEnt.addComponent<TransformComponent>();
+        outRefs.kinematicBasePos = f32x4(0.0f, 0.16f, -1.3f, 0.0f);
+        kXf.position = outRefs.kinematicBasePos;
+        kXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        kXf.scale = f32x4(1.3f, 0.18f, 0.9f, 0.0f);
+        mut RigidBodyComponent kRb = kinEnt.addComponent<RigidBodyComponent>();
+        kRb.type = BodyType::Kinematic;
+        kRb.driveKinematicFromTransform = false;
+        kRb.dirty = true;
+        mut ColliderComponent kCol = kinEnt.addComponent<ColliderComponent>();
+        kCol.shapeType = ShapeType::Hull;
+        kCol.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+        kCol.friction = 0.8f;
+        kCol.dirty = true;
+        mut ModelComponent kMdl = kinEnt.addComponent<ModelComponent>();
+        kMdl.model = AssetRef<Model>(boxModelName);
+        mut RendererComponent kRnd = kinEnt.addComponent<RendererComponent>();
+        kRnd.material = AssetRef<Material>(whiteMatName);
+        outRefs.oscKinematicEntity = kinEnt.id();
+        outEntities.push_back(kinEnt.id());
+        outEntities.push_back(SpawnPhysicsDynamicBox(world, VectorSingle(0.0f, 0.65f, -1.3f, 0.0f), VectorSingle(0.34f, 0.34f, 0.34f, 0.0f), 0.7f, 0.1f, boxModelName, whiteMatName));
     }
 
     outEntities.push_back(SpawnShowcaseBasicShape(world, ShapeType::Capsule, VectorSingle(-2.6f, 0.9f, -3.0f, 0.0f), BodyType::Dynamic));
@@ -1342,7 +2798,9 @@ void CreateShowcasePhysicsScene(
         jc.length = 0.85f;
         jc.enableLimit = true; jc.minLength = 0.45f; jc.maxLength = 1.25f;
         jc.enableSpring = true; jc.hertz = 2.0f; jc.dampingRatio = 0.4f;
+        jc.breakForce = 65.0f;
         jc.dirty = true;
+        outRefs.breakableJointEntity = je.id();
         outEntities.push_back(je.id());
     }
     {
@@ -1357,6 +2815,7 @@ void CreateShowcasePhysicsScene(
         jc.localAxisB = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
         jc.localAnchorB = f32x4(0.0f, 0.6f, 0.0f, 0.0f);
         jc.enableLimit = true; jc.swingLimit = 0.65f; jc.swingLimitY = 0.45f;
+        jc.enableTwistLimit = true; jc.lowerLimit = -0.6f; jc.upperLimit = 0.6f;
         jc.dirty = true;
         outEntities.push_back(je.id());
     }
@@ -1376,6 +2835,8 @@ void CreateShowcasePhysicsScene(
         jc.sixDofAxes[3u].motion = JointMotion::Free;
         jc.sixDofAxes[4u].motion = JointMotion::Limited; jc.sixDofAxes[4u].lowerLimit = -0.5f; jc.sixDofAxes[4u].upperLimit = 0.5f;
         jc.sixDofAxes[5u].motion = JointMotion::Limited; jc.sixDofAxes[5u].lowerLimit = -0.5f; jc.sixDofAxes[5u].upperLimit = 0.5f;
+        jc.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
+        jc.sixDofSwingLimitY = 0.5f;
         jc.dirty = true;
         outEntities.push_back(je.id());
     }
@@ -1383,15 +2844,23 @@ void CreateShowcasePhysicsScene(
         EntityID gAnc = s_InvalidEntityId;
         EntityID gA = s_InvalidEntityId;
         EntityID gB = s_InvalidEntityId;
-        SpawnShowcaseAnchorAndBody(world, VectorSingle(1.7f, 2.2f, -4.4f, 0.0f), VectorSingle(1.55f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, gAnc, gA);
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(1.75f, 2.2f, -4.4f, 0.0f), VectorSingle(1.55f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, gAnc, gA);
         gB = SpawnPhysicsDynamicBox(world, VectorSingle(1.95f, 1.6f, -4.4f, 0.0f), VectorSingle(0.24f, 0.24f, 0.24f, 0.0f), 0.5f, 0.1f, boxModelName, whiteMatName);
         outEntities.push_back(gB);
         Entity revA = world.createEntity();
         mut JointComponent jra = revA.addComponent<JointComponent>();
         jra.bodyEntityA = gAnc; jra.bodyEntityB = gA; jra.type = JointType::Revolute;
+        jra.localAnchorA = f32x4(-0.20f, -0.6f, 0.0f, 0.0f);
         jra.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jra.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
         jra.enableMotor = true; jra.motorSpeed = 1.5f; jra.maxMotorForce = 5.0f; jra.dirty = true;
         outEntities.push_back(revA.id());
+        Entity revB = world.createEntity();
+        mut JointComponent jrb = revB.addComponent<JointComponent>();
+        jrb.bodyEntityA = gAnc; jrb.bodyEntityB = gB; jrb.type = JointType::Revolute;
+        jrb.localAnchorA = f32x4(0.20f, -0.6f, 0.0f, 0.0f);
+        jrb.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jrb.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jrb.dirty = true;
+        outEntities.push_back(revB.id());
         Entity gear = world.createEntity();
         mut JointComponent jg = gear.addComponent<JointComponent>();
         jg.bodyEntityA = gA; jg.bodyEntityB = gB; jg.type = JointType::Gear;
@@ -1413,9 +2882,26 @@ void CreateShowcasePhysicsScene(
         outEntities.push_back(pulley.id());
     }
     {
-        EntityID rack = s_InvalidEntityId;
-        EntityID pinion = s_InvalidEntityId;
-        SpawnShowcaseAnchorAndBody(world, VectorSingle(-2.4f, 1.6f, -5.8f, 0.0f), VectorSingle(-2.4f, 1.2f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, rack, pinion);
+        const EntityID rpFrame = SpawnPhysicsStaticBox(world, VectorSingle(-2.4f, 2.0f, -5.8f, 0.0f), VectorSingle(0.18f, 0.18f, 0.18f, 0.0f), VectorSingle(0.5f, 0.5f, 0.5f, 0.0f), 0.5f, 0.1f, true, boxModelName, whiteMatName);
+        const EntityID rack = SpawnPhysicsDynamicBox(world, VectorSingle(-2.4f, 1.5f, -5.8f, 0.0f), VectorSingle(0.45f, 0.14f, 0.18f, 0.0f), 0.5f, 0.1f, boxModelName, whiteMatName);
+        const EntityID pinion = SpawnPhysicsDynamicBox(world, VectorSingle(-2.4f, 1.15f, -5.8f, 0.0f), VectorSingle(0.24f, 0.24f, 0.18f, 0.0f), 0.5f, 0.1f, boxModelName, whiteMatName);
+        outEntities.push_back(rpFrame);
+        outEntities.push_back(rack);
+        outEntities.push_back(pinion);
+        Entity rpPrism = world.createEntity();
+        mut JointComponent jPr = rpPrism.addComponent<JointComponent>();
+        jPr.bodyEntityA = rpFrame; jPr.bodyEntityB = rack; jPr.type = JointType::Prismatic;
+        jPr.localAnchorA = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        jPr.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jPr.enableLimit = true; jPr.lowerLimit = -0.5f; jPr.upperLimit = 0.5f; jPr.dirty = true;
+        outEntities.push_back(rpPrism.id());
+        Entity rpRev = world.createEntity();
+        mut JointComponent jRv = rpRev.addComponent<JointComponent>();
+        jRv.bodyEntityA = rpFrame; jRv.bodyEntityB = pinion; jRv.type = JointType::Revolute;
+        jRv.localAnchorA = f32x4(0.0f, -0.85f, 0.0f, 0.0f);
+        jRv.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jRv.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jRv.enableMotor = true; jRv.motorSpeed = 1.6f; jRv.maxMotorForce = 6.0f; jRv.dirty = true;
+        outEntities.push_back(rpRev.id());
         Entity rp = world.createEntity();
         mut JointComponent jrp = rp.addComponent<JointComponent>();
         jrp.bodyEntityA = rack; jrp.bodyEntityB = pinion; jrp.type = JointType::RackAndPinion;
@@ -1436,6 +2922,7 @@ void CreateShowcasePhysicsScene(
         jpt.pathPoints.push_back(f32x4(0.35f, 0.0f, 0.0f, 0.0f));
         jpt.pathPoints.push_back(f32x4(0.0f, -0.25f, -0.2f, 0.0f));
         jpt.pathClosed = true;
+        jpt.pathLockRotation = true;
         jpt.dirty = true;
         outEntities.push_back(pe.id());
     }
@@ -1449,6 +2936,33 @@ void CreateShowcasePhysicsScene(
         jr.maxLength = 1.05f; jr.dirty = true;
         outEntities.push_back(re.id());
     }
+    {
+        EntityID fixAnc = s_InvalidEntityId;
+        EntityID fixBod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(3.5f, 2.2f, -4.4f, 0.0f), VectorSingle(3.5f, 1.75f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, fixAnc, fixBod);
+        Entity fe = world.createEntity();
+        mut JointComponent jf = fe.addComponent<JointComponent>();
+        jf.bodyEntityA = fixAnc; jf.bodyEntityB = fixBod; jf.type = JointType::Fixed;
+        jf.localAnchorA = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        jf.localAnchorB = f32x4(0.0f, 0.20f, 0.0f, 0.0f);
+        jf.dirty = true;
+        outEntities.push_back(fe.id());
+    }
+    {
+        EntityID whlAnc = s_InvalidEntityId;
+        EntityID whlBod = s_InvalidEntityId;
+        SpawnShowcaseAnchorAndBody(world, VectorSingle(3.6f, 2.2f, -5.8f, 0.0f), VectorSingle(3.6f, 1.55f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, whlAnc, whlBod);
+        Entity we = world.createEntity();
+        mut JointComponent jw = we.addComponent<JointComponent>();
+        jw.bodyEntityA = whlAnc; jw.bodyEntityB = whlBod; jw.type = JointType::Wheel;
+        jw.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jw.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jw.enableSpring = true; jw.hertz = 3.0f; jw.dampingRatio = 0.45f;
+        jw.enableLimit = true; jw.lowerLimit = -0.35f; jw.upperLimit = 0.35f;
+        jw.enableMotor = true; jw.motorSpeed = 2.0f; jw.maxMotorForce = 6.0f;
+        jw.dirty = true;
+        outEntities.push_back(we.id());
+    }
 
     {
         Entity charEnt = world.createEntity();
@@ -1459,6 +2973,7 @@ void CreateShowcasePhysicsScene(
         cc.def.radius = 0.32f;
         cc.def.halfHeight = 0.50f;
         cc.dirty = true;
+        outRefs.characterEntity = charEnt.id();
         outEntities.push_back(charEnt.id());
     }
 
@@ -1475,6 +2990,10 @@ void CreateShowcasePhysicsScene(
         col.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
         col.density = 3.0f;
         col.dirty = true;
+        mut ModelComponent vMdl = vehEnt.addComponent<ModelComponent>();
+        vMdl.model = AssetRef<Model>(boxModelName);
+        mut RendererComponent vRnd = vehEnt.addComponent<RendererComponent>();
+        vRnd.material = AssetRef<Material>(whiteMatName);
         mut VehicleComponent vc = vehEnt.addComponent<VehicleComponent>();
         vc.engine.forwardGearRatios[0u] = 3.5f;
         vc.engine.forwardGearRatios[1u] = 2.2f;
@@ -1495,8 +3014,10 @@ void CreateShowcasePhysicsScene(
             wd.isDriven = (wi >= 2u);
             vc.wheels.push_back(wd);
         }
-        vc.input.brake = 0.25f;
+        BindVehicleWheelVisuals(world, vc, VectorSingle(4.0f, 0.9f, -3.4f, 0.0f), boxModelName, whiteMatName, true, outEntities);
+        vc.input.brake = 0.0f;
         vc.dirty = true;
+        outRefs.vehicleEntity = vehEnt.id();
         outEntities.push_back(vehEnt.id());
     }
 
@@ -1506,19 +3027,34 @@ void CreateShowcasePhysicsScene(
         xf.position = f32x4(0.0f, 1.6f, -5.8f, 0.0f);
         xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         mut RagdollComponent rc = ragEnt.addComponent<RagdollComponent>();
+        rc.driveToPose = true;
+        rc.driveStrengthMultiplier = 1.4f;
         for(u32 bi = 0u; bi < 3u; ++bi){
             RagdollBoneDef bone;
-            if(bi == 0u)
+            if(bi == 0u){
                 bone.parentIndex = s_NullIndex;
-            else
-                bone.parentIndex = bi - 1u;
-            const f32 by = cast<f32>(bi) * 0.45f;
+                bone.shapeType = RagdollBoneShapeType::Box;
+                bone.boxHalfExtents = f32x4(0.14f, 0.12f, 0.10f, 0.0f);
+            }
+            else if(bi == 1u){
+                bone.parentIndex = 0u;
+                bone.shapeType = RagdollBoneShapeType::Capsule;
+                bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
+                bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
+            }
+            else{
+                bone.parentIndex = 1u;
+                bone.shapeType = RagdollBoneShapeType::Sphere;
+                bone.sphere = MakeSphereShape(VectorSingle(0.0f), 0.14f).value();
+            }
+            const f32 by = cast<f32>(bi) * 0.42f;
             bone.bodyDef.type = BodyType::Dynamic;
             bone.bodyDef.position = f32x4(0.0f, by, 0.0f, 0.0f);
-            bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
-            bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
-            bone.jointAnchorWorld = f32x4(0.0f, by - 0.22f, 0.0f, 0.0f);
+            bone.jointAnchorWorld = f32x4(0.0f, by - 0.20f, 0.0f, 0.0f);
             rc.bones.push_back(bone);
+            Transform3D tgtXf;
+            tgtXf.position = f32x4(0.0f, by + 0.15f, 0.0f, 0.0f);
+            rc.targetPose.push_back(tgtXf);
         }
         rc.dirty = true;
         outEntities.push_back(ragEnt.id());
@@ -1535,8 +3071,30 @@ void CreateShowcasePhysicsScene(
         fvc.volume.flowVelocity = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
         fvc.volume.density = 1200.0f;
         outEntities.push_back(fluidEnt.id());
-
         outEntities.push_back(SpawnPhysicsDynamicBox(world, VectorSingle(0.2f, 0.9f, -7.8f, 0.0f), VectorSingle(0.35f, 0.35f, 0.35f, 0.0f), 0.4f, 0.1f, boxModelName, whiteMatName));
+
+        Entity fluidSph = world.createEntity();
+        mut TransformComponent fsXf = fluidSph.addComponent<TransformComponent>();
+        fsXf.position = f32x4(-4.8f, 0.9f, -7.8f, 0.0f);
+        fsXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut FluidVolumeComponent fvs = fluidSph.addComponent<FluidVolumeComponent>();
+        fvs.volume.shape = FluidVolumeShape::Sphere;
+        fvs.volume.surfaceNormalOffset = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        fvs.volume.flowVelocity = f32x4(0.0f, 0.6f, 0.0f, 0.0f);
+        fvs.volume.density = 1100.0f;
+        outEntities.push_back(fluidSph.id());
+
+        Entity fluidPlane = world.createEntity();
+        mut TransformComponent fpXf = fluidPlane.addComponent<TransformComponent>();
+        fpXf.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        fpXf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        mut FluidVolumeComponent fvp = fluidPlane.addComponent<FluidVolumeComponent>();
+        fvp.volume.shape = FluidVolumeShape::HalfSpacePlane;
+        fvp.volume.surfaceNormalOffset = f32x4(0.0f, 1.0f, 0.0f, -0.05f);
+        fvp.volume.waveAmplitude = 0.08f;
+        fvp.volume.waveFrequency = 2.0f;
+        fvp.volume.waveSpeed = 1.8f;
+        outEntities.push_back(fluidPlane.id());
     }
 
     {
@@ -1552,8 +3110,45 @@ void CreateShowcasePhysicsScene(
         ffc.field.radius = 2.0f;
         ffc.field.strength = 12.0f;
         outEntities.push_back(ffEnt.id());
-
         outEntities.push_back(SpawnPhysicsDynamicSphere(world, VectorSingle(2.4f, 1.5f, -8.8f, 0.0f), VectorSingle(0.25f, 0.25f, 0.25f, 0.0f), VectorSingle(0.0f, 0.0f, 1.5f, 0.0f), 0.5f, 0.3f, 0.3f, sphereModelName, whiteMatName));
+
+        Entity ffPt = world.createEntity();
+        ffPt.addComponent<TransformComponent>().position = f32x4(-3.6f, 1.2f, -9.2f, 0.0f);
+        mut ForceFieldComponent ffp = ffPt.addComponent<ForceFieldComponent>();
+        ffp.field.type = ForceFieldType::PointGravity;
+        ffp.field.useBounds = false;
+        ffp.field.radius = 1.6f;
+        ffp.field.minDistance = 0.5f;
+        ffp.field.strength = 10.0f;
+        outEntities.push_back(ffPt.id());
+
+        Entity ffWind = world.createEntity();
+        ffWind.addComponent<TransformComponent>().position = f32x4(-0.6f, 1.2f, -9.8f, 0.0f);
+        mut ForceFieldComponent ffw = ffWind.addComponent<ForceFieldComponent>();
+        ffw.field.type = ForceFieldType::BoxWind;
+        ffw.field.useBounds = true;
+        ffw.field.bounds = Aabb3D(VectorSingle(-1.1f, -0.8f, -0.8f, 0.0f), VectorSingle(1.1f, 0.8f, 0.8f, 0.0f));
+        ffw.field.originOrDirection = f32x4(1.0f, 0.2f, 0.0f, 0.0f);
+        ffw.field.strength = 7.0f;
+        outEntities.push_back(ffWind.id());
+
+        Entity ffDamp = world.createEntity();
+        ffDamp.addComponent<TransformComponent>().position = f32x4(-5.4f, 0.9f, -5.2f, 0.0f);
+        mut ForceFieldComponent ffd = ffDamp.addComponent<ForceFieldComponent>();
+        ffd.field.type = ForceFieldType::DampingZone;
+        ffd.field.useBounds = true;
+        ffd.field.bounds = Aabb3D(VectorSingle(-0.8f, -0.7f, -0.8f, 0.0f), VectorSingle(0.8f, 0.7f, 0.8f, 0.0f));
+        ffd.field.strength = 3.5f;
+        outEntities.push_back(ffDamp.id());
+
+        Entity ffGrav = world.createEntity();
+        ffGrav.addComponent<TransformComponent>().position = f32x4(5.4f, 1.0f, -5.8f, 0.0f);
+        mut ForceFieldComponent ffg = ffGrav.addComponent<ForceFieldComponent>();
+        ffg.field.type = ForceFieldType::LocalGravityOverride;
+        ffg.field.useBounds = true;
+        ffg.field.bounds = Aabb3D(VectorSingle(-0.8f, -0.8f, -0.8f, 0.0f), VectorSingle(0.8f, 0.8f, 0.8f, 0.0f));
+        ffg.field.originOrDirection = f32x4(0.0f, 3.0f, 0.0f, 0.0f);
+        outEntities.push_back(ffGrav.id());
     }
 
     {
@@ -1563,20 +3158,32 @@ void CreateShowcasePhysicsScene(
         xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         mut ArticulationComponent ac = artEnt.addComponent<ArticulationComponent>();
         ac.isFixedBase = true;
-        for(u32 li = 0u; li < 2u; ++li){
+        for(u32 li = 0u; li < 3u; ++li){
             ArticulationLinkDef link;
             if(li == 0u){
                 link.parentIndex = s_NullIndex;
                 link.parentToJoint.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                link.jointType = ArticulationJointType::Revolute;
+                link.enableDrive = true;
+                link.driveStiffness = 10.0f;
+                link.driveDamping = 1.5f;
+                link.driveMaxForce = 12.0f;
+                link.driveTargetPos = 0.6f;
+            }
+            else if(li == 1u){
+                link.parentIndex = 0u;
+                link.parentToJoint.position = f32x4(0.0f, -0.50f, 0.0f, 0.0f);
+                link.jointType = ArticulationJointType::Universal;
             }
             else{
-                link.parentIndex = 0u;
-                link.parentToJoint.position = f32x4(0.0f, -0.55f, 0.0f, 0.0f);
+                link.parentIndex = 1u;
+                link.parentToJoint.position = f32x4(0.0f, -0.45f, 0.0f, 0.0f);
+                link.jointType = ArticulationJointType::Spherical;
             }
-            link.jointType = ArticulationJointType::Revolute;
             link.jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-            link.jointToChild.position = f32x4(0.0f, -0.35f, 0.0f, 0.0f);
-            link.mass = 1.0f;
+            link.jointAxisSecondaryLocal = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+            link.jointToChild.position = f32x4(0.0f, -0.32f, 0.0f, 0.0f);
+            link.mass = 0.9f;
             ac.links.push_back(link);
         }
         ac.dirty = true;
@@ -1599,9 +3206,47 @@ void CreateShowcasePhysicsScene(
             0.002f
         );
         sbc.softBody.particles[0u].invMass = 0.0f;
+        sbc.softBody.particles[0u].isFixed = true;
         sbc.softBody.particles[5u].invMass = 0.0f;
+        sbc.softBody.particles[5u].isFixed = true;
+        sbc.softBody.windVelocity = f32x4(1.5f, 0.2f, 0.4f, 0.0f);
+        sbc.softBody.enableSelfCollision = true;
+        sbc.softBody.selfCollisionRadius = 0.04f;
         outEntities.push_back(softEnt.id());
+
+        const EntityID sbHook = SpawnPhysicsStaticBox(world, VectorSingle(-1.5f, 2.4f, -9.2f, 0.0f), VectorSingle(0.18f, 0.18f, 0.18f, 0.0f), VectorSingle(0.5f, 0.5f, 0.5f, 0.0f), 0.5f, 0.1f, true, boxModelName, whiteMatName);
+        outEntities.push_back(sbHook);
+        const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+        if(physicsSystem.has_value())
+            physicsSystem.value().registerNamedEntity(Name("showcase_soft_hook"), sbHook);
+
+        Entity tetEnt = world.createEntity();
+        tetEnt.addComponent<TransformComponent>();
+        mut SoftBodyComponent tbc = tetEnt.addComponent<SoftBodyComponent>();
+        tbc.softBody = CreateTetrahedralBox(VectorSingle(-1.5f, 1.5f, -9.2f, 0.0f), VectorSingle(0.28f, 0.28f, 0.28f, 0.0f), 2.5f, 0.002f, 0.001f);
+        SoftBodyAttachment att;
+        att.particleIndex = 6u;
+        att.localAnchor = f32x4(0.0f, -0.15f, 0.0f, 0.0f);
+        tbc.softBody.attachments.push_back(att);
+        tbc.attachmentBodyEntityNames.push_back(Name("showcase_soft_hook"));
+        SoftBodyBackstopConstraint bs;
+        bs.particleIndex = 0u;
+        bs.center = f32x4(-1.5f, 1.2f, -9.2f, 0.0f);
+        bs.normal = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        bs.maxDistance = 0.8f;
+        tbc.softBody.backstopConstraints.push_back(bs);
+        outEntities.push_back(tetEnt.id());
     }
+}
+
+void CreateShowcasePhysicsScene(
+    mut NotNullUniquePtr<World> worldHandle,
+    in TestbedPhysicsBackendChoice backendChoice,
+    mut EntityID outConfigEntity,
+    mut Vector<EntityID> outEntities
+){
+    TestbedShowcaseRefs unusedRefs;
+    CreateShowcasePhysicsScene(worldHandle, backendChoice, outConfigEntity, outEntities, unusedRefs);
 }
 
 TestbedPhysicsHudStats QueryPhysicsStats(mut NotNullUniquePtr<World> worldHandle){
@@ -1671,7 +3316,8 @@ void ApplyFlyCameraTransform(
     in VectorSingle moveAxes,
     in b8 boosted,
     in VectorSingle mouseDelta,
-    in f32 deltaSeconds
+    in f32 deltaSeconds,
+    in f32 speedScale
 ){
     const FlyCameraMotion motion = FlyCameraMotion();
     const f32x4 rotationValue = transform.rotation;
@@ -1679,9 +3325,33 @@ void ApplyFlyCameraTransform(
     const VectorSingle currentRotation = VectorSingle(rotationValue);
     const VectorSingle currentPosition = VectorSingle(positionValue);
     const VectorSingle resolvedRotation = motion.resolveStepRotation(currentRotation, mouseDelta);
-    const VectorSingle resolvedPosition = motion.resolvePosition(currentPosition, moveAxes, resolvedRotation, deltaSeconds, boosted);
+    const VectorSingle resolvedPosition = motion.resolvePosition(currentPosition, moveAxes, resolvedRotation, deltaSeconds, boosted, speedScale);
     transform.rotation = f32x4(resolvedRotation);
     transform.position = f32x4(resolvedPosition);
+}
+
+void ApplyFlyCameraTransform(
+    mut TransformComponent transform,
+    in VectorSingle moveAxes,
+    in b8 boosted,
+    in VectorSingle mouseDelta,
+    in f32 deltaSeconds
+){
+    ApplyFlyCameraTransform(transform, moveAxes, boosted, mouseDelta, deltaSeconds, 1.0f);
+}
+
+void ApplyFlyCameraInputToWorld(
+    mut World world,
+    in VectorSingle moveAxes,
+    in b8 boosted,
+    in VectorSingle mouseDelta,
+    in f32 deltaSeconds,
+    in f32 speedScale
+){
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    assert(cameraView.valid());
+    Entity cameraEntity = world.entity(cameraView.entity);
+    ApplyFlyCameraTransform(cameraEntity.getComponent<TransformComponent>(), moveAxes, boosted, mouseDelta, deltaSeconds, speedScale);
 }
 
 void ApplyFlyCameraInputToWorld(
@@ -1691,10 +3361,18 @@ void ApplyFlyCameraInputToWorld(
     in VectorSingle mouseDelta,
     in f32 deltaSeconds
 ){
-    const SceneCameraView cameraView = ResolveSceneCameraView(world);
-    assert(cameraView.valid());
-    Entity cameraEntity = world.entity(cameraView.entity);
-    ApplyFlyCameraTransform(cameraEntity.getComponent<TransformComponent>(), moveAxes, boosted, mouseDelta, deltaSeconds);
+    ApplyFlyCameraInputToWorld(world, moveAxes, boosted, mouseDelta, deltaSeconds, 1.0f);
+}
+
+void ApplyFlyCameraInputToMainCamera(
+    mut NotNullUniquePtr<World> worldHandle,
+    in VectorSingle moveAxes,
+    in b8 boosted,
+    in VectorSingle mouseDelta,
+    in f32 deltaSeconds,
+    in f32 speedScale
+){
+    ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds, speedScale);
 }
 
 void ApplyFlyCameraInputToMainCamera(
@@ -1704,7 +3382,87 @@ void ApplyFlyCameraInputToMainCamera(
     in VectorSingle mouseDelta,
     in f32 deltaSeconds
 ){
-    ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds);
+    ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds, 1.0f);
+}
+
+void QueryMainCameraBasis(
+    mut NotNullUniquePtr<World> worldHandle,
+    mut VectorSingle outPos,
+    mut VectorSingle outForward,
+    mut VectorSingle outRight
+){
+    outPos = VectorSingle(0.0f);
+    outForward = VectorSingle(0.0f, 0.0f, -1.0f, 0.0f);
+    outRight = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    in TransformComponent camXf = cameraView.components.value().transform;
+    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
+    outRight = basis[0u];
+    outForward = basis[2u];
+    outPos = basis[3u];
+}
+
+void UpdateTestbedChaseOrOrbitCamera(
+    mut NotNullUniquePtr<World> worldHandle,
+    in TestbedCameraMode cameraMode,
+    in EntityID targetEntity,
+    in VectorSingle mouseDelta,
+    mut f32 inOutOrbitYaw,
+    mut f32 inOutOrbitPitch,
+    in f32 orbitDistance
+){
+    if(cameraMode == TestbedCameraMode::Fly)
+        return;
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    VectorSingle tgtPos(0.0f, 1.0f, 0.0f, 0.0f);
+    VectorSingle tgtRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(!TryGetTestbedEntityWorldPose(world, targetEntity, tgtPos, tgtRot))
+        return;
+    Entity cameraEntity = world.entity(cameraView.entity);
+    mut TransformComponent camXf = cameraEntity.getComponent<TransformComponent>();
+    VectorSingle outPos(0.0f);
+    VectorSingle outRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(cameraMode == TestbedCameraMode::Chase){
+        const MatrixSingle tgtBasis = BuildSceneViewBasis(tgtPos, tgtRot);
+        ResolveChaseCameraPose(tgtPos, tgtBasis[2u], orbitDistance, SimdMax(1.4f, orbitDistance * 0.35f), outPos, outRot);
+    }
+    else{
+        const FlyCameraMotion motion = FlyCameraMotion();
+        motion.resolveOrbitRotation(mouseDelta, inOutOrbitYaw, inOutOrbitPitch);
+        ResolveOrbitCameraPose(tgtPos, inOutOrbitYaw, inOutOrbitPitch, orbitDistance, outPos, outRot);
+    }
+    camXf.position = f32x4(outPos, 0.0f);
+    camXf.rotation = f32x4(outRot);
+}
+
+void FocusTestbedCameraOnEntity(
+    mut NotNullUniquePtr<World> worldHandle,
+    in EntityID entity,
+    mut f32 inOutOrbitYaw,
+    mut f32 inOutOrbitPitch,
+    in f32 distance
+){
+    mut World world = worldHandle.deref();
+    const SceneCameraView cameraView = ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return;
+    VectorSingle tgtPos(0.0f);
+    VectorSingle tgtRot(0.0f, 0.0f, 0.0f, 1.0f);
+    if(!TryGetTestbedEntityWorldPose(world, entity, tgtPos, tgtRot))
+        return;
+    Entity cameraEntity = world.entity(cameraView.entity);
+    mut TransformComponent camXf = cameraEntity.getComponent<TransformComponent>();
+    VectorSingle outPos(0.0f);
+    VectorSingle outRot(0.0f, 0.0f, 0.0f, 1.0f);
+    ResolveOrbitCameraPose(tgtPos, inOutOrbitYaw, inOutOrbitPitch, distance, outPos, outRot);
+    camXf.position = f32x4(outPos, 0.0f);
+    camXf.rotation = f32x4(outRot);
 }
 
 b8 InstantiateSceneSubsystemsEntities(
@@ -1742,12 +3500,14 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     in PhysicsDebugDrawOptions options,
     in b8 drawPhysicsWorldDebug,
     in TestbedGrabState grabState,
+    in EntityID selectedEntity,
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
     mut PhysicsDebugDrawScratch debugScratch,
     mut Vector<PaintLineSegment> screenLines
 ){
-    if(!drawPhysicsWorldDebug && !grabState.active)
+    const b8 showGizmo = selectedEntity.valid() && worldHandle.deref().alive(selectedEntity);
+    if(!drawPhysicsWorldDebug && !grabState.active && !showGizmo)
         return PhysicsDebugDrawStats();
 
     mut World world = worldHandle.deref();
@@ -1772,6 +3532,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
         return PhysicsDebugDrawStats();
 
     PhysicsDebugDrawStats stats;
+    const f32 lineThickness = ResolvePhysicsDebugLineThickness(options);
     if(drawPhysicsWorldDebug){
         TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
         stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
@@ -1779,23 +3540,88 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     else{
         screenLines.clear();
     }
-    if(grabState.active){
+    if(grabState.active && grabState.targetKind != TestbedGrabTargetKind::GizmoAxis){
         VectorSingle grabSeg(0.0f);
         if(projector.projectSegment(VectorSingle(grabState.grabWorldPoint), VectorSingle(grabState.targetWorldPoint), grabSeg)){
             PaintLineSegment grabLine;
             grabLine.start = Point(grabSeg.x, grabSeg.y);
             grabLine.end = Point(grabSeg.z, grabSeg.w);
             grabLine.color = Color(0.98f, 0.92f, 0.20f, 1.0f);
+            grabLine.thickness = SimdMax(2.2f, lineThickness * 1.4f);
             screenLines.push_back(grabLine);
         }
     }
-    if(!screenLines.empty()){
-        f32 lineThickness = 1.5f;
-        if(IsFinite(VectorSingle(options.lineThickness)) && options.lineThickness > 0.0f)
-            lineThickness = options.lineThickness;
+    if(showGizmo){
+        VectorSingle gizmoPos(0.0f);
+        VectorSingle gizmoRot(0.0f, 0.0f, 0.0f, 1.0f);
+        if(TryGetTestbedEntityWorldPose(world, selectedEntity, gizmoPos, gizmoRot)){
+            const f32 axisLen = 0.75f;
+            const f32 gizmoThickness = SimdMax(2.6f, lineThickness * 1.75f);
+            for(u32 ai = 0u; ai < 3u; ++ai){
+                const VectorSingle axisEnd = gizmoPos + TestbedGizmoWorldAxisDir(ai) * axisLen;
+                VectorSingle seg(0.0f);
+                if(!projector.projectSegment(gizmoPos, axisEnd, seg))
+                    continue;
+                PaintLineSegment gLine;
+                gLine.start = Point(seg.x, seg.y);
+                gLine.end = Point(seg.z, seg.w);
+                const b8 isHot = (grabState.active && grabState.targetKind == TestbedGrabTargetKind::GizmoAxis && grabState.targetSubIndex == ai)
+                    || (grabState.hoveredGizmoActive && grabState.hoveredGizmoAxis == ai);
+                if(isHot){
+                    gLine.color = Color(1.0f, 0.96f, 0.35f, 1.0f);
+                    gLine.thickness = gizmoThickness * 1.35f;
+                }
+                else{
+                    if(ai == 0u) gLine.color = Color(0.96f, 0.22f, 0.22f, 1.0f);
+                    else if(ai == 1u) gLine.color = Color(0.22f, 0.94f, 0.32f, 1.0f);
+                    else gLine.color = Color(0.25f, 0.56f, 1.0f, 1.0f);
+                    gLine.thickness = gizmoThickness;
+                }
+                screenLines.push_back(gLine);
+            }
+        }
+    }
+    if(!screenLines.empty())
         context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), lineThickness);
+
+    if(drawPhysicsWorldDebug && options.drawLabels){
+        Vector<PhysicsDebugLabel> worldLabels;
+        Vector<PhysicsDebugScreenLabel> projectedLabels;
+        BuildEcsPhysicsDebugLabels(world, physicsSystem.value(), options, projector, worldLabels);
+        ProjectPhysicsDebugLabels(projector, Span<PhysicsDebugLabel>(worldLabels.data(), worldLabels.size()), projectedLabels);
+        for(usize li = 0u; li < projectedLabels.size(); ++li){
+            in PhysicsDebugScreenLabel sl = projectedLabels[li];
+            ShapeRequest req;
+            req.text = sl.text.view();
+            req.fontSize = 11.5f;
+            const auto measured = context.text.layoutAndMeasureShared(req, metrics);
+            if(!measured.has_value() || !measured.value().layout.valid())
+                continue;
+            in Rect tb = measured.value().bounds;
+            const f32 padX = 4.0f;
+            const f32 padY = 2.0f;
+            const f32 bgW = SimdMax(10.0f, tb.width + padX * 2.0f);
+            const f32 bgH = SimdMax(12.0f, tb.height + padY * 2.0f);
+            const Rect bgRect(sl.screenPosDepth.x - bgW * 0.5f, sl.screenPosDepth.y - bgH - 4.0f, bgW, bgH);
+            context.paint.fillRect(bgRect, Color(0.06f, 0.08f, 0.12f, 0.78f));
+            const Point topLeft(bgRect.x + padX - tb.x, bgRect.y + padY - tb.y);
+            const Color txtCol(sl.color.x, sl.color.y, sl.color.z, sl.color.w);
+            context.text.paint(context.paint, measured.value().layout.deref(), topLeft, txtCol);
+        }
     }
     return stats;
+}
+
+PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
+    in PhysicsDebugDrawOptions options,
+    in b8 drawPhysicsWorldDebug,
+    in TestbedGrabState grabState,
+    mut NotNullUniquePtr<World> worldHandle,
+    mut UiPaintContext context,
+    mut PhysicsDebugDrawScratch debugScratch,
+    mut Vector<PaintLineSegment> screenLines
+){
+    return PaintPhysicsDebugOverlay(options, drawPhysicsWorldDebug, grabState, s_InvalidEntityId, worldHandle, context, debugScratch, screenLines);
 }
 
 

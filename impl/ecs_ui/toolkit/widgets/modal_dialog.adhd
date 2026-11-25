@@ -1,0 +1,103 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "popup.adhd"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const f32 s_DialogDefaultWidth = 420.0f;
+const f32 s_DialogDefaultHeight = 260.0f;
+const f32 s_DialogDefaultHeaderHeight = 32.0f;
+const f32 s_DialogDefaultCloseSize = 22.0f;
+const f32 s_DialogDefaultBodyPadding = 8.0f;
+const Color s_DialogDefaultDividerColor = Color(0.28f, 0.32f, 0.38f, 0.85f);
+const Color s_DialogDefaultCloseIconColor = Color(0.90f, 0.92f, 0.96f, 1.0f);
+const StringView s_DialogHeaderScopeKey = "@dialog.header";
+const StringView s_DialogTitleItemKey = "@dialog.title";
+const StringView s_DialogCloseButtonKey = "@dialog.close";
+const StringView s_DialogSeparatorItemKey = "@dialog.sep";
+const StringView s_DialogBodyScopeKey = "@dialog.body";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class DialogStyle{
+    public Name header = s_StyleHeaderNormalRegionName;
+    public Name headerFallback = s_StylePanelNormalRegionName;
+    public Color headerDividerColor = s_DialogDefaultDividerColor;
+    public Color closeIconColor = s_DialogDefaultCloseIconColor;
+    public f32 headerHeight = s_DialogDefaultHeaderHeight;
+    public f32 closeButtonSize = s_DialogDefaultCloseSize;
+    public Insets bodyPadding = Insets(s_DialogDefaultBodyPadding, s_DialogDefaultBodyPadding, s_DialogDefaultBodyPadding, s_DialogDefaultBodyPadding);
+}
+
+class DialogOptions{
+    public Point size = Point(s_DialogDefaultWidth, s_DialogDefaultHeight);
+    public b8 closable = true;
+    public b8 dismissOutside = false;
+    public b8 dismissCancel = true;
+    public b8 autofocus = true;
+    public b8 modal = true;
+}
+
+class DialogState : NoCopy{
+    public PopupState m_popup;
+    public b8 m_closedThisFrame = false;
+
+    public void open(){
+        this.m_closedThisFrame = false;
+        this.m_popup.open();
+    }
+
+    public void close(){
+        this.m_popup.close();
+    }
+
+    public b8 isOpen()const{
+        return this.m_popup.isOpen();
+    }
+
+    public b8 wasClosedByUser()const{
+        return this.m_closedThisFrame;
+    }
+
+    public in PopupPlacement placement()const{
+        return this.m_popup.placement();
+    }
+
+    public u64 instanceGeneration()const{
+        return this.m_popup.instanceGeneration();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IsValidDialogOptions(in DialogOptions options){
+    return IsFinite(VectorSingle(options.size.x, options.size.y, 0.0f, 0.0f))
+        && options.size.x > 0.0f
+        && options.size.y > 0.0f;
+}
+
+b8 IsValidDialogStyle(in DialogStyle style){
+    return IsValidPaintColor(style.headerDividerColor)
+        && IsValidPaintColor(style.closeIconColor)
+        && IsBoundedUiPadding(style.bodyPadding)
+        && IsFinite(VectorSingle(style.headerHeight, style.closeButtonSize, 0.0f, 0.0f))
+        && style.headerHeight > 0.0f
+        && style.closeButtonSize > 0.0f;
+}
+
+void ApplySkinPaletteToDialogStyle(in UiSkinPalette palette, mut DialogStyle style){
+    style.headerDividerColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
+    style.closeIconColor = ResolveUiSkinColor(palette, UiSkinColorRole::TextNormal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

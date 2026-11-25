@@ -50,6 +50,16 @@ namespace TextInputCancelReason{
     enum Enum : u8{ FocusLost, NativeCancelled, Overflow, NativeFailure };
 };
 
+namespace TextInputPreeditClauseStyle{
+    enum Enum : u8{ Raw = 0u, Converted = 1u, Target = 2u, Selected = 3u, kCount };
+};
+
+struct TextInputPreeditClause{
+    usize beginByte = 0u;
+    usize endByte = 0u;
+    TextInputPreeditClauseStyle::Enum style = TextInputPreeditClauseStyle::Raw;
+};
+
 inline constexpr usize s_TextInputMaxEvents = 64u;
 inline constexpr usize s_TextInputMaxEventTextBytes = 64u * 1024u;
 inline constexpr usize s_TextInputMaxQueuedTextBytes = 256u * 1024u;
@@ -98,6 +108,7 @@ struct TextInputEvent{
     using uses_leading_arena_t = ::ArenaBase;
 
     AString<::ArenaBase> text;
+    Vector<TextInputPreeditClause, ::ArenaBase> preeditClauses;
     TextInputSessionToken token;
     u64 sequence = 0u;
     u64 surroundingRevision = 0u;
@@ -112,8 +123,9 @@ struct TextInputEvent{
 
 
 public:
-    explicit TextInputEvent(::ArenaBase& arena)noexcept(noexcept(AString<::ArenaBase>(arena)))
+    explicit TextInputEvent(::ArenaBase& arena)noexcept(noexcept(AString<::ArenaBase>(arena)) && noexcept(Vector<TextInputPreeditClause, ::ArenaBase>(arena)))
         : text(arena)
+        , preeditClauses(arena)
     {}
     TextInputEvent(const TextInputEvent&) = default;
     TextInputEvent(TextInputEvent&&)noexcept = default;
@@ -127,6 +139,10 @@ public:
                 text = Move(source.text);
             else
                 text.assign(source.text.data(), source.text.size());
+            if(preeditClauses.get_allocator() == source.preeditClauses.get_allocator())
+                preeditClauses = Move(source.preeditClauses);
+            else
+                preeditClauses.assign(source.preeditClauses.begin(), source.preeditClauses.end());
             token = source.token;
             sequence = source.sequence;
             surroundingRevision = source.surroundingRevision;
@@ -175,4 +191,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

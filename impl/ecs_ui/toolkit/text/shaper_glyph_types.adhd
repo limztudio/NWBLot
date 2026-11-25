@@ -10,19 +10,30 @@
 
 const usize s_TextBytesPerKilobyte = 1024u;
 const usize s_TextMaxBytes = s_TextBytesPerKilobyte * s_TextBytesPerKilobyte;
-const usize s_TextMaxFontSources = 8u;
+const usize s_TextMaxFontSources = 32u;
+const usize s_TextMaxOpenTypeFeatures = 8u;
 const usize s_TextMaxLanguageBytes = 63u;
 const f32 s_TextDefaultFontSize = 16.0f;
 const StringView s_TextDefaultLanguage = "en";
 const f32 s_TextFixedPointScale = 64.0f;
 const f64 s_TextFixedPointScaleF64 = 64.0;
 const f32 s_TextMaxFontSize = 2048.0f;
+const f32 s_TextMaxLineHeightMultiplier = 16.0f;
 const u32 s_TextMaxRasterPpem = 4096u;
 const f32 s_TextMaxRasterPpemF32 = 4096.0f;
 const u32 s_TextDefaultScriptTag = 0x4c61746eu;
+const u32 s_OpenTypeTagKern = 0x6b65726eu;
+const u32 s_OpenTypeTagLiga = 0x6c696761u;
+const u32 s_OpenTypeTagCalt = 0x63616c74u;
+const u32 s_OpenTypeTagTnum = 0x746e756du;
+const u32 s_OpenTypeTagSmcp = 0x736d6370u;
+const u32 s_OpenTypeTagZero = 0x7a65726fu;
 const u32 s_ScriptTagLetterCount = 4u;
 const u32 s_ScriptTagLetterMask = 0xffu;
 const u32 s_ScriptTagBitsPerByte = 8u;
+const u32 s_TextUnicodeTab = 0x09u;
+const u32 s_TextDefaultTabStopSpaces = 4u;
+const u32 s_TextMaxTabStopSpaces = 32u;
 const u32 s_TextUnicodeSpace = 0x20u;
 const u32 s_TextUnicodeDelete = 0x7fu;
 const u32 s_TextUnicodeC1Last = 0x9fu;
@@ -43,6 +54,18 @@ enum<u8> TextDirection{
     RightToLeft,
 }
 
+enum<u8> TextWrapMode{
+    None,
+    Word,
+    Character,
+}
+
+enum<u8> TextAlignment{
+    Leading,
+    Center,
+    Trailing,
+}
+
 enum<u8> TextLayoutStatus{
     Success,
     InvalidUtf8,
@@ -52,16 +75,132 @@ enum<u8> TextLayoutStatus{
     FontFailure,
 }
 
+enum<u16> FontWeight{
+    Thin = 100u,
+    ExtraLight = 200u,
+    Light = 300u,
+    Regular = 400u,
+    Medium = 500u,
+    SemiBold = 600u,
+    Bold = 700u,
+    ExtraBold = 800u,
+    Black = 900u,
+}
+
+enum<u8> FontSlant{
+    Normal = 0u,
+    Italic = 1u,
+    Oblique = 2u,
+}
+
+enum<u8> TextBidiMode{
+    None = 0u,
+    Auto = 1u,
+    ForceLeftToRight = 2u,
+    ForceRightToLeft = 3u,
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u32 MakeOpenTypeTag(in u8 a, in u8 b, in u8 c, in u8 d){
+    return (cast<u32>(a) << 24u) | (cast<u32>(b) << 16u) | (cast<u32>(c) << 8u) | cast<u32>(d);
+}
+
+class FontDescriptor{
+    public FontDescriptor(){
+        this.family = s_NameNone;
+        this.weight = FontWeight::Regular;
+        this.slant = FontSlant::Normal;
+    }
+
+    public FontDescriptor(in Name inFamily){
+        this.family = inFamily;
+        this.weight = FontWeight::Regular;
+        this.slant = FontSlant::Normal;
+    }
+
+    public FontDescriptor(in Name inFamily, in FontWeight inWeight, in FontSlant inSlant){
+        this.family = inFamily;
+        this.weight = inWeight;
+        this.slant = inSlant;
+    }
+
+    public b8 operator==(in FontDescriptor rhs)const{
+        return this.family == rhs.family && this.weight == rhs.weight && this.slant == rhs.slant;
+    }
+
+    public b8 operator!=(in FontDescriptor rhs)const{
+        return this.family != rhs.family || this.weight != rhs.weight || this.slant != rhs.slant;
+    }
+
+    public usize hash()const{
+        usize seed = HashValue(this.family);
+        seed = HashCombineValue(seed, cast<u16>(this.weight));
+        return HashCombineValue(seed, cast<u8>(this.slant));
+    }
+
+    public Name family;
+    public FontWeight weight;
+    public FontSlant slant;
+}
+
+class OpenTypeFeature{
+    public OpenTypeFeature(){
+        this.tag = 0u;
+        this.value = 1u;
+        this.start = 0u;
+        this.end = u32.max;
+    }
+
+    public OpenTypeFeature(in u32 inTag, in u32 inValue){
+        this.tag = inTag;
+        this.value = inValue;
+        this.start = 0u;
+        this.end = u32.max;
+    }
+
+    public b8 operator==(in OpenTypeFeature rhs)const{
+        return this.tag == rhs.tag && this.value == rhs.value && this.start == rhs.start && this.end == rhs.end;
+    }
+
+    public b8 operator!=(in OpenTypeFeature rhs)const{
+        return this.tag != rhs.tag || this.value != rhs.value || this.start != rhs.start || this.end != rhs.end;
+    }
+
+    public usize hash()const{
+        usize seed = HashValue(this.tag);
+        seed = HashCombineValue(seed, this.value);
+        seed = HashCombineValue(seed, this.start);
+        return HashCombineValue(seed, this.end);
+    }
+
+    public u32 tag;
+    public u32 value;
+    public u32 start;
+    public u32 end;
+}
+
 class ShapeRequest{
     public StringView text = "";
     public StringView language = s_TextDefaultLanguage;
+    public FontDescriptor font;
     public f32 fontSize = s_TextDefaultFontSize;
+    public f32 letterSpacing = 0.0f;
+    public f32 wordSpacing = 0.0f;
+    public f32 lineHeightMultiplier = 1.0f;
+    public f32 lineHeightOverride = 0.0f;
     public u32 scriptTag = s_TextDefaultScriptTag;
     public TextDirection direction = TextDirection::LeftToRight;
+    public TextBidiMode bidiMode = TextBidiMode::None;
+    public f32 maxWidth = 0.0f;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public TextAlignment alignment = TextAlignment::Leading;
+    public u32 tabStopSpaces = s_TextDefaultTabStopSpaces;
+    public b8 preserveWrapSpaces = false;
+    public Array<OpenTypeFeature, s_TextMaxOpenTypeFeatures> features;
+    public u8 featureCount = 0u;
 }
 
 class FontMetrics{
@@ -207,6 +346,8 @@ class AtlasGlyphRecord<TFace>{
     public Rect pixels;
     public i32 bearingX = 0;
     public i32 bearingY = 0;
+    public f32 bitmapScale = 1.0f;
+    public b8 isColor = false;
 }
 
 

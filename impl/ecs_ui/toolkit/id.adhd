@@ -16,9 +16,35 @@ const StringView s_WidgetPartScrollVerticalBefore = "scroll.y.before";
 const StringView s_WidgetPartScrollHorizontalAfter = "scroll.x.after";
 const StringView s_WidgetPartScrollVerticalAfter = "scroll.y.after";
 const StringView s_WidgetPartScrollCorner = "scroll.corner";
+const StringView s_WidgetPartTabs = "tabs";
+const StringView s_WidgetPartTabClose = "tab.close";
+const StringView s_WidgetPartSplitterHandle = "splitter.handle";
+const StringView s_WidgetPartTreeToggle = "tree.toggle";
+const StringView s_WidgetPartTableHeader = "table.header";
+const StringView s_WidgetPartTableResize = "table.resize";
+const StringView s_WidgetPartSpinDec = "spin.dec";
+const StringView s_WidgetPartSpinInc = "spin.inc";
+const StringView s_WidgetPartDialogClose = "dialog.close";
+const StringView s_WidgetPartMenuItem = "menu.item";
+const StringView s_WidgetPartToastClose = "toast.close";
+const StringView s_WidgetPartColorSv = "color.sv";
+const StringView s_WidgetPartColorHue = "color.hue";
+const StringView s_WidgetPartColorAlpha = "color.alpha";
+const StringView s_WidgetPartRichLink = "rich.link";
+const StringView s_WidgetPartDockSplit = "dock.split";
+const StringView s_WidgetPartDockTab = "dock.tab";
+const StringView s_WidgetPartDockClose = "dock.close";
 const StringView s_WindowChromeTitleKey = "@window.title";
 const StringView s_WindowChromeCollapseKey = "@window.collapse";
+const StringView s_WindowChromeCloseKey = "@window.close";
 const StringView s_WindowChromeResizeKey = "@window.resize";
+const StringView s_WindowChromeResizeLeftKey = "@window.resize.left";
+const StringView s_WindowChromeResizeRightKey = "@window.resize.right";
+const StringView s_WindowChromeResizeTopKey = "@window.resize.top";
+const StringView s_WindowChromeResizeBottomKey = "@window.resize.bottom";
+const StringView s_WindowChromeResizeTopLeftKey = "@window.resize.top_left";
+const StringView s_WindowChromeResizeTopRightKey = "@window.resize.top_right";
+const StringView s_WindowChromeResizeBottomLeftKey = "@window.resize.bottom_left";
 const u64 s_WidgetMaxStates = 4096u;
 const usize s_WidgetStateRetainedCapacity = 8192u;
 const usize s_WidgetFrameReserve = 16u;
@@ -50,6 +76,23 @@ enum<u8> WidgetKind{
     Slider,
     Progress,
     Image,
+    ScrollArea,
+    CollapsibleHeader,
+    TabBar,
+    Splitter,
+    SpinBox,
+    TreeView,
+    DataTable,
+    MenuBar,
+    ToastStack,
+    ColorPicker,
+    DragSource,
+    DropTarget,
+    Hyperlink,
+    RichText,
+    Plot,
+    Canvas,
+    DockSpace,
 }
 
 class WidgetId{

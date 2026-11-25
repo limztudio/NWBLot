@@ -12,16 +12,44 @@ b8 IsTextAsciiAlphaNumericOrHyphen(in u32 codePoint){
     return IsAsciiAlpha(codePoint) || (codePoint >= 0x30u && codePoint <= 0x39u) || codePoint == 0x2du;
 }
 
+b8 IsValidFontDescriptor(in FontDescriptor desc){
+    return desc.weight >= FontWeight::Thin && desc.weight <= FontWeight::Black && desc.slant <= FontSlant::Oblique;
+}
+
+b8 IsValidOpenTypeFeatures(in Array<OpenTypeFeature, s_TextMaxOpenTypeFeatures> features, in u8 count){
+    if(cast<usize>(count) > s_TextMaxOpenTypeFeatures)
+        return false;
+    for(usize i = 0u; i < cast<usize>(count); ++i){
+        in OpenTypeFeature f = features[i];
+        if(f.tag == 0u || f.start > f.end)
+            return false;
+    }
+    return true;
+}
+
 TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBreaks){
     if(
         request.text.size() > s_TextMaxBytes
-        || !IsFinite(VectorSingle(request.fontSize))
+        || !IsFinite(VectorSingle(request.fontSize, request.maxWidth, 0.0f, 0.0f).xy)
+        || !IsFinite(VectorSingle(request.letterSpacing, request.wordSpacing, request.lineHeightMultiplier, request.lineHeightOverride))
         || request.fontSize < 1.0f / s_TextFixedPointScale
         || request.fontSize > s_TextMaxFontSize
+        || request.lineHeightMultiplier <= 0.0f
+        || request.lineHeightMultiplier > s_TextMaxLineHeightMultiplier
+        || request.lineHeightOverride < 0.0f
+        || request.lineHeightOverride > s_TextMaxFontSize * 4.0f
+        || request.maxWidth < 0.0f
+        || !IsValidFontDescriptor(request.font)
+        || !IsValidOpenTypeFeatures(request.features, request.featureCount)
         || request.scriptTag == 0u
         || request.language.empty()
         || request.language.size() > s_TextMaxLanguageBytes
         || (request.direction != TextDirection::LeftToRight && request.direction != TextDirection::RightToLeft)
+        || request.bidiMode > TextBidiMode::ForceRightToLeft
+        || request.wrapMode > TextWrapMode::Character
+        || request.alignment > TextAlignment::Trailing
+        || request.tabStopSpaces == 0u
+        || request.tabStopSpaces > s_TextMaxTabStopSpaces
     )
         return TextLayoutStatus::InvalidParameters;
     for(u32 byte = 0u; byte < s_ScriptTagLetterCount; ++byte){
@@ -48,6 +76,9 @@ TextLayoutStatus ValidateTextRequest(in ShapeRequest request, in b8 allowLineBre
         else if(scalar == '\n'){
             if(!allowLineBreaks)
                 return TextLayoutStatus::UnsupportedControl;
+        }
+        else if(scalar == s_TextUnicodeTab){
+            continue;
         }
         else if(scalar < s_TextUnicodeSpace || (scalar >= s_TextUnicodeDelete && scalar <= s_TextUnicodeC1Last) || scalar == s_TextUnicodeLineSeparator || scalar == s_TextUnicodeParagraphSeparator){
             return TextLayoutStatus::UnsupportedControl;
@@ -80,7 +111,147 @@ b8 IsValidTextFontSize(in f32 fontSize){
 }
 
 b8 SameShapeRequest(in ShapeRequest lhs, in ShapeRequest rhs){
-    return lhs.text == rhs.text && lhs.language == rhs.language && lhs.fontSize == rhs.fontSize && lhs.scriptTag == rhs.scriptTag && lhs.direction == rhs.direction;
+    if(
+        lhs.text != rhs.text
+        || lhs.language != rhs.language
+        || lhs.font != rhs.font
+        || lhs.fontSize != rhs.fontSize
+        || lhs.letterSpacing != rhs.letterSpacing
+        || lhs.wordSpacing != rhs.wordSpacing
+        || lhs.lineHeightMultiplier != rhs.lineHeightMultiplier
+        || lhs.lineHeightOverride != rhs.lineHeightOverride
+        || lhs.scriptTag != rhs.scriptTag
+        || lhs.direction != rhs.direction
+        || lhs.bidiMode != rhs.bidiMode
+        || lhs.maxWidth != rhs.maxWidth
+        || lhs.wrapMode != rhs.wrapMode
+        || lhs.alignment != rhs.alignment
+        || lhs.tabStopSpaces != rhs.tabStopSpaces
+        || lhs.preserveWrapSpaces != rhs.preserveWrapSpaces
+        || lhs.featureCount != rhs.featureCount
+    )
+        return false;
+    for(usize i = 0u; i < cast<usize>(lhs.featureCount); ++i){
+        if(lhs.features[i] != rhs.features[i])
+            return false;
+    }
+    return true;
+}
+
+u32 ResolveFontSlantPreferenceScore(in FontSlant query, in FontSlant candidate){
+    if(candidate == query)
+        return 0u;
+    if(query == FontSlant::Italic){
+        if(candidate == FontSlant::Oblique)
+            return 1u;
+        return 2u;
+    }
+    if(query == FontSlant::Oblique){
+        if(candidate == FontSlant::Italic)
+            return 1u;
+        return 2u;
+    }
+    if(candidate == FontSlant::Oblique)
+        return 1u;
+    return 2u;
+}
+
+void ComputeFontWeightMatchRank(in u32 targetW, in u32 candW, mut u32 outTier, mut u32 outDistance){
+    if(candW == targetW){
+        outTier = 0u;
+        outDistance = 0u;
+        return;
+    }
+    if(targetW >= 400u && targetW <= 500u){
+        if(candW > targetW && candW <= 500u){
+            outTier = 1u;
+            outDistance = candW - targetW;
+            return;
+        }
+        if(candW < targetW){
+            outTier = 2u;
+            outDistance = targetW - candW;
+            return;
+        }
+        outTier = 3u;
+        outDistance = candW - 500u;
+        return;
+    }
+    if(targetW < 400u){
+        if(candW < targetW){
+            outTier = 1u;
+            outDistance = targetW - candW;
+            return;
+        }
+        outTier = 2u;
+        outDistance = candW - targetW;
+        return;
+    }
+    if(candW > targetW){
+        outTier = 1u;
+        outDistance = candW - targetW;
+        return;
+    }
+    outTier = 2u;
+    outDistance = targetW - candW;
+}
+
+usize ResolveBestFontDescriptorIndex(in Span<FontDescriptor> descriptors, in Name defaultFamily, in FontDescriptor query){
+    if(descriptors.empty())
+        return 0u;
+    Name resolvedFamily = s_NameNone;
+    b8 hasTargetFamily = false;
+    if(query.family != s_NameNone){
+        for(in FontDescriptor d : descriptors){
+            if(d.family == query.family){
+                resolvedFamily = query.family;
+                hasTargetFamily = true;
+                break;
+            }
+        }
+    }
+    if(!hasTargetFamily && defaultFamily != s_NameNone){
+        for(in FontDescriptor d : descriptors){
+            if(d.family == defaultFamily){
+                resolvedFamily = defaultFamily;
+                hasTargetFamily = true;
+                break;
+            }
+        }
+    }
+    if(!hasTargetFamily){
+        resolvedFamily = descriptors[0u].family;
+        hasTargetFamily = true;
+    }
+
+    usize bestIndex = 0u;
+    b8 hasBest = false;
+    u32 bestSlantScore = u32.max;
+    u32 bestWeightTier = u32.max;
+    u32 bestWeightDistance = u32.max;
+    const u32 targetW = cast<u32>(query.weight);
+
+    for(usize idx = 0u; idx < descriptors.size(); ++idx){
+        in FontDescriptor cand = descriptors[idx];
+        if(hasTargetFamily && cand.family != resolvedFamily)
+            continue;
+        const u32 slantScore = ResolveFontSlantPreferenceScore(query.slant, cand.slant);
+        u32 weightTier = 0u;
+        u32 weightDistance = 0u;
+        ComputeFontWeightMatchRank(targetW, cast<u32>(cand.weight), weightTier, weightDistance);
+        if(!hasBest
+            || slantScore < bestSlantScore
+            || (slantScore == bestSlantScore && weightTier < bestWeightTier)
+            || (slantScore == bestSlantScore && weightTier == bestWeightTier && weightDistance < bestWeightDistance)
+        ){
+            bestIndex = idx;
+            hasBest = true;
+            bestSlantScore = slantScore;
+            bestWeightTier = weightTier;
+            bestWeightDistance = weightDistance;
+        }
+    }
+    return bestIndex;
 }
 
 b8 ValidateShapedRunMetrics(in FontMetrics metrics, in usize glyphCount){

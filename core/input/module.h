@@ -75,6 +75,9 @@ public:
     void mousePosUpdate(f64 xpos, f64 ypos);
     void mouseButtonUpdate(i32 button, i32 action, i32 mods);
     void mouseScrollUpdate(f64 xoffset, f64 yoffset);
+    void gamepadConnectionUpdate(u32 gamepadIndex, b8 connected);
+    void gamepadButtonUpdate(u32 gamepadIndex, i32 button, i32 action);
+    void gamepadAxisUpdate(u32 gamepadIndex, i32 axis, f32 value);
 
 
 private:
@@ -123,4 +126,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

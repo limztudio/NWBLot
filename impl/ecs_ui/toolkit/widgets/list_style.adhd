@@ -31,6 +31,13 @@ enum<u8> ListActionOutcome{
     Failed,
 }
 
+enum<u8> ListSelectionMode{
+    Single,
+    Multiple,
+    Extended,
+    kCount,
+}
+
 class SelectableStyle{
     public Name normal = s_ListRowNormalRegionName;
     public Name hover = s_ListRowHoverRegionName;
@@ -53,6 +60,8 @@ class ListStyle{
     public Name thumb = s_ScrollThumbRegionName;
     public Name thumbFallback = s_StyleButtonNormalRegionName;
     public Name thumbHover = s_StyleButtonHoverRegionName;
+    public Name thumbPressed = s_StyleButtonPressedRegionName;
+    public Name thumbDisabled = s_StyleButtonDisabledRegionName;
     public Insets padding = Insets(s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall, s_StyleSpacingSmall);
     public f32 scrollbarWidth = s_StyleScrollbarThickness;
     public f32 minimumThumb = s_StyleScrollbarMinimumThumb;
@@ -64,6 +73,12 @@ class ListOptions{
     public f32 wheelRows = s_StyleScrollWheelStep;
     public b8 enabled = true;
     public b8 selectOnNavigate = true;
+    public LayoutItemOptions layout;
+    public ListSelectionMode selectionMode = ListSelectionMode::Single;
+    public ScrollbarPolicy horizontalScrollbar = ScrollbarPolicy::Never;
+    public ScrollbarPolicy verticalScrollbar = ScrollbarPolicy::Auto;
+    public f32 contentWidth = 0.0f;
+    public f32 wheelColumns = 32.0f;
 }
 
 class ListResult{
@@ -112,7 +127,10 @@ class ListMeasureKey{
             || this.pixelScaleX != rhs.pixelScaleX
             || this.pixelScaleY != rhs.pixelScaleY
             || this.scriptTag != rhs.scriptTag
+            || this.direction != rhs.direction
             || this.languageLength != rhs.languageLength
+            || this.rowHeightRevision != rhs.rowHeightRevision
+            || this.variableRowHeights != rhs.variableRowHeights
         )
             return false;
         for(usize i = 0u; i < s_ListRowMetricCount; ++i){
@@ -139,21 +157,34 @@ class ListMeasureKey{
     public u64 rowCount = 0u;
     public u64 textIdentity = 0u;
     public u64 textGeneration = 0u;
+    public u64 rowHeightRevision = 0u;
     public f32 fontSize = 0.0f;
     public f32 pixelScaleX = 0.0f;
     public f32 pixelScaleY = 0.0f;
     public Array<f32, s_ListRowMetricCount> rowMetrics;
     public Array<u8, s_ListLanguageBufferBytes> language;
     public u32 scriptTag = 0u;
+    public TextDirection direction = TextDirection::LeftToRight;
     public u8 languageLength = 0u;
+    public b8 variableRowHeights = false;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 IsValidVirtualListDeclarationOptions(in ListOptions options){
+    return IsFinite(VectorSingle(options.wheelRows, options.wheelColumns, options.contentWidth, 0.0f))
+        && options.wheelRows > 0.0f
+        && options.wheelColumns > 0.0f
+        && options.contentWidth >= 0.0f
+        && options.selectionMode < ListSelectionMode::kCount
+        && options.horizontalScrollbar <= ScrollbarPolicy::Never
+        && options.verticalScrollbar <= ScrollbarPolicy::Never;
+}
+
 b8 IsValidListOptions(in ListOptions options){
-    return options.enabled && IsFinite(VectorSingle(options.wheelRows)) && options.wheelRows > 0.0f;
+    return options.enabled && IsValidVirtualListDeclarationOptions(options);
 }
 
 b8 IsReverseListControlAction(in ControlActionKind kind){

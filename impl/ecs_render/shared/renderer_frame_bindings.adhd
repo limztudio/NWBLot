@@ -66,6 +66,7 @@ class MeshFrameBindingSnapshot{
     public BufferHandle materialTypedBuffer;
     public MeshViewBufferSnapshot meshView;
     public GpuDescriptorHandle instanceHeapHandle;
+    public GpuDescriptorHandle instanceUavHeapHandle;
     public GpuDescriptorHandle materialTypedHeapHandle;
     public usize instanceBufferCapacity;
     public usize materialTypedBufferCapacity;
@@ -75,6 +76,7 @@ class MeshFrameBindingSnapshot{
         this.materialTypedBuffer = BufferHandle();
         this.meshView = MeshViewBufferSnapshot();
         this.instanceHeapHandle = GpuDescriptorHandleInvalid();
+        this.instanceUavHeapHandle = GpuDescriptorHandleInvalid();
         this.materialTypedHeapHandle = GpuDescriptorHandleInvalid();
         this.instanceBufferCapacity = 0u;
         this.materialTypedBufferCapacity = 0u;
@@ -85,6 +87,7 @@ class MeshFrameBindingSnapshot{
         in BufferHandle materialTypedBufferIn,
         in MeshViewBufferSnapshot meshViewIn,
         in GpuDescriptorHandle instanceHeapHandleIn,
+        in GpuDescriptorHandle instanceUavHeapHandleIn,
         in GpuDescriptorHandle materialTypedHeapHandleIn,
         in usize instanceBufferCapacityIn,
         in usize materialTypedBufferCapacityIn
@@ -93,6 +96,7 @@ class MeshFrameBindingSnapshot{
         this.materialTypedBuffer = materialTypedBufferIn;
         this.meshView = meshViewIn;
         this.instanceHeapHandle = instanceHeapHandleIn;
+        this.instanceUavHeapHandle = instanceUavHeapHandleIn;
         this.materialTypedHeapHandle = materialTypedHeapHandleIn;
         this.instanceBufferCapacity = instanceBufferCapacityIn;
         this.materialTypedBufferCapacity = materialTypedBufferCapacityIn;
@@ -105,6 +109,8 @@ class MeshFrameBindingSnapshot{
             && this.meshView.bindingValid()
             && this.instanceHeapHandle.valid()
             && this.instanceHeapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
+            && this.instanceUavHeapHandle.valid()
+            && this.instanceUavHeapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
             && this.materialTypedHeapHandle.valid()
             && this.materialTypedHeapHandle.descriptorClass() == GpuDescriptorClass::StorageBuffer
         ;

@@ -20,6 +20,18 @@ const Point s_WindowDefaultMinimumSize = Point(160.0f, 80.0f);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+enum<u8> WindowResizeEdge{
+    None = 0u,
+    Left = 1u,
+    Right = 2u,
+    Top = 4u,
+    Bottom = 8u,
+    TopLeft = 5u,
+    TopRight = 6u,
+    BottomLeft = 9u,
+    BottomRight = 10u,
+}
+
 class WindowGestureState{
     public InputActionId id;
     public Rect initialBounds;
@@ -29,28 +41,37 @@ class WindowState{
     public Rect bounds;
     public WindowGestureState moveGesture;
     public WindowGestureState resizeGesture;
+    public u32 zOrder = 0u;
     public b8 initialized = false;
     public b8 collapsed = false;
+    public b8 open = true;
+    public b8 closeRequested = false;
 }
 
 class WindowOptions{
     public Rect initialBounds = s_WindowDefaultBounds;
     public Point minimumSize = s_WindowDefaultMinimumSize;
+    public Point maximumSize = Point(0.0f, 0.0f);
     public LayoutDirection direction = LayoutDirection::Column;
     public b8 contentWidthFirstUse = false;
     public b8 contentHeightFirstUse = false;
     public b8 movable = true;
     public b8 resizable = true;
     public b8 collapsible = true;
+    public b8 closable = false;
+    public b8 bringToFrontOnPress = true;
 }
 
 class WindowMetrics{
     public Insets contentPadding;
     public Insets titlePadding;
     public Point minimumSize;
+    public Point maximumSize = Point(0.0f, 0.0f);
     public f32 titleHeight = 0.0f;
     public f32 collapseExtent = 0.0f;
+    public f32 closeExtent = 0.0f;
     public f32 resizeExtent = 0.0f;
+    public f32 resizeBorder = 0.0f;
 }
 
 
@@ -81,12 +102,50 @@ Rect ResolveWindowCollapseBounds(in WindowState state, in WindowMetrics metrics)
     return Rect(x, y, metrics.collapseExtent, metrics.collapseExtent);
 }
 
+Rect ResolveWindowCloseBounds(in WindowState state, in WindowMetrics metrics){
+    const f32 x = (state.bounds.x + state.bounds.width) - metrics.titlePadding.right - metrics.closeExtent;
+    const f32 availableHeight = ((metrics.titleHeight - metrics.titlePadding.top) - metrics.titlePadding.bottom) - metrics.closeExtent;
+    const f32 y = (state.bounds.y + metrics.titlePadding.top) + UiSimdMax(0.0f, availableHeight * 0.5f);
+    return Rect(x, y, metrics.closeExtent, metrics.closeExtent);
+}
+
 Rect ResolveWindowResizeBounds(in WindowState state, in WindowMetrics metrics){
     const f32 extent = UiSimdMin(metrics.resizeExtent, UiSimdMin(state.bounds.width, state.bounds.height - metrics.titleHeight));
     const VectorSingle origin(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
     const VectorSingle size(state.bounds.width, state.bounds.height, state.bounds.width, state.bounds.height);
     const VectorSingle start = (origin + size) - VectorSingle(extent);
     return Rect(start.x, start.y, extent, extent);
+}
+
+Rect ResolveWindowResizeEdgeBounds(in WindowState state, in WindowMetrics metrics, in WindowResizeEdge edge){
+    if(edge == WindowResizeEdge::BottomRight)
+        return ResolveWindowResizeBounds(state, metrics);
+    if(edge == WindowResizeEdge::None)
+        return Rect();
+    const Rect se = ResolveWindowResizeBounds(state, metrics);
+    const f32 x = state.bounds.x;
+    const f32 y = state.bounds.y;
+    const f32 w = state.bounds.width;
+    const f32 h = state.bounds.height;
+    const f32 b = UiSimdMin(metrics.resizeBorder, UiSimdMin(w * 0.25f, h * 0.25f));
+    switch(edge){
+    case WindowResizeEdge::TopLeft:
+        return Rect(x, y, b, b);
+    case WindowResizeEdge::TopRight:
+        return Rect(x + w - b, y, b, b);
+    case WindowResizeEdge::Top:
+        return Rect(x + b, y, UiSimdMax(0.0f, w - 2.0f * b), b);
+    case WindowResizeEdge::Left:
+        return Rect(x, y + b, b, UiSimdMax(0.0f, h - 2.0f * b));
+    case WindowResizeEdge::Right:
+        return Rect(x + w - b, y + b, b, UiSimdMax(0.0f, se.y - (y + b)));
+    case WindowResizeEdge::BottomLeft:
+        return Rect(x, y + h - b, b, b);
+    case WindowResizeEdge::Bottom:
+        return Rect(x + b, y + h - b, UiSimdMax(0.0f, se.x - (x + b)), b);
+    default:
+        return Rect();
+    }
 }
 
 void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rect outVertical){
@@ -104,14 +163,18 @@ void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rec
     outVertical = Rect(origins.z, origins.w, thickness, scaledSize.w);
 }
 
-Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in UiSkinRegion collapse, in UiSkinRegion resize, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
+Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion title, in UiSkinRegion collapse, in UiSkinRegion close, in UiSkinRegion resize, in WidgetStyle style, in WindowOptions options, in Point titleSize, in f32 density){
     if(
         !IsFinite(VectorSingle(style.windowCollapseExtent, style.windowResizeExtent, style.gap, density))
+        || !IsFinite(VectorSingle(style.windowCloseExtent, style.windowResizeBorder, 0.0f, 0.0f))
         || style.windowCollapseExtent <= 0.0f
+        || style.windowCloseExtent <= 0.0f
         || style.windowResizeExtent <= 0.0f
+        || style.windowResizeBorder < 0.0f
         || style.gap < 0.0f
         || density <= 0.0f
         || !IsValidUiExtent(options.minimumSize)
+        || !IsValidUiExtent(options.maximumSize)
     )
         return MakeUnexpected(Failure());
     WindowMetrics metrics;
@@ -119,8 +182,12 @@ Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion tit
     metrics.titlePadding = Insets(title.padding.left, title.padding.top, title.padding.right, title.padding.bottom);
     if(options.collapsible)
         metrics.collapseExtent = ResolveUiSkinSquareExtent(style.windowCollapseExtent, collapse, density);
+    if(options.closable)
+        metrics.closeExtent = ResolveUiSkinSquareExtent(style.windowCloseExtent, close, density);
     metrics.resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
-    const f32 titleContentY = UiSimdMax(titleSize.y, metrics.collapseExtent);
+    metrics.resizeBorder = style.windowResizeBorder;
+    metrics.maximumSize = options.maximumSize;
+    const f32 titleContentY = UiSimdMax(titleSize.y, UiSimdMax(metrics.collapseExtent, metrics.closeExtent));
     const VectorSingle titleContent(titleSize.x, titleContentY, titleSize.x, titleContentY);
     const VectorSingle leadingPadding(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top);
     const VectorSingle trailingPadding(metrics.titlePadding.right, metrics.titlePadding.bottom, metrics.titlePadding.right, metrics.titlePadding.bottom);
@@ -131,11 +198,16 @@ Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion tit
     f32 collapseWidth = 0.0f;
     if(options.collapsible)
         collapseWidth = metrics.collapseExtent + style.gap;
-    const f32 titleMinX = UiSimdMax(title.minimumWidth, titlePaddedX + collapseWidth);
+    f32 closeWidth = 0.0f;
+    if(options.closable)
+        closeWidth = metrics.closeExtent + style.gap;
+    const f32 titleMinX = UiSimdMax(title.minimumWidth, titlePaddedX + collapseWidth + closeWidth);
     const f32 contentMinY = (metrics.titleHeight + metrics.contentPadding.top) + metrics.contentPadding.bottom;
     const VectorSingle minimum = Max(VectorSingle(options.minimumSize.x, options.minimumSize.y, options.minimumSize.x, options.minimumSize.y), Max(VectorSingle(frame.minimumWidth, frame.minimumHeight, frame.minimumWidth, frame.minimumHeight), VectorSingle(titleMinX, contentMinY, titleMinX, contentMinY)));
     metrics.minimumSize = Point(minimum.x, minimum.y);
     if(!IsFinite(VectorSingle(metrics.titleHeight, metrics.minimumSize.x, metrics.minimumSize.y, 0.0f)) || metrics.titleHeight <= 0.0f || metrics.minimumSize.x <= 0.0f || metrics.minimumSize.y <= 0.0f)
+        return MakeUnexpected(Failure());
+    if((options.maximumSize.x > 0.0f && options.maximumSize.x < metrics.minimumSize.x) || (options.maximumSize.y > 0.0f && options.maximumSize.y < metrics.minimumSize.y))
         return MakeUnexpected(Failure());
     return metrics;
 }

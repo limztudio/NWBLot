@@ -1491,6 +1491,81 @@ void VerifyUiSliderStateTests_NonfinitePublicValuesAreRejectedAtomically(){
     }
 }
 
+void VerifyUiSliderBehaviorTests_StepSnappingAndKeyboardFallbackReachExactMaximumOnSeekAndDrag(mut UiSliderBehaviorTests self){
+    self.m_options.minimum = 0.0;
+    self.m_options.maximum = 10.0;
+    self.m_options.keyStep = 0.0;
+    self.m_options.step = 3.0;
+    ASSERT_TRUE(self.refresh());
+    PointerGesture seek = self.gesture(false);
+    seek.position = Point(seek.referenceRectangle.x + seek.referenceRectangle.width * 0.48f, CenterUiRect(seek.referenceRectangle).y);
+    ASSERT_TRUE(SeekSliderPointerGesture(self.m_options, seek, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 6.0);
+    seek.position = Point(seek.referenceRectangle.x + seek.referenceRectangle.width * 0.96f, CenterUiRect(seek.referenceRectangle).y);
+    ASSERT_TRUE(SeekSliderPointerGesture(self.m_options, seek, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 10.0);
+    ASSERT_TRUE(self.set(0.0));
+    PointerGesture drag = self.gesture(true);
+    const f64 dragTravel = cast<f64>(drag.referenceRectangle.width) - cast<f64>(drag.targetRectangle.width);
+    drag.position = Point(drag.origin.x + cast<f32>(dragTravel * 0.62), drag.origin.y);
+    ASSERT_TRUE(DragSliderPointerGesture(self.m_options, drag, self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 6.0);
+    ASSERT_TRUE(ApplySliderControlAction(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 9.0);
+    ASSERT_TRUE(ApplySliderControlAction(self.m_options, self.key(ControlActionKind::Right), self.m_state, self.m_result));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 10.0);
+}
+
+void VerifyUiSliderInputTests_VerticalSliderPlacesBottomToTopAndTracksVerticalGestures(mut UiSliderInputTests self){
+    SliderOptions options = MakeSliderFixtureOptions();
+    options.orientation = SliderOrientation::Vertical;
+    options.width = LayoutSize(LayoutSizePolicy::Fixed, 32.0f);
+    options.height = 200.0f;
+    options.step = 0.25;
+    options.keyStep = 0.0;
+    ASSERT_TRUE(self.m_state.setValue(0.0));
+    ASSERT_TRUE(self.accept(1u, options));
+    const SliderPlacement zeroPlacement = self.m_state.placement();
+    EXPECT_EQ(zeroPlacement.orientation, SliderOrientation::Vertical);
+    EXPECT_GT(zeroPlacement.track.height, zeroPlacement.track.width);
+    EXPECT_FLOAT_EQ(zeroPlacement.thumb.y, zeroPlacement.travelBounds.y + (zeroPlacement.travelBounds.height - zeroPlacement.thumb.height));
+    const Point topTrack = Point(CenterUiRect(zeroPlacement.centerTravel).x, zeroPlacement.centerTravel.y + zeroPlacement.centerTravel.height * 0.23f);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, topTrack)).pointerConsumed);
+    ASSERT_TRUE(self.accept(2u, options));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 0.75);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, topTrack)).pointerConsumed);
+    ASSERT_TRUE(self.accept(3u, options));
+    const Point thumbOrigin = self.thumbPoint();
+    const Point thumbUp = Point(thumbOrigin.x, thumbOrigin.y - zeroPlacement.centerTravel.height * 0.30f);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, thumbOrigin)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PointerMove, thumbUp)).pointerConsumed);
+    EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, thumbUp)).pointerConsumed);
+    ASSERT_TRUE(self.accept(4u, options));
+    EXPECT_DOUBLE_EQ(self.m_state.value(), 1.0);
+    EXPECT_FLOAT_EQ(self.m_state.placement().thumb.y, self.m_state.placement().travelBounds.y);
+}
+
+void VerifyUiSliderLayoutTests_VerticalSliderAndInvalidStepsValidateMetricsAndPlacement(){
+    SliderOptions invalid = SliderOptions();
+    invalid.step = -0.5;
+    EXPECT_FALSE(MeasureSlider(invalid, SliderStyle()).has_value());
+    invalid.step = bit_cast<f64>(s_UiSliderQuietNaNF64Bits);
+    EXPECT_FALSE(MeasureSlider(invalid, SliderStyle()).has_value());
+    invalid.step = 0.0;
+    invalid.orientation = cast<SliderOrientation>(9u);
+    EXPECT_FALSE(MeasureSlider(invalid, SliderStyle()).has_value());
+    SliderOptions vertical = SliderOptions();
+    vertical.orientation = SliderOrientation::Vertical;
+    vertical.height = 180.0f;
+    const Expected<SliderMetrics> metrics = MeasureSlider(vertical, SliderStyle());
+    ASSERT_TRUE(metrics.has_value());
+    EXPECT_FLOAT_EQ(metrics.value().contentSize.y, 180.0f);
+    const Rect bounds = Rect(10.0f, 20.0f, 32.0f, 180.0f);
+    const Expected<SliderPlacement> mid = PlaceSlider(bounds, bounds, metrics.value(), 0.5);
+    ASSERT_TRUE(mid.has_value());
+    EXPECT_FLOAT_EQ(mid.value().thumb.y, mid.value().travelBounds.y + (mid.value().travelBounds.height - mid.value().thumb.height) * 0.5f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1571,6 +1646,9 @@ NWB_ADHD_GTEST(UiSliderStateTests, IdenticalFinitePublicValuesRetireCopiedInputA
 NWB_ADHD_GTEST(UiSliderStateTests, PublicValuesPreserveSignedZeroBitsAndRetireIdenticalSignedZeroIntents, VerifyUiSliderStateTests_PublicValuesPreserveSignedZeroBitsAndRetireIdenticalSignedZeroIntents)
 NWB_ADHD_GTEST(UiSliderStateTests, ValueAwayAndBackCannotRestoreTheOldSnapshot, VerifyUiSliderStateTests_ValueAwayAndBackCannotRestoreTheOldSnapshot)
 NWB_ADHD_GTEST(UiSliderStateTests, NonfinitePublicValuesAreRejectedAtomically, VerifyUiSliderStateTests_NonfinitePublicValuesAreRejectedAtomically)
+NWB_ADHD_GTEST_F(UiSliderBehaviorTests, StepSnappingAndKeyboardFallbackReachExactMaximumOnSeekAndDrag, VerifyUiSliderBehaviorTests_StepSnappingAndKeyboardFallbackReachExactMaximumOnSeekAndDrag)
+NWB_ADHD_GTEST_F(UiSliderInputTests, VerticalSliderPlacesBottomToTopAndTracksVerticalGestures, VerifyUiSliderInputTests_VerticalSliderPlacesBottomToTopAndTracksVerticalGestures)
+NWB_ADHD_GTEST(UiSliderLayoutTests, VerticalSliderAndInvalidStepsValidateMetricsAndPlacement, VerifyUiSliderLayoutTests_VerticalSliderAndInvalidStepsValidateMetricsAndPlacement)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

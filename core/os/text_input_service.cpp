@@ -168,7 +168,9 @@ TextInputPollResult::Enum QueuedTextInputService::poll(const TextInputSessionTok
     if(m_events.empty())
         return TextInputPollResult::Pending;
     const TextInputEvent& next = m_events.front();
+    event.preeditClauses.reserve(next.preeditClauses.size());
     event.text.assign(next.text.data(), next.text.size());
+    event.preeditClauses.assign(next.preeditClauses.begin(), next.preeditClauses.end());
     event.token = next.token;
     event.sequence = next.sequence;
     event.surroundingRevision = next.surroundingRevision;
@@ -213,4 +215,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

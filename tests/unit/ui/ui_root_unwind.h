@@ -45,6 +45,7 @@ private:
     Impl::Ui::EditCompositionView composition;
     Impl::Ui::EditBoxRange selection;
     Impl::Ui::EditBoxRange preedit;
+    Vector<Impl::Ui::EditPreeditClause, ToggleRootArena> preeditClauses(arena);
     Impl::Ui::EditBoxRange replacement;
     usize caret = 7u;
     usize committedBytes = 8u;
@@ -54,8 +55,8 @@ private:
     b8 ready = true;
     arena.rejectAllocations();
     const b8 propagated = static_cast<b8>(ThrowsException<AllocationException>([&](){
-        return Impl::Ui::EditBoxSnapshotBuilder().commit("abc", Span<const usize>(boundaries), composition, mode, 0u, 0u, 0u, 1u,
-            display, mapping, selection, preedit, replacement, caret, committedBytes, revision, mode, composing, ready);
+        return Impl::Ui::EditBoxSnapshotBuilder().commit("abc", Span<const usize>(boundaries), composition, mode, 0u, 0u, 0u, 1u, false, Impl::Ui::s_EditBoxDefaultMaskCodePoint,
+            display, mapping, selection, preedit, preeditClauses, replacement, caret, committedBytes, revision, mode, composing, ready);
     }));
     return propagated && display == "old" && mapping.empty() && caret == 7u && committedBytes == 8u && revision == 9u && ready;
 }
@@ -74,6 +75,7 @@ private:
     Impl::Ui::EditCompositionView composition;
     Impl::Ui::EditBoxRange selection;
     Impl::Ui::EditBoxRange preedit;
+    Vector<Impl::Ui::EditPreeditClause, Core::Alloc::GlobalArena> preeditClauses(storage.arena);
     Impl::Ui::EditBoxRange replacement;
     usize caret = 7u;
     usize committedBytes = 8u;
@@ -82,8 +84,8 @@ private:
     b8 composing = false;
     b8 ready = true;
     const b8 propagated = static_cast<b8>(ThrowsException<AllocationException>([&](){
-        return Impl::Ui::EditBoxSnapshotBuilder().commit(AStringView(input), Span<const usize>(boundaries), composition, mode, 0u, 0u, 0u, 1u,
-            display, mapping, selection, preedit, replacement, caret, committedBytes, revision, mode, composing, ready);
+        return Impl::Ui::EditBoxSnapshotBuilder().commit(AStringView(input), Span<const usize>(boundaries), composition, mode, 0u, 0u, 0u, 1u, false, Impl::Ui::s_EditBoxDefaultMaskCodePoint,
+            display, mapping, selection, preedit, preeditClauses, replacement, caret, committedBytes, revision, mode, composing, ready);
     }));
     return propagated && display == "old" && mapping.empty() && caret == 7u && committedBytes == 8u && revision == 9u && ready;
 }
@@ -114,4 +116,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

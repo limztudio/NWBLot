@@ -55,11 +55,19 @@ b8 IsValidDisplayMetricsForGpuSubmit(in DisplayMetrics display){
 }
 
 b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
-    if(command.material == PaintMaterial::Glyph)
+    if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::ColorGlyph)
         return cast<usize>(command.glyphPageIndex) < pageCount && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
     if(command.material == PaintMaterial::SdfGlyph)
         return command.glyphPageIndex == 0xffffffffu;
-    if(command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin || command.material == PaintMaterial::Image)
+    if(
+        command.material == PaintMaterial::Solid
+        || command.material == PaintMaterial::Skin
+        || command.material == PaintMaterial::Image
+        || command.material == PaintMaterial::Gradient
+        || command.material == PaintMaterial::DropShadow
+        || command.material == PaintMaterial::Blur
+        || command.material == PaintMaterial::EffectLayerComposite
+    )
         return command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
     return false;
 }
@@ -297,6 +305,76 @@ b8 TryResolveUniformPaintTransformScale(in PaintTransform2D xf, mut f32 outScale
     const VectorSingle resolvedVec = Sqrt(VectorSingle(c0Sq));
     outScale = resolvedVec.x;
     return IsFinite(resolvedVec) && outScale > 0.0f;
+}
+
+PaintGradient MakeLinearGradient(in Point start, in Point end, in Color startColor, in Color endColor){
+    PaintGradient gradient;
+    gradient.kind = PaintGradientKind::Linear;
+    gradient.start = start;
+    gradient.end = end;
+    gradient.addStop(0.0f, startColor);
+    gradient.addStop(1.0f, endColor);
+    return gradient;
+}
+
+PaintGradient MakeRadialGradient(in Point center, in f32 radius, in Color innerColor, in Color outerColor){
+    PaintGradient gradient;
+    gradient.kind = PaintGradientKind::Radial;
+    gradient.start = center;
+    gradient.end = center;
+    gradient.startRadius = 0.0f;
+    gradient.endRadius = radius;
+    gradient.addStop(0.0f, innerColor);
+    gradient.addStop(1.0f, outerColor);
+    return gradient;
+}
+
+PaintGradient MakeConicGradient(in Point center, in f32 startAngleRadians, in Color startColor, in Color endColor){
+    PaintGradient gradient;
+    gradient.kind = PaintGradientKind::Conic;
+    gradient.start = center;
+    gradient.startAngle = startAngleRadians;
+    gradient.addStop(0.0f, startColor);
+    gradient.addStop(1.0f, endColor);
+    return gradient;
+}
+
+b8 IsValidPaintGradient(in PaintGradient gradient){
+    if(gradient.kind > PaintGradientKind::Conic || gradient.spread > PaintGradientSpread::Mirror)
+        return false;
+    if(!IsFinite(VectorSingle(gradient.start.x, gradient.start.y, gradient.end.x, gradient.end.y)))
+        return false;
+    if(!IsFinite(VectorSingle(gradient.startRadius, gradient.endRadius, gradient.startAngle, 0.0f).xyz))
+        return false;
+    if(gradient.stopCount == 0u || cast<usize>(gradient.stopCount) > s_PaintMaxGradientStops)
+        return false;
+    if(gradient.kind == PaintGradientKind::Radial && (gradient.startRadius < 0.0f || gradient.endRadius < 0.0f))
+        return false;
+    for(u32 i = 0u; i < gradient.stopCount; ++i){
+        in PaintGradientStop stop = gradient.stops[cast<usize>(i)];
+        if(!IsFinite(VectorSingle(stop.offset)) || !IsFinite(VectorSingle(stop.color.r, stop.color.g, stop.color.b, stop.color.a)))
+            return false;
+        if(stop.color.a < 0.0f || stop.color.a > 1.0f)
+            return false;
+    }
+    return true;
+}
+
+b8 IsValidPaintShadowStyle(in PaintShadowStyle style){
+    if(!IsFinite(VectorSingle(style.offset.x, style.offset.y, style.blurRadius, style.spread)))
+        return false;
+    if(style.blurRadius < 0.0f || style.blurRadius > s_PaintMaxBlurRadius)
+        return false;
+    if(!IsFinite(VectorSingle(style.color.r, style.color.g, style.color.b, style.color.a)))
+        return false;
+    return style.color.a >= 0.0f && style.color.a <= 1.0f;
+}
+
+Color ApplyPaintOpacity(in Color color, in f32 opacity){
+    if(opacity >= 1.0f)
+        return color;
+    const f32 clamped = UiSimdClamp(opacity, 0.0f, 1.0f);
+    return Color(color.r, color.g, color.b, color.a * clamped);
 }
 
 

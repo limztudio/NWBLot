@@ -241,6 +241,34 @@ Expected<GlobalUniquePtr<ITextInputService>> Frame::createPlatformTextInputServi
     }
 }
 
+Expected<GlobalUniquePtr<ICursorService>> Frame::createPlatformCursorService(){
+    switch(data<Common::LinuxFrame>().backend()){
+    case Common::LinuxFrameBackend::X11:
+        return FrameDetail::CreateX11FrameCursor(*this);
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        return FrameDetail::CreateWaylandFrameCursor(*this);
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        return MakeUnexpected(Failure{});
+    }
+}
+
+Expected<GlobalUniquePtr<IAccessibilityService>> Frame::createPlatformAccessibilityService(){
+    switch(data<Common::LinuxFrame>().backend()){
+    case Common::LinuxFrameBackend::X11:
+        return FrameDetail::CreateX11FrameAccessibility(*this);
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        return FrameDetail::CreateWaylandFrameAccessibility(*this);
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        return MakeUnexpected(Failure{});
+    }
+}
+
 void Frame::setupPlatform([[maybe_unused]] void* inst)noexcept{
     auto& frameData = data<Common::LinuxFrame>();
     frameData.setActive(false);
@@ -289,4 +317,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

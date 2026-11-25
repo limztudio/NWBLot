@@ -914,15 +914,15 @@ void VerifyEditBoxLayoutTests_MismatchedAndRtlLayoutsPreserveTheAdmittedGeometry
     const f32 oldCaret = self.m_placement.caret.x;
     EXPECT_FALSE(self.tryAdoptBuiltLayout("other"));
     EXPECT_EQ(self.m_view.layout().utf8(), "abc");
-    EXPECT_FALSE(self.tryAdoptBuiltLayout("abc", TextDirection::RightToLeft));
-    ASSERT_TRUE(self.place());
-    EXPECT_FLOAT_EQ(self.m_placement.caret.x, oldCaret);
     ShapeRequest request = ShapeRequest();
     request.text = "abc";
-    request.direction = TextDirection::RightToLeft;
+    request.direction = cast<TextDirection>(99u);
     TextService service = TextService();
     EXPECT_EQ(self.m_view.shape(service, request), TextLayoutStatus::InvalidParameters);
     EXPECT_EQ(self.m_view.layout().utf8(), "abc");
+    ASSERT_TRUE(self.tryAdoptBuiltLayout("abc", TextDirection::RightToLeft));
+    ASSERT_TRUE(self.place());
+    EXPECT_NE(self.m_placement.caret.x, oldCaret);
 }
 
 void VerifyEditBoxLayoutTests_SnapshotOwnsModelBytesAndReshapingRejectsUnsupportedSingleLineControls(mut EditBoxLayoutTests self){
@@ -942,6 +942,10 @@ void VerifyEditBoxLayoutTests_SnapshotOwnsModelBytesAndReshapingRejectsUnsupport
     ASSERT_TRUE(moved.snapshot(self.m_model));
     EXPECT_FALSE(moved.ready());
     TextService service = TextService();
+    EXPECT_EQ(moved.shape(service), TextLayoutStatus::FontFailure);
+    ASSERT_TRUE(self.m_model.setText("A\x01B"));
+    ASSERT_TRUE(moved.snapshot(self.m_model));
+    EXPECT_FALSE(moved.ready());
     EXPECT_EQ(moved.shape(service), TextLayoutStatus::UnsupportedControl);
     EXPECT_FALSE(moved.arrange(Rect(), Insets(), Rect(), Point()).has_value());
 }
@@ -1402,11 +1406,14 @@ void VerifyEditCaretFixture_MultilineRequiresCanonicalLfAndSingleLineRejectsHard
     EXPECT_EQ(self.m_geometry.textMode(), EditTextMode::SingleLine);
 }
 
-void VerifyEditCaretFixture_RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry(mut EditCaretFixture self){
+void VerifyEditCaretFixture_InvalidDirectionAndMalformedClusterCoverageCannotReplaceReadyGeometry(mut EditCaretFixture self){
     const StringView text = "abc";
     ASSERT_TRUE(self.adoptText("base", EditTextMode::SingleLine));
     ASSERT_TRUE(self.identityMapping(text));
-    EXPECT_FALSE(UiEditCaretAdoptBuiltLayout(self, text, text, 3u, EditTextMode::SingleLine, TextDirection::RightToLeft));
+    ShapeRequest invalidDirection = ShapeRequest();
+    invalidDirection.text = text;
+    invalidDirection.direction = cast<TextDirection>(99u);
+    EXPECT_FALSE(self.m_builder.layout(invalidDirection).has_value());
     Array<UiFixtureShaperFault, 4u> faults = Array<UiFixtureShaperFault, 4u>();
     faults[0u] = UiFixtureShaperFault::LeadingGap;
     faults[1u] = UiFixtureShaperFault::TrailingGap;
@@ -1430,6 +1437,42 @@ void VerifyEditCaretFixture_NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeom
     self.m_shaper.fault = UiFixtureShaperFault::None;
     EXPECT_FALSE(UiEditCaretAdoptNonfinitePlacement(self));
     EXPECT_EQ(self.m_geometry.layout().utf8(), "base");
+}
+
+void VerifyEditCaretFixture_RtlClustersSupportCaretsSelectionRangesWordHitAndVerticalTargets(mut EditCaretFixture self){
+    const StringView text = "ab\ncd";
+    ASSERT_TRUE(self.identityMapping(text));
+    ASSERT_TRUE(UiEditCaretAdoptBuiltLayout(self, text, text, 5u, EditTextMode::Multiline, TextDirection::RightToLeft));
+    self.expectCaret(0u, 20.0f, 0.0f);
+    self.expectCaret(1u, 10.0f, 0.0f);
+    self.expectCaret(2u, 0.0f, 0.0f);
+    self.expectCaret(3u, 20.0f, 12.0f);
+    self.expectCaret(4u, 10.0f, 12.0f);
+    self.expectCaret(5u, 0.0f, 12.0f);
+
+    const Expected<Rect> line0Full = self.m_geometry.rangeOnLine(MakeUiEditCaretRange(0u, 2u), 0u, 2.0f);
+    ASSERT_TRUE(line0Full.has_value());
+    ExpectUiRect(line0Full.value(), Rect(0.0f, 0.0f, 20.0f, 12.0f));
+    const Expected<Rect> crossLine = self.m_geometry.rangeOnLine(MakeUiEditCaretRange(1u, 4u), 0u, 2.0f);
+    ASSERT_TRUE(crossLine.has_value());
+    ExpectUiRect(crossLine.value(), Rect(0.0f, 0.0f, 12.0f, 12.0f));
+
+    const Expected<usize> down = self.m_geometry.verticalTarget(1u, true, 10.0f);
+    ASSERT_TRUE(down.has_value());
+    EXPECT_EQ(down.value(), 4u);
+
+    const Expected<usize> wordLeft = TryHitEditWordCaretGeometry(self.m_geometry.lines(), self.m_geometry.caretStops(), Point(5.0f, 4.0f));
+    const Expected<usize> wordRight = TryHitEditWordCaretGeometry(self.m_geometry.lines(), self.m_geometry.caretStops(), Point(15.0f, 4.0f));
+    ASSERT_TRUE(wordLeft.has_value());
+    ASSERT_TRUE(wordRight.has_value());
+    EXPECT_EQ(wordLeft.value(), 1u);
+    EXPECT_EQ(wordRight.value(), 0u);
+
+    self.m_shaper.fault = UiFixtureShaperFault::LeadingGap;
+    ASSERT_TRUE(self.identityMapping("xyz"));
+    EXPECT_FALSE(UiEditCaretAdoptBuiltLayout(self, "xyz", "xyz", 3u, EditTextMode::SingleLine, TextDirection::RightToLeft));
+    self.m_shaper.fault = UiFixtureShaperFault::None;
+    EXPECT_EQ(self.m_geometry.layout().utf8(), "ab\ncd");
 }
 
 void VerifyEditCaretFixture_MalformedLineRecordsCannotReplaceReadyGeometry(mut EditCaretFixture self){
@@ -1604,6 +1647,34 @@ void VerifyEditCaretRangeFixture_OverflowingSelectedBreakWidthRejectsQuery(mut E
     self.expectRange(MakeUiEditCaretRange(0u, 1u), 0u, Rect(0.0f, 0.0f, f32.max, 12.0f));
 }
 
+void VerifyEditBoxLayoutTests_PasswordMaskingMapsCaretsHitsAndImePreeditAcrossMultiByteGlyphs(mut EditBoxLayoutTests self){
+    ASSERT_TRUE(self.m_model.setText("a\xc3\xa9"));
+    ASSERT_TRUE(self.m_model.setSelection(1u, 3u));
+    ASSERT_TRUE(self.m_view.snapshot(self.m_model, true, 0x2022u));
+    EXPECT_EQ(self.m_view.displayText(), "\xe2\x80\xa2\xe2\x80\xa2");
+    EXPECT_EQ(self.m_view.selectionRange().begin, 3u);
+    EXPECT_EQ(self.m_view.selectionRange().end, 6u);
+    EXPECT_EQ(self.m_view.displayCaret(), 6u);
+    ASSERT_TRUE(self.tryAdoptBuiltLayout(self.m_view.displayText()));
+    ASSERT_TRUE(self.place());
+    ASSERT_EQ(self.m_view.caretStops().size(), 3u);
+    EXPECT_EQ(self.m_view.caretStops()[1u].committedByte, 1u);
+    EXPECT_EQ(self.m_view.caretStops()[1u].displayByte, 3u);
+    const Expected<usize> hitMiddle = self.m_view.hitTest(Point(18.0f, 24.0f), self.m_placement);
+    ASSERT_TRUE(hitMiddle.has_value());
+    EXPECT_EQ(hitMiddle.value(), 1u);
+    ASSERT_TRUE(self.m_model.beginComposition());
+    ASSERT_TRUE(self.m_model.updateComposition("xy", 1u, 2u));
+    ASSERT_TRUE(self.m_view.snapshot(self.m_model, true, 0x2au));
+    EXPECT_EQ(self.m_view.displayText(), "***");
+    EXPECT_EQ(self.m_view.preeditRange().begin, 1u);
+    EXPECT_EQ(self.m_view.preeditRange().end, 3u);
+    EXPECT_EQ(self.m_view.selectionRange().begin, 2u);
+    EXPECT_EQ(self.m_view.selectionRange().end, 3u);
+    EXPECT_EQ(self.m_view.displayCaret(), 3u);
+    EXPECT_FALSE(self.m_view.snapshot(self.m_model, true, 0x0au));
+}
+
 NWB_ADHD_GTEST_F(UiControlInputTests, AcceptedWheelOwnsItsStepAfterCallerTargetMutation, VerifyUiControlInputTests_AcceptedWheelOwnsItsStepAfterCallerTargetMutation)
 
 NWB_ADHD_GTEST_F(UiControlInputTests, OverlappingUnrelatedControlBlocksUnderlyingWheelRouting, VerifyUiControlInputTests_OverlappingUnrelatedControlBlocksUnderlyingWheelRouting)
@@ -1724,7 +1795,8 @@ NWB_ADHD_GTEST_F(EditCaretFixture, NativeMappingAcceptsScalarEdgesButRejectsCont
 
 NWB_ADHD_GTEST_F(EditCaretFixture, MultilineRequiresCanonicalLfAndSingleLineRejectsHardBreaks, VerifyEditCaretFixture_MultilineRequiresCanonicalLfAndSingleLineRejectsHardBreaks)
 
-NWB_ADHD_GTEST_F(EditCaretFixture, RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry, VerifyEditCaretFixture_RtlAndMalformedClusterCoverageCannotReplaceReadyLtrGeometry)
+NWB_ADHD_GTEST_F(EditCaretFixture, InvalidDirectionAndMalformedClusterCoverageCannotReplaceReadyGeometry, VerifyEditCaretFixture_InvalidDirectionAndMalformedClusterCoverageCannotReplaceReadyGeometry)
+NWB_ADHD_GTEST_F(EditCaretFixture, RtlClustersSupportCaretsSelectionRangesWordHitAndVerticalTargets, VerifyEditCaretFixture_RtlClustersSupportCaretsSelectionRangesWordHitAndVerticalTargets)
 
 NWB_ADHD_GTEST_F(EditCaretFixture, NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometry, VerifyEditCaretFixture_NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometry)
 
@@ -1759,6 +1831,8 @@ NWB_ADHD_GTEST_F(EditCaretFixture, InvalidRangeEndpointsAndLineIndicesRejectQuer
 NWB_ADHD_GTEST_F(EditCaretFixture, InvalidBreakCapsRejectEvenCollapsedRanges, VerifyEditCaretRangeFixture_InvalidBreakCapsRejectEvenCollapsedRanges)
 
 NWB_ADHD_GTEST_F(EditCaretFixture, OverflowingSelectedBreakWidthRejectsQuery, VerifyEditCaretRangeFixture_OverflowingSelectedBreakWidthRejectsQuery)
+
+NWB_ADHD_GTEST_F(EditBoxLayoutTests, PasswordMaskingMapsCaretsHitsAndImePreeditAcrossMultiByteGlyphs, VerifyEditBoxLayoutTests_PasswordMaskingMapsCaretsHitsAndImePreeditAcrossMultiByteGlyphs)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1232,6 +1232,7 @@ b8 RendererMaterialSystem::reserveInstanceBufferCapacity(in usize instanceCount)
     instanceBufferDesc
         .setByteSize(cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
+        .setCanHaveUAVs(true)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(s_InstanceBufferName)
         .enableAutomaticStateTracking(ResourceStates::Common)

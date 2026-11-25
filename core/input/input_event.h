@@ -57,6 +57,41 @@ namespace MouseButton{
     };
 };
 
+inline constexpr u32 s_MaxGamepadCount = 4u;
+
+namespace GamepadButton{
+    enum Enum : i32{
+        A = 0,
+        B,
+        X,
+        Y,
+        LeftBumper,
+        RightBumper,
+        Back,
+        Start,
+        Guide,
+        LeftThumb,
+        RightThumb,
+        DPadUp,
+        DPadRight,
+        DPadDown,
+        DPadLeft,
+        kCount
+    };
+};
+
+namespace GamepadAxis{
+    enum Enum : i32{
+        LeftX = 0,
+        LeftY,
+        RightX,
+        RightY,
+        LeftTrigger,
+        RightTrigger,
+        kCount
+    };
+};
+
 namespace Key{
     static constexpr i32 s_KeyUnknownCode = -1;
     static constexpr i32 s_KeySpaceAscii = 32;
@@ -236,6 +271,12 @@ public:
     virtual b8 mouseButtonUpdate(i32, i32, i32){ return false; }
 
     virtual b8 mouseScrollUpdate(f64, f64){ return false; }
+
+    virtual void gamepadConnectionUpdate(u32, b8){}
+
+    virtual b8 gamepadButtonUpdate(u32, i32, i32){ return false; }
+
+    virtual b8 gamepadAxisUpdate(u32, i32, f32){ return false; }
 };
 
 
@@ -243,4 +284,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

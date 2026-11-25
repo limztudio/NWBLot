@@ -88,11 +88,12 @@ class RadioGroupState : NoCopy{
 
 
 Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in RadioGroupChoices choices, in RadioGroupMetrics metrics){
-    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count)
+    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidRadioGroupMetrics(metrics) || choices.count != metrics.count || choices.rows.size() != cast<usize>(choices.count))
         return MakeUnexpected(Failure());
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;
     candidate.count = choices.count;
+    candidate.rows.resize(cast<usize>(candidate.count));
     const Expected<Rect> clipped = TryIntersectUiRects(bounds, clip, UiRectPrecision::PreciseExtents);
     if(!clipped.has_value())
         return MakeUnexpected(Failure());
@@ -105,21 +106,37 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
     const f64 contentX = insetRect.x;
     const f64 contentY = insetRect.y;
     const f64 contentW = insetRect.z;
-    const f64 indicatorExtentScalar = UiSimdMinF64(cast<f64>(metrics.indicatorExtent), contentW);
-    const f64 labelOffset = UiSimdMinF64(contentW, indicatorExtentScalar + cast<f64>(metrics.gap));
+    const u32 cols = Max(cast<u32>(1u), metrics.columns);
+    const u32 colGapCount = cols - 1u;
+    const f64 totalColGap = cast<f64>(colGapCount) * cast<f64>(metrics.columnGap);
+    const f64 cellW = UiSimdMaxF64(0.0, (contentW - totalColGap) / cast<f64>(cols));
+    const f64 indicatorExtentScalar = UiSimdMinF64(cast<f64>(metrics.indicatorExtent), cellW);
+    const f64 labelOffset = UiSimdMinF64(cellW, indicatorExtentScalar + cast<f64>(metrics.gap));
     const f64 markInsetScalar = indicatorExtentScalar * cast<f64>(metrics.markInset);
     const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
+    HashSet<u64> seenKeys;
+    if(candidate.count > 16u)
+        seenKeys.reserve(cast<usize>(candidate.count));
     for(u32 index = 0u; index < candidate.count; ++index){
-        if(!IsUniqueRadioGroupChoiceKey(choices, index, choices.rows[index].key))
+        const u64 key = choices.rows[index].key;
+        if(candidate.count > 16u){
+            if(key == 0u || seenKeys.find(key) != seenKeys.end())
+                return MakeUnexpected(Failure());
+            seenKeys.insert(key);
+        }
+        else if(!IsUniqueRadioGroupChoiceKey(choices, index, key))
             return MakeUnexpected(Failure());
+        const u32 col = index % cols;
+        const u32 rowIdx = index / cols;
         RadioGroupChoicePlacement row;
-        row.key = choices.rows[index].key;
+        row.key = key;
         row.enabled = choices.rows[index].enabled;
-        const f64 rowOffset = cast<f64>(index) * (rowHeightScalar + cast<f64>(metrics.rowGap));
+        const f64 cellX = contentX + cast<f64>(col) * (cellW + cast<f64>(metrics.columnGap));
+        const f64 rowOffset = cast<f64>(rowIdx) * (rowHeightScalar + cast<f64>(metrics.rowGap));
         const f64 rowOriginScalar = contentY + rowOffset;
         const f64 indicatorSpace = rowHeightScalar - indicatorExtentScalar;
         const f64 indicatorYScalar = rowOriginScalar + (indicatorSpace * 0.5);
-        const Expected<Rect> rowRect = TryMakeUiRect(contentX, rowOriginScalar, contentW, rowHeightScalar, UiRectPrecision::PreciseExtents);
+        const Expected<Rect> rowRect = TryMakeUiRect(cellX, rowOriginScalar, cellW, rowHeightScalar, UiRectPrecision::PreciseExtents);
         if(!rowRect.has_value())
             return MakeUnexpected(Failure());
         row.rectangle = rowRect.value();
@@ -127,11 +144,11 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
         if(!rowClip.has_value())
             return MakeUnexpected(Failure());
         row.clip = rowClip.value();
-        const Expected<Rect> indicator = TryMakeUiRect(contentX, indicatorYScalar, indicatorExtentScalar, indicatorExtentScalar, UiRectPrecision::PreciseExtents);
+        const Expected<Rect> indicator = TryMakeUiRect(cellX, indicatorYScalar, indicatorExtentScalar, indicatorExtentScalar, UiRectPrecision::PreciseExtents);
         if(!indicator.has_value())
             return MakeUnexpected(Failure());
         row.indicator = indicator.value();
-        const VectorDouble markOrigin = VectorDouble(contentX, indicatorYScalar, contentX, indicatorYScalar) + VectorDouble(markInsetScalar);
+        const VectorDouble markOrigin = VectorDouble(cellX, indicatorYScalar, cellX, indicatorYScalar) + VectorDouble(markInsetScalar);
         const f64 markX = markOrigin.x;
         const f64 markY = markOrigin.y;
         const f64 markExtent = indicatorExtentScalar - cast<f64>(s_CheckmarkInsetSides) * markInsetScalar;
@@ -139,7 +156,7 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
         if(!mark.has_value())
             return MakeUnexpected(Failure());
         row.mark = mark.value();
-        const Expected<Rect> labelRect = TryMakeUiRect(contentX + labelOffset, rowOriginScalar, contentW - labelOffset, rowHeightScalar, UiRectPrecision::PreciseExtents);
+        const Expected<Rect> labelRect = TryMakeUiRect(cellX + labelOffset, rowOriginScalar, cellW - labelOffset, rowHeightScalar, UiRectPrecision::PreciseExtents);
         if(!labelRect.has_value())
             return MakeUnexpected(Failure());
         const Expected<Rect> textClip = TryIntersectUiRects(labelRect.value(), row.clip, UiRectPrecision::PreciseExtents);
@@ -206,7 +223,7 @@ Expected<RadioGroupSelectionOutcome> TryApplyRadioGroupControlAction(
     case ControlActionKind::Right:
     case ControlActionKind::Home:
     case ControlActionKind::End:
-        candidate = ResolveRadioGroupNavigationTarget(choices, currentCursor, action.kind);
+        candidate = ResolveRadioGroupNavigationTarget(choices, currentCursor, action.kind, options.orientation, options.columns);
         break;
     case ControlActionKind::Submit:
     case ControlActionKind::Activate:{

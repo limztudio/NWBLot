@@ -4,4 +4,4 @@ nwb_target_adhd_sources(nwb_ecs_csg
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/*.adhd"
 )
-target_link_libraries(nwb_ecs_csg PUBLIC nwb_ecs nwb_assets_csg)
+target_link_libraries(nwb_ecs_csg PUBLIC nwb_ecs nwb_ecs_scene nwb_assets_csg)

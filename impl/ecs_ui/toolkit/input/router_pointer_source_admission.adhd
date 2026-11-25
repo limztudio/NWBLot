@@ -104,7 +104,7 @@ class RouterPointerSourceAdmission{
                             outHit = targets[hitIndex.value()];
                         hitResolved = true;
                     }
-                    consumed = !popups.empty() || outHasHit;
+                    consumed = HasBlockingRouterPopup(popups) || outHasHit;
                 }
             }
             PointerSource added;
@@ -129,7 +129,7 @@ class RouterPointerSourceAdmission{
                         outHit = targets[hitIndex.value()];
                     hitResolved = true;
                 }
-                inOutResult.pointerConsumed = inOutResult.pointerConsumed || !popups.empty() || outHasHit;
+                inOutResult.pointerConsumed = inOutResult.pointerConsumed || HasBlockingRouterPopup(popups) || outHasHit;
                 return false;
             }
             const usize heldIndex = heldFound.value();

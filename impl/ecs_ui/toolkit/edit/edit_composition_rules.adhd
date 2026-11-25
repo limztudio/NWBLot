@@ -109,14 +109,14 @@ class EditCompositionRules{
         in usize compositionCaret,
         in b8 compositionActive
     ){
-        return EditCompositionView(
-            preedit,
-            preeditAnchor,
-            preeditCaret,
-            Min(compositionAnchor, compositionCaret),
-            Max(compositionAnchor, compositionCaret),
-            compositionActive
-        );
+        EditCompositionView result;
+        result.text = preedit;
+        result.anchor = preeditAnchor;
+        result.caret = preeditCaret;
+        result.replacementStart = Min(compositionAnchor, compositionCaret);
+        result.replacementEnd = Max(compositionAnchor, compositionCaret);
+        result.active = compositionActive;
+        return result;
     }
 }
 

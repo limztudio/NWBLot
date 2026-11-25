@@ -678,6 +678,100 @@ void VerifyUiBuilderTests_FocusTransferWhileButtonSubmitIsHeldCannotActivateEith
     ASSERT_TRUE(self.m_context.commitFrame(3u));
 }
 
+void VerifyUiBuilderTests_OverlayAndUnclippedContainerPreserveChildBoundsAgainstOuterClip(mut UiBuilderTests self){
+    ASSERT_TRUE(self.begin(1u, Rect(10.0f, 10.0f, 200.0f, 160.0f)));
+    ContainerOptions overlayOpts = ContainerOptions();
+    overlayOpts.height.policy = LayoutSizePolicy::Fixed;
+    overlayOpts.height.value = 40.0f;
+    ASSERT_TRUE(self.m_builder.beginOverlay("overlay", overlayOpts));
+    WidgetOptions firstBtn = WidgetOptions();
+    firstBtn.width.policy = LayoutSizePolicy::Fixed;
+    firstBtn.width.value = 100.0f;
+    firstBtn.height.policy = LayoutSizePolicy::Fixed;
+    firstBtn.height.value = 20.0f;
+    WidgetOptions secondBtn = firstBtn;
+    secondBtn.width.value = 60.0f;
+    EXPECT_FALSE(self.m_builder.button("first", "First", firstBtn));
+    EXPECT_FALSE(self.m_builder.button("second", "Second", secondBtn));
+    ASSERT_TRUE(self.m_builder.endContainer());
+
+    ContainerOptions clippedOpts = ContainerOptions();
+    clippedOpts.width.policy = LayoutSizePolicy::Fixed;
+    clippedOpts.width.value = 40.0f;
+    clippedOpts.height.policy = LayoutSizePolicy::Fixed;
+    clippedOpts.height.value = 24.0f;
+    clippedOpts.clipChildren = true;
+    ASSERT_TRUE(self.m_builder.beginRow("clipped", clippedOpts));
+    EXPECT_FALSE(self.m_builder.button("btn", "Wide", firstBtn));
+    ASSERT_TRUE(self.m_builder.endContainer());
+
+    ContainerOptions unclippedOpts = clippedOpts;
+    unclippedOpts.clipChildren = false;
+    ASSERT_TRUE(self.m_builder.beginRow("unclipped", unclippedOpts));
+    EXPECT_FALSE(self.m_builder.button("btn", "Wide", firstBtn));
+    ASSERT_TRUE(self.m_builder.endContainer());
+
+    ASSERT_TRUE(self.finish());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+    const Expected<HitTarget> firstTarget = self.tryTarget(RequireUiWidgetId(self.id("overlay"), "first"));
+    const Expected<HitTarget> secondTarget = self.tryTarget(RequireUiWidgetId(self.id("overlay"), "second"));
+    ASSERT_TRUE(firstTarget.has_value());
+    ASSERT_TRUE(secondTarget.has_value());
+    EXPECT_FLOAT_EQ(firstTarget.value().rectangle.x, secondTarget.value().rectangle.x);
+    EXPECT_FLOAT_EQ(firstTarget.value().rectangle.y, secondTarget.value().rectangle.y);
+
+    const Expected<HitTarget> clippedTarget = self.tryTarget(RequireUiWidgetId(self.id("clipped"), "btn"));
+    const Expected<HitTarget> unclippedTarget = self.tryTarget(RequireUiWidgetId(self.id("unclipped"), "btn"));
+    ASSERT_TRUE(clippedTarget.has_value());
+    ASSERT_TRUE(unclippedTarget.has_value());
+    EXPECT_FLOAT_EQ(clippedTarget.value().clip.width, 40.0f);
+    EXPECT_GT(unclippedTarget.value().clip.width, 90.0f);
+}
+
+void VerifyUiBuilderTests_LabelOptionsAlignmentAndEllipsisTruncateInLtrAndRtl(mut UiBuilderTests self){
+    LabelOptions truncOpts = LabelOptions();
+    truncOpts.width.policy = LayoutSizePolicy::Fixed;
+    truncOpts.width.value = 48.0f;
+    truncOpts.ellipsis = true;
+    truncOpts.alignment = TextAlignment::Trailing;
+
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.label("trunc", "ABCDEFGHIJKLMNOP", truncOpts));
+    ASSERT_TRUE(self.finish());
+    Vector<Vertex> ltrVerts;
+    CopyGlyphVertices(self.m_paint.freeze(), ltrVerts);
+    const usize ltrQuads = ltrVerts.size() / 6u;
+    EXPECT_GE(ltrQuads, 4u);
+    EXPECT_LT(ltrQuads, 16u);
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    ASSERT_TRUE(self.m_builder.setTextDirection(TextDirection::RightToLeft));
+    ASSERT_TRUE(self.begin(2u));
+    truncOpts.alignment = TextAlignment::Center;
+    ASSERT_TRUE(self.m_builder.label("rtl_trunc", "ABCDEFGHIJKLMNOP", truncOpts));
+    ASSERT_TRUE(self.finish());
+    Vector<Vertex> rtlVerts;
+    CopyGlyphVertices(self.m_paint.freeze(), rtlVerts);
+    const usize rtlQuads = rtlVerts.size() / 6u;
+    EXPECT_GE(rtlQuads, 4u);
+    EXPECT_LT(rtlQuads, 16u);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+
+    ASSERT_TRUE(self.m_builder.setTextDirection(TextDirection::LeftToRight));
+    LabelOptions alignOpts = LabelOptions();
+    alignOpts.width.policy = LayoutSizePolicy::Fixed;
+    alignOpts.width.value = 140.0f;
+    alignOpts.alignment = TextAlignment::Trailing;
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.label("aligned", "A", alignOpts));
+    ASSERT_TRUE(self.finish());
+    Vector<Vertex> alignVerts;
+    CopyGlyphVertices(self.m_paint.freeze(), alignVerts);
+    ASSERT_EQ(alignVerts.size(), 6u);
+    EXPECT_GT(alignVerts[0u].position.x, 100.0f);
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+}
+
 void VerifyUiBuilderTests_FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBuilderReuse(mut UiBuilderTests self){
     b8 checked = true;
     String caption = "A";
@@ -745,6 +839,113 @@ void VerifyUiBuilderTextShapingTests_InvalidPolicyPreservesPreviousShapingAndOpe
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 100.0f)));
     EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
     EXPECT_TRUE(self.m_builder.failed());
+    EXPECT_FALSE(self.m_builder.endPanel());
+}
+
+void VerifyUiBuilderTextShapingTests_TextDirectionUpdatesLabelListEditBoxAndRejectsInvalidDirection(mut UiBuilderTextShapingTests self){
+    ASSERT_TRUE(self.installKoreanFallback());
+    self.addEditRegion();
+    ASSERT_TRUE(self.m_skin.validatePayload());
+    EXPECT_EQ(self.m_builder.textDirection(), TextDirection::LeftToRight);
+    EXPECT_FALSE(self.m_builder.setTextDirection(cast<TextDirection>(99u)));
+    EXPECT_FALSE(self.m_builder.failed());
+    EXPECT_EQ(self.m_builder.textDirection(), TextDirection::LeftToRight);
+
+    ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('A', 'r', 'a', 'b'), "ar", TextDirection::RightToLeft));
+    EXPECT_EQ(self.m_builder.textDirection(), TextDirection::RightToLeft);
+
+    EditModel model = EditModel();
+    ASSERT_TRUE(model.setText("abc"));
+    EditBoxState editState = EditBoxState();
+    ArithmeticSource listSource = ArithmeticSource();
+    ListState listState = ListState();
+    ListOptions listOpts = ListOptions();
+    listOpts.width.policy = LayoutSizePolicy::Fixed;
+    listOpts.width.value = 160.0f;
+    listOpts.height.policy = LayoutSizePolicy::Fixed;
+    listOpts.height.value = 80.0f;
+
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 220.0f)));
+    ASSERT_TRUE(self.m_builder.label("lbl", "abc"));
+    ASSERT_TRUE(self.m_builder.virtualList("list", listSource, listState, listOpts).valid);
+    ASSERT_TRUE(self.m_builder.editBox("edit", model, editState).valid);
+    ASSERT_TRUE(self.finishPanel());
+    EXPECT_EQ(listState.m_measureKey.direction, TextDirection::RightToLeft);
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    ASSERT_TRUE(self.m_builder.setTextDirection(TextDirection::LeftToRight));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 220.0f)));
+    ASSERT_TRUE(self.m_builder.virtualList("list", listSource, listState, listOpts).valid);
+    ASSERT_TRUE(self.m_builder.editBox("edit", model, editState).valid);
+    ASSERT_TRUE(self.finishPanel());
+    EXPECT_EQ(listState.m_measureKey.direction, TextDirection::LeftToRight);
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 100.0f)));
+    EXPECT_FALSE(self.m_builder.setTextDirection(TextDirection::RightToLeft));
+    EXPECT_TRUE(self.m_builder.failed());
+    EXPECT_FALSE(self.m_builder.endPanel());
+}
+
+void VerifyUiBuilderTextShapingTests_EditBoxPlaceholderPasswordAndInvalidOptionsWork(mut UiBuilderTextShapingTests self){
+    self.addEditRegion();
+    ASSERT_TRUE(self.m_skin.validatePayload());
+    EditModel model = EditModel();
+    EditBoxState editState = EditBoxState();
+    EditBoxOptions options = EditBoxOptions();
+    options.placeholder = "Password";
+    options.password = true;
+    options.maskCodePoint = 0x2au;
+
+    ASSERT_TRUE(self.begin(1u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 180.0f)));
+    ASSERT_TRUE(self.m_builder.editBox("edit", model, editState, options).valid);
+    ASSERT_TRUE(self.finishPanel());
+    Vector<Vertex> emptyVerts;
+    CopyGlyphVertices(self.m_paint.freeze(), emptyVerts);
+    EXPECT_FALSE(emptyVerts.empty());
+    ASSERT_TRUE(self.m_context.commitFrame(1u));
+
+    ASSERT_TRUE(model.setText("secret"));
+    ASSERT_TRUE(self.begin(2u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 180.0f)));
+    ASSERT_TRUE(self.m_builder.editBox("edit", model, editState, options).valid);
+    ASSERT_TRUE(self.finishPanel());
+    Vector<Vertex> maskedVerts;
+    CopyGlyphVertices(self.m_paint.freeze(), maskedVerts);
+    ASSERT_FALSE(maskedVerts.empty());
+    ASSERT_TRUE(self.m_context.commitFrame(2u));
+
+    options.password = false;
+    ASSERT_TRUE(self.begin(3u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 180.0f)));
+    ASSERT_TRUE(self.m_builder.editBox("edit", model, editState, options).valid);
+    ASSERT_TRUE(self.finishPanel());
+    Vector<Vertex> plainVerts;
+    CopyGlyphVertices(self.m_paint.freeze(), plainVerts);
+    ASSERT_FALSE(plainVerts.empty());
+    EXPECT_NE(maskedVerts[0u].texCoord.x, plainVerts[0u].texCoord.x);
+    ASSERT_TRUE(self.m_context.commitFrame(3u));
+
+    EditBoxOptions badMask = EditBoxOptions();
+    badMask.password = true;
+    badMask.maskCodePoint = 0x0au;
+    ASSERT_TRUE(self.begin(4u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 180.0f)));
+    EXPECT_FALSE(self.m_builder.editBox("edit", model, editState, badMask).valid);
+    EXPECT_FALSE(self.m_builder.endPanel());
+    self.m_context.abandonFrame();
+    self.m_builder.reset();
+    self.m_context.abandonFrame();
+
+    EditBoxOptions badPlaceholder = EditBoxOptions();
+    badPlaceholder.placeholder = "bad\nline";
+    ASSERT_TRUE(self.begin(5u));
+    ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 180.0f)));
+    EXPECT_FALSE(self.m_builder.editBox("edit", model, editState, badPlaceholder).valid);
     EXPECT_FALSE(self.m_builder.endPanel());
 }
 
@@ -1683,8 +1884,12 @@ NWB_ADHD_GTEST_F(UiBuilderTests, PreparedFrameTargetsStayInaccessibleUntilExactC
 NWB_ADHD_GTEST_F(UiBuilderTests, EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmission, VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubmission)
 NWB_ADHD_GTEST_F(UiBuilderTests, FocusTransferWhileButtonSubmitIsHeldCannotActivateEitherButton, VerifyUiBuilderTests_FocusTransferWhileButtonSubmitIsHeldCannotActivateEitherButton)
 NWB_ADHD_GTEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBuilderReuse, VerifyUiBuilderTests_FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBuilderReuse)
+NWB_ADHD_GTEST_F(UiBuilderTests, OverlayAndUnclippedContainerPreserveChildBoundsAgainstOuterClip, VerifyUiBuilderTests_OverlayAndUnclippedContainerPreserveChildBoundsAgainstOuterClip)
+NWB_ADHD_GTEST_F(UiBuilderTests, LabelOptionsAlignmentAndEllipsisTruncateInLtrAndRtl, VerifyUiBuilderTests_LabelOptionsAlignmentAndEllipsisTruncateInLtrAndRtl)
 
 NWB_ADHD_GTEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenScopeMutationFails, VerifyUiBuilderTextShapingTests_InvalidPolicyPreservesPreviousShapingAndOpenScopeMutationFails)
+NWB_ADHD_GTEST_F(UiBuilderTextShapingTests, TextDirectionUpdatesLabelListEditBoxAndRejectsInvalidDirection, VerifyUiBuilderTextShapingTests_TextDirectionUpdatesLabelListEditBoxAndRejectsInvalidDirection)
+NWB_ADHD_GTEST_F(UiBuilderTextShapingTests, EditBoxPlaceholderPasswordAndInvalidOptionsWork, VerifyUiBuilderTextShapingTests_EditBoxPlaceholderPasswordAndInvalidOptionsWork)
 
 NWB_ADHD_GTEST(UiCaretClockTests, FiniteLongDeltaPreservesWholeCycleRemainder, VerifyUiCaretClockTests_FiniteLongDeltaPreservesWholeCycleRemainder)
 NWB_ADHD_GTEST(UiCaretClockTests, InvalidAndNonpositiveDeltasKeepCurrentPhase, VerifyUiCaretClockTests_InvalidAndNonpositiveDeltasKeepCurrentPhase)

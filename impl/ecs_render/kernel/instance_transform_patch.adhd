@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/mesh/instance_gpu_data.adhd>
+#include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+b8 AppendInstanceTransformPatch(
+    in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor,
+    in Span<InstanceGpuData> instances,
+    in GpuGraphResourceId materialInstances,
+    in MeshFrameBindingSnapshot frameBindings,
+    in Name passIdentityPrefix,
+    in b8 mergeWithPrevious,
+    mut GpuTaskGraph graph,
+    mut GpuTaskId dependency
+){
+    if(!contributor.has_value() || instances.empty())
+        return true;
+    if(!materialInstances.valid() || !frameBindings.instanceUavHeapHandle.valid())
+        return false;
+
+    Vector<u32> instanceEntityIds;
+    instanceEntityIds.resize(instances.size(), 0xffffffffu);
+    for(usize i = 0u; i < instances.size(); ++i)
+        instanceEntityIds[i] = instances[i].scale.w;
+
+    GpuTaskGraphInstanceTransformPatchRequest request;
+    request.instanceBufferResource = materialInstances;
+    request.instanceBufferUavSlot = frameBindings.instanceUavHeapHandle.slot();
+    request.instanceStrideFloat4 = cast<u32>(size_of<InstanceGpuData>() / size_of<f32x4>());
+    request.passIdentityPrefix = passIdentityPrefix;
+    request.dependency = dependency;
+    request.mergeWithPrevious = mergeWithPrevious;
+
+    const auto patchResult = contributor.value().declareInstanceTransformPatch(request, Span<u32>(instanceEntityIds.data(), instanceEntityIds.size()), graph);
+    if(!patchResult.has_value()){
+        dependency = GpuTaskId();
+        return false;
+    }
+    if(patchResult.value().valid())
+        dependency = patchResult.value();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

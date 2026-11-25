@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.adhd>
 #include <impl/ecs_render/material/material_system.adhd>
 #include <impl/ecs_render/material/material_typed_private.adhd>
+#include <impl/ecs_render/kernel/instance_transform_patch.adhd>
 #include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
 #include <impl/ecs_render/kernel/renderer_constants_private.adhd>
@@ -351,6 +352,7 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     in borrow MeshViewGpuData meshViewState,
     in GpuTaskId initialDependency,
     in b8 enabled,
+    in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor,
     mut DeferredFrameTargets targets,
     mut ObjectGeometryCacheGraph objectGeometry,
     mut AvboitGeneratedGeometryReuse generatedGeometry,
@@ -441,7 +443,8 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     const Span<InstanceGpuData> instanceSpan = instances;
     const Span<u8> materialBytes = typedBytes;
     if(!AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureInstancesUpload, materialInstances, graph.copyUploadElements<InstanceGpuData>(instanceSpan))
-        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureMaterialUpload, materialTyped, graph.copyUploadBytes<u32>(materialBytes)))
+        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureMaterialUpload, materialTyped, graph.copyUploadBytes<u32>(materialBytes))
+        || !AppendInstanceTransformPatch(instanceTransformPatchContributor, instanceSpan, materialInstances, frameBindings, Name("render.avboit.refraction_capture.physics_patch"), true, graph, dependency))
         return MakeUnexpected(Failure());
 
     Vector<GpuTaskResourceUse> commonUses;

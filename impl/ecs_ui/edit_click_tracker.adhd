@@ -14,6 +14,7 @@ const usize s_UiEditBoxMaxEntries = 256u;
 const u64 s_UiDoubleClickMaxIntervalMs = 500u;
 const f64 s_UiDoubleClickMaxDistanceSquared = 16.0;
 const u8 s_UiDoubleClickCount = 2u;
+const u8 s_UiTripleClickCount = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +46,7 @@ enum<u8> UiTextEditStatus{
 enum<u8> UiEditClickKind{
     Caret,
     Word,
+    Line,
 }
 
 class UiTextEditResult{
@@ -107,24 +109,29 @@ class UiEditClickTracker{
             this.cancel();
             return UiEditClickKind::Caret;
         }
-        const b8 second = this.m_released && this.m_clickCount == 1u && owner == this.m_owner && popup == this.m_popup
+        const b8 sameChain = this.m_released && owner == this.m_owner && popup == this.m_popup
             && revision == this.m_revision && externalRevision == this.m_externalRevision
             && timestampMs >= this.m_pressTimestampMs && timestampMs - this.m_pressTimestampMs <= s_UiDoubleClickMaxIntervalMs
             && this.withinDoubleClickDistance(position);
+        const b8 second = sameChain && this.m_clickCount == 1u;
+        const b8 third = sameChain && this.m_clickCount == s_UiDoubleClickCount;
         this.m_owner = owner;
         this.m_popup = popup;
         this.m_position = position;
         this.m_revision = revision;
         this.m_externalRevision = externalRevision;
         this.m_pressTimestampMs = timestampMs;
-        if(second)
-            this.m_clickCount = s_UiDoubleClickCount;
-        else
-            this.m_clickCount = 1u;
         this.m_down = true;
         this.m_released = false;
-        if(second)
+        if(second){
+            this.m_clickCount = s_UiDoubleClickCount;
             return UiEditClickKind::Word;
+        }
+        if(third){
+            this.m_clickCount = s_UiTripleClickCount;
+            return UiEditClickKind::Line;
+        }
+        this.m_clickCount = 1u;
         return UiEditClickKind::Caret;
     }
 

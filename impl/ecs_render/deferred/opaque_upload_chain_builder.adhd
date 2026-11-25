@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/material_system.adhd>
 #include <impl/ecs_render/shared/renderer_frame_bindings.adhd>
 #include <impl/ecs_render/deferred/import_types.adhd>
+#include <impl/ecs_render/kernel/instance_transform_patch.adhd>
 #include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 #include <impl/ecs_render/mesh/instance_gpu_data.adhd>
 
@@ -30,6 +31,7 @@ class OpaqueUploadChainInputs{
     public GpuGraphResourceId csgClipContextSlots;
     public GpuGraphResourceId csgIntervalSampleState;
     public GpuTaskId dependencyTask;
+    public Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor;
     public b8 hasOpaqueDrawItems = false;
 
     public OpaqueUploadChainInputs(in DeferredFrameTargets targets, in MeshFrameBindingSnapshot bindings, in CsgGraphResourceSnapshot resources, in CsgFrameGpuDataView frame){
@@ -68,6 +70,17 @@ class OpaqueUploadChainBuilder : NoCopy{
                 ValidateMaterialTypedUploadRanges(inputs.materialTypedRanges.value(), inputs.materialTypedBytes);
             }
             if(!DeclareOpaqueMaterialUploads(this.m_graph, instanceData, inputs.materialTypedBytes, inputs.materialInstances, inputs.materialTyped, dependency))
+                return MakeUnexpected(Failure());
+            if(!AppendInstanceTransformPatch(
+                inputs.instanceTransformPatchContributor,
+                instanceData,
+                inputs.materialInstances,
+                inputs.frameBindings,
+                Name("render.graphics_prefix.opaque.physics_patch"),
+                true,
+                this.m_graph,
+                dependency
+            ))
                 return MakeUnexpected(Failure());
             result.materialDrawBuffersUploaded = true;
         }

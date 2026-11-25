@@ -46,6 +46,7 @@ class RendererSystem : IRenderPass, IFrameGraphContributor{
     public b8 appendFrameGraph(mut FrameGraphBuilder builder)override;
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems);
+    public void setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor);
     public void setRefractionEnabled(in b8 enabled);
     public void setRefractionHardwareTracingEnabled(in b8 enabled);
     public void setRefractionDiagnosticsEnabled(in b8 enabled);

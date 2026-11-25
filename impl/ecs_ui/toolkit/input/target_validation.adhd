@@ -60,6 +60,8 @@ Expected<InputEvent> TryMakePointerInputEvent(in PointerInput input){
     outEvent.scrollY = input.scrollY;
     outEvent.timestampMs = input.timestampMs;
     outEvent.extend = input.extend;
+    outEvent.shift = input.extend;
+    outEvent.control = input.toggle;
     outEvent.hoverCapable = input.hoverCapable;
     return outEvent;
 }
@@ -74,6 +76,8 @@ b8 HasValidHitTargetControlProperties(in HitTarget target){
         || target.gestureMaximumX < 0.0
         || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
         || (target.horizontalNavigation && !target.navigable)
+        || (target.horizontalOnlyNavigation && !target.horizontalNavigation)
+        || target.cursor > PointerCursor::Hidden
         || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
     )
         return false;
@@ -134,6 +138,14 @@ b8 HasValidHitTargetCommandOwnerProperties(in HitTarget source){
         && source.commandControl.valid();
 }
 
+b8 HasValidHitTargetScrollOwnerProperties(in HitTarget target){
+    if(!target.scrollOwner.valid())
+        return target.scrollOwnerDeclarationGeneration == 0u;
+    return target.scrollOwnerDeclarationGeneration != 0u
+        && target.scrollOwner != target.id
+        && target.scrollOwner != target.owner;
+}
+
 Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<TargetLookup> lookup, in WidgetId id, in u64 declarationGeneration){
     if(!id.valid() || lookup.empty())
         return MakeUnexpected(Failure());
@@ -158,8 +170,16 @@ Expected<usize> FindTargetIndexInTable(in Span<HitTarget> targets, in Span<Targe
 }
 
 b8 ValidStagedPopupTarget(in HitTarget target, in Span<PopupRecord> stagedPopups){
-    if(!target.popup.widget.valid())
-        return target.layer == 0u && target.popup.declarationGeneration == 0u && target.popup.instanceGeneration == 0u && target.popup.openGeneration == 0u;
+    if(!target.popup.widget.valid()){
+        return target.layer == 0u
+            && target.popup.declarationGeneration == 0u
+            && target.popup.instanceGeneration == 0u
+            && target.popup.openGeneration == 0u
+            && target.windowId.valid() == (target.windowDeclarationGeneration != 0u)
+            && (!target.windowId.valid() || target.zOrder != 0u);
+    }
+    if(target.zOrder != 0u || target.windowId.valid() || target.windowDeclarationGeneration != 0u)
+        return false;
     for(usize i = 0u; i < stagedPopups.size(); ++i){
         if(stagedPopups[i].scope.token == target.popup)
             return target.layer == stagedPopups[i].scope.layer;

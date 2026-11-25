@@ -151,7 +151,7 @@ TextHit HitTestTextLayout(in Span<TextLine> lines, in Span<TextCluster> clusters
     return hit;
 }
 
-Expected<Rect> TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextCluster> clusters, in TextDirection direction, in u32 byteOffset, in TextCaretEdge edge){
+Expected<Rect> TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextCluster> clusters, in TextDirection direction, in b8 hasBidiRuns, in u32 byteOffset, in TextCaretEdge edge){
     if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
         return MakeUnexpected(Failure());
     if(lines.empty())
@@ -177,35 +177,38 @@ Expected<Rect> TryResolveTextCaretRect(in Span<TextLine> lines, in Span<TextClus
         const usize first = cast<usize>(line.firstCluster);
         const usize end = first + cast<usize>(line.clusterCount);
         usize candidate = first;
-        if(direction == TextDirection::LeftToRight){
-            usize low = first;
-            usize high = end;
-            while(low < high){
-                const usize mid = low + (high - low) / 2u;
-                if(clusters[mid].byteEnd < byteOffset)
-                    low = mid + 1u;
-                else
-                    high = mid;
+        usize checkLimit = end;
+        if(!hasBidiRuns){
+            if(direction == TextDirection::LeftToRight){
+                usize low = first;
+                usize high = end;
+                while(low < high){
+                    const usize mid = low + (high - low) / 2u;
+                    if(clusters[mid].byteEnd < byteOffset)
+                        low = mid + 1u;
+                    else
+                        high = mid;
+                }
+                candidate = low;
             }
-            candidate = low;
-        }
-        else{
-            usize low = first;
-            usize high = end;
-            while(low < high){
-                const usize mid = low + (high - low) / 2u;
-                if(clusters[mid].byteBegin > byteOffset)
-                    low = mid + 1u;
-                else
-                    high = mid;
+            else{
+                usize low = first;
+                usize high = end;
+                while(low < high){
+                    const usize mid = low + (high - low) / 2u;
+                    if(clusters[mid].byteBegin > byteOffset)
+                        low = mid + 1u;
+                    else
+                        high = mid;
+                }
+                candidate = low;
             }
-            candidate = low;
+            checkLimit = candidate + 2u;
+            if(checkLimit > end)
+                checkLimit = end;
         }
         b8 hasAlternate = false;
         TextCluster alternate;
-        usize checkLimit = candidate + 2u;
-        if(checkLimit > end)
-            checkLimit = end;
         for(usize i = candidate; i < checkLimit; ++i){
             const TextCluster cluster = clusters[i];
             b8 matched = false;

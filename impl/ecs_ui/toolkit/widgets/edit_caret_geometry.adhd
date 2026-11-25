@@ -39,7 +39,7 @@ class EditCaretGeometry{
         if(!AdoptEditCaretGeometryInto(
             layout.utf8(), layout.fontSize(), Span<TextLine>(layout.lines()), Span<TextCluster>(layout.clusters()),
             layout.glyphs().size(), layout.measure(), layout.inkBounds(), expectedText, mapping, committedBytes,
-            mode, requiredCarets, this.m_boundaries, stopTable.stops, stopTable.lines
+            mode, layout.direction(), requiredCarets, this.m_boundaries, stopTable.stops, stopTable.lines
         ))
             return false;
         this.m_stopTable = nextTable.value();
@@ -50,16 +50,16 @@ class EditCaretGeometry{
     }
 
     public Expected<Rect> caretRect(in usize displayByte)const{
-        return TryResolveEditCaretRectWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, displayByte);
+        return TryResolveEditCaretRectWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, displayByte, this.m_layout.direction());
     }
     public Expected<usize> hitTest(in Point localPoint)const{
         return TryHitTestEditCaretGeometryWhenReady(this.m_ready, this.lines(), this.caretStops(), localPoint);
     }
     public Expected<usize> verticalTarget(in usize displayCaret, in b8 down, in f32 preferredX)const{
-        return TryResolveEditCaretVerticalTargetWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.lines(), this.caretStops(), displayCaret, down, preferredX);
+        return TryResolveEditCaretVerticalTargetWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.lines(), this.caretStops(), displayCaret, down, preferredX, this.m_layout.direction());
     }
     public Expected<Rect> rangeOnLine(in EditBoxRange range, in u32 lineIndex, in f32 breakWidth)const{
-        return TryResolveEditCaretRangeOnLineWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.lines(), range, lineIndex, breakWidth);
+        return TryResolveEditCaretRangeOnLineWhenReady(this.m_ready, this.m_layout.utf8(), this.m_layout.lines(), this.m_layout.clusters(), this.m_boundaries, this.lines(), range, lineIndex, breakWidth, this.m_layout.direction());
     }
 
     public in TextLayout layout()const{ return this.m_layout; }

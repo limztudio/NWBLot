@@ -17,6 +17,8 @@ class PhysicsSubsystem{
     public AssetRef<ComputeShader> gpuResidentStepCs;
     public AssetRef<ComputeShader> spatialQueryCs;
     public AssetRef<ComputeShader> exportRenderTransformsCs;
+    public AssetRef<ComputeShader> gpuResidentContactPrepCs;
+    public AssetRef<ComputeShader> gpuSubsystemsCs;
 }
 
 

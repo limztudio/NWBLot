@@ -89,9 +89,26 @@ extern class TextInputCapabilities{
     TextInputBackend backend;
 };
 
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputPreeditClauseStyle::Enum")]
+extern enum TextInputPreeditClauseStyle : u8{
+    Raw,
+    Converted,
+    Target,
+    Selected,
+    kCount
+};
+
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputPreeditClause"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+extern class TextInputPreeditClause{
+    usize beginByte;
+    usize endByte;
+    TextInputPreeditClauseStyle style;
+};
+
 [cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent"), cpp_flags(arena_first_ctor)]
 extern class TextInputEvent{
     String text;
+    Vector<TextInputPreeditClause> preeditClauses;
     TextInputSessionToken token;
     u64 sequence;
     u64 surroundingRevision;

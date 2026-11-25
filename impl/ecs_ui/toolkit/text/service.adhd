@@ -58,25 +58,58 @@ class CachedMeasuredText{
 class CachedTextLayout{
     public String text;
     public String language;
+    public FontDescriptor font;
     public SharedTextLayout layout;
     public Rect measuredBounds = Rect();
     public u64 measuredAtlasIdentity = 0u;
     public usize measuredAtlasGlyphCount = 0u;
     public u32 fontSizeBits = 0u;
+    public u32 letterSpacingBits = 0u;
+    public u32 wordSpacingBits = 0u;
+    public u32 lineHeightMultBits = 0u;
+    public u32 lineHeightOverBits = 0u;
+    public u32 maxWidthBits = 0u;
     public u32 scriptTag = 0u;
     public u32 measuredPixelScaleXBits = 0u;
     public u32 measuredPixelScaleYBits = 0u;
     public u32 next = u32.max;
     public TextDirection direction = TextDirection::LeftToRight;
+    public TextBidiMode bidiMode = TextBidiMode::None;
+    public TextWrapMode wrapMode = TextWrapMode::None;
+    public TextAlignment alignment = TextAlignment::Leading;
+    public u32 tabStopSpaces = s_TextDefaultTabStopSpaces;
+    public Array<OpenTypeFeature, s_TextMaxOpenTypeFeatures> features;
+    public u8 featureCount = 0u;
+    public b8 preserveWrapSpaces = false;
     public b8 hasMeasured = false;
     public b8 measuredNeedsAtlasRecheck = false;
 
     public b8 matches(in ShapeRequest request)const{
-        return this.fontSizeBits == bit_cast<u32>(request.fontSize)
-            && this.scriptTag == request.scriptTag
-            && this.direction == request.direction
-            && StringView(this.language) == request.language
-            && StringView(this.text) == request.text;
+        if(
+            this.font != request.font
+            || this.fontSizeBits != bit_cast<u32>(request.fontSize)
+            || this.letterSpacingBits != bit_cast<u32>(request.letterSpacing)
+            || this.wordSpacingBits != bit_cast<u32>(request.wordSpacing)
+            || this.lineHeightMultBits != bit_cast<u32>(request.lineHeightMultiplier)
+            || this.lineHeightOverBits != bit_cast<u32>(request.lineHeightOverride)
+            || this.maxWidthBits != bit_cast<u32>(request.maxWidth)
+            || this.scriptTag != request.scriptTag
+            || this.direction != request.direction
+            || this.bidiMode != request.bidiMode
+            || this.wrapMode != request.wrapMode
+            || this.alignment != request.alignment
+            || this.tabStopSpaces != request.tabStopSpaces
+            || this.preserveWrapSpaces != request.preserveWrapSpaces
+            || this.featureCount != request.featureCount
+            || StringView(this.language) != request.language
+            || StringView(this.text) != request.text
+        )
+            return false;
+        for(usize fi = 0u; fi < cast<usize>(this.featureCount); ++fi){
+            if(this.features[fi] != request.features[fi])
+                return false;
+        }
+        return true;
     }
 }
 
@@ -119,6 +152,30 @@ class TextService : NoCopy{
         ++this.m_generation;
         return true;
     }
+
+    [cpp_unwind]
+    public b8 registerFont(in FontSource source){
+        if(this.m_generation == u64.max || !this.m_shaper.registerFont(source))
+            return false;
+        this.m_layoutCacheHead.clear();
+        this.m_layoutCacheEntries.clear();
+        ++this.m_generation;
+        return true;
+    }
+
+    public void setDefaultFamily(in Name family){
+        if(this.m_shaper.defaultFamily() == family)
+            return;
+        this.m_shaper.setDefaultFamily(family);
+        this.m_layoutCacheHead.clear();
+        this.m_layoutCacheEntries.clear();
+        if(this.m_generation < u64.max)
+            ++this.m_generation;
+    }
+
+    public Name defaultFamily()const{ return this.m_shaper.defaultFamily(); }
+    public usize fontCount()const{ return this.m_shaper.fontCount(); }
+    public Optional<SharedFontFace> resolveFace(in FontDescriptor descriptor)const{ return this.m_shaper.resolveFace(descriptor); }
 
     [cpp_unwind, owner_result]
     public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
@@ -165,10 +222,24 @@ class TextService : NoCopy{
         mut CachedTextLayout entry = this.m_layoutCacheEntries[newIndex];
         entry.text.assign(request.text);
         entry.language.assign(request.language);
+        entry.font = request.font;
         entry.layout = shaped.value();
         entry.fontSizeBits = bit_cast<u32>(request.fontSize);
+        entry.letterSpacingBits = bit_cast<u32>(request.letterSpacing);
+        entry.wordSpacingBits = bit_cast<u32>(request.wordSpacing);
+        entry.lineHeightMultBits = bit_cast<u32>(request.lineHeightMultiplier);
+        entry.lineHeightOverBits = bit_cast<u32>(request.lineHeightOverride);
+        entry.maxWidthBits = bit_cast<u32>(request.maxWidth);
         entry.scriptTag = request.scriptTag;
         entry.direction = request.direction;
+        entry.bidiMode = request.bidiMode;
+        entry.wrapMode = request.wrapMode;
+        entry.alignment = request.alignment;
+        entry.tabStopSpaces = request.tabStopSpaces;
+        entry.preserveWrapSpaces = request.preserveWrapSpaces;
+        entry.featureCount = request.featureCount;
+        for(usize fi = 0u; fi < cast<usize>(request.featureCount); ++fi)
+            entry.features[fi] = request.features[fi];
         const auto insertIt = this.m_layoutCacheHead.find(hash);
         if(insertIt != this.m_layoutCacheHead.end()){
             entry.next = insertIt.value();
@@ -282,6 +353,8 @@ class TextService : NoCopy{
                 ExpandMeasuredTextBoundsWithSdfSupport(support, bounds);
                 continue;
             }
+            if(glyph.coverage.known && glyph.coverage.ink.width <= 0.0f && glyph.coverage.ink.height <= 0.0f)
+                continue;
             if(!glyph.face.valid() || !glyph.face.deref().valid())
                 return MakeUnexpected(Failure());
             const Optional<in AtlasGlyph> cached = this.m_atlas.find(glyph.face, glyph.glyphId, raster.pixelSize);
@@ -458,7 +531,7 @@ class TextService : NoCopy{
                 const u32 faceUnitsPerEm = faceRef.unitsPerEm();
                 lastFaceUnknownMarginVec = VectorDouble(covUnknownMarginBaseScalar + (fontSizeF64 / cast<f64>(faceUnitsPerEm))) + covHalfPixVec;
                 lastFaceHasUsableBaked = false;
-                if(faceRef.bakedAtlas().valid()){
+                if(!faceRef.hasColor() && faceRef.bakedAtlas().valid()){
                     in BakedFontAtlas candidateBaked = faceRef.bakedAtlas().deref();
                     if(candidateBaked.valid() && CanUseBakedFontAtlasAtPhysicalSize(candidateBaked.bakePpem(), raster.physicalSize) && candidateBaked.unitsPerEm() != 0u){
                         lastFaceHasUsableBaked = true;
@@ -617,7 +690,8 @@ class TextService : NoCopy{
             Rect lastCovPixels;
             i32 lastCovBearingX = 0;
             i32 lastCovBearingY = 0;
-            const VectorDouble covInvRasterScaleVec(1.0 / cast<f64>(raster.rasterScale));
+            f32 lastCovBitmapScale = 1.0f;
+            b8 lastCovIsColor = false;
             const VectorDouble covScaleVec(cast<f64>(deviceScale.x), cast<f64>(deviceScale.y), cast<f64>(deviceScale.x), cast<f64>(deviceScale.y));
             const VectorDouble covInvScaleVec(1.0 / cast<f64>(deviceScale.x), 1.0 / cast<f64>(deviceScale.y), 1.0 / cast<f64>(deviceScale.x), 1.0 / cast<f64>(deviceScale.y));
             const VectorSingle covInvAtlasExtentVec(1.0f / cast<f32>(s_GlyphAtlasPageExtent));
@@ -638,14 +712,17 @@ class TextService : NoCopy{
                         lastCovPixels = foundRec.pixels;
                         lastCovBearingX = foundRec.bearingX;
                         lastCovBearingY = foundRec.bearingY;
+                        lastCovBitmapScale = foundRec.bitmapScale;
+                        lastCovIsColor = foundRec.isColor;
                     }
                 }
                 else
                     return false;
-                if(!IsValidUiRect(lastCovPixels))
+                if(!IsValidUiRect(lastCovPixels) || !(lastCovBitmapScale > 0.0f))
                     return false;
                 Rect covRect;
                 if(lastCovPageIndex != s_GlyphAtlasNoPage){
+                    const VectorDouble covInvRasterScaleVec(1.0 / (cast<f64>(raster.rasterScale) * cast<f64>(lastCovBitmapScale)));
                     const VectorDouble origin = topLeftVec + VectorDouble(cast<f64>(glyph.position.x), cast<f64>(glyph.position.y), cast<f64>(glyph.position.x), cast<f64>(glyph.position.y));
                     const VectorDouble bearing = VectorDouble(cast<f64>(lastCovBearingX), cast<f64>(lastCovBearingY), cast<f64>(lastCovBearingX), cast<f64>(lastCovBearingY)) * covInvRasterScaleVec;
                     const VectorDouble pos = origin + VectorDouble(bearing.x, -bearing.y, bearing.x, -bearing.y);
@@ -673,6 +750,7 @@ class TextService : NoCopy{
                 item.rectangle = covRect;
                 item.uv = StoreRect(LoadRect(lastCovPixels) * covInvAtlasExtentVec);
                 item.pageIndex = lastCovPageIndex;
+                item.isColor = lastCovIsColor;
             }
             Array<u32, s_GlyphAtlasMaxPages> resolvedCoveragePages;
             for(usize pageSlot = 0u; pageSlot < s_GlyphAtlasMaxPages; ++pageSlot)
@@ -738,9 +816,24 @@ b8 HasPositivePreparedGlyphExtent(in Rect rectangle){
 usize ComputeTextLayoutCacheHash(in ShapeRequest request){
     usize seed = HashValue(request.text);
     seed = HashCombineValue(seed, request.language);
+    seed = HashCombineValue(seed, request.font.hash());
     seed = HashCombineValue(seed, bit_cast<u32>(request.fontSize));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.letterSpacing));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.wordSpacing));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.lineHeightMultiplier));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.lineHeightOverride));
+    seed = HashCombineValue(seed, bit_cast<u32>(request.maxWidth));
     seed = HashCombineValue(seed, request.scriptTag);
-    return HashCombineValue(seed, cast<u8>(request.direction));
+    seed = HashCombineValue(seed, cast<u8>(request.direction));
+    seed = HashCombineValue(seed, cast<u8>(request.bidiMode));
+    seed = HashCombineValue(seed, cast<u8>(request.wrapMode));
+    seed = HashCombineValue(seed, cast<u8>(request.alignment));
+    seed = HashCombineValue(seed, request.tabStopSpaces);
+    seed = HashCombineValue(seed, cast<u8>(request.preserveWrapSpaces));
+    seed = HashCombineValue(seed, request.featureCount);
+    for(usize fi = 0u; fi < cast<usize>(request.featureCount); ++fi)
+        seed = HashCombineValue(seed, request.features[fi].hash());
+    return seed;
 }
 
 

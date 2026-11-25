@@ -329,7 +329,7 @@ b8 FrameBindingsMatch(in MeshFrameBindingSnapshot left, in MeshFrameBindingSnaps
     return
         left.instanceBuffer == right.instanceBuffer && left.materialTypedBuffer == right.materialTypedBuffer
         && left.meshView.buffer == right.meshView.buffer && left.meshView.heapHandle == right.meshView.heapHandle
-        && left.instanceHeapHandle == right.instanceHeapHandle && left.materialTypedHeapHandle == right.materialTypedHeapHandle
+        && left.instanceHeapHandle == right.instanceHeapHandle && left.instanceUavHeapHandle == right.instanceUavHeapHandle && left.materialTypedHeapHandle == right.materialTypedHeapHandle
         && left.instanceBufferCapacity == right.instanceBufferCapacity
         && left.materialTypedBufferCapacity == right.materialTypedBufferCapacity
     ;

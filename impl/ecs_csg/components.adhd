@@ -15,6 +15,8 @@ class CsgReceiverComponent{
     public b8 enabled = true;
     public b8 affectOpaquePass = true;
     public b8 affectTransparentPass = true;
+
+    public CsgReceiverComponent asReceiver()const{ return this; }
 }
 
 [arena, component("csg_mesh_receiver")]
@@ -42,6 +44,7 @@ class CsgCutterComponent{
     public f32x3x4 shapeToWorld(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public Vector<u8> parameterBytes;
     public b8 active = true;
+    public b8 syncFromTransform = true;
 }
 
 

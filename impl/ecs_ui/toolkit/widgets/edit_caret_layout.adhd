@@ -8,13 +8,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize LowerBoundEditClusterByEnd(in Span<TextCluster> clusters, in usize beginIndex, in usize endIndex, in usize byte){
+usize FindEditClusterForByte(in Span<TextCluster> clusters, in usize beginIndex, in usize endIndex, in usize byte, in TextDirection direction){
     usize first = beginIndex;
     usize count = endIndex - beginIndex;
     while(count > 0u){
         const usize step = count / 2u;
         const usize mid = first + step;
-        if(cast<usize>(clusters[mid].byteEnd) < byte){
+        b8 advance = false;
+        if(direction == TextDirection::LeftToRight)
+            advance = cast<usize>(clusters[mid].byteEnd) < byte;
+        else
+            advance = cast<usize>(clusters[mid].byteBegin) > byte;
+        if(advance){
             first = mid + 1u;
             count -= step + 1u;
         }
@@ -49,11 +54,13 @@ b8 ValidateEditCaretLayout(
     in usize glyphCount,
     in Point measure,
     in Rect ink,
-    in EditTextMode mode
+    in EditTextMode mode,
+    in TextDirection direction
 ){
     if(
         lines.empty() || lines.size() > s_TextMaxBytes + 1u || clusters.size() > s_TextMaxBytes
         || glyphCount > s_TextMaxBytes || (mode == EditTextMode::SingleLine && lines.size() != 1u)
+        || (direction != TextDirection::LeftToRight && direction != TextDirection::RightToLeft)
         || !IsFinite(VectorSingle(measure.x, measure.y, 0.0f, 0.0f)) || measure.x < 0.0f || measure.y <= 0.0f
         || !IsFinite(VectorSingle(ink.x, ink.y, ink.width, ink.height))
         || ink.width < 0.0f || ink.height < 0.0f
@@ -93,9 +100,17 @@ b8 ValidateEditCaretLayout(
             if(lineByteEnd != text.size() || lineBreakEnd != lineByteEnd)
                 return false;
         }
-        else if(lineByteEnd == text.size() || text[lineByteEnd] != '\n' || lineBreakEnd != lineByteEnd + 1u)
+        else if(lineByteEnd >= text.size())
+            return false;
+        else if(text[lineByteEnd] == '\n'){
+            if(lineBreakEnd != lineByteEnd + 1u)
+                return false;
+        }
+        else if(lineByteEnd <= lineByteBegin || lineBreakEnd != lineByteEnd)
             return false;
         usize coveredByte = lineByteBegin;
+        if(direction != TextDirection::LeftToRight)
+            coveredByte = lineByteEnd;
         const usize glyphEnd = nextGlyph + lineGlyphCount;
         const usize clusterEnd = nextCluster + lineClusterCount;
         f32 previousX = 0.0f;
@@ -106,21 +121,38 @@ b8 ValidateEditCaretLayout(
             const usize clusterFirstGlyph = cast<usize>(cluster.firstGlyph);
             const usize clusterGlyphCount = cast<usize>(cluster.glyphCount);
             if(
-                cast<usize>(cluster.lineIndex) != lineIndex || clusterByteBegin != coveredByte
-                || clusterByteEnd <= clusterByteBegin || clusterByteEnd > lineByteEnd
+                cast<usize>(cluster.lineIndex) != lineIndex
                 || !IsUtf8ScalarBoundary(text, clusterByteBegin)
                 || !IsUtf8ScalarBoundary(text, clusterByteEnd)
                 || clusterFirstGlyph != nextGlyph || clusterGlyphCount == 0u || clusterGlyphCount > glyphEnd - nextGlyph
                 || !IsFinite(VectorSingle(cluster.leadingX, cluster.trailingX, 0.0f, 0.0f))
-                || cluster.leadingX != previousX || cluster.trailingX < cluster.leadingX || cluster.trailingX > line.advance
             )
                 return false;
+            if(direction == TextDirection::LeftToRight){
+                if(
+                    clusterByteBegin != coveredByte || clusterByteEnd <= clusterByteBegin || clusterByteEnd > lineByteEnd
+                    || cluster.leadingX != previousX || cluster.trailingX < cluster.leadingX || cluster.trailingX > line.advance
+                )
+                    return false;
+                coveredByte = clusterByteEnd;
+                previousX = cluster.trailingX;
+            }
+            else{
+                if(
+                    clusterByteEnd != coveredByte || clusterByteBegin >= clusterByteEnd || clusterByteBegin < lineByteBegin
+                    || cluster.trailingX != previousX || cluster.leadingX < cluster.trailingX || cluster.leadingX > line.advance
+                )
+                    return false;
+                coveredByte = clusterByteBegin;
+                previousX = cluster.leadingX;
+            }
             nextGlyph += clusterGlyphCount;
-            coveredByte = clusterByteEnd;
-            previousX = cluster.trailingX;
             ++nextCluster;
         }
-        if(coveredByte != lineByteEnd || nextGlyph != glyphEnd || previousX != line.advance)
+        usize expectedEndByte = lineByteEnd;
+        if(direction != TextDirection::LeftToRight)
+            expectedEndByte = lineByteBegin;
+        if(coveredByte != expectedEndByte || nextGlyph != glyphEnd || previousX != line.advance)
             return false;
         previousBreak = lineBreakEnd;
         previousBottom = bottom;
@@ -144,7 +176,8 @@ b8 ValidateEditCaretAdoptionRequest(
     in StringView expectedText,
     in Span<EditCaretMapping> mapping,
     in usize committedBytes,
-    in EditTextMode mode
+    in EditTextMode mode,
+    in TextDirection direction
 ){
     if(
         layoutText != expectedText || (mode != EditTextMode::SingleLine && mode != EditTextMode::Multiline)
@@ -159,8 +192,9 @@ b8 ValidateEditCaretAdoptionRequest(
     ShapeRequest request;
     request.text = expectedText;
     request.fontSize = layoutFontSize;
+    request.direction = direction;
     return ValidateTextRequest(request, mode == EditTextMode::Multiline) == TextLayoutStatus::Success
-        && ValidateEditCaretLayout(layoutText, lines, clusters, glyphCount, measure, ink, mode);
+        && ValidateEditCaretLayout(layoutText, lines, clusters, glyphCount, measure, ink, mode, direction);
 }
 
 

@@ -608,6 +608,39 @@ void VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacte
     EXPECT_EQ(self.m_sceneCodePoint, cast<u32>('B'));
 }
 
+void VerifyWin32TextInputFixture_CursorAndAccessibilityMessageDispatchEdgeCases(mut Win32TextInputFixture self){
+    const auto cursorResult = OpenOsCursorService(self.storage, OsPlatformWindow(self.m_window));
+    ASSERT_TRUE(cursorResult.has_value());
+    ASSERT_TRUE(cursorResult.value().valid());
+    EXPECT_TRUE(cursorResult.value().deref().setCursor(CursorShape::Hand));
+    const Optional<isize> nonClient = DispatchWin32CursorMessage(cursorResult.value().deref(), s_Win32Setcursor, 0u, s_Win32HitCaption);
+    EXPECT_FALSE(nonClient.has_value());
+    const Optional<isize> clientCursor = DispatchWin32CursorMessage(cursorResult.value().deref(), s_Win32Setcursor, 0u, s_Win32HitClient);
+    ASSERT_TRUE(clientCursor.has_value());
+    EXPECT_EQ(clientCursor.value(), s_Win32TrueResult);
+
+    const auto a11yResult = OpenOsAccessibilityService(self.storage, OsPlatformWindow(self.m_window));
+    ASSERT_TRUE(a11yResult.has_value());
+    ASSERT_TRUE(a11yResult.value().valid());
+    Vector<AccessibilityNodeData> nodes;
+    AccessibilityNodeData winNode;
+    winNode.id = 10u;
+    winNode.role = AccessibilityRole::Window;
+    winNode.stateBits = s_AccessibilityStateEnabled | s_AccessibilityStateFocusable;
+    winNode.width = 100.0f;
+    winNode.height = 100.0f;
+    winNode.nameLength = 3u;
+    nodes.push_back(winNode);
+    EXPECT_TRUE(a11yResult.value().deref().publishTree(Span<AccessibilityNodeData>(nodes), "Win", cast<u64>(10u), cast<u64>(1u), 1.0f, 1.0f));
+    const Optional<isize> ignoredMsg = DispatchWin32AccessibilityMessage(a11yResult.value().deref(), s_Win32Mousemove, 0u, s_Win32UiaRootObjectId);
+    EXPECT_FALSE(ignoredMsg.has_value());
+    const Optional<isize> wrongObjectId = DispatchWin32AccessibilityMessage(a11yResult.value().deref(), s_Win32Getobject, 0u, 0);
+    EXPECT_FALSE(wrongObjectId.has_value());
+    const Optional<isize> uiaObject = DispatchWin32AccessibilityMessage(a11yResult.value().deref(), s_Win32Getobject, 0u, s_Win32UiaRootObjectId);
+    if(a11yResult.value().deref().capabilities().tree)
+        EXPECT_TRUE(uiaObject.has_value());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -638,6 +671,7 @@ NWB_ADHD_GTEST_F(Win32TextInputFixture, InsertCharSupplementaryPairProducesOneUt
 NWB_ADHD_GTEST_F(Win32TextInputFixture, KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange, VerifyWin32TextInputFixture_KeyboardFocusMessagesCancelQueuedWorkWithoutActivationChange)
 NWB_ADHD_GTEST_F(Win32TextInputFixture, InactiveKeyboardFocusMessagesResetSceneSurrogateState, VerifyWin32TextInputFixture_InactiveKeyboardFocusMessagesResetSceneSurrogateState)
 NWB_ADHD_GTEST_F(Win32TextInputFixture, UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair, VerifyWin32TextInputFixture_UnfocusedSceneFallbackRefusesLateWindowCharacterAndClearsPartialPair)
+NWB_ADHD_GTEST_F(Win32TextInputFixture, CursorAndAccessibilityMessageDispatchEdgeCases, VerifyWin32TextInputFixture_CursorAndAccessibilityMessageDispatchEdgeCases)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

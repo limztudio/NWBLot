@@ -65,7 +65,8 @@ b8 PaintSelectable(
     in SelectableStyle style,
     in SelectablePaintFlags flags,
     in Color textColor,
-    in Color disabledTextColor
+    in Color disabledTextColor,
+    in f32 horizontalScrollOffset
 ){
     Name preferred = style.normal;
     Name fallback = style.fallback;
@@ -90,7 +91,7 @@ b8 PaintSelectable(
     if(flags.enabled && flags.focused)
         paint.tryDrawRegion(style.focus, bounds);
     const Rect content = InsetUiRectBounds(bounds, padding);
-    const Point origin = ResolveCenteredTextOrigin(content, 0.0f, textBounds);
+    const Point origin = ResolveCenteredTextOrigin(content, -horizontalScrollOffset, textBounds);
     paint.pushClip(content);
     Color activeColor = disabledTextColor;
     if(flags.enabled)
@@ -100,6 +101,37 @@ b8 PaintSelectable(
     const b8 rowPopped = paint.popClip();
     const b8 clipPopped = paint.popClip();
     return painted && textPopped && rowPopped && clipPopped;
+}
+
+b8 PaintSelectable(
+    mut PaintBuilder paint,
+    mut TextService text,
+    in UiSkin skin,
+    in TextLayout layout,
+    in Rect textBounds,
+    in Insets padding,
+    in Rect bounds,
+    in Rect clip,
+    in SelectableStyle style,
+    in SelectablePaintFlags flags,
+    in Color textColor,
+    in Color disabledTextColor
+){
+    return PaintSelectable(
+        paint,
+        text,
+        skin,
+        layout,
+        textBounds,
+        padding,
+        bounds,
+        clip,
+        style,
+        flags,
+        textColor,
+        disabledTextColor,
+        0.0f
+    );
 }
 
 

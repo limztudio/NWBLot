@@ -58,6 +58,107 @@ Expected<usize, TextInputAdmission::Enum> Win32TextInputService::compositionCurs
     return static_cast<usize>(prefixLength);
 }
 
+void Win32TextInputService::readCompositionClauses(const NotNull<void*> nativeContext, const AStringView utf8Text){
+    m_preeditClauses.clear();
+    if(utf8Text.empty() || m_wideText.empty())
+        return;
+
+    const HIMC context = static_cast<HIMC>(nativeContext.get());
+    const LONG attrBytes = ImmGetCompositionStringW(context, GCS_COMPATTR, nullptr, 0u);
+    if(attrBytes <= 0)
+        return;
+    const usize attrCount = Min(static_cast<usize>(attrBytes), m_wideText.size());
+    m_compAttr.resize(static_cast<usize>(attrBytes));
+    const LONG readAttr = ImmGetCompositionStringW(context, GCS_COMPATTR, m_compAttr.data(), static_cast<DWORD>(attrBytes));
+    if(readAttr != attrBytes)
+        return;
+
+    m_utf16ByteOffsets.assign(m_wideText.size() + 1u, utf8Text.size());
+    usize utf16Index = 0u;
+    usize byteOffset = 0u;
+    while(byteOffset < utf8Text.size() && utf16Index < m_wideText.size()){
+        m_utf16ByteOffsets[utf16Index] = byteOffset;
+        const u8 lead = static_cast<u8>(utf8Text[byteOffset]);
+        usize sequenceBytes = 1u;
+        usize utf16Units = 1u;
+        if((lead & 0x80u) == 0u)
+            sequenceBytes = 1u;
+        else if((lead & 0xe0u) == 0xc0u)
+            sequenceBytes = 2u;
+        else if((lead & 0xf0u) == 0xe0u)
+            sequenceBytes = 3u;
+        else{
+            sequenceBytes = 4u;
+            utf16Units = 2u;
+        }
+        if(utf16Units == 2u && utf16Index + 1u < m_wideText.size())
+            m_utf16ByteOffsets[utf16Index + 1u] = byteOffset;
+        utf16Index += utf16Units;
+        byteOffset += sequenceBytes;
+    }
+
+    b8 hasValidClauses = false;
+    m_compClause.clear();
+    const LONG clauseBytes = ImmGetCompositionStringW(context, GCS_COMPCLAUSE, nullptr, 0u);
+    if(clauseBytes >= static_cast<LONG>(2u * sizeof(u32)) && (static_cast<usize>(clauseBytes) % sizeof(u32)) == 0u){
+        m_compClause.resize(static_cast<usize>(clauseBytes) / sizeof(u32));
+        const LONG readClause = ImmGetCompositionStringW(context, GCS_COMPCLAUSE, m_compClause.data(), static_cast<DWORD>(clauseBytes));
+        if(readClause == clauseBytes && m_compClause[0u] == 0u && m_compClause.back() <= m_wideText.size()){
+            hasValidClauses = true;
+            for(usize index = 1u; index < m_compClause.size(); ++index){
+                if(m_compClause[index] < m_compClause[index - 1u]){
+                    hasValidClauses = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    const auto mapAttrStyle = [](const u8 attr)noexcept -> TextInputPreeditClauseStyle::Enum{
+        switch(attr){
+        case ATTR_TARGET_CONVERTED:
+        case ATTR_TARGET_NOTCONVERTED:
+            return TextInputPreeditClauseStyle::Target;
+        case ATTR_CONVERTED:
+        case ATTR_FIXEDCONVERTED:
+            return TextInputPreeditClauseStyle::Converted;
+        default:
+            return TextInputPreeditClauseStyle::Raw;
+        }
+    };
+
+    const auto emitSpan = [&](const usize u16Begin, const usize u16End){
+        usize runStart = u16Begin;
+        while(runStart < u16End){
+            const TextInputPreeditClauseStyle::Enum runStyle = mapAttrStyle(m_compAttr[runStart]);
+            usize runEnd = runStart + 1u;
+            while(runEnd < u16End && mapAttrStyle(m_compAttr[runEnd]) == runStyle)
+                ++runEnd;
+            const usize beginByte = m_utf16ByteOffsets[runStart];
+            const usize endByte = m_utf16ByteOffsets[runEnd];
+            if(beginByte < endByte && (m_preeditClauses.empty() || beginByte >= m_preeditClauses.back().endByte)){
+                TextInputPreeditClause clause;
+                clause.beginByte = beginByte;
+                clause.endByte = endByte;
+                clause.style = runStyle;
+                m_preeditClauses.push_back(clause);
+            }
+            runStart = runEnd;
+        }
+    };
+
+    if(hasValidClauses){
+        for(usize index = 0u; index + 1u < m_compClause.size(); ++index){
+            const usize u16Begin = Min(static_cast<usize>(m_compClause[index]), attrCount);
+            const usize u16End = Min(static_cast<usize>(m_compClause[index + 1u]), attrCount);
+            if(u16Begin < u16End)
+                emitSpan(u16Begin, u16End);
+        }
+    }
+    else
+        emitSpan(0u, attrCount);
+}
+
 TextInputAdmission::Enum Win32TextInputService::acceptComposition(const TextInputSessionToken token, const usize wParam, const isize flags){
     if((flags & CS_INSERTCHAR) != 0 && (flags & (GCS_RESULTSTR | GCS_COMPSTR)) == 0){
         if(wParam > s_MaxU16)
@@ -86,14 +187,15 @@ TextInputAdmission::Enum Win32TextInputService::acceptComposition(const TextInpu
             if(cleared != TextInputAdmission::Accepted)
                 return cleared;
         }
-        if((flags & (GCS_COMPSTR | GCS_CURSORPOS)) != 0){
+        if((flags & (GCS_COMPSTR | GCS_CURSORPOS | GCS_COMPATTR | GCS_COMPCLAUSE)) != 0){
             const TextInputAdmission::Enum result = readCompositionText(MakeNotNull(static_cast<void*>(context)), GCS_COMPSTR);
             if(result != TextInputAdmission::Accepted)
                 return result;
             const auto cursorByte = compositionCursor(MakeNotNull(static_cast<void*>(context)));
             if(!cursorByte)
                 return cursorByte.error();
-            return publishCompositionPreedit(token, m_utf8Text, *cursorByte, *cursorByte);
+            readCompositionClauses(MakeNotNull(static_cast<void*>(context)), m_utf8Text);
+            return publishCompositionPreedit(token, m_utf8Text, *cursorByte, *cursorByte, m_preeditClauses);
         }
         return TextInputAdmission::Accepted;
     }();
@@ -110,4 +212,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

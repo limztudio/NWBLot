@@ -57,6 +57,21 @@ extern const u32 s_ShaderUiMaterialSdfGlyph;
 [cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_IMAGE")]
 extern const u32 s_ShaderUiMaterialImage;
 
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_COLOR_GLYPH")]
+extern const u32 s_ShaderUiMaterialColorGlyph;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_GRADIENT")]
+extern const u32 s_ShaderUiMaterialGradient;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_DROP_SHADOW")]
+extern const u32 s_ShaderUiMaterialDropShadow;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_BLUR")]
+extern const u32 s_ShaderUiMaterialBlur;
+
+[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_EFFECT_LAYER_COMPOSITE")]
+extern const u32 s_ShaderUiMaterialEffectLayerComposite;
+
 [cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8")]
 extern const u32 s_ShaderUiSdfDistanceEncodingFreetypeU8;
 
@@ -93,6 +108,36 @@ extern const u32 s_ShaderUiPushConstantsSdfSpreadByteOffset;
 [cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET")]
 extern const u32 s_ShaderUiPushConstantsSdfEncodingByteOffset;
 
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_EFFECT_BUFFER_SLOT_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsEffectBufferSlotByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_EFFECT_OFFSET_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsEffectOffsetByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_CLIP_MASK_OFFSET_BYTE_OFFSET")]
+extern const u32 s_ShaderUiPushConstantsClipMaskOffsetByteOffset;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_MAX_GRADIENT_STOPS")]
+extern const u32 s_ShaderUiMaxGradientStops;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_MAX_ANALYTIC_CLIP_DEPTH")]
+extern const u32 s_ShaderUiMaxAnalyticClipDepth;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_GRADIENT_HEADER_BYTES")]
+extern const u32 s_ShaderUiGradientHeaderBytes;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_GRADIENT_STOP_BYTES")]
+extern const u32 s_ShaderUiGradientStopBytes;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_DROP_SHADOW_RECORD_BYTES")]
+extern const u32 s_ShaderUiDropShadowRecordBytes;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_CLIP_MASK_RECORD_BYTES")]
+extern const u32 s_ShaderUiClipMaskRecordBytes;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_BLUR_RECORD_BYTES")]
+extern const u32 s_ShaderUiBlurRecordBytes;
+
 [cpp_header("<impl/assets/graphics/ui/output_push_constants.h>"), cpp_name("NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE")]
 extern const u32 s_ShaderUiOutputPushConstantsByteSize;
 
@@ -122,6 +167,9 @@ static_assert(offset_of<GpuPaintPushConstants>(material) == s_ShaderUiPushConsta
 static_assert(offset_of<GpuPaintPushConstants>(sdfChannel) == s_ShaderUiPushConstantsSdfChannelByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(sdfSpreadPixels) == s_ShaderUiPushConstantsSdfSpreadByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(sdfDistanceEncoding) == s_ShaderUiPushConstantsSdfEncodingByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(effectBufferSlot) == s_ShaderUiPushConstantsEffectBufferSlotByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_EFFECT_BUFFER_SLOT_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(effectOffset) == s_ShaderUiPushConstantsEffectOffsetByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_EFFECT_OFFSET_BYTE_OFFSET");
+static_assert(offset_of<GpuPaintPushConstants>(clipMaskOffset) == s_ShaderUiPushConstantsClipMaskOffsetByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_CLIP_MASK_OFFSET_BYTE_OFFSET");
 static_assert(size_of<GpuOutputPushConstants>() == s_ShaderUiOutputPushConstantsByteSize, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE");
 static_assert(offset_of<GpuOutputPushConstants>(textureSlot) == s_ShaderUiOutputPushConstantsTextureSlotByteOffset, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET");
 static_assert(offset_of<GpuOutputPushConstants>(samplerSlot) == s_ShaderUiOutputPushConstantsSamplerSlotByteOffset, "UI shader ABI requires NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET");
@@ -131,6 +179,13 @@ static_assert(cast<u32>(PaintMaterial::Skin) == s_ShaderUiMaterialSkin, "UI shad
 static_assert(cast<u32>(PaintMaterial::Glyph) == s_ShaderUiMaterialGlyph, "UI shader ABI requires NWB_UI_MATERIAL_GLYPH");
 static_assert(cast<u32>(PaintMaterial::SdfGlyph) == s_ShaderUiMaterialSdfGlyph, "UI shader ABI requires NWB_UI_MATERIAL_SDF_GLYPH");
 static_assert(cast<u32>(PaintMaterial::Image) == s_ShaderUiMaterialImage, "UI shader ABI requires NWB_UI_MATERIAL_IMAGE");
+static_assert(cast<u32>(PaintMaterial::ColorGlyph) == s_ShaderUiMaterialColorGlyph, "UI shader ABI requires NWB_UI_MATERIAL_COLOR_GLYPH");
+static_assert(cast<u32>(PaintMaterial::Gradient) == s_ShaderUiMaterialGradient, "UI shader ABI requires NWB_UI_MATERIAL_GRADIENT");
+static_assert(cast<u32>(PaintMaterial::DropShadow) == s_ShaderUiMaterialDropShadow, "UI shader ABI requires NWB_UI_MATERIAL_DROP_SHADOW");
+static_assert(cast<u32>(PaintMaterial::Blur) == s_ShaderUiMaterialBlur, "UI shader ABI requires NWB_UI_MATERIAL_BLUR");
+static_assert(cast<u32>(PaintMaterial::EffectLayerComposite) == s_ShaderUiMaterialEffectLayerComposite, "UI shader ABI requires NWB_UI_MATERIAL_EFFECT_LAYER_COMPOSITE");
+static_assert(s_PaintMaxGradientStops == cast<usize>(s_ShaderUiMaxGradientStops), "UI shader ABI requires NWB_UI_MAX_GRADIENT_STOPS");
+static_assert(s_PaintMaxAnalyticClipDepth == cast<usize>(s_ShaderUiMaxAnalyticClipDepth), "UI shader ABI requires NWB_UI_MAX_ANALYTIC_CLIP_DEPTH");
 static_assert(s_FontAtlasDistanceEncoding == s_ShaderUiSdfDistanceEncodingFreetypeU8, "UI shader ABI requires NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8");
 
 

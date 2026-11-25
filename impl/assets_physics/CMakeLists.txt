@@ -30,9 +30,11 @@ target_link_libraries(nwb_assets_physics PUBLIC nwb_assets nwb_assets_subsystem 
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_physics_cook)
+    target_sources(nwb_assets_physics_cook PRIVATE "${CMAKE_CURRENT_LIST_DIR}/cook_source_io.cpp")
     nwb_target_adhd_sources(nwb_assets_physics_cook
         NAMESPACE "NWB::Impl"
         SOURCES
+            "${CMAKE_CURRENT_LIST_DIR}/cook_source_io.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime_physics_assets.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/runtime_components.adhd"
             "${CMAKE_CURRENT_LIST_DIR}/cook_physics_assets.adhd"
@@ -40,6 +42,7 @@ if(NWB_BUILD_PIPELINE)
             "${CMAKE_CURRENT_LIST_DIR}/cook_subsystem_components.adhd"
     )
     target_link_libraries(nwb_assets_physics_cook PUBLIC nwb_assets nwb_assets_subsystem_cook nwb_assets_scene_cook nwb_assets_mesh_cook nwb_ecs_physics_components nwb_assets_physics_types)
+    target_link_libraries(nwb_assets_physics_cook PRIVATE nwb::ufbx nwb::basis_universal nwb::nlohmann_json nwb::miniz)
     target_compile_definitions(nwb_assets_physics_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_physics_volume_entry)

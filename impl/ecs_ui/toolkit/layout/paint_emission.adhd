@@ -92,6 +92,8 @@ PaintClipEntry ComputeIntersectedPaintClipEntry(in PaintClipEntry parent, in Rec
         next.right = outEnd.x;
         next.bottom = outEnd.y;
     }
+    next.clipMaskOffset = parent.clipMaskOffset;
+    next.blendMode = parent.blendMode;
     return next;
 }
 
@@ -128,7 +130,7 @@ b8 BeginPaintOverlay(
     mut u32 inOutLayer,
     mut Vector<PaintClipEntry> clips
 ){
-    if(!recording || layer == 0u || inOutOverlayDepth == s_PaintMaxOverlayDepth)
+    if(!recording || layer == 0u || layer == s_PaintZOrderSentinelLayer || inOutOverlayDepth == s_PaintMaxOverlayDepth)
         return false;
     PaintOverlayFrame frame;
     frame.clipDepth = clips.size();
@@ -247,15 +249,18 @@ void EmitPaintQuadImpl(
         const usize lastIndex = commands.size() - 1u;
         in DrawCommand previous = commands[lastIndex];
         if(
-            previous.layer == layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
+            previous.layer == layer && previous.zOrder == 0u && previous.material == material && previous.glyphPageIndex == glyphPageIndex
             && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
             && previous.textureImageIndex == textureImageIndex
+            && previous.effectOffset == u32.max
+            && previous.clipMaskOffset == clipEntry.clipMaskOffset
+            && previous.blendMode == clipEntry.blendMode
             && EqualUiRect(previous.clip, clipEntry.rect)
         ){
             commands[lastIndex].indexCount += s_PaintQuadIndexCount;
             return;
         }
-        if(previous.layer > layer)
+        if(previous.layer > layer || (previous.layer == layer && previous.zOrder > 0u))
             inOutCommandsOrdered = false;
         else
             inOutCommandsStrictlyDescending = false;
@@ -270,6 +275,9 @@ void EmitPaintQuadImpl(
     command.sdfChannel = sdfChannel;
     command.layer = layer;
     command.textureImageIndex = textureImageIndex;
+    command.effectOffset = u32.max;
+    command.clipMaskOffset = clipEntry.clipMaskOffset;
+    command.blendMode = clipEntry.blendMode;
     commands.push_back(command);
 }
 
@@ -375,11 +383,15 @@ void EmitPaintOpaqueWhiteRectValidated(
     if(!commands.empty()){
         const usize lastIndex = commands.size() - 1u;
         in DrawCommand previous = commands[lastIndex];
-        if(previous.layer == layer && previous.material == PaintMaterial::Solid && EqualUiRect(previous.clip, clipEntry.rect)){
+        if(
+            previous.layer == layer && previous.zOrder == 0u && previous.material == PaintMaterial::Solid
+            && previous.effectOffset == u32.max && previous.clipMaskOffset == clipEntry.clipMaskOffset
+            && previous.blendMode == clipEntry.blendMode && EqualUiRect(previous.clip, clipEntry.rect)
+        ){
             commands[lastIndex].indexCount += s_PaintQuadIndexCount;
             return;
         }
-        if(previous.layer > layer)
+        if(previous.layer > layer || (previous.layer == layer && previous.zOrder > 0u))
             inOutCommandsOrdered = false;
         else
             inOutCommandsStrictlyDescending = false;
@@ -394,6 +406,9 @@ void EmitPaintOpaqueWhiteRectValidated(
     command.sdfChannel = 0u;
     command.layer = layer;
     command.textureImageIndex = u32.max;
+    command.effectOffset = u32.max;
+    command.clipMaskOffset = clipEntry.clipMaskOffset;
+    command.blendMode = clipEntry.blendMode;
     commands.push_back(command);
 }
 
@@ -458,11 +473,15 @@ void EmitPaintSolidQuadValidated(
     if(!commands.empty()){
         const usize lastIndex = commands.size() - 1u;
         in DrawCommand previous = commands[lastIndex];
-        if(previous.layer == layer && previous.material == PaintMaterial::Solid && EqualUiRect(previous.clip, clipEntry.rect)){
+        if(
+            previous.layer == layer && previous.zOrder == 0u && previous.material == PaintMaterial::Solid
+            && previous.effectOffset == u32.max && previous.clipMaskOffset == clipEntry.clipMaskOffset
+            && previous.blendMode == clipEntry.blendMode && EqualUiRect(previous.clip, clipEntry.rect)
+        ){
             commands[lastIndex].indexCount += s_PaintQuadIndexCount;
             return;
         }
-        if(previous.layer > layer)
+        if(previous.layer > layer || (previous.layer == layer && previous.zOrder > 0u))
             inOutCommandsOrdered = false;
         else
             inOutCommandsStrictlyDescending = false;
@@ -477,6 +496,9 @@ void EmitPaintSolidQuadValidated(
     command.sdfChannel = 0u;
     command.layer = layer;
     command.textureImageIndex = u32.max;
+    command.effectOffset = u32.max;
+    command.clipMaskOffset = clipEntry.clipMaskOffset;
+    command.blendMode = clipEntry.blendMode;
     commands.push_back(command);
 }
 
@@ -510,11 +532,15 @@ void AppendPaintSolidCommand(
                     && previous.textureImageIndex == textureImageIndex
                 )
             );
-        if(previous.layer == layer && sameMaterial && EqualUiRect(previous.clip, clipEntry.rect)){
+        if(
+            previous.layer == layer && previous.zOrder == 0u && sameMaterial
+            && previous.effectOffset == u32.max && previous.clipMaskOffset == clipEntry.clipMaskOffset
+            && previous.blendMode == clipEntry.blendMode && EqualUiRect(previous.clip, clipEntry.rect)
+        ){
             commands[lastIndex].indexCount += indexCount;
             return;
         }
-        if(previous.layer > layer)
+        if(previous.layer > layer || (previous.layer == layer && previous.zOrder > 0u))
             inOutCommandsOrdered = false;
         else
             inOutCommandsStrictlyDescending = false;
@@ -530,6 +556,9 @@ void AppendPaintSolidCommand(
     command.sdfChannel = sdfChannel;
     command.layer = layer;
     command.textureImageIndex = textureImageIndex;
+    command.effectOffset = u32.max;
+    command.clipMaskOffset = clipEntry.clipMaskOffset;
+    command.blendMode = clipEntry.blendMode;
     commands.push_back(command);
 }
 

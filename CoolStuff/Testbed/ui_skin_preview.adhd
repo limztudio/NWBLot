@@ -172,7 +172,12 @@ class UiNestedPopupGallery{
         this.m_beforeText = EditModel();
         this.m_afterText = EditModel();
         this.m_childText = EditModel();
-        const b8 initialized = this.m_beforeText.setText("Before child") && this.m_afterText.setText("After child") && this.m_childText.setText("Inside child");
+        const b8 initialized =
+            this.m_beforeText.setText("Before child")
+            && this.m_afterText.setText("After child")
+            && this.m_childText.setText("Inside child")
+            && this.m_lastAction.assign("None")
+        ;
         [essential] assert(initialized);
         this.m_combo.select(1u);
         this.m_search.combo().select(1u);
@@ -201,6 +206,16 @@ class UiNestedPopupGallery{
         RestoreBuilderGap(context.ui, previousGap);
     }
 
+    private void recordAction(in StringView actionName){
+        ++this.m_actionCount;
+        b8 ok = this.m_lastAction.assign(actionName);
+        ok = this.m_lastAction.append(" (#") && ok;
+        AppendUnsignedU64Text(this.m_lastAction, cast<u64>(this.m_actionCount));
+        ok = this.m_lastAction.append(")") && ok;
+        if(!ok)
+            this.m_actionCount = 0u;
+    }
+
     private b8 paintParent(mut Builder ui){
         WidgetOptions button = WidgetOptions();
         button.width = LayoutSize(LayoutSizePolicy::Fixed, s_NestedPopupButtonWidth);
@@ -211,9 +226,12 @@ class UiNestedPopupGallery{
         EditBoxOptions edit = EditBoxOptions();
         ListOptions list = ListOptions();
         list.height = LayoutSize(LayoutSizePolicy::Fixed, s_NestedPopupListHeight);
-        if(!ui.label(s_TitleKey, "Parent: controls before and after child") || !ui.beginRow("before", row))
+        if(!ui.label(s_TitleKey, "Parent: controls before and after child"))
             return false;
-        ui.button(s_NestedPopupActionKey, "Before", button);
+        if(!ui.label("action_status", this.m_lastAction.view()) || !ui.beginRow("before", row))
+            return false;
+        if(ui.button(s_NestedPopupActionKey, "Before", button))
+            this.recordAction("Before");
         const EditBoxResult before = ui.editBox(s_NestedPopupEditKey, this.m_beforeText, this.m_beforeEdit, edit);
         if(!before.valid || !ui.endContainer() || !ui.virtualList("before_list", this.m_source, this.m_beforeList, list).valid)
             return false;
@@ -221,7 +239,8 @@ class UiNestedPopupGallery{
             this.m_child.open();
         if(!this.paintChild(ui) || !ui.beginRow("after", row))
             return false;
-        ui.button(s_NestedPopupActionKey, "After", button);
+        if(ui.button(s_NestedPopupActionKey, "After", button))
+            this.recordAction("After");
         const EditBoxResult after = ui.editBox(s_NestedPopupEditKey, this.m_afterText, this.m_afterEdit, edit);
         if(!after.valid || !ui.endContainer() || !ui.virtualList("after_list", this.m_source, this.m_afterList, list).valid)
             return false;
@@ -234,7 +253,8 @@ class UiNestedPopupGallery{
         search.combo.popupHeight = s_NestedPopupSearchPopupHeight;
         if(!ui.searchComboBox("search", this.m_source, this.m_search, search).combo.valid)
             return false;
-        ui.button(s_NestedPopupMenuAnchorKey, "Right-click / Menu for commands", wide);
+        if(ui.button(s_NestedPopupMenuAnchorKey, "Right-click / Menu for commands", wide))
+            this.recordAction("Parent anchor");
         ContextMenuOptions menu = ContextMenuOptions();
         menu.size = Point(s_NestedPopupMenuWidth, s_NestedPopupMenuHeight);
         const ContextMenuResult result = ui.contextMenu(s_CommandsKey, s_NestedPopupMenuAnchorKey, this.m_source, this.m_menu, menu);
@@ -255,7 +275,8 @@ class UiNestedPopupGallery{
         button.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
         if(!ui.label(s_TitleKey, "Independent child overlay"))
             return false;
-        ui.button(s_NestedPopupActionKey, "Child action", button);
+        if(ui.button(s_NestedPopupActionKey, "Child action", button))
+            this.recordAction("Child action");
         EditBoxOptions edit = EditBoxOptions();
         const EditBoxResult result = ui.editBox(s_NestedPopupEditKey, this.m_childText, this.m_childEdit, edit);
         if(ui.button("close_branch", "Close ancestor and entire branch", button))
@@ -277,6 +298,8 @@ class UiNestedPopupGallery{
     private EditBoxState m_beforeEdit = EditBoxState();
     private EditBoxState m_afterEdit = EditBoxState();
     private EditBoxState m_childEdit = EditBoxState();
+    private CompactString m_lastAction;
+    private u32 m_actionCount = 0u;
 }
 
 class UiNumericEditGallery{
@@ -468,239 +491,6 @@ class UiSliderGallery{
     private b8 m_enabled = true;
 }
 
-void PushStaticUniquePoint(in Point pt, mut Vector<Point> outPoints){
-    if(!outPoints.empty()){
-        in Point prev = outPoints[outPoints.size() - 1u];
-        const f32 dx = pt.x - prev.x;
-        const f32 dy = pt.y - prev.y;
-        if(dx * dx + dy * dy <= 1.0e-6f)
-            return;
-    }
-    outPoints.push_back(pt);
-}
-
-void BuildStaticRoundedRectPoints(in Rect rectangle, in f32 radius, mut Vector<Point> outPoints){
-    outPoints.clear();
-    const f32 halfMin = 0.5f * UiSimdMin(rectangle.width, rectangle.height);
-    const f32 r = UiSimdClamp(radius, 0.0f, halfMin);
-    const usize segPerCorner = cast<usize>(UiSimdClamp(r * (s_Pi * 0.5f) / 3.0f, 4.0f, 16.0f));
-    const f32 stepAngle = (s_Pi * 0.5f) / cast<f32>(segPerCorner);
-    VectorSingle sStepVec(0.0f);
-    VectorSingle cStepVec(0.0f);
-    VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
-    const f32 ds = sStepVec.x;
-    const f32 dc = cStepVec.x;
-
-    outPoints.reserve(4u * (segPerCorner + 1u));
-    Array<f32, 17u> arcCos;
-    Array<f32, 17u> arcSin;
-    f32 c = 1.0f;
-    f32 s = 0.0f;
-    for(usize si = 0u; si < segPerCorner; ++si){
-        arcCos[si] = c * r;
-        arcSin[si] = s * r;
-        const f32 nextC = c * dc - s * ds;
-        const f32 nextS = c * ds + s * dc;
-        c = nextC;
-        s = nextS;
-    }
-    arcCos[segPerCorner] = 0.0f;
-    arcSin[segPerCorner] = r;
-
-    Array<Point, 4u> centers;
-    centers[0u] = Point(rectangle.x + r, rectangle.y + r);
-    centers[1u] = Point(rectangle.x + rectangle.width - r, rectangle.y + r);
-    centers[2u] = Point(rectangle.x + rectangle.width - r, rectangle.y + rectangle.height - r);
-    centers[3u] = Point(rectangle.x + r, rectangle.y + rectangle.height - r);
-
-    const b8 checkInterior = r * ds <= 1.1e-3f;
-    for(usize ci = 0u; ci < 4u; ++ci){
-        in Point cen = centers[ci];
-        for(usize si = 0u; si <= segPerCorner; ++si){
-            const f32 ac = arcCos[si];
-            const f32 as = arcSin[si];
-            f32 ox = 0.0f;
-            f32 oy = 0.0f;
-            if(ci == 0u){
-                ox = -ac;
-                oy = -as;
-            }
-            else if(ci == 1u){
-                ox = as;
-                oy = -ac;
-            }
-            else if(ci == 2u){
-                ox = ac;
-                oy = as;
-            }
-            else{
-                ox = -as;
-                oy = ac;
-            }
-            const Point pt(cen.x + ox, cen.y + oy);
-            if(si == 0u || checkInterior)
-                PushStaticUniquePoint(pt, outPoints);
-            else
-                outPoints.push_back(pt);
-        }
-    }
-    if(outPoints.size() >= 2u){
-        in Point firstPt = outPoints[0u];
-        in Point lastPt = outPoints[outPoints.size() - 1u];
-        const f32 dx = firstPt.x - lastPt.x;
-        const f32 dy = firstPt.y - lastPt.y;
-        if(dx * dx + dy * dy <= 1.0e-6f)
-            outPoints.pop_back();
-    }
-}
-
-void BuildStaticEllipsePoints(in Point center, in f32 radiusX, in f32 radiusY, mut Vector<Point> outPoints){
-    const f32 maxR = UiSimdMax(radiusX, radiusY);
-    const usize segCount = cast<usize>(UiSimdClamp((2.0f * s_Pi) * maxR / 3.0f, 12.0f, 64.0f));
-    const f32 stepAngle = (2.0f * s_Pi) / cast<f32>(segCount);
-    VectorSingle sStepVec(0.0f);
-    VectorSingle cStepVec(0.0f);
-    VectorSinCos(sStepVec, cStepVec, VectorSingle(stepAngle));
-    const f32 ds = sStepVec.x;
-    const f32 dc = cStepVec.x;
-    outPoints.clear();
-    outPoints.reserve(segCount);
-    f32 ux = 1.0f;
-    f32 uy = 0.0f;
-    for(usize i = 0u; i < segCount; ++i){
-        outPoints.push_back(Point(center.x + ux * radiusX, center.y + uy * radiusY));
-        const f32 nextUx = ux * dc - uy * ds;
-        const f32 nextUy = ux * ds + uy * dc;
-        ux = nextUx;
-        uy = nextUy;
-    }
-}
-
-void BuildStaticArcPoints(in Point center, in f32 radius, in f32 startAngle, in f32 sweepAngle, mut Vector<Point> outPoints){
-    const f32 absSweep = Abs(VectorSingle(sweepAngle)).x;
-    const usize segCount = cast<usize>(UiSimdClamp(absSweep * radius / 3.0f, 4.0f, 64.0f));
-    const f32 stepAngle = sweepAngle / cast<f32>(segCount);
-    VectorSingle sVec(0.0f);
-    VectorSingle cVec(0.0f);
-    VectorSinCos(sVec, cVec, VectorSingle(startAngle, stepAngle, 0.0f, 0.0f));
-    f32 ux = cVec.x;
-    f32 uy = sVec.x;
-    const f32 ds = sVec.y;
-    const f32 dc = cVec.y;
-    outPoints.clear();
-    outPoints.reserve(segCount + 1u);
-    for(usize i = 0u; i <= segCount; ++i){
-        outPoints.push_back(Point(center.x + ux * radius, center.y + uy * radius));
-        const f32 nextUx = ux * dc - uy * ds;
-        const f32 nextUy = ux * ds + uy * dc;
-        ux = nextUx;
-        uy = nextUy;
-    }
-}
-
-void BuildStaticQuadBezierPoints(in Point p0, in Point p1, in Point p2, mut Vector<Point> outPoints){
-    const f32 devX = p1.x - 0.5f * (p0.x + p2.x);
-    const f32 devY = p1.y - 0.5f * (p0.y + p2.y);
-    const f32 chordX = p2.x - p0.x;
-    const f32 chordY = p2.y - p0.y;
-    const VectorSingle lens = Sqrt(VectorSingle(devX * devX + devY * devY, chordX * chordX + chordY * chordY, 0.0f, 0.0f));
-    const usize steps = cast<usize>(UiSimdClamp((lens.x * 2.0f + lens.y * 0.25f) / 4.0f + 4.0f, 4.0f, 32.0f));
-    outPoints.clear();
-    outPoints.reserve(steps + 1u);
-    const f32 invSteps = 1.0f / cast<f32>(steps);
-    const VectorSingle invStepsVec(invSteps);
-    const VectorSingle oneVec(1.0f);
-    const VectorSingle twoVec(2.0f);
-    const VectorSingle p0x(p0.x);
-    const VectorSingle p0y(p0.y);
-    const VectorSingle p1x(p1.x);
-    const VectorSingle p1y(p1.y);
-    const VectorSingle p2x(p2.x);
-    const VectorSingle p2y(p2.y);
-    usize i = 0u;
-    while(i + 4u <= steps + 1u){
-        const f32 f0 = cast<f32>(i);
-        const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
-        const VectorSingle uVec = oneVec - tVec;
-        const VectorSingle w0 = uVec * uVec;
-        const VectorSingle w1 = twoVec * uVec * tVec;
-        const VectorSingle w2 = tVec * tVec;
-        const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x;
-        const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y;
-        outPoints.push_back(Point(rx.x, ry.x));
-        outPoints.push_back(Point(rx.y, ry.y));
-        outPoints.push_back(Point(rx.z, ry.z));
-        outPoints.push_back(Point(rx.w, ry.w));
-        i += 4u;
-    }
-    while(i <= steps){
-        const f32 t = cast<f32>(i) * invSteps;
-        const f32 u = 1.0f - t;
-        const f32 w0 = u * u;
-        const f32 w1 = 2.0f * u * t;
-        const f32 w2 = t * t;
-        outPoints.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y));
-        ++i;
-    }
-}
-
-void BuildStaticCubicBezierPoints(in Point p0, in Point p1, in Point p2, in Point p3, mut Vector<Point> outPoints){
-    const f32 d1x = p1.x - (p0.x + (p3.x - p0.x) * (1.0f / 3.0f));
-    const f32 d1y = p1.y - (p0.y + (p3.y - p0.y) * (1.0f / 3.0f));
-    const f32 d2x = p2.x - (p0.x + (p3.x - p0.x) * (2.0f / 3.0f));
-    const f32 d2y = p2.y - (p0.y + (p3.y - p0.y) * (2.0f / 3.0f));
-    const f32 chordX = p3.x - p0.x;
-    const f32 chordY = p3.y - p0.y;
-    const VectorSingle lens = Sqrt(VectorSingle(d1x * d1x + d1y * d1y, d2x * d2x + d2y * d2y, chordX * chordX + chordY * chordY, 0.0f));
-    const f32 dev = lens.x + lens.y;
-    const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + lens.z * 0.25f) / 4.0f + 4.0f, 4.0f, 48.0f));
-    outPoints.clear();
-    outPoints.reserve(steps + 1u);
-    const f32 invSteps = 1.0f / cast<f32>(steps);
-    const VectorSingle invStepsVec(invSteps);
-    const VectorSingle oneVec(1.0f);
-    const VectorSingle threeVec(3.0f);
-    const VectorSingle p0x(p0.x);
-    const VectorSingle p0y(p0.y);
-    const VectorSingle p1x(p1.x);
-    const VectorSingle p1y(p1.y);
-    const VectorSingle p2x(p2.x);
-    const VectorSingle p2y(p2.y);
-    const VectorSingle p3x(p3.x);
-    const VectorSingle p3y(p3.y);
-    usize i = 0u;
-    while(i + 4u <= steps + 1u){
-        const f32 f0 = cast<f32>(i);
-        const VectorSingle tVec = VectorSingle(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f) * invStepsVec;
-        const VectorSingle uVec = oneVec - tVec;
-        const VectorSingle uu = uVec * uVec;
-        const VectorSingle tt = tVec * tVec;
-        const VectorSingle w0 = uu * uVec;
-        const VectorSingle w1 = threeVec * uu * tVec;
-        const VectorSingle w2 = threeVec * uVec * tt;
-        const VectorSingle w3 = tt * tVec;
-        const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x + w3 * p3x;
-        const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y + w3 * p3y;
-        outPoints.push_back(Point(rx.x, ry.x));
-        outPoints.push_back(Point(rx.y, ry.y));
-        outPoints.push_back(Point(rx.z, ry.z));
-        outPoints.push_back(Point(rx.w, ry.w));
-        i += 4u;
-    }
-    while(i <= steps){
-        const f32 t = cast<f32>(i) * invSteps;
-        const f32 u = 1.0f - t;
-        const f32 uu = u * u;
-        const f32 tt = t * t;
-        const f32 w0 = uu * u;
-        const f32 w1 = 3.0f * uu * t;
-        const f32 w2 = 3.0f * u * tt;
-        const f32 w3 = tt * t;
-        outPoints.push_back(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y));
-        ++i;
-    }
-}
-
 class UiVectorPaintGallery{
     public UiVectorPaintGallery(){
         this.m_label = Label();
@@ -709,47 +499,16 @@ class UiVectorPaintGallery{
         [essential] assert(ok, "Testbed vector paint label must be valid");
     }
 
-    private void rebuildGeometry(in f32 x, in f32 y){
-        const Rect card(x, y, s_SelectorWidth, s_ContentHeight);
-        BuildStaticRoundedRectPoints(card, 10.0f, this.m_cardPoly);
-        BuildStaticRoundedRectPoints(Rect(x + 1.0f, y + 1.0f, s_SelectorWidth - 2.0f, s_ContentHeight - 2.0f), 9.0f, this.m_borderPoly);
-        BuildStaticRoundedRectPoints(Rect(x + 14.0f, y + 14.0f, 112.0f, 64.0f), 8.0f, this.m_accentRectPoly);
-        BuildStaticEllipsePoints(Point(x + 174.0f, y + 46.0f), 22.0f, 22.0f, this.m_fillCirclePoly);
-        BuildStaticEllipsePoints(Point(x + 174.0f, y + 46.0f), 26.0f, 26.0f, this.m_strokeCirclePoly);
-        BuildStaticEllipsePoints(Point(x + 266.0f, y + 46.0f), 38.0f, 18.0f, this.m_fillEllipsePoly);
-        BuildStaticEllipsePoints(Point(x + 266.0f, y + 46.0f), 42.0f, 22.0f, this.m_strokeEllipsePoly);
-        BuildStaticArcPoints(Point(x + 348.0f, y + 46.0f), 26.0f, -0.4f, 1.45f * s_Pi, this.m_arcPoly);
-        this.m_pentagonPoly[0u] = Point(x + 48.0f, y + 98.0f);
-        this.m_pentagonPoly[1u] = Point(x + 76.0f, y + 116.0f);
-        this.m_pentagonPoly[2u] = Point(x + 66.0f, y + 150.0f);
-        this.m_pentagonPoly[3u] = Point(x + 30.0f, y + 150.0f);
-        this.m_pentagonPoly[4u] = Point(x + 20.0f, y + 116.0f);
-        BuildStaticQuadBezierPoints(Point(x + 96.0f, y + 152.0f), Point(x + 148.0f, y + 86.0f), Point(x + 204.0f, y + 152.0f), this.m_quadBezierPoly);
-        BuildStaticCubicBezierPoints(Point(x + 216.0f, y + 148.0f), Point(x + 256.0f, y + 84.0f), Point(x + 324.0f, y + 178.0f), Point(x + 382.0f, y + 104.0f), this.m_cubicBezierPoly);
-        this.m_dashPoly[0u] = Point(x + 18.0f, y + 174.0f);
-        this.m_dashPoly[1u] = Point(x + 150.0f, y + 174.0f);
-        this.m_dashPoly[2u] = Point(x + 190.0f, y + 238.0f);
-        this.m_dashPoly[3u] = Point(x + 38.0f, y + 238.0f);
-        this.m_cachedXBits = bit_cast<u32>(x);
-        this.m_cachedYBits = bit_cast<u32>(y);
-        this.m_hasCachedGeometry = true;
-    }
-
     public void paint(mut UiPaintContext context, in f32 x, in f32 y){
-        const u32 xBits = bit_cast<u32>(x);
-        const u32 yBits = bit_cast<u32>(y);
-        if(!this.m_hasCachedGeometry || this.m_cachedXBits != xBits || this.m_cachedYBits != yBits)
-            this.rebuildGeometry(x, y);
-
         const Rect card(x, y, s_SelectorWidth, s_ContentHeight);
         context.paint.pushClip(card);
 
-        context.paint.fillConvexPolygon(Span<Point>(this.m_cardPoly.data(), this.m_cardPoly.size()), Color(0.08f, 0.10f, 0.14f, 0.94f));
+        context.paint.fillRoundedRect(card, 10.0f, Color(0.08f, 0.10f, 0.14f, 0.94f));
         PaintLineStyle borderStyle;
         borderStyle.thickness = 1.5f;
         borderStyle.antiAlias = true;
         borderStyle.join = PaintLineJoin::Round;
-        context.paint.drawPolyline(Span<Point>(this.m_borderPoly.data(), this.m_borderPoly.size()), true, borderStyle, Color(0.32f, 0.48f, 0.72f, 0.95f));
+        context.paint.strokeRoundedRect(Rect(x + 1.0f, y + 1.0f, s_SelectorWidth - 2.0f, s_ContentHeight - 2.0f), 9.0f, borderStyle, Color(0.32f, 0.48f, 0.72f, 0.95f));
 
         context.paint.fillRectGradient(
             Rect(x + 14.0f, y + 14.0f, 112.0f, 64.0f),
@@ -763,26 +522,37 @@ class UiVectorPaintGallery{
         accentStyle.antiAlias = true;
         accentStyle.cap = PaintLineCap::Round;
         accentStyle.join = PaintLineJoin::Round;
-        context.paint.drawPolyline(Span<Point>(this.m_accentRectPoly.data(), this.m_accentRectPoly.size()), true, accentStyle, Color(0.88f, 0.94f, 1.0f, 0.95f));
+        context.paint.strokeRoundedRect(Rect(x + 14.0f, y + 14.0f, 112.0f, 64.0f), 8.0f, accentStyle, Color(0.88f, 0.94f, 1.0f, 0.95f));
 
-        context.paint.fillConvexPolygon(Span<Point>(this.m_fillCirclePoly.data(), this.m_fillCirclePoly.size()), Color(0.24f, 0.78f, 0.45f, 0.85f));
-        context.paint.drawPolyline(Span<Point>(this.m_strokeCirclePoly.data(), this.m_strokeCirclePoly.size()), true, accentStyle, Color(0.96f, 0.88f, 0.30f, 0.95f));
-        context.paint.fillConvexPolygon(Span<Point>(this.m_fillEllipsePoly.data(), this.m_fillEllipsePoly.size()), Color(0.90f, 0.34f, 0.54f, 0.85f));
-        context.paint.drawPolyline(Span<Point>(this.m_strokeEllipsePoly.data(), this.m_strokeEllipsePoly.size()), true, borderStyle, Color(0.98f, 0.72f, 0.84f, 0.95f));
-        context.paint.drawPolyline(Span<Point>(this.m_arcPoly.data(), this.m_arcPoly.size()), false, accentStyle, Color(0.35f, 0.92f, 0.98f, 0.98f));
+        context.paint.fillCircle(Point(x + 174.0f, y + 46.0f), 22.0f, Color(0.24f, 0.78f, 0.45f, 0.85f));
+        context.paint.strokeCircle(Point(x + 174.0f, y + 46.0f), 26.0f, accentStyle, Color(0.96f, 0.88f, 0.30f, 0.95f));
+        context.paint.fillEllipse(Point(x + 266.0f, y + 46.0f), 38.0f, 18.0f, Color(0.90f, 0.34f, 0.54f, 0.85f));
+        context.paint.strokeEllipse(Point(x + 266.0f, y + 46.0f), 42.0f, 22.0f, borderStyle, Color(0.98f, 0.72f, 0.84f, 0.95f));
+        context.paint.drawArc(Point(x + 348.0f, y + 46.0f), 26.0f, -0.4f, 1.45f * s_Pi, accentStyle, Color(0.35f, 0.92f, 0.98f, 0.98f));
 
-        context.paint.fillConvexPolygon(Span<Point>(this.m_pentagonPoly.data(), 5u), Color(0.95f, 0.72f, 0.22f, 0.90f));
-        context.paint.drawPolyline(Span<Point>(this.m_quadBezierPoly.data(), this.m_quadBezierPoly.size()), false, accentStyle, Color(0.45f, 0.95f, 0.65f, 0.98f));
-        context.paint.drawPolyline(Span<Point>(this.m_cubicBezierPoly.data(), this.m_cubicBezierPoly.size()), false, accentStyle, Color(0.68f, 0.78f, 1.0f, 0.98f));
+        Array<Point, 5u> pentagonPoly;
+        pentagonPoly[0u] = Point(x + 48.0f, y + 98.0f);
+        pentagonPoly[1u] = Point(x + 76.0f, y + 116.0f);
+        pentagonPoly[2u] = Point(x + 66.0f, y + 150.0f);
+        pentagonPoly[3u] = Point(x + 30.0f, y + 150.0f);
+        pentagonPoly[4u] = Point(x + 20.0f, y + 116.0f);
+        context.paint.fillConvexPolygon(Span<Point>(pentagonPoly.data(), 5u), Color(0.95f, 0.72f, 0.22f, 0.90f));
+        context.paint.drawQuadraticBezier(Point(x + 96.0f, y + 152.0f), Point(x + 148.0f, y + 86.0f), Point(x + 204.0f, y + 152.0f), accentStyle, Color(0.45f, 0.95f, 0.65f, 0.98f));
+        context.paint.drawCubicBezier(Point(x + 216.0f, y + 148.0f), Point(x + 256.0f, y + 84.0f), Point(x + 324.0f, y + 178.0f), Point(x + 382.0f, y + 104.0f), accentStyle, Color(0.68f, 0.78f, 1.0f, 0.98f));
 
-        PaintLineStyle dashPoly;
-        dashPoly.thickness = 3.0f;
-        dashPoly.cap = PaintLineCap::Round;
-        dashPoly.join = PaintLineJoin::Bevel;
-        dashPoly.dashLength = 10.0f;
-        dashPoly.gapLength = 5.0f;
-        dashPoly.antiAlias = true;
-        context.paint.drawPolyline(Span<Point>(this.m_dashPoly.data(), 4u), false, dashPoly, Color(0.98f, 0.85f, 0.28f, 0.98f));
+        Array<Point, 4u> dashPoly;
+        dashPoly[0u] = Point(x + 18.0f, y + 174.0f);
+        dashPoly[1u] = Point(x + 150.0f, y + 174.0f);
+        dashPoly[2u] = Point(x + 190.0f, y + 238.0f);
+        dashPoly[3u] = Point(x + 38.0f, y + 238.0f);
+        PaintLineStyle dashPolyStyle;
+        dashPolyStyle.thickness = 3.0f;
+        dashPolyStyle.cap = PaintLineCap::Round;
+        dashPolyStyle.join = PaintLineJoin::Bevel;
+        dashPolyStyle.dashLength = 10.0f;
+        dashPolyStyle.gapLength = 5.0f;
+        dashPolyStyle.antiAlias = true;
+        context.paint.drawPolyline(Span<Point>(dashPoly.data(), 4u), false, dashPolyStyle, Color(0.98f, 0.85f, 0.28f, 0.98f));
 
         const u64 textIdentity = context.text.identity();
         const u64 fontGeneration = context.text.generation();
@@ -833,18 +603,6 @@ class UiVectorPaintGallery{
 
     private Label m_label;
     private PaintTransform2D m_labelBaseXf;
-    private Vector<Point> m_cardPoly;
-    private Vector<Point> m_borderPoly;
-    private Vector<Point> m_accentRectPoly;
-    private Vector<Point> m_fillCirclePoly;
-    private Vector<Point> m_strokeCirclePoly;
-    private Vector<Point> m_fillEllipsePoly;
-    private Vector<Point> m_strokeEllipsePoly;
-    private Vector<Point> m_arcPoly;
-    private Array<Point, 5u> m_pentagonPoly;
-    private Vector<Point> m_quadBezierPoly;
-    private Vector<Point> m_cubicBezierPoly;
-    private Array<Point, 4u> m_dashPoly;
     private Rect m_cachedLabelRect;
     private u64 m_cachedLabelTextIdentity = 0u;
     private u64 m_cachedLabelFontGeneration = 0u;
@@ -852,9 +610,6 @@ class UiVectorPaintGallery{
     private usize m_cachedLabelAtlasGlyphCount = 0u;
     private u32 m_cachedLabelScaleXBits = 0u;
     private u32 m_cachedLabelScaleYBits = 0u;
-    private u32 m_cachedXBits = 0u;
-    private u32 m_cachedYBits = 0u;
-    private b8 m_hasCachedGeometry = false;
     private b8 m_hasCachedLabelMeasure = false;
     private b8 m_cachedLabelValid = false;
     private b8 m_cachedLabelNeedsAtlasRecheck = false;

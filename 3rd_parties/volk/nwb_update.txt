@@ -1,5 +1,5 @@
 package: volk
-version: 1.4.363 (VOLK_HEADER_VERSION 363)
-updated_utc: 2026-09-29T17:35:31Z
-source: https://github.com/zeux/volk/tree/vulkan-sdk-1.4.363.0
-notes: Vulkan meta-loader. volk.c/h from zeux/volk vulkan-sdk-1.4.363.0 (commit 54fc0d7a72887cbfc5b030d26897b2b40ac53fb8). Matching Vulkan-Headers vulkan-sdk-1.4.363.0 is flattened into top-level vulkan_headers and consumed through nwb::vulkan_headers. The NWB static target is runtime-matched through the top-level CMake policy.
+version: 1.4.369 (VOLK_HEADER_VERSION 369)
+updated_utc: 2026-11-26T00:28:20Z
+source: https://github.com/zeux/volk/tree/653b2bfd1142df0f00f921eb2c1ae9943092340a
+notes: Vulkan meta-loader. volk.c/h from zeux/volk commit 653b2bfd1142df0f00f921eb2c1ae9943092340a (Update to 1.4.369). Matching Vulkan-Headers v1.4.369 is flattened into top-level vulkan_headers and consumed through nwb::vulkan_headers. The NWB static target is runtime-matched through the top-level CMake policy.

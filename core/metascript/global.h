@@ -35,6 +35,9 @@ using MChar = char;
 using MString = AString<MetaArena>;
 using MStringView = BasicStringView<MChar>;
 
+inline constexpr i64 s_ShiftOperandMin = 0;
+inline constexpr i64 s_I64ShiftOperandMax = 64;
+
 template<typename T>
 using MVector = Vector<T, MetaArena>;
 

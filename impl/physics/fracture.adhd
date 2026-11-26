@@ -99,14 +99,14 @@ class FractureBondGraph{
         const VectorSingle locB = InverseTransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), anchorW);
 
         JointDef jDef;
-        jDef.type = JointType::Fixed;
+        jDef.settings.type = JointType::Fixed;
         jDef.bodyIdA = bA;
         jDef.bodyIdB = bB;
-        jDef.localAnchorA = f32x4(locA, 0.0f);
-        jDef.localAnchorB = f32x4(locB, 0.0f);
-        jDef.collideConnected = true;
-        jDef.breakForce = SimdMax(0.0f, breakForce);
-        jDef.breakTorque = SimdMax(0.0f, breakTorque);
+        jDef.settings.localAnchorA = f32x4(locA, 0.0f);
+        jDef.settings.localAnchorB = f32x4(locB, 0.0f);
+        jDef.settings.collideConnected = true;
+        jDef.settings.breakForce = Max(0.0f, breakForce);
+        jDef.settings.breakTorque = Max(0.0f, breakTorque);
         const Expected<JointId> jRes = world.createJoint(jDef);
         if(!jRes.has_value())
             return MakeUnexpected(Failure());
@@ -116,7 +116,7 @@ class FractureBondGraph{
         bond.chunkB = chunkB;
         bond.jointId = jRes.value();
         bond.worldAnchor = f32x4(anchorW, 0.0f);
-        bond.maxHealth = SimdMax(1.0e-3f, health);
+        bond.maxHealth = Max(1.0e-3f, health);
         bond.health = bond.maxHealth;
         bond.broken = false;
         const u32 bondIdx = cast<u32>(this.bonds.size());
@@ -172,8 +172,8 @@ class FractureBondGraph{
             const f32 distSq = Vector3LengthSq(VectorSingle(pos - worldOrigin, 0.0f)).x;
             if(distSq >= radSq)
                 continue;
-            const f32 dist = SqrtFast(distSq);
-            const f32 atten = SimdClamp(1.0f - dist / radius, 0.0f, 1.0f);
+            const f32 dist = Sqrt(distSq);
+            const f32 atten = Clamp(1.0f - dist / radius, 0.0f, 1.0f);
             bond.health -= damage * atten;
             if(bond.health <= 0.0f){
                 bond.health = 0.0f;
@@ -395,7 +395,7 @@ void ClipPolyhedronPtsByPlane(
         const f32 denom = da - db;
         if(Abs(VectorSingle(denom)).x <= 1.0e-12f)
             continue;
-        const f32 t = SimdClamp(da / denom, 0.0f, 1.0f);
+        const f32 t = Clamp(da / denom, 0.0f, 1.0f);
         const VectorSingle pInter = Lerp(VectorSingle(verts[ia]), VectorSingle(verts[ib]), VectorSingle(t));
         const f32x4 pInter4(pInter, 0.0f);
         outNegPts.push_back(pInter4);
@@ -491,8 +491,8 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
     if(srcVerts.size() < 4u)
         return MakeUnexpected(Failure());
 
-    const f32 sourceVol = SimdMax(ComputeHullBuoyancyVolume(sourceHull), 1.0e-6f);
-    const f32 minChunkVol = SimdMax(0.0f, params.minChunkVolumeRatio) * sourceVol;
+    const f32 sourceVol = Max(ComputeHullBuoyancyVolume(sourceHull), 1.0e-6f);
+    const f32 minChunkVol = Max(0.0f, params.minChunkVolumeRatio) * sourceVol;
     VectorSingle boxMin(0.0f);
     VectorSingle boxMax(0.0f);
     ComputePolyhedronPtsBounds(Span<f32x4>(srcVerts), boxMin, boxMax);
@@ -505,7 +505,7 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
     u32 rng = params.seed;
     if(rng == 0u)
         rng = 1337u;
-    const f32 impactBias = SimdClamp(params.impactPointBias, 0.0f, 1.0f);
+    const f32 impactBias = Clamp(params.impactPointBias, 0.0f, 1.0f);
     const VectorSingle impactPt = VectorSingle(params.impactLocalPoint);
 
     Vector<f32x4> sites;
@@ -540,7 +540,7 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
             const f32 ry = NextFractureRandomUnit(rng) * 2.0f - 1.0f;
             const f32 rz = NextFractureRandomUnit(rng) * 2.0f - 1.0f;
             const VectorSingle dir = SafeNormalizeVec3(VectorSingle(rx, ry, rz, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-            const VectorSingle fallbackPt = boxCenter + dir * (SimdMin(SimdMin(boxSpan.x, boxSpan.y), boxSpan.z) * (0.15f + 0.15f * NextFractureRandomUnit(rng)));
+            const VectorSingle fallbackPt = boxCenter + dir * (Min(Min(boxSpan.x, boxSpan.y), boxSpan.z) * (0.15f + 0.15f * NextFractureRandomUnit(rng)));
             if(IsPointInsideConvexHullLocal(sourceHull, fallbackPt, 1.0e-3f))
                 chosen = fallbackPt;
             else
@@ -582,8 +582,8 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
             f32 maxProj = -s_MaxF32;
             for(usize vi = 0u; vi < workVerts.size(); ++vi){
                 const f32 d = Vector3Dot(bisN, VectorSingle(workVerts[vi])).x - bisD;
-                minProj = SimdMin(minProj, d);
-                maxProj = SimdMax(maxProj, d);
+                minProj = Min(minProj, d);
+                maxProj = Max(maxProj, d);
             }
             if(maxProj <= 1.0e-5f)
                 continue;

@@ -31,15 +31,15 @@ f32 ComputeDockTabWidth(in DockNode node, in u64 panelKey, in Vector<DockPanelTi
     if(found != titleIndex.end()){
         const usize idx = found.value();
         if(idx < titles.size() && titles[idx].key == panelKey)
-            textW = UiSimdMax(16.0f, titles[idx].titleBounds.width);
+            textW = Max(16.0f, titles[idx].titleBounds.width);
     }
     f32 closeW = 0.0f;
     if(allowClose)
         closeW = style.tabCloseSize + 4.0f;
     const f32 desired = textW + 2.0f * style.tabPaddingX + closeW;
-    const f32 countF = cast<f32>(UiSimdMax(cast<usize>(1u), node.panelKeys.size()));
-    const f32 maxPerTab = UiSimdMax(24.0f, node.tabBarRect.width / countF);
-    return UiSimdMin(desired, maxPerTab);
+    const f32 countF = cast<f32>(Max(cast<usize>(1u), node.panelKeys.size()));
+    const f32 maxPerTab = Max(24.0f, node.tabBarRect.width / countF);
+    return Min(desired, maxPerTab);
 }
 
 b8 FindDockTitleLayout(in u64 panelKey, in Vector<DockPanelTitleEntry> titles, in HashMap<u64, usize> titleIndex, mut SharedTextLayout outLayout, mut Rect outBounds){
@@ -176,8 +176,6 @@ b8 Builder::beginDockSpace(in StringView stableKey, mut DockSpaceState state, in
                             state.m_dragActive = true;
                             state.m_draggingPanelKey = pk;
                             state.m_draggingSourceNodeId = state.findPanelNodeId(pk);
-                            state.m_dragOrigin = gesture.origin;
-                            state.m_dragPointer = gesture.position;
                             if(state.m_draggingSourceNodeId != 0u)
                                 state.selectTab(state.m_draggingSourceNodeId, pk);
                             u32 hoverNode = 0u;
@@ -242,7 +240,6 @@ b8 Builder::beginDockSpace(in StringView stableKey, mut DockSpaceState state, in
     frame.options = options;
     frame.token = token;
     frame.revision = state.revision();
-    frame.node = admittedNode.value();
     frame.layer = this.m_context.popupLayer() + 1u;
     frame.arrangedBounds = arrangeBounds;
 
@@ -355,51 +352,27 @@ b8 Builder::beginDockedPanel(in StringView stableKey, in u64 panelKey, in String
 b8 Builder::endDockedPanel(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::DockPanel
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::DockPanel)
     ){
         this.m_context.fail();
         return false;
     }
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     return this.m_context.popScope();
 }
 
 b8 Builder::endDockSpace(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::DockSpace
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::DockSpace)
         || this.m_scope.value().m_dockSpaceStack.empty()
     ){
         this.m_context.fail();
         return false;
     }
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     this.m_scope.value().m_dockSpaceStack.pop_back();
     return this.m_context.popScope();
-}
-
-b8 Builder::dockSpaceStateMatches(in BuilderDockSpaceFrame frame)const{
-    return frame.state.has_value() && this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
 }
 
 b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
@@ -422,7 +395,7 @@ b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
 
     HitTargetFactory targets;
     in InputRouter input = this.m_context.input();
-    const HitTarget host = targets.makeDockSpaceHostHitTarget(dockRect, clip, item.enabled, frame.token);
+    const HitTarget host = targets.makeFocusableHostHitTarget(dockRect, clip, item.enabled, false, frame.token);
     if(!this.m_context.addTarget(frame.widget, host))
         return false;
     this.emitAccessibleNode(
@@ -493,17 +466,17 @@ b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
                 this.m_paint.fillRect(tabRect, tabCol);
                 this.m_paint.strokeRect(tabRect, s_DockBorderThickness, style.borderColor);
 
-                f32 labelMaxW = UiSimdMax(0.0f, tabRect.width - 2.0f * style.tabPaddingX);
+                f32 labelMaxW = Max(0.0f, tabRect.width - 2.0f * style.tabPaddingX);
                 Rect closeRect;
                 if(frame.options.allowTabClose && tabRect.width > style.tabCloseSize + style.tabPaddingX){
-                    const f32 cs = UiSimdMin(style.tabCloseSize, tabRect.height - 4.0f);
+                    const f32 cs = Min(style.tabCloseSize, tabRect.height - 4.0f);
                     closeRect = Rect(
                         tabRect.x + tabRect.width - style.tabPaddingX * 0.5f - cs,
                         tabRect.y + (tabRect.height - cs) * 0.5f,
                         cs,
                         cs
                     );
-                    labelMaxW = UiSimdMax(0.0f, closeRect.x - 4.0f - (tabRect.x + style.tabPaddingX));
+                    labelMaxW = Max(0.0f, closeRect.x - 4.0f - (tabRect.x + style.tabPaddingX));
                 }
 
                 SharedTextLayout titleLayout;
@@ -546,7 +519,7 @@ b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
                     }
                     if(frame.options.allowTabClose && closeRect.width > 0.0f && closeRect.height > 0.0f){
                         const Rect closeClip = IntersectUiRectsBounds(closeRect, clip);
-                        const HitTarget closeTgt = targets.makeDockTabCloseHitTarget(closeRect, closeClip, true, frame.token, pk);
+                        const HitTarget closeTgt = targets.makeActivatablePartHitTarget(closeRect, closeClip, true, frame.token, pk);
                         if(!this.m_context.addPartTarget(frame.widget, closeId.value(), closeTgt)){
                             this.m_paint.popClip();
                             this.m_paint.popClip();
@@ -586,7 +559,7 @@ b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
 
 b8 Builder::paintDockSpaceOverlays(){
     for(in BuilderDockSpaceFrame frame : this.m_scope.value().m_dockSpaces){
-        if(!this.dockSpaceStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
         in DockSpaceState state = frame.state.value();
         if(!state.m_dragActive || state.m_hoverTargetNodeId == 0u || state.m_hoverDropZone == DockDropZone::None)

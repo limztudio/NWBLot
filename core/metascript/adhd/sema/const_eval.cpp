@@ -31,10 +31,6 @@ namespace __hidden_adhd_const_eval{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr i64 s_ShiftOperandMin = 0;
-constexpr i64 s_I64ShiftOperandMax = 64;
-
-
 [[nodiscard]] constexpr b8 TryEvaluateIntegerScalarLimit(const MStringView scalarType, const MStringView member, i64& outVal)noexcept{
     b8 isMin = false;
     if(!BuiltinTypeSemantics::TryMapScalarLimitMember(member, nullptr, &isMin))
@@ -179,7 +175,7 @@ b8 TryEvaluateEnumEntryConstant(const EnumDecl& ed, const MStringView targetEntr
             nextSeq = static_cast<i64>(static_cast<u64>(curVal) + 1u);
         }
         else if(ed.isFlag){
-            if(flagBitIndex >= __hidden_adhd_const_eval::s_I64ShiftOperandMax)
+            if(flagBitIndex >= s_I64ShiftOperandMax)
                 return false;
             curVal = static_cast<i64>(u64(1) << flagBitIndex++);
             nextSeq = static_cast<i64>(static_cast<u64>(curVal) + 1u);

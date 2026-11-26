@@ -14,7 +14,7 @@ from csg_shadow_smoke import capture_environment
 from csg_shadow_open_evidence import CASES, CsgOpenShadowImageEvidence, CsgOpenShadowRuntimeEvidence
 import window_capture_smoke as capture
 from window_capture_arguments import WindowCaptureArguments
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip
 
 LIT_WARNING_TAG = "[WARNING]"
@@ -68,7 +68,7 @@ def capture_case(args, case):
         os.environ.clear()
         os.environ.update(previous_environment)
     receipt = CsgOpenShadowRuntimeEvidence.validate_runtime(runtime_log.read_text(encoding=LIT_UTF_8), case, args.route, args.frames, args.warning_policy)
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("open-shadow smoke requires the actual 960x720 framebuffer")
     receipt["bmp_sha256"] = hashlib.sha256(output.read_bytes()).hexdigest()

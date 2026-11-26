@@ -138,6 +138,69 @@ void CommitEditModelBuffersAndComposition(
 
 
 
+[cpp_unwind] void FinalizeEditModelCommit(
+    in StringView candidate,
+    in Span<usize> newBoundaries,
+    in usize anchor,
+    in usize caret,
+    in usize maxHistoryRecords,
+    in usize maxHistoryBytes,
+    in b8 updateHistoryAndRevision,
+    in b8 recordHistory,
+    mut EditHistoryRules historyRules,
+    mut EditHistoryRecord inOutStagedRecord,
+    mut String inOutText,
+    mut Vector<usize> inOutBoundaries,
+    mut usize inOutAnchor,
+    mut usize inOutCaret,
+    mut u64 inOutSelectionGeneration,
+    mut Vector<EditHistoryRecord> inOutHistory,
+    mut usize inOutHistoryCursor,
+    mut usize inOutHistoryBytes,
+    mut String inOutPreedit,
+    mut usize outPreeditAnchor,
+    mut usize outPreeditCaret,
+    mut usize outCompositionAnchor,
+    mut usize outCompositionCaret,
+    mut b8 inOutCompositionActive,
+    mut u64 inOutCompositionGeneration,
+    mut u64 inOutRevision
+){
+    if(updateHistoryAndRevision){
+        if(recordHistory){
+            historyRules.commitPrepared(
+                maxHistoryRecords,
+                maxHistoryBytes,
+                inOutStagedRecord,
+                inOutHistory,
+                inOutHistoryCursor,
+                inOutHistoryBytes
+            );
+        }
+        else{
+            historyRules.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
+        }
+    }
+    CommitEditModelBuffersAndComposition(
+        candidate,
+        newBoundaries,
+        inOutText,
+        inOutBoundaries,
+        inOutPreedit,
+        outPreeditAnchor,
+        outPreeditCaret,
+        outCompositionAnchor,
+        outCompositionCaret,
+        inOutCompositionActive,
+        inOutCompositionGeneration
+    );
+    inOutAnchor = anchor;
+    inOutCaret = caret;
+    ++inOutSelectionGeneration;
+    if(updateHistoryAndRevision)
+        ++inOutRevision;
+}
+
 [cpp_unwind] b8 CommitEditModelEraseAroundSelection(
     in StringView candidate,
     in Span<usize> newBoundaries,
@@ -183,36 +246,34 @@ void CommitEditModelBuffersAndComposition(
         inOutStagedRecord,
         inOutHistory
     );
-    if(recordHistory){
-        historyRules.commitPrepared(
-            maxHistoryRecords,
-            maxHistoryBytes,
-            inOutStagedRecord,
-            inOutHistory,
-            inOutHistoryCursor,
-            inOutHistoryBytes
-        );
-    }
-    else{
-        historyRules.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
-    }
-    CommitEditModelBuffersAndComposition(
+    FinalizeEditModelCommit(
         candidate,
         newBoundaries,
+        anchor,
+        caret,
+        maxHistoryRecords,
+        maxHistoryBytes,
+        true,
+        recordHistory,
+        historyRules,
+        inOutStagedRecord,
         inOutText,
         inOutBoundaries,
+        inOutAnchor,
+        inOutCaret,
+        inOutSelectionGeneration,
+        inOutHistory,
+        inOutHistoryCursor,
+        inOutHistoryBytes,
         inOutPreedit,
         outPreeditAnchor,
         outPreeditCaret,
         outCompositionAnchor,
         outCompositionCaret,
         inOutCompositionActive,
-        inOutCompositionGeneration
+        inOutCompositionGeneration,
+        inOutRevision
     );
-    inOutAnchor = anchor;
-    inOutCaret = caret;
-    ++inOutSelectionGeneration;
-    ++inOutRevision;
     return true;
 }
 
@@ -263,39 +324,34 @@ void CommitEditModelBuffersAndComposition(
             inOutHistory
         );
     }
-    if(changed){
-        if(recordHistory){
-            historyRules.commitPrepared(
-                maxHistoryRecords,
-                maxHistoryBytes,
-                inOutStagedRecord,
-                inOutHistory,
-                inOutHistoryCursor,
-                inOutHistoryBytes
-            );
-        }
-        else{
-            historyRules.clear(inOutHistory, inOutHistoryCursor, inOutHistoryBytes);
-        }
-    }
-    CommitEditModelBuffersAndComposition(
+    FinalizeEditModelCommit(
         candidate,
         newBoundaries,
+        caret,
+        caret,
+        maxHistoryRecords,
+        maxHistoryBytes,
+        changed,
+        recordHistory,
+        historyRules,
+        inOutStagedRecord,
         inOutText,
         inOutBoundaries,
+        inOutAnchor,
+        inOutCaret,
+        inOutSelectionGeneration,
+        inOutHistory,
+        inOutHistoryCursor,
+        inOutHistoryBytes,
         inOutPreedit,
         outPreeditAnchor,
         outPreeditCaret,
         outCompositionAnchor,
         outCompositionCaret,
         inOutCompositionActive,
-        inOutCompositionGeneration
+        inOutCompositionGeneration,
+        inOutRevision
     );
-    inOutAnchor = caret;
-    inOutCaret = caret;
-    ++inOutSelectionGeneration;
-    if(changed)
-        ++inOutRevision;
 }
 
 

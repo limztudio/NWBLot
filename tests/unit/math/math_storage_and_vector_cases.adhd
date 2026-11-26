@@ -6,6 +6,7 @@
 #include "case_types.adhd"
 #include "storage_equality.adhd"
 #include "storage_fixture.adhd"
+#include <tests/common/platform_features.adhd>
 #include <tests/common/value_storage.adhd>
 
 
@@ -598,7 +599,7 @@ void VerifyMath_StorageEqualityPreservesNaNShortCircuitExceptionFlags(){
 }
 
 void VerifyMath_StorageEqualityDoesNotReadBeyondUnalignedShortValues(){
-    if(!s_LinuxStorage){
+    if(!s_IsLinuxPlatform){
         GTEST_SKIP();
         return;
     }
@@ -669,7 +670,7 @@ void VerifyMath_StorageEqualityFallsBackForWideIntegralArrays(){
 void VerifyMath_StorageEqualityPreservesSubnormalNaNAndSkippedLaneMxcsrFlags(){
     const VectorSingle zeroGuard = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
     ASSERT_TRUE(zeroGuard.x == 0.0f);
-    if(!s_Sse2Storage){
+    if(!s_HasSse2InstructionSet){
         GTEST_SKIP();
         return;
     }

@@ -271,15 +271,6 @@ b8 EqualUiBuilderVertexBytes(in Span<Vertex> lhs, in Span<Vertex> rhs){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputEvent MakeUiBuilderKeyEvent(in InputEventType type, in i32 key, in b8 shift, in b8 repeat){
-    InputEvent event = InputEvent();
-    event.type = type;
-    event.key = key;
-    event.shift = shift;
-    event.repeat = repeat;
-    return event;
-}
-
 UiSkinPalette MakeUiBuilderSkinPalette(in f32 offset){
     UiSkinPalette palette = UiSkinPalette();
     for(u32 index = 0u; index < UiSkinColorRole::kCount; ++index){
@@ -594,8 +585,8 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
     keys[2u] = Key::Space;
     for(in i32 key : keys){
         if(!self.m_context.input().focus().valid()){
-            EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
-            EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
+            EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+            EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab)).commandConsumed);
         }
         ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiBuilderApplyKey));
         const b8 pointer = key == Key::Unknown;
@@ -623,8 +614,8 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
         EXPECT_FALSE(self.m_builder.button(s_UiBuilderApplyKey, "Apply"));
         ASSERT_TRUE(self.finish());
         ASSERT_TRUE(self.m_context.commitFrame(generation));
-        EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Escape, false, false)).commandConsumed);
-        EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Escape, false, false)).commandConsumed);
+        EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Escape)).commandConsumed);
+        EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Escape)).commandConsumed);
         const InputRoutingResult released = self.send(up);
         if(pointer)
             EXPECT_TRUE(released.pointerConsumed);
@@ -637,11 +628,11 @@ void VerifyUiBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboardButtonSubm
         ASSERT_TRUE(self.m_context.commitFrame(generation));
         EXPECT_TRUE(self.m_context.input().actions().empty());
     }
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab)).commandConsumed);
     ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiBuilderApplyKey));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ++generation;
     ASSERT_TRUE(self.begin(generation));
     EXPECT_TRUE(self.m_builder.button(s_UiBuilderApplyKey, "Apply"));
@@ -655,21 +646,21 @@ void VerifyUiBuilderTests_FocusTransferWhileButtonSubmitIsHeldCannotActivateEith
     EXPECT_FALSE(self.m_builder.button("second", "Second"));
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab)).commandConsumed);
     ASSERT_EQ(self.m_context.input().focus(), self.id("first"));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab)).commandConsumed);
     ASSERT_EQ(self.m_context.input().focus(), self.id("second"));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.begin(2u));
     EXPECT_FALSE(self.m_builder.button("first", "First"));
     EXPECT_FALSE(self.m_builder.button("second", "Second"));
     ASSERT_TRUE(self.finish());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     EXPECT_FALSE(self.m_builder.button("first", "First"));
     EXPECT_TRUE(self.m_builder.button("second", "Second"));
@@ -817,9 +808,9 @@ void VerifyUiBuilderTextShapingTests_InvalidPolicyPreservesPreviousShapingAndOpe
     ASSERT_TRUE(self.installKoreanFallback());
     self.addEditRegion();
     ASSERT_TRUE(self.m_skin.validatePayload());
-    ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('H', 'a', 'n', 'g'), "ko"));
-    EXPECT_FALSE(self.m_builder.setTextShaping(0u, "ko"));
-    EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko!"));
+    ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('H', 'a', 'n', 'g'), "ko", TextDirection::LeftToRight));
+    EXPECT_FALSE(self.m_builder.setTextShaping(0u, "ko", TextDirection::LeftToRight));
+    EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko!", TextDirection::LeftToRight));
     ASSERT_FALSE(self.m_builder.failed());
     EditModel model = EditModel();
     ASSERT_TRUE(model.setText(s_UiBuilderTextShapingJamo));
@@ -836,7 +827,7 @@ void VerifyUiBuilderTextShapingTests_InvalidPolicyPreservesPreviousShapingAndOpe
 
     ASSERT_TRUE(self.begin(2u));
     ASSERT_TRUE(self.m_builder.beginPanel("panel", Rect(0.0f, 0.0f, 400.0f, 100.0f)));
-    EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
+    EXPECT_FALSE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en", TextDirection::LeftToRight));
     EXPECT_TRUE(self.m_builder.failed());
     EXPECT_FALSE(self.m_builder.endPanel());
 }
@@ -1432,8 +1423,8 @@ void VerifyUiComboBuilderTests_TabExitsAnExplicitlyOpenedComboRelativeToItsField
     self.m_state.open();
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 4u));
     ASSERT_EQ(self.m_context.input().focus(), self.list());
-    const InputEvent reverseDown = MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Tab, true, false);
-    const InputEvent reverseUp = MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Tab, true, false);
+    const InputEvent reverseDown = Key(InputEventType::KeyDown, Key::Tab, false, true);
+    const InputEvent reverseUp = Key(InputEventType::KeyUp, Key::Tab, false, true);
     EXPECT_TRUE(self.send(reverseDown).commandConsumed);
     EXPECT_TRUE(self.send(reverseUp).commandConsumed);
     ASSERT_TRUE(AcceptUiComboBuilderNeighbors(self, 5u));
@@ -1476,7 +1467,7 @@ void VerifyUiComboBuilderTests_HeldOpeningSubmitWaitsForReleaseBeforeTransferrin
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     self.press(Key::Tab);
-    InputEvent event = MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false);
+    InputEvent event = Key(InputEventType::KeyDown, Key::Enter);
     EXPECT_TRUE(self.send(event).commandConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_state.isOpen());
@@ -1509,11 +1500,11 @@ void VerifyUiComboBuilderTests_EscapeBeforeReleaseCancelsFieldOpeningAndPopupSub
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     self.press(Key::Tab);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_state.isOpen());
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_FALSE(self.m_result.opened);
@@ -1527,11 +1518,11 @@ void VerifyUiComboBuilderTests_EscapeBeforeReleaseCancelsFieldOpeningAndPopupSub
     self.press(Key::Down);
     ASSERT_TRUE(self.accept(5u));
     ASSERT_EQ(self.m_state.listState().cursorKey(), 2u);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(6u));
     EXPECT_FALSE(self.m_result.committed);
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiBuilderKeyEvent(InputEventType::KeyUp, Key::Enter, false, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(7u));
     EXPECT_FALSE(self.m_state.isOpen());
     EXPECT_FALSE(self.m_result.committed);
@@ -1797,7 +1788,7 @@ void VerifyUiComboBuilderTests_OmissionRetiresThePopupAndHeldNavigationCannotOpe
     const Expected<HitTarget> initialField = self.tryTarget(self.id(s_UiComboBuilderKey, s_UiComboBuilderPanelKey));
     ASSERT_TRUE(initialField.has_value());
     const u64 oldDeclaration = initialField.value().declarationGeneration;
-    InputEvent held = MakeUiBuilderKeyEvent(InputEventType::KeyDown, Key::Down, false, false);
+    InputEvent held = Key(InputEventType::KeyDown, Key::Down);
     EXPECT_TRUE(self.send(held).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     ASSERT_TRUE(self.m_builder.beginPanel(s_UiComboBuilderPanelKey, Rect(10.0f, 10.0f, 320.0f, 240.0f)));

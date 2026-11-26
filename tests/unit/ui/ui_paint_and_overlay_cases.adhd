@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/floating_point_environment_guard.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
 #include <tests/unit/ui/name_cases.adhd>
@@ -19,17 +20,6 @@ const u64 s_UiPaintOverlayDefaultAtlasIdentity = 11u;
 const Name s_UiPaintOverlayTextureName = "tests/ui/texture";
 const Name s_UiPaintOverlayPanelRegionName = "panel";
 
-class UiPaintScopedHeldFenv : NoCopy{
-    private Expected<FloatingPointEnvironment> m_held = HoldFloatingPointExceptions();
-    public b8 valid()const{ return this.m_held.has_value(); }
-    public ~UiPaintScopedHeldFenv(){
-        if(this.m_held.has_value() && !SetFloatingPointEnvironment(this.m_held.value()).has_value()){
-            assert(false, "Failed to restore floating-point environment");
-            TerminateInvariant();
-        }
-    }
-}
-
 class UiPaintSdfAssetFactorySample{
     public SharedSdfAtlasPage page;
     public Sha256Digest sourceHash;
@@ -46,10 +36,10 @@ class UiPaintSdfTests : PaintTextFixture{
         return this.m_builder.prepareSdfPages(Array<SharedSdfAtlasPage, 1u>(page));
     }
     public b8 prepareGlyphSpanAndSingleSdf(in Span<SharedGlyphPage> glyphs, in SharedSdfAtlasPage sdf){
-        return this.m_builder.prepareImages(glyphs, Array<SharedSdfAtlasPage, 1u>(sdf));
+        return this.m_builder.prepareImages(glyphs, Array<SharedSdfAtlasPage, 1u>(sdf), Span<SharedImageSource>());
     }
     public b8 prepareSingleGlyphAndSingleSdf(in SharedGlyphPage glyph, in SharedSdfAtlasPage sdf){
-        return this.m_builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Array<SharedSdfAtlasPage, 1u>(sdf));
+        return this.m_builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Array<SharedSdfAtlasPage, 1u>(sdf), Span<SharedImageSource>());
     }
     public UiPaintSdfAssetFactorySample createPageFromTemporaryAtlas(){
         UiPaintSdfAssetFactorySample sample;
@@ -134,29 +124,14 @@ b8 UiPaintOverlayPrepareOneGlyphAndOneImage(mut PaintBuilder builder, in SharedG
 b8 UiPaintOverlayPrepareOneGlyphOneSdfAndImageSpan(mut PaintBuilder builder, in SharedGlyphPage glyph, in SharedSdfAtlasPage sdf, in Span<SharedImageSource> images){ return builder.prepareImages(Array<SharedGlyphPage, 1u>(glyph), Array<SharedSdfAtlasPage, 1u>(sdf), images); }
 b8 UiPaintOverlayPrepareSingleTextureImage(mut PaintBuilder builder, in SharedImageSource image){ return builder.prepareTextureImages(Array<SharedImageSource, 1u>(image)); }
 b8 UiPaintOverlayHasGlyphPage(in SharedGlyphPage page){ return page.valid(); }
-usize UiPaintOverlayGlyphPageAddress(in SharedGlyphPage page){
-    if(page.valid())
-        return TestValueAddress<GlyphPage>(page.deref());
-    return 0u;
-}
-u64 UiPaintOverlayGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
-u8 UiPaintOverlayGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
 b8 UiPaintOverlayHasSdfPage(in SharedSdfAtlasPage page){ return page.valid(); }
-usize UiPaintOverlaySdfPageAddress(in SharedSdfAtlasPage page){
-    if(page.valid())
-        return TestValueAddress<SdfAtlasPage>(page.deref());
-    return 0u;
-}
+usize UiPaintOverlaySdfPageAddress(in SharedSdfAtlasPage page){ return UiSharedAddress<SdfAtlasPage>(page); }
 u8 UiPaintOverlaySdfPagePixel(in SharedSdfAtlasPage page, in usize index){ return page.deref().pixels()[index]; }
 Sha256Digest UiPaintOverlaySdfPagePixelsHash(in SharedSdfAtlasPage page){ return page.deref().binding().pixelsSha256; }
 u8 UiPaintOverlaySdfPageFontHashByte(in SharedSdfAtlasPage page, in usize index){ return page.deref().binding().fontSha256.bytes[index]; }
 SdfAtlasPageBinding UiPaintOverlaySdfPageBinding(in SharedSdfAtlasPage page){ return page.deref().binding(); }
 b8 UiPaintOverlayHasImage(in SharedImageSource image){ return image.valid(); }
-usize UiPaintOverlayImageAddress(in SharedImageSource image){
-    if(image.valid())
-        return TestValueAddress<ImageSource>(image.deref());
-    return 0u;
-}
+usize UiPaintOverlayImageAddress(in SharedImageSource image){ return UiSharedAddress<ImageSource>(image); }
 u64 UiPaintOverlayImageGeneration(in SharedImageSource image){ return image.deref().generation(); }
 AssetRef<Texture> UiPaintOverlayImageIdentity(in SharedImageSource image){ return image.deref().identity(); }
 u8 UiPaintOverlayImagePayloadByte(in SharedImageSource image, in usize index){ return image.deref().texture().payloadBytes()[index]; }
@@ -187,7 +162,7 @@ void RecordUiPaintImageAdmissionBaseline(
     ASSERT_TRUE(UiPaintOverlayPrepareGlyphsAndSingleSdfAndImage(builder, glyphs, sdf, image));
     builder.fillRect(Rect(2.0f, 3.0f, 4.0f, 5.0f), Color(0.8f, 0.4f, 0.2f, 0.5f));
     ASSERT_TRUE(builder.drawGlyph(glyphs[0u], Rect(12.0f, 3.0f, 4.0f, 5.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
-    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 3u, Rect(22.0f, 3.0f, 4.0f, 5.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 3u, Rect(22.0f, 3.0f, 4.0f, 5.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     ASSERT_TRUE(builder.drawImage(image, Rect(32.0f, 3.0f, 8.0f, 4.0f)));
 }
 
@@ -202,7 +177,7 @@ void RecordUiPaintImageMixedOverflowBaseline(
     ASSERT_TRUE(builder.drawGlyph(glyphs[0u], Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.125f, 0.25f, 0.5f, 0.5f)));
     ASSERT_TRUE(builder.beginOverlay(2u));
     builder.pushClip(Rect(30.0f, 10.0f, 40.0f, 20.0f));
-    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 2u, Rect(32.0f, 12.0f, 8.0f, 8.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 2u, Rect(32.0f, 12.0f, 8.0f, 8.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     ASSERT_TRUE(builder.drawImage(image, Rect(44.0f, 12.0f, 12.0f, 8.0f), Rect(0.25f, 0.25f, 0.5f, 0.5f)));
     ASSERT_TRUE(builder.popClip());
     ASSERT_TRUE(builder.endOverlay());
@@ -221,7 +196,7 @@ void RecordUiPaintImageNullThirdPassRetry(
     in SharedImageSource addition
 ){
     ASSERT_TRUE(UiPaintOverlayPrepareOneEach(builder, upgrade, sdf, addition));
-    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 1u, Rect(22.0f, 3.0f, 4.0f, 5.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(builder.drawSdfGlyph(sdf, 1u, Rect(22.0f, 3.0f, 4.0f, 5.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     ASSERT_TRUE(builder.drawImage(addition, Rect(32.0f, 3.0f, 8.0f, 4.0f)));
 }
 
@@ -322,9 +297,9 @@ void VerifyPaintImageFixture_MixedOverflowPreservesCoverageGenerationSdfImageVer
     const DrawSnapshot actual = self.m_builder.freeze();
     ExpectUiSameImagePaintSnapshots(actual, expected);
     ASSERT_EQ(actual.glyphPages().size(), 62u);
-    EXPECT_EQ(UiPaintOverlayGlyphPageAddress(actual.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(glyphs[0u]));
-    EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(actual.glyphPages()[0u]), 1u);
-    EXPECT_EQ(UiPaintOverlayGlyphPagePixel(actual.glyphPages()[0u], 32u), 0u);
+    EXPECT_EQ(UiPaintGlyphPageAddress(actual.glyphPages()[0u]), UiPaintGlyphPageAddress(glyphs[0u]));
+    EXPECT_EQ(UiPaintGlyphPageGeneration(actual.glyphPages()[0u]), 1u);
+    EXPECT_EQ(UiPaintGlyphPagePixel(actual.glyphPages()[0u], 32u), 0u);
     ASSERT_EQ(actual.sdfPages().size(), 1u);
     EXPECT_EQ(UiPaintOverlaySdfPageAddress(actual.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(sdf));
     ASSERT_EQ(actual.textureImages().size(), 1u);
@@ -373,18 +348,18 @@ void VerifyPaintImageFixture_NullThirdKindRejectsEarlierCandidatesAtomicallyAndA
         const DrawSnapshot actual = self.m_builder.freeze();
         ExpectUiSameImagePaintSnapshots(actual, expected);
         ASSERT_EQ(actual.glyphPages().size(), 1u);
-        usize expectedGlyphAddress = UiPaintOverlayGlyphPageAddress(glyph);
+        usize expectedGlyphAddress = UiPaintGlyphPageAddress(glyph);
         u64 expectedGeneration = 1u;
         usize expectedSdfCount = 0u;
         usize expectedImageCount = 1u;
         if(pass != 0u){
-            expectedGlyphAddress = UiPaintOverlayGlyphPageAddress(upgrade);
+            expectedGlyphAddress = UiPaintGlyphPageAddress(upgrade);
             expectedGeneration = 2u;
             expectedSdfCount = 1u;
             expectedImageCount = 2u;
         }
-        EXPECT_EQ(UiPaintOverlayGlyphPageAddress(actual.glyphPages()[0u]), expectedGlyphAddress);
-        EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(actual.glyphPages()[0u]), expectedGeneration);
+        EXPECT_EQ(UiPaintGlyphPageAddress(actual.glyphPages()[0u]), expectedGlyphAddress);
+        EXPECT_EQ(UiPaintGlyphPageGeneration(actual.glyphPages()[0u]), expectedGeneration);
         EXPECT_EQ(actual.sdfPages().size(), expectedSdfCount);
         EXPECT_EQ(actual.textureImages().size(), expectedImageCount);
     }
@@ -508,7 +483,7 @@ void VerifyPaintImageFixture_ImageCommandsKeepDistinctClipsMaterialsAndOverlayLa
     const Rect unitUv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(self.m_builder.drawGlyph(glyph, rectangle, unitUv));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, rectangle, unitUv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, rectangle, unitUv, Color()));
     self.m_builder.pushClip(Rect(5.0f, 5.0f, 8.0f, 8.0f));
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     ASSERT_TRUE(self.m_builder.beginOverlay(2u));
@@ -942,11 +917,11 @@ void VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBinding
     const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
     ASSERT_TRUE(self.m_builder.beginOverlay(4u));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 3u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 3u, rectangle, uv, Color()));
     ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
     ASSERT_TRUE(self.m_builder.endOverlay());
     ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 1u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(distance, 1u, rectangle, uv, Color()));
     ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 5u);
@@ -954,7 +929,7 @@ void VerifyUiPaintOverlayTests_SortingCommandsRetainsSkinCoverageDistanceBinding
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
     EXPECT_EQ(snapshot.skinBinding().texture.name(), s_UiPaintOverlayTextureName);
     EXPECT_EQ(UiPaintOverlaySdfPageAddress(snapshot.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(distance));
-    EXPECT_EQ(UiPaintOverlayGlyphPageAddress(snapshot.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(coverage));
+    EXPECT_EQ(UiPaintGlyphPageAddress(snapshot.glyphPages()[0u]), UiPaintGlyphPageAddress(coverage));
     EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::Skin);
     EXPECT_EQ(snapshot.commands()[0u].firstIndex, 12u);
     EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::SdfGlyph);
@@ -1023,18 +998,18 @@ void VerifyUiPaintSdfTests_BatchesOnlyAdjacentMatchingGroupChannelMaterialAndCli
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(first) && UiPaintOverlayHasSdfPage(second) && UiPaintOverlayHasGlyphPage(coverage));
     const Rect rectangle = Rect(1.0f, 1.0f, 4.0f, 4.0f);
     const Rect uv = Rect(0.0f, 0.0f, 0.5f, 0.5f);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, Color()));
     ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, Color(0.5f, 0.25f, 1.0f, 0.5f)));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 1u, rectangle, uv));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(second, 1u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 1u, rectangle, uv, Color()));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(second, 1u, rectangle, uv, Color()));
     ASSERT_TRUE(self.m_builder.drawGlyph(coverage, rectangle, uv));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, Color()));
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
     self.m_builder.pushClip(Rect(0.0f, 0.0f, 20.0f, 20.0f));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, Color()));
     ASSERT_TRUE(self.m_builder.popClip());
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(first, 0u, rectangle, uv, Color()));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 2u);
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
@@ -1057,7 +1032,7 @@ void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepack
     TestMoveAssign<SharedSdfAtlasPage>(original, originalCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(original));
     const Sha256Digest oldPixelsHash = UiPaintOverlaySdfPagePixelsHash(original);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(original, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(original, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f), Color()));
     const DrawSnapshot first = self.m_builder.freeze();
     original.reset();
     self.begin(8u);
@@ -1066,7 +1041,7 @@ void VerifyUiPaintSdfTests_FrozenSnapshotKeepsExactPixelsAndFontHashAcrossRepack
     SharedSdfAtlasPage replacement = SharedSdfAtlasPage();
     TestMoveAssign<SharedSdfAtlasPage>(replacement, replacementCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(replacement));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(replacement, 2u, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(replacement, 2u, Rect(6.0f, 1.0f, 4.0f, 4.0f), Rect(0.5f, 0.5f, 0.25f, 0.25f), Color()));
     const DrawSnapshot second = self.m_builder.freeze();
     replacement.reset();
     self.begin(9u);
@@ -1097,7 +1072,7 @@ void VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCover
     TestMoveAssign<SharedSdfAtlasPage>(sdf, sdfCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(sdf));
     ASSERT_TRUE(self.prepareGlyphSpanAndSingleSdf(coverage, sdf));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     auto upgradeCreationResult = self.makeCoverage(100u, 2u);
     ASSERT_TRUE(upgradeCreationResult.has_value());
     SharedGlyphPage upgrade = SharedGlyphPage();
@@ -1107,12 +1082,12 @@ void VerifyUiPaintSdfTests_RejectedMixedAdmissionAtCapacityPreservesEarlierCover
     SharedSdfAtlasPage overflow = SharedSdfAtlasPage();
     TestMoveAssign<SharedSdfAtlasPage>(overflow, overflowCreationResult.value());
     EXPECT_FALSE(self.prepareSingleGlyphAndSingleSdf(upgrade, overflow));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(overflow, 0u, Rect(10.0f, 10.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(overflow, 0u, Rect(10.0f, 10.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 1u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(UiPaintOverlayGlyphPageAddress(snapshot.glyphPages()[0u]), UiPaintOverlayGlyphPageAddress(coverage[0u]));
-    EXPECT_EQ(UiPaintOverlayGlyphPageGeneration(snapshot.glyphPages()[0u]), 1u);
+    EXPECT_EQ(UiPaintGlyphPageAddress(snapshot.glyphPages()[0u]), UiPaintGlyphPageAddress(coverage[0u]));
+    EXPECT_EQ(UiPaintGlyphPageGeneration(snapshot.glyphPages()[0u]), 1u);
     EXPECT_EQ(UiPaintOverlaySdfPageAddress(snapshot.sdfPages()[0u]), UiPaintOverlaySdfPageAddress(sdf));
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
@@ -1143,8 +1118,8 @@ void VerifyUiPaintSdfTests_InvalidChannelAndUvFailBeforeImageOrGeometryAdmission
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
     TestMoveAssign<SharedSdfAtlasPage>(page, pageCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 4u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 0u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.75f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 4u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 0u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.75f, 0.0f, 0.5f, 0.5f), Color()));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_TRUE(snapshot.vertices().empty());
@@ -1207,10 +1182,10 @@ void VerifyUiPaintSdfTests_CompactPageRejectsMissingChannelsWithoutPublishingGeo
     SharedSdfAtlasPage page = SharedSdfAtlasPage();
     TestMoveAssign<SharedSdfAtlasPage>(page, pageCreationResult.value());
     ASSERT_TRUE(UiPaintOverlayHasSdfPage(page));
-    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    EXPECT_FALSE(self.m_builder.drawSdfGlyph(page, 2u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     EXPECT_TRUE(self.m_builder.freeze().commands().empty());
     self.begin(8u);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(page, 1u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(page, 1u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     EXPECT_EQ(snapshot.commands()[0u].sdfChannel, 1u);
@@ -1242,7 +1217,7 @@ void VerifyUiPaintSdfTests_CompactFactoryRejectsInvalidChannelCountAndRgbaSizedI
 void VerifyUiPaintSdfTests_AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased(mut UiPaintSdfTests self){
     UiPaintSdfAssetFactorySample sample = self.createPageFromTemporaryAtlas();
     ASSERT_TRUE(sample.valid);
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sample.page, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f)));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sample.page, 3u, Rect(1.0f, 1.0f, 4.0f, 4.0f), Rect(0.0f, 0.0f, 0.5f, 0.5f), Color()));
     const DrawSnapshot snapshot = self.m_builder.freeze();
     sample.page.reset();
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
@@ -1347,7 +1322,7 @@ void VerifyUiPaintTests_UndersizedNineSliceCollapsesCenterAndScalesOpposingBorde
 }
 
 void VerifyUiPaintTests_NineSliceZeroBordersDoNotEvaluateInactiveShrinkRatios(mut UiPaintTests self){
-    const UiPaintScopedHeldFenv heldEnvironment = UiPaintScopedHeldFenv();
+    const ScopedHeldFloatingPointEnvironment heldEnvironment = ScopedHeldFloatingPointEnvironment();
     ASSERT_TRUE(heldEnvironment.valid());
     Array<UiSkinSliceInsets, 3u> borders = Array<UiSkinSliceInsets, 3u>();
     borders[0u] = UiSkinSliceInsets();

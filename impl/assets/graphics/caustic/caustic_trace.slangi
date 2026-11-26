@@ -27,16 +27,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_CAUSTIC_MAX_BOUNCES 16u
-
-#define NWB_CAUSTIC_FLUX_EPSILON 1e-6
-#define NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM 1e-3
-#define NWB_CAUSTIC_TRACE_T_MAX 1e7
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct NwbCausticHit{
     bool hit;
 #if NWB_RT_CSG_ENABLED
@@ -57,7 +47,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 #if !NWB_RT_CSG_ENABLED
 NwbCausticHit nwbCausticTraceBounceZero(float3 origin, float3 direction, float tMin, float tMax);
 #endif
-bool nwbCausticSceneBounds(out float3 boundsMin, out float3 boundsMax, out uint flags);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,7 +63,17 @@ struct NwbCausticSplat{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbOpticalTraceConfig nwbCausticOpticalConfig();
+NwbOpticalTraceConfig nwbCausticOpticalConfig(){
+    NwbOpticalTraceConfig config;
+    config.instanceMaterialHeapSlot = g_NwbCausticMaterialContextSlots.sceneSlots.z;
+    config.opticalSceneHeapSlot = g_NwbCausticMaterialContextSlots.materialSlots.y;
+    config.opticalInstanceCount = g_NwbCausticMaterialContextSlots.materialSlots.z;
+    config.maxQueries = NWB_OPTICAL_MAX_QUERIES;
+    config.minDistance = 0.0;
+    config.maxDistance = NWB_FLOAT_MAX;
+    return config;
+}
+
 bool nwbCausticCollectRefractiveEvents(
     const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const float minimum, const float maximum, const bool reverse,
     __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], out uint eventCount, out NwbCausticBoundary boundary, out float tolerance, inout NwbOpticalTraceResult result
@@ -84,27 +83,50 @@ bool nwbCausticCheckRefractiveBoundary(
     inout bool hasFirst, inout NwbOpticalBootstrapEvent firstEvent, inout uint candidateCount, inout NwbCausticBoundary boundary, inout NwbOpticalInstance outOptical, inout NwbOpticalTraceResult result
 );
 
+bool nwbCausticValidateBoundaryCandidate(
+    const NwbOpticalTraceConfig config,
+    const float3 origin,
+    const float3 direction,
+    const float distance,
+    const uint instance,
+    const float3 normal,
+    const uint currentCount,
+    out NwbOpticalInstance outOptical,
+    out float3 outPosition,
+    out float outFacing,
+    inout NwbOpticalTraceResult result
+){
+    outOptical = (NwbOpticalInstance)0;
+    outPosition = float3(0.0);
+    outFacing = 0.0;
+    if(currentCount == NWB_OPTICAL_MAX_CANDIDATE_EVENTS){
+        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+        return false;
+    }
+    if(!nwbOpticalReadInstance(config, instance, outOptical, result))
+        return false;
+    if(outOptical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && outOptical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    outFacing = dot(direction, normal);
+    outPosition = origin + direction * distance;
+    if(!isfinite(distance) || !all(isfinite(outPosition)) || !isfinite(outFacing) || abs(outFacing) <= NWB_OPTICAL_FACING_EPSILON){
+        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+        return false;
+    }
+    return true;
+}
+
 bool nwbCausticAppendBoundary(
     const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const float distance, const uint instance, const uint primitive, const float3 normal, const bool reverse,
     __ref NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS], inout uint count, inout NwbCausticBoundary boundary, inout float tolerance, inout NwbOpticalTraceResult result
 ){
-    if(count == NWB_OPTICAL_MAX_CANDIDATE_EVENTS){
-        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
-        return false;
-    }
     NwbOpticalInstance optical;
-    if(!nwbOpticalReadInstance(config, instance, optical, result))
+    float3 position;
+    float facing;
+    if(!nwbCausticValidateBoundaryCandidate(config, origin, direction, distance, instance, normal, count, optical, position, facing, result))
         return false;
-    if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
-        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
-        return false;
-    }
-    const float facing = dot(direction, normal);
-    const float3 position = origin + direction * distance;
-    if(!isfinite(distance) || !all(isfinite(position)) || !isfinite(facing) || abs(facing) <= NWB_OPTICAL_FACING_EPSILON){
-        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
-        return false;
-    }
     tolerance = max(tolerance, NWB_OPTICS_POSITION_TOLERANCE_SCALE * nwbOpticsPositionUncertainty(position));
     NwbOpticalBootstrapEvent event;
     event.distance = reverse ? -distance : distance;
@@ -137,23 +159,11 @@ bool nwbCausticVisitBoundaryCandidate(
     inout NwbOpticalInstance outOptical,
     inout NwbOpticalTraceResult result
 ){
-    if(candidateCount == NWB_OPTICAL_MAX_CANDIDATE_EVENTS){
-        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
-        return false;
-    }
     NwbOpticalInstance optical;
-    if(!nwbOpticalReadInstance(config, instance, optical, result))
+    float3 position;
+    float facing;
+    if(!nwbCausticValidateBoundaryCandidate(config, origin, direction, distance, instance, normal, candidateCount, optical, position, facing, result))
         return false;
-    if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
-        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
-        return false;
-    }
-    const float facing = dot(direction, normal);
-    const float3 position = origin + direction * distance;
-    if(!isfinite(distance) || !all(isfinite(position)) || !isfinite(facing) || abs(facing) <= NWB_OPTICAL_FACING_EPSILON){
-        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
-        return false;
-    }
     const uint entering = facing < 0.0 ? 1u : 0u;
     ++candidateCount;
     ++result.bootstrapEventCount;
@@ -184,6 +194,41 @@ bool nwbCausticVisitBoundaryCandidate(
     }
     return true;
 }
+
+interface INwbCausticBoundaryVisitor{
+    [mutating] bool visit(const uint instance, const uint primitive, const float distance, const float3 normal, inout NwbOpticalTraceResult result);
+};
+
+struct NwbCausticCollectVisitor : INwbCausticBoundaryVisitor{
+    NwbOpticalTraceConfig config;
+    float3 origin;
+    float3 direction;
+    bool reverse;
+    NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
+    uint eventCount;
+    NwbCausticBoundary boundary;
+    float tolerance;
+
+    [mutating] bool visit(const uint instance, const uint primitive, const float distance, const float3 normal, inout NwbOpticalTraceResult result){
+        return nwbCausticAppendBoundary(config, origin, direction, distance, instance, primitive, normal, reverse, events, eventCount, boundary, tolerance, result);
+    }
+};
+
+struct NwbCausticCheckBoundaryVisitor : INwbCausticBoundaryVisitor{
+    NwbOpticalTraceConfig config;
+    float3 origin;
+    float3 direction;
+    uint expectedInstance;
+    bool hasFirst;
+    NwbOpticalBootstrapEvent firstEvent;
+    uint candidateCount;
+    NwbCausticBoundary boundary;
+    NwbOpticalInstance optical;
+
+    [mutating] bool visit(const uint instance, const uint primitive, const float distance, const float3 normal, inout NwbOpticalTraceResult result){
+        return nwbCausticVisitBoundaryCandidate(config, origin, direction, distance, instance, primitive, normal, expectedInstance, hasFirst, firstEvent, candidateCount, boundary, optical, result);
+    }
+};
 
 bool nwbCausticCheckBoundary(const NwbOpticalTraceConfig config, const float3 origin, const float3 direction, const NwbCausticHit hit, out NwbCausticBoundary boundary, out NwbOpticalInstance optical, inout NwbOpticalTraceResult result){
     const float tolerance = NWB_OPTICS_POSITION_TOLERANCE_SCALE * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(hit.worldPos));

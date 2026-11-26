@@ -73,10 +73,6 @@ RenderState PaintRenderStateForBlendMode(in PaintBlendMode mode){
     return state;
 }
 
-RenderState PaintRenderState(){
-    return PaintRenderStateForBlendMode(PaintBlendMode::Normal);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,7 +144,6 @@ b8 GpuRendererState::createResources(){
         .setInputLayout(resources.deref().m_inputLayout)
         .setVertexShader(resources.deref().m_vertexShader)
         .setPixelShader(resources.deref().m_pixelShader)
-        .setRenderState(PaintRenderState())
         .addBindingLayout(resources.deref().m_layout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())

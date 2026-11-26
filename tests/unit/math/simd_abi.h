@@ -124,12 +124,6 @@ template<typename Handler>
 #endif
 }
 
-#if defined(FOUNDATION_HAS_AVX2)
-inline constexpr b8 s_HasAvx2 = true;
-#else
-inline constexpr b8 s_HasAvx2 = false;
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

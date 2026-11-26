@@ -21,22 +21,31 @@ class ModelComponent{
 
 [component("model_runtime")]
 class ModelRuntimeComponent{
+    [transient]
     public Name model = s_NameNone;
+    [transient]
     public u32 objectCount = 0u;
 }
 
 [component("model_object")]
 class ModelObjectComponent{
+    [transient]
     public Name model = s_NameNone;
+    [transient]
     public Name object = s_NameNone;
+    [transient]
     public Name defaultMaterial = s_NameNone;
+    [transient]
     public f32x3x4 localTransform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    [transient]
     public EntityID owner = s_InvalidEntityId;
+    [transient]
     public ModelObjectKind kind = ModelObjectKind::StaticMesh;
 }
 
 [component("model_skeleton")]
 class ModelSkeletonComponent{
+    [transient]
     public AssetRef<Skeleton> skeleton;
 }
 
@@ -46,8 +55,11 @@ class ModelStaticMeshAttachmentComponent{
         return this.parentEntity.valid() && this.parentJointIndex != s_SkeletonInvalidJointIndex;
     }
 
+    [transient]
     public EntityID parentEntity = s_InvalidEntityId;
+    [transient]
     public u32 parentJointIndex = s_SkeletonInvalidJointIndex;
+    [transient]
     public f32x3x4 localTransform(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
 }
 

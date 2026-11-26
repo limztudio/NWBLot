@@ -251,16 +251,6 @@ UiNumericFormatBuffer FormatUiNumericF64(in f64 value){
     return out;
 }
 
-usize UiPaintGlyphPageAddress(in SharedGlyphPage page){
-    if(page.valid())
-        return TestValueAddress<GlyphPage>(page.deref());
-    return 0u;
-}
-
-u64 UiPaintGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
-
-u8 UiPaintGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
-
 b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutation mutation, mut EditModel draft){
     const usize anchor = draft.anchor();
     const usize caret = draft.caret();
@@ -268,7 +258,7 @@ b8 MutateUiNumericSelectionEpochDraft(in UiNumericSelectionEpochMutation mutatio
         return draft.setSelection(0u, 0u) && draft.setSelection(anchor, caret);
     if(mutation == UiNumericSelectionEpochMutation::SameSelection)
         return draft.setSelection(anchor, caret);
-    if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u))
+    if(!draft.beginComposition() || !draft.updateComposition("IME", 0u, 3u, Span<EditPreeditClause>()))
         return false;
     draft.cancelComposition();
     return true;
@@ -279,7 +269,7 @@ void ExpectUiNumericAtomicBadIntegerBounds(in IntegerBounds bounds, mut IntegerE
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(model.lendDraft().beginComposition());
-    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(model.draft());
     const u64 epoch = model.revision();
     const u64 valueBits = bit_cast<u64>(model.value());
@@ -297,7 +287,7 @@ void ExpectUiNumericAtomicBadFloatBounds(in FloatBounds bounds, mut FloatEditMod
     ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(model.lendDraft().beginComposition());
-    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(model.draft());
     const u64 epoch = model.revision();
     const u64 valueBits = bit_cast<u64>(model.value());
@@ -620,7 +610,7 @@ void VerifyUiNumericEditLoanTests_BeginAndCancelCompositionStillRetireThePrepare
     ASSERT_TRUE(self.m_builder.integerEdit(s_UiNumericEditIntegerKey, self.m_integer, self.m_integerState).edit.valid);
     const u64 revision = self.m_integer.draft().revision();
     ASSERT_TRUE(self.m_integer.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_integer.lendDraft().updateComposition("7", 1u, 1u));
+    ASSERT_TRUE(self.m_integer.lendDraft().updateComposition("7", 1u, 1u, Span<EditPreeditClause>()));
     self.m_integer.lendDraft().cancelComposition();
     EXPECT_EQ(self.m_integer.draft().revision(), revision);
     EXPECT_FALSE(self.m_integer.draft().composition().active);
@@ -880,7 +870,7 @@ void VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelecti
     ASSERT_TRUE(self.m_model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const u64 generation = self.m_model.draft().instanceGeneration();
     const u64 external = self.m_model.draft().externalRevision();
     const u64 epoch = self.m_model.revision();
@@ -908,7 +898,7 @@ void VerifyNumericLifetimeTests_SameValueExternalReplacementFencesHistorySelecti
     ASSERT_TRUE(self.m_model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const u64 generation = self.m_model.draft().instanceGeneration();
     const u64 external = self.m_model.draft().externalRevision();
     const u64 epoch = self.m_model.revision();
@@ -936,7 +926,7 @@ void VerifyNumericLifetimeTests_SameTextDraftReplacementFencesWithoutChangingThe
     ASSERT_TRUE(self.m_model.lendDraft().selectAll());
     ASSERT_TRUE(self.m_model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const u64 revision = self.m_model.draft().revision();
     const u64 external = self.m_model.draft().externalRevision();
     const u64 epoch = self.m_model.revision();
@@ -956,7 +946,7 @@ void VerifyNumericLifetimeTests_SameTextDraftReplacementFencesWithoutChangingThe
     ASSERT_TRUE(self.m_model.lendDraft().selectAll());
     ASSERT_TRUE(self.m_model.lendDraft().replaceSelection("8"));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const u64 revision = self.m_model.draft().revision();
     const u64 external = self.m_model.draft().externalRevision();
     const u64 epoch = self.m_model.revision();
@@ -992,7 +982,7 @@ void VerifyNumericLifetimeTests_RestorationDropsPreeditAndUndoWhileUsingCanonica
         ASSERT_TRUE(self.m_model.lendDraft().selectAll());
         ASSERT_TRUE(self.m_model.lendDraft().replaceSelection("-"));
         ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-        ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+        ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
         const u64 external = self.m_model.draft().externalRevision();
         NumericEditResult result = NumericEditResult();
         if(action == 0u)
@@ -1026,7 +1016,7 @@ void VerifyNumericLifetimeTests_RestorationDropsPreeditAndUndoWhileUsingCanonica
         ASSERT_TRUE(self.m_model.lendDraft().selectAll());
         ASSERT_TRUE(self.m_model.lendDraft().replaceSelection("-"));
         ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-        ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+        ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
         const u64 external = self.m_model.draft().externalRevision();
         NumericEditResult result = NumericEditResult();
         if(action == 0u)
@@ -1083,7 +1073,7 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
     EXPECT_FALSE(self.m_model.dirty());
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(self.m_model.draft());
     const u64 epoch = self.m_model.revision();
     String excessive = "";
@@ -1113,7 +1103,7 @@ void VerifyNumericLifetimeTests_CapacityAndInvalidUtf8FailuresPreserveEveryDraft
     EXPECT_FALSE(self.m_model.dirty());
     ASSERT_TRUE(self.m_model.lendDraft().setSelection(0u, 1u));
     ASSERT_TRUE(self.m_model.lendDraft().beginComposition());
-    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u));
+    ASSERT_TRUE(self.m_model.lendDraft().updateComposition("9", 0u, 1u, Span<EditPreeditClause>()));
     const UiNumericLifetimeDraftSnapshot before = UiNumericLifetimeDraftSnapshot(self.m_model.draft());
     const u64 epoch = self.m_model.revision();
     String excessive = "";

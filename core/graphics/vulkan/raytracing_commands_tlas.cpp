@@ -17,37 +17,56 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* instances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    constexpr TStringView s_BuildTlasOperation = FOUNDATION_TEXT("build TLAS");
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, FOUNDATION_TEXT("build top-level acceleration structure")))
-        return;
+b8 CommandList::validateTopLevelAccelStructBuildPrefix(
+    RayTracingAccelStruct* const accelStructResource,
+    const void* const instanceSource,
+    const TStringView nullSourceReason,
+    const usize numInstances,
+    const RayTracingAccelStructBuildFlags::Mask buildFlags,
+    const TStringView capabilityOperation,
+    const TStringView operationName,
+    VkBuildAccelerationStructureFlagsKHR& outVkBuildFlags
+){
+    outVkBuildFlags = 0u;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, capabilityOperation))
+        return false;
     if(!accelStructResource){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
-        return;
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: acceleration structure is null"), operationName);
+        return false;
     }
-    if(!instances && numInstances > 0){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: instance data is null"));
-        return;
+    if(!instanceSource && numInstances > 0u){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: {}"), operationName, nullSourceReason);
+        return false;
     }
-    if(numInstances == 0)
-        return;
+    if(numInstances == 0u)
+        return false;
     if(numInstances > UINT32_MAX){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: instance count exceeds Vulkan limit"));
-        return;
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: instance count exceeds Vulkan limit"), operationName);
+        return false;
     }
 
     if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
-        return;
+        return false;
 
     auto& as = *MakeNotNull(accelStructResource);
     if(!as.m_isTopLevelAtCreation){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
-        return;
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to {}: acceleration structure is not top-level"), operationName);
+        return false;
     }
-    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, s_BuildTlasOperation);
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, operationName);
     if(!vkBuildFlagsResult)
+        return false;
+    outVkBuildFlags = *vkBuildFlagsResult;
+    return true;
+}
+
+void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* instances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    constexpr TStringView s_BuildTlasOperation = FOUNDATION_TEXT("build TLAS");
+    VkBuildAccelerationStructureFlagsKHR vkBuildFlags = 0u;
+    if(!validateTopLevelAccelStructBuildPrefix(accelStructResource, instances, FOUNDATION_TEXT("instance data is null"), numInstances, buildFlags, FOUNDATION_TEXT("build top-level acceleration structure"), s_BuildTlasOperation, vkBuildFlags))
         return;
-    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
+
+    auto& as = *MakeNotNull(accelStructResource);
     const b8 allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
     constexpr usize s_ValidatedBlasCacheCapacity = 8u;
     Array<const AccelStruct*, s_ValidatedBlasCacheCapacity> validatedBlasCache{};
@@ -145,35 +164,11 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
 
 void CommandList::buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* accelStructResource, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
     constexpr TStringView s_BuildTlasFromBufferOperation = FOUNDATION_TEXT("build TLAS from buffer");
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, FOUNDATION_TEXT("build top-level acceleration structure from buffer")))
-        return;
-    if(!accelStructResource){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
-        return;
-    }
-    if(!instanceBuffer && numInstances > 0){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is null"));
-        return;
-    }
-    if(numInstances == 0)
-        return;
-    if(numInstances > UINT32_MAX){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS from buffer: instance count exceeds Vulkan limit"));
-        return;
-    }
-
-    if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
+    VkBuildAccelerationStructureFlagsKHR vkBuildFlags = 0u;
+    if(!validateTopLevelAccelStructBuildPrefix(accelStructResource, instanceBuffer, FOUNDATION_TEXT("instance buffer is null"), numInstances, buildFlags, FOUNDATION_TEXT("build top-level acceleration structure from buffer"), s_BuildTlasFromBufferOperation, vkBuildFlags))
         return;
 
     auto& as = *MakeNotNull(accelStructResource);
-    if(!as.m_isTopLevelAtCreation){
-        NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
-        return;
-    }
-    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, s_BuildTlasFromBufferOperation);
-    if(!vkBuildFlagsResult)
-        return;
-    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
     auto& instanceBufferImpl = *MakeNotNull(instanceBuffer);
     if(!isBufferReadyForCommandQueue(&instanceBufferImpl, VulkanDetail::s_AccelStructBuildInputUsage)){

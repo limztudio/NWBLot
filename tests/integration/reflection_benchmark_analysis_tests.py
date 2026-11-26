@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_benchmark as benchmark
-from reflection_gpu_coverage import ReflectionGpuCoverage
+from reflection_gpu_coverage import CLASSIFY, DEPTH, HARDWARE, ReflectionGpuCoverage, TEMPORAL
 from gpu_timing_evidence import GpuTimingEvidence, ScopeSample
 
 TIMING_EVIDENCE = GpuTimingEvidence()
@@ -40,7 +40,7 @@ def synthetic_scopes(variant, frame_ms=5.0, control_ms=.5, gpu_frames=200, mip_c
     result = {}
     for scope in ReflectionGpuCoverage.required_scopes(variant):
         mean = frame_ms if scope == benchmark.FRAME else control_ms if scope in benchmark.OBSERVED_CONTROLS else .1
-        samples = gpu_frames * (mip_count if scope == benchmark.DEPTH else 1)
+        samples = gpu_frames * (mip_count if scope == DEPTH else 1)
         result[scope] = {"total_ms": mean * samples, LIT_GPU_SAMPLES: samples, LIT_REPORTS: 16, LIT_MEAN_MS: mean}
     return result
 
@@ -89,26 +89,26 @@ class TimingNormalizationTests(unittest.TestCase):
             self.assertEqual(recovered[0][benchmark.FRAME], ScopeSample(1, 2))
 
     def test_zero_duration_is_valid_for_a_sampled_kernel(self):
-        parsed = TIMING_EVIDENCE.parse_intervals(report([(benchmark.CLASSIFY, 0, 5)]), finalized=True)
-        self.assertEqual(TIMING_EVIDENCE.summarize_intervals(parsed)[benchmark.CLASSIFY][LIT_MEAN_MS], 0)
+        parsed = TIMING_EVIDENCE.parse_intervals(report([(CLASSIFY, 0, 5)]), finalized=True)
+        self.assertEqual(TIMING_EVIDENCE.summarize_intervals(parsed)[CLASSIFY][LIT_MEAN_MS], 0)
 
     def test_depth_is_per_mip_and_count_ratio_is_required(self):
         variant = benchmark.Variant(LIT_HYBRID, LIT_HYBRID)
         scopes = synthetic_scopes(variant)
         ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10)
-        scopes[benchmark.DEPTH][LIT_GPU_SAMPLES] = 200
+        scopes[DEPTH][LIT_GPU_SAMPLES] = 200
         with self.assertRaises(benchmark.SmokeFailure):
             ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10)
 
     def test_missing_scopes_and_sparse_publications_fail(self):
         variant = benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE)
         scopes = synthetic_scopes(variant)
-        for scope in (benchmark.HARDWARE, benchmark.FRAME, benchmark.CONTROLS[0]):
+        for scope in (HARDWARE, benchmark.FRAME, benchmark.CONTROLS[0]):
             missing = copy.deepcopy(scopes)
             del missing[scope]
             with self.assertRaises(benchmark.SmokeFailure):
                 ReflectionGpuCoverage.validate_coverage(missing, variant, 16, 100, 10)
-        scopes[benchmark.CLASSIFY][LIT_REPORTS] = 2
+        scopes[CLASSIFY][LIT_REPORTS] = 2
         with self.assertRaises(benchmark.SmokeFailure):
             ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10)
 
@@ -117,10 +117,10 @@ class TimingNormalizationTests(unittest.TestCase):
         scopes = synthetic_scopes(variant)
         with self.assertRaisesRegex(benchmark.SmokeFailure, "unexpected native dispatch"):
             ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10, history_samples=1)
-        del scopes[benchmark.TEMPORAL]
+        del scopes[TEMPORAL]
         ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10, history_samples=1)
         self.assertAlmostEqual(ReflectionGpuCoverage.kernel_work_ms(scopes, variant, 10, history_samples=1), .3)
-        for scope in (benchmark.FRAME, benchmark.CLASSIFY, benchmark.HARDWARE, benchmark.CONTROLS[0]):
+        for scope in (benchmark.FRAME, CLASSIFY, HARDWARE, benchmark.CONTROLS[0]):
             missing = copy.deepcopy(scopes)
             del missing[scope]
             with self.subTest(scope=scope), self.assertRaisesRegex(benchmark.SmokeFailure, LIT_MISSING_GPU_SCOPES):
@@ -132,10 +132,10 @@ class TimingNormalizationTests(unittest.TestCase):
             with self.subTest(history_samples=history_samples):
                 scopes = synthetic_scopes(variant)
                 ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10, history_samples=history_samples)
-                scopes[benchmark.TEMPORAL][LIT_GPU_SAMPLES] = 1
+                scopes[TEMPORAL][LIT_GPU_SAMPLES] = 1
                 with self.assertRaises(benchmark.SmokeFailure):
                     ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10, history_samples=history_samples)
-                del scopes[benchmark.TEMPORAL]
+                del scopes[TEMPORAL]
                 with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_MISSING_GPU_SCOPES):
                     ReflectionGpuCoverage.validate_coverage(scopes, variant, 16, 100, 10, history_samples=history_samples)
 
@@ -171,7 +171,7 @@ class PairedInferenceTests(unittest.TestCase):
         self.assertEqual(statuses[("disabled", LIT_HARDWARE)], LIT_UNRESOLVED)
 
     def test_positive_frame_reports_ignore_missing_and_zero_frame_rows(self):
-        text = report([(benchmark.FRAME, 1, 2)]) + report([(benchmark.CLASSIFY, 1, 2)]) + report([(benchmark.FRAME, 0, 2)]) + report([])
+        text = report([(benchmark.FRAME, 1, 2)]) + report([(CLASSIFY, 1, 2)]) + report([(benchmark.FRAME, 0, 2)]) + report([])
         self.assertEqual(TIMING_EVIDENCE.positive_frame_reports(TIMING_EVIDENCE.parse_intervals(text, finalized=True)), 1)
 
     def test_noisy_controls_require_equivalence_before_a_speedup_claim(self):
@@ -196,7 +196,7 @@ class BenchmarkCoverageBoundaryTests(unittest.TestCase):
     def test_capacity_prepared_scopes_allow_only_two_frames_or_two_percent_boundary_skew(self):
         variant = benchmark.Variant(LIT_HYBRID, LIT_HYBRID)
         for frames, allowed in ((100, 2), (1000, 20)):
-            for scope, multiplier in ((benchmark.CLASSIFY, 1), (benchmark.DEPTH, 10)):
+            for scope, multiplier in ((CLASSIFY, 1), (DEPTH, 10)):
                 for sign in (-1, 1):
                     with self.subTest(frames=frames, scope=scope, sign=sign):
                         scopes = synthetic_scopes(variant, gpu_frames=frames)

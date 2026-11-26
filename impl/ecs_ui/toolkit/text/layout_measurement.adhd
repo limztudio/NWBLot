@@ -167,6 +167,82 @@ class ShapedBidiLineRun<TFace>{
     public TextDirection direction = TextDirection::LeftToRight;
 }
 
+b8 PlaceShapedRunClustersInto<TFace>(
+    in u32 originByte,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    in TextDirection direction,
+    in f32 baseline,
+    in u32 lineIndex,
+    mut f32 inOutPen,
+    mut Vector<PlacedGlyphRecord<TFace>> inOutGlyphs,
+    mut Vector<TextCluster> inOutClusters,
+    mut VectorDouble inOutInkBounds,
+    mut b8 inOutHasInk
+){
+    usize first = 0u;
+    while(first < runGlyphs.size()){
+        usize end = first + 1u;
+        while(end < runGlyphs.size() && runGlyphs[end].byteBegin == runGlyphs[first].byteBegin)
+            ++end;
+        const f32 clusterLeft = inOutPen;
+        const u32 firstGlyph = cast<u32>(inOutGlyphs.size());
+        for(usize index = first; index < end; ++index){
+            const ShapedGlyphRecord<TFace> glyph = runGlyphs[index];
+            const Expected<Point> position = TryAdvanceTextGlyphPosition(
+                baseline,
+                glyph.offset,
+                glyph.advance,
+                glyph.ink,
+                glyph.coverage,
+                inOutPen,
+                inOutInkBounds,
+                inOutHasInk
+            );
+            if(!position.has_value())
+                return false;
+            PlacedGlyphRecord<TFace> placed;
+            placed.face = glyph.face;
+            placed.glyphId = glyph.glyphId;
+            placed.byteBegin = originByte + glyph.byteBegin;
+            placed.byteEnd = originByte + glyph.byteEnd;
+            placed.position = position.value();
+            placed.ink = glyph.ink;
+            placed.coverage = glyph.coverage;
+            inOutGlyphs.push_back(placed);
+        }
+        inOutClusters.push_back(MakeTextCluster(
+            originByte,
+            runGlyphs[first].byteBegin,
+            runGlyphs[first].byteEnd,
+            firstGlyph,
+            cast<u32>(end - first),
+            lineIndex,
+            direction,
+            clusterLeft,
+            inOutPen
+        ));
+        first = end;
+    }
+    return true;
+}
+
+TextLayoutStatus FinalizePlacedShapedLine(
+    in f32 pen,
+    mut TextLine line,
+    in usize clusterCount,
+    mut Vector<TextLine> inOutLines,
+    mut Point inOutMeasure
+){
+    const f32 nextHeight = line.top + line.height;
+    if(!IsFinite(VectorSingle(pen, nextHeight, pen, nextHeight).xy))
+        return TextLayoutStatus::InvalidParameters;
+    line.advance = pen;
+    line.clusterCount = cast<u32>(clusterCount) - line.firstCluster;
+    inOutLines.push_back(line);
+    inOutMeasure = Point(Max(inOutMeasure.x, pen), nextHeight);
+    return TextLayoutStatus::Success;
+}
+
 TextLayoutStatus PlaceValidatedShapedLineInto<TFace>(
     in usize byteBegin,
     in usize byteEnd,
@@ -199,60 +275,21 @@ TextLayoutStatus PlaceValidatedShapedLineInto<TFace>(
     if(!lineResult.has_value())
         return TextLayoutStatus::InvalidParameters;
     TextLine line = lineResult.value();
-    const u32 originByte = cast<u32>(glyphByteOrigin);
-    usize first = 0u;
     f32 pen = 0.0f;
-    while(first < runGlyphs.size()){
-        usize end = first + 1u;
-        while(end < runGlyphs.size() && runGlyphs[end].byteBegin == runGlyphs[first].byteBegin)
-            ++end;
-        const f32 clusterLeft = pen;
-        const u32 firstGlyph = cast<u32>(inOutGlyphs.size());
-        for(usize index = first; index < end; ++index){
-            const ShapedGlyphRecord<TFace> glyph = runGlyphs[index];
-            const Expected<Point> position = TryAdvanceTextGlyphPosition(
-                line.baseline,
-                glyph.offset,
-                glyph.advance,
-                glyph.ink,
-                glyph.coverage,
-                pen,
-                inOutInkBounds,
-                inOutHasInk
-            );
-            if(!position.has_value())
-                return TextLayoutStatus::InvalidParameters;
-            PlacedGlyphRecord<TFace> placed;
-            placed.face = glyph.face;
-            placed.glyphId = glyph.glyphId;
-            placed.byteBegin = originByte + glyph.byteBegin;
-            placed.byteEnd = originByte + glyph.byteEnd;
-            placed.position = position.value();
-            placed.ink = glyph.ink;
-            placed.coverage = glyph.coverage;
-            inOutGlyphs.push_back(placed);
-        }
-        inOutClusters.push_back(MakeTextCluster(
-            originByte,
-            runGlyphs[first].byteBegin,
-            runGlyphs[first].byteEnd,
-            firstGlyph,
-            cast<u32>(end - first),
-            cast<u32>(inOutLines.size()),
-            direction,
-            clusterLeft,
-            pen
-        ));
-        first = end;
-    }
-    const f32 nextHeight = line.top + line.height;
-    if(!IsFinite(VectorSingle(pen, nextHeight, pen, nextHeight).xy))
+    if(!PlaceShapedRunClustersInto<TFace>(
+        cast<u32>(glyphByteOrigin),
+        runGlyphs,
+        direction,
+        line.baseline,
+        cast<u32>(inOutLines.size()),
+        pen,
+        inOutGlyphs,
+        inOutClusters,
+        inOutInkBounds,
+        inOutHasInk
+    ))
         return TextLayoutStatus::InvalidParameters;
-    line.advance = pen;
-    line.clusterCount = cast<u32>(inOutClusters.size()) - line.firstCluster;
-    inOutLines.push_back(line);
-    inOutMeasure = Point(UiSimdMax(inOutMeasure.x, pen), nextHeight);
-    return TextLayoutStatus::Success;
+    return FinalizePlacedShapedLine(pen, line, inOutClusters.size(), inOutLines, inOutMeasure);
 }
 
 TextLayoutStatus PlaceShapedLineInto<TFace>(
@@ -334,59 +371,21 @@ TextLayoutStatus PlaceShapedBidiLineInto<TFace>(
     TextLine line = lineResult.value();
     f32 pen = 0.0f;
     for(in ShapedBidiLineRun<TFace> run : runs){
-        usize first = 0u;
-        while(first < run.glyphs.size()){
-            usize end = first + 1u;
-            while(end < run.glyphs.size() && run.glyphs[end].byteBegin == run.glyphs[first].byteBegin)
-                ++end;
-            const f32 clusterLeft = pen;
-            const u32 firstGlyph = cast<u32>(inOutGlyphs.size());
-            for(usize index = first; index < end; ++index){
-                const ShapedGlyphRecord<TFace> glyph = run.glyphs[index];
-                const Expected<Point> position = TryAdvanceTextGlyphPosition(
-                    line.baseline,
-                    glyph.offset,
-                    glyph.advance,
-                    glyph.ink,
-                    glyph.coverage,
-                    pen,
-                    inOutInkBounds,
-                    inOutHasInk
-                );
-                if(!position.has_value())
-                    return TextLayoutStatus::InvalidParameters;
-                PlacedGlyphRecord<TFace> placed;
-                placed.face = glyph.face;
-                placed.glyphId = glyph.glyphId;
-                placed.byteBegin = run.runByteOffset + glyph.byteBegin;
-                placed.byteEnd = run.runByteOffset + glyph.byteEnd;
-                placed.position = position.value();
-                placed.ink = glyph.ink;
-                placed.coverage = glyph.coverage;
-                inOutGlyphs.push_back(placed);
-            }
-            inOutClusters.push_back(MakeTextCluster(
-                run.runByteOffset,
-                run.glyphs[first].byteBegin,
-                run.glyphs[first].byteEnd,
-                firstGlyph,
-                cast<u32>(end - first),
-                cast<u32>(inOutLines.size()),
-                run.direction,
-                clusterLeft,
-                pen
-            ));
-            first = end;
-        }
+        if(!PlaceShapedRunClustersInto<TFace>(
+            run.runByteOffset,
+            run.glyphs,
+            run.direction,
+            line.baseline,
+            cast<u32>(inOutLines.size()),
+            pen,
+            inOutGlyphs,
+            inOutClusters,
+            inOutInkBounds,
+            inOutHasInk
+        ))
+            return TextLayoutStatus::InvalidParameters;
     }
-    const f32 nextHeight = line.top + line.height;
-    if(!IsFinite(VectorSingle(pen, nextHeight, pen, nextHeight).xy))
-        return TextLayoutStatus::InvalidParameters;
-    line.advance = pen;
-    line.clusterCount = cast<u32>(inOutClusters.size()) - line.firstCluster;
-    inOutLines.push_back(line);
-    inOutMeasure = Point(UiSimdMax(inOutMeasure.x, pen), nextHeight);
-    return TextLayoutStatus::Success;
+    return FinalizePlacedShapedLine(pen, line, inOutClusters.size(), inOutLines, inOutMeasure);
 }
 
 Rect StoreTextLayoutInkBounds(in VectorDouble inkBounds){
@@ -398,6 +397,34 @@ f32 SumShapedGlyphRangeWidth<TFace>(in Span<ShapedGlyphRecord<TFace>> runGlyphs,
     for(usize i = first; i < last; ++i)
         width += runGlyphs[i].advance.x;
     return width;
+}
+
+b8 AccumulateWrappedGlyphCluster<TFace>(
+    in StringView fullText,
+    in usize segBegin,
+    in ShapeRequest request,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    in usize cFirst,
+    in usize cLast,
+    mut f32 inOutAccumWidth,
+    mut usize inOutFirstClusterEnd,
+    mut usize outFitEnd,
+    mut usize outWordEnd
+){
+    const usize relEnd = cast<usize>(runGlyphs[cFirst].byteEnd);
+    if(inOutFirstClusterEnd == 0u)
+        inOutFirstClusterEnd = relEnd;
+    inOutAccumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
+    if(inOutAccumWidth <= request.maxWidth){
+        outFitEnd = relEnd;
+        if(request.wrapMode == TextWrapMode::Word){
+            const u8 lastByte = cast<u8>(fullText[segBegin + relEnd - 1u]);
+            if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-'))
+                outWordEnd = relEnd;
+        }
+        return true;
+    }
+    return false;
 }
 
 b8 TryResolveNextWrappedTextSegment<TFace>(
@@ -432,19 +459,7 @@ b8 TryResolveNextWrappedTextSegment<TFace>(
             usize cLast = cursor + 1u;
             while(cLast < runGlyphs.size() && runGlyphs[cLast].byteBegin == runGlyphs[cFirst].byteBegin)
                 ++cLast;
-            const usize relEnd = cast<usize>(runGlyphs[cFirst].byteEnd);
-            if(firstClusterEnd == 0u)
-                firstClusterEnd = relEnd;
-            accumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
-            if(accumWidth <= request.maxWidth){
-                fitEnd = relEnd;
-                if(request.wrapMode == TextWrapMode::Word){
-                    const u8 lastByte = cast<u8>(fullText[segBegin + relEnd - 1u]);
-                    if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-'))
-                        wordEnd = relEnd;
-                }
-            }
-            else
+            if(!AccumulateWrappedGlyphCluster<TFace>(fullText, segBegin, request, runGlyphs, cFirst, cLast, accumWidth, firstClusterEnd, fitEnd, wordEnd))
                 break;
             cursor = cLast;
         }
@@ -456,19 +471,7 @@ b8 TryResolveNextWrappedTextSegment<TFace>(
             usize cFirst = cLast - 1u;
             while(cFirst > 0u && runGlyphs[cFirst - 1u].byteBegin == runGlyphs[cLast - 1u].byteBegin)
                 --cFirst;
-            const usize relEnd = cast<usize>(runGlyphs[cFirst].byteEnd);
-            if(firstClusterEnd == 0u)
-                firstClusterEnd = relEnd;
-            accumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
-            if(accumWidth <= request.maxWidth){
-                fitEnd = relEnd;
-                if(request.wrapMode == TextWrapMode::Word){
-                    const u8 lastByte = cast<u8>(fullText[segBegin + relEnd - 1u]);
-                    if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-'))
-                        wordEnd = relEnd;
-                }
-            }
-            else
+            if(!AccumulateWrappedGlyphCluster<TFace>(fullText, segBegin, request, runGlyphs, cFirst, cLast, accumWidth, firstClusterEnd, fitEnd, wordEnd))
                 break;
             cursor = cFirst;
         }

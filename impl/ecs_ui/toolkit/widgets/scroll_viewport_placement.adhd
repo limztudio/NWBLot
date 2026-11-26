@@ -214,7 +214,7 @@ Expected<f32> TryStepScrollbarOffset(in f64 offset, in f64 delta, in f64 step, i
         return MakeUnexpected(Failure());
     f64 next = 0.0;
     if(offset > 0.0)
-        next = UiSimdMinF64(maximum, offset);
+        next = Min(maximum, offset);
     if(step > 0.0 && delta > 0.0){
         const f64 distanceInSteps = (maximum - next) / step;
         if(delta >= distanceInSteps)
@@ -258,7 +258,7 @@ Expected<f32> TryDragScrollbarOffset(in PointerGesture gesture, in b8 horizontal
     const f64 normalized = (startDelta + pointerDelta) / travel;
     f64 clamped = 0.0;
     if(normalized > 0.0)
-        clamped = UiSimdMinF64(1.0, normalized);
+        clamped = Min(1.0, normalized);
     const f64 next = clamped * maximum;
     if(!IsFinite(VectorDouble(next)) || next > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
@@ -430,8 +430,8 @@ Expected<ListScrollPlacementResult> CalculateListScrollPlacement(
         const f64 clippedTop = cast<f64>(sb.contentClip.y) - cast<f64>(sb.viewport.y);
         const f64 startPos = sb.vertical.offset + clippedTop;
         const f64 endPos = startPos + cast<f64>(sb.contentClip.height);
-        const f64 clampedStart = UiSimdMaxF64(0.0, startPos);
-        const f64 clampedEnd = UiSimdMaxF64(0.0, endPos);
+        const f64 clampedStart = Max(0.0, startPos);
+        const f64 clampedEnd = Max(0.0, endPos);
         if(!rowOffsets.empty()){
             CalculateVariableRowScrollRange(rowOffsets, clampedStart, clampedEnd, result.placement.firstRow, result.placement.endRow);
         }

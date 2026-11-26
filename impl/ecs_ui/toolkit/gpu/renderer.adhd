@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_type_alias(ShaderPathResolveCallback, ShaderArchivePathResolver)]
 class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
     private ArenaObjectSlot<GpuRendererState> m_state = ArenaObjectSlot<GpuRendererState>();
 

@@ -285,9 +285,9 @@ void VerifyUiScrollAreaAndTabsTests_CollapsibleHeaderTogglesByPointerAndKeyboard
     EXPECT_TRUE(self.hasTarget(secretId));
     EXPECT_EQ(self.m_context.input().focus(), hdrId);
 
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, true)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Space, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     ASSERT_TRUE(self.panel(3u, "panel", Rect(10.0f, 10.0f, 240.0f, 160.0f)));
     EXPECT_FALSE(self.m_builder.collapsibleHeader("hdr", "Details", expanded));
     ASSERT_TRUE(self.finishPanel());

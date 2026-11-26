@@ -65,9 +65,9 @@ namespace VulkanTextureDetail{
     }
 
     if(valueKind == TextureClearValueKind::DepthStencil)
-        contract.queueRequirement = TextureClearQueueRequirement::Graphics;
+        contract.queueRequirement = TextureQueueRequirement::Graphics;
     else if(!blockCompressed)
-        contract.queueRequirement = TextureClearQueueRequirement::ComputeOrGraphics;
+        contract.queueRequirement = TextureQueueRequirement::ComputeOrGraphics;
     return contract;
 }
 
@@ -84,17 +84,18 @@ namespace VulkanTextureDetail{
 }
 
 [[nodiscard]] inline b8 BoxCoversWholeMipExtent(const TextureDesc& description, const MipLevel mipLevel, const Box& resolvedBox)noexcept{
-    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, mipLevel);
-    return resolvedBox.minX == 0
+    return
+        resolvedBox.minX == 0
         && resolvedBox.minY == 0
         && resolvedBox.minZ == 0
-        && resolvedBox.maxX == static_cast<i32>(mipExtent.width)
-        && resolvedBox.maxY == static_cast<i32>(mipExtent.height)
-        && resolvedBox.maxZ == static_cast<i32>(mipExtent.depth)
+        && resolvedBox.maxX >= 0
+        && resolvedBox.maxY >= 0
+        && resolvedBox.maxZ >= 0
+        && IsWholeMipExtent(description, mipLevel, 0u, 0u, 0u, static_cast<u32>(resolvedBox.maxX), static_cast<u32>(resolvedBox.maxY), static_cast<u32>(resolvedBox.maxZ))
     ;
 }
 
-[[nodiscard]] inline TextureClearQueueRequirement::Enum TextureClearBoxQueueRequirement(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{
+[[nodiscard]] inline TextureQueueRequirement::Enum TextureClearBoxQueueRequirement(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{
     const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
     for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
         const Box resolvedBox = ResolveTextureClearBox(description, mipLevel, box);
@@ -102,9 +103,9 @@ namespace VulkanTextureDetail{
             continue;
 
         if(!BoxCoversWholeMipExtent(description, mipLevel, resolvedBox))
-            return TextureClearQueueRequirement::ComputeOrGraphics;
+            return TextureQueueRequirement::ComputeOrGraphics;
     }
-    return TextureClearQueueRequirement::Transfer;
+    return TextureQueueRequirement::Transfer;
 }
 
 [[nodiscard]] inline b8 TextureClearBoxFullyCoversSubresources(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{

@@ -174,7 +174,7 @@ class ControlVisualPainter{
             thumbIdx = paint.resolveRegionIndex(style.thumbFallback, style.thumbFallback);
         if(!trackIdx.has_value() || !thumbIdx.has_value())
             return false;
-        const Color tint = ResolveSliderThumbTint(style, interactive, pressed, hover);
+        const Color tint = ResolveControlStateTint(style, interactive, pressed, hover);
         paint.pushClip(placement.clip);
         Color trackTint = style.disabledTint;
         if(interactive)
@@ -214,7 +214,7 @@ class ControlVisualPainter{
             indicatorIdx = paint.resolveRegionIndex(style.fallback, style.fallback);
         if(!indicatorIdx.has_value())
             return false;
-        const Color tint = ResolveRadioGroupChoiceTint(style, enabled, pressed, hover);
+        const Color tint = ResolveControlStateTint(style, enabled, pressed, hover);
         paint.pushClip(row.clip);
         paint.drawRegionByIndex(indicatorIdx.value(), row.indicator, tint);
         b8 painted = true;
@@ -222,7 +222,7 @@ class ControlVisualPainter{
             painted = paint.drawRegion(markRegionName, row.mark, tint);
         if(painted && focused)
             paint.tryDrawRegion(style.focus, row.rectangle);
-        const f32 horizontalOffset = UiSimdMin(row.rectangle.width, row.indicator.width + metrics.gap);
+        const f32 horizontalOffset = Min(row.rectangle.width, row.indicator.width + metrics.gap);
         const Point origin = ResolveCenteredTextOrigin(row.rectangle, horizontalOffset, textBounds);
         paint.pushClip(row.textClip);
         if(painted){
@@ -436,19 +436,6 @@ class ControlVisualPainter{
         return trackPopped;
     }
 
-    public b8 paintListScrollbarVisual(
-        mut PaintBuilder paint,
-        in UiSkin skin,
-        in ListStyle style,
-        in ScrollPlacement placement,
-        in Rect clip,
-        in b8 enabled,
-        in b8 pressed,
-        in b8 hover
-    ){
-        return this.paintListScrollbarAxisVisual(paint, skin, style, placement.track, placement.thumb, clip, enabled, pressed, hover);
-    }
-
     public b8 paintListScrollbarsVisual(
         mut PaintBuilder paint,
         in UiSkin skin,
@@ -590,7 +577,7 @@ class ControlVisualPainter{
                 paint.tryDrawRegion(style.focus, tab.rectangle);
             if(painted && tab.textClip.width > 0.0f && tab.textClip.height > 0.0f){
                 paint.pushClip(tab.textClip);
-                const f32 textInset = UiSimdMax(0.0f, (tab.textClip.width - labelEntry.bounds.width) * s_RectCenterFraction);
+                const f32 textInset = Max(0.0f, (tab.textClip.width - labelEntry.bounds.width) * s_RectCenterFraction);
                 const Point origin = ResolveCenteredTextOrigin(tab.textClip, textInset, labelEntry.bounds);
                 Color activeTextColor = widgetStyle.disabledText;
                 if(tabEnabled)

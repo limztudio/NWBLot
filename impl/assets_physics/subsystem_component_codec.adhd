@@ -41,7 +41,6 @@ const u8 s_RagdollFlagDriveFromSkeleton = 0x10u;
 const u8 s_RagdollFlagWriteBackToSkeleton = 0x20u;
 const u8 s_RagdollFlagAutoGenerateFromSkeleton = 0x40u;
 
-const u8 s_RagdollShapeFlagUseBox = 0x01u;
 const u8 s_RagdollShapeFlagIsSensor = 0x02u;
 const u8 s_RagdollShapeFlagContactEvents = 0x04u;
 const u8 s_RagdollShapeFlagHitEvents = 0x08u;
@@ -1206,9 +1205,8 @@ class SubsystemPhysicsComponentBinaryCodec{
         return true;
     }
 
-    private u8 packRagdollShapeFlags(in b8 useBox, in ShapeDef shapeDef)const{
+    private u8 packRagdollShapeFlags(in ShapeDef shapeDef)const{
         u8 sFlags = 0u;
-        if(useBox) sFlags |= s_RagdollShapeFlagUseBox;
         if(shapeDef.isSensor) sFlags |= s_RagdollShapeFlagIsSensor;
         if(shapeDef.enableContactEvents) sFlags |= s_RagdollShapeFlagContactEvents;
         if(shapeDef.enableHitEvents) sFlags |= s_RagdollShapeFlagHitEvents;
@@ -1305,11 +1303,8 @@ class SubsystemPhysicsComponentBinaryCodec{
                 return false;
             if(cast<u8>(b.shapeType) >= cast<u8>(RagdollBoneShapeType::kCount) || b.hullVertices.size() > 32u || b.extraShapes.size() > 4u)
                 return false;
-            RagdollBoneShapeType effectiveType = b.shapeType;
-            if(effectiveType == RagdollBoneShapeType::Capsule && b.useBox)
-                effectiveType = RagdollBoneShapeType::Box;
             if(!this.validRagdollShapeGeometry(
-                effectiveType,
+                b.shapeType,
                 b.capsule,
                 b.sphere,
                 VectorSingle(b.boxHalfExtents),
@@ -1520,7 +1515,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             if(b.bodyDef.allowFastRotation) bFlags |= s_RigidBodyFlagAllowFastRotation;
             if(b.bodyDef.enableGyroscopicTorque) bFlags |= s_RigidBodyFlagEnableGyroscopic;
             bb.bodyFlags = bFlags;
-            bb.shapeFlags = this.packRagdollShapeFlags(b.useBox, b.shapeDef);
+            bb.shapeFlags = this.packRagdollShapeFlags(b.shapeDef);
             u8 eFlags = 0u;
             if(b.useSixDof) eFlags |= s_RagdollBoneExtraFlagUseSixDof;
             if(b.useSolverMotors) eFlags |= s_RagdollBoneExtraFlagUseSolverMotors;
@@ -1564,7 +1559,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                 eb.hullRadius = ex.hullRadius;
                 eb.hullVertexCount = cast<u32>(ex.hullVertices.size());
                 eb.shapeType = cast<u8>(ex.shapeType);
-                eb.shapeFlags = this.packRagdollShapeFlags(false, ex.shapeDef);
+                eb.shapeFlags = this.packRagdollShapeFlags(ex.shapeDef);
                 AppendPOD(outBinary, eb);
                 this.appendFixedHullVertices(Span<f32x4>(ex.hullVertices.data(), ex.hullVertices.size()), outBinary);
             }
@@ -1686,7 +1681,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             b.sphere.centerRadius = bb.sphereCenterRadius;
             b.boxHalfExtents = bb.boxHalfExtents;
             b.hullRadius = bb.hullRadius;
-            b.useBox = (bb.shapeFlags & s_RagdollShapeFlagUseBox) != 0u;
             this.unpackRagdollShapeDefCommon(
                 bb.shapeFlags,
                 VectorSingle(bb.shapeLocalPosition),
@@ -1737,7 +1731,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                 if(eb.reserved0 != 0u
                     || eb.reserved1 != 0u
                     || eb.reserved2 != 0u
-                    || (eb.shapeFlags & s_RagdollShapeFlagUseBox) != 0u
+                    || (eb.shapeFlags & 0x01u) != 0u
                     || eb.hullVertexCount > 32u){
                     error("RagdollComponentAsset::loadComponentPayload failed: unsupported extra shape flags");
                     return MakeUnexpected(Failure());

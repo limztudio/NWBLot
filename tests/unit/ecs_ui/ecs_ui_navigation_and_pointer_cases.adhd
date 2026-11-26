@@ -40,14 +40,6 @@ enum<u8> CallbackMutation{
     FailContext
 }
 
-ControlToken MakeEcsUiControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
-    ControlToken token = ControlToken();
-    token.instanceGeneration = instanceGeneration;
-    token.contentGeneration = contentGeneration;
-    token.contentRevision = contentRevision;
-    return token;
-}
-
 b8 SeedPreferredNavigationColumn(mut UiEditNavigationLifetimeTests self, in EditBoxOptions options){
     if(!self.m_navigationModel.setText("abcdef\nx\nabcdef") || !self.m_navigationModel.setSelection(5u, 5u) || !self.activateNavigation(options) || !self.core.key(Key::Down) || !self.navigationFrame(options)){
         return false;
@@ -139,7 +131,7 @@ void ApplyEcsUiNavigationCallbackMutation(mut UiEditNavigationGuardTests self, i
         mutationAccepted = self.m_navigationModel.setSelection(0u, 0u) && self.m_navigationModel.setSelection(1u, 1u);
     }
     else if(mutation == CallbackMutation::CompositionRoundTrip){
-        mutationAccepted = self.m_navigationModel.beginComposition() && self.m_navigationModel.updateComposition("IME", 0u, 3u);
+        mutationAccepted = self.m_navigationModel.beginComposition() && self.m_navigationModel.updateComposition("IME", 0u, 3u, Span<EditPreeditClause>());
         self.m_navigationModel.cancelComposition();
     }
     else if(mutation == CallbackMutation::IdenticalText){
@@ -205,15 +197,15 @@ void RejectEcsUiNavigationMutation(mut UiEditNavigationGuardTests self, in Callb
 
 b8 PublishEcsUiPointerCapturePart(mut UiEditPointerCaptureTests self, in b8 gesture){
     Array<HitTarget, 2> targets = Array<HitTarget, 2>();
-    const Expected<HitTarget> foundTarget = self.core.m_context.input().tryFindTarget(self.core.m_widget.id);
+    const Expected<HitTarget> foundTarget = self.core.m_context.input().tryFindTarget(self.core.m_widget.id, 0u);
     if(!foundTarget.has_value()){
         return false;
     }
     targets[0u] = foundTarget.value();
-    targets[0u].control = MakeEcsUiControlToken(91u, 1u, 1u);
+    targets[0u].control = MakeUiControlToken(91u, 1u, 1u);
     targets[1u].id = self.core.m_otherWidget.id;
     targets[1u].declarationGeneration = self.core.m_otherWidget.declarationGeneration;
-    targets[1u].rectangle = MakeEcsUiRect(180.0f, 20.0f, 10.0f, 48.0f);
+    targets[1u].rectangle = Rect(180.0f, 20.0f, 10.0f, 48.0f);
     targets[1u].clip = targets[0u].clip;
     targets[1u].paintOrder = 1u;
     targets[1u].owner = targets[0u].id;
@@ -225,7 +217,7 @@ b8 PublishEcsUiPointerCapturePart(mut UiEditPointerCaptureTests self, in b8 gest
         targets[1u].gestureReference = targets[1u].rectangle;
     }
     ++self.core.m_generation;
-    if(!self.core.m_context.input().commitTargets(targets, self.core.m_generation)){
+    if(!self.core.m_context.input().commitTargets(targets, self.core.m_generation, Span<PopupScope>(), u64.max)){
         return false;
     }
     self.core.m_host.synchronizeFocus();
@@ -246,12 +238,12 @@ void VerifyUiEditNavigationHostTests_CandidateGeometryCannotReplacePublishedYHit
     ASSERT_TRUE(self.activateNavigation());
     const u64 displayed = self.core.m_context.input().layoutGeneration();
     const TextInputRect nativeRect = self.core.m_textInput.currentCaret();
-    const Rect shiftedBounds = MakeEcsUiRect(10.0f, 80.0f, 180.0f, 48.0f);
+    const Rect shiftedBounds = Rect(10.0f, 80.0f, 180.0f, 48.0f);
     ASSERT_TRUE(self.prepareNavigation(EditBoxOptions(), shiftedBounds));
     EXPECT_EQ(self.core.m_context.input().layoutGeneration(), displayed);
     self.core.m_host.commitFrame(self.core.m_generation);
     EXPECT_EQ(self.core.m_textInput.currentCaret().y, nativeRect.y);
-    ASSERT_TRUE(self.click(MakeEcsUiPoint(20.0f, 38.0f)));
+    ASSERT_TRUE(self.click(Point(20.0f, 38.0f)));
     ASSERT_TRUE(self.core.commit());
     ASSERT_TRUE(self.navigationFrame(EditBoxOptions(), shiftedBounds));
     EXPECT_EQ(self.m_navigationModel.caret(), 4u);
@@ -265,10 +257,10 @@ void VerifyUiEditNavigationHostTests_EmptyAndTrailingHardLinesPublishDistinctEnd
     ASSERT_TRUE(self.m_navigationModel.setText("a\n\n"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
-    ASSERT_TRUE(self.click(MakeEcsUiPoint(20.0f, 38.0f)));
+    ASSERT_TRUE(self.click(Point(20.0f, 38.0f)));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.caret(), 2u);
-    ASSERT_TRUE(self.click(MakeEcsUiPoint(20.0f, 50.0f)));
+    ASSERT_TRUE(self.click(Point(20.0f, 50.0f)));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.caret(), 3u);
     EXPECT_EQ(self.m_navigationModel.anchor(), 3u);
@@ -281,7 +273,7 @@ void VerifyUiEditNavigationHostTests_EarlierCommittedTextRetiresQueuedPublishedP
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(self.commitNative("Q"));
-    ASSERT_TRUE(self.click(MakeEcsUiPoint(20.0f, 38.0f)));
+    ASSERT_TRUE(self.click(Point(20.0f, 38.0f)));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.text(), "Qab\ncd\nxy");
     EXPECT_EQ(self.m_navigationModel.anchor(), 1u);
@@ -825,9 +817,9 @@ void VerifyUiEditNavigationHostTests_FailedAndCancelledPastePreserveTheAcceptedC
 void VerifyUiEditNavigationHostTests_PageMovementCarriesTheViewportAcceptedAtInputAdmission(mut UiEditNavigationHostTests self){
     ASSERT_TRUE(self.m_navigationModel.setText("a\nb\nc\nd\ne\nf\ng"));
     ASSERT_TRUE(self.m_navigationModel.setSelection(1u, 1u));
-    ASSERT_TRUE(self.activateNavigation(EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 24.0f)));
+    ASSERT_TRUE(self.activateNavigation(EditBoxOptions(), Rect(10.0f, 20.0f, 180.0f, 24.0f)));
     const u64 displayed = self.core.m_context.input().layoutGeneration();
-    const Rect nextBounds = MakeEcsUiRect(10.0f, 20.0f, 180.0f, 36.0f);
+    const Rect nextBounds = Rect(10.0f, 20.0f, 180.0f, 36.0f);
     ASSERT_TRUE(self.prepareNavigation(EditBoxOptions(), nextBounds));
     EXPECT_EQ(self.core.m_context.input().layoutGeneration(), displayed);
     ASSERT_TRUE(self.core.key(Key::PageDown));
@@ -876,11 +868,11 @@ void VerifyUiEditPointerCaptureTests_ScrollbarGestureFocusCannotCollapseCrossLin
     const EditNavigationSnapshot navigation = self.m_navigation.snapshot();
     const u64 revision = self.m_navigationModel.revision();
     const u64 selection = self.m_navigationModel.selectionGeneration();
-    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(185.0f, 62.0f), InputEventType::PrimaryDown));
+    ASSERT_TRUE(self.core.dispatchPoint(Point(185.0f, 62.0f), InputEventType::PrimaryDown));
     EXPECT_EQ(self.core.m_context.input().focus(), self.core.m_widget.id);
     EXPECT_EQ(self.core.m_context.input().capture(), self.core.m_otherWidget.id);
-    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(450.0f, 180.0f), InputEventType::PointerMove));
-    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(450.0f, 180.0f), InputEventType::PrimaryUp));
+    ASSERT_TRUE(self.core.dispatchPoint(Point(450.0f, 180.0f), InputEventType::PointerMove));
+    ASSERT_TRUE(self.core.dispatchPoint(Point(450.0f, 180.0f), InputEventType::PrimaryUp));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.anchor(), 2u);
     EXPECT_EQ(self.m_navigationModel.caret(), 9u);
@@ -900,7 +892,7 @@ void VerifyUiEditPointerCaptureTests_UnfocusedTrackActivationCannotShiftExtendCr
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, false));
     EXPECT_FALSE(self.core.m_context.input().focus().valid());
     const u64 selection = self.m_navigationModel.selectionGeneration();
-    ASSERT_TRUE(self.click(MakeEcsUiPoint(185.0f, 62.0f), true));
+    ASSERT_TRUE(self.click(Point(185.0f, 62.0f), true));
     EXPECT_EQ(self.core.m_context.input().focus(), self.core.m_widget.id);
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.anchor(), 2u);
@@ -919,7 +911,7 @@ void VerifyUiEditPointerCaptureTests_ReadOnlyScrollbarFocusCannotChangeTextSelec
     ASSERT_TRUE(self.activateNavigation(options));
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, true));
     const u64 selection = self.m_navigationModel.selectionGeneration();
-    ASSERT_TRUE(self.click(MakeEcsUiPoint(185.0f, 62.0f)));
+    ASSERT_TRUE(self.click(Point(185.0f, 62.0f)));
     ASSERT_TRUE(self.navigationFrame(options));
     EXPECT_EQ(self.m_navigationModel.anchor(), 2u);
     EXPECT_EQ(self.m_navigationModel.caret(), 9u);
@@ -933,10 +925,10 @@ void VerifyUiEditPointerCaptureTests_MainEditorCaptureStillClampsAnOutOfBoundsCr
     ASSERT_TRUE(self.m_navigationModel.setSelection(0u, 0u));
     ASSERT_TRUE(self.activateNavigation());
     ASSERT_TRUE(PublishEcsUiPointerCapturePart(self, true));
-    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(20.0f, 26.0f), InputEventType::PrimaryDown));
+    ASSERT_TRUE(self.core.dispatchPoint(Point(20.0f, 26.0f), InputEventType::PrimaryDown));
     EXPECT_EQ(self.core.m_context.input().capture(), self.core.m_widget.id);
-    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(30.0f, 120.0f), InputEventType::PointerMove));
-    ASSERT_TRUE(self.core.dispatchPoint(MakeEcsUiPoint(30.0f, 120.0f), InputEventType::PrimaryUp));
+    ASSERT_TRUE(self.core.dispatchPoint(Point(30.0f, 120.0f), InputEventType::PointerMove));
+    ASSERT_TRUE(self.core.dispatchPoint(Point(30.0f, 120.0f), InputEventType::PrimaryUp));
     ASSERT_TRUE(self.navigationFrame());
     EXPECT_EQ(self.m_navigationModel.anchor(), 1u);
     EXPECT_EQ(self.m_navigationModel.caret(), 8u);
@@ -948,8 +940,8 @@ void VerifyUiEditPointerCaptureTests_MainEditorCaptureStillClampsAnOutOfBoundsCr
 void VerifyUiEditPointerSourceTests_ForeignContactCannotMoveOrEndTheAcceptedEditorSelection(mut UiEditPointerSourceTests self){
     ASSERT_TRUE(self.m_model.setText("abcdef"));
     ASSERT_TRUE(self.activate());
-    const InputSource first = MakeEcsUiInputSource(17u, 1u);
-    const InputSource second = MakeEcsUiInputSource(17u, 2u);
+    const InputSource first = MakeUiInputSource(17u, 1u);
+    const InputSource second = MakeUiInputSource(17u, 2u);
     PointerInput input = PointerInput();
     input.source = first;
     input.position = self.atByte(1u);
@@ -986,7 +978,7 @@ void VerifyUiEditPointerSourceTests_ForeignContactCannotMoveOrEndTheAcceptedEdit
 void VerifyUiEditPointerSourceTests_TouchTimestampsCannotManufactureNativeDoubleClickWordSelection(mut UiEditPointerSourceTests self){
     ASSERT_TRUE(self.m_model.setText("one two"));
     ASSERT_TRUE(self.activate());
-    const InputSource touch = MakeEcsUiInputSource(21u, 9u);
+    const InputSource touch = MakeUiInputSource(21u, 9u);
     Array<u64, 2> timestamps = Array<u64, 2>();
     timestamps[0u] = 1000u;
     timestamps[1u] = 1200u;
@@ -1012,8 +1004,8 @@ void VerifyUiEditPointerSourceTests_TouchTimestampsCannotManufactureNativeDouble
 void VerifyUiEditPointerSourceTests_CancelledContactCannotEraseAnEarlierCompletedSelection(mut UiEditPointerSourceTests self){
     ASSERT_TRUE(self.m_model.setText("abcdef"));
     ASSERT_TRUE(self.activate());
-    const InputSource completed = MakeEcsUiInputSource(31u, 1u);
-    const InputSource next = MakeEcsUiInputSource(31u, 2u);
+    const InputSource completed = MakeUiInputSource(31u, 1u);
+    const InputSource next = MakeUiInputSource(31u, 2u);
     Array<InputSource, 2> sources = Array<InputSource, 2>();
     sources[0u] = completed;
     sources[1u] = next;
@@ -1089,7 +1081,7 @@ void VerifyUiEditActionHostTests_HeldSubmitObservesReleaseAfterDraftEventsWithou
 void VerifyUiEditActionHostTests_EscapeCancelsConcurrentKeyboardAndControllerSubmitsBeforeRelease(mut UiEditActionHostTests self){
     ASSERT_TRUE(self.activateActions());
     ASSERT_TRUE(self.replaceNative("42"));
-    const InputSource controller = MakeEcsUiInputSource(7u, 3u);
+    const InputSource controller = MakeUiInputSource(7u, 3u);
     InputEvent keyDown = InputEvent();
     keyDown.key = Key::Enter;
     keyDown.type = InputEventType::KeyDown;
@@ -1154,19 +1146,19 @@ void VerifyUiEditActionHostTests_ReboundEditorModelCannotReceiveAnEarlierHeldSub
     ASSERT_TRUE(self.core.dispatch(down));
     EditModel replacement = EditModel();
     ASSERT_TRUE(replacement.setText("replacement"));
-    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
+    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), Rect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
     ASSERT_TRUE(self.core.commit());
     self.m_actions.clear();
     InputEvent up = InputEvent();
     up.key = Key::Enter;
     up.type = InputEventType::KeyUp;
     ASSERT_TRUE(self.core.dispatch(up));
-    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
+    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), Rect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
     ASSERT_TRUE(self.core.commit());
     EXPECT_FALSE(self.core.m_result.submitted);
     EXPECT_EQ(self.actionCount(EditAction::Submit), 0u);
     ASSERT_TRUE(self.core.key(Key::Enter));
-    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
+    ASSERT_TRUE(PrepareEcsUiEditActionsFrame(self.core, replacement, EditBoxOptions(), Rect(10.0f, 20.0f, 180.0f, 30.0f), self.m_actions));
     ASSERT_TRUE(self.core.commit());
     EXPECT_EQ(self.actionCount(EditAction::Submit), 1u);
 }
@@ -1292,7 +1284,7 @@ void VerifyUiEditWordSelectionTests_RightHalfOfFinalWordGlyphSelectsItsWordRathe
     ASSERT_TRUE(self.m_model.setText("one two"));
     ASSERT_TRUE(self.activate());
     const VectorSingle shifted = VectorSingle(self.m_placement.textOrigin.x, self.m_placement.textOrigin.y, 0.0f, 0.0f) + VectorSingle(29.0f, 5.0f, 0.0f, 0.0f);
-    const Point point = MakeEcsUiPoint(shifted.x, shifted.y);
+    const Point point = Point(shifted.x, shifted.y);
     ASSERT_TRUE(WordSelectClickAt(self, point, 1000u));
     ASSERT_TRUE(self.frame(self.m_model));
     ASSERT_TRUE(WordSelectClickAt(self, point, 1200u));
@@ -1320,7 +1312,7 @@ void VerifyUiEditWordSelectionTests_RightHalfAtHardLineEndDoesNotSelectNewline(m
     ASSERT_TRUE(self.key(Key::Tab));
     ASSERT_TRUE(self.frame(multiline));
     const VectorSingle shifted = VectorSingle(self.m_placement.textOrigin.x, self.m_placement.textOrigin.y, 0.0f, 0.0f) + VectorSingle(29.0f, 5.0f, 0.0f, 0.0f);
-    const Point point = MakeEcsUiPoint(shifted.x, shifted.y);
+    const Point point = Point(shifted.x, shifted.y);
     ASSERT_TRUE(WordSelectClickAt(self, point, 1000u));
     ASSERT_TRUE(self.frame(multiline));
     ASSERT_TRUE(WordSelectClickAt(self, point, 1200u));
@@ -1416,10 +1408,10 @@ void VerifyUiMultilineClipboardTests_NormalizedCapacityFailurePreservesSelection
     const u64 revision = model.revision();
     const u64 selection = model.selectionGeneration();
     self.m_clipboard.delayed = true;
-    ASSERT_EQ(controller.request(owner, model, EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(owner, model, EditClipboardAction::Paste, ClipboardChannel::Clipboard, false).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\r\ny\r\nz"));
-    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::TooLarge);
+    EXPECT_EQ(controller.drain(owner, model, false).status, UiEditClipboardStatus::TooLarge);
     EXPECT_EQ(model.text(), "a\nb");
     EXPECT_EQ(model.anchor(), 1u);
     EXPECT_EQ(model.caret(), 2u);
@@ -1436,10 +1428,10 @@ void VerifyUiMultilineClipboardTests_UnsupportedControlsRejectBeforeReplacement(
     ASSERT_TRUE(model.selectAll());
     const u64 selection = model.selectionGeneration();
     self.m_clipboard.delayed = true;
-    ASSERT_EQ(controller.request(owner, model, EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(owner, model, EditClipboardAction::Paste, ClipboardChannel::Clipboard, false).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "x\x01y"));
-    EXPECT_EQ(controller.drain(owner, model).status, UiEditClipboardStatus::InvalidText);
+    EXPECT_EQ(controller.drain(owner, model, false).status, UiEditClipboardStatus::InvalidText);
     EXPECT_EQ(model.text(), "a\nb");
     EXPECT_EQ(model.anchor(), 0u);
     EXPECT_EQ(model.caret(), 3u);

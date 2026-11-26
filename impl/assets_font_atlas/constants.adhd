@@ -73,7 +73,6 @@ enum<u32> FontAtlasRasterMode{
     Bitmap = 1u
 }
 
-[reflect]
 class FontAtlasGlyph{
     public u32 glyphId = 0u;
     public u32 group = 0u;

@@ -16,12 +16,6 @@
 NWB_BEGIN
 namespace Tests::GlobalCases{
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-inline constexpr b8 s_WindowsPath = true;
-#else
-inline constexpr b8 s_WindowsPath = false;
-#endif
-
 };
 NWB_END
 

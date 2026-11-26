@@ -560,8 +560,10 @@ private:
     [[nodiscard]] b8 validateTextureForGpuState(Texture* texture, ResourceStates::Mask requiredState, TStringView operationName, VkImageUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] b8 validateBufferForGpuState(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
     [[nodiscard]] b8 validateBufferForGpuStateValidated(Buffer* buffer, ResourceStates::Mask requiredState, TStringView operationName, VkBufferUsageFlags explicitRequiredUsage = 0u);
+    [[nodiscard]] b8 validateBufferStateInit(Buffer* buffer, ResourceStates::Mask stateBits, BufferRange range, TStringView operationName);
     [[nodiscard]] static b8 CollectGraphicsBufferStates(const GraphicsState& state, GraphicsBufferStateTable& outTable)noexcept;
     [[nodiscard]] b8 validateGraphicsState(const GraphicsState& state, GraphicsBufferStateTable& outRequiredBufferStates);
+    [[nodiscard]] b8 validateMeshletPipelineForFramebuffer(const MeshletPipeline& pipeline, const Framebuffer& framebuffer, TStringView operationName);
     [[nodiscard]] b8 validateMeshletState(const MeshletState& state);
     [[nodiscard]] b8 validateGraphicsDrawState(TStringView operationName, b8 indexed);
     [[nodiscard]] b8 validateGraphicsDrawArguments(const DrawArguments& arguments, b8 indexed, TStringView operationName);
@@ -700,11 +702,22 @@ private:
     b8 clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, b8 clearDepth, f32 depth, b8 clearStencil, u8 stencil);
     [[nodiscard]] b8 validateTextureTransferResources(Texture& dest, ResourceStates::Mask destState, Texture& src, ResourceStates::Mask srcState, TStringView operationName);
     [[nodiscard]] b8 validateStagingTextureCopyResources(StagingTexture& stagingTexture, Texture& texture, CpuAccessMode::Enum requiredCpuAccess, VkImageUsageFlags requiredImageUsage, TStringView operationName);
+    [[nodiscard]] b8 validateStagingTextureCopyQueueCapability(const TextureDesc& desc, const VkBufferImageCopy& region, b8 depthStencilCopy, TStringView operationName);
     Expected<VkBufferImageCopy> prepareStagingTextureCopy(StagingTexture& stagingResource, const TextureSlice& stagingSlice, Texture& textureResource, const TextureSlice& textureSlice)const noexcept;
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(const void* data, usize dataSize, TStringView operationName, u32 alignment = s_DefaultUploadSuballocationAlignment);
     [[nodiscard]] Expected<VkDeviceAddress> suballocateBuildScratchAddress(u64 buildScratchSize, u64 scratchAlignment, TStringView operationName);
     [[nodiscard]] Expected<BufferSuballocation> suballocateBuildInput(u64 byteCount, u64 deviceAddressAlignment, TStringView operationName);
+    [[nodiscard]] b8 validateTopLevelAccelStructBuildPrefix(
+        RayTracingAccelStruct* accelStructResource,
+        const void* instanceSource,
+        TStringView nullSourceReason,
+        usize numInstances,
+        RayTracingAccelStructBuildFlags::Mask buildFlags,
+        TStringView capabilityOperation,
+        TStringView operationName,
+        VkBuildAccelerationStructureFlagsKHR& outVkBuildFlags
+    );
     [[nodiscard]] Expected<b8> validateAccelStructBuildSignature(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,

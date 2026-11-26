@@ -86,6 +86,21 @@ b8 GpuTaskScheduler::executeTask(
     return executeTask(compiled, task, &onRecorded, &onAccepted, scratch, graph, recorded, transaction, &timing);
 }
 
+template<typename Fn>
+b8 GpuTaskScheduler::executeWithinDeviceOperation(
+    GpuTimingRecorder* const timingRecorder,
+    GpuSubmissionPacketId* const outFailedPacket,
+    Fn&& fn
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    DeviceOperation deviceOperation(*this);
+    if(!deviceOperation.m_admitted)
+        return false;
+    const GpuNativePacketRecorder recorder(device(), timingRecorder);
+    return Forward<Fn>(fn)(recorder);
+}
+
 b8 GpuTaskScheduler::executeGraph(
     const GpuTaskGraphNormalExecutionDesc& desc, GpuTaskGraph& graph,
     GpuCompiledGraph& compiled, GpuRecordedGraph& recorded, GpuGraphSubmissionTransaction& transaction
@@ -134,13 +149,13 @@ b8 GpuTaskScheduler::executeGraph(
     GpuTimingRecorder* const timingRecorder,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted)
-        return false;
-    const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return submitGraphWithinDeviceOperation(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+    return executeWithinDeviceOperation(
+        timingRecorder,
+        outFailedPacket,
+        [&](const GpuNativePacketRecorder& recorder){
+            return submitGraphWithinDeviceOperation(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+        }
+    );
 }
 
 b8 GpuTaskScheduler::executeAcceptedFrontierTask(
@@ -153,13 +168,13 @@ b8 GpuTaskScheduler::executeAcceptedFrontierTask(
     GpuTimingRecorder* const timingRecorder,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted)
-        return false;
-    const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return recordAndSubmitAcceptedFrontierTask(compiledGraph, recorder, task, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+    return executeWithinDeviceOperation(
+        timingRecorder,
+        outFailedPacket,
+        [&](const GpuNativePacketRecorder& recorder){
+            return recordAndSubmitAcceptedFrontierTask(compiledGraph, recorder, task, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+        }
+    );
 }
 
 b8 GpuTaskScheduler::executeTask(
@@ -174,13 +189,13 @@ b8 GpuTaskScheduler::executeTask(
     GpuTimingRecorder* const timingRecorder,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted)
-        return false;
-    const GpuNativePacketRecorder recorder(device(), timingRecorder);
-    return recordAndSubmitTask(compiledGraph, recorder, task, recordedCallback, acceptedCallback, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+    return executeWithinDeviceOperation(
+        timingRecorder,
+        outFailedPacket,
+        [&](const GpuNativePacketRecorder& recorder){
+            return recordAndSubmitTask(compiledGraph, recorder, task, recordedCallback, acceptedCallback, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
+        }
+    );
 }
 
 b8 GpuTaskScheduler::compileGraph(

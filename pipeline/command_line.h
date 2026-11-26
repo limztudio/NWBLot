@@ -33,19 +33,13 @@ namespace CompilerBootstrap{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace PipelineTool{
-    enum Enum : u8{
-        AdhdCompiler,
-    };
-};
-
 inline constexpr int s_PipelineExitSuccess = 0;
 inline constexpr int s_PipelineExitFailure = 1;
 inline constexpr int s_PipelineExitFatal = -1;
 inline constexpr AStringView s_PipelineAppDescription = "NWB asset pipeline";
 inline constexpr AStringView s_PipelineInputOption = "input,--input";
 inline constexpr AStringView s_PipelineInputListOption = "--input-list";
-inline constexpr AStringView s_PipelineOutputOption = "-o,--output,--output-dir,--output-directory";
+inline constexpr AStringView s_PipelineOutputOption = "-o,--output";
 inline constexpr AStringView s_PipelineIncludeDirOption = "-I,--include-dir";
 inline constexpr AStringView s_PipelineDepfileOption = "--depfile";
 inline constexpr AStringView s_PipelineNamespaceOption = "--namespace";
@@ -92,7 +86,7 @@ public:
 
 class PipelineCommandLine final : NoCopy{
 public:
-    explicit PipelineCommandLine(PipelineTool::Enum inTool);
+    PipelineCommandLine();
     PipelineCommandLine(PipelineCommandLine&&) = delete;
 
 

@@ -24,6 +24,18 @@ class UiSearchComboLabelResolver : IUiLabelResolver{
     }
 }
 
+class UiPopupToolsLabelResolver : IUiLabelResolver{
+    public StringView label(in u64 index)const override{
+        return ResolvePopupToolsLabel(index);
+    }
+}
+
+class UiRadioGroupLabelResolver : IUiLabelResolver{
+    public StringView label(in u64 index)const override{
+        return ResolveRadioGroupLabel(index);
+    }
+}
+
 class UiFilteredListState<ResolverT : IUiLabelResolver, const usize LabelCount, const u64 DisabledKey> : IUiFilteredListState{
     private String m_query = "";
     private Array<u64, LabelCount> m_indices;

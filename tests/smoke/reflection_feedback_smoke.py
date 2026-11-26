@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 
-import base64
 from dataclasses import asdict, dataclass
-import hashlib
-import html
 import json
 from pathlib import Path
 import subprocess
@@ -42,12 +39,16 @@ from reflection_feedback_evidence import (
     LIT_STABLE_FEEDBACK,
     LIT_STATISTICS,
 )
-from framebuffer_png_encoder import FramebufferPngEncoder
-from window_capture_image import read_bmp_24_rows
+from smoke_capture_suite import (
+    build_window_capture_command,
+    run_window_capture_subprocess,
+    sha256_lf,
+    sha256_source_files,
+    write_evidence_gallery_report,
+)
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE
 from smoke_volume_identity import authored_volume_hashes, file_identity
-
-LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 
 LIT_NPOT = "npot"
 LIT_HARDWARE_BUDGET = "hardware_budget"
@@ -62,7 +63,6 @@ LIT_MUTATION_FRESH = "mutation_fresh"
 LIT_DIAGNOSTICS_OFF = "diagnostics_off_"
 LIT_BMP = ".bmp"
 LIT_LOG = ".log"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_UTF_8 = "utf-8"
 LIT_IMAGES = "images"
 LIT_SCOPE = "scope"
@@ -110,33 +110,30 @@ def spec_environment(spec):
 
 def capture(args, spec):
     output = args.output_directory / (spec.name + LIT_BMP)
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1" if spec.diagnostics else str(max(64, spec.accepted_frames) + 1), "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)),
-        LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created", LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: reflection mode {spec.mode}", LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTION_SCREEN_FEEDBACK_LOG_TEMPLATE.format(v=int(spec.enabled)),
-        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTION_SCREEN_STEPS_LOG_TEMPLATE.format(v=spec.screen_steps), LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: " + ("hardware" if spec.mode == LIT_HYBRID and spec.hardware_budget else "screen-space"), LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
-        "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
+    log_path = output.with_suffix(LIT_LOG)
+    expect_logs = [f"ReflectionSmokeProject: case {spec.case} created", f"ReflectionSmokeProject: reflection mode {spec.mode}",
+        LIT_REFLECTION_SCREEN_FEEDBACK_LOG_TEMPLATE.format(v=int(spec.enabled)), LIT_REFLECTION_SCREEN_STEPS_LOG_TEMPLATE.format(v=spec.screen_steps),
+        "ReflectionSmokeProject: shutdown", "Reflection resolve: " + ("hardware" if spec.mode == LIT_HYBRID and spec.hardware_budget else "screen-space")]
     if spec.diagnostics:
-        command += [LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEFEEDBACK]
+        expect_logs.append(LIT_REFLECTIONSMOKEFEEDBACK)
+        reject_logs = ()
     else:
-        for prefix in (LIT_REFLECTIONSMOKESTATISTICS, LIT_REFLECTIONSMOKEHISTORY, LIT_REFLECTIONSMOKEFEEDBACK, LIT_REFLECTIONSMOKEOPTICS):
-            command += ["--reject-log-message", prefix]
-    if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable)]
+        reject_logs = (LIT_REFLECTIONSMOKESTATISTICS, LIT_REFLECTIONSMOKEHISTORY, LIT_REFLECTIONSMOKEFEEDBACK, LIT_REFLECTIONSMOKEOPTICS)
+    if args.require_hardware:
+        expect_logs.append("ReflectionSmokeProject: hardware available")
+        skip_logs = ()
     else:
-        command.append("--no-logserver")
-    command.extend("--application-arg=" + argument for argument in args.application_arg)
+        skip_logs = ("ReflectionSmokeProject: hardware unavailable",)
+    command = build_window_capture_command(args, output, frames=1 if spec.diagnostics else max(64, spec.accepted_frames) + 1,
+        log_output=log_path, expect_logs=expect_logs, reject_logs=reject_logs, skip_logs=skip_logs)
     print(f"Capturing {spec.name}: feedback={spec.enabled}, steps={spec.screen_steps}, budget={spec.hardware_budget}...", flush=True)
-    result = subprocess.run(command, env=spec_environment(spec), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode == SKIP_EXIT_CODE:
+    if run_window_capture_subprocess(command, env=spec_environment(spec), timeout=args.timeout, failure_message=f"{spec.name} capture failed: {{code}}") is None:
         return None
-    if result.returncode:
-        raise SmokeFailure(f"{spec.name} capture failed: {result.returncode}")
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     ReflectionImageAnalysis.validate_frame(frame)
     if frame[:2] != spec.dimensions:
         raise SmokeFailure("feedback readback dimensions do not match the selected native/NPOT preset")
-    text = output.with_suffix(LIT_LOG).read_text(encoding=LIT_UTF_8)
+    text = log_path.read_text(encoding=LIT_UTF_8)
     if not spec.diagnostics:
         return ReflectionFeedbackEvidence.validate_diagnostics_off(text, spec)
     statistics = ReflectionStatistics.parse_statistics(text)
@@ -147,7 +144,7 @@ def capture(args, spec):
 def analyze_suite(directory, evidence, specs=CAPTURES):
     available = {spec.name: spec for spec in specs}
     def frame(name):
-        return read_bmp_24_rows(directory / (name + LIT_BMP))
+        return Bmp24Codec.read_bmp_24_rows(directory / (name + LIT_BMP))
     metrics = {}
     for case in (LIT_OFFSCREEN, LIT_FLOOR, LIT_OPAQUE_GLASS):
         first, second = LIT_DIAGNOSTICS_OFF + case + LIT_BASELINE, LIT_DIAGNOSTICS_OFF + case + LIT_FEEDBACK
@@ -177,30 +174,23 @@ def write_report(args, completed, evidence, metrics=None):
     stem = "reflection_feedback_diagnostics_off" if diagnostics_off else "reflection_feedback"
     note = "Actual framebuffer readbacks. Diagnostic captures include completed feedback observations for budget guards, returns, probes, source-change invalidation and actual traversal work. The separate diagnostics-off suite checks frozen smooth images after the framebuffer completion fence and contains no feedback counter evidence. Counter reductions do not establish GPU speed; optimized benchmarks remain separate."
     build_identity = {"executable_sha256": file_identity(args.executable)["sha256"], "asset_volumes": authored_volume_hashes(args.working_directory)}
+    here = Path(__file__)
     metadata = {"frame_source": "actual application framebuffer readback", "captures": [asdict(spec) for spec in completed], "build_identity": build_identity, "temporal": False, "spatial_filter": False,
         "fixed_delta_seconds": 0.016666667, "optical_queries": 16, "completed_frame_evidence": evidence, "metrics": metrics, LIT_SCOPE: note,
-        "analyzer_source_sha256_lf": hashlib.sha256(Path(__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "analyzer_dependencies_sha256_lf": {
-            "framebuffer_png_encoder.py": hashlib.sha256(Path(__file__).with_name("framebuffer_png_encoder.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-            "reflection_feedback_image_analysis.py": hashlib.sha256(Path(feedback_image_analysis.__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-            "reflection_roughness_reference.py": hashlib.sha256(Path(__file__).with_name("reflection_roughness_reference.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-            "reflection_roughness_oracle.py": hashlib.sha256(Path(__file__).with_name("reflection_roughness_oracle.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-            "reflection_roughness_image_evidence.py": hashlib.sha256(Path(__file__).with_name("reflection_roughness_image_evidence.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-            "reflection_feedback_evidence.py": hashlib.sha256(Path(feedback_evidence.__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        }}
-    (args.output_directory / (stem + "_manifest.json")).write_text(json.dumps(metadata, indent=2) + LIT_N, encoding=LIT_UTF_8)
-    cards = []
-    for spec in completed:
-        path = args.output_directory / (spec.name + LIT_BMP)
-        png = FramebufferPngEncoder.encode(read_bmp_24_rows(path))
-        path.with_suffix(".png").write_bytes(png)
-        cards.append(f'<article><h2>{html.escape(spec.name)}</h2><a href="{spec.name}.bmp">Raw BMP</a> / ' f'<a href="{spec.name}.log">Completed-frame log</a><img alt="Actual {html.escape(spec.name)} capture" '
-            f'src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection feedback evidence</title>'
-    document += '<style>body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}</style>'
-    document += '<h1>Reflection feedback — actual captures</h1><p>' + html.escape(note) + '</p><main>' + ''.join(cards) + '</main><pre>'
-    document += html.escape(json.dumps(metrics, indent=2) if metrics else 'Captured evidence; assertions pending.') + '</pre></html>'
-    (args.output_directory / (stem + ".html")).write_text(document, encoding=LIT_UTF_8)
+        "analyzer_source_sha256_lf": sha256_lf(__file__),
+        "analyzer_dependencies_sha256_lf": sha256_source_files({
+            "framebuffer_png_encoder.py": here.with_name("framebuffer_png_encoder.py"),
+            "reflection_feedback_image_analysis.py": feedback_image_analysis.__file__,
+            "reflection_roughness_reference.py": here.with_name("reflection_roughness_reference.py"),
+            "reflection_roughness_oracle.py": here.with_name("reflection_roughness_oracle.py"),
+            "reflection_roughness_image_evidence.py": here.with_name("reflection_roughness_image_evidence.py"),
+            "reflection_feedback_evidence.py": feedback_evidence.__file__,
+        })}
+    items = [(spec.name, spec.name, spec.name + LIT_BMP, spec.name + LIT_LOG, "Completed-frame log", f"Actual {spec.name} capture", None) for spec in completed]
+    style = "body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}"
+    write_evidence_gallery_report(args.output_directory, manifest_name=stem + "_manifest.json", html_name=stem + ".html", metadata=metadata,
+        title="Reflection feedback evidence", heading="Reflection feedback \u2014 actual captures", note=note, items=items, metrics=metrics,
+        pending_message="Captured evidence; assertions pending.", style=style)
 
 
 def run_suite(args):

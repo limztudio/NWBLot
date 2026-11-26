@@ -42,10 +42,6 @@ extern void TestMoveAssign<T>(mut T destination, mut T source);
 extern b8 TestUsesStorage(in auto sequence, in auto storage);
 
 
-[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestReflectedMethodCount")]
-extern usize TestReflectedMethodCount<T>();
-
-
 b8 OverwritePOD<T>(in usize offset, in T value, mut Span<u8> bytes){
     const Span<u8> payload = PodBytes(value);
     if(offset > bytes.size() || payload.size() > bytes.size() - offset)

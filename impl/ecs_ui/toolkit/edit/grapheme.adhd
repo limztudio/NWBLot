@@ -19,10 +19,6 @@ type EditBoundaryVector = Vector<usize>;
     return boundaries;
 }
 
-[cpp_unwind] Expected<EditBoundaryVector> BuildEditGraphemeBoundaries(in StringView text){
-    return BuildEditGraphemeBoundaries(text, false);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

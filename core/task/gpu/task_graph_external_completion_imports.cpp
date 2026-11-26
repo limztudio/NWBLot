@@ -47,7 +47,7 @@ Expected<GpuExternalCompletionId> GpuTaskGraph::importExternalCompletion(const G
         return MakeUnexpected(Failure{});
 
     const u32 completionIndex = findExternalCompletionIdentity(desc.identity);
-    if(completionIndex != s_InvalidImportIndex){
+    if(completionIndex != GpuGraphResourceImportIndex::s_InvalidImportIndex){
         GpuExternalCompletionNode& existing = m_externalCompletions[completionIndex];
         if(hasToken){
             if(existing.hasToken){
@@ -75,17 +75,17 @@ u32 GpuTaskGraph::findExternalCompletionIdentity(const Name& identity)const noex
     const NameHash& key = identity.identityHash();
     if(m_externalCompletionIdentityIndex){
         const auto found = m_externalCompletionIdentityIndex->find(key);
-        return found == m_externalCompletionIdentityIndex->end() ? s_InvalidImportIndex : found.value();
+        return found == m_externalCompletionIdentityIndex->end() ? GpuGraphResourceImportIndex::s_InvalidImportIndex : found.value();
     }
     for(usize index = 0u; index < m_externalCompletions.size(); ++index){
         if(m_externalCompletions[index].identity.identityHash() == key)
             return static_cast<u32>(index);
     }
-    return s_InvalidImportIndex;
+    return GpuGraphResourceImportIndex::s_InvalidImportIndex;
 }
 
 void GpuTaskGraph::prepareExternalCompletionIndex(){
-    if(m_externalCompletionIdentityIndex || m_externalCompletions.size() < s_InlineImportIndexCount)
+    if(m_externalCompletionIdentityIndex || m_externalCompletions.size() < GpuGraphResourceImportIndex::s_InlineImportIndexCount)
         return;
     const usize identityCount = AddSize(m_externalCompletions.size(), 1u);
     ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);

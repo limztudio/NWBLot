@@ -3,11 +3,10 @@ from __future__ import annotations
 import math
 import re
 
-from numeric_edit_probe import ink_coverage
 from edit_probe import caret_pixel_column
-from probe_common import center, text_hash
+from probe_common import FrameProbeRecorder, NUMBER, center, compile_smoke_patterns, ink_coverage, text_hash
 from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
+from probe_reference import linear_channels, linear_rgb_bytes
 
 LIT_COHERENT = "coherent"
 LIT_LINE_COUNT = "line_count"
@@ -35,14 +34,10 @@ LIT_TEXT_INK = "text_ink"
 LIT_COVERAGE = "coverage"
 
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiTextAreaSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiTextAreaSmoke: state sequence=(\d+) values=((?:\d+,){24}\d+)")
-GEOMETRY = re.compile(rf"UiTextAreaSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-METRICS = re.compile(rf"UiTextAreaSmoke: metrics sequence=(\d+) scroll=({NUMBER}),({NUMBER}) measure=({NUMBER}),({NUMBER}) line_height=({NUMBER}) selections=(\d+) maximum=({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiTextAreaSmoke: skin=(default|alternate)")
 FIELDS = ("bytes", "hash", "anchor", "caret", "focus", "enabled", "readonly", "compact", "long_document", "preferred_valid", "preferred_bits", "submits", "cancels", "blurs", "abandons", "outside", "clipboard_seeds",
     "clipboard_pending", "model_revision", "external_revision", "selection_generation", LIT_COHERENT, LIT_LINE_COUNT, "can_undo", "can_redo")
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiTextAreaSmoke", len(FIELDS))
+METRICS = re.compile(rf"UiTextAreaSmoke: metrics sequence=(\d+) scroll=({NUMBER}),({NUMBER}) measure=({NUMBER}),({NUMBER}) line_height=({NUMBER}) selections=(\d+) maximum=({NUMBER}),({NUMBER})")
 RECTANGLES = ("bounds", "content", "clip", "caret", "reset", "long", "readonly", "enabled", "viewport", "clipboard", "outside", "x_track", "x_thumb", "y_track", "y_thumb", "corner")
 MARKER_PARTS = tuple(3 if index in (1, 10, 18, 19, 20) else 2 for index in range(len(FIELDS))) + (2,)
 
@@ -81,22 +76,11 @@ def snapshot_from_logs(text):
 def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None, extra=None, minimum_selection_lines=0, allow_offscreen_caret=False):
     width, height, rows = frame
     scale_x, scale_y = snapshot[LIT_SCALE]
-    probes = []
+    recorder = FrameProbeRecorder(frame, snapshot[LIT_SCALE], "TextArea")
+    probes = recorder.probes
+    probe = lambda name, position, color, tolerance=5, radius=1: recorder.probe(name, position, color, tolerance, radius=radius)
 
-    def probe(name, position, color, tolerance=5, radius=1):
-        x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"TextArea probe '{name}' is outside {width}x{height}: ({x},{y})")
-        pixels = [rows[py][px] for py in range(y - radius, y + radius + 1) for px in range(x - radius, x + radius + 1)]
-        observed = tuple(sorted(pixel[channel] for pixel in pixels)[len(pixels) // 2] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({LIT_NAME: name, LIT_POSITION: [x, y], LIT_EXPECTED: list(color), LIT_OBSERVED: list(observed), LIT_ERROR: error, LIT_PASSED: error <= tolerance})
-
-    marker = 0
-    for index, (value, parts) in enumerate(zip((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), MARKER_PARTS)):
-        for part in range(parts):
-            probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot[LIT_LOGICAL_EXTENT][1] - 13.0), encoded_marker(value >> (part * 12)))
-            marker += 1
+    marker = recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), 11.0, 8.0, snapshot[LIT_LOGICAL_EXTENT][1] - 13.0, parts=MARKER_PARTS, tolerance=5)
     panel = (39, 63, 34) if skin == LIT_ALTERNATE else (24, 29, 37)
     probe("panel_atlas", (28.0, 394.0), panel, 8)
     bx, by, bw, bh = snapshot[LIT_RECTANGLES]["bounds"]

@@ -130,7 +130,6 @@ enum<u8> MaterialTypedLayoutValidationStatus{
     TotalBlockByteCountMismatch
 }
 
-[reflect]
 class MaterialTypedLayoutBlock{
     public Name blockName = s_NameNone;
     public MaterialBlockClass blockClass = MaterialBlockClass::None;
@@ -139,7 +138,6 @@ class MaterialTypedLayoutBlock{
     public u32 byteSize = 0u;
 }
 
-[reflect]
 class MaterialTypedLayoutField{
     public Name fieldName = s_NameNone;
     public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::None;
@@ -147,7 +145,6 @@ class MaterialTypedLayoutField{
     public u32x4u defaultValue;
 }
 
-[reflect]
 class MaterialResourceReference{
     public Name blockName = s_NameNone;
     public Name fieldName = s_NameNone;

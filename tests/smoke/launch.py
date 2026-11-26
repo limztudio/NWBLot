@@ -37,9 +37,7 @@ FLAG_VALUE_ON = "on"
 ENABLED_VALUE = "1"
 DISABLED_VALUE = "0"
 MSG_UNKNOWN_SCENE = "unknown smoke scene '{scene}' (valid: {valid})"
-MSG_NO_BACKEND = "scene '{scene_name}' does not have backend '{backend}' (valid: {valid})"
 MSG_SCENES_HEADER = "smoke scenes:"
-MSG_SCENE_LINE = "  smoke {name} --backend {{{backends}}}"
 MSG_RAY_BUDGET = "reflection ray budget must be a nonnegative u32"
 TESTING_DIR = "Testing"
 MAIN_ENTRY = "__main__"
@@ -50,8 +48,6 @@ REFLECTION_OPT_DIAGNOSTICS = "diagnostics"
 REFLECTION_OPT_FEEDBACK = "feedback"
 SAMPLES_METAVAR = "1..256"
 ACTION_STORE_TRUE = "store_true"
-BACKEND_NATIVE_LABEL = "native"
-BACKEND_NATIVE = BACKEND_NATIVE_LABEL
 
 
 @dataclass(frozen=True)
@@ -63,25 +59,30 @@ class SmokeExecutable:
 @dataclass(frozen=True)
 class SmokeScene:
     runtime: str
-    backends: Dict[str, SmokeExecutable]
+    executable: SmokeExecutable
 
 
 SMOKE_REQUIRED_DEFINES = { "NWB_BUILD_LOADER": DEFINE_ON, "NWB_BUILD_LOGSERVER": DEFINE_ON, "NWB_BUILD_PIPELINE": DEFINE_ON, "NWB_BUILD_TESTS": DEFINE_ON, "NWB_BUILD_UTILITIES": DEFINE_ON, }
 
 
-SMOKE_SCENES = { "reflection": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_reflection_smoke", "reflection_smoke"), },), "refraction": SmokeScene(runtime=RUNTIME_SMOKE, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_refraction_smoke", "refraction_smoke"), },), DEFAULT_SCENE: SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke"), },),
-    "transparent-csg": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke"), },), "texture": SmokeScene(runtime=RUNTIME_TEXTURE_SMOKE, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_texture_smoke", "texture_smoke"), },), "caustic-sphere": SmokeScene(runtime=RUNTIME_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_caustic_sphere_smoke", "caustic_sphere_smoke"), },),
-    "csg-visible": SmokeScene(runtime=RUNTIME_CSG_VISIBLE_SMOKE, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_csg_visible_smoke", "csg_visible_smoke"), },), "csg-skinned-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_csg_skinned_visible_smoke", "csg_skinned_visible_smoke"), },), "csg-skinned-sphere-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_csg_skinned_sphere_visible_smoke", "csg_skinned_sphere_visible_smoke"), },), "csg-skinned-transparent-sphere-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_csg_skinned_transparent_sphere_visible_smoke", "csg_skinned_transparent_sphere_visible_smoke",), },), "skinning-culling-benchmark": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_skinning_culling_benchmark", "skinning_culling_benchmark"), },), "skinned-caustic": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_skinned_caustic_smoke", "skinned_caustic_smoke"), },), "stress-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, backends={
-            BACKEND_NATIVE: SmokeExecutable("nwb_stress_test_smoke", "stress_test_smoke"), },), "flicker-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_flicker_test_smoke", "flicker_test_smoke"),
-        },), "soft-shadow-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, backends={ BACKEND_NATIVE: SmokeExecutable("nwb_soft_shadow_test_smoke", "soft_shadow_test_smoke"), },), "gi-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK,
-        backends={ BACKEND_NATIVE: SmokeExecutable("nwb_gi_test_smoke", "gi_test_smoke"), },), }
+SMOKE_SCENES = {
+    "reflection": SmokeScene(runtime=RUNTIME_SMOKE, executable=SmokeExecutable("nwb_reflection_smoke", "reflection_smoke")),
+    "refraction": SmokeScene(runtime=RUNTIME_SMOKE, executable=SmokeExecutable("nwb_refraction_smoke", "refraction_smoke")),
+    DEFAULT_SCENE: SmokeScene(runtime=RUNTIME_SMOKE, executable=SmokeExecutable("nwb_transparent_multi_smoke", "transparent_multi_smoke")),
+    "transparent-csg": SmokeScene(runtime=RUNTIME_SMOKE, executable=SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke")),
+    "texture": SmokeScene(runtime=RUNTIME_TEXTURE_SMOKE, executable=SmokeExecutable("nwb_texture_smoke", "texture_smoke")),
+    "caustic-sphere": SmokeScene(runtime=RUNTIME_SMOKE, executable=SmokeExecutable("nwb_caustic_sphere_smoke", "caustic_sphere_smoke")),
+    "csg-visible": SmokeScene(runtime=RUNTIME_CSG_VISIBLE_SMOKE, executable=SmokeExecutable("nwb_csg_visible_smoke", "csg_visible_smoke")),
+    "csg-skinned-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, executable=SmokeExecutable("nwb_csg_skinned_visible_smoke", "csg_skinned_visible_smoke")),
+    "csg-skinned-sphere-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, executable=SmokeExecutable("nwb_csg_skinned_sphere_visible_smoke", "csg_skinned_sphere_visible_smoke")),
+    "csg-skinned-transparent-sphere-visible": SmokeScene(runtime=RUNTIME_CSG_SKINNED_VISIBLE_SMOKE, executable=SmokeExecutable("nwb_csg_skinned_transparent_sphere_visible_smoke", "csg_skinned_transparent_sphere_visible_smoke")),
+    "skinning-culling-benchmark": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, executable=SmokeExecutable("nwb_skinning_culling_benchmark", "skinning_culling_benchmark")),
+    "skinned-caustic": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, executable=SmokeExecutable("nwb_skinned_caustic_smoke", "skinned_caustic_smoke")),
+    "stress-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, executable=SmokeExecutable("nwb_stress_test_smoke", "stress_test_smoke")),
+    "flicker-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, executable=SmokeExecutable("nwb_flicker_test_smoke", "flicker_test_smoke")),
+    "soft-shadow-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, executable=SmokeExecutable("nwb_soft_shadow_test_smoke", "soft_shadow_test_smoke")),
+    "gi-test": SmokeScene(runtime=RUNTIME_SKINNING_CULLING_BENCHMARK, executable=SmokeExecutable("nwb_gi_test_smoke", "gi_test_smoke")),
+}
 
 
 def build_smoke_environment(args) -> Dict[str, str]:
@@ -127,11 +128,8 @@ def smoke_scene_name(args) -> str:
 def smoke_command(args) -> int:
     scene_name = smoke_scene_name(args)
     scene = SMOKE_SCENES[scene_name]
-    if args.backend not in scene.backends:
-        valid = LIST_SEPARATOR.join(sorted(scene.backends))
-        raise SystemExit(MSG_NO_BACKEND.format(scene_name=scene_name, backend=args.backend, valid=valid))
 
-    smoke_executable = scene.backends[args.backend]
+    smoke_executable = scene.executable
     env = build_smoke_environment(args)
     settings = CmakeSettings.resolve_launch_settings(args, DEFAULT_DOMAIN)
     CmakeSettings.maybe_configure(args, settings, CmakeSettings.merged_required_defines(SMOKE_REQUIRED_DEFINES, CmakeSettings.profile_required_defines(args)), env,)
@@ -148,9 +146,7 @@ def smoke_command(args) -> int:
 def profiles_command(_args) -> int:
     print(MSG_SCENES_HEADER)
     for name in sorted(SMOKE_SCENES):
-        scene = SMOKE_SCENES[name]
-        backends = LIST_SEPARATOR.join(sorted(scene.backends))
-        print(MSG_SCENE_LINE.format(name=name, backends=backends))
+        print(f"  smoke {name}")
     return 0
 
 
@@ -170,7 +166,6 @@ def reflection_ray_budget(value: str) -> int:
 def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("scene_name", nargs="?", help="Smoke scene name.")
     parser.add_argument("--scene", choices=sorted(SMOKE_SCENES), default=DEFAULT_SCENE)
-    parser.add_argument("--backend", default=BACKEND_NATIVE, help="Backend variant for the scene; currently native.")
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
     parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor", "feedback_boundary", "feedback_mutation", "feedback_long_miss",
@@ -189,7 +184,7 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reflection-seed", type=reflection_ray_budget, help="Deterministic u32 sampling seed.")
     parser.add_argument("--reflection-optical-queries", type=int, choices=range(1, 17), metavar="1..16", help="Typed maximum scene queries per reflected optical path, including bootstrap and continuations.")
     parser.add_argument("--reflection-screen-steps", type=int, choices=range(8, 257), metavar="8..256", help="Typed bound on actual screen traversal iterations.")
-    parser.add_argument("--reflection-extent", choices=(BACKEND_NATIVE, "npot"), help="Use the 960x720 standard framebuffer or the fixed 953x713 partial-workgroup fixture.")
+    parser.add_argument("--reflection-extent", choices=("native", "npot"), help="Use the 960x720 standard framebuffer or the fixed 953x713 partial-workgroup fixture.")
     for option in (REFLECTION_OPT_TEMPORAL, REFLECTION_OPT_SPATIAL, REFLECTION_OPT_DIAGNOSTICS, "final-state", REFLECTION_OPT_FEEDBACK):
         parser.add_argument("--reflection-" + option, choices=(FLAG_VALUE_ON, "off"), help="Set the test fixture's typed " + option + " control.")
     parser.add_argument("--refraction-case", choices=("single", "separate", "stacked", "intersecting", "nested", "coincident", "coincident_tinted", "torus", "same_mesh", "prism",

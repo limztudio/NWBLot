@@ -71,12 +71,6 @@ void nwbPhysicsResMakeSoftness(const float hertz, const float zeta, const float 
     outImpulseScale = a3;
 }
 
-float nwbPhysicsResLinearInvMassDot(const float3 a, const float3 b, const float invMass, const uint flags){
-    if((flags & 0x07u) == 0u)
-        return invMass * dot(a, b);
-    return invMass * dot(a, nwbPhysicsApplyLinearLocks(b, flags));
-}
-
 uint nwbPhysicsResHashShapePair(const uint shapeA, const uint shapeB, const uint mask){
     const uint lo = min(shapeA, shapeB);
     const uint hi = max(shapeA, shapeB);
@@ -327,7 +321,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     if(mode != NWB_PHYSICS_RES_PREP_MODE_BUILD_CONSTRAINTS)
         return;
 
-    const bool isComplex = (flags & 1u) != 0u;
     const bool enableSoftening = (flags & 2u) != 0u;
     const bool enableWarmStarting = (flags & 4u) != 0u;
     const uint warmPow2 = (flags >> 8u) & 0x1fu;
@@ -496,7 +489,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             }
                         }
 
-                        const float baseLinearKN = nwbPhysicsResLinearInvMassDot(n, n, invMassA, flagsA) + nwbPhysicsResLinearInvMassDot(n, n, invMassB, flagsB);
+                        const float baseLinearKN = nwbPhysicsLinearInvMassDot(n, n, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(n, n, invMassB, flagsB);
                         float4 normMassArr = float4(0.0f, 0.0f, 0.0f, 0.0f);
                         float3 sumCenterA = float3(0.0f, 0.0f, 0.0f);
                         float3 sumCenterB = float3(0.0f, 0.0f, 0.0f);
@@ -560,9 +553,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const float3 irt1B = hasB ? nwbPhysicsMulSymmetric3(invIB0, invIB1, rt1B) : float3(0.0f, 0.0f, 0.0f);
                         const float3 irt2B = hasB ? nwbPhysicsMulSymmetric3(invIB0, invIB1, rt2B) : float3(0.0f, 0.0f, 0.0f);
 
-                        const float lin00 = nwbPhysicsResLinearInvMassDot(t1, t1, invMassA, flagsA) + nwbPhysicsResLinearInvMassDot(t1, t1, invMassB, flagsB);
-                        const float lin01 = nwbPhysicsResLinearInvMassDot(t1, t2, invMassA, flagsA) + nwbPhysicsResLinearInvMassDot(t1, t2, invMassB, flagsB);
-                        const float lin11 = nwbPhysicsResLinearInvMassDot(t2, t2, invMassA, flagsA) + nwbPhysicsResLinearInvMassDot(t2, t2, invMassB, flagsB);
+                        const float lin00 = nwbPhysicsLinearInvMassDot(t1, t1, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(t1, t1, invMassB, flagsB);
+                        const float lin01 = nwbPhysicsLinearInvMassDot(t1, t2, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(t1, t2, invMassB, flagsB);
+                        const float lin11 = nwbPhysicsLinearInvMassDot(t2, t2, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(t2, t2, invMassB, flagsB);
                         const float k00 = lin00 + dot(rt1A, irt1A) + dot(rt1B, irt1B);
                         const float k01 = lin01 + dot(rt1A, irt2A) + dot(rt1B, irt2B);
                         const float k11 = lin11 + dot(rt2A, irt2A) + dot(rt2B, irt2B);

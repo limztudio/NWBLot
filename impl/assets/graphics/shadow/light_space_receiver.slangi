@@ -10,6 +10,7 @@
 
 
 #include "../common/math.slangi"
+#include "shadow_sampling.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,6 +60,41 @@ bool nwbLightSpaceReceiverPosition(const uint2 pixel, const float depth, out flo
     return all(isfinite(position)) && all(isfinite(positionError));
 }
 #endif
+
+bool nwbLightSpaceLoadReceiver<let AllowBackground : bool>(
+    const uint2 pixel,
+    const uint2 fullExtent,
+    out bool outBackground,
+    out float3 outPosition,
+    out float3 outNormal,
+    out float3 outPositionError
+){
+    const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
+    const int3 texel = int3(receiverPixel, 0);
+    outPosition = float3(0.0);
+    outPositionError = float3(0.0);
+    outNormal = float3(0.0, 0.0, 1.0);
+    const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
+    outBackground = AllowBackground && depth >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
+    bool receiverValid = true;
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+    receiverValid = outBackground || nwbLightSpaceReceiverPosition(receiverPixel, depth, outPosition, outPositionError);
+#else
+    outPosition = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
+#endif
+    if(receiverValid)
+        outNormal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
+    return receiverValid;
+}
+
+float2 nwbLightSpaceSampleJitter(const uint2 pixel, const uint sample){
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+    const uint salt = NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT;
+#else
+    const uint salt = 0u;
+#endif
+    return nwbShadowLowDiscrepancy2D(pixel, g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

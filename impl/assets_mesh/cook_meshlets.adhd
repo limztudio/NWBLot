@@ -82,40 +82,6 @@ VectorSingle NormalizeMeshletDirection3OrZero(in VectorSingle value){
     return VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-Expected<u8> TryFindMeshletLocalVertex(in Span<u32> localVertexRefs, in u32 vertexRefIndex){
-    for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
-        if(localVertexRefs[localIndex] != vertexRefIndex)
-            continue;
-
-        return cast<u8>(localIndex);
-    }
-
-    return MakeUnexpected(Failure());
-}
-
-MeshletVertexCounts CountMeshletMissingVertices(in Span<u32> localVertexRefs, in MeshletTriangleData triangle){
-    MeshletVertexCounts counts;
-    for(usize cornerIndex = 0u; cornerIndex < cast<usize>(s_MeshletTriangleIndexCount); ++cornerIndex){
-        const u32 vertexRefIndex = triangle.vertexRefs[cornerIndex];
-        b8 repeatedInTriangle = false;
-        for(usize previousCornerIndex = 0u; previousCornerIndex < cornerIndex; ++previousCornerIndex){
-            if(triangle.vertexRefs[previousCornerIndex] == vertexRefIndex){
-                repeatedInTriangle = true;
-                break;
-            }
-        }
-        if(repeatedInTriangle)
-            continue;
-
-        if(TryFindMeshletLocalVertex(localVertexRefs, vertexRefIndex).has_value())
-            ++counts.shared;
-        else
-            ++counts.missing;
-    }
-
-    return counts;
-}
-
 MeshletVertexCounts CountMeshletMissingVerticesStamped(
     in Span<u32> vertexMeshletStamps,
     in u32 currentMeshletStamp,

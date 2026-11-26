@@ -24,8 +24,6 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 
 import launch as AB_LAUNCH  # noqa: E402
 from launcher.build import BuildController  # noqa: E402
-from launcher.cli import LauncherCli  # noqa: E402
-from launcher.cmake_settings import CmakeSettings  # noqa: E402
 from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 
 LIT_EXECUTABLE = "--executable"
@@ -47,7 +45,7 @@ class FrameLaggedPaths:
 
 def resolve_paths(args: argparse.Namespace, settings) -> FrameLaggedPaths:
     executable = BuildController.resolve_executable_path(settings, SMOKE_TARGET, args.executable, None, args.dry_run,)
-    runtime_directory = (CmakeSettings.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
+    runtime_directory = AB_LAUNCH.resolve_ab_runtime_directory(settings, args.runtime_dir, RUNTIME_DIRECTORY)
     return FrameLaggedPaths(executable, runtime_directory)
 
 
@@ -62,7 +60,7 @@ def run_runner(args: argparse.Namespace, paths: FrameLaggedPaths) -> int:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    LauncherCli.add_build_options(parser)
+    AB_LAUNCH.LauncherCli.add_build_options(parser)
     parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the frame-lagged smoke executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked smoke runtime directory.")
     AB_LAUNCH.add_ab_runner_options(
@@ -79,11 +77,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run(args: argparse.Namespace) -> int:
-    environment = BuildController.build_environment(args)
-    settings = CmakeSettings.resolve_launch_settings(args, DEFAULT_DOMAIN)
-    CmakeSettings.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
-    settings = CmakeSettings.refresh_launch_settings(settings, args.domain)
-    BuildController.build_target(args, settings, SMOKE_TARGET, environment)
+    settings = AB_LAUNCH.configure_and_build_ab_targets(args, DEFAULT_DOMAIN, REQUIRED_DEFINES, (SMOKE_TARGET,))
     return run_runner(args, resolve_paths(args, settings))
 
 

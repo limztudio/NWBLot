@@ -241,7 +241,7 @@ void SetSuiteInstancePitchAndX(in f32 x, mut InstanceGpuData instance){
 }
 
 u64 BuildSuiteLightSpaceCsgCaptureIdentity(in LightSpaceCsgState state, in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances, in Span<u8> materialBytes){
-    return BuildLightSpaceCsgCaptureIdentity(state, materials, instances, materialBytes, Span<TextureHandle>());
+    return BuildLightSpaceCsgCaptureIdentityWithMaterialHash(state, materials, instances, materialBytes.size(), UpdateFnv64(s_Fnv64OffsetBasis, materialBytes), Span<TextureHandle>());
 }
 
 u64 BuildSuiteLightSpaceCsgCaptureIdentityEmptyBytes(in LightSpaceCsgState state, in Span<NwbRtInstanceMaterialGpu> materials, in Span<InstanceGpuData> instances){
@@ -252,18 +252,64 @@ GpuDescriptorHandle MakeSuiteStorageBufferDescriptor(in u32 slot){ return GpuDes
 
 Span<u32> EmptySuiteU32Span(){ return Span<u32>(); }
 
-Expected<CsgClipWorkBounds> ResolveSuiteCsgBoxWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgBoxShapeParameters parameters, in CsgClipWorkBounds receiver){
-    return ResolveCsgClipWorkBounds(registry, shape, transform, PodBytes(parameters), receiver);
+class SuiteCsgClipWorkBounds{
+    public f32x4 minBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 maxBounds(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 valid = false;
 }
 
-Expected<CsgClipWorkBounds> ResolveSuiteCsgTranslatedBoxWorkBounds(
+Expected<SuiteCsgClipWorkBounds> ResolveSuiteCsgClipWorkBounds(in CsgShapeRegistry shapeRegistry, in CsgShapeTypeInfo shapeType, in MatrixSingle shapeToWorld, in Span<u8> parameterBytes, in SuiteCsgClipWorkBounds receiverBounds){
+    if(!CsgClipCutterRequiresShapeBounds(receiverBounds.valid, shapeType.desc.shaderModule != s_NameNone, shapeType.desc.name))
+        return SuiteCsgClipWorkBounds();
+
+    const auto cutterBounds = shapeRegistry.buildShapeBounds(shapeType.id, shapeToWorld, parameterBytes);
+    b8 cutterBoundsResolved = false;
+    b8 cutterFiniteBounds = false;
+    VectorSingle cutterMinBounds = VectorZero();
+    VectorSingle cutterMaxBounds = VectorZero();
+    if(cutterBounds.has_value()){
+        cutterBoundsResolved = true;
+        cutterFiniteBounds = cutterBounds.value().finiteBounds;
+        cutterMinBounds = VectorSingle(cutterBounds.value().minBounds);
+        cutterMaxBounds = VectorSingle(cutterBounds.value().maxBounds);
+    }
+
+    b8 resolvedValid = false;
+    VectorSingle resolvedMin = VectorZero();
+    VectorSingle resolvedMax = VectorZero();
+    if(!ResolveCsgClipWorkBoundsValues(
+        receiverBounds.valid,
+        VectorSingle(receiverBounds.minBounds),
+        VectorSingle(receiverBounds.maxBounds),
+        cutterBoundsResolved,
+        cutterFiniteBounds,
+        cutterMinBounds,
+        cutterMaxBounds,
+        resolvedValid,
+        resolvedMin,
+        resolvedMax
+    ))
+        return MakeUnexpected(Failure());
+
+    SuiteCsgClipWorkBounds outWorkBounds;
+    outWorkBounds.minBounds = f32x4(resolvedMin);
+    outWorkBounds.maxBounds = f32x4(resolvedMax);
+    outWorkBounds.valid = resolvedValid;
+    return outWorkBounds;
+}
+
+Expected<SuiteCsgClipWorkBounds> ResolveSuiteCsgBoxWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgBoxShapeParameters parameters, in SuiteCsgClipWorkBounds receiver){
+    return ResolveSuiteCsgClipWorkBounds(registry, shape, transform, PodBytes(parameters), receiver);
+}
+
+Expected<SuiteCsgClipWorkBounds> ResolveSuiteCsgTranslatedBoxWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in f32 x,
     in f32 y,
     in f32 z,
     in CsgBoxShapeParameters parameters,
-    in CsgClipWorkBounds receiver
+    in SuiteCsgClipWorkBounds receiver
 ){
     return ResolveSuiteCsgBoxWorkBounds(registry, shape, MatrixTranslation(x, y, z), parameters, receiver);
 }
@@ -272,8 +318,8 @@ void ExpandSuitePerspectiveWorldBounds(mut CsgFrameWorkRegion region, in VectorS
     region.expandWorldBounds(MatrixPerspectiveFovLH(s_HalfPi, 1.0f, 0.1f, 100.0f), minimum, maximum, width, height);
 }
 
-Expected<CsgClipWorkBounds> ResolveSuiteCsgEmptyWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in CsgClipWorkBounds receiver){
-    return ResolveCsgClipWorkBounds(registry, shape, transform, Span<u8>(), receiver);
+Expected<SuiteCsgClipWorkBounds> ResolveSuiteCsgEmptyWorkBounds(in CsgShapeRegistry registry, in CsgShapeTypeInfo shape, in MatrixSingle transform, in SuiteCsgClipWorkBounds receiver){
+    return ResolveSuiteCsgClipWorkBounds(registry, shape, transform, Span<u8>(), receiver);
 }
 
 void SuiteSelectOpticalVolumes(mut CoincidentSelectionContext context, in Span<CoincidentOpticalVolumeCandidate> candidates){
@@ -351,24 +397,24 @@ Span<u32> AsSuiteU32Span(in Span<u32> words){
     return words;
 }
 
-Expected<CsgClipWorkBounds> SuiteResolveCsgBoxWorkBounds(
+Expected<SuiteCsgClipWorkBounds> SuiteResolveCsgBoxWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in MatrixSingle shapeToWorld,
     in CsgBoxShapeParameters parameters,
-    in CsgClipWorkBounds receiver
+    in SuiteCsgClipWorkBounds receiver
 ){
     return ResolveSuiteCsgBoxWorkBounds(registry, shape, shapeToWorld, parameters, receiver);
 }
 
-Expected<CsgClipWorkBounds> SuiteResolveCsgTranslatedBoxWorkBounds(
+Expected<SuiteCsgClipWorkBounds> SuiteResolveCsgTranslatedBoxWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in f32 tx,
     in f32 ty,
     in f32 tz,
     in CsgBoxShapeParameters parameters,
-    in CsgClipWorkBounds receiver
+    in SuiteCsgClipWorkBounds receiver
 ){
     return ResolveSuiteCsgTranslatedBoxWorkBounds(registry, shape, tx, ty, tz, parameters, receiver);
 }
@@ -383,11 +429,11 @@ void SuiteExpandPerspectiveCsgWorldBounds(
     ExpandSuitePerspectiveWorldBounds(region, minBounds, maxBounds, width, height);
 }
 
-Expected<CsgClipWorkBounds> SuiteResolveCsgEmptyWorkBounds(
+Expected<SuiteCsgClipWorkBounds> SuiteResolveCsgEmptyWorkBounds(
     in CsgShapeRegistry registry,
     in CsgShapeTypeInfo shape,
     in MatrixSingle shapeToWorld,
-    in CsgClipWorkBounds receiver
+    in SuiteCsgClipWorkBounds receiver
 ){
     return ResolveSuiteCsgEmptyWorkBounds(registry, shape, shapeToWorld, receiver);
 }
@@ -1494,12 +1540,12 @@ void VerifyEcsGraphics_CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedR
     const CsgShapeTypeInfo shape = foundShape.value();
     CsgBoxShapeParameters parameters = CsgBoxShapeParameters();
     parameters.halfExtents = f32x4(0.25f, 0.125f, 0.5f, 0.0f);
-    CsgClipWorkBounds receiver = CsgClipWorkBounds();
+    SuiteCsgClipWorkBounds receiver = SuiteCsgClipWorkBounds();
     receiver.minBounds = f32x4(-20.0f, -20.0f, -20.0f, 0.0f);
     receiver.maxBounds = f32x4(-10.0f, -10.0f, -10.0f, 0.0f);
-    Expected<CsgClipWorkBounds> workResult = SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver);
+    Expected<SuiteCsgClipWorkBounds> workResult = SuiteResolveCsgTranslatedBoxWorkBounds(registry, shape, 0.5f, 0.25f, 2.0f, parameters, receiver);
     ASSERT_TRUE(workResult.has_value());
-    CsgClipWorkBounds work = workResult.value();
+    SuiteCsgClipWorkBounds work = workResult.value();
     ASSERT_TRUE(work.valid);
     EXPECT_FLOAT_EQ(work.minBounds.x, 0.25f);
     EXPECT_FLOAT_EQ(work.minBounds.y, 0.125f);
@@ -1537,10 +1583,10 @@ void VerifyEcsGraphics_CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPr
     const Expected<CsgShapeTypeInfo> foundShape2 = registry.findShapeType(s_CsgBoxShapeName);
     ASSERT_TRUE(foundShape2.has_value());
     CsgShapeTypeInfo shape = foundShape2.value();
-    CsgClipWorkBounds receiver = CsgClipWorkBounds();
-    Expected<CsgClipWorkBounds> workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
+    SuiteCsgClipWorkBounds receiver = SuiteCsgClipWorkBounds();
+    Expected<SuiteCsgClipWorkBounds> workResult = SuiteResolveCsgEmptyWorkBounds(registry, shape, identityMat, receiver);
     ASSERT_TRUE(workResult.has_value());
-    CsgClipWorkBounds work = workResult.value();
+    SuiteCsgClipWorkBounds work = workResult.value();
     ASSERT_TRUE(work.valid);
 
     CsgBoxShapeParameters invalidParameters = CsgBoxShapeParameters();
@@ -1797,16 +1843,20 @@ void VerifyMeshSkinning_NamedSkeletonResolutionAndScopeIsolation(){
         bind.skeletonEntityName = Name("HeroSkel");
     }
 
-    const EntityID resolved = ResolveSkinningSkeletonEntity(meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>(), tw.world);
+    SceneEntityNameIndex sceneNameIndex;
+    b8 sceneNameIndexBuilt = false;
+    HashSet<SceneEntityNameQueryKey> unresolvedSkeletonQueries;
+
+    const EntityID resolved = ResolveFrameSkinningSkeletonEntityWithCache(tw.world, sceneNameIndex, sceneNameIndexBuilt, unresolvedSkeletonQueries, meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>());
     EXPECT_EQ(resolved, skelB.id());
     EXPECT_EQ(meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntity, skelB.id());
 
     meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntity = skelA.id();
-    EXPECT_EQ(ResolveSkinningSkeletonEntity(meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>(), tw.world), skelA.id());
+    EXPECT_EQ(ResolveFrameSkinningSkeletonEntityWithCache(tw.world, sceneNameIndex, sceneNameIndexBuilt, unresolvedSkeletonQueries, meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>()), skelA.id());
 
     meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntity = s_InvalidEntityId;
     meshEnt.getComponent<SkinnedMeshBindingComponent>().skeletonEntityName = Name("NonExistentSkel");
-    EXPECT_EQ(ResolveSkinningSkeletonEntity(meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>(), tw.world), meshEnt.id());
+    EXPECT_EQ(ResolveFrameSkinningSkeletonEntityWithCache(tw.world, sceneNameIndex, sceneNameIndexBuilt, unresolvedSkeletonQueries, meshEnt.id(), meshEnt.getComponent<SkinnedMeshBindingComponent>()), meshEnt.id());
 }
 
 NWB_ADHD_GTEST(EcsGraphics, IndexedNamesPreserveMaximumIndices, VerifyEcsGraphics_IndexedNamesPreserveMaximumIndices)

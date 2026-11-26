@@ -5,6 +5,7 @@
 #include "fixture_sources.adhd"
 #include "extension_sdk.adhd"
 #include "cook_tools.adhd"
+#include <tests/common/platform_features.adhd>
 #include "model_case_fixture.adhd"
 #include "cook_contracts.adhd"
 #include "bunch_case_fixture.adhd"
@@ -490,13 +491,13 @@ Expected<ShaderArchiveRecordVector> DeserializeShaderIndexFromBytes(mut TestAren
 }
 
 StringView AssetsGraphicsTestConfigurationName(){
-    if(s_GraphicsDebugBuild) return "dbg";
-    if(s_GraphicsFinalBuild) return "fin";
+    if(s_IsDebugBuild) return "dbg";
+    if(s_IsFinalBuild) return "fin";
     return "opt";
 }
 
 b8 IsWindowsPlatformHost(){
-    return s_GraphicsWindowsHost;
+    return s_IsWindowsPlatform;
 }
 
 GraphicsTestPath JoinGraphicsPath(in GraphicsTestPath base, in StringView child){

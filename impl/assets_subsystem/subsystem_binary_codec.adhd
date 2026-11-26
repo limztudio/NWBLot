@@ -8,6 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ReadSubsystemPodSpan<PodT>(in Span<u8> binary, mut usize cursor, mut Span<PodT> outSpan){
+    for(usize i = 0u; i < outSpan.size(); ++i){
+        const Expected<PodT> item = ReadPOD<PodT>(binary, cursor);
+        if(!item.has_value())
+            return false;
+        outSpan[i] = item.value();
+    }
+    return true;
+}
+
 class SubsystemBinaryCounts{
     public usize cursor = 0u;
     public usize subsystemCount = 0u;
@@ -42,10 +52,6 @@ class SubsystemBinaryCodec{
     }
 
     private b8 validateHeader(in SubsystemHeaderBinary header, in Name assetType, in usize expectedFieldCount)const{
-        if(header.version != s_SubsystemVersion){
-            error("ISubsystem::loadBinary failed: unsupported version {}", header.version);
-            return false;
-        }
         if(header.subsystemTypeHash != assetType.hash()){
             error("ISubsystem::loadBinary failed: subsystem binary type does not match '{}'", assetType.resolvedText());
             return false;
@@ -60,6 +66,27 @@ class SubsystemBinaryCodec{
             return false;
         }
         return true;
+    }
+
+    private Expected<usize> validatePayloadSlice(
+        in Span<u8> binary,
+        mut usize inOutOffset,
+        in u64 rawCount,
+        in usize strideBytes,
+        in StringView label
+    )const{
+        if(rawCount > cast<u64>(usize.max / strideBytes)){
+            error("ISubsystem::loadBinary failed: '{}' payload byte size overflows", label);
+            return MakeUnexpected(Failure());
+        }
+        const usize count = cast<usize>(rawCount);
+        const usize byteCount = count * strideBytes;
+        if(!CanReadBytes(binary, inOutOffset, byteCount)){
+            error("ISubsystem::loadBinary failed: malformed '{}' payload", label);
+            return MakeUnexpected(Failure());
+        }
+        inOutOffset += byteCount;
+        return count;
     }
 
     private b8 validateFieldElementCountSum(in Span<u64> fieldCounts, in u64 expectedAssetCount)const{
@@ -119,56 +146,54 @@ class SubsystemBinaryCodec{
         in usize expectedFieldCount
     )const{
         usize cursor = 0u;
-        const Expected<SubsystemHeaderBinary> headerResult = ReadPOD<SubsystemHeaderBinary>(binary, cursor);
-        if(!headerResult.has_value()){
-            error("ISubsystem::loadBinary failed: malformed header");
+        const Expected<SubsystemHeaderBinary> headerResult = ReadMagicVersionHeaderPayload<SubsystemHeaderBinary>(
+            binary,
+            s_SubsystemMagic,
+            s_SubsystemVersion,
+            "ISubsystem::loadBinary",
+            "subsystem",
+            cursor
+        );
+        if(!headerResult.has_value())
             return MakeUnexpected(Failure());
-        }
         const SubsystemHeaderBinary header = headerResult.value();
-        if(header.magic != s_SubsystemMagic){
-            error("ISubsystem::loadBinary failed: invalid subsystem asset format; recook required");
-            return MakeUnexpected(Failure());
-        }
         if(!this.validateHeader(header, assetType, expectedFieldCount))
             return MakeUnexpected(Failure());
 
-        if(header.subsystemCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
-            error("ISubsystem::loadBinary failed: 'subsystems' payload byte size overflows");
+        usize payloadOffset = cursor;
+        const Expected<usize> subsystemCount = this.validatePayloadSlice(
+            binary,
+            payloadOffset,
+            header.subsystemCount,
+            s_SubsystemNameHashBinaryBytes,
+            "subsystems"
+        );
+        if(!subsystemCount.has_value())
             return MakeUnexpected(Failure());
-        }
-        const usize subsystemCount = cast<usize>(header.subsystemCount);
-        if(!CanReadBytes(binary, cursor, subsystemCount * s_SubsystemNameHashBinaryBytes)){
-            error("ISubsystem::loadBinary failed: malformed 'subsystems' payload");
+        const Expected<usize> fieldCount = this.validatePayloadSlice(
+            binary,
+            payloadOffset,
+            header.fieldCount,
+            s_SubsystemFieldCountBinaryBytes,
+            "field counts"
+        );
+        if(!fieldCount.has_value())
             return MakeUnexpected(Failure());
-        }
-        const usize afterSubsystems = cursor + subsystemCount * s_SubsystemNameHashBinaryBytes;
-
-        if(header.fieldCount > cast<u64>(usize.max / s_SubsystemFieldCountBinaryBytes)){
-            error("ISubsystem::loadBinary failed: 'field counts' payload byte size overflows");
+        const Expected<usize> assetCount = this.validatePayloadSlice(
+            binary,
+            payloadOffset,
+            header.assetCount,
+            s_SubsystemNameHashBinaryBytes,
+            "assets"
+        );
+        if(!assetCount.has_value())
             return MakeUnexpected(Failure());
-        }
-        const usize fieldCount = cast<usize>(header.fieldCount);
-        if(!CanReadBytes(binary, afterSubsystems, fieldCount * s_SubsystemFieldCountBinaryBytes)){
-            error("ISubsystem::loadBinary failed: malformed 'field counts' payload");
-            return MakeUnexpected(Failure());
-        }
-        const usize afterFieldCounts = afterSubsystems + fieldCount * s_SubsystemFieldCountBinaryBytes;
-
-        if(header.assetCount > cast<u64>(usize.max / s_SubsystemNameHashBinaryBytes)){
-            error("ISubsystem::loadBinary failed: 'assets' payload byte size overflows");
-            return MakeUnexpected(Failure());
-        }
-        const usize assetCount = cast<usize>(header.assetCount);
-        if(!CanReadBytes(binary, afterFieldCounts, assetCount * s_SubsystemNameHashBinaryBytes)){
-            error("ISubsystem::loadBinary failed: malformed 'assets' payload");
-            return MakeUnexpected(Failure());
-        }
 
         SubsystemBinaryCounts counts = SubsystemBinaryCounts();
         counts.cursor = cursor;
-        counts.subsystemCount = subsystemCount;
-        counts.fieldCount = fieldCount;
-        counts.assetCount = assetCount;
+        counts.subsystemCount = subsystemCount.value();
+        counts.fieldCount = fieldCount.value();
+        counts.assetCount = assetCount.value();
         return counts;
     }
 
@@ -181,29 +206,14 @@ class SubsystemBinaryCodec{
         mut Span<NameHash> outAssetHashes
     )const{
         usize cursor = initialCursor;
-        for(usize i = 0u; i < outSubsystemHashes.size(); ++i){
-            const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outSubsystemHashes[i] = item.value();
-        }
-        for(usize i = 0u; i < outFieldCounts.size(); ++i){
-            const Expected<u64> item = ReadPOD<u64>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outFieldCounts[i] = item.value();
-        }
-        for(usize i = 0u; i < outAssetHashes.size(); ++i){
-            const Expected<NameHash> item = ReadPOD<NameHash>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outAssetHashes[i] = item.value();
-        }
-
-        if(cursor != binary.size()){
-            error("ISubsystem::loadBinary failed: trailing bytes detected");
+        if(!ReadSubsystemPodSpan(binary, cursor, outSubsystemHashes)
+            || !ReadSubsystemPodSpan(binary, cursor, outFieldCounts)
+            || !ReadSubsystemPodSpan(binary, cursor, outAssetHashes)
+        )
             return false;
-        }
+
+        if(!ReadCompletePayload(binary, cursor, "ISubsystem::loadBinary"))
+            return false;
 
         return this.validateFieldElementCountSum(outFieldCounts, expectedAssetCount);
     }

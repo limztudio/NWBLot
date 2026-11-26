@@ -82,7 +82,6 @@ class CausticQualitySettings{
     public u32 photonGridDivisor = 1u;
 }
 
-[reflect]
 class CausticPhotonBudget{
     public u32 gridSide = 0u;
     public u32 fullGridCount = 0u;

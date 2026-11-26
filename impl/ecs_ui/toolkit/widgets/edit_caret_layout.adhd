@@ -156,7 +156,7 @@ b8 ValidateEditCaretLayout(
             return false;
         previousBreak = lineBreakEnd;
         previousBottom = bottom;
-        maximumAdvance = UiSimdMax(maximumAdvance, line.advance);
+        maximumAdvance = Max(maximumAdvance, line.advance);
     }
     return nextCluster == clusters.size() && nextGlyph == glyphCount && measure.x == maximumAdvance && measure.y == previousBottom;
 }

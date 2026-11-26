@@ -4,6 +4,7 @@
 
 #include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
 #include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
 #include <impl/ecs_ui/toolkit/widgets/text_area_navigation.adhd>
 #include <impl/ecs_ui/toolkit/edit/text_normalization.adhd>
 #include <impl/ecs_ui/toolkit/edit/types.adhd>
@@ -326,7 +327,6 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
             return result;
         }
         editFrame.placeholder = measuredPlaceholder.value().layout;
-        editFrame.placeholderBounds = measuredPlaceholder.value().bounds;
     }
     TextWrapMode prepareWrapMode = TextWrapMode::None;
     f32 prepareWrapWidth = 0.0f;
@@ -357,7 +357,6 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
         result.valid = false;
         return result;
     }
-    frame.item = cast<u32>(this.m_scope.value().m_items.size());
     this.m_scope.value().m_editBoxes.push_back(editFrame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     this.m_scope.value().m_textAreas.push_back(frame);
@@ -416,7 +415,7 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
         const auto unwrappedViewport = TryComputeEditBoxViewport(box.rectangle, item.padding, clip, state.scroll(), caretWidth);
         if(!unwrappedViewport.has_value())
             return false;
-        const f32 fullWidth = UiSimdMax(0.0f, unwrappedViewport.value().width - caretWidth);
+        const f32 fullWidth = Max(0.0f, unwrappedViewport.value().width - caretWidth);
         mut CachedEditBoxView cached = this.m_editBoxCacheEntries[editFrame.editViewCache];
         const b8 steadyState =
             cached.valid
@@ -482,7 +481,7 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
                 if(!viewport.has_value())
                     return false;
                 if(pass == 0u && viewport.value().vertical.visible){
-                    const f32 nextWrapWidth = UiSimdMax(0.0f, viewport.value().viewport.width - caretWidth);
+                    const f32 nextWrapWidth = Max(0.0f, viewport.value().viewport.width - caretWidth);
                     if(nextWrapWidth > 0.0f && Abs(VectorSingle(nextWrapWidth - targetWrapWidth)).x > 0.5f){
                         targetWrapWidth = nextWrapWidth;
                         continue;
@@ -518,7 +517,7 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     if(!arranged.has_value())
         return false;
     in EditBoxPlacement placement = arranged.value();
-    const Point clampedScroll = Point(UiSimdMin(placement.scroll, cast<f32>(state.m_scrollInput.placement.horizontal.maximum)), placement.scrollY);
+    const Point clampedScroll = Point(Min(placement.scroll, cast<f32>(state.m_scrollInput.placement.horizontal.maximum)), placement.scrollY);
     if(!TryUpdateScrollViewportOffsets(clampedScroll, state.m_scrollInput.placement))
         return false;
     Optional<in TextLayout> placeholderLayout;
@@ -542,31 +541,7 @@ b8 Builder::paintTextArea(in BuilderItem item, in LayoutBox box){
     );
     if(!this.m_context.addTarget(item.state, target) || !this.paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
-    u32 a11yState = ResolveAccessibleVisibilityStateBits(editFrame.editOptions.enabled, clip) | s_AccessibilityStateFocusable | s_AccessibilityStateMultiline;
-    if(editFrame.editOptions.readOnly)
-        a11yState |= s_AccessibilityStateReadOnly;
-    if(editFrame.editOptions.password)
-        a11yState |= s_AccessibilityStatePassword;
-    StringView a11yName = StringView();
-    if(editFrame.placeholder.valid())
-        a11yName = editFrame.placeholder.deref().utf8();
-    StringView a11yValue = StringView();
-    if(!editFrame.editOptions.password)
-        a11yValue = view.layout().utf8();
-    u32 a11yActions = s_AccessibilityActionFocus;
-    if(!editFrame.editOptions.readOnly)
-        a11yActions |= s_AccessibilityActionSetValue;
-    if(item.contextMenu)
-        a11yActions |= s_AccessibilityActionContextMenu;
-    this.emitAccessibleNode(
-        item.state,
-        AccessibilityRole::TextArea,
-        box.rectangle,
-        a11yName,
-        a11yValue,
-        a11yState,
-        a11yActions
-    );
+    this.emitTextInputAccessibleNode(item, box, clip, editFrame, view, AccessibilityRole::TextArea, s_AccessibilityStateMultiline);
     const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
     if(!published || !this.textAreaMatches(frame))
         return false;
@@ -584,57 +559,31 @@ b8 Builder::applyTextAreaScrollInput(in BuilderItem item, in BuilderTextAreaFram
     const auto verticalId = TryMakeWidgetId(item.state.id, s_WidgetPartScrollVerticalThumb);
     if(!verticalId.has_value())
         return false;
-    auto horizontal = this.m_context.takePartPointerGesture(item.state, horizontalId.value(), enabled);
-    b8 haveHorizontal = horizontal.has_value() && horizontal.value().control == token;
-    auto vertical = this.m_context.takePartPointerGesture(item.state, verticalId.value(), enabled);
-    b8 haveVertical = vertical.has_value() && vertical.value().control == token;
-    auto action = this.m_context.takeControlAction(item.state, enabled, token);
-    b8 haveAction = action.has_value();
     Point scroll = state.scroll();
     b8 manual = false;
-    while(haveHorizontal || haveVertical || haveAction){
-        u64 horizontalSequence = 0u;
-        u64 verticalSequence = 0u;
-        u64 actionSequence = 0u;
-        if(haveHorizontal)
-            horizontalSequence = horizontal.value().updateSequence;
-        if(haveVertical)
-            verticalSequence = vertical.value().updateSequence;
-        if(haveAction)
-            actionSequence = action.value().id.sequence;
-        const u8 stream = SelectNextScrollInputStream(
-            haveHorizontal,
-            horizontalSequence,
-            haveVertical,
-            verticalSequence,
-            haveAction,
-            actionSequence
-        );
-        if(stream == 0u){
-            const auto dragged = TryDragScrollbarOffset(horizontal.value(), true);
-            if(!dragged.has_value())
-                return false;
-            scroll.x = dragged.value();
-            manual = true;
-            horizontal = this.m_context.takePartPointerGesture(item.state, horizontalId.value(), enabled);
-            haveHorizontal = horizontal.has_value() && horizontal.value().control == token;
-        }
-        else if(stream == 1u){
-            const auto dragged = TryDragScrollbarOffset(vertical.value(), false);
-            if(!dragged.has_value())
-                return false;
-            scroll.y = dragged.value();
-            manual = true;
-            vertical = this.m_context.takePartPointerGesture(item.state, verticalId.value(), enabled);
-            haveVertical = vertical.has_value() && vertical.value().control == token;
-        }
-        else{
-            if(!TryApplyTextAreaScrollControlAction(action.value(), state.scrollbars(), scroll, manual))
-                return false;
-            action = this.m_context.takeControlAction(item.state, enabled, token);
-            haveAction = action.has_value();
-        }
-    }
+    const ScrollGestureApplyFn onHorizontal = lambda[mut scroll, mut manual](in PointerGesture gesture) -> ListActionOutcome{
+        const auto dragged = TryDragScrollbarOffset(gesture, true);
+        if(!dragged.has_value())
+            return ListActionOutcome::Failed;
+        scroll.x = dragged.value();
+        manual = true;
+        return ListActionOutcome::Continue;
+    };
+    const ScrollGestureApplyFn onVertical = lambda[mut scroll, mut manual](in PointerGesture gesture) -> ListActionOutcome{
+        const auto dragged = TryDragScrollbarOffset(gesture, false);
+        if(!dragged.has_value())
+            return ListActionOutcome::Failed;
+        scroll.y = dragged.value();
+        manual = true;
+        return ListActionOutcome::Continue;
+    };
+    const ScrollActionApplyFn onAction = lambda[mut state, mut scroll, mut manual](in ControlAction act) -> ListActionOutcome{
+        if(!TryApplyTextAreaScrollControlAction(act, state.scrollbars(), scroll, manual))
+            return ListActionOutcome::Failed;
+        return ListActionOutcome::Continue;
+    };
+    if(!ConsumeScrollInputStreams(this.m_context, item.state, horizontalId.value(), verticalId.value(), token, enabled, false, PopupToken(), onHorizontal, onVertical, onAction))
+        return false;
     if(manual){
         state.m_visual.scroll = scroll.x;
         state.m_scrollY = scroll.y;

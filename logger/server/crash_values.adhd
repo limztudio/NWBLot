@@ -44,7 +44,6 @@ const StringView s_CrashSymbolicateLinuxAddr2LineDemangleFlag = "-C";
 const StringView s_CrashSymbolicateLinuxAddr2LineInlineFlag = "-i";
 const StringView s_CrashSymbolicateLinuxAddr2LineExeFlag = "-e";
 const StringView s_CrashSymbolicateLinuxAnonymousModulePath = "<anonymous>";
-const usize s_CrashSymbolicateLinuxSymbolizerResultReserveMultiplier = 3u;
 const StringView s_CrashSymbolicateRgdGpuDetectiveSectionHeader = "\n[gpu_detective]\n";
 const StringView s_CrashSymbolicateRgdGpuDetectiveDecodeFailedStatus = "status=decode_failed\n";
 const StringView s_CrashSymbolicateRgdReportDetailPrefix = "detail=";

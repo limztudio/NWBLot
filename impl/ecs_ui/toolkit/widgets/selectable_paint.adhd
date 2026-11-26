@@ -53,6 +53,30 @@ Expected<SelectableMetrics> MeasureSelectable(in UiSkin skin, in SelectableStyle
     return metrics;
 }
 
+Optional<usize> ResolveSelectableRegionIndex(
+    in PaintBuilder paint,
+    in SelectableStyle style,
+    in b8 enabled,
+    in b8 selected,
+    in b8 hovered
+){
+    Name preferred = style.normal;
+    Name fallback = style.fallback;
+    if(!enabled){
+        preferred = style.disabled;
+        fallback = style.disabledFallback;
+    }
+    else if(selected){
+        preferred = style.selected;
+        fallback = style.selectedFallback;
+    }
+    else if(hovered){
+        preferred = style.hover;
+        fallback = style.hoverFallback;
+    }
+    return paint.resolveRegionIndex(preferred, fallback);
+}
+
 b8 PaintSelectable(
     mut PaintBuilder paint,
     mut TextService text,
@@ -68,21 +92,7 @@ b8 PaintSelectable(
     in Color disabledTextColor,
     in f32 horizontalScrollOffset
 ){
-    Name preferred = style.normal;
-    Name fallback = style.fallback;
-    if(!flags.enabled){
-        preferred = style.disabled;
-        fallback = style.disabledFallback;
-    }
-    else if(flags.selected){
-        preferred = style.selected;
-        fallback = style.selectedFallback;
-    }
-    else if(flags.hover){
-        preferred = style.hover;
-        fallback = style.hoverFallback;
-    }
-    const Optional<usize> regionIdx = paint.resolveRegionIndex(preferred, fallback);
+    const Optional<usize> regionIdx = ResolveSelectableRegionIndex(paint, style, flags.enabled, flags.selected, flags.hover);
     if(!regionIdx.has_value())
         return false;
     paint.pushClip(clip);

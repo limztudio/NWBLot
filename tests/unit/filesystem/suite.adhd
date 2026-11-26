@@ -21,7 +21,7 @@ void VerifyFilesystemVolumeTest_SegmentProbePreservesInspectionErrors(mut Filesy
     EXPECT_FALSE(missing.value());
 
     Path invalidPath;
-    if(s_WindowsFilesystem) invalidPath = Path("invalid|volume");
+    if(s_IsWindowsPlatform) invalidPath = Path("invalid|volume");
     else{
         String longName;
         longName.resize(40000u, 97u);
@@ -425,7 +425,7 @@ void VerifyFilesystemVolumeTest_CompactionPreservesExistingRecoveryDirectories(m
 }
 
 void VerifyFilesystemVolumeTest_IncompleteCompactionRollbackUnmountsTheVolume(mut FilesystemVolumeTest self){
-    if(!s_WindowsFilesystem){
+    if(!s_IsWindowsPlatform){
         SkipTest("Requires a Windows file handle that denies deletion");
         return;
     }

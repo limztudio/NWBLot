@@ -6,6 +6,7 @@
 #include <impl/ecs_ui/toolkit/widgets/control_style_metrics.adhd>
 #include <impl/ecs_ui/toolkit/widgets/control_visual_painter.adhd>
 #include <impl/ecs_ui/toolkit/widgets/hit_target_factory.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +35,7 @@ b8 Builder::beginScrollArea(in StringView stableKey, mut ScrollAreaState state, 
         this.m_context.fail();
         return false;
     }
-    state.m_scroll = Point(UiSimdMax(0.0f, state.m_scroll.x), UiSimdMax(0.0f, state.m_scroll.y));
+    state.m_scroll = Point(Max(0.0f, state.m_scroll.x), Max(0.0f, state.m_scroll.y));
     LayoutNodeDesc description;
     description.direction = options.direction;
     description.clipChildren = true;
@@ -62,7 +63,6 @@ b8 Builder::beginScrollArea(in StringView stableKey, mut ScrollAreaState state, 
         return false;
     }
     BuilderScrollAreaFrame frame;
-    frame.widget = widget.value();
     frame.state = Optional<mut ScrollAreaState>(state);
     frame.options = options;
     frame.scrollbarStyle = this.m_scrollbarStyle;
@@ -91,15 +91,9 @@ b8 Builder::beginScrollArea(in StringView stableKey, mut ScrollAreaState state, 
 b8 Builder::endScrollArea(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::ScrollArea)
         || this.m_scope.value().m_splitterStack.back() != s_LayoutNoParent
         || this.m_scope.value().m_scrollAreaStack.back() == s_LayoutNoParent
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::ScrollArea
         || this.m_context.failed()
     ){
         this.m_context.fail();
@@ -119,11 +113,7 @@ b8 Builder::endScrollArea(){
     endItem.enabled = beginItem.enabled;
     endItem.checked = true;
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     return this.m_context.popScope();
 }
 
@@ -140,54 +130,28 @@ b8 Builder::applyScrollAreaInput(in WidgetState widget, mut ScrollAreaState stat
     const auto verticalId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalThumb);
     if(!horizontalId.has_value() || !verticalId.has_value())
         return false;
-    auto horizontal = this.m_context.takePartPointerGesture(widget, horizontalId.value(), true);
-    b8 haveHorizontal = horizontal.has_value() && horizontal.value().control == activeToken;
-    auto vertical = this.m_context.takePartPointerGesture(widget, verticalId.value(), true);
-    b8 haveVertical = vertical.has_value() && vertical.value().control == activeToken;
-    auto action = this.m_context.takeControlAction(widget, true, activeToken);
-    b8 haveAction = action.has_value();
     Point scroll = state.scroll();
-    while(haveHorizontal || haveVertical || haveAction){
-        u64 horizontalSequence = 0u;
-        u64 verticalSequence = 0u;
-        u64 actionSequence = 0u;
-        if(haveHorizontal)
-            horizontalSequence = horizontal.value().updateSequence;
-        if(haveVertical)
-            verticalSequence = vertical.value().updateSequence;
-        if(haveAction)
-            actionSequence = action.value().id.sequence;
-        const u8 stream = SelectNextScrollInputStream(
-            haveHorizontal,
-            horizontalSequence,
-            haveVertical,
-            verticalSequence,
-            haveAction,
-            actionSequence
-        );
-        if(stream == 0u){
-            const auto dragged = TryDragScrollbarOffset(horizontal.value(), true);
-            if(!dragged.has_value())
-                return false;
-            scroll.x = dragged.value();
-            horizontal = this.m_context.takePartPointerGesture(widget, horizontalId.value(), true);
-            haveHorizontal = horizontal.has_value() && horizontal.value().control == activeToken;
-        }
-        else if(stream == 1u){
-            const auto dragged = TryDragScrollbarOffset(vertical.value(), false);
-            if(!dragged.has_value())
-                return false;
-            scroll.y = dragged.value();
-            vertical = this.m_context.takePartPointerGesture(widget, verticalId.value(), true);
-            haveVertical = vertical.has_value() && vertical.value().control == activeToken;
-        }
-        else{
-            if(!TryApplyScrollAreaControlAction(action.value(), state.scrollbars(), state.m_scrollInput.step, scroll))
-                return false;
-            action = this.m_context.takeControlAction(widget, true, activeToken);
-            haveAction = action.has_value();
-        }
-    }
+    const ScrollGestureApplyFn onHorizontal = lambda[mut scroll](in PointerGesture gesture) -> ListActionOutcome{
+        const auto dragged = TryDragScrollbarOffset(gesture, true);
+        if(!dragged.has_value())
+            return ListActionOutcome::Failed;
+        scroll.x = dragged.value();
+        return ListActionOutcome::Continue;
+    };
+    const ScrollGestureApplyFn onVertical = lambda[mut scroll](in PointerGesture gesture) -> ListActionOutcome{
+        const auto dragged = TryDragScrollbarOffset(gesture, false);
+        if(!dragged.has_value())
+            return ListActionOutcome::Failed;
+        scroll.y = dragged.value();
+        return ListActionOutcome::Continue;
+    };
+    const ScrollActionApplyFn onAction = lambda[mut state, mut scroll](in ControlAction act) -> ListActionOutcome{
+        if(!TryApplyScrollAreaControlAction(act, state.scrollbars(), state.m_scrollInput.step, scroll))
+            return ListActionOutcome::Failed;
+        return ListActionOutcome::Continue;
+    };
+    if(!ConsumeScrollInputStreams(this.m_context, widget, horizontalId.value(), verticalId.value(), activeToken, true, false, PopupToken(), onHorizontal, onVertical, onAction))
+        return false;
     state.m_scroll = scroll;
     return true;
 }
@@ -376,20 +340,22 @@ b8 Builder::paintScrollbarAxisForHost(
     Rect beforeRect;
     Rect afterRect;
     ResolveScrollbarBeforeAfterRects(bar, horizontal, beforeRect, afterRect);
-    const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(
+    const HitTarget beforeTarget = targets.makeActivatablePartHitTarget(
         beforeRect,
         clip,
+        true,
         token,
-        beforeAction
+        cast<u64>(beforeAction)
     );
     const auto beforeId = TryMakeWidgetId(owner.id, beforeKey);
     if(!beforeId.has_value() || !this.m_context.addPartTarget(owner, beforeId.value(), beforeTarget))
         return false;
-    const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(
+    const HitTarget afterTarget = targets.makeActivatablePartHitTarget(
         afterRect,
         clip,
+        true,
         token,
-        afterAction
+        cast<u64>(afterAction)
     );
     const auto afterId = TryMakeWidgetId(owner.id, afterKey);
     if(!afterId.has_value() || !this.m_context.addPartTarget(owner, afterId.value(), afterTarget))
@@ -492,7 +458,7 @@ TabBarResult Builder::tabBar(in StringView stableKey, in Span<TabBarItem> tabs, 
         labelEntry.bounds = measuredLabel.value().bounds;
         frame.labels.push_back(labelEntry);
         frame.labelWidths.push_back(measuredLabel.value().bounds.width);
-        maxLabelHeight = UiSimdMax(maxLabelHeight, measuredLabel.value().bounds.height);
+        maxLabelHeight = Max(maxLabelHeight, measuredLabel.value().bounds.height);
     }
     const Expected<TabBarMetrics> metrics = ControlStyleMetrics().tabBarMetrics(
         this.m_skin.value(),
@@ -587,14 +553,14 @@ b8 Builder::paintTabBar(in BuilderItem item, in LayoutBox box){
         if(!tabPartId.has_value())
             return false;
         if(item.enabled){
-            const HitTarget tabTarget = targets.makeTabBarPartHitTarget(tab.rectangle, tab.clip, tab.enabled, frame.token, tab.key);
+            const HitTarget tabTarget = targets.makeActivatablePartHitTarget(tab.rectangle, tab.clip, tab.enabled, frame.token, tab.key);
             if(!this.m_context.addPartTarget(item.state, tabPartId.value(), tabTarget))
                 return false;
             if(tab.enabled && tab.closable && tab.closeButton.width > 0.0f && tab.closeButton.height > 0.0f){
                 const auto closePartId = TryMakeWidgetPartId(closeGroupId.value(), tab.key);
                 if(!closePartId.has_value())
                     return false;
-                const HitTarget closeTarget = targets.makeTabBarPartHitTarget(tab.closeButton, tab.clip, true, frame.token, tab.key);
+                const HitTarget closeTarget = targets.makeActivatablePartHitTarget(tab.closeButton, tab.clip, true, frame.token, tab.key);
                 if(!this.m_context.addPartTarget(item.state, closePartId.value(), closeTarget))
                     return false;
             }

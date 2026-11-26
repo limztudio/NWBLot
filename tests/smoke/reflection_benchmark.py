@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import load_name_symbols
 from experiment_statistics import PairedExperimentAnalysis
 from reflection_experiment_analysis import ReflectionExperimentAnalysis
-from reflection_gpu_coverage import (FRAME, CLASSIFY, DEPTH, BUILD_ARGS, HARDWARE, TEMPORAL, SPATIAL, CONTROLS, OBSERVED_CONTROLS, KERNELS, KNOWN_SCOPES, ReflectionGpuCoverage)
+from reflection_gpu_coverage import (FRAME, CONTROLS, OBSERVED_CONTROLS, KERNELS, KNOWN_SCOPES, ReflectionGpuCoverage)
 from reflection_workload_qualification import ReflectionWorkloadQualification
 from gpu_timing_evidence import GpuTimingEvidence
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
@@ -47,15 +47,11 @@ LIT_HYBRID_RAW = "hybrid_raw"
 LIT_HYBRID = "hybrid"
 LIT_HYBRID_FEEDBACK = "hybrid_feedback"
 LIT_SCREEN = "screen"
-LIT_TOTAL_MS = "total_ms"
-LIT_GPU_SAMPLES = "gpu_samples"
 LIT_REPORTS = "reports"
 LIT_POSITIVE_FRAME_REPORTS = "positive_frame_reports"
-LIT_MEAN_MS = "mean_ms"
 LIT_BLOCKS = "blocks"
 LIT_BLOCK = "block"
 LIT_VARIANT = "variant"
-LIT_NAME = "name"
 LIT_SCOPES = "scopes"
 LIT_KERNEL_WORK_MS = "kernel_work_ms"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"

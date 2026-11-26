@@ -57,18 +57,7 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
     const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_TelemetryUploadCounter.fetch_add(1u, MemoryOrder::relaxed);
-    const auto fileName = StringFormat(
-        arena,
-        FOUNDATION_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}"),
-        localTime.tm_year + s_LocalTimeYearBase,
-        localTime.tm_mon + s_LocalTimeMonthBase,
-        localTime.tm_mday,
-        localTime.tm_hour,
-        localTime.tm_min,
-        localTime.tm_sec,
-        CurrentProcessId(),
-        counter
-    );
+    const auto fileName = FormatTimestampedProcessFilename(arena, TStringView(FOUNDATION_TEXT("telemetry_")), localTime, counter);
 
     return ScratchPath(arena, fileName);
 }

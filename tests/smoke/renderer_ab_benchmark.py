@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS, load_name_symbols
 from experiment_statistics import PairedExperimentAnalysis
 import reflection_benchmark as reflection
-from reflection_gpu_coverage import ReflectionGpuCoverage
+from reflection_gpu_coverage import HARDWARE, ReflectionGpuCoverage
 import caustic_timing_qualification as caustic
 from caustic_workload import CausticWorkload
 from reflection_benchmark import LIT_POSITIVE_FRAME_REPORTS
@@ -42,7 +42,6 @@ from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, window_capture_source_paths, write_status,)
 
-LIT_SOURCE = "source"
 LIT_RETAINED_REPORT_RANGE = "retained_report_range"
 LIT_WALL_FRAME = "wall_frame"
 LIT_COMPARISON = "comparison"
@@ -51,7 +50,6 @@ LIT_REPORT_JSON = "report.json"
 
 LIT_HARDWARE = "hardware"
 LIT_HYBRID = "hybrid"
-LIT_SOFTWARE = "software"
 LIT_TIMING_IN_FLIGHT_RANGES = "timing_in_flight_ranges"
 LIT_REFLECTION_POLICY = "reflection_policy"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
@@ -203,7 +201,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         validate_inactive_scopes(timing_evidence.summarize_intervals(finalized), workload)
         report_range = [args.warmup_intervals, args.warmup_intervals + len(selected)]
         return {LIT_ARM: arm.name, LIT_BLOCK: block, LIT_POSITION: position, LIT_REPORTS: len(selected), LIT_POSITIVE_FRAME_REPORTS: timing_evidence.positive_frame_reports(selected), LIT_RETAINED_REPORT_RANGE: report_range, LIT_NATIVE_HARDWARE_DISPATCHES_PER_RANGE: getattr(args, arm.name + "_hardware_dispatches_per_range")
-                if reflection.HARDWARE in workload.scopes else None, LIT_WALL_FRAME: RendererWallFrameEvidence.summarize_wall_frames(text, timing_text, workload, report_range),
+                if HARDWARE in workload.scopes else None, LIT_WALL_FRAME: RendererWallFrameEvidence.summarize_wall_frames(text, timing_text, workload, report_range),
             "caustic_warmup_scopes": timing_evidence.summarize_intervals(finalized[:args.warmup_intervals]) if workload.validate_log is RendererWorkloadLogPolicy.caustic_log else None, LIT_SCOPES: timing_evidence.summarize_intervals(selected), LIT_RUNTIME_SIGNATURE: signature,
             LIT_ARTIFACTS: str(directory), "cache_after": RendererBenchmarkIdentity.cache_identity(arm.runtime)}
     finally:
@@ -331,7 +329,7 @@ def run(args):
         "minimum_frame_samples": args.minimum_frame_samples, "timeout_seconds": args.timeout, LIT_TIMING_IN_FLIGHT_RANGES: 32, "scope_multipliers": dict(workload.scope_multipliers), "inactive_scopes": list(workload.inactive_scopes),
         "wall_frame_policy": WALL_FRAME_POLICY if workload.reflection_policy is not None else SYNTHETIC_FRAME_REASON, LIT_REFLECTION_POLICY: asdict(workload.reflection_policy) if workload.reflection_policy is not None else None,
         "caustic_qualification": qualification, LIT_NATIVE_HARDWARE_DISPATCHES_PER_RANGE: { LIT_BASELINE: args.baseline_hardware_dispatches_per_range, LIT_CANDIDATE: args.candidate_hardware_dispatches_per_range,
-        } if reflection.HARDWARE in workload.scopes else None,
+        } if HARDWARE in workload.scopes else None,
         "hardware_range_policy": "one completed range per frame containing every submitted native call; sliced optical work may include zero-work indirect records beyond the admitted queue; declared submitted counts require separate build qualification and never divide measured time",
         "depth_range_policy": "native mip count ranges per frame; per-range means describe one mip, with total measured mip work per frame reported separately",
         "inactive_scope_policy": "no completed inactive scope in warm-up, retained acquisition, or final shutdown reports", "scope_coverage": "completed timing ranges; publication skew bounded by max(2 ranges, 2% of expected), scaled by multiplicity",
@@ -344,6 +342,28 @@ def run(args):
     if args.plan_only:
         write_status("Frozen A/B plan written; use a new output directory for acquisition")
         return 0
+    return run_paired_trials(
+        args,
+        arms,
+        orders,
+        identities,
+        shared,
+        acquire_fn=lambda current_args, arm, block, position: acquire_trial(current_args, arm, workload, block, position, symbols),
+        status_fn=lambda block, name: f"renderer A/B block {block + 1}/{args.blocks}: {name}",
+        mismatch_message="physical device, material route, shadow route or extent changed between arms/trials",
+        finish_fn=lambda trials: _finish_ab_report(args, plan, trials, orders, workload),
+        write_trial_summary=True,
+    )
+
+
+def _finish_ab_report(args, plan, trials, orders, workload):
+    comparison = RendererTrialComparison.compare_trials(trials, orders, workload, args.analysis_seed, args.practical_ms, args.practical_fraction, args.control_floor_ms)
+    write_json(args.output_directory / LIT_REPORT_JSON, {"plan": plan, "trials": trials, LIT_COMPARISON: comparison})
+    write_status(f"Renderer A/B complete: {args.output_directory / LIT_REPORT_JSON}")
+    return 0
+
+
+def run_paired_trials(args, arms, orders, identities, shared, *, acquire_fn, status_fn, mismatch_message, finish_fn, write_trial_summary=False):
     trials = []
     signature = None
     by_name = {arm.name: arm for arm in arms}
@@ -351,30 +371,32 @@ def run(args):
         for block, row in enumerate(orders):
             for position, name in enumerate(row):
                 RendererBenchmarkIdentity.verify_frozen(arms, identities, shared)
-                write_status(f"renderer A/B block {block + 1}/{args.blocks}: {name}")
-                trial = acquire_trial(args, by_name[name], workload, block, position, symbols)
+                write_status(status_fn(block, name))
+                trial = acquire_fn(args, by_name[name], block, position)
                 RendererBenchmarkIdentity.verify_frozen(arms, identities, shared)
                 if signature is not None and trial[LIT_RUNTIME_SIGNATURE] != signature:
-                    raise SmokeFailure("physical device, material route, shadow route or extent changed between arms/trials")
+                    raise SmokeFailure(mismatch_message)
                 signature = trial[LIT_RUNTIME_SIGNATURE]
-                write_json(Path(trial[LIT_ARTIFACTS]) / "summary.json", trial)
+                if write_trial_summary:
+                    write_json(Path(trial[LIT_ARTIFACTS]) / "summary.json", trial)
                 trials.append(trial)
                 write_json(args.output_directory / "trials.json", trials)
-        comparison = RendererTrialComparison.compare_trials(trials, orders, workload, args.analysis_seed, args.practical_ms, args.practical_fraction, args.control_floor_ms)
-        write_json(args.output_directory / LIT_REPORT_JSON, {"plan": plan, "trials": trials, LIT_COMPARISON: comparison})
-        write_status(f"Renderer A/B complete: {args.output_directory / LIT_REPORT_JSON}")
-        return 0
+        return finish_fn(trials)
     except Exception as error:
         write_failure_report(write_json, args.output_directory / "failure.json", {"error": str(error), LIT_COMPLETED_TRIALS: len(trials)})
         raise
 
 
-def main(argv=None):
+def run_benchmark_main(parse_fn, run_fn, argv=None):
     try:
-        return run(parse_args(argv))
+        return run_fn(parse_fn(argv))
     except (SmokeFailure, SmokeSkip, OSError, ValueError, subprocess.SubprocessError) as error:
         write_status(f"FAIL: {error}")
         return 1
+
+
+def main(argv=None):
+    return run_benchmark_main(parse_args, run, argv)
 
 
 if __name__ == LIT_MAIN:

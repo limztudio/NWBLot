@@ -3,6 +3,7 @@
 
 
 #include "memory_probe_access.adhd"
+#include <tests/common/platform_features.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,7 +13,7 @@ void CandidateCopy<const usize FixedCount>(in ReadAddress source, in usize bytes
     usize count = bytes;
     if(FixedCount != 0u)
         count = FixedCount;
-    if(!s_ProbeHasAvx){
+    if(!s_HasAvxInstructionSet){
         CopyTestBytes(destination, capacity, source, count);
         return;
     }

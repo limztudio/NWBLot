@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 import time
 
@@ -11,21 +9,12 @@ from edit_native import EditNativeInput
 from probe_common import center
 from popup_probe import observe_popup, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main
+from checkpoint_report import CHECKPOINT_SETTLE_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_MODAL = "modal"
 LIT_RECTANGLES = "rectangles"
-LIT_LOGICAL_EXTENT = "logical_extent"
-LIT_PASSED = "passed"
-LIT_UTF_8 = "utf-8"
 LIT_TRIGGER = "trigger"
 LIT_TAB = "Tab"
 LIT_ESCAPE = "Escape"
@@ -33,63 +22,24 @@ LIT_RETURN = "Return"
 LIT_COUNTER = "counter"
 LIT_F5 = "F5"
 LIT_F7 = "F7"
-LIT_UI_POPUP_FIXTURE = "UI popup fixture"
 
 
-class PopupRun:
+class PopupRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = EditNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=EditNativeInput(backend, handle))
         self.expected = {"open": 0, LIT_MODAL: 0, "underlying": 0, "selected": 0, "checked": 0, "edit_focused": 0, "outside_focused": 0, "edge": 0, "right": 0, "visible": 1, "text_bytes": 5}
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
-        return round(x * scale_x), round(y * scale_y)
-
-    def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def checkpoint(self, name, *, extent=None, **changes):
         self.expected.update(changes)
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during popup UI capture")
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 390.0:
-                raise SmokeSkip("the popup fixture needs a logical client of at least 600x390")
-            self.backend.capture_client_window(self.handle, path)
-            report = observe_popup(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin)
-            if report[LIT_PASSED]:
-                self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path)})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        raise SmokeFailure(f"popup displayed-state gate '{name}' failed: {report}")
+        self.poll_checkpoint(name, minimum_extent=(600.0, 390.0), minimum_extent_message="the popup fixture needs a logical client of at least 600x390",
+            process_stage="during popup UI capture", snapshot_reader=snapshot_from_logs,
+            evaluate=lambda frame, snapshot: observe_popup(frame, snapshot, self.expected, extent=extent, skin=self.args.skin), failure_label="popup")
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/WM_CHAR messages with native Shift modifiers"
-                if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus", "runtime_limit": "Synthetic text bypasses live IME. No native Wayland, physical pointer-grab, or native Linux qualification."}
-        (self.args.output_directory / "popup.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("popup.json", passed,
+            input_path="Win32 posted keys/pointer/WM_CHAR messages with native Shift modifiers" if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus",
+            runtime_limit="Synthetic text bypasses live IME. No native Wayland, physical pointer-grab, or native Linux qualification.")
 
     def execute(self):
         self.checkpoint("initial")
@@ -161,45 +111,8 @@ class PopupRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "POPUP", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = popup_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the popup fixture appeared")
-            raise SmokeFailure("custom popup fixture did not appear")
-        backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiPopupSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        popup_run = PopupRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        popup_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_POPUP_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_POPUP_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "popup.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                if logserver is not None:
-                    CaptureProcessTermination.terminate_process(logserver, "UI popup logserver")
-                backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    popup_run.write_report(True)
-    print(f"UI popup: {len(popup_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="POPUP", display_marker="UiPopupSmoke: display", driver_type=PopupRun, log_name="popup.log", label="UI popup",
+        window_label="popup", process_label="popup")
 
 
 def main(argv):

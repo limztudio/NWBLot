@@ -167,7 +167,6 @@ void AssignGpuPaintMaterialPushConstants(
     in u32 textureSlot,
     in u32 sdfChannel,
     in u32 sdfSpreadPixels,
-    in u32 sdfDistanceEncoding,
     in u32 effectBufferSlot,
     in u32 effectOffset,
     in u32 clipMaskOffset,
@@ -178,7 +177,6 @@ void AssignGpuPaintMaterialPushConstants(
     if(material == PaintMaterial::SdfGlyph){
         inOutPush.sdfChannel = sdfChannel;
         inOutPush.sdfSpreadPixels = sdfSpreadPixels;
-        inOutPush.sdfDistanceEncoding = sdfDistanceEncoding;
     }
     inOutPush.effectBufferSlot = effectBufferSlot;
     inOutPush.effectOffset = effectOffset;
@@ -200,7 +198,7 @@ b8 SameGpuPaintPushConstants(in GpuPaintPushConstants lhs, in GpuPaintPushConsta
     )
         return false;
     if(lhs.material == cast<u32>(PaintMaterial::SdfGlyph))
-        return lhs.sdfChannel == rhs.sdfChannel && lhs.sdfSpreadPixels == rhs.sdfSpreadPixels && lhs.sdfDistanceEncoding == rhs.sdfDistanceEncoding;
+        return lhs.sdfChannel == rhs.sdfChannel && lhs.sdfSpreadPixels == rhs.sdfSpreadPixels;
     return true;
 }
 

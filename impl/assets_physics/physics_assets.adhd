@@ -97,109 +97,117 @@ class CollisionLayerMatrix{
 
 [asset("physics_material")]
 class PhysicsMaterialAsset{
-    public SurfaceMaterial material;
+    private SurfaceMaterial m_material;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setMaterial(in SurfaceMaterial mat){
-        this.material = mat;
+        this.m_material = mat;
     }
 
     public in SurfaceMaterial surfaceMaterial()const{
-        return this.material;
+        return this.m_material;
     }
 }
 
 [asset("collision_layer_matrix")]
 class CollisionLayerMatrixAsset{
-    public CollisionLayerMatrix matrix;
+    private CollisionLayerMatrix m_matrix;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
+    public void setMatrix(in CollisionLayerMatrix inMatrix){
+        this.m_matrix = inMatrix;
+    }
+
+    public in CollisionLayerMatrix layerMatrix()const{
+        return this.m_matrix;
+    }
+
     public u32 findLayerIndex(in Name layerName)const{
-        return this.matrix.findLayerIndex(layerName);
+        return this.m_matrix.findLayerIndex(layerName);
     }
 
     public b8 layersCollide(in u32 layerA, in u32 layerB)const{
-        return this.matrix.layersCollide(layerA, layerB);
+        return this.m_matrix.layersCollide(layerA, layerB);
     }
 
     public b8 setLayersCollide(in u32 layerA, in u32 layerB, in b8 collide){
-        return this.matrix.setLayersCollide(layerA, layerB, collide);
+        return this.m_matrix.setLayersCollide(layerA, layerB, collide);
     }
 
     public Filter makeFilter(in u32 layerIdx, in i32 groupIndex)const{
-        return this.matrix.makeFilter(layerIdx, groupIndex);
+        return this.m_matrix.makeFilter(layerIdx, groupIndex);
     }
 
     public Filter makeFilterByName(in Name layerName, in i32 groupIndex)const{
-        return this.matrix.makeFilterByName(layerName, groupIndex);
+        return this.m_matrix.makeFilterByName(layerName, groupIndex);
     }
 }
 
 [asset("convex_hull")]
 class ConvexHullAsset{
-    public HullShape hull;
+    private HullShape m_hull;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setHull(in HullShape inHull){
-        this.hull = inHull;
+        this.m_hull = inHull;
     }
 
     public in HullShape hullShape()const{
-        return this.hull;
+        return this.m_hull;
     }
 }
 
 [asset("collision_mesh")]
 class CollisionMeshAsset{
-    public MeshShape mesh;
+    private MeshShape m_mesh;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setMesh(in MeshShape inMesh){
-        this.mesh = inMesh;
+        this.m_mesh = inMesh;
     }
 
     public in MeshShape meshShape()const{
-        return this.mesh;
+        return this.m_mesh;
     }
 }
 
 [asset("heightfield")]
 class HeightfieldAsset{
-    public HeightfieldShape heightfield;
+    private HeightfieldShape m_heightfield;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setHeightfield(in HeightfieldShape inHeightfield){
-        this.heightfield = inHeightfield;
+        this.m_heightfield = inHeightfield;
     }
 
     public in HeightfieldShape heightfieldShape()const{
-        return this.heightfield;
+        return this.m_heightfield;
     }
 }
 
 [asset("compound_hull")]
 class CompoundHullAsset{
-    public Vector<HullShape> hulls;
+    private Vector<HullShape> m_hulls;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setHulls(in Vector<HullShape> inHulls){
-        this.hulls = inHulls;
+        this.m_hulls = inHulls;
     }
 
     public in Vector<HullShape> hullShapes()const{
-        return this.hulls;
+        return this.m_hulls;
     }
 }
 

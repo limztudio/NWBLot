@@ -298,22 +298,7 @@ b8 Builder::endWindow(){
         else
             painted = false;
     }
-    const b8 popped = this.m_context.popScope();
-    this.m_scope.value().m_panelActive = false;
-    this.m_scope.value().m_windowActive = false;
-    this.m_scope.value().m_window.state.reset();
-    this.m_scope.value().m_stack.clear();
-    this.m_scope.value().m_scrollAreaStack.clear();
-    this.m_scope.value().m_scopeKinds.clear();
-    this.m_scope.value().m_virtualListStack.clear();
-    this.m_scope.value().m_splitterStack.clear();
-    this.m_scope.value().m_dockSpaceStack.clear();
-    const b8 combosPainted = painted && popped && this.paintDeferred();
-    this.publishSliderResults(combosPainted);
-    this.releaseDeferredLoans();
-    if(!combosPainted)
-        this.m_context.fail();
-    return combosPainted;
+    return this.finishRootScope(painted);
 }
 
 
@@ -426,10 +411,10 @@ b8 Builder::paintWindowTitle(){
         }
     }
     if(options.collapsible){
-        const HitTarget collapse = targets.makeWindowCollapseHitTarget(state, metrics, clip);
+        const Rect collapseRect = ResolveWindowCollapseBounds(state, metrics);
+        const HitTarget collapse = targets.makeBasicControlHitTarget(collapseRect, clip, true, true, false);
         if(!this.m_context.addTarget(this.m_scope.value().m_window.collapseState, collapse))
             return false;
-        const Rect collapseRect = ResolveWindowCollapseBounds(state, metrics);
         u32 collapseStateBits = ResolveAccessibleVisibilityStateBits(true, clip) | s_AccessibilityStateFocusable;
         if(state.collapsed)
             collapseStateBits |= s_AccessibilityStateCollapsed;
@@ -446,10 +431,10 @@ b8 Builder::paintWindowTitle(){
         );
     }
     if(options.closable){
-        const HitTarget closeTarget = targets.makeWindowCloseHitTarget(state, metrics, clip);
+        const Rect closeRect = ResolveWindowCloseBounds(state, metrics);
+        const HitTarget closeTarget = targets.makeBasicControlHitTarget(closeRect, clip, true, true, false);
         if(!this.m_context.addTarget(this.m_scope.value().m_window.closeState, closeTarget))
             return false;
-        const Rect closeRect = ResolveWindowCloseBounds(state, metrics);
         this.emitAccessibleNode(
             this.m_scope.value().m_window.closeState,
             AccessibilityRole::Button,

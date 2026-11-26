@@ -69,13 +69,6 @@ const usize s_NormalizeResourceUseCapacity = 9u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum<u8> RendererTaskTimingFeedbackCollectionAction{
-    None = 0u,
-    Enable = 1u,
-    Disable = 2u,
-    kCount = 3u
-}
-
 enum<u8> SharedComputeEmulationPhase{
     Generate = 0u,
     Raster = 1u

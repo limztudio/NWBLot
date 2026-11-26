@@ -11,36 +11,239 @@
 
 type ListInputMatches = Func<64u, b8()>;
 type ListInputApplyAction = Func<64u, ListActionOutcome(in ControlAction)>;
+type ScrollGestureApplyFn = Func<64u, ListActionOutcome(in PointerGesture)>;
+type ScrollActionApplyFn = Func<64u, ListActionOutcome(in ControlAction)>;
+
+interface IScrollInputSink : NoCopy{
+    b8 matches()const;
+    ListActionOutcome applyHorizontal(in PointerGesture gesture);
+    ListActionOutcome applyVertical(in PointerGesture gesture);
+    ListActionOutcome applyAction(in ControlAction action);
+}
+
+interface IListActionHandler : NoCopy{
+    b8 matches()const;
+    ListActionOutcome apply(in ControlAction action);
+}
+
+class FuncScrollInputSink : IScrollInputSink{
+    private in ScrollGestureApplyFn m_applyHorizontal;
+    private in ScrollGestureApplyFn m_applyVertical;
+    private in ScrollActionApplyFn m_applyAction;
+
+    public FuncScrollInputSink(
+        in ScrollGestureApplyFn applyHorizontal,
+        in ScrollGestureApplyFn applyVertical,
+        in ScrollActionApplyFn applyAction
+    ){
+        this.m_applyHorizontal = applyHorizontal;
+        this.m_applyVertical = applyVertical;
+        this.m_applyAction = applyAction;
+    }
+
+    public b8 matches()const override{ return true; }
+    public ListActionOutcome applyHorizontal(in PointerGesture gesture)override{ return this.m_applyHorizontal(gesture); }
+    public ListActionOutcome applyVertical(in PointerGesture gesture)override{ return this.m_applyVertical(gesture); }
+    public ListActionOutcome applyAction(in ControlAction action)override{ return this.m_applyAction(action); }
+}
+
+class FuncListActionHandler : IListActionHandler{
+    private in ListInputMatches m_matches;
+    private in ListInputApplyAction m_applyAction;
+
+    public FuncListActionHandler(in ListInputMatches matches, in ListInputApplyAction applyAction){
+        this.m_matches = matches;
+        this.m_applyAction = applyAction;
+    }
+
+    public b8 matches()const override{ return this.m_matches(); }
+    public ListActionOutcome apply(in ControlAction action)override{ return this.m_applyAction(action); }
+}
+
+Expected<PointerGesture> NextScrollGestureStream(mut Context context, in WidgetState owner, in WidgetId thumb, in b8 enabled, in b8 inPopup){
+    if(inPopup)
+        return context.input().consumePointerGesture(thumb, owner.declarationGeneration);
+    return context.takePartPointerGesture(owner, thumb, enabled);
+}
+
+Expected<ControlAction> NextScrollActionStream(mut Context context, in WidgetState owner, in ControlToken token, in b8 enabled, in b8 inPopup){
+    if(inPopup)
+        return context.input().consumeControlAction(owner.id, owner.declarationGeneration, token);
+    return context.takeControlAction(owner, enabled, token);
+}
+
+b8 ConsumeScrollInputStreams(
+    mut Context context,
+    in WidgetState owner,
+    in WidgetId horizontalThumb,
+    in WidgetId verticalThumb,
+    in ControlToken token,
+    in b8 enabled,
+    in b8 inPopup,
+    in PopupToken popup,
+    mut IScrollInputSink sink
+){
+    Expected<PointerGesture> horizontal = NextScrollGestureStream(context, owner, horizontalThumb, enabled, inPopup);
+    b8 haveH = horizontal.has_value() && horizontal.value().control == token && (!inPopup || horizontal.value().popup == popup);
+    Expected<PointerGesture> vertical = NextScrollGestureStream(context, owner, verticalThumb, enabled, inPopup);
+    b8 haveV = vertical.has_value() && vertical.value().control == token && (!inPopup || vertical.value().popup == popup);
+    Expected<ControlAction> action = NextScrollActionStream(context, owner, token, enabled, inPopup);
+    b8 haveA = action.has_value() && (!inPopup || action.value().popup == popup);
+    while(haveH || haveV || haveA){
+        u64 hSeq = 0u;
+        u64 vSeq = 0u;
+        u64 aSeq = 0u;
+        if(haveH)
+            hSeq = horizontal.value().updateSequence;
+        if(haveV)
+            vSeq = vertical.value().updateSequence;
+        if(haveA)
+            aSeq = action.value().id.sequence;
+        const u8 stream = SelectNextScrollInputStream(haveH, hSeq, haveV, vSeq, haveA, aSeq);
+        if(stream == 0u){
+            const ListActionOutcome outcome = sink.applyHorizontal(horizontal.value());
+            if(outcome == ListActionOutcome::Failed)
+                return false;
+            if(outcome == ListActionOutcome::Stop)
+                return true;
+            horizontal = NextScrollGestureStream(context, owner, horizontalThumb, enabled, inPopup);
+            haveH = horizontal.has_value() && horizontal.value().control == token && (!inPopup || horizontal.value().popup == popup);
+        }
+        else if(stream == 1u){
+            const ListActionOutcome outcome = sink.applyVertical(vertical.value());
+            if(outcome == ListActionOutcome::Failed)
+                return false;
+            if(outcome == ListActionOutcome::Stop)
+                return true;
+            vertical = NextScrollGestureStream(context, owner, verticalThumb, enabled, inPopup);
+            haveV = vertical.has_value() && vertical.value().control == token && (!inPopup || vertical.value().popup == popup);
+        }
+        else{
+            const ListActionOutcome outcome = sink.applyAction(action.value());
+            if(outcome == ListActionOutcome::Failed)
+                return false;
+            if(outcome == ListActionOutcome::Stop)
+                return true;
+            action = NextScrollActionStream(context, owner, token, enabled, inPopup);
+            haveA = action.has_value() && (!inPopup || action.value().popup == popup);
+        }
+    }
+    return sink.matches();
+}
+
+b8 ConsumeScrollInputStreams(
+    mut Context context,
+    in WidgetState owner,
+    in WidgetId horizontalThumb,
+    in WidgetId verticalThumb,
+    in ControlToken token,
+    in b8 enabled,
+    in b8 inPopup,
+    in PopupToken popup,
+    in ScrollGestureApplyFn applyHorizontal,
+    in ScrollGestureApplyFn applyVertical,
+    in ScrollActionApplyFn applyAction
+){
+    FuncScrollInputSink sink(applyHorizontal, applyVertical, applyAction);
+    return ConsumeScrollInputStreams(context, owner, horizontalThumb, verticalThumb, token, enabled, inPopup, popup, sink);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+class ListScrollInputSink : IScrollInputSink{
+    private WidgetId m_vBeforeId;
+    private WidgetId m_vAfterId;
+    private WidgetId m_hBeforeId;
+    private WidgetId m_hAfterId;
+    private mut ListState m_state;
+    private mut IListActionHandler m_handler;
+
+    public ListScrollInputSink(
+        in WidgetId vBeforeId,
+        in WidgetId vAfterId,
+        in WidgetId hBeforeId,
+        in WidgetId hAfterId,
+        mut ListState state,
+        mut IListActionHandler handler
+    ){
+        this.m_vBeforeId = vBeforeId;
+        this.m_vAfterId = vAfterId;
+        this.m_hBeforeId = hBeforeId;
+        this.m_hAfterId = hAfterId;
+        this.m_state = state;
+        this.m_handler = handler;
+    }
+
+    public b8 matches()const override{
+        return this.m_handler.matches();
+    }
+
+    public ListActionOutcome applyHorizontal(in PointerGesture gesture)override{
+        if(!this.m_handler.matches())
+            return ListActionOutcome::Failed;
+        const Expected<f64> offsetX = TryComputeListGestureScrollOffset(gesture, true);
+        if(!offsetX.has_value() || !this.m_state.m_scrollX.setOffset(offsetX.value()))
+            return ListActionOutcome::Failed;
+        return ListActionOutcome::Continue;
+    }
+
+    public ListActionOutcome applyVertical(in PointerGesture gesture)override{
+        if(!this.m_handler.matches())
+            return ListActionOutcome::Failed;
+        const Expected<f64> offset = TryComputeListGestureScrollOffset(gesture, false);
+        if(!offset.has_value())
+            return ListActionOutcome::Failed;
+        this.m_state.m_ensureCursor = false;
+        if(!this.m_state.m_scroll.setOffset(offset.value()))
+            return ListActionOutcome::Failed;
+        return ListActionOutcome::Continue;
+    }
+
+    public ListActionOutcome applyAction(in ControlAction act)override{
+        if(!this.m_handler.matches())
+            return ListActionOutcome::Failed;
+        if(act.kind == ControlActionKind::Activate && (act.source == this.m_vBeforeId || act.source == this.m_vAfterId)){
+            f64 pageDelta = -1.0;
+            if(act.source == this.m_vBeforeId)
+                pageDelta = 1.0;
+            f64 pageStep = cast<f64>(this.m_state.m_placement.viewport.height);
+            if(pageStep <= 0.0)
+                pageStep = cast<f64>(Max(act.pageRows, cast<u64>(1u))) * cast<f64>(this.m_state.m_scrollRowHeight);
+            if(pageStep > 0.0){
+                const Expected<f64> offset = TryComputeListWheelOffset(this.m_state.m_scroll.offset(), pageDelta, pageStep, act.maximum);
+                if(!offset.has_value())
+                    return ListActionOutcome::Failed;
+                this.m_state.m_ensureCursor = false;
+                if(!this.m_state.m_scroll.setOffset(offset.value()))
+                    return ListActionOutcome::Failed;
+            }
+            return ListActionOutcome::Continue;
+        }
+        if(act.kind == ControlActionKind::Activate && (act.source == this.m_hBeforeId || act.source == this.m_hAfterId)){
+            f64 pageDeltaX = 1.0;
+            if(act.source == this.m_hBeforeId)
+                pageDeltaX = -1.0;
+            f64 pageStepX = cast<f64>(this.m_state.m_scrollbars.viewport.width);
+            if(pageStepX <= 0.0)
+                pageStepX = act.stepX;
+            if(pageStepX > 0.0){
+                const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(this.m_state.m_scrollX.offset(), pageDeltaX, pageStepX, act.maximumX);
+                if(!offsetX.has_value() || !this.m_state.m_scrollX.setOffset(offsetX.value()))
+                    return ListActionOutcome::Failed;
+            }
+            return ListActionOutcome::Continue;
+        }
+        return this.m_handler.apply(act);
+    }
+}
 
 class ListInput{
     private mut Context m_context;
 
     public ListInput(mut Context context){
         this.m_context = context;
-    }
-
-    private Expected<PointerGesture> nextGesture(in WidgetState rows, in WidgetId thumb, in b8 enabled, in b8 inPopup){
-        if(inPopup)
-            return this.m_context.input().consumePointerGesture(thumb, rows.declarationGeneration);
-        return this.m_context.takePartPointerGesture(rows, thumb, enabled);
-    }
-
-    private Expected<ControlAction> nextAction(in WidgetState rows, in ControlToken token, in b8 enabled, in b8 inPopup){
-        if(inPopup)
-            return this.m_context.input().consumeControlAction(rows.id, rows.declarationGeneration, token);
-        return this.m_context.takeControlAction(rows, enabled, token);
-    }
-
-    private b8 validGesture(in Expected<PointerGesture> gesture, in ControlToken token, in b8 inPopup, in PopupToken popup)const{
-        return gesture.has_value() && gesture.value().control == token && (!inPopup || gesture.value().popup == popup);
-    }
-
-    private b8 validAction(in Expected<ControlAction> action, in b8 inPopup, in PopupToken popup)const{
-        return action.has_value() && (!inPopup || action.value().popup == popup);
     }
 
     private b8 consumeQueued(
@@ -50,8 +253,7 @@ class ListInput{
         in b8 inPopup,
         in PopupToken popup,
         mut ListState state,
-        in ListInputMatches matches,
-        in ListInputApplyAction applyAction
+        mut IListActionHandler handler
     ){
         const Expected<WidgetId> vThumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollbar);
         const Expected<WidgetId> hThumb = TryMakeWidgetId(rows.id, s_WidgetPartScrollHorizontalThumb);
@@ -61,109 +263,26 @@ class ListInput{
         const Expected<WidgetId> hAfter = TryMakeWidgetId(rows.id, s_WidgetPartScrollHorizontalAfter);
         if(!vThumb.has_value() || !hThumb.has_value() || !vBefore.has_value() || !vAfter.has_value() || !hBefore.has_value() || !hAfter.has_value())
             return false;
-        Expected<PointerGesture> hGesture = this.nextGesture(rows, hThumb.value(), enabled, inPopup);
-        b8 haveHorizontal = this.validGesture(hGesture, token, inPopup, popup);
-        Expected<PointerGesture> vGesture = this.nextGesture(rows, vThumb.value(), enabled, inPopup);
-        b8 haveVertical = this.validGesture(vGesture, token, inPopup, popup);
-        Expected<ControlAction> action = this.nextAction(rows, token, enabled, inPopup);
-        b8 haveAction = this.validAction(action, inPopup, popup);
-        while(haveHorizontal || haveVertical || haveAction){
-            if(!matches())
-                return false;
-            u64 horizontalSequence = 0u;
-            u64 verticalSequence = 0u;
-            u64 actionSequence = 0u;
-            if(haveHorizontal)
-                horizontalSequence = hGesture.value().updateSequence;
-            if(haveVertical)
-                verticalSequence = vGesture.value().updateSequence;
-            if(haveAction)
-                actionSequence = action.value().id.sequence;
-            const u8 stream = SelectNextScrollInputStream(
-                haveHorizontal,
-                horizontalSequence,
-                haveVertical,
-                verticalSequence,
-                haveAction,
-                actionSequence
-            );
-            if(stream == 0u){
-                const Expected<f64> offsetX = TryComputeListHorizontalGestureScrollOffset(hGesture.value());
-                if(!offsetX.has_value())
-                    return false;
-                if(!state.m_scrollX.setOffset(offsetX.value()))
-                    return false;
-                hGesture = this.nextGesture(rows, hThumb.value(), enabled, inPopup);
-                haveHorizontal = this.validGesture(hGesture, token, inPopup, popup);
-            }
-            else if(stream == 1u){
-                const Expected<f64> offset = TryComputeListGestureScrollOffset(vGesture.value());
-                if(!offset.has_value())
-                    return false;
-                state.m_ensureCursor = false;
-                if(!state.m_scroll.setOffset(offset.value()))
-                    return false;
-                vGesture = this.nextGesture(rows, vThumb.value(), enabled, inPopup);
-                haveVertical = this.validGesture(vGesture, token, inPopup, popup);
-            }
-            else if(
-                action.value().kind == ControlActionKind::Activate
-                && (action.value().source == vBefore.value() || action.value().source == vAfter.value())
-            ){
-                f64 pageDelta = -1.0;
-                if(action.value().source == vBefore.value())
-                    pageDelta = 1.0;
-                f64 pageStep = cast<f64>(state.m_placement.viewport.height);
-                if(pageStep <= 0.0)
-                    pageStep = cast<f64>(Max(action.value().pageRows, cast<u64>(1u))) * cast<f64>(state.m_scrollRowHeight);
-                if(pageStep > 0.0){
-                    const Expected<f64> offset = TryComputeListWheelOffset(state.m_scroll.offset(), pageDelta, pageStep, action.value().maximum);
-                    if(!offset.has_value())
-                        return false;
-                    state.m_ensureCursor = false;
-                    if(!state.m_scroll.setOffset(offset.value()))
-                        return false;
-                }
-                action = this.nextAction(rows, token, enabled, inPopup);
-                haveAction = this.validAction(action, inPopup, popup);
-            }
-            else if(
-                action.value().kind == ControlActionKind::Activate
-                && (action.value().source == hBefore.value() || action.value().source == hAfter.value())
-            ){
-                f64 pageDeltaX = 1.0;
-                if(action.value().source == hBefore.value())
-                    pageDeltaX = -1.0;
-                f64 pageStepX = cast<f64>(state.m_scrollbars.viewport.width);
-                if(pageStepX <= 0.0)
-                    pageStepX = action.value().stepX;
-                if(pageStepX > 0.0){
-                    const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), pageDeltaX, pageStepX, action.value().maximumX);
-                    if(!offsetX.has_value() || !state.m_scrollX.setOffset(offsetX.value()))
-                        return false;
-                }
-                action = this.nextAction(rows, token, enabled, inPopup);
-                haveAction = this.validAction(action, inPopup, popup);
-            }
-            else{
-                const ListActionOutcome outcome = applyAction(action.value());
-                if(outcome == ListActionOutcome::Failed)
-                    return false;
-                if(outcome == ListActionOutcome::Stop)
-                    return true;
-                action = this.nextAction(rows, token, enabled, inPopup);
-                haveAction = this.validAction(action, inPopup, popup);
-            }
-        }
-        return matches();
+        ListScrollInputSink sink(vBefore.value(), vAfter.value(), hBefore.value(), hAfter.value(), state, handler);
+        return ConsumeScrollInputStreams(this.m_context, rows, hThumb.value(), vThumb.value(), token, enabled, inPopup, popup, sink);
+    }
+
+    public b8 consume(in WidgetState rows, in ControlToken token, in b8 enabled, mut ListState state, mut IListActionHandler handler){
+        return this.consumeQueued(rows, token, enabled, false, PopupToken(), state, handler);
+    }
+
+    public b8 consume(in WidgetState rows, in ControlToken token, in b8 enabled, in PopupToken popup, mut ListState state, mut IListActionHandler handler){
+        return this.consumeQueued(rows, token, enabled, true, popup, state, handler);
     }
 
     public b8 consume(in WidgetState rows, in ControlToken token, in b8 enabled, mut ListState state, in ListInputMatches matches, in ListInputApplyAction applyAction){
-        return this.consumeQueued(rows, token, enabled, false, PopupToken(), state, matches, applyAction);
+        FuncListActionHandler handler(matches, applyAction);
+        return this.consumeQueued(rows, token, enabled, false, PopupToken(), state, handler);
     }
 
     public b8 consume(in WidgetState rows, in ControlToken token, in b8 enabled, in PopupToken popup, mut ListState state, in ListInputMatches matches, in ListInputApplyAction applyAction){
-        return this.consumeQueued(rows, token, enabled, true, popup, state, matches, applyAction);
+        FuncListActionHandler handler(matches, applyAction);
+        return this.consumeQueued(rows, token, enabled, true, popup, state, handler);
     }
 }
 

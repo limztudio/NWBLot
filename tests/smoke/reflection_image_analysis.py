@@ -1,6 +1,7 @@
 import math
 
 from reflection_statistics import LIT_DISABLED, LIT_FLOOR, LIT_SCREEN
+from window_capture_image_regions import ImageRegions
 from window_capture_smoke import SmokeFailure
 
 LIT_MOVED = "moved"
@@ -35,10 +36,7 @@ class ReflectionImageAnalysis:
 
     @staticmethod
     def region_pixels(width, height, region):
-        left, top, right, bottom = region
-        for y in range(int(top * height), int(bottom * height)):
-            for x in range(int(left * width), int(right * width)):
-                yield x, y
+        return ImageRegions.region_pixels(width, height, region)
 
     @staticmethod
     def marker_color(pixel, color):

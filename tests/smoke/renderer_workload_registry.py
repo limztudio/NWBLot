@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Callable
 
 import reflection_benchmark as reflection
-from reflection_gpu_coverage import ReflectionGpuCoverage
+from reflection_gpu_coverage import (BUILD_ARGS, DEPTH, HARDWARE, ReflectionGpuCoverage, SPATIAL, TEMPORAL)
 from caustic_workload import CausticWorkload, PHOTONS as CAUSTIC_PHOTONS, RESOLVE as CAUSTIC_RESOLVE, PRESETS as CAUSTIC_PRESETS
 from renderer_workload_log_policy import RendererWorkloadLogPolicy
 from window_capture_outcome import SmokeFailure
@@ -87,7 +87,7 @@ class RendererWorkloadRegistry:
         policy = ReflectionPolicy(family, variant, roughness)
         required = tuple(ReflectionGpuCoverage.required_scopes(variant, policy.history_samples))
         inactive = tuple(scope for scope in reflection.KERNELS if scope not in required)
-        workload = Workload(name, 960, 720, tuple((scope, 10 if scope == reflection.DEPTH else 1) for scope in required), target_scope, (), RendererWorkloadLogPolicy.reflection_log, policy, inactive)
+        workload = Workload(name, 960, 720, tuple((scope, 10 if scope == DEPTH else 1) for scope in required), target_scope, (), RendererWorkloadLogPolicy.reflection_log, policy, inactive)
         _, overrides = reflection.timed_environment({}, RendererWorkloadLogPolicy.reflection_arguments(workload), variant, Path("timing.txt"))
         del overrides[LIT_NWB_GPU_TIMING_FILE]
         return Workload(name, workload.width, workload.height, workload.scope_multipliers, target_scope, tuple(overrides.items()), RendererWorkloadLogPolicy.reflection_log, policy, inactive)
@@ -97,10 +97,10 @@ class RendererWorkloadRegistry:
         scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT)
         result = {LIT_TRANSPARENT_MULTI: Workload(LIT_TRANSPARENT_MULTI, 1280, 900, tuple((scope, 1) for scope in scopes), OCCUPANCY, (("NWB_AVBOIT_SMOKE_TIMING", "1"), ("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", "0"),
              (LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS, LIT_N_0_016666667)), RendererWorkloadLogPolicy.transparent_multi_log)}
-        definitions = (("reflection-rough-spatial", LIT_ROUGH, LIT_HARDWARE, .4, False, True, reflection.SPATIAL), ("reflection-mirror-spatial", LIT_ROUGH, LIT_HARDWARE, 0.0, False, True, reflection.SPATIAL),
-            ("reflection-rough-filtered", LIT_ROUGH, LIT_HARDWARE, .4, True, True, reflection.SPATIAL), ("reflection-screen-depth", "floor", "screen", 0.0, False, False, reflection.DEPTH),
-            ("reflection-optical-clear", "optical_clear", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE), ("reflection-optical-csg-cap", "optical_csg_cap", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
-            (LIT_REFLECTION_OPTICAL_INSIDE, LIT_OPTICAL_INSIDE, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),)
+        definitions = (("reflection-rough-spatial", LIT_ROUGH, LIT_HARDWARE, .4, False, True, SPATIAL), ("reflection-mirror-spatial", LIT_ROUGH, LIT_HARDWARE, 0.0, False, True, SPATIAL),
+            ("reflection-rough-filtered", LIT_ROUGH, LIT_HARDWARE, .4, True, True, SPATIAL), ("reflection-screen-depth", "floor", "screen", 0.0, False, False, DEPTH),
+            ("reflection-optical-clear", "optical_clear", LIT_HARDWARE, 0.0, False, False, HARDWARE), ("reflection-optical-csg-cap", "optical_csg_cap", LIT_HARDWARE, 0.0, False, False, HARDWARE),
+            (LIT_REFLECTION_OPTICAL_INSIDE, LIT_OPTICAL_INSIDE, LIT_HARDWARE, 0.0, False, False, HARDWARE),)
         for definition in definitions:
             workload = RendererWorkloadRegistry.reflection_workload(*definition)
             result[workload.name] = workload
@@ -110,8 +110,8 @@ class RendererWorkloadRegistry:
         caustic_scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT, CAUSTIC_PHOTONS, CAUSTIC_RESOLVE)
         for preset in CAUSTIC_PRESETS:
             name = "caustic-" + preset
-            result[name] = Workload(name, 1280, 900, tuple((scope, 1) for scope in caustic_scopes), CAUSTIC_RESOLVE, tuple(CausticWorkload.environment(preset).items()), RendererWorkloadLogPolicy.caustic_log, inactive_scopes=(reflection.DEPTH, reflection.BUILD_ARGS, reflection.HARDWARE,
-                    reflection.TEMPORAL, reflection.SPATIAL), control_scopes=(*CONTROLS, *OBSERVATIONS, CAUSTIC_PHOTONS))
+            result[name] = Workload(name, 1280, 900, tuple((scope, 1) for scope in caustic_scopes), CAUSTIC_RESOLVE, tuple(CausticWorkload.environment(preset).items()), RendererWorkloadLogPolicy.caustic_log, inactive_scopes=(DEPTH, BUILD_ARGS, HARDWARE,
+                    TEMPORAL, SPATIAL), control_scopes=(*CONTROLS, *OBSERVATIONS, CAUSTIC_PHOTONS))
         shadow_scopes = (FRAME, *SHADOW_CONTROLS, *SHADOW_PHASES)
         for name, angle, radius in (("shadow-zero-extent", "0", "0"), ("shadow-finite-extent", LIT_N_0_03, LIT_N_0_15), ("shadow-zero-directional", "0", LIT_N_0_15), ("shadow-zero-punctual", LIT_N_0_03, "0")):
             result[name] = Workload(name, 1280, 900, tuple((scope, 1) for scope in shadow_scopes), LIT_RENDER_SHADOW_VISIBILITY, (("NWB_SOFT_SHADOW_TEST_TIMING", "1"), (LIT_NWB_SOFT_SHADOW_TEST_ANGLE, angle), (LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS, radius),

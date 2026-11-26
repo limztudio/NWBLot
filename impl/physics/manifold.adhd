@@ -183,7 +183,7 @@ VectorSingle ClosestPointOnSegmentVec(in VectorSingle a, in VectorSingle b, in V
     const f32 lenSq = Vector3LengthSq(ab).x;
     if(lenSq <= s_NormalizeEpsilonSq)
         return a;
-    const f32 t = SimdClamp(Vector3Dot(VectorSingle(p - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+    const f32 t = Clamp(Vector3Dot(VectorSingle(p - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
     return a + ab * t;
 }
 
@@ -213,30 +213,30 @@ void ClosestPointsBetweenSegments(
     }
     else if(a <= s_NormalizeEpsilonSq){
         s = 0.0f;
-        t = SimdClamp(f / e, 0.0f, 1.0f);
+        t = Clamp(f / e, 0.0f, 1.0f);
     }
     else{
         const f32 c = Vector3Dot(d1, r).x;
         if(e <= s_NormalizeEpsilonSq){
             t = 0.0f;
-            s = SimdClamp(-c / a, 0.0f, 1.0f);
+            s = Clamp(-c / a, 0.0f, 1.0f);
         }
         else{
             const f32 b = Vector3Dot(d1, d2).x;
             const f32 denom = a * e - b * b;
             if(denom > s_NormalizeEpsilonSq)
-                s = SimdClamp((b * f - c * e) / denom, 0.0f, 1.0f);
+                s = Clamp((b * f - c * e) / denom, 0.0f, 1.0f);
             else
                 s = 0.0f;
 
             t = (b * s + f) / e;
             if(t < 0.0f){
                 t = 0.0f;
-                s = SimdClamp(-c / a, 0.0f, 1.0f);
+                s = Clamp(-c / a, 0.0f, 1.0f);
             }
             else if(t > 1.0f){
                 t = 1.0f;
-                s = SimdClamp((b - c) / a, 0.0f, 1.0f);
+                s = Clamp((b - c) / a, 0.0f, 1.0f);
             }
         }
     }
@@ -272,7 +272,7 @@ Manifold CollideSpheres(
     if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
-    const f32 dist = SqrtFast(distSq);
+    const f32 dist = Sqrt(distSq);
     VectorSingle n = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     if(distSq > s_NormalizeEpsilonSq)
         n = d * (1.0f / dist);
@@ -309,7 +309,7 @@ Manifold CollideSphereAndCapsule(
     if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
-    const f32 dist = SqrtFast(distSq);
+    const f32 dist = Sqrt(distSq);
     VectorSingle n = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
     if(distSq > s_NormalizeEpsilonSq)
         n = d * (1.0f / dist);
@@ -357,7 +357,7 @@ Manifold CollideCapsules(
     if(maxD < 0.0f || distSq > maxD * maxD)
         return m;
 
-    const f32 dist = SqrtFast(distSq);
+    const f32 dist = Sqrt(distSq);
     VectorSingle n(0.0f);
     if(distSq > s_NormalizeEpsilonSq){
         n = d * (1.0f / dist);
@@ -375,16 +375,16 @@ Manifold CollideCapsules(
     m.normalTwist = f32x4(n, 0.0f);
 
     if(lenSqA > s_NormalizeEpsilonSq && lenSqB > s_NormalizeEpsilonSq){
-        const f32 lenA = SqrtFast(lenSqA);
+        const f32 lenA = Sqrt(lenSqA);
         const VectorSingle uA = dirA * (1.0f / lenA);
         const VectorSingle uB = dirB * Rsqrt(VectorSingle(lenSqB)).x;
         if(Abs(Vector3Dot(uA, uB)).x > 0.9995f){
             const f32 pB1 = Vector3Dot(VectorSingle(b1 - a1, 0.0f), uA).x;
             const f32 pB2 = Vector3Dot(VectorSingle(b2 - a1, 0.0f), uA).x;
-            const f32 minB = SimdMin(pB1, pB2);
-            const f32 maxB = SimdMax(pB1, pB2);
-            const f32 overlapMin = SimdMax(0.0f, minB);
-            const f32 overlapMax = SimdMin(lenA, maxB);
+            const f32 minB = Min(pB1, pB2);
+            const f32 maxB = Max(pB1, pB2);
+            const f32 overlapMin = Max(0.0f, minB);
+            const f32 overlapMax = Min(lenA, maxB);
             if(overlapMax - overlapMin > s_MinCapsuleLength){
                 const VectorSingle pA0 = a1 + uA * overlapMin;
                 const VectorSingle pA1 = a1 + uA * overlapMax;
@@ -447,7 +447,7 @@ Manifold CollideSphereAndHull(
         u8 featureIdx = 0u;
 
         if(distSq > 1.0e-10f){
-            const f32 dist = SqrtFast(distSq);
+            const f32 dist = Sqrt(distSq);
             localOutward = deltaLocal / dist;
             separation = dist - totalR;
             if(localS.x < -hBox.x)
@@ -673,7 +673,7 @@ void ClosestPointSegmentToBoxLocal(
 
         f32 candT = tMid;
         if(denom > 1.0e-12f)
-            candT = SimdClamp(-num / denom, ta, tb);
+            candT = Clamp(-num / denom, ta, tb);
 
         const VectorSingle sp = l0 + d * candT;
         const VectorSingle bp = ClampVec3ToHalfExtents(sp, hBox);
@@ -701,8 +701,8 @@ void ClipCapsuleIntervalAxis(in f32 p0, in f32 d, in f32 hExt, mut f32 tMin, mut
         t0 = t1;
         t1 = tmp;
     }
-    tMin = SimdMax(tMin, t0);
-    tMax = SimdMin(tMax, t1);
+    tMin = Max(tMin, t0);
+    tMax = Min(tMax, t1);
 }
 
 b8 TryClipSegmentAgainstHullFace(
@@ -813,7 +813,7 @@ Manifold CollideCapsuleAndHull(
 
         b8 wonByEdge = false;
         if(bestDistSq > 1.0e-10f){
-            const f32 dist = SqrtFast(bestDistSq);
+            const f32 dist = Sqrt(bestDistSq);
             localOutward = VectorSingle(bestSegPt - bestBoxPt, 0.0f) / dist;
             singleSep = dist - totalR;
             const VectorSingle absOutward = Abs(localOutward);
@@ -1084,7 +1084,7 @@ Manifold CollideCapsuleAndHull(
         const f32 offset = hullB.facePlanes[i].normalOffset.w;
         const f32 d1 = Vector3Dot(faceN, l1).x - offset;
         const f32 d2 = Vector3Dot(faceN, l2).x - offset;
-        const f32 sep = SimdMin(d1, d2);
+        const f32 sep = Min(d1, d2);
         if(sep > totalR + maxDistance)
             return m;
         if(sep > maxFaceSep){
@@ -1149,7 +1149,7 @@ Manifold CollideCapsuleAndHull(
             const VectorSingle eDir = VectorSingle(e1 - e0, 0.0f);
             const VectorSingle cr = Cross(dSegHull, eDir);
             const f32 crLenSq = Vector3LengthSq(cr).x;
-            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(segHullLenSq * Vector3LengthSq(eDir).x, 1.0e-12f);
+            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(segHullLenSq * Vector3LengthSq(eDir).x, 1.0e-12f);
             if(crLenSq <= normTol)
                 continue;
 
@@ -1241,13 +1241,13 @@ Manifold CollideCapsuleAndHull(
     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(faceN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     const VectorSingle nAtoB = -worldOut;
     m.normalTwist = f32x4(nAtoB, 0.0f);
-    const f32 sep = SimdMin(d1, d2) - totalR;
+    const f32 sep = Min(d1, d2) - totalR;
     VectorSingle deepLocal = l1;
     if(d2 < d1)
         deepLocal = l2;
     const VectorSingle deepWorld = TransformPointValues(posB, rotB, deepLocal);
     const VectorSingle wA = deepWorld + nAtoB * capR;
-    const VectorSingle wB = deepWorld + worldOut * (hullR - SimdMin(d1, d2));
+    const VectorSingle wB = deepWorld + worldOut * (hullR - Min(d1, d2));
     m.setPointCount(1u);
     SetManifoldPoint(m, 0u, (wA + wB) * 0.5f, wA - posA, wB - posB, sep, MakeFeatureId(0u, 3u, 1u, cast<u8>(bestFace)));
     return m;
@@ -1355,23 +1355,11 @@ Manifold CollideSphereAndMesh(
     u32 bestTriIdx = 0u;
     b8 foundHit = false;
 
-    Array<u32, 256u> stack;
-    stack[0u] = 0u;
-    u32 stackCount = 0u;
+    BvhSpillStack<u32, 256u> stack;
     if(queryR >= 0.0f)
-        stackCount = 1u;
-    Vector<u32> overflowStack;
-    b8 useOverflow = false;
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32 nodeIdx = 0u;
-        if(useOverflow){
-            nodeIdx = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            nodeIdx = stack[stackCount];
-        }
+        stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -1391,7 +1379,7 @@ Manifold CollideSphereAndMesh(
                 if(cullBackFaces && signedPlane < -s_LinearSlop){
                     if(closedMesh && -signedPlane < minBackfaceDist && -signedPlane <= bestSurfaceDist){
                         const VectorSingle backQ = ClosestPointOnTriangleLocal(lcA, tv0, tv1, tv2);
-                        const f32 backDist = SqrtFast(Vector3LengthSq(VectorSingle(backQ - lcA, 0.0f)).x);
+                        const f32 backDist = Sqrt(Vector3LengthSq(VectorSingle(backQ - lcA, 0.0f)).x);
                         if(backDist < minBackfaceDist)
                             minBackfaceDist = backDist;
                     }
@@ -1403,7 +1391,7 @@ Manifold CollideSphereAndMesh(
                 if(distSq > queryR * queryR)
                     continue;
 
-                const f32 dist = SqrtFast(distSq);
+                const f32 dist = Sqrt(distSq);
                 f32 sep = dist - totalR;
                 VectorSingle nLocal = -triN;
                 if(dist > 1.0e-5f){
@@ -1435,8 +1423,8 @@ Manifold CollideSphereAndMesh(
             }
         }
         else{
-            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
         }
     }
 
@@ -1459,7 +1447,7 @@ Manifold CollideSphereAndMesh(
             const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle worldN = -worldOut;
             const VectorSingle worldQ = TransformPointValues(posB, rotB, closePt);
-            const f32 interiorDist = SqrtFast(Vector3LengthSq(VectorSingle(closePt - lcA, 0.0f)).x);
+            const f32 interiorDist = Sqrt(Vector3LengthSq(VectorSingle(closePt - lcA, 0.0f)).x);
             const f32 interiorSep = -(interiorDist + totalR);
             if(interiorSep <= maxDistance && (!foundHit || interiorSep < bestSep)){
                 foundHit = true;
@@ -1495,9 +1483,9 @@ b8 ClipSegmentAgainstTriangleEdgePlane(
     if(d0 > 0.0f && d1 > 0.0f)
         return false;
     if(d0 > 0.0f)
-        ioClip0 = Lerp(ioClip0, ioClip1, VectorSingle(SimdClamp(d0 / (d0 - d1), 0.0f, 1.0f)));
+        ioClip0 = Lerp(ioClip0, ioClip1, VectorSingle(Clamp(d0 / (d0 - d1), 0.0f, 1.0f)));
     else if(d1 > 0.0f)
-        ioClip1 = Lerp(ioClip0, ioClip1, VectorSingle(SimdClamp(d0 / (d0 - d1), 0.0f, 1.0f)));
+        ioClip1 = Lerp(ioClip0, ioClip1, VectorSingle(Clamp(d0 / (d0 - d1), 0.0f, 1.0f)));
     return true;
 }
 
@@ -1574,23 +1562,11 @@ Manifold CollideCapsuleAndMesh(
     u32 bestTriIdx = 0u;
     b8 foundHit = false;
 
-    Array<u32, 256u> stack;
-    stack[0u] = 0u;
-    u32 stackCount = 0u;
+    BvhSpillStack<u32, 256u> stack;
     if(queryR >= 0.0f)
-        stackCount = 1u;
-    Vector<u32> overflowStack;
-    b8 useOverflow = false;
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32 nodeIdx = 0u;
-        if(useOverflow){
-            nodeIdx = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            nodeIdx = stack[stackCount];
-        }
+        stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -1612,7 +1588,7 @@ Manifold CollideCapsuleAndMesh(
                 if(cullBackFaces){
                     if(sDist1 < -s_LinearSlop && sDist2 < -s_LinearSlop){
                         if(closedMesh){
-                            const f32 endMinBack = SimdMin(-sDist1, -sDist2);
+                            const f32 endMinBack = Min(-sDist1, -sDist2);
                             if(endMinBack < minBackfaceDist && endMinBack <= bestSurfaceDist)
                                 minBackfaceDist = endMinBack;
                         }
@@ -1711,8 +1687,8 @@ Manifold CollideCapsuleAndMesh(
             }
         }
         else{
-            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
         }
     }
 
@@ -1756,7 +1732,7 @@ Manifold CollideCapsuleAndMesh(
                 }
             }
             if(foundInt){
-                const f32 interiorSep = -(SqrtFast(bestIntDistSq) + totalR);
+                const f32 interiorSep = -(Sqrt(bestIntDistSq) + totalR);
                 if(interiorSep <= maxDistance && (!foundHit || interiorSep < bestSep)){
                     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestIntN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle worldN = -worldOut;
@@ -1786,7 +1762,7 @@ Manifold CollideCapsuleAndMesh(
         const VectorSingle seg = VectorSingle(l2 - l1, 0.0f);
         const f32 segLenSq = Vector3LengthSq(seg).x;
         if(segLenSq > s_MinCapsuleLength * s_MinCapsuleLength && Abs(Vector3Dot(bestNormal, bTriWorldN)).x > 0.99f){
-            const VectorSingle segDir = seg / SqrtFast(segLenSq);
+            const VectorSingle segDir = seg / Sqrt(segLenSq);
             if(Abs(Vector3Dot(segDir, bTriN)).x < 0.08f){
                 VectorSingle clip0 = l1;
                 VectorSingle clip1 = l2;
@@ -1881,7 +1857,7 @@ ClipVertex MakeInterpolatedClipVertex(
     const f32 denom = prevDist - curDist;
     f32 t = 0.0f;
     if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-        t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
+        t = Clamp(prevDist / denom, 0.0f, 1.0f);
     ClipVertex interp;
     interp.position = f32x3u(Lerp(VectorSingle(prev.position, 0.0f), VectorSingle(cur.position, 0.0f), VectorSingle(t)));
     interp.id0 = id0;
@@ -1924,6 +1900,45 @@ u32 ClipPolygonAgainstPlane(
     return cast<u32>(outVerts.size());
 }
 
+void UpdateFourthManifoldPointCandidate(
+    in f32 a0,
+    in f32 a1,
+    in f32 a2,
+    in f32 baseSign,
+    in u32 candidateIdx,
+    mut f32 bestFallbackArea,
+    mut u32 fallbackIdx3,
+    mut f32 bestOutsideArea,
+    mut u32 idx3
+){
+    const f32 maxAbs = Vector3MaxComponent(Abs(VectorSingle(a0, a1, a2, 0.0f))).x;
+    if(maxAbs > bestFallbackArea){
+        bestFallbackArea = maxAbs;
+        fallbackIdx3 = candidateIdx;
+    }
+    f32 outsideArea = -1.0f;
+    if(baseSign >= 0.0f){
+        if(a0 < 0.0f && -a0 > outsideArea)
+            outsideArea = -a0;
+        if(a1 < 0.0f && -a1 > outsideArea)
+            outsideArea = -a1;
+        if(a2 < 0.0f && -a2 > outsideArea)
+            outsideArea = -a2;
+    }
+    else{
+        if(a0 > 0.0f && a0 > outsideArea)
+            outsideArea = a0;
+        if(a1 > 0.0f && a1 > outsideArea)
+            outsideArea = a1;
+        if(a2 > 0.0f && a2 > outsideArea)
+            outsideArea = a2;
+    }
+    if(outsideArea > bestOutsideArea){
+        bestOutsideArea = outsideArea;
+        idx3 = candidateIdx;
+    }
+}
+
 void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVertex, s_MaxClipPoints> candidates){
     if(candidates.size() <= s_MaxManifoldPoints)
         return;
@@ -1960,9 +1975,9 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
         }
     }
 
-    usize idx3 = 0u;
+    u32 idx3 = 0u;
     f32 bestOutsideArea = -1.0f;
-    usize fallbackIdx3 = 0u;
+    u32 fallbackIdx3 = 0u;
     f32 bestFallbackArea = -1.0f;
     const VectorSingle p2(candidates[idx2].position, 0.0f);
     const f32 baseSign = Vector3Dot(Cross(e01, VectorSingle(p2 - p0, 0.0f)), refNormal).x;
@@ -1973,32 +1988,7 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
         const f32 a0 = Vector3Dot(Cross(VectorSingle(p1 - p0, 0.0f), VectorSingle(pi - p0, 0.0f)), refNormal).x;
         const f32 a1 = Vector3Dot(Cross(VectorSingle(p2 - p1, 0.0f), VectorSingle(pi - p1, 0.0f)), refNormal).x;
         const f32 a2 = Vector3Dot(Cross(VectorSingle(p0 - p2, 0.0f), VectorSingle(pi - p2, 0.0f)), refNormal).x;
-        const f32 maxAbs = Vector3MaxComponent(Abs(VectorSingle(a0, a1, a2, 0.0f))).x;
-        if(maxAbs > bestFallbackArea){
-            bestFallbackArea = maxAbs;
-            fallbackIdx3 = i;
-        }
-        f32 outsideArea = -1.0f;
-        if(baseSign >= 0.0f){
-            if(a0 < 0.0f && -a0 > outsideArea)
-                outsideArea = -a0;
-            if(a1 < 0.0f && -a1 > outsideArea)
-                outsideArea = -a1;
-            if(a2 < 0.0f && -a2 > outsideArea)
-                outsideArea = -a2;
-        }
-        else{
-            if(a0 > 0.0f && a0 > outsideArea)
-                outsideArea = a0;
-            if(a1 > 0.0f && a1 > outsideArea)
-                outsideArea = a1;
-            if(a2 > 0.0f && a2 > outsideArea)
-                outsideArea = a2;
-        }
-        if(outsideArea > bestOutsideArea){
-            bestOutsideArea = outsideArea;
-            idx3 = i;
-        }
+        UpdateFourthManifoldPointCandidate(a0, a1, a2, baseSign, cast<u32>(i), bestFallbackArea, fallbackIdx3, bestOutsideArea, idx3);
     }
     if(bestOutsideArea < 0.0f)
         idx3 = fallbackIdx3;
@@ -2668,8 +2658,8 @@ Manifold CollideConvexProxyVsPlane(
                 ta = tb;
                 tb = tmp;
             }
-            tMin = SimdMax(tMin, ta);
-            tMax = SimdMin(tMax, tb);
+            tMin = Max(tMin, ta);
+            tMax = Min(tMax, tb);
             if(tMin > tMax)
                 segInside = false;
         }
@@ -2688,8 +2678,8 @@ Manifold CollideConvexProxyVsPlane(
                     ta = tb;
                     tb = tmp;
                 }
-                tMin = SimdMax(tMin, ta);
-                tMax = SimdMin(tMax, tb);
+                tMin = Max(tMin, ta);
+                tMax = Min(tMax, tb);
                 if(tMin > tMax)
                     segInside = false;
             }
@@ -2724,7 +2714,7 @@ Manifold CollideConvexProxyVsPlane(
             const f32 distSq = Vector3LengthSq(toCenter).x;
             const f32 maxR = proxyA.radius + maxDistance;
             if(Vector3Dot(relC, worldPlaneN).x >= -proxyA.radius && distSq <= maxR * maxR){
-                const f32 dist = SqrtFast(distSq);
+                const f32 dist = Sqrt(distSq);
                 const VectorSingle outN = SafeNormalizeVec3(toCenter, worldPlaneN);
                 const VectorSingle edgeNAtoB = -outN;
                 const VectorSingle wA = wCenter - outN * proxyA.radius;
@@ -2793,21 +2783,10 @@ void CollideConvexProxyAndMeshMulti(
     VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
     f32 deepestSep = s_MaxF32;
 
-    Array<u32, 256u> stack;
-    stack[0u] = 0u;
-    u32 stackCount = 1u;
-    Vector<u32> overflowStack;
-    b8 useOverflow = false;
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32 nodeIdx = 0u;
-        if(useOverflow){
-            nodeIdx = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            nodeIdx = stack[stackCount];
-        }
+    BvhSpillStack<u32, 256u> stack;
+    stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -2881,8 +2860,8 @@ void CollideConvexProxyAndMeshMulti(
             }
         }
         else{
-            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
         }
     }
 

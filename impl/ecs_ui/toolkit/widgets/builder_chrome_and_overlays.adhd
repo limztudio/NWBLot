@@ -414,7 +414,6 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
         entry.text = measured.value().layout;
         entry.bounds = measured.value().bounds;
         entry.enabled = menu.enabled;
-        entry.hasDropdown = menu.items.has_value();
         frame.labels.push_back(entry);
         const f32 itemW = entry.bounds.width + 2.0f * frame.style.itemPaddingX;
         totalWidth += itemW;
@@ -441,36 +440,159 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
     return result;
 }
 
-b8 Builder::applyMenuBarListInput(mut BuilderMenuBarFrame frame, mut MenuBarResult result){
-    ListOptions options;
-    options.wheelRows = frame.options.wheelRows;
-    options.selectOnNavigate = false;
-    in ListOptions optionsRef = options;
-    ListInput inputs(this.m_context);
-    const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.menuBarMatches(frame); };
-    const ListInputApplyAction apply = lambda[mut this, mut frame, in optionsRef, mut result](in ControlAction action) -> ListActionOutcome{
+class PopupMenuListActionHandler : IListActionHandler{
+    private in IListDataSource m_source;
+    private ListOptions m_options;
+    private mut ListState m_listState;
+    private in ListInputMatches m_matches;
+    private mut b8 m_activated;
+    private mut u64 m_activatedKey;
+
+    public PopupMenuListActionHandler(
+        in borrow IListDataSource source,
+        in ListOptions options,
+        mut ListState listState,
+        in ListInputMatches matches,
+        mut b8 outActivated,
+        mut u64 outActivatedKey
+    ){
+        this.m_source = source;
+        this.m_options = options;
+        this.m_listState = listState;
+        this.m_matches = matches;
+        this.m_activated = outActivated;
+        this.m_activatedKey = outActivatedKey;
+    }
+
+    public b8 matches()const override{
+        return this.m_matches();
+    }
+
+    public ListActionOutcome apply(in ControlAction action)override{
         ListResult preview;
-        if(!ApplyListControlAction(frame.source.value(), optionsRef, action, frame.state.value().m_list, preview) || !this.menuBarMatches(frame))
+        if(!ApplyListControlAction(this.m_source, this.m_options, action, this.m_listState, preview) || !this.m_matches())
             return ListActionOutcome::Failed;
         if(!preview.activated)
             return ListActionOutcome::Continue;
-        result.activated = true;
-        result.menuKey = frame.openMenuKey;
-        result.itemKey = frame.state.value().m_list.selectedKey();
-        frame.state.value().close();
-        this.m_context.input().closePopup(frame.popupToken);
-        this.snapshotMenuBar(frame);
+        this.m_activated = true;
+        this.m_activatedKey = this.m_listState.selectedKey();
         return ListActionOutcome::Stop;
-    };
-    return inputs.consume(
+    }
+}
+
+b8 Builder::applyPopupMenuListInput(
+    in WidgetState rows,
+    in ControlToken listToken,
+    in PopupToken popupToken,
+    in u32 wheelRows,
+    in borrow IListDataSource source,
+    mut ListState listState,
+    in ListInputMatches matches,
+    mut b8 outActivated,
+    mut u64 outActivatedKey
+){
+    outActivated = false;
+    outActivatedKey = 0u;
+    ListOptions options;
+    options.wheelRows = wheelRows;
+    options.selectOnNavigate = false;
+    ListInput inputs(this.m_context);
+    PopupMenuListActionHandler handler(source, options, listState, matches, outActivated, outActivatedKey);
+    if(!inputs.consume(rows, listToken, true, popupToken, listState, handler))
+        return false;
+    if(outActivated)
+        this.m_context.input().closePopup(popupToken);
+    return true;
+}
+
+b8 Builder::paintPopupListOverlay(
+    in WidgetState popupWidget,
+    in WidgetState rowsWidget,
+    in u32 listIndex,
+    in b8 enabled,
+    in PopupToken popupToken,
+    in PopupToken parentToken,
+    in PopupOptions options,
+    in PopupStyle popupStyle,
+    in UiSkinRegion background,
+    in b8 emitMenuAccessibleNode,
+    in ListInputMatches checkMatches,
+    mut PopupPlacement outPlacement
+){
+    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
+    if(!placement.has_value())
+        return false;
+    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(popupToken, parentToken, placement.value());
+    if(!this.m_context.updatePopupScope(popupToken, scope) || !this.m_context.activatePopupScope(popupToken))
+        return false;
+    if(!this.m_paint.beginOverlay(this.m_context.popupLayer())){
+        if(!this.m_context.endPopupScope(false))
+            this.m_context.fail();
+        return false;
+    }
+    const Insets padding = MaxUiPadding(popupStyle.padding, background.padding);
+    this.m_paint.pushClip(placement.value().bounds);
+    const b8 backgroundPainted = this.m_paint.drawRegion(background.name, placement.value().bounds);
+    const b8 popped = this.m_paint.popClip();
+    HitTargetFactory targets;
+    const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
+    b8 painted = backgroundPainted && popped && this.m_context.addTarget(popupWidget, barrier);
+    if(painted){
+        b8 pushedParent = false;
+        if(emitMenuAccessibleNode){
+            this.emitAccessibleNode(
+                popupWidget,
+                AccessibilityRole::Menu,
+                placement.value().bounds,
+                StringView(),
+                StringView(),
+                ResolveAccessibleVisibilityStateBits(enabled, placement.value().bounds),
+                s_AccessibilityActionNone
+            );
+            pushedParent = this.m_context.pushAccessibleParent(popupWidget.id);
+        }
+        auto item = this.makeItem();
+        item.state = rowsWidget;
+        item.list = listIndex;
+        item.enabled = enabled;
+        LayoutBox box;
+        box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
+        box.clip = placement.value().bounds;
+        painted = this.paintList(item, box) && checkMatches();
+        if(emitMenuAccessibleNode && pushedParent)
+            this.m_context.popAccessibleParent();
+    }
+    const b8 overlayEnded = this.m_paint.endOverlay();
+    const b8 scopeEnded = this.m_context.endPopupScope(painted);
+    if(painted)
+        outPlacement = placement.value();
+    return painted && overlayEnded && scopeEnded;
+}
+
+b8 Builder::applyMenuBarListInput(mut BuilderMenuBarFrame frame, mut MenuBarResult result){
+    const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.menuBarMatches(frame); };
+    b8 activated = false;
+    u64 itemKey = 0u;
+    if(!this.applyPopupMenuListInput(
         frame.rows,
         frame.listToken,
-        true,
         frame.popupToken,
+        frame.options.wheelRows,
+        frame.source.value(),
         frame.state.value().m_list,
         matches,
-        apply
-    );
+        activated,
+        itemKey
+    ))
+        return false;
+    if(activated){
+        result.activated = true;
+        result.menuKey = frame.openMenuKey;
+        result.itemKey = itemKey;
+        frame.state.value().close();
+        this.snapshotMenuBar(frame);
+    }
+    return true;
 }
 
 void Builder::snapshotMenuBar(mut BuilderMenuBarFrame frame){
@@ -486,14 +608,9 @@ void Builder::snapshotMenuBar(mut BuilderMenuBarFrame frame){
         this.m_scope.value().m_lists[frame.list].token = frame.listToken;
 }
 
-b8 Builder::menuBarStateMatches(in BuilderMenuBarFrame frame)const{
-    if(!frame.state.has_value())
-        return false;
-    return this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
-}
-
 b8 Builder::menuBarMatches(in BuilderMenuBarFrame frame)const{
-    return this.menuBarStateMatches(frame)
+    return frame.state.has_value()
+        && this.popupStateTokenMatches(frame.state.value().revision(), frame.revision)
         && frame.source.has_value()
         && frame.source.value().instanceGeneration() == frame.listToken.contentGeneration
         && frame.source.value().revision() == frame.listToken.contentRevision
@@ -513,7 +630,7 @@ b8 Builder::paintMenuBar(in BuilderItem item, in LayoutBox box){
         return false;
     this.m_paint.pushClip(clip);
     this.m_paint.drawRegionByIndex(bgIdx.value(), box.rectangle);
-    const f32 borderY = UiSimdMax(box.rectangle.y, box.rectangle.y + box.rectangle.height - s_MenuBarBorderThickness);
+    const f32 borderY = Max(box.rectangle.y, box.rectangle.y + box.rectangle.height - s_MenuBarBorderThickness);
     this.m_paint.drawLine(
         Point(box.rectangle.x, borderY),
         Point(box.rectangle.x + box.rectangle.width, borderY),
@@ -588,7 +705,7 @@ b8 Builder::paintMenuBar(in BuilderItem item, in LayoutBox box){
         }
         if(item.enabled && entryEnabled){
             const Rect itemClip = IntersectUiRectsBounds(itemRect, clip);
-            const HitTarget itemTarget = targets.makeMenuBarItemHitTarget(itemRect, itemClip, true, frame.token, entry.key);
+            const HitTarget itemTarget = targets.makeActivatablePartHitTarget(itemRect, itemClip, true, frame.token, entry.key);
             if(!this.m_context.addPartTarget(frame.widget, partId.value(), itemTarget)){
                 this.m_paint.popClip();
                 return false;
@@ -617,7 +734,7 @@ b8 Builder::paintMenuBar(in BuilderItem item, in LayoutBox box){
 
 b8 Builder::paintMenuBars(){
     for(mut auto frame : this.m_scope.value().m_menuBars){
-        if(!this.menuBarStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
         if(frame.open && frame.options.enabled){
             if(frame.list >= this.m_scope.value().m_lists.size() || !this.menuBarMatches(frame))
@@ -648,40 +765,25 @@ b8 Builder::paintMenuBarPopup(mut BuilderMenuBarFrame frame){
     options.size = frame.style.dropdownSize;
     options.side = PopupPlacementSide::Below;
     options.gap = 0.0f;
-    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
-    if(!placement.has_value())
-        return false;
-    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(frame.popupToken, frame.parentToken, placement.value());
-    if(!this.m_context.updatePopupScope(frame.popupToken, scope) || !this.m_context.activatePopupScope(frame.popupToken))
-        return false;
-    if(!this.m_paint.beginOverlay(this.m_context.popupLayer())){
-        const b8 ended = this.m_context.endPopupScope(false);
-        if(!ended)
-            this.m_context.fail();
-        return false;
-    }
-    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background.value().padding);
-    this.m_paint.pushClip(placement.value().bounds);
-    const b8 backgroundPainted = this.m_paint.drawRegion(background.value().name, placement.value().bounds);
-    const b8 popped = this.m_paint.popClip();
-    HitTargetFactory targets;
-    const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
-    b8 painted = backgroundPainted && popped && this.m_context.addTarget(frame.popup, barrier);
-    if(painted){
-        auto item = this.makeItem();
-        item.state = frame.rows;
-        item.list = frame.list;
-        item.enabled = frame.options.enabled;
-        LayoutBox box;
-        box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
-        box.clip = placement.value().bounds;
-        painted = this.paintList(item, box) && this.menuBarMatches(frame);
-    }
-    const b8 overlayEnded = this.m_paint.endOverlay();
-    const b8 scopeEnded = this.m_context.endPopupScope(painted);
-    if(painted)
-        frame.state.value().m_popup.m_placement = placement.value();
-    return painted && overlayEnded && scopeEnded;
+    const ListInputMatches checkMatches = lambda[in this, mut frame]() -> b8{ return this.menuBarMatches(frame); };
+    PopupPlacement placement;
+    const b8 ok = this.paintPopupListOverlay(
+        frame.popup,
+        frame.rows,
+        frame.list,
+        frame.options.enabled,
+        frame.popupToken,
+        frame.parentToken,
+        options,
+        frame.popupStyle,
+        background.value(),
+        false,
+        checkMatches,
+        placement
+    );
+    if(ok)
+        frame.state.value().m_popup.m_placement = placement;
+    return ok;
 }
 
 
@@ -832,9 +934,9 @@ ToastResult Builder::toastStack(in StringView stableKey, mut ToastState state, i
     );
 
     in DisplayMetrics display = this.m_paint.displayMetrics();
-    const f32 cardW = UiSimdMin(frame.style.cardWidth, UiSimdMax(40.0f, display.logicalWidth - frame.style.margin * 2.0f));
+    const f32 cardW = Min(frame.style.cardWidth, Max(40.0f, display.logicalWidth - frame.style.margin * 2.0f));
     const f32 closeOffset = frame.style.closeButtonSize + frame.style.gap;
-    const f32 innerW = UiSimdMax(
+    const f32 innerW = Max(
         16.0f,
         cardW - frame.style.accentWidth - frame.style.padding.left - frame.style.padding.right - closeOffset
     );
@@ -877,7 +979,7 @@ ToastResult Builder::toastStack(in StringView stableKey, mut ToastState state, i
             textHeight += entry.messageBounds.height;
         }
         const f32 paddedH = textHeight + frame.style.padding.top + frame.style.padding.bottom;
-        entry.cardHeight = UiSimdMax(frame.style.minCardHeight, paddedH);
+        entry.cardHeight = Max(frame.style.minCardHeight, paddedH);
         frame.entries.push_back(entry);
     }
 
@@ -888,18 +990,12 @@ ToastResult Builder::toastStack(in StringView stableKey, mut ToastState state, i
     return result;
 }
 
-b8 Builder::toastStateMatches(in BuilderToastFrame frame)const{
-    if(!frame.state.has_value())
-        return false;
-    return this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
-}
-
 b8 Builder::paintToasts(){
     HitTargetFactory targets;
     in DisplayMetrics display = this.m_paint.displayMetrics();
     const Rect viewport(0.0f, 0.0f, display.logicalWidth, display.logicalHeight);
     for(mut auto frame : this.m_scope.value().m_toasts){
-        if(!this.toastStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
         mut ToastState state = frame.state.value();
         state.m_visibleRects.clear();
@@ -915,12 +1011,12 @@ b8 Builder::paintToasts(){
             return false;
         }
 
-        const f32 cardW = UiSimdMin(frame.style.cardWidth, UiSimdMax(40.0f, display.logicalWidth - frame.style.margin * 2.0f));
+        const f32 cardW = Min(frame.style.cardWidth, Max(40.0f, display.logicalWidth - frame.style.margin * 2.0f));
         const b8 alignRight = frame.options.corner == ToastCorner::TopRight || frame.options.corner == ToastCorner::BottomRight;
         const b8 fromBottom = frame.options.corner == ToastCorner::BottomLeft || frame.options.corner == ToastCorner::BottomRight;
         f32 cardX = frame.style.margin;
         if(alignRight)
-            cardX = UiSimdMax(frame.style.margin, display.logicalWidth - frame.style.margin - cardW);
+            cardX = Max(frame.style.margin, display.logicalWidth - frame.style.margin - cardW);
         f32 cursorY = frame.style.margin;
         if(fromBottom)
             cursorY = display.logicalHeight - frame.style.margin;
@@ -948,10 +1044,10 @@ b8 Builder::paintToasts(){
             const Rect cardRect(cardX, cardY, cardW, entry.cardHeight);
             state.m_visibleRects.push_back(cardRect);
             state.m_visibleIds.push_back(entry.id);
-            unionMinX = UiSimdMin(unionMinX, cardRect.x);
-            unionMinY = UiSimdMin(unionMinY, cardRect.y);
-            unionMaxX = UiSimdMax(unionMaxX, cardRect.x + cardRect.width);
-            unionMaxY = UiSimdMax(unionMaxY, cardRect.y + cardRect.height);
+            unionMinX = Min(unionMinX, cardRect.x);
+            unionMinY = Min(unionMinY, cardRect.y);
+            unionMaxX = Max(unionMaxX, cardRect.x + cardRect.width);
+            unionMaxY = Max(unionMaxY, cardRect.y + cardRect.height);
 
             const Rect closeRect(
                 cardRect.x + cardRect.width - frame.style.padding.right - frame.style.closeButtonSize,
@@ -971,7 +1067,7 @@ b8 Builder::paintToasts(){
 
             const f32 textX = cardRect.x + frame.style.accentWidth + frame.style.padding.left;
             f32 textY = cardRect.y + frame.style.padding.top;
-            const f32 textW = UiSimdMax(4.0f, closeRect.x - frame.style.gap - textX);
+            const f32 textW = Max(4.0f, closeRect.x - frame.style.gap - textX);
             const Rect textClip(textX, cardRect.y, textW, cardRect.height);
             this.m_paint.pushClip(textClip);
             if(entry.title.valid()){
@@ -1004,7 +1100,7 @@ b8 Builder::paintToasts(){
         if(!this.m_paint.endOverlay())
             return false;
 
-        const Rect hostRect(unionMinX, unionMinY, UiSimdMax(0.0f, unionMaxX - unionMinX), UiSimdMax(0.0f, unionMaxY - unionMinY));
+        const Rect hostRect(unionMinX, unionMinY, Max(0.0f, unionMaxX - unionMinX), Max(0.0f, unionMaxY - unionMinY));
         this.emitAccessibleNode(
             frame.widget,
             AccessibilityRole::Region,
@@ -1047,7 +1143,7 @@ b8 Builder::paintToasts(){
         }
 
         if(frame.options.enabled){
-            const HitTarget host = targets.makeToastHostHitTarget(hostRect, viewport, true, frame.token);
+            const HitTarget host = targets.makeFocusableHostHitTarget(hostRect, viewport, true, false, frame.token);
             if(!this.m_context.addTarget(frame.widget, host))
                 return false;
             for(usize idx = 0u; idx < frame.entries.size(); ++idx){
@@ -1056,7 +1152,7 @@ b8 Builder::paintToasts(){
                 const Expected<WidgetId> closeId = TryMakeWidgetPartId(closeRoot.value(), frame.entries[idx].id);
                 if(!closeId.has_value())
                     return false;
-                const HitTarget closeTarget = targets.makeToastCloseHitTarget(state.m_closeRectsScratch[idx], state.m_visibleRects[idx], true, frame.token, frame.entries[idx].id);
+                const HitTarget closeTarget = targets.makeActivatablePartHitTarget(state.m_closeRectsScratch[idx], state.m_visibleRects[idx], true, frame.token, frame.entries[idx].id);
                 if(!this.m_context.addPartTarget(frame.widget, closeId.value(), closeTarget))
                     return false;
             }
@@ -1249,12 +1345,6 @@ ColorPickerResult Builder::colorPicker(in StringView stableKey, mut ColorPickerS
     return result;
 }
 
-b8 Builder::colorPickerStateMatches(in BuilderColorPickerFrame frame)const{
-    if(!frame.state.has_value())
-        return false;
-    return this.popupAncestorsVisible() && frame.state.value().revision() == frame.revision;
-}
-
 b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
     if(item.colorPicker >= this.m_scope.value().m_colorPickers.size())
         return false;
@@ -1269,7 +1359,7 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
     if(!(w > 0.0f) || !(bounds.height > 0.0f))
         return this.finishClipPaint(item, bounds, clip, true);
 
-    const Rect svRect(bounds.x, bounds.y, w, UiSimdMin(style.svHeight, bounds.height));
+    const Rect svRect(bounds.x, bounds.y, w, Min(style.svHeight, bounds.height));
     f32 curY = svRect.y + svRect.height + style.gap;
     const Rect hueRect(bounds.x, curY, w, style.barHeight);
     curY += style.barHeight + style.gap;
@@ -1330,7 +1420,7 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
         this.m_paint.fillRectGradient(Rect(sx, hueRect.y, ex - sx, hueRect.height), leftCol, rightCol, rightCol, leftCol);
     }
     this.m_paint.strokeRect(hueRect, s_ColorPickerBarBorderThickness, style.borderColor);
-    const f32 huePosX = UiSimdClamp(hueRect.x + (frame.hsv.h / 360.0f) * hueRect.width, hueRect.x, hueRight);
+    const f32 huePosX = Clamp(hueRect.x + (frame.hsv.h / 360.0f) * hueRect.width, hueRect.x, hueRight);
     this.m_paint.strokeRect(
         Rect(huePosX - s_ColorPickerIndicatorHalfWidth, hueRect.y, s_ColorPickerIndicatorHalfWidth * 2.0f, hueRect.height),
         s_ColorPickerBarBorderThickness,
@@ -1347,10 +1437,10 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
         const f32 alphaBottom = alphaRect.y + alphaRect.height;
         const f32 stepX = cell * 2.0f;
         while(cy < alphaBottom){
-            const f32 ch = UiSimdMin(cell, alphaBottom - cy);
+            const f32 ch = Min(cell, alphaBottom - cy);
             f32 cx = alphaRect.x + cast<f32>(row & 1u) * cell;
             while(cx < alphaRight){
-                const f32 cw = UiSimdMin(cell, alphaRight - cx);
+                const f32 cw = Min(cell, alphaRight - cx);
                 this.m_paint.fillRect(Rect(cx, cy, cw, ch), style.checkerLight);
                 cx += stepX;
             }
@@ -1362,7 +1452,7 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
         const Color alphaOne(frame.color.r, frame.color.g, frame.color.b, 1.0f);
         this.m_paint.fillRectGradient(alphaRect, alphaZero, alphaOne, alphaOne, alphaZero);
         this.m_paint.strokeRect(alphaRect, s_ColorPickerBarBorderThickness, style.borderColor);
-        const f32 alphaPosX = UiSimdClamp(alphaRect.x + frame.hsv.a * alphaRect.width, alphaRect.x, alphaRect.x + alphaRect.width);
+        const f32 alphaPosX = Clamp(alphaRect.x + frame.hsv.a * alphaRect.width, alphaRect.x, alphaRect.x + alphaRect.width);
         this.m_paint.strokeRect(
             Rect(alphaPosX - s_ColorPickerIndicatorHalfWidth, alphaRect.y, s_ColorPickerIndicatorHalfWidth * 2.0f, alphaRect.height),
             s_ColorPickerBarBorderThickness,
@@ -1373,7 +1463,7 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
     if(frame.options.showPreview || frame.options.showHexLabel){
         f32 textStartX = footerRect.x;
         if(frame.options.showPreview){
-            const f32 swatchW = UiSimdMin(style.swatchHeight * 2.0f, footerRect.width * 0.4f);
+            const f32 swatchW = Min(style.swatchHeight * 2.0f, footerRect.width * 0.4f);
             const Rect swatchRect(footerRect.x, footerRect.y, swatchW, footerRect.height);
             this.m_paint.fillRect(swatchRect, style.checkerLight);
             const f32 halfW = swatchW * 0.5f;
@@ -1386,7 +1476,7 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
             Color hexColor = frame.widgetStyle.disabledText;
             if(item.enabled)
                 hexColor = frame.widgetStyle.text;
-            const Rect hexRect(textStartX, footerRect.y, UiSimdMax(0.0f, footerRect.x + footerRect.width - textStartX), footerRect.height);
+            const Rect hexRect(textStartX, footerRect.y, Max(0.0f, footerRect.x + footerRect.width - textStartX), footerRect.height);
             const Point hexOrigin = ResolveCenteredTextOrigin(hexRect, 0.0f, frame.hexBounds);
             this.m_paint.pushClip(hexRect);
             if(!this.m_text.paint(this.m_paint, frame.hexText.deref(), hexOrigin, hexColor)){

@@ -257,7 +257,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         ASSERT_TRUE(ParseAssetValueFromScript(colScriptA, testArena, docA, valA));
         const auto colResA = ParseColliderComponentCookMetadata(vPath, metaFile, valA);
         ASSERT_TRUE(colResA.has_value());
-        in ColliderComponent cA = colResA.value().component;
+        in ColliderShapeEntry cA = colResA.value().component.primaryShape;
         EXPECT_EQ(cA.compoundHullAsset.name(), Name("project/physics/my_compound"));
         EXPECT_EQ(cA.vhacdMaxHulls, 12u);
         EXPECT_EQ(cA.vhacdMaxRecursionDepth, 5u);
@@ -275,9 +275,9 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         ASSERT_TRUE(ParseAssetValueFromScript(colHfPairs, testArena, docHfP, valHfP));
         const auto colHfPRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfP);
         ASSERT_TRUE(colHfPRes.has_value());
-        EXPECT_TRUE(colHfPRes.value().component.heightfieldFlipDiagonal);
-        ASSERT_EQ(colHfPRes.value().component.heightfieldCellHoles.size(), cast<usize>(1u));
-        EXPECT_EQ(colHfPRes.value().component.heightfieldCellHoles[0u], 0x02u);
+        EXPECT_TRUE(colHfPRes.value().component.primaryShape.heightfieldFlipDiagonal);
+        ASSERT_EQ(colHfPRes.value().component.primaryShape.heightfieldCellHoles.size(), cast<usize>(1u));
+        EXPECT_EQ(colHfPRes.value().component.primaryShape.heightfieldCellHoles[0u], 0x02u);
 
         const StringView colHfFlat =
             "collider_component asset;\nasset.shape_type = \"heightfield\";\nasset.heightfield_rows = 3;\nasset.heightfield_cols = 3;\nasset.heightfield_heights = [0,0,0,0,0,0,0,0,0];\nasset.heightfield_cell_holes = [0, 1, 0, 1];\n";
@@ -286,8 +286,8 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         ASSERT_TRUE(ParseAssetValueFromScript(colHfFlat, testArena, docHfF, valHfF));
         const auto colHfFRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfF);
         ASSERT_TRUE(colHfFRes.has_value());
-        ASSERT_EQ(colHfFRes.value().component.heightfieldCellHoles.size(), cast<usize>(1u));
-        EXPECT_EQ(colHfFRes.value().component.heightfieldCellHoles[0u], 0x0Au);
+        ASSERT_EQ(colHfFRes.value().component.primaryShape.heightfieldCellHoles.size(), cast<usize>(1u));
+        EXPECT_EQ(colHfFRes.value().component.primaryShape.heightfieldCellHoles[0u], 0x0Au);
 
         const StringView jointScript =
             "joint_component asset;\nasset.type = \"six_dof\";\nasset.enable_twist_limit = 1;\nasset.enable_slerp_drive = 1;\nasset.target_orientation_euler_degrees = [0.0, 90.0, 0.0];\nasset.slerp_hertz = 6.5;\nasset.slerp_damping_ratio = 0.85;\nasset.slerp_max_torque = 120.0;\nasset.six_dof_swing_limit_mode = \"cone\";\nasset.six_dof_swing_limit_y = 0.6;\nasset.six_dof_swing_limit_z = 0.45;\n";
@@ -296,7 +296,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         ASSERT_TRUE(ParseAssetValueFromScript(jointScript, testArena, docJ, valJ));
         const auto jRes = ParseJointComponentCookMetadata(vPath, metaFile, valJ);
         ASSERT_TRUE(jRes.has_value());
-        in JointComponent jOut = jRes.value().component;
+        in JointSettings jOut = jRes.value().component.primaryJoint.settings;
         EXPECT_TRUE(jOut.enableTwistLimit);
         EXPECT_TRUE(jOut.enableSlerpDrive);
         EXPECT_NEAR(jOut.targetOrientation.y, 0.70710678f, 1.0e-4f);
@@ -431,8 +431,8 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         ASSERT_TRUE(ParseAssetValueFromScript(col4B, testArena, docCol4B, valCol4B));
         const auto resCol4B = ParseColliderComponentCookMetadata(vPath, metaFile, valCol4B);
         ASSERT_TRUE(resCol4B.has_value());
-        EXPECT_TRUE(resCol4B.value().component.syncCsgCuts);
-        EXPECT_TRUE(resCol4B.value().component.useMeshComponentFallback);
+        EXPECT_TRUE(resCol4B.value().component.primaryShape.syncCsgCuts);
+        EXPECT_TRUE(resCol4B.value().component.primaryShape.useMeshComponentFallback);
         ASSERT_EQ(resCol4B.value().component.extraShapes.size(), cast<usize>(1u));
         EXPECT_TRUE(resCol4B.value().component.extraShapes[0u].syncCsgCuts);
         EXPECT_TRUE(resCol4B.value().component.extraShapes[0u].useMeshComponentFallback);

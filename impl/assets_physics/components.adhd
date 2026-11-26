@@ -62,8 +62,8 @@ class JointComponentAsset : IComponent{
         dst.runtimeExtraJointIds.clear();
         dst.boundExtraBodyIdAs.clear();
         dst.boundExtraBodyIdBs.clear();
-        dst.bodyEntityA = s_InvalidEntityId;
-        dst.bodyEntityB = s_InvalidEntityId;
+        dst.primaryJoint.bodyEntityA = s_InvalidEntityId;
+        dst.primaryJoint.bodyEntityB = s_InvalidEntityId;
         for(usize i = 0u; i < dst.extraJoints.size(); ++i){
             dst.extraJoints[i].bodyEntityA = s_InvalidEntityId;
             dst.extraJoints[i].bodyEntityB = s_InvalidEntityId;

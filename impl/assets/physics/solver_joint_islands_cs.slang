@@ -22,87 +22,22 @@
 
 groupshared uint g_NwbPhysicsLdsProjAny;
 
-void nwbPhysicsIslandWarmStartJointsPass(
-    const uint tid,
-    const uint jointOffset,
-    const uint2 jointCounts,
-    const uint denseJointColors,
-    const uint bodySimSlot,
-    const uint bodyStateSlot,
-    const uint jointSlot,
-    const uint flags,
-    const bool hasJointAux
-){
-    uint off = jointOffset;
-    const uint overflowCnt = (jointCounts.y >> 24u) & 0xffu;
-    const uint totalSlots = denseJointColors + (overflowCnt > 0u ? 1u : 0u);
-    [loop]
-    for(uint colorSlot = 0u; colorSlot < totalSlots; ++colorSlot){
-        const bool isOverflow = (colorSlot == denseJointColors);
-        uint cnt = overflowCnt;
-        if(!isOverflow){
-            const uint packed = (colorSlot < 4u) ? jointCounts.x : jointCounts.y;
-            cnt = (packed >> ((colorSlot & 3u) * 8u)) & 0xffu;
-        }
-        if(!isOverflow || tid == 0u){
-            const uint startIdx = isOverflow ? 0u : tid;
-            const uint stepIdx = isOverflow ? 1u : NWB_PHYSICS_ISLAND_WORKGROUP_SIZE;
-            for(uint j = startIdx; j < cnt; j += stepIdx)
-                nwbPhysicsWarmStartSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot, flags);
-        }
-        off += cnt;
-        if(hasJointAux)
-            AllMemoryBarrierWithGroupSync();
-        else
-            GroupMemoryBarrierWithGroupSync();
-    }
-}
+#define NWB_PHYSICS_JOINT_PASS_WARM_START 0u
+#define NWB_PHYSICS_JOINT_PASS_SOLVE_BIAS 1u
+#define NWB_PHYSICS_JOINT_PASS_SOLVE_RELAX 2u
+#define NWB_PHYSICS_JOINT_PASS_PROJECT 3u
 
-void nwbPhysicsIslandSolveJointsPass(
+bool nwbPhysicsIslandJointsPass(
     const uint tid,
     const uint jointOffset,
     const uint2 jointCounts,
     const uint denseJointColors,
-    const bool useBias,
+    const uint passMode,
     const uint bodySimSlot,
     const uint bodyStateSlot,
     const uint jointSlot,
     const float h,
-    const bool hasJointAux
-){
-    uint off = jointOffset;
-    const uint overflowCnt = (jointCounts.y >> 24u) & 0xffu;
-    const uint totalSlots = denseJointColors + (overflowCnt > 0u ? 1u : 0u);
-    [loop]
-    for(uint colorSlot = 0u; colorSlot < totalSlots; ++colorSlot){
-        const bool isOverflow = (colorSlot == denseJointColors);
-        uint cnt = overflowCnt;
-        if(!isOverflow){
-            const uint packed = (colorSlot < 4u) ? jointCounts.x : jointCounts.y;
-            cnt = (packed >> ((colorSlot & 3u) * 8u)) & 0xffu;
-        }
-        if(!isOverflow || tid == 0u){
-            const uint startIdx = isOverflow ? 0u : tid;
-            const uint stepIdx = isOverflow ? 1u : NWB_PHYSICS_ISLAND_WORKGROUP_SIZE;
-            for(uint j = startIdx; j < cnt; j += stepIdx)
-                nwbPhysicsSolveSingleJoint(off + j, useBias, bodySimSlot, bodyStateSlot, jointSlot, h);
-        }
-        off += cnt;
-        if(hasJointAux)
-            AllMemoryBarrierWithGroupSync();
-        else
-            GroupMemoryBarrierWithGroupSync();
-    }
-}
-
-bool nwbPhysicsIslandProjectJointsPass(
-    const uint tid,
-    const uint jointOffset,
-    const uint2 jointCounts,
-    const uint denseJointColors,
-    const uint bodySimSlot,
-    const uint bodyStateSlot,
-    const uint jointSlot,
+    const uint flags,
     const bool hasJointAux
 ){
     bool anyProj = false;
@@ -121,7 +56,13 @@ bool nwbPhysicsIslandProjectJointsPass(
             const uint startIdx = isOverflow ? 0u : tid;
             const uint stepIdx = isOverflow ? 1u : NWB_PHYSICS_ISLAND_WORKGROUP_SIZE;
             for(uint j = startIdx; j < cnt; j += stepIdx){
-                if(nwbPhysicsProjectSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot))
+                if(passMode == NWB_PHYSICS_JOINT_PASS_WARM_START)
+                    nwbPhysicsWarmStartSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot, flags);
+                else if(passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_BIAS)
+                    nwbPhysicsSolveSingleJoint(off + j, true, bodySimSlot, bodyStateSlot, jointSlot, h);
+                else if(passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_RELAX)
+                    nwbPhysicsSolveSingleJoint(off + j, false, bodySimSlot, bodyStateSlot, jointSlot, h);
+                else if(nwbPhysicsProjectSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot))
                     anyProj = true;
             }
         }
@@ -227,7 +168,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 #endif
         if(jointCount > 0u && (warmStart || subStep > 0u)){
             if(warmStart){
-                nwbPhysicsIslandWarmStartJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, bodySimSlot, bodyStateSlot, jointSlot, NWB_PHYSICS_SOLVER_FLAG_WARM_START, hasJointAux);
+                nwbPhysicsIslandJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_JOINT_PASS_WARM_START, bodySimSlot, bodyStateSlot, jointSlot, h, NWB_PHYSICS_SOLVER_FLAG_WARM_START, hasJointAux);
             }
             else{
                 nwbPhysicsClearIslandJointWarmStartLds(tid, jointOffset, jointCount, jointSlot, hasJointAux);
@@ -243,7 +184,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseContactColors, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u, hasRolling);
 #endif
         if(jointCount > 0u)
-            nwbPhysicsIslandSolveJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, true, bodySimSlot, bodyStateSlot, jointSlot, h, hasJointAux);
+            nwbPhysicsIslandJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_JOINT_PASS_SOLVE_BIAS, bodySimSlot, bodyStateSlot, jointSlot, h, 0u, hasJointAux);
         if(tid < bodyCount)
             nwbPhysicsIntegrateIslandBodyPosition(bodySimSlot, bodyOffset + tid, tid, h, maxAngSpeed);
         GroupMemoryBarrierWithGroupSync();
@@ -252,7 +193,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             nwbPhysicsIslandSolveContactsPass(tid, contactOffset, slice.contactColorCounts0, slice.contactColorCounts1, denseContactColors, overflowContactCount, NWB_PHYSICS_SOLVER_MODE_RELAX, bodySimSlot, bodyStateSlot, constraintSlot, invH, 0u, hasRolling);
 #endif
         if(jointCount > 0u)
-            nwbPhysicsIslandSolveJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, false, bodySimSlot, bodyStateSlot, jointSlot, h, hasJointAux);
+            nwbPhysicsIslandJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_JOINT_PASS_SOLVE_RELAX, bodySimSlot, bodyStateSlot, jointSlot, h, 0u, hasJointAux);
     }
 
 #if NWB_PHYSICS_JOINT_ISLAND_MODE == 0
@@ -270,7 +211,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             if(tid == 0u)
                 g_NwbPhysicsLdsProjAny = 0u;
             GroupMemoryBarrierWithGroupSync();
-            const bool localProj = nwbPhysicsIslandProjectJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, bodySimSlot, bodyStateSlot, jointSlot, hasJointAux);
+            const bool localProj = nwbPhysicsIslandJointsPass(tid, jointOffset, slice.contactColorCounts1.zw, denseJointColors, NWB_PHYSICS_JOINT_PASS_PROJECT, bodySimSlot, bodyStateSlot, jointSlot, h, 0u, hasJointAux);
             if(localProj)
                 InterlockedOr(g_NwbPhysicsLdsProjAny, 1u);
             if(hasJointAux)

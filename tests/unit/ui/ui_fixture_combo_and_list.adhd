@@ -11,7 +11,6 @@
 
 const StringView s_ComboPanelKey = "panel";
 const StringView s_ComboKey = "combo";
-const StringView s_SecondComboKey = "other";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,13 +320,6 @@ ControlAction MakeUiListControlAction(in u64 instanceGeneration, in u64 contentG
     action.control.contentRevision = contentRevision;
     action.kind = kind;
     return action;
-}
-
-void ExpectUiListResult(in ListResult actual, in ListResult expected){
-    EXPECT_EQ(actual.valid, expected.valid);
-    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
-    EXPECT_EQ(actual.activated, expected.activated);
-    EXPECT_EQ(actual.focused, expected.focused);
 }
 
 void ResetComboSourceCounters(in ComboSource self){

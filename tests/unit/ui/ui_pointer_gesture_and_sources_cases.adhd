@@ -14,7 +14,7 @@ class UiPointerGestureTests : RouterTestFixture{
     public Context m_context;
 
     public b8 commitSingle(in HitTarget target, in u64 generation){
-        return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation);
+        return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation, Span<PopupScope>(), u64.max);
     }
     public InputRoutingResult sendToContext(in InputEvent event){ return SendUiPointerGestureToContext(this, event); }
     public void complete(){ this.complete(Point(45.0f, 55.0f)); }
@@ -53,10 +53,10 @@ class UiPointerHitPopupHarness{
     public InputRouter router;
 
     public b8 commitWithPopup(in Span<HitTarget> targets, in u64 generation, in PopupScope scope){
-        return this.router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope));
+        return this.router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope), u64.max);
     }
     public b8 commitSingle(in HitTarget target, in u64 generation){
-        return this.router.commitTargets(MakeUiSingleHitTargetArray(target), generation);
+        return this.router.commitTargets(MakeUiSingleHitTargetArray(target), generation, Span<PopupScope>(), u64.max);
     }
 }
 
@@ -67,7 +67,7 @@ class UiPointerSourceTests : RouterTestFixture{
         this.m_targets[0u] = MakeUiPointerSourceTarget(1u, 10.0f);
         this.m_targets[1u] = MakeUiPointerSourceTarget(2u, 110.0f);
     }
-    public void setup(){ ASSERT_TRUE(this.m_router.commitTargets(this.m_targets, 1u)); }
+    public void setup(){ ASSERT_TRUE(this.m_router.commitTargets(this.m_targets, 1u, Span<PopupScope>(), u64.max)); }
     public void cancelCommand(){ CancelUiPointerSourceCommand(this); }
 }
 
@@ -436,7 +436,7 @@ void VerifyUiPointerGestureTests_EscapeCancelsOnlyTheActiveGestureAndRetainsHeld
     ASSERT_TRUE(self.commitSingle(target, 1u));
     self.complete(Point(40.0f, 40.0f));
     EXPECT_TRUE(self.send(MakeUiPointerGestureEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    const InputRoutingResult escaped = self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Escape));
+    const InputRoutingResult escaped = self.send(Key(InputEventType::KeyDown, Key::Escape));
     EXPECT_TRUE(escaped.commandConsumed);
     EXPECT_FALSE(escaped.capture.valid());
     EXPECT_FALSE(escaped.focus.valid());
@@ -451,7 +451,7 @@ void VerifyUiPointerGestureTests_EscapeCancelsOnlyTheActiveGestureAndRetainsHeld
     EXPECT_FALSE(self.m_router.consumePointerGesture(target.id, target.declarationGeneration).has_value());
     EXPECT_TRUE(self.send(MakeUiPointerGestureEvent(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumePointerGesture(target.id, target.declarationGeneration).has_value());
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Escape)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Escape)).commandConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
 }
@@ -464,7 +464,7 @@ void VerifyUiPointerGestureTests_ActiveCaptureLossPreservesCompletedGesturesActi
     self.complete(Point(40.0f, 40.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     EXPECT_TRUE(self.send(MakeUiPointerGestureEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Space)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Space)).commandConsumed);
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     const InputRoutingResult lost = self.send(MakeUiBareInputEvent(InputEventType::PointerCaptureLost));
     EXPECT_TRUE(lost.pointerConsumed);
@@ -482,7 +482,7 @@ void VerifyUiPointerGestureTests_ActiveCaptureLossPreservesCompletedGesturesActi
     EXPECT_FALSE(self.m_router.consumePointerGesture(target.id, 1u).has_value());
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Space)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Space)).commandConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(target.id));
     EXPECT_FALSE(self.m_router.ownsKey(Key::Space));
     EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
@@ -565,7 +565,7 @@ void VerifyUiPointerGestureTests_GestureAdmissionUsesTheTopClippedTargetAndLifet
     targets[1u] = MakeUiPointerGestureTarget(2u);
     targets[1u].paintOrder = 1u;
     targets[1u].clip = Rect(10.0f, 20.0f, 10.0f, 10.0f);
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     self.complete();
     EXPECT_FALSE(self.m_router.consumePointerGesture(targets[0u].id, 1u).has_value());
     EXPECT_FALSE(self.m_router.consumePointerGesture(targets[1u].id, 0u).has_value());
@@ -589,7 +589,7 @@ void VerifyUiPointerGestureTests_InvalidLayoutPublicationPreservesTheActiveGestu
     Array<HitTarget, 2u> invalid = Array<HitTarget, 2u>();
     invalid[0u] = MakeUiPointerGestureTarget(2u);
     invalid[1u] = MakeUiPointerGestureTarget(2u);
-    EXPECT_FALSE(self.m_router.commitTargets(invalid, 8u));
+    EXPECT_FALSE(self.m_router.commitTargets(invalid, 8u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.commitSingle(target, 7u));
     EXPECT_EQ(self.m_router.capture(), target.id);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(90.0f, 100.0f))).pointerConsumed);
@@ -858,12 +858,12 @@ void VerifyUiPointerGestureValueTests_SeveralCompletedPressesRetainTheirOwnPubli
 void VerifyUiPointerGestureValueTests_CoalescedMoveUsesItsUpdateSequenceAmongOrderedControlActions(mut UiPointerGestureValueTests self){
     ASSERT_TRUE(self.publish());
     self.focusHost();
-    ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiKeyEvent(InputEventType::KeyDown, Key::Right))).has_value());
-    ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiKeyEvent(InputEventType::KeyUp, Key::Right))).has_value());
+    ASSERT_TRUE(self.m_router.queue(NativeInput(Key(InputEventType::KeyDown, Key::Right))).has_value());
+    ASSERT_TRUE(self.m_router.queue(NativeInput(Key(InputEventType::KeyUp, Key::Right))).has_value());
     ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(30.0f, 30.0f)))).has_value());
     ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiPointerEvent(InputEventType::PointerMove, Point(50.0f, 30.0f)))).has_value());
-    ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiKeyEvent(InputEventType::KeyDown, Key::Left))).has_value());
-    ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiKeyEvent(InputEventType::KeyUp, Key::Left))).has_value());
+    ASSERT_TRUE(self.m_router.queue(NativeInput(Key(InputEventType::KeyDown, Key::Left))).has_value());
+    ASSERT_TRUE(self.m_router.queue(NativeInput(Key(InputEventType::KeyUp, Key::Left))).has_value());
     ASSERT_TRUE(self.m_router.queue(NativeInput(MakeUiPointerEvent(InputEventType::PointerMove, Point(80.0f, 30.0f)))).has_value());
     const InputRoutingResult result = self.m_router.process();
     EXPECT_TRUE(result.pointerConsumed);
@@ -1037,7 +1037,7 @@ void VerifyUiPointerHitTests_VisibleOwnedPartCannotBypassItsClippedHostOrDisable
     targets[4u].focusable = false;
     targets[4u].paintOrder = u32.max;
     targets[4u].value = 27u;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.hitTest(Point(40.0f, 40.0f)), targets[1u].id);
     EXPECT_EQ(self.m_router.hitTest(Point(50.0f, 45.0f)), targets[0u].id);
     EXPECT_EQ(self.m_router.hitTest(Point(45.0f, 50.0f)), targets[0u].id);
@@ -1050,7 +1050,7 @@ void VerifyUiPointerHitTests_VisibleOwnedPartCannotBypassItsClippedHostOrDisable
     EXPECT_FALSE(self.m_router.consumeControlAction(targets[3u].id, 7u, targets[3u].control).has_value());
 
     targets[3u].clip.width = 100.0f;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.hover(), targets[4u].id);
     ASSERT_TRUE(self.send(MakeUiPointerContactHover(PointerPhase::Press, cursor, 45.0f, 45.0f, true)).pointerConsumed);
     EXPECT_EQ(self.m_router.capture(), targets[4u].id);
@@ -1118,7 +1118,7 @@ void VerifyUiPointerHitTests_HoverProviderChangesAndLayoutRelocationCannotReuseA
     Array<HitTarget, 2u> targets = Array<HitTarget, 2u>();
     targets[0u] = MakeUiPointerHitTargetWithRect(1u, Rect(0.0f, 0.0f, 60.0f, 100.0f));
     targets[1u] = MakeUiPointerHitTargetWithRect(2u, Rect(70.0f, 0.0f, 60.0f, 100.0f));
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     ASSERT_EQ(self.send(MakeUiPointerContactHover(PointerPhase::Move, cursor, 20.0f, 20.0f, true)).hover, targets[0u].id);
     const u64 initial = self.m_router.hoverActivityGeneration();
     ASSERT_EQ(self.send(MakeUiPointerContactHover(PointerPhase::Move, otherCursor, 20.0f, 20.0f, true)).hover, targets[0u].id);
@@ -1128,14 +1128,14 @@ void VerifyUiPointerHitTests_HoverProviderChangesAndLayoutRelocationCannotReuseA
 
     targets[0u].rectangle.x = 70.0f;
     targets[1u].rectangle.x = 0.0f;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.hover(), targets[1u].id);
     const u64 relocated = self.m_router.hoverActivityGeneration();
     EXPECT_GT(relocated, initial);
     ASSERT_EQ(self.send(MakeUiPointerContactHover(PointerPhase::Move, otherCursor, 20.0f, 20.0f, true)).hover, targets[1u].id);
     EXPECT_EQ(self.m_router.hoverActivityGeneration(), relocated);
     targets[1u].declarationGeneration = 8u;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 3u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.hover(), targets[1u].id);
     EXPECT_GT(self.m_router.hoverActivityGeneration(), relocated);
     EXPECT_FALSE(self.send(MakeUiPointerContactHover(PointerPhase::Leave, otherCursor, 20.0f, 20.0f, true)).hover.valid());
@@ -1148,7 +1148,7 @@ void VerifyUiPointerHitTests_CrossTargetTouchDragKeepsCaptureWhileAnotherCursorR
     Array<HitTarget, 2u> targets = Array<HitTarget, 2u>();
     targets[0u] = MakeUiPointerHitTargetWithRect(1u, Rect(0.0f, 0.0f, 60.0f, 100.0f));
     targets[1u] = MakeUiPointerHitTargetWithRect(2u, Rect(70.0f, 0.0f, 60.0f, 100.0f));
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     ASSERT_EQ(self.send(MakeUiPointerContactHover(PointerPhase::Move, cursor, 20.0f, 20.0f, true)).hover, targets[0u].id);
     ASSERT_TRUE(self.send(MakeUiPointerContactAt(PointerPhase::Press, contact, 80.0f, 20.0f)).pointerConsumed);
     ASSERT_EQ(self.m_router.capture(), targets[1u].id);
@@ -1223,7 +1223,7 @@ void VerifyUiPointerSourceTests_CompetingUiPressStaysInertUntilItsOwnReleaseAfte
     const InputSource second = MakeUiInputSource(11u, 2u);
     ASSERT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Press, first)).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiPointerContactAt(PointerPhase::Press, second, 130.0f, 20.0f)).pointerConsumed);
-    EXPECT_TRUE(self.m_router.ownsPointerSource(second));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(second, PointerIntent::Activate));
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_FALSE(self.m_router.pressed(self.m_targets[1u].id));
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Release, first)).pointerConsumed);
@@ -1231,7 +1231,7 @@ void VerifyUiPointerSourceTests_CompetingUiPressStaysInertUntilItsOwnReleaseAfte
     EXPECT_FALSE(self.send(MakeUiPointerContactAt(PointerPhase::Move, second, 130.0f, 20.0f)).pointerRouted);
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.send(MakeUiPointerContactAt(PointerPhase::Release, second, 130.0f, 20.0f)).pointerConsumed);
-    EXPECT_FALSE(self.m_router.ownsPointerSource(second));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(second, PointerIntent::Activate));
     EXPECT_FALSE(self.m_router.consumeActivation(self.m_targets[1u].id));
     EXPECT_TRUE(self.send(MakeUiPointerContactAt(PointerPhase::Press, second, 130.0f, 20.0f)).pointerConsumed);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[1u].id);
@@ -1242,9 +1242,9 @@ void VerifyUiPointerSourceTests_CompetingUiPressStaysInertUntilItsOwnReleaseAfte
 void VerifyUiPointerSourceTests_SceneAdmissionCannotTransferToAChangedUiLayoutDuringTheHold(mut UiPointerSourceTests self){
     const InputSource first = MakeUiInputSource(11u, 1u);
     EXPECT_FALSE(self.send(MakeUiPointerContactAt(PointerPhase::Press, first, 250.0f, 20.0f)).pointerConsumed);
-    EXPECT_FALSE(self.m_router.ownsPointerSource(first));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     self.m_targets[0u].rectangle.x = 230.0f;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.send(MakeUiPointerContactAt(PointerPhase::Move, first, 250.0f, 20.0f)).pointerConsumed);
     EXPECT_FALSE(self.send(MakeUiPointerContactAt(PointerPhase::Release, first, 250.0f, 20.0f)).pointerConsumed);
     EXPECT_FALSE(self.m_router.capture().valid());
@@ -1264,10 +1264,10 @@ void VerifyUiPointerSourceTests_TouchEscapeCancellationRetainsItsReleaseOwnerWit
     EXPECT_FALSE(self.m_router.pointerKnown());
     EXPECT_FALSE(self.m_router.hover().valid());
     self.cancelCommand();
-    EXPECT_TRUE(self.m_router.ownsPointerSource(first));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     EXPECT_FALSE(self.m_router.pressed(self.m_targets[0u].id));
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Release, first)).pointerConsumed);
-    EXPECT_FALSE(self.m_router.ownsPointerSource(first));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_FALSE(self.m_router.pointerKnown());
     EXPECT_FALSE(self.m_router.hover().valid());
@@ -1281,10 +1281,10 @@ void VerifyUiPointerSourceTests_RecreatedCapturedOwnerCannotReviveTheOriginalCon
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Press, first)).pointerConsumed);
     self.m_router.invalidateTarget(self.m_targets[0u].id);
     ++self.m_targets[0u].declarationGeneration;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     --self.m_targets[0u].declarationGeneration;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
-    EXPECT_TRUE(self.m_router.ownsPointerSource(first));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u, Span<PopupScope>(), u64.max));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Release, first)).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
@@ -1303,11 +1303,11 @@ void VerifyUiPointerSourceTests_ExactSourceCancellationPreservesOtherHoldsAndCom
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Press, first)).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiPointerContactAt(PointerPhase::Press, second, 130.0f, 20.0f)).pointerConsumed);
     self.send(MakeUiPointerContact(PointerPhase::Cancel, second));
-    EXPECT_FALSE(self.m_router.ownsPointerSource(second));
-    EXPECT_TRUE(self.m_router.ownsPointerSource(first));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(second, PointerIntent::Activate));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     self.send(MakeUiPointerContact(PointerPhase::Cancel, first));
-    EXPECT_FALSE(self.m_router.ownsPointerSource(first));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     EXPECT_FALSE(self.m_router.primaryDown());
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.m_router.consumeActivation(self.m_targets[0u].id));
@@ -1424,13 +1424,13 @@ void VerifyUiPointerSourceTests_QueuedTerminalDiscardedByResetRetiresTheContactW
     for(in PointerPhase terminal : terminals){
         ASSERT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Press, first)).pointerConsumed);
         ASSERT_TRUE(self.m_router.queuePointer(MakeUiPointerContact(terminal, first)).has_value());
-        EXPECT_TRUE(self.m_router.ownsPointerSource(first));
+        EXPECT_TRUE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
         self.m_router.reset();
-        EXPECT_FALSE(self.m_router.ownsPointerSource(first));
+        EXPECT_FALSE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
         EXPECT_FALSE(self.m_router.primaryDown());
         EXPECT_FALSE(self.m_router.activePointerSource().valid());
         EXPECT_TRUE(self.m_router.actions().empty());
-        ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+        ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
         const auto freshResult = self.m_router.queuePointer(MakeUiPointerContact(PointerPhase::Press, first));
         ASSERT_TRUE(freshResult.has_value());
         EXPECT_FALSE(freshResult.value().repeat);
@@ -1450,16 +1450,16 @@ void VerifyUiPointerSourceTests_QueuedReleaseBeforeResetReclaimsAFullSourceSlotA
         ASSERT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Press, MakeUiInputSource(11u, index + 1u))).pointerConsumed);
     ASSERT_TRUE(self.m_router.queuePointer(MakeUiPointerContact(PointerPhase::Release, first)).has_value());
     self.m_router.reset();
-    EXPECT_FALSE(self.m_router.ownsPointerSource(first));
-    EXPECT_TRUE(self.m_router.ownsPointerSource(second));
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(second, PointerIntent::Activate));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     const InputSource replacement = MakeUiInputSource(11u, s_InputMaxSources + 1u);
     const InputSource overflow = MakeUiInputSource(11u, s_InputMaxSources + 2u);
     ASSERT_TRUE(self.m_router.queuePointer(MakeUiPointerContact(PointerPhase::Press, replacement)).has_value());
     EXPECT_FALSE(self.m_router.queuePointer(MakeUiPointerContact(PointerPhase::Press, overflow)).has_value());
     EXPECT_TRUE(self.m_router.process().pointerRouted);
     EXPECT_EQ(self.m_router.activePointerSource(), replacement);
-    EXPECT_TRUE(self.m_router.ownsPointerSource(replacement));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(replacement, PointerIntent::Activate));
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Release, replacement)).pointerConsumed);
     EXPECT_TRUE(self.m_router.consumeActivation(self.m_targets[0u].id));
@@ -1477,14 +1477,14 @@ void VerifyUiPointerSourceTests_DiscardedQueuedPressCannotAcquireUiOwnershipOnIt
     const InputSource first = MakeUiInputSource(11u, 1u);
     ASSERT_TRUE(self.m_router.queuePointer(MakeUiPointerContact(PointerPhase::Press, first)).has_value());
     self.m_router.reset();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     const auto repeatedResult = self.m_router.queuePointer(MakeUiPointerContact(PointerPhase::Press, first));
     ASSERT_TRUE(repeatedResult.has_value());
     EXPECT_TRUE(repeatedResult.value().repeat);
     const InputRoutingResult routed = self.m_router.process();
     EXPECT_FALSE(routed.pointerConsumed);
     EXPECT_FALSE(routed.pointerRouted);
-    EXPECT_FALSE(self.m_router.ownsPointerSource(first));
+    EXPECT_FALSE(self.m_router.ownsPointerSource(first, PointerIntent::Activate));
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.send(MakeUiPointerContactAt(PointerPhase::Move, first, 30.0f, 25.0f)).pointerConsumed);
     EXPECT_FALSE(self.send(MakeUiPointerContactAt(PointerPhase::Release, first, 30.0f, 25.0f)).pointerConsumed);
@@ -1504,9 +1504,9 @@ void VerifyUiPointerSourceTests_CancelConsumesARetainedUiContactWithoutClaimingA
     EXPECT_TRUE(self.m_router.consumeActivation(self.m_targets[0u].id));
     self.m_router.clearFocus();
     EXPECT_FALSE(self.m_router.capture().valid());
-    EXPECT_TRUE(self.m_router.ownsPointerSource(second));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(second, PointerIntent::Activate));
     self.cancelCommand();
-    EXPECT_TRUE(self.m_router.ownsPointerSource(second));
+    EXPECT_TRUE(self.m_router.ownsPointerSource(second, PointerIntent::Activate));
     EXPECT_TRUE(self.send(MakeUiPointerContact(PointerPhase::Release, second)).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
     self.send(MakeUiPointerContactHover(PointerPhase::Move, cursorSource, 20.0f, 20.0f, true));
@@ -1586,7 +1586,7 @@ void InitUiPointerGestureValueTargets(mut Array<HitTarget, 2u> targets){
 
 b8 PublishUiPointerGestureValueTargets(mut UiPointerGestureValueTests self, in usize count){
     const u64 generation = self.m_generation + 1u;
-    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets).subspan(0u, count), generation))
+    if(!self.m_router.commitTargets(Span<HitTarget>(self.m_targets).subspan(0u, count), generation, Span<PopupScope>(), u64.max))
         return false;
     self.m_generation = generation;
     return true;

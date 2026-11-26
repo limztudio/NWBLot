@@ -95,9 +95,6 @@ public:
     [[nodiscard]] b8 confirmFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] b8 cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
 
-    void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor* contributor)noexcept{
-        m_taskGraphPresentationContributor = contributor;
-    }
     void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor& contributor)noexcept{
         m_taskGraphPresentationContributor = &contributor;
     }
@@ -109,13 +106,7 @@ public:
             return MakeNotNull(m_taskGraphPresentationContributor);
         return {};
     }
-    [[nodiscard]] IGpuTaskGraphPresentationContributor* taskGraphPresentationContributor()const noexcept{
-        return m_taskGraphPresentationContributor;
-    }
 
-    void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor* contributor)noexcept{
-        m_taskGraphOutputLayerContributor = contributor;
-    }
     void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor& contributor)noexcept{
         m_taskGraphOutputLayerContributor = &contributor;
     }
@@ -126,9 +117,6 @@ public:
         if(m_taskGraphOutputLayerContributor)
             return MakeNotNull(m_taskGraphOutputLayerContributor);
         return {};
-    }
-    [[nodiscard]] IGpuTaskGraphOutputLayerContributor* taskGraphOutputLayerContributor()const noexcept{
-        return m_taskGraphOutputLayerContributor;
     }
 
     [[nodiscard]] TStringView getRendererString()const noexcept;

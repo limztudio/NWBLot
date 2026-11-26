@@ -56,9 +56,7 @@ template<typename T>
 template<typename T>
     requires requires(T value){ std::countl_zero(value); }
 [[nodiscard]] constexpr FOUNDATION_INLINE i32 CountLeadingZeros(const T value)noexcept{
-#if defined(__clang__) || defined(__GNUC__)
     constexpr i32 s_BitWidth = static_cast<i32>(sizeof(T) * 8u);
-#if defined(__has_builtin)
 #if __has_builtin(__builtin_clzg)
     return __builtin_clzg(value, s_BitWidth);
 #else
@@ -73,12 +71,6 @@ template<typename T>
     else
         return std::countl_zero(value);
 #endif
-#else
-    return std::countl_zero(value);
-#endif
-#else
-    return std::countl_zero(value);
-#endif
 }
 
 template<typename T>
@@ -90,9 +82,7 @@ template<typename T>
 template<typename T>
     requires requires(T value){ std::countr_zero(value); }
 [[nodiscard]] constexpr FOUNDATION_INLINE i32 CountTrailingZeros(const T value)noexcept{
-#if defined(__clang__) || defined(__GNUC__)
     constexpr i32 s_BitWidth = static_cast<i32>(sizeof(T) * 8u);
-#if defined(__has_builtin)
 #if __has_builtin(__builtin_ctzg)
     return __builtin_ctzg(value, s_BitWidth);
 #else
@@ -107,19 +97,11 @@ template<typename T>
     else
         return std::countr_zero(value);
 #endif
-#else
-    return std::countr_zero(value);
-#endif
-#else
-    return std::countr_zero(value);
-#endif
 }
 
 template<typename T>
     requires requires(T value){ std::popcount(value); }
 [[nodiscard]] constexpr FOUNDATION_INLINE i32 CountSetBits(const T value)noexcept{
-#if defined(__clang__) || defined(__GNUC__)
-#if defined(__has_builtin)
 #if __has_builtin(__builtin_popcountg)
     return __builtin_popcountg(value);
 #else
@@ -131,12 +113,6 @@ template<typename T>
         return __builtin_popcountll(static_cast<unsigned long long>(value));
     else
         return std::popcount(value);
-#endif
-#else
-    return std::popcount(value);
-#endif
-#else
-    return std::popcount(value);
 #endif
 }
 

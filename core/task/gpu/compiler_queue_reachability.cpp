@@ -125,12 +125,7 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
     if(totalWordCount > Limit<usize>::s_Max / sizeof(u64) || totalWordCount > outReachability.m_words.max_size())
         return fail();
 
-    outReachability.m_graphGeneration = graph.generation();
-    outReachability.m_taskCount = taskCount;
-    outReachability.m_wordsPerRow = wordsPerRow;
-    if(precomputedStrictDesc && precomputedStrictDesc->valid && precomputedStrictDesc->taskCount == taskCount && precomputedStrictDesc->wordsPerRow == wordsPerRow && precomputedStrictDesc->strictDesc.size() == totalWordCount){
-        outReachability.m_words = Move(precomputedStrictDesc->strictDesc);
-        precomputedStrictDesc->valid = false;
+    const auto finalizeDenseReachability = [&]()noexcept{
         SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
         outReachability.m_topologicalRanks.resize(taskCount);
         for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)
@@ -151,6 +146,15 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
         }
         outReachability.m_valid = true;
         return true;
+    };
+
+    outReachability.m_graphGeneration = graph.generation();
+    outReachability.m_taskCount = taskCount;
+    outReachability.m_wordsPerRow = wordsPerRow;
+    if(precomputedStrictDesc && precomputedStrictDesc->valid && precomputedStrictDesc->taskCount == taskCount && precomputedStrictDesc->wordsPerRow == wordsPerRow && precomputedStrictDesc->strictDesc.size() == totalWordCount){
+        outReachability.m_words = Move(precomputedStrictDesc->strictDesc);
+        precomputedStrictDesc->valid = false;
+        return finalizeDenseReachability();
     }
     constexpr usize s_SmallDenseWordCount = 4u;
     if(wordsPerRow > s_SmallDenseWordCount){
@@ -266,25 +270,7 @@ b8 BuildGpuTaskSchedulingReachability(const GpuTaskGraph::DeclarationReadView& g
             sourceRange.end = Max(sourceRange.end, Max(consumerRange.end, consumerWordIndex + 1u));
         }
     }
-    SymmetrizeDenseBitMatrix(outReachability.m_words, taskCount, wordsPerRow);
-    outReachability.m_topologicalRanks.resize(taskCount);
-    for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)
-        outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        const usize rowOffset = taskIndex * wordsPerRow;
-        outReachability.m_words[rowOffset + taskIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
-        auto& range = outReachability.m_relatedWordRanges[taskIndex];
-        range = { .begin = wordsPerRow, .end = 0u };
-        for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex){
-            const u64 word = outReachability.m_words[rowOffset + wordIndex];
-            if(word != 0u){
-                range.begin = Min(range.begin, wordIndex);
-                range.end = wordIndex + 1u;
-            }
-        }
-    }
-    outReachability.m_valid = true;
-    return true;
+    return finalizeDenseReachability();
 }
 
 

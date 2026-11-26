@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 import re
 
-from probe_common import text_hash
+from probe_common import FrameProbeRecorder, NUMBER, text_hash
 from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
+from probe_reference import linear_channels, linear_rgb_bytes
 
 LIT_UTF_8 = "utf-8"
 LIT_PRIMARY = "primary"
@@ -25,7 +25,6 @@ LIT_PASSED = "passed"
 LIT_CONTENT = "content"
 LIT_CARET = "caret"
 
-NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiEditSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
 STATE = re.compile(r"UiEditSmoke: state sequence=(\d+) primary=(\d+),(\d+),(\d+),(\d+),([01])" r" secondary=(\d+),(\d+),(\d+),(\d+),([01]) readonly=([01]) visible=([01])")
 FIELD = re.compile(r"field=(primary|secondary)")
@@ -89,16 +88,9 @@ def caret_probe_position(caret, content, scale_x, scale_y, width, height):
 def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, extent=None, selection=False, scrolled=False):
     width, height, rows = frame
     scale_x, scale_y = snapshot[LIT_SCALE]
-    probes = []
-
-    def probe(name, position, expected, *, tolerance=TOLERANCE):
-        x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"edit probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-        observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, expected))
-        probes.append({LIT_NAME: name, LIT_POSITION: [x, y], LIT_EXPECTED: list(expected), LIT_OBSERVED: list(observed), LIT_ERROR: error, LIT_PASSED: error <= tolerance})
+    recorder = FrameProbeRecorder(frame, snapshot[LIT_SCALE], "edit")
+    probes = recorder.probes
+    probe = lambda name, position, expected, *, tolerance=TOLERANCE: recorder.probe(name, position, expected, tolerance)
 
     def caret_probe(field, caret, content):
         column, row, first_row, end_row = caret_probe_position(caret, content, scale_x, scale_y, width, height)
@@ -108,8 +100,7 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
         probes.append({LIT_NAME: f"{field}_caret", LIT_POSITION: [column, row], LIT_EXPECTED: list(expected), LIT_OBSERVED: [list(pixel) for pixel in pixels], LIT_ERROR: error, LIT_PASSED: error <= TOLERANCE})
 
     values = (*snapshot[LIT_PRIMARY], *snapshot[LIT_SECONDARY], int(snapshot[LIT_READONLY]), int(snapshot[LIT_VISIBLE]), snapshot[LIT_SEQUENCE])
-    for index, value in enumerate(values):
-        probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded_marker(value))
+    recorder.probe_markers(values, 19.0, 20.0, height / scale_y - 14.0, parts=1, tolerance=TOLERANCE)
 
     geometry_matches = True
     for field, state in ((LIT_PRIMARY, primary), (LIT_SECONDARY, secondary)):

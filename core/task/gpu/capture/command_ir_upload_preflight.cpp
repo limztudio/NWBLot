@@ -79,14 +79,10 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task
 )noexcept{
-    Buffer* const destination = graph.bufferForResource(destinationId);
-    if(!destination){
-        if(!graph.validResource(destinationId))
-            return GpuCommandIrReplayError::InvalidResource;
-        if(graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Buffer)
-            return GpuCommandIrReplayError::ResourceTypeMismatch;
-        return GpuCommandIrReplayError::MissingBackendResource;
-    }
+    const auto destinationResult = GpuCommandIrDetail::ResolveGraphBuffer(graph, destinationId);
+    if(!destinationResult)
+        return destinationResult.error();
+    Buffer* const destination = *destinationResult;
     if(!HasSourceBlobImpl(sourceUploadBlob, blobOffsetBytes, blobSizeBytes, blobBytes, graph))
         return GpuCommandIrReplayError::InvalidBufferUpload;
 
@@ -124,14 +120,10 @@ namespace __hidden_gpu_command_ir_upload_preflight{
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
-    Texture* const destination = graph.textureForResource(destinationId);
-    if(!destination){
-        if(!graph.validResource(destinationId))
-            return GpuCommandIrReplayError::InvalidResource;
-        if(graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Texture)
-            return GpuCommandIrReplayError::ResourceTypeMismatch;
-        return GpuCommandIrReplayError::MissingBackendResource;
-    }
+    const auto destinationResult = GpuCommandIrDetail::ResolveGraphTexture(graph, destinationId);
+    if(!destinationResult)
+        return destinationResult.error();
+    Texture* const destination = *destinationResult;
     if(!HasSourceBlobImpl(sourceUploadBlob, blobOffsetBytes, blobSizeBytes, blobBytes, graph))
         return GpuCommandIrReplayError::InvalidTextureUpload;
 

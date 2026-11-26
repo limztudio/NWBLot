@@ -908,7 +908,7 @@ b8 UiPopupToolsSmokeScene::paint(mut UiPaintContext context){
         ++this.m_underlying;
     if(!context.ui.endPanel())
         return false;
-    const Expected<HitTarget> hovered = context.ui.input().tryFindTarget(context.ui.input().hover());
+    const Expected<HitTarget> hovered = context.ui.input().tryFindTarget(context.ui.input().hover(), 0u);
     const b8 anchorHovered = hovered.has_value()
         && hovered.value().rectangle.x == 32.0f && hovered.value().rectangle.y == 64.0f
         && hovered.value().rectangle.width == 220.0f && hovered.value().rectangle.height == 36.0f;

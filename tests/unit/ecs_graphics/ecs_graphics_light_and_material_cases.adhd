@@ -134,19 +134,19 @@ class SkinningValidationContext{
         outside.skeletonJointCount = 2u;
         outside.inverseBindMatrices.clear();
         this.joints.joints.resize(1u, MakeIdentitySkeletonJointMatrix());
-        return BuildMeshSkinningJointPalette(outside, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
+        return BuildMeshSkinningJointPaletteValidated(outside, this.joints.joints, this.joints.skinningMode, false, this.jointMatrices);
     }
     public b8 buildNonAffineJoint(){
         MeshSkinningRuntimeInstance invalid = this.instance;
         this.joints.joints[0u] = f32x3x4(MatrixSingle(VectorSingle(0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)));
-        return BuildMeshSkinningJointPalette(invalid, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
+        return BuildMeshSkinningJointPaletteValidated(invalid, this.joints.joints, this.joints.skinningMode, false, this.jointMatrices);
     }
     public b8 buildScaledDualQuaternionJoint(){
         MeshSkinningRuntimeInstance scaled = this.instance;
         scaled.inverseBindMatrices.clear();
         this.joints.skinningMode = SkeletonSkinningMode::DualQuaternion;
         this.joints.joints[0u] = f32x3x4(MakeNonUniformScaleJointMatrix());
-        return BuildMeshSkinningJointPalette(scaled, this.joints.joints, this.joints.skinningMode, this.jointMatrices);
+        return BuildMeshSkinningJointPaletteValidated(scaled, this.joints.joints, this.joints.skinningMode, false, this.jointMatrices);
     }
 }
 
@@ -553,7 +553,7 @@ void VerifyEcsGraphics_AvboitUploadCountsRejectEachOverflowBoundary(){
     EXPECT_FALSE(AvboitUploadCountsFit(0u, 0u, cutterLimit + 1u, instanceLimit, receiverLimit, cutterLimit));
 }
 
-void VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes(){
+void VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySampling(){
     AvboitFrameTargets targets = AvboitFrameTargets();
     targets.fullWidth = 1920u;
     targets.fullHeight = 1080u;
@@ -565,30 +565,17 @@ void VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPr
 
     const b8 hasRefractionFramebuffer = HasRefractionFramebuffer(targets);
 
-    const RendererAvboitPushConstants sdr = ResolveRendererAvboitPushConstants(
+    const RendererAvboitPushConstants pushConstants = ResolveRendererAvboitPushConstants(
         targets.fullWidth,
         targets.fullHeight,
         targets.lowWidth,
         targets.lowHeight,
         targets.virtualSliceCount,
         targets.physicalSliceCount,
-        false,
         hasRefractionFramebuffer,
         targets.deferredSlotsBufferDescriptor.slot()
     );
-    const RendererAvboitPushConstants hdr10 = ResolveRendererAvboitPushConstants(
-        targets.fullWidth,
-        targets.fullHeight,
-        targets.lowWidth,
-        targets.lowHeight,
-        targets.virtualSliceCount,
-        targets.physicalSliceCount,
-        true,
-        hasRefractionFramebuffer,
-        targets.deferredSlotsBufferDescriptor.slot()
-    );
-    EXPECT_FLOAT_EQ(VectorGetByIndex(LoadFloat(sdr.params), s_TestLayoutAvboitPushParamsRefractionCapture), s_TestLayoutAvboitRefractionDisabled);
-    EXPECT_FLOAT_EQ(VectorGetByIndex(LoadFloat(hdr10.params), s_TestLayoutAvboitPushParamsRefractionCapture), s_TestLayoutAvboitRefractionDisabled);
+    EXPECT_FLOAT_EQ(VectorGetByIndex(LoadFloat(pushConstants.params), s_TestLayoutAvboitPushParamsRefractionCapture), s_TestLayoutAvboitRefractionDisabled);
 }
 
 void VerifyEcsGraphics_MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending(){
@@ -1734,7 +1721,7 @@ NWB_ADHD_GTEST(EcsGraphics, RuntimeMeshBufferByteCountRejectsOverflow, VerifyEcs
 
 NWB_ADHD_GTEST(EcsGraphics, AvboitUploadCountsRejectEachOverflowBoundary, VerifyEcsGraphics_AvboitUploadCountsRejectEachOverflowBoundary)
 
-NWB_ADHD_GTEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes, VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes)
+NWB_ADHD_GTEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySampling, VerifyEcsGraphics_MissingOpticalAttachmentsDisableAuxiliarySampling)
 
 NWB_ADHD_GTEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending, VerifyEcsGraphics_MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
 

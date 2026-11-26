@@ -100,7 +100,7 @@ Expected<RadioGroupMetrics> MeasureRadioGroup(in u32 count, in Point maximumLabe
     ResolveRadioGroupGridCounts(count, options.orientation, options.columns, cols, rows);
     RadioGroupMetrics candidate;
     candidate.orientation = options.orientation;
-    candidate.rowHeight = UiSimdMax(maximumLabel.y, style.indicatorExtent);
+    candidate.rowHeight = Max(maximumLabel.y, style.indicatorExtent);
     candidate.indicatorExtent = style.indicatorExtent;
     candidate.gap = style.gap;
     candidate.rowGap = style.rowGap;

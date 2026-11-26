@@ -77,14 +77,6 @@ class UiEditClipboardController : NoCopy{
         return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::Pending);
     }
 
-    [cpp_unwind] public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel){
-        return this.request(owner, model, action, channel, false);
-    }
-
-    [cpp_unwind] public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action){
-        return this.request(owner, model, action, ClipboardChannel::Clipboard, false);
-    }
-
     [cpp_unwind] public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model, in b8 readOnly){
         if(!this.m_service.isOwnerThread())
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::WrongThread);
@@ -111,10 +103,6 @@ class UiEditClipboardController : NoCopy{
         }
         this.clearRequest();
         return result;
-    }
-
-    [cpp_unwind] public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model){
-        return this.drain(owner, model, false);
     }
 
     public b8 cancel(){

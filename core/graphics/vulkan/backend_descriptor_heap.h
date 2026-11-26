@@ -186,6 +186,17 @@ public:
 
 private:
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass)noexcept;
+    template<typename HandleT, typename ResourceT>
+    [[nodiscard]] b8 commitDescriptorWriteLocked(
+        ResourceT* resource,
+        GpuDescriptorHandle handle,
+        const DescriptorWriteItem& writeItem,
+        GpuDescriptorClass::Enum descriptorClass,
+        b8 needsDynamicReadiness,
+        b8 needsConcurrentAdmission,
+        b8 alwaysPublishFastVersion,
+        HandleT& retained
+    );
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
     [[nodiscard]] b8 isResourceAdmittedToActiveUsesLocked(const ResourceQueueAdmissionSnapshot& admission)const noexcept;

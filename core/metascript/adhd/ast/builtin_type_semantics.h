@@ -107,7 +107,6 @@ public:
     [[nodiscard]] static constexpr MStringView PathTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::Path); }
     [[nodiscard]] static constexpr MStringView VectorSingleTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::VectorSingle); }
     [[nodiscard]] static constexpr MStringView VectorDoubleTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::VectorDouble); }
-    [[nodiscard]] static constexpr MStringView ArenaBaseTypeName()noexcept{ return SpecialTypeName(SpecialBuiltinTypeKind::ArenaBase); }
     [[nodiscard]] static constexpr MStringView ArenaBaseCppName()noexcept{ return SpecialTypeCppName(SpecialBuiltinTypeKind::ArenaBase); }
 
     [[nodiscard]] static constexpr b8 IsVoidTypeName(const MStringView name)noexcept{

@@ -108,9 +108,9 @@ void ApplyLayoutItemOptions(in LayoutItemOptions item, mut LayoutNodeDesc descri
 }
 
 f64 ClampLayoutAxisF64(in f64 value, in f32 minimum, in f32 maximum){
-    f64 result = UiSimdMaxF64(value, cast<f64>(minimum));
+    f64 result = Max(value, cast<f64>(minimum));
     if(maximum > 0.0f)
-        result = UiSimdMinF64(result, cast<f64>(maximum));
+        result = Min(result, cast<f64>(maximum));
     return result;
 }
 

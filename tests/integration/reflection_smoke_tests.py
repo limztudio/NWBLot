@@ -13,7 +13,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from reflection_image_analysis import ReflectionImageAnalysis, FOREGROUND_REGION, GLASS_REGION, OPAQUE_REGION  # noqa: E402
 from reflection_smoke import DEFAULT_RAY_BUDGET, SmokeFailure, capture_environment, write_report  # noqa: E402
-from window_capture_image import write_bmp_24  # noqa: E402
+from window_capture_image_codec import Bmp24Codec  # noqa: E402
 
 LIT_CAPTURES = "captures"
 
@@ -232,7 +232,7 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
             root = Path(directory)
             args = SimpleNamespace(output_directory=root, frames=16, require_hardware=True, application_arg=[], suite="baseline")
             path = root / "odd&case_hybrid.bmp"
-            write_bmp_24(path, 1, 1, [[(20, 40, 60)]])
+            Bmp24Codec.write_bmp_24(path, 1, 1, [[(20, 40, 60)]])
             write_report(args, [("odd&case", LIT_HYBRID, DEFAULT_RAY_BUDGET)])
             manifest = json.loads((root / "reflection_manifest.json").read_text(encoding=LIT_UTF_8))
             document = (root / "reflection.html").read_text(encoding=LIT_UTF_8)

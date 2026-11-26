@@ -44,11 +44,6 @@ struct CppContainerAliasEntry{
     MStringView targetContainerName;
 };
 
-struct CppCompatTypeAliasEntry{
-    MStringView cppExportName;
-    MStringView aliasAdhdName;
-};
-
 struct CppClangConfigGroupEntry{
     MStringView defaultFlag;
     MStringView optPrefix;
@@ -124,13 +119,6 @@ public:
         MStringView(adhdTypeName),
     #include "export_cpp_importer.h"
     #undef NWB_ADHD_EXPORT_CPP_STRING_VIEW_CONSTANT_TYPE
-    };
-
-    inline static constexpr auto s_CompatTypeAliases = Array{
-    #define NWB_ADHD_EXPORT_CPP_COMPAT_TYPE_ALIAS(cppExportName, aliasAdhdName) \
-        CppCompatTypeAliasEntry{ cppExportName, aliasAdhdName },
-    #include "export_cpp_importer.h"
-    #undef NWB_ADHD_EXPORT_CPP_COMPAT_TYPE_ALIAS
     };
 
     inline static constexpr auto s_ClangDefaultArgs = Array{
@@ -223,14 +211,6 @@ public:
                 return true;
         }
         return false;
-    }
-
-    [[nodiscard]] static constexpr MStringView FindCompatTypeAlias(const MStringView cppExportName)noexcept{
-        for(const CppCompatTypeAliasEntry& alias : s_CompatTypeAliases){
-            if(alias.cppExportName == cppExportName)
-                return alias.aliasAdhdName;
-        }
-        return {};
     }
 };
 

@@ -12,7 +12,7 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 sys.path.insert(0, str(SMOKE_DIRECTORY / "ui_layer"))
 
 import window_capture_smoke
-import window_capture_x11
+from window_capture_image_codec import Bmp24Codec
 import window_capture_x11_pixels
 import edit_probe
 import numeric_edit_smoke
@@ -127,7 +127,7 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         with mock.patch.object(text_area_smoke.time, LIT_MONOTONIC, side_effect=lambda: clock.now), \
              mock.patch.object(text_area_smoke.time, LIT_SLEEP, side_effect=sleep), \
              mock.patch.object(text_area_smoke, LIT_COLLECT_LOG_DELTA, side_effect=collect), \
-             mock.patch.object(text_area_smoke, "read_bmp_24_rows", side_effect=lambda _path: clock.frame), \
+             mock.patch.object(Bmp24Codec, "read_bmp_24_rows", side_effect=lambda _path: clock.frame), \
              mock.patch.object(text_area_smoke, "observe_text_area", side_effect=observe):
             if refreshed_sequence == 7:
                 run.checkpoint(LIT_PHASE_CAPTURE, settle=0.0)

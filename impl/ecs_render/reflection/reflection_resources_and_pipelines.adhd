@@ -339,7 +339,6 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         settings,
         scene.valid() && snapshot.hardwarePipeline.valid(),
         targets.bindless.gbufferSpecularRoughness.slot(),
-        targets.bindless.refractionSpecularRoughness.slot(),
         snapshot.postprocess.history.sampleIndex,
         snapshot.postprocess.current.storageSlot,
         snapshot.postprocess.current.sampledSlot,

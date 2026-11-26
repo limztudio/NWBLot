@@ -197,8 +197,10 @@ b8 ComputePlotAutoRangeSimd(in Span<PlotSeries> series, mut f32 outMinY, mut f32
         outMaxY = 1.0f;
         return true;
     }
-    outMinY = UiSimdMin(UiSimdMin(minVec.x, minVec.y), UiSimdMin(minVec.z, minVec.w));
-    outMaxY = UiSimdMax(UiSimdMax(maxVec.x, maxVec.y), UiSimdMax(maxVec.z, maxVec.w));
+    const VectorSingle minPair = Min(minVec, minVec.zwxy);
+    outMinY = Min(minPair, minPair.yxwz).x;
+    const VectorSingle maxPair = Max(maxVec, maxVec.zwxy);
+    outMaxY = Max(maxPair, maxPair.yxwz).x;
     if(outMaxY <= outMinY){
         outMinY -= 1.0f;
         outMaxY += 1.0f;

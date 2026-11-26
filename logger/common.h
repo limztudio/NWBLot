@@ -115,6 +115,48 @@ inline constexpr TStringView s_UnknownLogLevelName = FOUNDATION_TEXT("UNKNOWN");
     return StringFormat(arena, FOUNDATION_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
+template<typename ArenaT, typename CharT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> FormatTimestampedProcessFilename(
+    ArenaT& arena,
+    const BasicStringView<CharT> prefix,
+    const LocalTime& localTime,
+    const u64 counter,
+    const BasicStringView<CharT> suffix = {}
+){
+    if constexpr(IsSame_V<CharT, char>){
+        return StringFormat(
+            arena,
+            "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}{}",
+            prefix,
+            localTime.tm_year + s_LocalTimeYearBase,
+            localTime.tm_mon + s_LocalTimeMonthBase,
+            localTime.tm_mday,
+            localTime.tm_hour,
+            localTime.tm_min,
+            localTime.tm_sec,
+            CurrentProcessId(),
+            counter,
+            suffix
+        );
+    }
+    else{
+        return StringFormat(
+            arena,
+            FOUNDATION_TEXT("{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}{}"),
+            prefix,
+            localTime.tm_year + s_LocalTimeYearBase,
+            localTime.tm_mon + s_LocalTimeMonthBase,
+            localTime.tm_mday,
+            localTime.tm_hour,
+            localTime.tm_min,
+            localTime.tm_sec,
+            CurrentProcessId(),
+            counter,
+            suffix
+        );
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

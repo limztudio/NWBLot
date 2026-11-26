@@ -2,7 +2,6 @@
 """Exercise single-line editing through native input and matching GPU captures."""
 from __future__ import annotations
 
-import json
 import platform
 import sys
 import time
@@ -12,20 +11,13 @@ from edit_native import EditNativeInput
 from edit_probe import CARET_RGB, TOLERANCE, caret_probe_position, caret_required, model, observe_edit, snapshot_from_logs
 from interaction_smoke import parse_args
 from probe_common import center
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main
+from checkpoint_report import CHECKPOINT_SETTLE_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_SCALE = "scale"
 LIT_FIELDS = "fields"
 LIT_CONTENT = "content"
-LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_PRIMARY = "primary"
 LIT_SECONDARY = "secondary"
 LIT_PASSED = "passed"
@@ -48,32 +40,14 @@ LIT_F7 = "F7"
 LIT_Q = "q"
 LIT_F6 = "F6"
 LIT_SIMPLE = "simple"
-LIT_UI_EDIT_FIXTURE = "UI edit fixture"
 LIT_EDIT_GRACEFUL_EXIT_TIMEOUT_SECONDS = 60.0
 LIT_PRIMARY_INITIAL_TEXT = "Hello 한글"
 LIT_PRIMARY_BACKSPACED_TEXT = "Hello 한"
 
 
-class EditRun:
+class EditRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = EditNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot[LIT_SCALE]
-        return round(x * scale_x), round(y * scale_y)
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=EditNativeInput(backend, handle))
 
     def focus(self, field):
         self.native.click(*self.point(*center(self.snapshot[LIT_FIELDS][field]["bounds"])))
@@ -90,40 +64,26 @@ class EditRun:
 
     def checkpoint(self, name, primary, secondary, *, readonly=False, visible=True, extent=None, selection=False, scrolled=False, allowed_primary=None):
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during edit-box capture")
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 390.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 350.0:
-                raise SmokeSkip("the edit fixture needs a logical client of at least 390x350")
-            wanted = primary
-            if allowed_primary is not None and snapshot[LIT_PRIMARY] in allowed_primary:
-                wanted = snapshot[LIT_PRIMARY]
-            if (snapshot[LIT_PRIMARY] == wanted and snapshot[LIT_SECONDARY] == secondary and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
+        wanted = primary
+
+        def before_capture(snapshot, _report, stage_deadline):
+            nonlocal wanted
+            wanted = snapshot[LIT_PRIMARY] if allowed_primary is not None and snapshot[LIT_PRIMARY] in allowed_primary else primary
+            if snapshot[LIT_PRIMARY] == wanted and snapshot[LIT_SECONDARY] == secondary and snapshot["readonly"] == readonly and snapshot["visible"] == visible:
                 fields = [field for field, state in ((LIT_PRIMARY, wanted), (LIT_SECONDARY, secondary)) if caret_required(field, state, readonly, visible, selection)]
                 if fields:
                     self.wait_for_caret_phase(snapshot, fields, stage_deadline)
-            self.backend.capture_client_window(self.handle, path)
-            report = observe_edit(read_bmp_24_rows(path), snapshot, wanted, secondary, readonly, visible, extent=extent, selection=selection, scrolled=scrolled)
-            if report[LIT_PASSED]:
-                self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path)})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        raise SmokeFailure(f"edit displayed-state gate '{name}' failed: {report}")
+            return True
+
+        self.poll_checkpoint(name, minimum_extent=(390.0, 350.0), minimum_extent_message="the edit fixture needs a logical client of at least 390x350",
+            process_stage="during edit-box capture", snapshot_reader=snapshot_from_logs, before_capture=before_capture,
+            evaluate=lambda frame, snapshot: observe_edit(frame, snapshot, wanted, secondary, readonly, visible, extent=extent, selection=selection, scrolled=scrolled), failure_label="edit")
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "stages": self.stages, "input_path": "Win32 posted WM_CHAR/key/pointer messages, native Control/Shift modifiers and real cursor placement for double-click"
-                if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus", "runtime_limit": "Synthetic commits bypass live IME composition. No native Wayland or physical pointer-grab qualification.",
-            "queued_focus_limit": "A posted batch may straddle frames. Old-owner text may commit before focus moves; it must never enter the new owner."}
-        (self.args.output_directory / "edit.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_json_report("edit.json", {LIT_PASSED: passed, "platform": platform.system(), "stages": self.stages,
+            "input_path": "Win32 posted WM_CHAR/key/pointer messages, native Control/Shift modifiers and real cursor placement for double-click" if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus",
+            "runtime_limit": "Synthetic commits bypass live IME composition. No native Wayland or physical pointer-grab qualification.",
+            "queued_focus_limit": "A posted batch may straddle frames. Old-owner text may commit before focus moves; it must never enter the new owner."})
 
     def alternate_clipboard(self):
         primary = "Alternate"
@@ -278,62 +238,16 @@ class EditRun:
 
 
 def run(args, *, run_type=EditRun, input_bindings=False):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "EDIT", force_x11=True)
-    environment["NWB_UI_LAYER_INPUT_BINDINGS_SMOKE"] = "1" if input_bindings else "0"
+    extra_env = {"NWB_UI_LAYER_INPUT_BINDINGS_SMOKE": "1" if input_bindings else "0"}
     if platform.system() == "Linux":
-        environment["XMODIFIERS"] = ""
-        environment["GTK_IM_MODULE"] = LIT_SIMPLE
-        environment["QT_IM_MODULE"] = LIT_SIMPLE
-    backend = create_capture_backend()
-    logserver = application = edit_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the edit fixture appeared")
-            raise SmokeFailure("custom edit fixture did not appear")
-        backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiEditSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        edit_run = run_type(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        edit_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_EDIT_FIXTURE, handle, graceful_exit_timeout=LIT_EDIT_GRACEFUL_EXIT_TIMEOUT_SECONDS)
-                require_normal_process_exit(exit_code, tail, LIT_UI_EDIT_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "edit.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                if logserver is not None:
-                    CaptureProcessTermination.terminate_process(logserver, "UI edit logserver")
-                backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    edit_run.write_report(True)
-    print(f"UI edit: {len(edit_run.stages)} matching native/GPU state gates; synthetic commits bypass live IME", flush=True)
-    return 0
+        extra_env.update({"XMODIFIERS": "", "GTK_IM_MODULE": LIT_SIMPLE, "QT_IM_MODULE": LIT_SIMPLE})
+    return run_ui_fixture(args, fixture="EDIT", display_marker="UiEditSmoke: display", driver_type=run_type, log_name="edit.log", label="UI edit",
+        window_label="edit", process_label="edit", graceful_exit_timeout=LIT_EDIT_GRACEFUL_EXIT_TIMEOUT_SECONDS, environment_kwargs={"force_x11": True}, extra_env=extra_env,
+        summary_formatter=lambda driver: f"UI edit: {len(driver.stages)} matching native/GPU state gates; synthetic commits bypass live IME")
 
 
 def main(argv):
-    args = parse_args(argv, description=__doc__)
-    try:
-        return run(args)
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", flush=True)
-        return SKIP_EXIT_CODE
-    except (SmokeFailure, OSError, ValueError, TimeoutError) as error:
-        print(f"FAIL: {error}", flush=True)
-        return 1
+    return run_smoke_main(argv, lambda current_argv: parse_args(current_argv, description=__doc__), run)
 
 
 if __name__ == "__main__":

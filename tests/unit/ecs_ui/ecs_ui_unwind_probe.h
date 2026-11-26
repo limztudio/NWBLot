@@ -24,65 +24,9 @@ namespace Tests::EcsUiUnwind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class NthFailEcsUiArena final : public ArenaBase{
-public:
-    NthFailEcsUiArena()
-        : ArenaBase(Name("tests/ecs_ui/nth_fail"))
-        , m_backing(Name("tests/ecs_ui/nth_fail_backing"))
-    {}
-
-    void arm(const usize failOnCall)noexcept{
-        m_armed = true;
-        m_remaining = failOnCall;
-        m_hit = false;
-    }
-
-    void disarm()noexcept{
-        m_armed = false;
-        m_remaining = 0u;
-        m_hit = false;
-    }
-
-    [[nodiscard]] b8 hit()const noexcept{ return m_hit; }
-
-    void* allocate(usize align, usize size)override{
-        if(shouldFail())
-            return nullptr;
-        return m_backing.allocate(align, size);
-    }
-
-    void* reallocate(void* memory, usize align, usize size)override{
-        if(shouldFail())
-            return nullptr;
-        return m_backing.reallocate(memory, align, size);
-    }
-
-    void deallocate(void* memory, usize align, usize size)noexcept override{
-        m_backing.deallocate(memory, align, size);
-    }
-
-private:
-    [[nodiscard]] b8 shouldFail()noexcept{
-        if(!m_armed)
-            return false;
-        if(m_remaining <= 1u){
-            m_hit = true;
-            return true;
-        }
-        --m_remaining;
-        return false;
-    }
-
-private:
-    Core::Alloc::GlobalArena m_backing;
-    usize m_remaining = 0u;
-    b8 m_armed = false;
-    b8 m_hit = false;
-};
-
 inline void TriggerProbeOom(){
-    NthFailEcsUiArena arena;
-    Vector<u8, NthFailEcsUiArena> probe(arena);
+    Tests::NthFailArena arena(Name("tests/ecs_ui/nth_fail"), Name("tests/ecs_ui/nth_fail_backing"));
+    Vector<u8, Tests::NthFailArena> probe(arena);
     arena.arm(1u);
     probe.reserve(128u);
 }
@@ -102,7 +46,7 @@ inline void TriggerProbeOom(){
 
     usize newEntryHits = 0u;
     for(usize failAt = 1u; failAt <= 32u; ++failAt){
-        NthFailEcsUiArena hostArena;
+        Tests::NthFailArena hostArena(Name("tests/ecs_ui/nth_fail"), Name("tests/ecs_ui/nth_fail_backing"));
         Impl::Ui::Context context(support);
         Impl::UiEditBoxHost host(hostArena, context, textInput, clipboard);
 
@@ -169,7 +113,7 @@ inline void TriggerProbeOom(){
             return false;
     }
 
-    NthFailEcsUiArena hostArena;
+    Tests::NthFailArena hostArena(Name("tests/ecs_ui/nth_fail"), Name("tests/ecs_ui/nth_fail_backing"));
     Impl::Ui::Context context(support);
     Impl::UiEditBoxHost host(hostArena, context, textInput, clipboard);
     Impl::Ui::EditModel growingModel(support);
@@ -257,7 +201,7 @@ inline void TriggerProbeOom(){
 
     usize hits = 0u;
     for(usize failAt = 1u; failAt <= 16u; ++failAt){
-        NthFailEcsUiArena sessionArena;
+        Tests::NthFailArena sessionArena(Name("tests/ecs_ui/nth_fail"), Name("tests/ecs_ui/nth_fail_backing"));
         Impl::UiTextEditSession session(sessionArena, textInput);
         sessionArena.arm(failAt);
         Core::TextInputAdmission::Enum admission = Core::TextInputAdmission::Unavailable;
@@ -299,7 +243,7 @@ inline void TriggerProbeOom(){
 
     usize hits = 0u;
     for(usize failAt = 1u; failAt <= 16u; ++failAt){
-        NthFailEcsUiArena clipArena;
+        Tests::NthFailArena clipArena(Name("tests/ecs_ui/nth_fail"), Name("tests/ecs_ui/nth_fail_backing"));
         Impl::UiEditClipboardController clip(clipArena, clipboard);
         clipArena.arm(failAt);
         Impl::UiEditClipboardResult res{};

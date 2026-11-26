@@ -15,6 +15,7 @@
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/filesystem_helpers.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/platform_features.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/integration/crash/crash_test_paths.adhd>
 #include <tests/integration/logger_server/name_cases.adhd>
@@ -97,11 +98,11 @@ b8 CrashIngestMessageContains(in CrashIngestResult result, in StringView needle)
 }
 
 b8 IsWindowsLoggerCrashPlatform(){
-    return s_IsWindowsLoggerPlatform;
+    return s_IsWindowsPlatform;
 }
 
 b8 IsDesktopLinuxLoggerCrashPlatform(){
-    return s_IsDesktopLinuxLoggerPlatform;
+    return s_IsDesktopLinuxPlatform;
 }
 
 b8 IsDesktopLoggerCrashPlatform(){

@@ -1,0 +1,153 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CAUSTIC_PHOTON_COMMON_SLANGI
+#define NWB_GRAPHICS_CAUSTIC_PHOTON_COMMON_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "photon_push_constants.slangi"
+#include "photon_types.slangi"
+#include "../bvh/constants.h"
+#include "../mesh/runtime_constants.h"
+#include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+#include "../bvh/bindless_heap_rt.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_CAUSTIC_MAX_BOUNCES 16u
+#define NWB_CAUSTIC_FLUX_EPSILON 1e-6
+#define NWB_CAUSTIC_EXTERIOR_MARGIN_MINIMUM 1e-3
+#define NWB_CAUSTIC_TRACE_T_MAX 1e7
+
+[[vk::push_constant]] ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticPushConstants;
+
+#define g_NwbCausticBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticPushConstants.deferredResourcesHeapSlot]
+#define g_NwbCausticMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbCausticPushConstants.materialContextSlotsHeapSlot)
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticBindlessResources.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticBindlessResources.avboitSlots.w
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbCausticMaterialContextSlots.sceneSlots.w;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbCausticMaterialContextSlots.materialSlots.x;
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u;
+}
+#include "../mesh/bindless_heap_mesh.slangi"
+
+#include "../scene/buffer.slangi"
+#include "../common/math.slangi"
+
+#include "splat_constants.slangi"
+#include "light_pick.slangi"
+#include "caustic_photon_emission.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticEmissionTargets[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticViews[];
+#pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Texture2D<float4> nwbCausticGbufferDepth(){
+    return nwbHeapSampledImage2D(g_NwbCausticPushConstants.depthSlot);
+}
+
+Texture2D<float4> nwbCausticGbufferWorldPosition(){
+    return nwbHeapSampledImage2D(g_NwbCausticPushConstants.worldPositionSlot);
+}
+
+StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticEmissionTargets(){
+    return g_NwbHeapCausticEmissionTargets[g_NwbCausticPushConstants.emissionTargetSlot];
+}
+
+ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticView(){
+    return g_NwbHeapCausticViews[g_NwbCausticPushConstants.viewSlot];
+}
+
+bool nwbCausticSceneBounds(out float3 boundsMin, out float3 boundsMax, out uint flags){
+    boundsMin = float3(g_NwbCausticPushConstants.sceneBoundsMinX, g_NwbCausticPushConstants.sceneBoundsMinY, g_NwbCausticPushConstants.sceneBoundsMinZ);
+    boundsMax = float3(g_NwbCausticPushConstants.sceneBoundsMaxX, g_NwbCausticPushConstants.sceneBoundsMaxY, g_NwbCausticPushConstants.sceneBoundsMaxZ);
+    flags = g_NwbCausticPushConstants.sceneBoundsFlags;
+    return flags != NWB_CAUSTIC_SCENE_BOUNDS_INVALID;
+}
+
+bool nwbCausticEmitPhoton(const uint photonIndex, out NwbCausticPhoton outPhoton){
+    outPhoton = (NwbCausticPhoton)0;
+    if(
+        photonIndex >= g_NwbCausticPushConstants.photonCount
+        || g_NwbCausticPushConstants.emissionTargetCount == 0u
+        || g_NwbCausticPushConstants.instanceCount == 0u
+    )
+        return false;
+
+    NwbSceneLight light;
+    uint targetIndex;
+    uint localIndex;
+    uint localCount;
+    uint combo;
+    uint totalCombos;
+    if(!nwbCausticSelectLightAndTarget(photonIndex, g_NwbCausticPushConstants.photonCount, g_NwbCausticPushConstants.emissionTargetCount, light, targetIndex, localIndex, localCount, combo, totalCombos))
+        return false;
+
+    const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
+    const NwbCausticEmissionTarget target = nwbCausticEmissionTargets()[targetIndex];
+    const float2 cell = totalCombos == 1u
+        ? NwbCausticPhotonEmission.temporalCell(photonIndex, g_NwbCausticPushConstants.gridSide, g_NwbCausticPushConstants.frameIndex, g_NwbCausticPushConstants.temporalPhaseCount)
+        : NwbCausticPhotonEmission.stratifiedBlockCell(localIndex, localCount, g_NwbCausticPushConstants.frameIndex, g_NwbCausticPushConstants.temporalPhaseCount, combo);
+    const NwbCausticEmission emission = NwbCausticPhotonEmission.emitAtTarget(lightDir, target.aabbMin.xyz, target.aabbMax.xyz, cell);
+    if(!emission.valid)
+        return false;
+
+    outPhoton = NwbCausticPhotonEmission.createPhoton(
+        emission, NwbCausticPhotonEmission.lightColor(light.colorIntensity), g_NwbCausticPushConstants.emissionTargetCount,
+        g_NwbCausticPushConstants.photonCount, light.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX, light.position.xyz
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_CAUSTIC_SPLAT_VIEW nwbCausticView()
+#define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticPushConstants
+#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticGbufferDepth()
+#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticGbufferWorldPosition()
+#define NWB_CAUSTIC_SPLAT_ACCUMULATOR nwbHeapStorageImage2DArrayUint(g_NwbCausticPushConstants.accumulatorStorageSlot)
+#include "splat.slangi"
+#undef NWB_CAUSTIC_SPLAT_ACCUMULATOR
+#undef NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION
+#undef NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH
+#undef NWB_CAUSTIC_SPLAT_PUSH
+#undef NWB_CAUSTIC_SPLAT_VIEW
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

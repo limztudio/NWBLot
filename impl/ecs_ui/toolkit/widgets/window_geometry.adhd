@@ -91,26 +91,26 @@ Rect ResolveWindowContentBounds(in WindowState state, in WindowMetrics metrics){
         state.bounds.x,
         state.bounds.y + metrics.titleHeight,
         state.bounds.width,
-        UiSimdMax(0.0f, state.bounds.height - metrics.titleHeight)
+        Max(0.0f, state.bounds.height - metrics.titleHeight)
     );
 }
 
 Rect ResolveWindowCollapseBounds(in WindowState state, in WindowMetrics metrics){
     const f32 x = state.bounds.x + metrics.titlePadding.left;
     const f32 availableHeight = ((metrics.titleHeight - metrics.titlePadding.top) - metrics.titlePadding.bottom) - metrics.collapseExtent;
-    const f32 y = (state.bounds.y + metrics.titlePadding.top) + UiSimdMax(0.0f, availableHeight * 0.5f);
+    const f32 y = (state.bounds.y + metrics.titlePadding.top) + Max(0.0f, availableHeight * 0.5f);
     return Rect(x, y, metrics.collapseExtent, metrics.collapseExtent);
 }
 
 Rect ResolveWindowCloseBounds(in WindowState state, in WindowMetrics metrics){
     const f32 x = (state.bounds.x + state.bounds.width) - metrics.titlePadding.right - metrics.closeExtent;
     const f32 availableHeight = ((metrics.titleHeight - metrics.titlePadding.top) - metrics.titlePadding.bottom) - metrics.closeExtent;
-    const f32 y = (state.bounds.y + metrics.titlePadding.top) + UiSimdMax(0.0f, availableHeight * 0.5f);
+    const f32 y = (state.bounds.y + metrics.titlePadding.top) + Max(0.0f, availableHeight * 0.5f);
     return Rect(x, y, metrics.closeExtent, metrics.closeExtent);
 }
 
 Rect ResolveWindowResizeBounds(in WindowState state, in WindowMetrics metrics){
-    const f32 extent = UiSimdMin(metrics.resizeExtent, UiSimdMin(state.bounds.width, state.bounds.height - metrics.titleHeight));
+    const f32 extent = Min(metrics.resizeExtent, Min(state.bounds.width, state.bounds.height - metrics.titleHeight));
     const VectorSingle origin(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
     const VectorSingle size(state.bounds.width, state.bounds.height, state.bounds.width, state.bounds.height);
     const VectorSingle start = (origin + size) - VectorSingle(extent);
@@ -127,29 +127,29 @@ Rect ResolveWindowResizeEdgeBounds(in WindowState state, in WindowMetrics metric
     const f32 y = state.bounds.y;
     const f32 w = state.bounds.width;
     const f32 h = state.bounds.height;
-    const f32 b = UiSimdMin(metrics.resizeBorder, UiSimdMin(w * 0.25f, h * 0.25f));
+    const f32 b = Min(metrics.resizeBorder, Min(w * 0.25f, h * 0.25f));
     switch(edge){
     case WindowResizeEdge::TopLeft:
         return Rect(x, y, b, b);
     case WindowResizeEdge::TopRight:
         return Rect(x + w - b, y, b, b);
     case WindowResizeEdge::Top:
-        return Rect(x + b, y, UiSimdMax(0.0f, w - 2.0f * b), b);
+        return Rect(x + b, y, Max(0.0f, w - 2.0f * b), b);
     case WindowResizeEdge::Left:
-        return Rect(x, y + b, b, UiSimdMax(0.0f, h - 2.0f * b));
+        return Rect(x, y + b, b, Max(0.0f, h - 2.0f * b));
     case WindowResizeEdge::Right:
-        return Rect(x + w - b, y + b, b, UiSimdMax(0.0f, se.y - (y + b)));
+        return Rect(x + w - b, y + b, b, Max(0.0f, se.y - (y + b)));
     case WindowResizeEdge::BottomLeft:
         return Rect(x, y + h - b, b, b);
     case WindowResizeEdge::Bottom:
-        return Rect(x + b, y + h - b, UiSimdMax(0.0f, se.x - (x + b)), b);
+        return Rect(x + b, y + h - b, Max(0.0f, se.x - (x + b)), b);
     default:
         return Rect();
     }
 }
 
 void ResolveWindowResizeGripBars(in Rect corner, mut Rect outHorizontal, mut Rect outVertical){
-    const f32 thickness = UiSimdMin(s_WindowResizeGripMaximumThickness, corner.width * s_WindowResizeGripThicknessFraction);
+    const f32 thickness = Min(s_WindowResizeGripMaximumThickness, corner.width * s_WindowResizeGripThicknessFraction);
     const VectorSingle cornerSize(corner.width, corner.height, corner.width, corner.height);
     const VectorSingle scaledSize = cornerSize * VectorSingle(
         s_WindowResizeGripStartFraction,
@@ -187,21 +187,21 @@ Expected<WindowMetrics> MeasureWindow(in UiSkinRegion frame, in UiSkinRegion tit
     metrics.resizeExtent = ResolveUiSkinSquareExtent(style.windowResizeExtent, resize, density);
     metrics.resizeBorder = style.windowResizeBorder;
     metrics.maximumSize = options.maximumSize;
-    const f32 titleContentY = UiSimdMax(titleSize.y, UiSimdMax(metrics.collapseExtent, metrics.closeExtent));
+    const f32 titleContentY = Max(titleSize.y, Max(metrics.collapseExtent, metrics.closeExtent));
     const VectorSingle titleContent(titleSize.x, titleContentY, titleSize.x, titleContentY);
     const VectorSingle leadingPadding(metrics.titlePadding.left, metrics.titlePadding.top, metrics.titlePadding.left, metrics.titlePadding.top);
     const VectorSingle trailingPadding(metrics.titlePadding.right, metrics.titlePadding.bottom, metrics.titlePadding.right, metrics.titlePadding.bottom);
     const VectorSingle titlePadded = (titleContent + leadingPadding) + trailingPadding;
     const f32 titlePaddedX = titlePadded.x;
     const f32 titlePaddedY = titlePadded.y;
-    metrics.titleHeight = UiSimdMax(title.minimumHeight, titlePaddedY);
+    metrics.titleHeight = Max(title.minimumHeight, titlePaddedY);
     f32 collapseWidth = 0.0f;
     if(options.collapsible)
         collapseWidth = metrics.collapseExtent + style.gap;
     f32 closeWidth = 0.0f;
     if(options.closable)
         closeWidth = metrics.closeExtent + style.gap;
-    const f32 titleMinX = UiSimdMax(title.minimumWidth, titlePaddedX + collapseWidth + closeWidth);
+    const f32 titleMinX = Max(title.minimumWidth, titlePaddedX + collapseWidth + closeWidth);
     const f32 contentMinY = (metrics.titleHeight + metrics.contentPadding.top) + metrics.contentPadding.bottom;
     const VectorSingle minimum = Max(VectorSingle(options.minimumSize.x, options.minimumSize.y, options.minimumSize.x, options.minimumSize.y), Max(VectorSingle(frame.minimumWidth, frame.minimumHeight, frame.minimumWidth, frame.minimumHeight), VectorSingle(titleMinX, contentMinY, titleMinX, contentMinY)));
     metrics.minimumSize = Point(minimum.x, minimum.y);

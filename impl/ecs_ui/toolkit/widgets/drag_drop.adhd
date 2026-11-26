@@ -63,8 +63,6 @@ class DragDropState : NoCopy{
     public b8 m_dropConsumed = false;
     public u64 m_dropFrame = 0u;
     public WidgetId m_sourceWidget;
-    public WidgetId m_hoveredTarget;
-    public Point m_pressOrigin;
     public Point m_pointerPosition;
     public Point m_dropPosition;
     public DragDropPayload m_payload;
@@ -87,7 +85,6 @@ class DragDropState : NoCopy{
         this.m_pendingDrop = false;
         this.m_dropConsumed = false;
         this.m_sourceWidget = WidgetId();
-        this.m_hoveredTarget = WidgetId();
         this.m_payload = DragDropPayload();
         AdvanceNonWrappingRevision(this.m_revision);
     }

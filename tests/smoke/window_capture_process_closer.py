@@ -4,11 +4,10 @@ import subprocess
 import sys
 
 from window_capture_outcome import write_status
-from window_capture_win32 import create_windows_user32
+from window_capture_win32 import WINDOWS_ENUM_CALLBACK, create_windows_user32
 
 LIT_CLOSE_HELPER_TIMEOUT_SECONDS = 6.0
 WM_CLOSE_MESSAGE = 0x0010
-WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,)
 
 
 class WindowProcessCloser:

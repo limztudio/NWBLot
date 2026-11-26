@@ -72,9 +72,6 @@ extern const u32 s_ShaderUiMaterialBlur;
 [cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_MATERIAL_EFFECT_LAYER_COMPOSITE")]
 extern const u32 s_ShaderUiMaterialEffectLayerComposite;
 
-[cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8")]
-extern const u32 s_ShaderUiSdfDistanceEncodingFreetypeU8;
-
 [cpp_header("<impl/assets/graphics/ui/binding_slots.h>"), cpp_name("NWB_UI_PRESENTATION_SDR")]
 extern const u32 s_ShaderUiPresentationSdr;
 
@@ -104,9 +101,6 @@ extern const u32 s_ShaderUiPushConstantsSdfChannelByteOffset;
 
 [cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET")]
 extern const u32 s_ShaderUiPushConstantsSdfSpreadByteOffset;
-
-[cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET")]
-extern const u32 s_ShaderUiPushConstantsSdfEncodingByteOffset;
 
 [cpp_header("<impl/assets/graphics/ui/push_constants.h>"), cpp_name("NWB_UI_PUSH_CONSTANTS_EFFECT_BUFFER_SLOT_BYTE_OFFSET")]
 extern const u32 s_ShaderUiPushConstantsEffectBufferSlotByteOffset;
@@ -175,7 +169,6 @@ static_assert(offset_of<GpuPaintPushConstants>(samplerSlot) == s_ShaderUiPushCon
 static_assert(offset_of<GpuPaintPushConstants>(material) == s_ShaderUiPushConstantsMaterialByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_MATERIAL_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(sdfChannel) == s_ShaderUiPushConstantsSdfChannelByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(sdfSpreadPixels) == s_ShaderUiPushConstantsSdfSpreadByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET");
-static_assert(offset_of<GpuPaintPushConstants>(sdfDistanceEncoding) == s_ShaderUiPushConstantsSdfEncodingByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(effectBufferSlot) == s_ShaderUiPushConstantsEffectBufferSlotByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_EFFECT_BUFFER_SLOT_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(effectOffset) == s_ShaderUiPushConstantsEffectOffsetByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_EFFECT_OFFSET_BYTE_OFFSET");
 static_assert(offset_of<GpuPaintPushConstants>(clipMaskOffset) == s_ShaderUiPushConstantsClipMaskOffsetByteOffset, "UI shader ABI requires NWB_UI_PUSH_CONSTANTS_CLIP_MASK_OFFSET_BYTE_OFFSET");
@@ -195,7 +188,6 @@ static_assert(cast<u32>(PaintMaterial::Blur) == s_ShaderUiMaterialBlur, "UI shad
 static_assert(cast<u32>(PaintMaterial::EffectLayerComposite) == s_ShaderUiMaterialEffectLayerComposite, "UI shader ABI requires NWB_UI_MATERIAL_EFFECT_LAYER_COMPOSITE");
 static_assert(s_PaintMaxGradientStops == cast<usize>(s_ShaderUiMaxGradientStops), "UI shader ABI requires NWB_UI_MAX_GRADIENT_STOPS");
 static_assert(s_PaintMaxAnalyticClipDepth == cast<usize>(s_ShaderUiMaxAnalyticClipDepth), "UI shader ABI requires NWB_UI_MAX_ANALYTIC_CLIP_DEPTH");
-static_assert(s_FontAtlasDistanceEncoding == s_ShaderUiSdfDistanceEncodingFreetypeU8, "UI shader ABI requires NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

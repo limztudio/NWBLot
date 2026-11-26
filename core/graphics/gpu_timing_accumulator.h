@@ -125,7 +125,6 @@ public:
         b8& outPreviousDeviceReady
     );
     void releaseFailedBeginClaim(const GpuTimingScope& scope, b8 previousDeviceReady)noexcept;
-    [[nodiscard]] Expected<QueryBegin> beginQuery(CommandList& commandList, u64 frameIndex, u32 epoch, u64 performanceCaptureEpoch, GpuTimingSampleAttribution attribution);
     [[nodiscard]] QueryEndResult::Enum endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] QueryEndResult::Enum endQueryFromExistingClaim(CommandList& commandList, const GpuTimingScope& scope)noexcept;
     [[nodiscard]] b8 recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);

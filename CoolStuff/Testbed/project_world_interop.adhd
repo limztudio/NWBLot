@@ -622,6 +622,76 @@ void ApplyPhysicsBackendSettings(in TestbedPhysicsBackendChoice choice, mut Phys
     cfg.dirty = true;
 }
 
+EntityID CreateDefaultPhysicsWorldConfigEntity(mut World world, in TestbedPhysicsBackendChoice backendChoice){
+    Entity cfgEntity = world.createEntity();
+    mut PhysicsWorldConfigComponent cfg = cfgEntity.addComponent<PhysicsWorldConfigComponent>();
+    cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
+    cfg.fixedDeltaTime = 1.0f / 60.0f;
+    cfg.subStepCount = 4u;
+    ApplyPhysicsBackendSettings(backendChoice, cfg);
+    return cfgEntity.id();
+}
+
+void PopulateTestbedRagdollBones(mut RagdollComponent rc, in f32 boneSpacingY, in f32 anchorOffsetY, in b8 populateTargetPose){
+    for(u32 bi = 0u; bi < 3u; ++bi){
+        RagdollBoneDef bone;
+        if(bi == 0u){
+            bone.parentIndex = s_NullIndex;
+            bone.shapeType = RagdollBoneShapeType::Box;
+            bone.boxHalfExtents = f32x4(0.14f, 0.12f, 0.10f, 0.0f);
+        }
+        else if(bi == 1u){
+            bone.parentIndex = 0u;
+            bone.shapeType = RagdollBoneShapeType::Capsule;
+            bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
+            bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
+        }
+        else{
+            bone.parentIndex = 1u;
+            bone.shapeType = RagdollBoneShapeType::Sphere;
+            bone.sphere = MakeSphereShape(VectorSingle(0.0f), 0.14f).value();
+        }
+        const f32 by = cast<f32>(bi) * boneSpacingY;
+        bone.bodyDef.type = BodyType::Dynamic;
+        bone.bodyDef.position = f32x4(0.0f, by, 0.0f, 0.0f);
+        bone.jointAnchorWorld = f32x4(0.0f, by - anchorOffsetY, 0.0f, 0.0f);
+        rc.bones.push_back(bone);
+        if(populateTargetPose){
+            Transform3D tgtXf;
+            tgtXf.position = f32x4(0.0f, by + 0.15f, 0.0f, 0.0f);
+            rc.targetPose.push_back(tgtXf);
+        }
+    }
+}
+
+void PopulateTestbedVehicleWheels(mut VehicleComponent vc){
+    for(u32 wi = 0u; wi < 4u; ++wi){
+        VehicleWheelDef wd;
+        f32 wx = -0.7f;
+        if((wi & 1u) != 0u)
+            wx = 0.7f;
+        f32 wz = 0.95f;
+        if(wi >= 2u)
+            wz = -0.95f;
+        wd.attachmentPoint = f32x4(wx, -0.1f, wz, 0.0f);
+        wd.isSteerable = (wi < 2u);
+        wd.isDriven = (wi >= 2u);
+        vc.wheels.push_back(wd);
+    }
+}
+
+ArticulationLinkDef MakeTestbedArticulationLink(in u32 parentIndex, in f32 parentJointY, in ArticulationJointType jointType, in f32 childOffsetY, in f32 mass){
+    ArticulationLinkDef link;
+    link.parentIndex = parentIndex;
+    link.parentToJoint.position = f32x4(0.0f, parentJointY, 0.0f, 0.0f);
+    link.jointType = jointType;
+    link.jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    link.jointAxisSecondaryLocal = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    link.jointToChild.position = f32x4(0.0f, childOffsetY, 0.0f, 0.0f);
+    link.mass = mass;
+    return link;
+}
+
 void ApplyTestbedPhysicsRuntimeParams(
     mut NotNullUniquePtr<World> worldHandle,
     in EntityID configEntity,
@@ -632,9 +702,9 @@ void ApplyTestbedPhysicsRuntimeParams(
     if(!configEntity.valid() || !world.alive(configEntity) || !world.hasComponent<PhysicsWorldConfigComponent>(configEntity))
         return;
     mut PhysicsWorldConfigComponent cfg = world.getComponent<PhysicsWorldConfigComponent>(configEntity);
-    const f32 safeGravY = SimdClamp(params.gravityY, -50.0f, 50.0f);
-    const f32 safeHz = SimdClamp(params.fixedHz, 15.0f, 240.0f);
-    const f32 safeHertz = SimdClamp(params.contactHertz, 5.0f, 150.0f);
+    const f32 safeGravY = Clamp(params.gravityY, -50.0f, 50.0f);
+    const f32 safeHz = Clamp(params.fixedHz, 15.0f, 240.0f);
+    const f32 safeHertz = Clamp(params.contactHertz, 5.0f, 150.0f);
     const u32 safeSubSteps = Clamp(params.subStepCount, 1u, 12u);
     cfg.gravity = f32x4(0.0f, safeGravY, 0.0f, 0.0f);
     cfg.fixedDeltaTime = 1.0f / safeHz;
@@ -644,7 +714,7 @@ void ApplyTestbedPhysicsRuntimeParams(
     cfg.enableContinuous = params.enableContinuous;
     cfg.enableWarmStarting = params.enableWarmStarting;
     if(backendChoice == TestbedPhysicsBackendChoice::Hybrid)
-        cfg.gpuWorkloadFraction = SimdClamp(params.gpuWorkloadFraction, 0.0f, 1.0f);
+        cfg.gpuWorkloadFraction = Clamp(params.gpuWorkloadFraction, 0.0f, 1.0f);
     cfg.dirty = true;
 }
 
@@ -666,10 +736,10 @@ EntityID SpawnPhysicsStaticBox(
     xf.scale = f32x4(scale, 0.0f);
 
     mut ColliderComponent col = entity.addComponent<ColliderComponent>();
-    col.shapeType = ShapeType::Hull;
-    col.halfExtents = f32x4(halfExtents, 0.0f);
-    col.friction = friction;
-    col.restitution = restitution;
+    col.primaryShape.shapeType = ShapeType::Hull;
+    col.primaryShape.halfExtents = f32x4(halfExtents, 0.0f);
+    col.primaryShape.friction = friction;
+    col.primaryShape.restitution = restitution;
     col.dirty = true;
 
     if(addRenderMesh){
@@ -706,11 +776,11 @@ EntityID SpawnPhysicsDynamicBox(
     rb.dirty = true;
 
     mut ColliderComponent col = boxEntity.addComponent<ColliderComponent>();
-    col.shapeType = ShapeType::Hull;
-    col.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
-    col.density = 1.0f;
-    col.friction = friction;
-    col.restitution = restitution;
+    col.primaryShape.shapeType = ShapeType::Hull;
+    col.primaryShape.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+    col.primaryShape.density = 1.0f;
+    col.primaryShape.friction = friction;
+    col.primaryShape.restitution = restitution;
     col.dirty = true;
 
     mut ModelComponent mdl = boxEntity.addComponent<ModelComponent>();
@@ -744,11 +814,11 @@ EntityID SpawnPhysicsDynamicSphere(
     rb.dirty = true;
 
     mut ColliderComponent col = sphereEntity.addComponent<ColliderComponent>();
-    col.shapeType = ShapeType::Sphere;
-    col.radius = 0.5f;
-    col.density = density;
-    col.friction = friction;
-    col.restitution = restitution;
+    col.primaryShape.shapeType = ShapeType::Sphere;
+    col.primaryShape.radius = 0.5f;
+    col.primaryShape.density = density;
+    col.primaryShape.friction = friction;
+    col.primaryShape.restitution = restitution;
     col.dirty = true;
 
     mut ModelComponent mdl = sphereEntity.addComponent<ModelComponent>();
@@ -910,7 +980,7 @@ b8 TestbedRaySphereHit(
     const f32 disc = b * b - c;
     if(disc < 0.0f)
         return false;
-    const f32 s = SqrtFast(disc);
+    const f32 s = Sqrt(disc);
     f32 t = -b - s;
     if(t < 0.0f)
         t = -b + s;
@@ -997,7 +1067,7 @@ f32 ComputeScreenPointSegmentDistSq(in f32 px, in f32 py, in VectorSingle seg){
     const f32 lenSq = abx * abx + aby * aby;
     f32 u = 0.0f;
     if(lenSq > 1.0e-5f)
-        u = SimdClamp(((px - seg.x) * abx + (py - seg.y) * aby) / lenSq, 0.0f, 1.0f);
+        u = Clamp(((px - seg.x) * abx + (py - seg.y) * aby) / lenSq, 0.0f, 1.0f);
     const f32 dx = seg.x + abx * u - px;
     const f32 dy = seg.y + aby * u - py;
     return dx * dx + dy * dy;
@@ -1245,7 +1315,7 @@ b8 BeginTestbedPickOrGrab(
             if(!cc.enabled)
                 return;
             const VectorSingle cPos(cc.controller.position);
-            const f32 cRad = SimdMax(0.35f, cc.def.radius + 0.1f);
+            const f32 cRad = Max(0.35f, cc.def.radius + 0.1f);
             f32 t = 0.0f;
             VectorSingle pt(0.0f);
             if(TestbedRaySphereHit(rayOrigin, rayDir, cPos, cRad, bestDist, t, pt)){
@@ -1326,18 +1396,6 @@ b8 BeginTestbedPickOrGrab(
     return true;
 }
 
-b8 BeginTestbedGrab(
-    mut NotNullUniquePtr<World> worldHandle,
-    in f32 vpW,
-    in f32 vpH,
-    in f32 mouseX,
-    in f32 mouseY,
-    mut TestbedGrabState outGrab
-){
-    EntityID dummySelected = s_InvalidEntityId;
-    return BeginTestbedPickOrGrab(worldHandle, vpW, vpH, mouseX, mouseY, true, dummySelected, outGrab);
-}
-
 void ApplyTestbedBodySpringGrab(
     mut PhysicsWorld pw,
     in BodyId bodyId,
@@ -1374,7 +1432,7 @@ void ApplyTestbedBodySpringGrab(
     const VectorSingle leverW = VectorSingle(anchorW - comW, 0.0f);
     const VectorSingle anchorVel = linVel + Cross(angVel, leverW);
     const VectorSingle err = VectorSingle(targetWorldPoint - anchorW, 0.0f);
-    const f32 safeDt = SimdClamp(fixedDt, 1.0e-4f, 0.05f);
+    const f32 safeDt = Clamp(fixedDt, 1.0e-4f, 0.05f);
     VectorSingle impulse = (err * 140.0f - anchorVel * 16.0f) * (mass * safeDt);
     const f32 maxImp = mass * 28.0f * safeDt;
     const f32 impLenSq = Vector3LengthSq(VectorSingle(impulse, 0.0f)).x;
@@ -1503,7 +1561,7 @@ void ApplyTestbedGrabPreStep(
         if(!pt.isFixed && pt.invMass > 1.0e-8f){
             const VectorSingle pVel(pt.velocity);
             const VectorSingle err = VectorSingle(targetW - pPos, 0.0f);
-            const f32 safeDt = SimdClamp(fixedDt, 1.0e-4f, 0.05f);
+            const f32 safeDt = Clamp(fixedDt, 1.0e-4f, 0.05f);
             const VectorSingle dv = (err * 90.0f - pVel * 14.0f) * safeDt;
             const VectorSingle nextV = VectorSingle(pt.velocity) + dv;
             const f32 maxV = 12.0f;
@@ -1624,18 +1682,6 @@ void StepTestbedShowcasePreStep(
     }
 }
 
-void UpdateTestbedGrab(
-    mut NotNullUniquePtr<World> worldHandle,
-    in f32 vpW,
-    in f32 vpH,
-    in f32 mouseX,
-    in f32 mouseY,
-    in f32 dt,
-    mut TestbedGrabState inOutGrab
-){
-    UpdateTestbedPointerDragTarget(worldHandle, vpW, vpH, mouseX, mouseY, inOutGrab);
-}
-
 void BindVehicleWheelVisuals(
     mut World world,
     mut VehicleComponent vc,
@@ -1706,8 +1752,8 @@ void QueryTestbedSelectedEntityInfo(
 
     if(world.hasComponent<ColliderComponent>(entity)){
         in ColliderComponent col = world.getComponent<ColliderComponent>(entity);
-        outInfo.friction = col.friction;
-        outInfo.restitution = col.restitution;
+        outInfo.friction = col.primaryShape.friction;
+        outInfo.restitution = col.primaryShape.restitution;
     }
 
     const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
@@ -1912,7 +1958,7 @@ void SpawnTestbedItem(
     in TransformComponent camXf = cameraView.components.value().transform;
     const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
     VectorSingle spawnPos = basis[3u] + basis[2u] * 3.4f;
-    spawnPos.y = SimdMax(0.8f, spawnPos.y);
+    spawnPos.y = Max(0.8f, spawnPos.y);
 
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
@@ -1956,11 +2002,11 @@ void SpawnTestbedItem(
         rb.type = BodyType::Dynamic;
         rb.dirty = true;
         mut ColliderComponent col = ent.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Cylinder;
-        col.cylinderHalfHeight = 0.42f;
-        col.radius = 0.28f;
-        col.density = 1.6f;
-        col.friction = 0.65f;
+        col.primaryShape.shapeType = ShapeType::Cylinder;
+        col.primaryShape.cylinderHalfHeight = 0.42f;
+        col.primaryShape.radius = 0.28f;
+        col.primaryShape.density = 1.6f;
+        col.primaryShape.friction = 0.65f;
         col.dirty = true;
         TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
     }
@@ -1978,30 +2024,7 @@ void SpawnTestbedItem(
         xf.position = f32x4(spawnPos, 0.0f);
         xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         mut RagdollComponent rc = ent.addComponent<RagdollComponent>();
-        for(u32 bi = 0u; bi < 3u; ++bi){
-            RagdollBoneDef bone;
-            if(bi == 0u){
-                bone.parentIndex = s_NullIndex;
-                bone.shapeType = RagdollBoneShapeType::Box;
-                bone.boxHalfExtents = f32x4(0.14f, 0.12f, 0.10f, 0.0f);
-            }
-            else if(bi == 1u){
-                bone.parentIndex = 0u;
-                bone.shapeType = RagdollBoneShapeType::Capsule;
-                bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
-                bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
-            }
-            else{
-                bone.parentIndex = 1u;
-                bone.shapeType = RagdollBoneShapeType::Sphere;
-                bone.sphere = MakeSphereShape(VectorSingle(0.0f), 0.14f).value();
-            }
-            const f32 by = cast<f32>(bi) * 0.38f;
-            bone.bodyDef.type = BodyType::Dynamic;
-            bone.bodyDef.position = f32x4(0.0f, by, 0.0f, 0.0f);
-            bone.jointAnchorWorld = f32x4(0.0f, by - 0.18f, 0.0f, 0.0f);
-            rc.bones.push_back(bone);
-        }
+        PopulateTestbedRagdollBones(rc, 0.38f, 0.18f, false);
         rc.dirty = true;
         TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
     }
@@ -2013,22 +2036,10 @@ void SpawnTestbedItem(
         mut ArticulationComponent ac = ent.addComponent<ArticulationComponent>();
         ac.isFixedBase = true;
         for(u32 li = 0u; li < 3u; ++li){
-            ArticulationLinkDef link;
-            if(li == 0u){
-                link.parentIndex = s_NullIndex;
-                link.parentToJoint.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                link.jointType = ArticulationJointType::Revolute;
-            }
-            else{
-                link.parentIndex = li - 1u;
-                link.parentToJoint.position = f32x4(0.0f, -0.45f, 0.0f, 0.0f);
-                link.jointType = ArticulationJointType::Universal;
-            }
-            link.jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-            link.jointAxisSecondaryLocal = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-            link.jointToChild.position = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-            link.mass = 0.8f;
-            ac.links.push_back(link);
+            if(li == 0u)
+                ac.links.push_back(MakeTestbedArticulationLink(s_NullIndex, 0.0f, ArticulationJointType::Revolute, -0.25f, 0.8f));
+            else
+                ac.links.push_back(MakeTestbedArticulationLink(li - 1u, -0.45f, ArticulationJointType::Universal, -0.25f, 0.8f));
         }
         ac.dirty = true;
         TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
@@ -2054,24 +2065,12 @@ void SpawnTestbedItem(
         rb.type = BodyType::Dynamic;
         rb.dirty = true;
         mut ColliderComponent col = ent.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Hull;
-        col.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
-        col.density = 3.0f;
+        col.primaryShape.shapeType = ShapeType::Hull;
+        col.primaryShape.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
+        col.primaryShape.density = 3.0f;
         col.dirty = true;
         mut VehicleComponent vc = ent.addComponent<VehicleComponent>();
-        for(u32 wi = 0u; wi < 4u; ++wi){
-            VehicleWheelDef wd;
-            f32 wx = -0.7f;
-            if((wi & 1u) != 0u)
-                wx = 0.7f;
-            f32 wz = 0.95f;
-            if(wi >= 2u)
-                wz = -0.95f;
-            wd.attachmentPoint = f32x4(wx, -0.1f, wz, 0.0f);
-            wd.isSteerable = (wi < 2u);
-            wd.isDriven = (wi >= 2u);
-            vc.wheels.push_back(wd);
-        }
+        PopulateTestbedVehicleWheels(vc);
         vc.dirty = true;
         refs.vehicleEntity = ent.id();
         TrackSpawnedTestbedEntity(ent.id(), hasSnapshot, allEntities, postSnapEntities, outSelectedEntity);
@@ -2115,38 +2114,6 @@ void ShootTestbedProjectileTracked(
         outEntities.push_back(projId);
         if(hasSnapshot && outEntities.size() > prevCount)
             outPostSnapshotEntities.push_back(projId);
-    }
-}
-
-void ShootTestbedProjectile(mut NotNullUniquePtr<World> worldHandle, mut Vector<EntityID> outEntities){
-    mut World world = worldHandle.deref();
-    const SceneCameraView cameraView = ResolveSceneCameraView(world);
-    if(!cameraView.valid())
-        return;
-    in TransformComponent camXf = cameraView.components.value().transform;
-    const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(camXf.position), SafeNormalizeQuat(VectorSingle(camXf.rotation)));
-    const VectorSingle camPos = basis[3u];
-    const VectorSingle camFwd = basis[2u];
-    const Name sphereModelName = Name("project/meshes/physics_sphere/model");
-    const Name whiteMatName = Name("project/materials/mat_white_opaque");
-    const EntityID projId = SpawnPhysicsDynamicSphere(
-        world,
-        camPos + camFwd * 1.1f,
-        VectorSingle(0.24f, 0.24f, 0.24f, 0.0f),
-        camFwd * 18.0f,
-        3.0f,
-        0.4f,
-        0.45f,
-        sphereModelName,
-        whiteMatName
-    );
-    if(projId.valid()){
-        if(world.hasComponent<RigidBodyComponent>(projId)){
-            mut RigidBodyComponent rb = world.getComponent<RigidBodyComponent>(projId);
-            rb.isBullet = true;
-            rb.dirty = true;
-        }
-        outEntities.push_back(projId);
     }
 }
 
@@ -2248,15 +2215,7 @@ void CreateDefaultPhysicsScene(
     mut World world = worldHandle.deref();
     outEntities.clear();
 
-    {
-        Entity cfgEntity = world.createEntity();
-        mut PhysicsWorldConfigComponent cfg = cfgEntity.addComponent<PhysicsWorldConfigComponent>();
-        cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
-        cfg.fixedDeltaTime = 1.0f / 60.0f;
-        cfg.subStepCount = 4u;
-        ApplyPhysicsBackendSettings(backendChoice, cfg);
-        outConfigEntity = cfgEntity.id();
-    }
+    outConfigEntity = CreateDefaultPhysicsWorldConfigEntity(world, backendChoice);
 
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
@@ -2310,15 +2269,7 @@ void CreateStressPhysicsScene(
     mut World world = worldHandle.deref();
     outEntities.clear();
 
-    {
-        Entity cfgEntity = world.createEntity();
-        mut PhysicsWorldConfigComponent cfg = cfgEntity.addComponent<PhysicsWorldConfigComponent>();
-        cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
-        cfg.fixedDeltaTime = 1.0f / 60.0f;
-        cfg.subStepCount = 4u;
-        ApplyPhysicsBackendSettings(backendChoice, cfg);
-        outConfigEntity = cfgEntity.id();
-    }
+    outConfigEntity = CreateDefaultPhysicsWorldConfigEntity(world, backendChoice);
 
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
@@ -2424,15 +2375,15 @@ void CreateStressPhysicsScene(
 
             Entity jointEntity = world.createEntity();
             mut JointComponent jc = jointEntity.addComponent<JointComponent>();
-            jc.bodyEntityA = prevId;
-            jc.bodyEntityB = linkId;
-            jc.type = JointType::Spherical;
+            jc.primaryJoint.bodyEntityA = prevId;
+            jc.primaryJoint.bodyEntityB = linkId;
+            jc.primaryJoint.settings.type = JointType::Spherical;
             f32 localAnchorAY = -0.18f / 0.22f;
             if(linkIdx == 0u)
                 localAnchorAY = -0.18f / 0.24f;
-            jc.localAnchorA = f32x4(0.0f, localAnchorAY, 0.0f, 0.0f);
-            jc.localAnchorB = f32x4(0.0f, 0.18f / 0.22f, 0.0f, 0.0f);
-            jc.collideConnected = false;
+            jc.primaryJoint.settings.localAnchorA = f32x4(0.0f, localAnchorAY, 0.0f, 0.0f);
+            jc.primaryJoint.settings.localAnchorB = f32x4(0.0f, 0.18f / 0.22f, 0.0f, 0.0f);
+            jc.primaryJoint.settings.collideConnected = false;
             jc.dirty = true;
             outEntities.push_back(jointEntity.id());
             prevId = linkId;
@@ -2476,30 +2427,30 @@ EntityID SpawnShowcaseBasicShape(
     rb.dirty = true;
 
     mut ColliderComponent col = entity.addComponent<ColliderComponent>();
-    col.shapeType = shapeType;
-    col.density = 1.0f;
-    col.friction = 0.55f;
-    col.restitution = 0.15f;
+    col.primaryShape.shapeType = shapeType;
+    col.primaryShape.density = 1.0f;
+    col.primaryShape.friction = 0.55f;
+    col.primaryShape.restitution = 0.15f;
     if(shapeType == ShapeType::Capsule){
-        col.center = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-        col.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
-        col.radius = 0.22f;
+        col.primaryShape.center = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        col.primaryShape.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
+        col.primaryShape.radius = 0.22f;
     }
     else if(shapeType == ShapeType::Cylinder){
-        col.cylinderHalfHeight = 0.30f;
-        col.radius = 0.24f;
-        col.skinRadius = 0.03f;
+        col.primaryShape.cylinderHalfHeight = 0.30f;
+        col.primaryShape.radius = 0.24f;
+        col.primaryShape.skinRadius = 0.03f;
     }
     else if(shapeType == ShapeType::Cone){
-        col.cylinderHalfHeight = 0.34f;
-        col.radius = 0.26f;
-        col.skinRadius = 0.03f;
+        col.primaryShape.cylinderHalfHeight = 0.34f;
+        col.primaryShape.radius = 0.26f;
+        col.primaryShape.skinRadius = 0.03f;
     }
     else if(shapeType == ShapeType::TaperedCapsule){
-        col.center = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-        col.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
-        col.radius = 0.24f;
-        col.topRadius = 0.10f;
+        col.primaryShape.center = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        col.primaryShape.center2 = f32x4(0.0f, 0.25f, 0.0f, 0.0f);
+        col.primaryShape.radius = 0.24f;
+        col.primaryShape.topRadius = 0.10f;
     }
     col.dirty = true;
     return entity.id();
@@ -2516,15 +2467,7 @@ void CreateShowcasePhysicsScene(
     outEntities.clear();
     outRefs = TestbedShowcaseRefs();
 
-    {
-        Entity cfgEntity = world.createEntity();
-        mut PhysicsWorldConfigComponent cfg = cfgEntity.addComponent<PhysicsWorldConfigComponent>();
-        cfg.gravity = f32x4(0.0f, -9.81f, 0.0f, 0.0f);
-        cfg.fixedDeltaTime = 1.0f / 60.0f;
-        cfg.subStepCount = 4u;
-        ApplyPhysicsBackendSettings(backendChoice, cfg);
-        outConfigEntity = cfgEntity.id();
-    }
+    outConfigEntity = CreateDefaultPhysicsWorldConfigEntity(world, backendChoice);
 
     const Name boxModelName = Name("project/meshes/physics_box/model");
     const Name sphereModelName = Name("project/meshes/physics_sphere/model");
@@ -2539,10 +2482,10 @@ void CreateShowcasePhysicsScene(
         fRb.type = BodyType::Static;
         fRb.dirty = true;
         mut ColliderComponent fCol = floorEnt.addComponent<ColliderComponent>();
-        fCol.shapeType = ShapeType::Plane;
-        fCol.planeNormalOffset = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        fCol.halfExtents = f32x4(14.0f, 0.0f, 14.0f, 0.0f);
-        fCol.friction = 0.7f;
+        fCol.primaryShape.shapeType = ShapeType::Plane;
+        fCol.primaryShape.planeNormalOffset = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        fCol.primaryShape.halfExtents = f32x4(14.0f, 0.0f, 14.0f, 0.0f);
+        fCol.primaryShape.friction = 0.7f;
         fCol.dirty = true;
         outEntities.push_back(floorEnt.id());
     }
@@ -2556,10 +2499,10 @@ void CreateShowcasePhysicsScene(
         sRb.type = BodyType::Static;
         sRb.dirty = true;
         mut ColliderComponent sCol = segEnt.addComponent<ColliderComponent>();
-        sCol.shapeType = ShapeType::Segment;
-        sCol.center = f32x4(-0.6f, 0.0f, 0.0f, 0.0f);
-        sCol.center2 = f32x4(0.6f, 0.25f, 0.0f, 0.0f);
-        sCol.radius = 0.08f;
+        sCol.primaryShape.shapeType = ShapeType::Segment;
+        sCol.primaryShape.center = f32x4(-0.6f, 0.0f, 0.0f, 0.0f);
+        sCol.primaryShape.center2 = f32x4(0.6f, 0.25f, 0.0f, 0.0f);
+        sCol.primaryShape.radius = 0.08f;
         sCol.dirty = true;
         outEntities.push_back(segEnt.id());
     }
@@ -2573,24 +2516,24 @@ void CreateShowcasePhysicsScene(
         hfRb.type = BodyType::Static;
         hfRb.dirty = true;
         mut ColliderComponent hfCol = hfEnt.addComponent<ColliderComponent>();
-        hfCol.shapeType = ShapeType::Heightfield;
-        hfCol.heightfieldRows = 5u;
-        hfCol.heightfieldCols = 5u;
-        hfCol.heightfieldScale = f32x4(0.7f, 0.35f, 0.7f, 0.0f);
-        hfCol.heightfieldThickness = 0.35f;
-        hfCol.heightfieldFlipDiagonal = true;
-        hfCol.heightfieldHeights.resize(25u, 0.0f);
-        hfCol.heightfieldHeights[6u] = 0.5f;
-        hfCol.heightfieldHeights[7u] = 0.75f;
-        hfCol.heightfieldHeights[8u] = 0.5f;
-        hfCol.heightfieldHeights[11u] = 0.75f;
-        hfCol.heightfieldHeights[12u] = 1.25f;
-        hfCol.heightfieldHeights[13u] = 0.75f;
-        hfCol.heightfieldHeights[16u] = 0.5f;
-        hfCol.heightfieldHeights[17u] = 0.75f;
-        hfCol.heightfieldHeights[18u] = 0.5f;
-        hfCol.heightfieldCellHoles.resize(16u, 0u);
-        hfCol.heightfieldCellHoles[5u] = 1u;
+        hfCol.primaryShape.shapeType = ShapeType::Heightfield;
+        hfCol.primaryShape.heightfieldRows = 5u;
+        hfCol.primaryShape.heightfieldCols = 5u;
+        hfCol.primaryShape.heightfieldScale = f32x4(0.7f, 0.35f, 0.7f, 0.0f);
+        hfCol.primaryShape.heightfieldThickness = 0.35f;
+        hfCol.primaryShape.heightfieldFlipDiagonal = true;
+        hfCol.primaryShape.heightfieldHeights.resize(25u, 0.0f);
+        hfCol.primaryShape.heightfieldHeights[6u] = 0.5f;
+        hfCol.primaryShape.heightfieldHeights[7u] = 0.75f;
+        hfCol.primaryShape.heightfieldHeights[8u] = 0.5f;
+        hfCol.primaryShape.heightfieldHeights[11u] = 0.75f;
+        hfCol.primaryShape.heightfieldHeights[12u] = 1.25f;
+        hfCol.primaryShape.heightfieldHeights[13u] = 0.75f;
+        hfCol.primaryShape.heightfieldHeights[16u] = 0.5f;
+        hfCol.primaryShape.heightfieldHeights[17u] = 0.75f;
+        hfCol.primaryShape.heightfieldHeights[18u] = 0.5f;
+        hfCol.primaryShape.heightfieldCellHoles.resize(16u, 0u);
+        hfCol.primaryShape.heightfieldCellHoles[5u] = 1u;
         hfCol.dirty = true;
         outEntities.push_back(hfEnt.id());
     }
@@ -2604,17 +2547,17 @@ void CreateShowcasePhysicsScene(
         mRb.type = BodyType::Static;
         mRb.dirty = true;
         mut ColliderComponent mCol = meshEnt.addComponent<ColliderComponent>();
-        mCol.shapeType = ShapeType::Mesh;
-        mCol.meshVertices.push_back(f32x4(-0.6f, 0.0f, 0.5f, 0.0f));
-        mCol.meshVertices.push_back(f32x4(0.6f, 0.0f, 0.5f, 0.0f));
-        mCol.meshVertices.push_back(f32x4(0.6f, 0.0f, -0.5f, 0.0f));
-        mCol.meshVertices.push_back(f32x4(-0.6f, 0.0f, -0.5f, 0.0f));
-        mCol.meshVertices.push_back(f32x4(-0.6f, 0.45f, -0.5f, 0.0f));
-        mCol.meshVertices.push_back(f32x4(0.6f, 0.45f, -0.5f, 0.0f));
-        mCol.meshIndices.push_back(0u); mCol.meshIndices.push_back(1u); mCol.meshIndices.push_back(5u);
-        mCol.meshIndices.push_back(0u); mCol.meshIndices.push_back(5u); mCol.meshIndices.push_back(4u);
-        mCol.meshIndices.push_back(3u); mCol.meshIndices.push_back(4u); mCol.meshIndices.push_back(5u);
-        mCol.meshIndices.push_back(3u); mCol.meshIndices.push_back(5u); mCol.meshIndices.push_back(2u);
+        mCol.primaryShape.shapeType = ShapeType::Mesh;
+        mCol.primaryShape.meshVertices.push_back(f32x4(-0.6f, 0.0f, 0.5f, 0.0f));
+        mCol.primaryShape.meshVertices.push_back(f32x4(0.6f, 0.0f, 0.5f, 0.0f));
+        mCol.primaryShape.meshVertices.push_back(f32x4(0.6f, 0.0f, -0.5f, 0.0f));
+        mCol.primaryShape.meshVertices.push_back(f32x4(-0.6f, 0.0f, -0.5f, 0.0f));
+        mCol.primaryShape.meshVertices.push_back(f32x4(-0.6f, 0.45f, -0.5f, 0.0f));
+        mCol.primaryShape.meshVertices.push_back(f32x4(0.6f, 0.45f, -0.5f, 0.0f));
+        mCol.primaryShape.meshIndices.push_back(0u); mCol.primaryShape.meshIndices.push_back(1u); mCol.primaryShape.meshIndices.push_back(5u);
+        mCol.primaryShape.meshIndices.push_back(0u); mCol.primaryShape.meshIndices.push_back(5u); mCol.primaryShape.meshIndices.push_back(4u);
+        mCol.primaryShape.meshIndices.push_back(3u); mCol.primaryShape.meshIndices.push_back(4u); mCol.primaryShape.meshIndices.push_back(5u);
+        mCol.primaryShape.meshIndices.push_back(3u); mCol.primaryShape.meshIndices.push_back(5u); mCol.primaryShape.meshIndices.push_back(2u);
         mCol.dirty = true;
         outEntities.push_back(meshEnt.id());
     }
@@ -2628,15 +2571,15 @@ void CreateShowcasePhysicsScene(
         hRb.type = BodyType::Dynamic;
         hRb.dirty = true;
         mut ColliderComponent hCol = hullEnt.addComponent<ColliderComponent>();
-        hCol.shapeType = ShapeType::Hull;
-        hCol.isBox = false;
-        hCol.hullPoints.push_back(f32x4(0.0f, 0.34f, 0.0f, 0.0f));
-        hCol.hullPoints.push_back(f32x4(0.0f, -0.34f, 0.0f, 0.0f));
-        hCol.hullPoints.push_back(f32x4(0.28f, 0.0f, 0.0f, 0.0f));
-        hCol.hullPoints.push_back(f32x4(-0.28f, 0.0f, 0.0f, 0.0f));
-        hCol.hullPoints.push_back(f32x4(0.0f, 0.0f, 0.28f, 0.0f));
-        hCol.hullPoints.push_back(f32x4(0.0f, 0.0f, -0.28f, 0.0f));
-        hCol.density = 1.0f;
+        hCol.primaryShape.shapeType = ShapeType::Hull;
+        hCol.primaryShape.isBox = false;
+        hCol.primaryShape.hullPoints.push_back(f32x4(0.0f, 0.34f, 0.0f, 0.0f));
+        hCol.primaryShape.hullPoints.push_back(f32x4(0.0f, -0.34f, 0.0f, 0.0f));
+        hCol.primaryShape.hullPoints.push_back(f32x4(0.28f, 0.0f, 0.0f, 0.0f));
+        hCol.primaryShape.hullPoints.push_back(f32x4(-0.28f, 0.0f, 0.0f, 0.0f));
+        hCol.primaryShape.hullPoints.push_back(f32x4(0.0f, 0.0f, 0.28f, 0.0f));
+        hCol.primaryShape.hullPoints.push_back(f32x4(0.0f, 0.0f, -0.28f, 0.0f));
+        hCol.primaryShape.density = 1.0f;
         hCol.dirty = true;
         outEntities.push_back(hullEnt.id());
     }
@@ -2650,15 +2593,15 @@ void CreateShowcasePhysicsScene(
         chRb.type = BodyType::Static;
         chRb.dirty = true;
         mut ColliderComponent chCol = chainEnt.addComponent<ColliderComponent>();
-        chCol.shapeType = ShapeType::Segment;
-        chCol.isChain = true;
-        chCol.chainClosed = false;
-        chCol.chainRadius = 0.06f;
-        chCol.chainPoints.push_back(f32x4(-0.8f, 0.2f, 0.0f, 0.0f));
-        chCol.chainPoints.push_back(f32x4(-0.4f, 0.0f, 0.3f, 0.0f));
-        chCol.chainPoints.push_back(f32x4(0.0f, 0.15f, 0.0f, 0.0f));
-        chCol.chainPoints.push_back(f32x4(0.4f, 0.0f, -0.3f, 0.0f));
-        chCol.chainPoints.push_back(f32x4(0.8f, 0.25f, 0.0f, 0.0f));
+        chCol.primaryShape.shapeType = ShapeType::Segment;
+        chCol.primaryShape.isChain = true;
+        chCol.primaryShape.chainClosed = false;
+        chCol.primaryShape.chainRadius = 0.06f;
+        chCol.primaryShape.chainPoints.push_back(f32x4(-0.8f, 0.2f, 0.0f, 0.0f));
+        chCol.primaryShape.chainPoints.push_back(f32x4(-0.4f, 0.0f, 0.3f, 0.0f));
+        chCol.primaryShape.chainPoints.push_back(f32x4(0.0f, 0.15f, 0.0f, 0.0f));
+        chCol.primaryShape.chainPoints.push_back(f32x4(0.4f, 0.0f, -0.3f, 0.0f));
+        chCol.primaryShape.chainPoints.push_back(f32x4(0.8f, 0.25f, 0.0f, 0.0f));
         chCol.dirty = true;
         outEntities.push_back(chainEnt.id());
     }
@@ -2675,8 +2618,8 @@ void CreateShowcasePhysicsScene(
         cpRb.customCenterOfMass = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
         cpRb.dirty = true;
         mut ColliderComponent cpCol = cmpEnt.addComponent<ColliderComponent>();
-        cpCol.shapeType = ShapeType::Hull;
-        cpCol.halfExtents = f32x4(0.32f, 0.12f, 0.12f, 0.0f);
+        cpCol.primaryShape.shapeType = ShapeType::Hull;
+        cpCol.primaryShape.halfExtents = f32x4(0.32f, 0.12f, 0.12f, 0.0f);
         ColliderShapeEntry leftOrb;
         leftOrb.shapeType = ShapeType::Sphere;
         leftOrb.center = f32x4(-0.36f, 0.0f, 0.0f, 0.0f);
@@ -2700,10 +2643,10 @@ void CreateShowcasePhysicsScene(
         sRb.type = BodyType::Static;
         sRb.dirty = true;
         mut ColliderComponent sCol = senEnt.addComponent<ColliderComponent>();
-        sCol.shapeType = ShapeType::Hull;
-        sCol.halfExtents = f32x4(0.7f, 0.55f, 0.7f, 0.0f);
-        sCol.isSensor = true;
-        sCol.enableSensorEvents = true;
+        sCol.primaryShape.shapeType = ShapeType::Hull;
+        sCol.primaryShape.halfExtents = f32x4(0.7f, 0.55f, 0.7f, 0.0f);
+        sCol.primaryShape.isSensor = true;
+        sCol.primaryShape.enableSensorEvents = true;
         sCol.dirty = true;
         outRefs.sensorEntity = senEnt.id();
         outEntities.push_back(senEnt.id());
@@ -2719,8 +2662,8 @@ void CreateShowcasePhysicsScene(
         dRb.isEnabled = false;
         dRb.dirty = true;
         mut ColliderComponent dCol = disEnt.addComponent<ColliderComponent>();
-        dCol.shapeType = ShapeType::Hull;
-        dCol.halfExtents = f32x4(0.3f, 0.3f, 0.3f, 0.0f);
+        dCol.primaryShape.shapeType = ShapeType::Hull;
+        dCol.primaryShape.halfExtents = f32x4(0.3f, 0.3f, 0.3f, 0.0f);
         dCol.dirty = true;
         outEntities.push_back(disEnt.id());
     }
@@ -2737,9 +2680,9 @@ void CreateShowcasePhysicsScene(
         kRb.driveKinematicFromTransform = false;
         kRb.dirty = true;
         mut ColliderComponent kCol = kinEnt.addComponent<ColliderComponent>();
-        kCol.shapeType = ShapeType::Hull;
-        kCol.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
-        kCol.friction = 0.8f;
+        kCol.primaryShape.shapeType = ShapeType::Hull;
+        kCol.primaryShape.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+        kCol.primaryShape.friction = 0.8f;
         kCol.dirty = true;
         mut ModelComponent kMdl = kinEnt.addComponent<ModelComponent>();
         kMdl.model = AssetRef<Model>(boxModelName);
@@ -2763,14 +2706,14 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(-2.8f, 2.2f, -4.4f, 0.0f), VectorSingle(-2.8f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
         Entity je = world.createEntity();
         mut JointComponent jc = je.addComponent<JointComponent>();
-        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
-        jc.type = JointType::Revolute;
-        jc.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jc.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jc.localAnchorA = f32x4(0.0f, -0.2f, 0.0f, 0.0f);
-        jc.localAnchorB = f32x4(0.0f, 0.4f, 0.0f, 0.0f);
-        jc.enableLimit = true; jc.lowerLimit = -1.1f; jc.upperLimit = 1.1f;
-        jc.enableMotor = true; jc.motorSpeed = 1.2f; jc.maxMotorForce = 8.0f;
+        jc.primaryJoint.bodyEntityA = anc; jc.primaryJoint.bodyEntityB = bod;
+        jc.primaryJoint.settings.type = JointType::Revolute;
+        jc.primaryJoint.settings.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jc.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jc.primaryJoint.settings.localAnchorA = f32x4(0.0f, -0.2f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.localAnchorB = f32x4(0.0f, 0.4f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.enableLimit = true; jc.primaryJoint.settings.lowerLimit = -1.1f; jc.primaryJoint.settings.upperLimit = 1.1f;
+        jc.primaryJoint.settings.enableMotor = true; jc.primaryJoint.settings.motorSpeed = 1.2f; jc.primaryJoint.settings.maxMotorForce = 8.0f;
         jc.dirty = true;
         outEntities.push_back(je.id());
     }
@@ -2780,11 +2723,11 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(-1.9f, 2.2f, -4.4f, 0.0f), VectorSingle(-1.9f, 1.8f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
         Entity je = world.createEntity();
         mut JointComponent jc = je.addComponent<JointComponent>();
-        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
-        jc.type = JointType::Prismatic;
-        jc.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        jc.enableLimit = true; jc.lowerLimit = -0.45f; jc.upperLimit = 0.45f;
-        jc.enableSpring = true; jc.hertz = 2.5f; jc.dampingRatio = 0.3f;
+        jc.primaryJoint.bodyEntityA = anc; jc.primaryJoint.bodyEntityB = bod;
+        jc.primaryJoint.settings.type = JointType::Prismatic;
+        jc.primaryJoint.settings.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.enableLimit = true; jc.primaryJoint.settings.lowerLimit = -0.45f; jc.primaryJoint.settings.upperLimit = 0.45f;
+        jc.primaryJoint.settings.enableSpring = true; jc.primaryJoint.settings.hertz = 2.5f; jc.primaryJoint.settings.dampingRatio = 0.3f;
         jc.dirty = true;
         outEntities.push_back(je.id());
     }
@@ -2794,12 +2737,12 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(-1.0f, 2.2f, -4.4f, 0.0f), VectorSingle(-1.0f, 1.3f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
         Entity je = world.createEntity();
         mut JointComponent jc = je.addComponent<JointComponent>();
-        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
-        jc.type = JointType::Distance;
-        jc.length = 0.85f;
-        jc.enableLimit = true; jc.minLength = 0.45f; jc.maxLength = 1.25f;
-        jc.enableSpring = true; jc.hertz = 2.0f; jc.dampingRatio = 0.4f;
-        jc.breakForce = 65.0f;
+        jc.primaryJoint.bodyEntityA = anc; jc.primaryJoint.bodyEntityB = bod;
+        jc.primaryJoint.settings.type = JointType::Distance;
+        jc.primaryJoint.settings.length = 0.85f;
+        jc.primaryJoint.settings.enableLimit = true; jc.primaryJoint.settings.minLength = 0.45f; jc.primaryJoint.settings.maxLength = 1.25f;
+        jc.primaryJoint.settings.enableSpring = true; jc.primaryJoint.settings.hertz = 2.0f; jc.primaryJoint.settings.dampingRatio = 0.4f;
+        jc.primaryJoint.settings.breakForce = 65.0f;
         jc.dirty = true;
         outRefs.breakableJointEntity = je.id();
         outEntities.push_back(je.id());
@@ -2810,13 +2753,13 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(-0.1f, 2.2f, -4.4f, 0.0f), VectorSingle(-0.1f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
         Entity je = world.createEntity();
         mut JointComponent jc = je.addComponent<JointComponent>();
-        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
-        jc.type = JointType::Spherical;
-        jc.localAxisA = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
-        jc.localAxisB = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
-        jc.localAnchorB = f32x4(0.0f, 0.6f, 0.0f, 0.0f);
-        jc.enableLimit = true; jc.swingLimit = 0.65f; jc.swingLimitY = 0.45f;
-        jc.enableTwistLimit = true; jc.lowerLimit = -0.6f; jc.upperLimit = 0.6f;
+        jc.primaryJoint.bodyEntityA = anc; jc.primaryJoint.bodyEntityB = bod;
+        jc.primaryJoint.settings.type = JointType::Spherical;
+        jc.primaryJoint.settings.localAxisA = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.localAxisB = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.localAnchorB = f32x4(0.0f, 0.6f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.enableLimit = true; jc.primaryJoint.settings.swingLimit = 0.65f; jc.primaryJoint.settings.swingLimitY = 0.45f;
+        jc.primaryJoint.settings.enableTwistLimit = true; jc.primaryJoint.settings.lowerLimit = -0.6f; jc.primaryJoint.settings.upperLimit = 0.6f;
         jc.dirty = true;
         outEntities.push_back(je.id());
     }
@@ -2826,18 +2769,18 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(0.8f, 2.2f, -4.4f, 0.0f), VectorSingle(0.8f, 1.6f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, anc, bod);
         Entity je = world.createEntity();
         mut JointComponent jc = je.addComponent<JointComponent>();
-        jc.bodyEntityA = anc; jc.bodyEntityB = bod;
-        jc.type = JointType::SixDof;
-        jc.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-        jc.localAxisB = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        jc.sixDofAxes[0u].motion = JointMotion::Limited; jc.sixDofAxes[0u].lowerLimit = -0.25f; jc.sixDofAxes[0u].upperLimit = 0.25f;
-        jc.sixDofAxes[1u].motion = JointMotion::Locked;
-        jc.sixDofAxes[2u].motion = JointMotion::Locked;
-        jc.sixDofAxes[3u].motion = JointMotion::Free;
-        jc.sixDofAxes[4u].motion = JointMotion::Limited; jc.sixDofAxes[4u].lowerLimit = -0.5f; jc.sixDofAxes[4u].upperLimit = 0.5f;
-        jc.sixDofAxes[5u].motion = JointMotion::Limited; jc.sixDofAxes[5u].lowerLimit = -0.5f; jc.sixDofAxes[5u].upperLimit = 0.5f;
-        jc.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
-        jc.sixDofSwingLimitY = 0.5f;
+        jc.primaryJoint.bodyEntityA = anc; jc.primaryJoint.bodyEntityB = bod;
+        jc.primaryJoint.settings.type = JointType::SixDof;
+        jc.primaryJoint.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.localAxisB = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.sixDofAxes[0u].motion = JointMotion::Limited; jc.primaryJoint.settings.sixDofAxes[0u].lowerLimit = -0.25f; jc.primaryJoint.settings.sixDofAxes[0u].upperLimit = 0.25f;
+        jc.primaryJoint.settings.sixDofAxes[1u].motion = JointMotion::Locked;
+        jc.primaryJoint.settings.sixDofAxes[2u].motion = JointMotion::Locked;
+        jc.primaryJoint.settings.sixDofAxes[3u].motion = JointMotion::Free;
+        jc.primaryJoint.settings.sixDofAxes[4u].motion = JointMotion::Limited; jc.primaryJoint.settings.sixDofAxes[4u].lowerLimit = -0.5f; jc.primaryJoint.settings.sixDofAxes[4u].upperLimit = 0.5f;
+        jc.primaryJoint.settings.sixDofAxes[5u].motion = JointMotion::Limited; jc.primaryJoint.settings.sixDofAxes[5u].lowerLimit = -0.5f; jc.primaryJoint.settings.sixDofAxes[5u].upperLimit = 0.5f;
+        jc.primaryJoint.settings.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
+        jc.primaryJoint.settings.sixDofSwingLimitY = 0.5f;
         jc.dirty = true;
         outEntities.push_back(je.id());
     }
@@ -2850,23 +2793,23 @@ void CreateShowcasePhysicsScene(
         outEntities.push_back(gB);
         Entity revA = world.createEntity();
         mut JointComponent jra = revA.addComponent<JointComponent>();
-        jra.bodyEntityA = gAnc; jra.bodyEntityB = gA; jra.type = JointType::Revolute;
-        jra.localAnchorA = f32x4(-0.20f, -0.6f, 0.0f, 0.0f);
-        jra.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jra.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jra.enableMotor = true; jra.motorSpeed = 1.5f; jra.maxMotorForce = 5.0f; jra.dirty = true;
+        jra.primaryJoint.bodyEntityA = gAnc; jra.primaryJoint.bodyEntityB = gA; jra.primaryJoint.settings.type = JointType::Revolute;
+        jra.primaryJoint.settings.localAnchorA = f32x4(-0.20f, -0.6f, 0.0f, 0.0f);
+        jra.primaryJoint.settings.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jra.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jra.primaryJoint.settings.enableMotor = true; jra.primaryJoint.settings.motorSpeed = 1.5f; jra.primaryJoint.settings.maxMotorForce = 5.0f; jra.dirty = true;
         outEntities.push_back(revA.id());
         Entity revB = world.createEntity();
         mut JointComponent jrb = revB.addComponent<JointComponent>();
-        jrb.bodyEntityA = gAnc; jrb.bodyEntityB = gB; jrb.type = JointType::Revolute;
-        jrb.localAnchorA = f32x4(0.20f, -0.6f, 0.0f, 0.0f);
-        jrb.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jrb.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jrb.primaryJoint.bodyEntityA = gAnc; jrb.primaryJoint.bodyEntityB = gB; jrb.primaryJoint.settings.type = JointType::Revolute;
+        jrb.primaryJoint.settings.localAnchorA = f32x4(0.20f, -0.6f, 0.0f, 0.0f);
+        jrb.primaryJoint.settings.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jrb.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
         jrb.dirty = true;
         outEntities.push_back(revB.id());
         Entity gear = world.createEntity();
         mut JointComponent jg = gear.addComponent<JointComponent>();
-        jg.bodyEntityA = gA; jg.bodyEntityB = gB; jg.type = JointType::Gear;
-        jg.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jg.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jg.ratio = 2.0f; jg.dirty = true;
+        jg.primaryJoint.bodyEntityA = gA; jg.primaryJoint.bodyEntityB = gB; jg.primaryJoint.settings.type = JointType::Gear;
+        jg.primaryJoint.settings.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jg.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jg.primaryJoint.settings.ratio = 2.0f; jg.dirty = true;
         outEntities.push_back(gear.id());
     }
     {
@@ -2876,10 +2819,10 @@ void CreateShowcasePhysicsScene(
         outEntities.push_back(pB);
         Entity pulley = world.createEntity();
         mut JointComponent jp = pulley.addComponent<JointComponent>();
-        jp.bodyEntityA = pA; jp.bodyEntityB = pB; jp.type = JointType::Pulley;
-        jp.groundAnchorA = f32x4(2.5f, 2.7f, -4.4f, 0.0f);
-        jp.groundAnchorB = f32x4(3.1f, 2.7f, -4.4f, 0.0f);
-        jp.lengthA = 0.9f; jp.lengthB = 1.2f; jp.ratio = 1.0f; jp.dirty = true;
+        jp.primaryJoint.bodyEntityA = pA; jp.primaryJoint.bodyEntityB = pB; jp.primaryJoint.settings.type = JointType::Pulley;
+        jp.primaryJoint.settings.groundAnchorA = f32x4(2.5f, 2.7f, -4.4f, 0.0f);
+        jp.primaryJoint.settings.groundAnchorB = f32x4(3.1f, 2.7f, -4.4f, 0.0f);
+        jp.primaryJoint.settings.lengthA = 0.9f; jp.primaryJoint.settings.lengthB = 1.2f; jp.primaryJoint.settings.ratio = 1.0f; jp.dirty = true;
         outEntities.push_back(pulley.id());
     }
     {
@@ -2891,24 +2834,24 @@ void CreateShowcasePhysicsScene(
         outEntities.push_back(pinion);
         Entity rpPrism = world.createEntity();
         mut JointComponent jPr = rpPrism.addComponent<JointComponent>();
-        jPr.bodyEntityA = rpFrame; jPr.bodyEntityB = rack; jPr.type = JointType::Prismatic;
-        jPr.localAnchorA = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
-        jPr.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-        jPr.enableLimit = true; jPr.lowerLimit = -0.5f; jPr.upperLimit = 0.5f; jPr.dirty = true;
+        jPr.primaryJoint.bodyEntityA = rpFrame; jPr.primaryJoint.bodyEntityB = rack; jPr.primaryJoint.settings.type = JointType::Prismatic;
+        jPr.primaryJoint.settings.localAnchorA = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+        jPr.primaryJoint.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jPr.primaryJoint.settings.enableLimit = true; jPr.primaryJoint.settings.lowerLimit = -0.5f; jPr.primaryJoint.settings.upperLimit = 0.5f; jPr.dirty = true;
         outEntities.push_back(rpPrism.id());
         Entity rpRev = world.createEntity();
         mut JointComponent jRv = rpRev.addComponent<JointComponent>();
-        jRv.bodyEntityA = rpFrame; jRv.bodyEntityB = pinion; jRv.type = JointType::Revolute;
-        jRv.localAnchorA = f32x4(0.0f, -0.85f, 0.0f, 0.0f);
-        jRv.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jRv.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jRv.enableMotor = true; jRv.motorSpeed = 1.6f; jRv.maxMotorForce = 6.0f; jRv.dirty = true;
+        jRv.primaryJoint.bodyEntityA = rpFrame; jRv.primaryJoint.bodyEntityB = pinion; jRv.primaryJoint.settings.type = JointType::Revolute;
+        jRv.primaryJoint.settings.localAnchorA = f32x4(0.0f, -0.85f, 0.0f, 0.0f);
+        jRv.primaryJoint.settings.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f); jRv.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jRv.primaryJoint.settings.enableMotor = true; jRv.primaryJoint.settings.motorSpeed = 1.6f; jRv.primaryJoint.settings.maxMotorForce = 6.0f; jRv.dirty = true;
         outEntities.push_back(rpRev.id());
         Entity rp = world.createEntity();
         mut JointComponent jrp = rp.addComponent<JointComponent>();
-        jrp.bodyEntityA = rack; jrp.bodyEntityB = pinion; jrp.type = JointType::RackAndPinion;
-        jrp.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-        jrp.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jrp.ratio = 0.22f; jrp.dirty = true;
+        jrp.primaryJoint.bodyEntityA = rack; jrp.primaryJoint.bodyEntityB = pinion; jrp.primaryJoint.settings.type = JointType::RackAndPinion;
+        jrp.primaryJoint.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jrp.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jrp.primaryJoint.settings.ratio = 0.22f; jrp.dirty = true;
         outEntities.push_back(rp.id());
     }
     {
@@ -2917,13 +2860,13 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(-1.3f, 2.1f, -5.8f, 0.0f), VectorSingle(-1.3f, 2.3f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, pathAnc, pathBod);
         Entity pe = world.createEntity();
         mut JointComponent jpt = pe.addComponent<JointComponent>();
-        jpt.bodyEntityA = pathAnc; jpt.bodyEntityB = pathBod; jpt.type = JointType::Path;
-        jpt.pathPoints.push_back(f32x4(-0.35f, 0.0f, 0.0f, 0.0f));
-        jpt.pathPoints.push_back(f32x4(0.0f, 0.25f, 0.2f, 0.0f));
-        jpt.pathPoints.push_back(f32x4(0.35f, 0.0f, 0.0f, 0.0f));
-        jpt.pathPoints.push_back(f32x4(0.0f, -0.25f, -0.2f, 0.0f));
-        jpt.pathClosed = true;
-        jpt.pathLockRotation = true;
+        jpt.primaryJoint.bodyEntityA = pathAnc; jpt.primaryJoint.bodyEntityB = pathBod; jpt.primaryJoint.settings.type = JointType::Path;
+        jpt.primaryJoint.pathPoints.push_back(f32x4(-0.35f, 0.0f, 0.0f, 0.0f));
+        jpt.primaryJoint.pathPoints.push_back(f32x4(0.0f, 0.25f, 0.2f, 0.0f));
+        jpt.primaryJoint.pathPoints.push_back(f32x4(0.35f, 0.0f, 0.0f, 0.0f));
+        jpt.primaryJoint.pathPoints.push_back(f32x4(0.0f, -0.25f, -0.2f, 0.0f));
+        jpt.primaryJoint.settings.pathClosed = true;
+        jpt.primaryJoint.settings.pathLockRotation = true;
         jpt.dirty = true;
         outEntities.push_back(pe.id());
     }
@@ -2933,8 +2876,8 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(2.5f, 2.3f, -5.8f, 0.0f), VectorSingle(2.8f, 1.4f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, ropeAnc, ropeBod);
         Entity re = world.createEntity();
         mut JointComponent jr = re.addComponent<JointComponent>();
-        jr.bodyEntityA = ropeAnc; jr.bodyEntityB = ropeBod; jr.type = JointType::Rope;
-        jr.maxLength = 1.05f; jr.dirty = true;
+        jr.primaryJoint.bodyEntityA = ropeAnc; jr.primaryJoint.bodyEntityB = ropeBod; jr.primaryJoint.settings.type = JointType::Rope;
+        jr.primaryJoint.settings.maxLength = 1.05f; jr.dirty = true;
         outEntities.push_back(re.id());
     }
     {
@@ -2943,9 +2886,9 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(3.5f, 2.2f, -4.4f, 0.0f), VectorSingle(3.5f, 1.75f, -4.4f, 0.0f), boxModelName, whiteMatName, outEntities, fixAnc, fixBod);
         Entity fe = world.createEntity();
         mut JointComponent jf = fe.addComponent<JointComponent>();
-        jf.bodyEntityA = fixAnc; jf.bodyEntityB = fixBod; jf.type = JointType::Fixed;
-        jf.localAnchorA = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-        jf.localAnchorB = f32x4(0.0f, 0.20f, 0.0f, 0.0f);
+        jf.primaryJoint.bodyEntityA = fixAnc; jf.primaryJoint.bodyEntityB = fixBod; jf.primaryJoint.settings.type = JointType::Fixed;
+        jf.primaryJoint.settings.localAnchorA = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+        jf.primaryJoint.settings.localAnchorB = f32x4(0.0f, 0.20f, 0.0f, 0.0f);
         jf.dirty = true;
         outEntities.push_back(fe.id());
     }
@@ -2955,12 +2898,12 @@ void CreateShowcasePhysicsScene(
         SpawnShowcaseAnchorAndBody(world, VectorSingle(3.6f, 2.2f, -5.8f, 0.0f), VectorSingle(3.6f, 1.55f, -5.8f, 0.0f), boxModelName, whiteMatName, outEntities, whlAnc, whlBod);
         Entity we = world.createEntity();
         mut JointComponent jw = we.addComponent<JointComponent>();
-        jw.bodyEntityA = whlAnc; jw.bodyEntityB = whlBod; jw.type = JointType::Wheel;
-        jw.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        jw.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jw.enableSpring = true; jw.hertz = 3.0f; jw.dampingRatio = 0.45f;
-        jw.enableLimit = true; jw.lowerLimit = -0.35f; jw.upperLimit = 0.35f;
-        jw.enableMotor = true; jw.motorSpeed = 2.0f; jw.maxMotorForce = 6.0f;
+        jw.primaryJoint.bodyEntityA = whlAnc; jw.primaryJoint.bodyEntityB = whlBod; jw.primaryJoint.settings.type = JointType::Wheel;
+        jw.primaryJoint.settings.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jw.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jw.primaryJoint.settings.enableSpring = true; jw.primaryJoint.settings.hertz = 3.0f; jw.primaryJoint.settings.dampingRatio = 0.45f;
+        jw.primaryJoint.settings.enableLimit = true; jw.primaryJoint.settings.lowerLimit = -0.35f; jw.primaryJoint.settings.upperLimit = 0.35f;
+        jw.primaryJoint.settings.enableMotor = true; jw.primaryJoint.settings.motorSpeed = 2.0f; jw.primaryJoint.settings.maxMotorForce = 6.0f;
         jw.dirty = true;
         outEntities.push_back(we.id());
     }
@@ -2987,9 +2930,9 @@ void CreateShowcasePhysicsScene(
         rb.type = BodyType::Dynamic;
         rb.dirty = true;
         mut ColliderComponent col = vehEnt.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Hull;
-        col.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
-        col.density = 3.0f;
+        col.primaryShape.shapeType = ShapeType::Hull;
+        col.primaryShape.halfExtents = f32x4(0.75f, 0.25f, 1.25f, 0.0f);
+        col.primaryShape.density = 3.0f;
         col.dirty = true;
         mut ModelComponent vMdl = vehEnt.addComponent<ModelComponent>();
         vMdl.model = AssetRef<Model>(boxModelName);
@@ -3002,19 +2945,7 @@ void CreateShowcasePhysicsScene(
         vc.engine.forwardGearRatios[3u] = 1.1f;
         vc.engine.forwardGearRatios[4u] = 0.9f;
         vc.engine.forwardGearRatios[5u] = 0.75f;
-        for(u32 wi = 0u; wi < 4u; ++wi){
-            VehicleWheelDef wd;
-            f32 wx = -0.7f;
-            if((wi & 1u) != 0u)
-                wx = 0.7f;
-            f32 wz = 0.95f;
-            if(wi >= 2u)
-                wz = -0.95f;
-            wd.attachmentPoint = f32x4(wx, -0.1f, wz, 0.0f);
-            wd.isSteerable = (wi < 2u);
-            wd.isDriven = (wi >= 2u);
-            vc.wheels.push_back(wd);
-        }
+        PopulateTestbedVehicleWheels(vc);
         BindVehicleWheelVisuals(world, vc, VectorSingle(4.0f, 0.9f, -3.4f, 0.0f), boxModelName, whiteMatName, true, outEntities);
         vc.input.brake = 0.0f;
         vc.dirty = true;
@@ -3030,33 +2961,7 @@ void CreateShowcasePhysicsScene(
         mut RagdollComponent rc = ragEnt.addComponent<RagdollComponent>();
         rc.driveToPose = true;
         rc.driveStrengthMultiplier = 1.4f;
-        for(u32 bi = 0u; bi < 3u; ++bi){
-            RagdollBoneDef bone;
-            if(bi == 0u){
-                bone.parentIndex = s_NullIndex;
-                bone.shapeType = RagdollBoneShapeType::Box;
-                bone.boxHalfExtents = f32x4(0.14f, 0.12f, 0.10f, 0.0f);
-            }
-            else if(bi == 1u){
-                bone.parentIndex = 0u;
-                bone.shapeType = RagdollBoneShapeType::Capsule;
-                bone.capsule.center1Radius = f32x4(0.0f, -0.14f, 0.0f, 0.11f);
-                bone.capsule.center2 = f32x4(0.0f, 0.14f, 0.0f, 0.0f);
-            }
-            else{
-                bone.parentIndex = 1u;
-                bone.shapeType = RagdollBoneShapeType::Sphere;
-                bone.sphere = MakeSphereShape(VectorSingle(0.0f), 0.14f).value();
-            }
-            const f32 by = cast<f32>(bi) * 0.42f;
-            bone.bodyDef.type = BodyType::Dynamic;
-            bone.bodyDef.position = f32x4(0.0f, by, 0.0f, 0.0f);
-            bone.jointAnchorWorld = f32x4(0.0f, by - 0.20f, 0.0f, 0.0f);
-            rc.bones.push_back(bone);
-            Transform3D tgtXf;
-            tgtXf.position = f32x4(0.0f, by + 0.15f, 0.0f, 0.0f);
-            rc.targetPose.push_back(tgtXf);
-        }
+        PopulateTestbedRagdollBones(rc, 0.42f, 0.20f, true);
         rc.dirty = true;
         outEntities.push_back(ragEnt.id());
     }
@@ -3159,34 +3064,15 @@ void CreateShowcasePhysicsScene(
         xf.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         mut ArticulationComponent ac = artEnt.addComponent<ArticulationComponent>();
         ac.isFixedBase = true;
-        for(u32 li = 0u; li < 3u; ++li){
-            ArticulationLinkDef link;
-            if(li == 0u){
-                link.parentIndex = s_NullIndex;
-                link.parentToJoint.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                link.jointType = ArticulationJointType::Revolute;
-                link.enableDrive = true;
-                link.driveStiffness = 10.0f;
-                link.driveDamping = 1.5f;
-                link.driveMaxForce = 12.0f;
-                link.driveTargetPos = 0.6f;
-            }
-            else if(li == 1u){
-                link.parentIndex = 0u;
-                link.parentToJoint.position = f32x4(0.0f, -0.50f, 0.0f, 0.0f);
-                link.jointType = ArticulationJointType::Universal;
-            }
-            else{
-                link.parentIndex = 1u;
-                link.parentToJoint.position = f32x4(0.0f, -0.45f, 0.0f, 0.0f);
-                link.jointType = ArticulationJointType::Spherical;
-            }
-            link.jointAxisLocal = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-            link.jointAxisSecondaryLocal = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-            link.jointToChild.position = f32x4(0.0f, -0.32f, 0.0f, 0.0f);
-            link.mass = 0.9f;
-            ac.links.push_back(link);
-        }
+        ArticulationLinkDef rootLink = MakeTestbedArticulationLink(s_NullIndex, 0.0f, ArticulationJointType::Revolute, -0.32f, 0.9f);
+        rootLink.enableDrive = true;
+        rootLink.driveStiffness = 10.0f;
+        rootLink.driveDamping = 1.5f;
+        rootLink.driveMaxForce = 12.0f;
+        rootLink.driveTargetPos = 0.6f;
+        ac.links.push_back(rootLink);
+        ac.links.push_back(MakeTestbedArticulationLink(0u, -0.50f, ArticulationJointType::Universal, -0.32f, 0.9f));
+        ac.links.push_back(MakeTestbedArticulationLink(1u, -0.45f, ArticulationJointType::Spherical, -0.32f, 0.9f));
         ac.dirty = true;
         outEntities.push_back(artEnt.id());
     }
@@ -3238,16 +3124,6 @@ void CreateShowcasePhysicsScene(
         tbc.softBody.backstopConstraints.push_back(bs);
         outEntities.push_back(tetEnt.id());
     }
-}
-
-void CreateShowcasePhysicsScene(
-    mut NotNullUniquePtr<World> worldHandle,
-    in TestbedPhysicsBackendChoice backendChoice,
-    mut EntityID outConfigEntity,
-    mut Vector<EntityID> outEntities
-){
-    TestbedShowcaseRefs unusedRefs;
-    CreateShowcasePhysicsScene(worldHandle, backendChoice, outConfigEntity, outEntities, unusedRefs);
 }
 
 TestbedPhysicsHudStats QueryPhysicsStats(mut NotNullUniquePtr<World> worldHandle){
@@ -3331,16 +3207,6 @@ void ApplyFlyCameraTransform(
     transform.position = f32x4(resolvedPosition);
 }
 
-void ApplyFlyCameraTransform(
-    mut TransformComponent transform,
-    in VectorSingle moveAxes,
-    in b8 boosted,
-    in VectorSingle mouseDelta,
-    in f32 deltaSeconds
-){
-    ApplyFlyCameraTransform(transform, moveAxes, boosted, mouseDelta, deltaSeconds, 1.0f);
-}
-
 void ApplyFlyCameraInputToWorld(
     mut World world,
     in VectorSingle moveAxes,
@@ -3355,16 +3221,6 @@ void ApplyFlyCameraInputToWorld(
     ApplyFlyCameraTransform(cameraEntity.getComponent<TransformComponent>(), moveAxes, boosted, mouseDelta, deltaSeconds, speedScale);
 }
 
-void ApplyFlyCameraInputToWorld(
-    mut World world,
-    in VectorSingle moveAxes,
-    in b8 boosted,
-    in VectorSingle mouseDelta,
-    in f32 deltaSeconds
-){
-    ApplyFlyCameraInputToWorld(world, moveAxes, boosted, mouseDelta, deltaSeconds, 1.0f);
-}
-
 void ApplyFlyCameraInputToMainCamera(
     mut NotNullUniquePtr<World> worldHandle,
     in VectorSingle moveAxes,
@@ -3374,16 +3230,6 @@ void ApplyFlyCameraInputToMainCamera(
     in f32 speedScale
 ){
     ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds, speedScale);
-}
-
-void ApplyFlyCameraInputToMainCamera(
-    mut NotNullUniquePtr<World> worldHandle,
-    in VectorSingle moveAxes,
-    in b8 boosted,
-    in VectorSingle mouseDelta,
-    in f32 deltaSeconds
-){
-    ApplyFlyCameraInputToWorld(worldHandle.deref(), moveAxes, boosted, mouseDelta, deltaSeconds, 1.0f);
 }
 
 void QueryMainCameraBasis(
@@ -3431,7 +3277,7 @@ void UpdateTestbedChaseOrOrbitCamera(
     VectorSingle outRot(0.0f, 0.0f, 0.0f, 1.0f);
     if(cameraMode == TestbedCameraMode::Chase){
         const MatrixSingle tgtBasis = BuildSceneViewBasis(tgtPos, tgtRot);
-        ResolveChaseCameraPose(tgtPos, tgtBasis[2u], orbitDistance, SimdMax(1.4f, orbitDistance * 0.35f), outPos, outRot);
+        ResolveChaseCameraPose(tgtPos, tgtBasis[2u], orbitDistance, Max(1.4f, orbitDistance * 0.35f), outPos, outRot);
     }
     else{
         const FlyCameraMotion motion = FlyCameraMotion();
@@ -3548,7 +3394,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
             grabLine.start = Point(grabSeg.x, grabSeg.y);
             grabLine.end = Point(grabSeg.z, grabSeg.w);
             grabLine.color = Color(0.98f, 0.92f, 0.20f, 1.0f);
-            grabLine.thickness = SimdMax(2.2f, lineThickness * 1.4f);
+            grabLine.thickness = Max(2.2f, lineThickness * 1.4f);
             screenLines.push_back(grabLine);
         }
     }
@@ -3557,7 +3403,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
         VectorSingle gizmoRot(0.0f, 0.0f, 0.0f, 1.0f);
         if(TryGetTestbedEntityWorldPose(world, selectedEntity, gizmoPos, gizmoRot)){
             const f32 axisLen = 0.75f;
-            const f32 gizmoThickness = SimdMax(2.6f, lineThickness * 1.75f);
+            const f32 gizmoThickness = Max(2.6f, lineThickness * 1.75f);
             for(u32 ai = 0u; ai < 3u; ++ai){
                 const VectorSingle axisEnd = gizmoPos + TestbedGizmoWorldAxisDir(ai) * axisLen;
                 VectorSingle seg(0.0f);
@@ -3601,8 +3447,8 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
             in Rect tb = measured.value().bounds;
             const f32 padX = 4.0f;
             const f32 padY = 2.0f;
-            const f32 bgW = SimdMax(10.0f, tb.width + padX * 2.0f);
-            const f32 bgH = SimdMax(12.0f, tb.height + padY * 2.0f);
+            const f32 bgW = Max(10.0f, tb.width + padX * 2.0f);
+            const f32 bgH = Max(12.0f, tb.height + padY * 2.0f);
             const Rect bgRect(sl.screenPosDepth.x - bgW * 0.5f, sl.screenPosDepth.y - bgH - 4.0f, bgW, bgH);
             context.paint.fillRect(bgRect, Color(0.06f, 0.08f, 0.12f, 0.78f));
             const Point topLeft(bgRect.x + padX - tb.x, bgRect.y + padY - tb.y);
@@ -3611,18 +3457,6 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
         }
     }
     return stats;
-}
-
-PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
-    in PhysicsDebugDrawOptions options,
-    in b8 drawPhysicsWorldDebug,
-    in TestbedGrabState grabState,
-    mut NotNullUniquePtr<World> worldHandle,
-    mut UiPaintContext context,
-    mut PhysicsDebugDrawScratch debugScratch,
-    mut Vector<PaintLineSegment> screenLines
-){
-    return PaintPhysicsDebugOverlay(options, drawPhysicsWorldDebug, grabState, s_InvalidEntityId, worldHandle, context, debugScratch, screenLines);
 }
 
 

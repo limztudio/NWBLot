@@ -25,7 +25,6 @@ set(_nwb_ecs_render_component_adhd_sources
     "${CMAKE_CURRENT_LIST_DIR}/execute/types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/gi/lifecycle_types.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/gi/quality_settings.adhd"
-    "${CMAKE_CURRENT_LIST_DIR}/kernel/timing_policy.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/material/csg_shader_variant_builder.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/material/instance_override_fields.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/material/instance_typed_ranges.adhd"

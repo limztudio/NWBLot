@@ -77,31 +77,6 @@ public:
         return ParseValue<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, value, nonStringErrorText, scratchArena);
     }
 
-    template<typename AssetT, typename MetadataValue>
-    [[nodiscard]] static Expected<AssetVector<AssetRef<AssetT>>> ParseList(
-        const Path& nwbFilePath,
-        const AStringView diagnosticPrefix,
-        const MetadataValue& listValue,
-        const AStringView fieldLabel,
-        AssetArena& arena,
-        Alloc::ScratchArena& scratchArena
-    ){
-        if(!listValue.isList()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' must be a list"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldLabel));
-            return MakeUnexpected(Failure{});
-        }
-        const auto& items = listValue.asList();
-        AssetVector<AssetRef<AssetT>> refs(arena);
-        refs.reserve(items.size());
-        for(const MetadataValue& item : items){
-            const auto parsedRef = ParseValue<AssetT>(nwbFilePath, diagnosticPrefix, fieldLabel, item, "entries must be strings", scratchArena);
-            if(!parsedRef)
-                return MakeUnexpected(Failure{});
-            refs.push_back(*parsedRef);
-        }
-        return refs;
-    }
-
 };
 
 

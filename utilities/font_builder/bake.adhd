@@ -195,19 +195,6 @@ Expected<Vector<u8>, StringView> BuildPreparedFont(in Span<u8> sourceFontBytes, 
     return binary;
 }
 
-void ReportFontBuilderPairEntry(in StagedFilePairResult result, in u32 index, in Path output, in Path backup){
-    if(!result.succeeded()){
-        if(result.removalErrors[index].value() != 0)
-            error("font_builder: could not remove failed new '{}': {}", PathToString(output), ErrorCodeMessage(result.removalErrors[index]));
-        if(result.restorationErrors[index].value() != 0)
-            error("font_builder: could not restore previous '{}': {}", PathToString(output), ErrorCodeMessage(result.restorationErrors[index]));
-    }else if(result.backupCleanupErrors[index].value() != 0){
-        warning("font_builder: published pair but could not remove backup '{}': {}", PathToString(backup), ErrorCodeMessage(result.backupCleanupErrors[index]));
-    }else if(result.backupCleanupMissing[index]){
-        warning("font_builder: published pair but previous backup was already absent: '{}'", PathToString(backup));
-    }
-}
-
 [cpp_unwind]
 b8 WriteOutputs(in BakeOptions options, in Span<u8> sourceFontBytes, in FontAtlasPayload payload){
     const auto binary = BuildPreparedFont(sourceFontBytes, payload);
@@ -222,11 +209,7 @@ b8 WriteOutputs(in BakeOptions options, in Span<u8> sourceFontBytes, in FontAtla
     StagedFilePairPaths paths(primary, options.output);
     const StagedFilePairResult validation = ValidateStagedFilePairPaths(paths, options.overwrite, true);
     if(!validation.succeeded()){
-        LogFontBuilderPreValidationFailure(
-            validation.failureStage == StagedFilePairFailureStage::QueryWorkPath,
-            validation.failureStage == StagedFilePairFailureStage::WorkPathAlreadyExists,
-            ErrorCodeMessage(validation.error)
-        );
+        ReportStagedFilePairValidationFailure("font_builder", paths, validation, "--overwrite", "complete regular .nwb and .font files");
         return false;
     }
     const Path directory = options.output.parentPath();
@@ -238,10 +221,9 @@ b8 WriteOutputs(in BakeOptions options, in Span<u8> sourceFontBytes, in FontAtla
         }
     }
     const auto published = StageAndPublishFilePair(paths, binary.value(), metadata, options.overwrite, true, true, s_PublicationDiagnosticTag);
-    ReportFontBuilderPairEntry(published, 0u, paths.primary, paths.primaryBackup);
-    ReportFontBuilderPairEntry(published, 1u, paths.secondary, paths.secondaryBackup);
+    ReportStagedFilePairEntries("font_builder", paths, published);
     if(!published.succeeded()){
-        LogFontBuilderPublishFailure(cast<u8>(published.failureStage), ErrorCodeMessage(published.error));
+        ReportStagedFilePairPublishFailure("font_builder", paths, published, "font temporary", "metadata temporary", "--overwrite", "complete regular .nwb and .font files");
         return false;
     }
     return true;

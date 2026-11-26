@@ -638,26 +638,15 @@ void CommandList::discardUnsubmittedUploadChunks(){
     const u8 usedMask = owner.m_usedUploadChunkMask;
     const u64 nativeRecordingID = m_nativeRecordingID;
     const GpuPhysicalQueueId ownerQueue = owner.m_queue.m_physicalQueue;
-    constexpr u8 s_UploadBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Upload));
-    constexpr u8 s_ScratchBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Scratch));
-    constexpr u8 s_AccelInputBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::AccelStructBuildInput));
     const Expected<u64> reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
     if(!reusableVersion){
-        if((usedMask & s_UploadBit) != 0u)
-            m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-        if((usedMask & s_ScratchBit) != 0u)
-            m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-        if((usedMask & s_AccelInputBit) != 0u)
-            m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+        abandonUnsubmittedUploadChunks();
         return;
     }
 
-    if((usedMask & s_UploadBit) != 0u)
-        m_device.m_uploadManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
-    if((usedMask & s_ScratchBit) != 0u)
-        m_device.m_scratchManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
-    if((usedMask & s_AccelInputBit) != 0u)
-        m_device.m_accelStructInputManager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    m_device.forEachUploadManager(usedMask, [&](UploadManager& manager){
+        manager.discardChunks(ownerQueue, &owner, nativeRecordingID, *reusableVersion);
+    });
 }
 
 void CommandList::abandonUnsubmittedUploadChunks()noexcept{
@@ -668,15 +657,9 @@ void CommandList::abandonUnsubmittedUploadChunks()noexcept{
     const u8 usedMask = owner.m_usedUploadChunkMask;
     const u64 nativeRecordingID = m_nativeRecordingID;
     const GpuPhysicalQueueId ownerQueue = owner.m_queue.m_physicalQueue;
-    constexpr u8 s_UploadBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Upload));
-    constexpr u8 s_ScratchBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::Scratch));
-    constexpr u8 s_AccelInputBit = static_cast<u8>(1u << static_cast<usize>(UploadManager::ChunkKind::AccelStructBuildInput));
-    if((usedMask & s_UploadBit) != 0u)
-        m_device.m_uploadManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-    if((usedMask & s_ScratchBit) != 0u)
-        m_device.m_scratchManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
-    if((usedMask & s_AccelInputBit) != 0u)
-        m_device.m_accelStructInputManager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    m_device.forEachUploadManager(usedMask, [&](UploadManager& manager)noexcept{
+        manager.abandonChunks(ownerQueue, &owner, nativeRecordingID);
+    });
 }
 
 

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import re
-
-from window_capture_smoke import SmokeFailure
-from probe_common import center, snapshot_from_patterns
-from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
+from probe_common import FrameProbeRecorder, center, compile_smoke_patterns, snapshot_from_patterns
+from probe_reference import compose, linear_rgb_bytes, sampled_region, sampled_tile
 
 LIT_VALUES = "values"
 LIT_SEQUENCE = "sequence"
@@ -29,13 +26,9 @@ LIT_PARENT = "parent"
 LIT_CHILD = "child"
 
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiImageSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiImageSmoke: state sequence=(\d+) values=((?:\d+,){9}\d+)")
-GEOMETRY = re.compile(rf"UiImageSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiImageSmoke: skin=(default|alternate)")
 FIELDS = ("phase", "focus_code", "before_clicks", "after_clicks", "parent", "child", "popup_count", "image_targets", "declared_region", "post_declaration_region",)
 RECTANGLES = ("before", "after", "natural_sprite", "natural_slice", "fixed_sprite", "fixed_slice", "stretch", "tinted", "transparent", "frozen", "external", "external_clip", "parent_image", "child_image", "parent", "child",)
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiImageSmoke", len(FIELDS))
 FILL = ((53, 131, 192), (97, 176, 233))
 MARK = (235, 245, 255)
 WHITE = (1.0, 1.0, 1.0, 1.0)
@@ -43,42 +36,20 @@ SENTINEL = linear_rgb_bytes((0.07, 0.13, 0.2))
 
 
 def snapshot_from_logs(text):
-    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="image")
-    if snapshot is None:
-        return None
-    values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
-    if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
-        raise SmokeFailure("image fixture reported invalid display or placement extents")
-    if any(value > 0xFFFFFF for value in (*values, sequence)):
-        raise SmokeFailure("image fixture exceeds its two-part displayed marker schema")
-    return snapshot
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="image", non_negative_extents=True, max_value=0xFFFFFF)
 
 
 def observe_image(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
-    width, height, rows = frame
+    width, height, _ = frame
     scale, rectangles = snapshot["scale"], snapshot[LIT_RECTANGLES]
-    probes = []
+    recorder = FrameProbeRecorder(frame, scale, "image")
+    probes = recorder.probes
     geometry_matches = snapshot[LIT_PHASE] in (0, 1) and snapshot["image_targets"] == 0
+    pixel = recorder.pixel
+    inside = recorder.inside
+    record = lambda name, position, color, tolerance=8: recorder.record(name, position, color, tolerance, radius=0)
 
-    def pixel(point):
-        return round(point[0] * scale[0]), round(point[1] * scale[1])
-
-    def inside(rectangle, position):
-        x, y = (position[0] + 0.5) / scale[0], (position[1] + 0.5) / scale[1]
-        return rectangle[0] <= x < rectangle[0] + rectangle[2] and rectangle[1] <= y < rectangle[1] + rectangle[3]
-
-    def record(name, position, color, tolerance=8):
-        x, y = position
-        if not 0 <= x < width or not 0 <= y < height:
-            raise SmokeFailure(f"image probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        observed = rows[y][x]
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": list(position), LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-    for index, value in enumerate((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE])):
-        for part in range(2):
-            marker = index * 2 + part
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
+    recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), 16.0, 12.0, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0, tolerance=5, radius=0, flat_names=True)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     logical_width = snapshot[LIT_LOGICAL_EXTENT][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)

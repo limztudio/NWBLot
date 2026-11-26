@@ -8,7 +8,7 @@
 
 #include <cstring>
 
-#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64)
 #include <arm_neon.h>
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -16,13 +16,8 @@
 #include <asm/hwcap.h>
 #include <sys/auxv.h>
 #endif
-#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__) || defined(_M_X64)
+#elif defined(__x86_64__) || defined(_M_X64)
 #include <immintrin.h>
-#if defined(_MSC_VER)
-#include <intrin.h>
-#else
-#include <cpuid.h>
-#endif
 #endif
 
 
@@ -35,7 +30,7 @@ namespace __hidden_sha1{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64)
 [[nodiscard]] b8 DetectArmv8Sha1()noexcept{
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
     return ::IsProcessorFeaturePresent(PF_ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE) != 0;
@@ -197,32 +192,7 @@ namespace __hidden_sha1{
     vst1q_u32(state.data(), abcd);
     state[4u] = e;
 }
-#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__) || defined(_M_X64)
-[[nodiscard]] b8 DetectX86ShaNi()noexcept{
-#if defined(_MSC_VER)
-    int info[4] = {};
-    ::__cpuidex(info, 0, 0);
-    if(info[0] < 7)
-        return false;
-    int ext[4] = {};
-    ::__cpuidex(ext, 7, 0);
-    return (ext[1] & (1 << 29)) != 0;
-#else
-    unsigned int eax = 0u;
-    unsigned int ebx = 0u;
-    unsigned int ecx = 0u;
-    unsigned int edx = 0u;
-    if(__get_cpuid_count(7u, 0u, &eax, &ebx, &ecx, &edx) == 0)
-        return false;
-    return (ebx & (1u << 29u)) != 0u;
-#endif
-}
-
-[[nodiscard]] inline b8 HasX86ShaNi()noexcept{
-    static const b8 s_Supported = DetectX86ShaNi();
-    return s_Supported;
-}
-
+#elif defined(__x86_64__) || defined(_M_X64)
 [[gnu::target("sha,sse4.1")]] void CompressBlocksX86ShaNi(
     Array<u32, Sha1Detail::s_StateWordCount>& state,
     const u8* blocks,
@@ -459,22 +429,6 @@ void CompressBlocksScalar(
     }
 }
 
-template<void (*CompressFn)(Array<u32, Sha1Detail::s_StateWordCount>&, const u8*, usize)>
-[[nodiscard]] inline Sha1Digest ComputeSha1WithKernel(const BinaryByteView input)noexcept{
-    Array<u32, Sha1Detail::s_StateWordCount> state = Sha1Detail::s_InitialState;
-    const usize inputSize = input.size();
-    const u8* const inputData = input.data();
-    const usize fullBlocks = inputSize / ShaBe32Detail::s_BlockByteCount;
-    const usize offset = fullBlocks * ShaBe32Detail::s_BlockByteCount;
-    if(fullBlocks > 0u)
-        CompressFn(state, inputData, fullBlocks);
-
-    alignas(16) Array<u8, ShaBe32Detail::s_BlockByteCount * 2u> tail;
-    const usize tailBlockCount = ShaBe32Detail::PrepareShaBe32TailBlocks(inputData, inputSize, offset, tail);
-    CompressFn(state, tail.data(), tailBlockCount);
-    return ShaBe32Detail::FinalizeShaBe32Digest<Sha1Digest, Sha1Detail::s_StateWordCount>(state);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -485,33 +439,15 @@ template<void (*CompressFn)(Array<u32, Sha1Detail::s_StateWordCount>&, const u8*
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Sha1Detail::CompressBlocks(Array<u32, s_StateWordCount>& state, const u8* const blocks, const usize blockCount)noexcept{
-    if(blockCount == 0u || !blocks)
-        return;
-
-#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__) || defined(_M_ARM64)
-    if(__hidden_sha1::HasArmv8Sha1()){
-        __hidden_sha1::CompressBlocksArmv8Sha1(state, blocks, blockCount);
-        return;
-    }
-#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__) || defined(_M_X64)
-    if(__hidden_sha1::HasX86ShaNi()){
-        __hidden_sha1::CompressBlocksX86ShaNi(state, blocks, blockCount);
-        return;
-    }
-#endif
-    __hidden_sha1::CompressBlocksScalar(state, blocks, blockCount);
-}
-
 Sha1Digest Sha1Detail::ComputeSha1Impl(const BinaryByteView input)noexcept{
-#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__aarch64__) || defined(_M_ARM64)
     if(__hidden_sha1::HasArmv8Sha1())
-        return __hidden_sha1::ComputeSha1WithKernel<&__hidden_sha1::CompressBlocksArmv8Sha1>(input);
-#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__) || defined(_M_X64)
-    if(__hidden_sha1::HasX86ShaNi())
-        return __hidden_sha1::ComputeSha1WithKernel<&__hidden_sha1::CompressBlocksX86ShaNi>(input);
+        return ShaBe32Detail::ComputeShaBe32WithKernel<Sha1Digest, Sha1Detail::s_StateWordCount, &__hidden_sha1::CompressBlocksArmv8Sha1>(Sha1Detail::s_InitialState, input);
+#elif defined(__x86_64__) || defined(_M_X64)
+    if(ShaBe32Detail::HasX86ShaNi())
+        return ShaBe32Detail::ComputeShaBe32WithKernel<Sha1Digest, Sha1Detail::s_StateWordCount, &__hidden_sha1::CompressBlocksX86ShaNi>(Sha1Detail::s_InitialState, input);
 #endif
-    return __hidden_sha1::ComputeSha1WithKernel<&__hidden_sha1::CompressBlocksScalar>(input);
+    return ShaBe32Detail::ComputeShaBe32WithKernel<Sha1Digest, Sha1Detail::s_StateWordCount, &__hidden_sha1::CompressBlocksScalar>(Sha1Detail::s_InitialState, input);
 }
 
 

@@ -169,7 +169,7 @@ class ListLayoutPreparer{
                 if(cursor < rows.size() && rows[cursor].index == index){
                     if(trackHorizontal){
                         const f64 rowW = (cast<f64>(rows[cursor].textBounds.width) + cast<f64>(frame.style.row.padding.left)) + cast<f64>(frame.style.row.padding.right);
-                        nextContentWidth = UiSimdMaxF64(nextContentWidth, rowW);
+                        nextContentWidth = Max(nextContentWidth, rowW);
                     }
                     ++cursor;
                     continue;
@@ -183,7 +183,7 @@ class ListLayoutPreparer{
                     height = ComputeListRowPaddedHeight(row.value().textBounds.height, frame.style.row.padding, height);
                 if(trackHorizontal){
                     const f64 rowW = (cast<f64>(row.value().textBounds.width) + cast<f64>(frame.style.row.padding.left)) + cast<f64>(frame.style.row.padding.right);
-                    nextContentWidth = UiSimdMaxF64(nextContentWidth, rowW);
+                    nextContentWidth = Max(nextContentWidth, rowW);
                 }
                 if(cursor == rows.size()){
                     rows.push_back(row.value());
@@ -249,10 +249,6 @@ b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, in Span<
         return false;
     outSpan = span;
     return true;
-}
-
-b8 TryResolveListCursorScrollSpan(in u64 cursorIndex, in f32 rowHeight, mut VectorDouble outSpan){
-    return TryResolveListCursorScrollSpan(cursorIndex, rowHeight, Span<f64>(), outSpan);
 }
 
 usize ListRowInsertionIndex(in Vector<BuilderListRow> rows, in u64 index){

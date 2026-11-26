@@ -132,7 +132,6 @@ public:
 
 private:
     void attachToOwnerSlow()noexcept;
-    void recordPeakUsedBytes(u64 usedBytes)noexcept;
 
 
 private:

@@ -238,14 +238,7 @@ struct CrashState{
     HANDLE crashHandledEvent = nullptr;
     PROCESS_INFORMATION handlerProcessInfo = {};
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
-#elif defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-    stack_t previousSignalStack = {};
-    Array<struct sigaction, s_MaxCrashSignals> previousSignalActions = {};
-    Array<int, s_MaxCrashSignals> installedSignals = {};
-    Array<b8, s_MaxCrashSignals> signalActionInstalled = {};
-    b8 signalStackInstalled = false;
-    ThreadId signalStackOwner{};
-#elif defined(FOUNDATION_PLATFORM_ANDROID)
+#elif defined(FOUNDATION_PLATFORM_LINUX) || defined(FOUNDATION_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
     Array<struct sigaction, s_MaxCrashSignals> previousSignalActions = {};
     Array<int, s_MaxCrashSignals> installedSignals = {};
@@ -328,6 +321,61 @@ template<typename ArenaT>
 
 [[nodiscard]] StringView PlatformKindName(u32 platform)noexcept;
 [[nodiscard]] StringView ReasonKindName(u32 reasonKind)noexcept;
+
+
+class CrashTransportFlightGuard final : NoCopy{
+public:
+    explicit CrashTransportFlightGuard(Atomic<u32>& inFlight)noexcept{
+        b8& inTransport = InTransportFlag();
+        if(inTransport)
+            return;
+        inTransport = true;
+
+        u32 expected = 0u;
+        if(!inFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
+            inTransport = false;
+            return;
+        }
+        m_inFlight = &inFlight;
+    }
+
+    ~CrashTransportFlightGuard()noexcept{
+        if(!m_inFlight)
+            return;
+        m_inFlight->store(0u, MemoryOrder::release);
+        InTransportFlag() = false;
+    }
+
+
+public:
+    [[nodiscard]] b8 entered()const noexcept{ return m_inFlight != nullptr; }
+
+
+private:
+    static b8& InTransportFlag()noexcept{
+        static thread_local b8 s_InTransport = false;
+        return s_InTransport;
+    }
+
+
+private:
+    Atomic<u32>* m_inFlight = nullptr;
+};
+
+
+inline void InstallTerminateHandler(const ::TerminateHandler handler)noexcept{
+    g_State.previousTerminateHandler = ExchangeTerminateHandler(handler);
+    g_State.terminateHandlerInstalled = true;
+}
+
+inline void RestoreTerminateHandler(const ::TerminateHandler expectedHandler)noexcept{
+    if(!g_State.terminateHandlerInstalled)
+        return;
+    if(QueryTerminateHandler() == expectedHandler)
+        ExchangeTerminateHandler(g_State.previousTerminateHandler);
+    g_State.terminateHandlerInstalled = false;
+    g_State.previousTerminateHandler = nullptr;
+}
 
 void PublishCrashStateSnapshot()noexcept;
 void SnapshotCrashState(CrashReasonKind::Enum reasonKind, u32 reasonCode, CrashRequest& outRequest)noexcept;

@@ -273,49 +273,34 @@ FOUNDATION_INLINE void ConstructInArena(::ArenaBase& arena, U* const p, Args&&..
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T, typename ArenaT>
-class ArenaAllocator : public AdaptorDetail::ArenaAllocatorTraits<T>{
-    template<typename U, typename A>
-    friend class ArenaAllocator;
-
-
+template<typename T, typename ArenaT, typename Derived>
+class ArenaAllocatorBase : public ArenaAllocatorTraits<T>{
 public:
-    using Base = AdaptorDetail::ArenaAllocatorTraits<T>;
+    using Base = ArenaAllocatorTraits<T>;
     using value_type = typename Base::value_type;
     using size_type = typename Base::size_type;
     using pointer = typename Base::pointer;
 
 
 public:
-    template<typename U>
-    struct rebind{
-        using other = ArenaAllocator<U, ArenaT>;
-    };
-
-
-public:
-    constexpr ArenaAllocator()noexcept
+    constexpr ArenaAllocatorBase()noexcept
         : m_arena(nullptr)
     {}
-    constexpr ArenaAllocator(ArenaT& arena)noexcept
+    constexpr ArenaAllocatorBase(ArenaT& arena)noexcept
         : m_arena(&arena)
     {}
-    constexpr ArenaAllocator(const ArenaAllocator&)noexcept = default;
-    template<typename U>
-    constexpr ArenaAllocator(const ArenaAllocator<U, ArenaT>& other)noexcept
-        : m_arena(other.m_arena)
-    {}
-    constexpr ~ArenaAllocator()noexcept = default;
+    constexpr ArenaAllocatorBase(const ArenaAllocatorBase&)noexcept = default;
+    constexpr ~ArenaAllocatorBase()noexcept = default;
 
 
 public:
-    constexpr ArenaAllocator& operator=(const ArenaAllocator&)noexcept = default;
+    constexpr ArenaAllocatorBase& operator=(const ArenaAllocatorBase&)noexcept = default;
+
+
+protected:
+    explicit constexpr ArenaAllocatorBase(ArenaT* const arena)noexcept
+        : m_arena(arena)
+    {}
 
 
 public:
@@ -329,7 +314,7 @@ public:
             return;
 
         const size_type bytes = sizeof(value_type) * count;
-        m_arena->deallocate(buffer, static_cast<size_type>(alignof(value_type)), bytes);
+        m_arena->deallocate(buffer, Derived::Alignment(), bytes);
     }
 
     [[nodiscard]] constexpr pointer allocate(const size_type count){
@@ -341,7 +326,7 @@ public:
         if(m_arena == nullptr)
             throw AllocationException{};
 
-        pointer const output = static_cast<pointer>(m_arena->allocate(static_cast<size_type>(alignof(value_type)), bytes));
+        pointer const output = static_cast<pointer>(m_arena->allocate(Derived::Alignment(), bytes));
         if(output == nullptr)
             throw AllocationException{};
 
@@ -353,7 +338,7 @@ public:
         return *m_arena;
     }
 
-    [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
+    [[nodiscard]] constexpr ArenaT* arenaPtr()const noexcept{ return m_arena; }
 
     template<typename U, typename... Args>
         requires (IsSame_V<ArenaT, ::ArenaBase> || IsBaseOf_V<::ArenaBase, ArenaT>)
@@ -363,8 +348,59 @@ public:
     }
 
 
-private:
+protected:
     ArenaT* m_arena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename ArenaT>
+class ArenaAllocator : public AdaptorDetail::ArenaAllocatorBase<T, ArenaT, ArenaAllocator<T, ArenaT>>{
+    template<typename U, typename A>
+    friend class ArenaAllocator;
+
+
+public:
+    using Base = AdaptorDetail::ArenaAllocatorBase<T, ArenaT, ArenaAllocator<T, ArenaT>>;
+    using value_type = typename Base::value_type;
+    using size_type = typename Base::size_type;
+    using pointer = typename Base::pointer;
+
+
+public:
+    template<typename U>
+    struct rebind{
+        using other = ArenaAllocator<U, ArenaT>;
+    };
+
+
+public:
+    [[nodiscard]] static constexpr size_type Alignment()noexcept{
+        return static_cast<size_type>(alignof(value_type));
+    }
+
+
+public:
+    using Base::Base;
+    constexpr ArenaAllocator()noexcept = default;
+    constexpr ArenaAllocator(const ArenaAllocator&)noexcept = default;
+    template<typename U>
+    constexpr ArenaAllocator(const ArenaAllocator<U, ArenaT>& other)noexcept
+        : Base(other.arenaPtr())
+    {}
+    constexpr ~ArenaAllocator()noexcept = default;
+
+
+public:
+    constexpr ArenaAllocator& operator=(const ArenaAllocator&)noexcept = default;
 };
 
 template<typename T, typename U, typename ArenaT>
@@ -431,13 +467,13 @@ inline b8 operator!=(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, 
 
 
 template<typename T, typename ArenaT>
-class ArenaCacheAlignedAllocator : public AdaptorDetail::ArenaAllocatorTraits<T>{
+class ArenaCacheAlignedAllocator : public AdaptorDetail::ArenaAllocatorBase<T, ArenaT, ArenaCacheAlignedAllocator<T, ArenaT>>{
     template<typename U, typename A>
     friend class ArenaCacheAlignedAllocator;
 
 
 public:
-    using Base = AdaptorDetail::ArenaAllocatorTraits<T>;
+    using Base = AdaptorDetail::ArenaAllocatorBase<T, ArenaT, ArenaCacheAlignedAllocator<T, ArenaT>>;
     using value_type = typename Base::value_type;
     using size_type = typename Base::size_type;
     using pointer = typename Base::pointer;
@@ -457,16 +493,12 @@ public:
 
 
 public:
-    constexpr ArenaCacheAlignedAllocator()noexcept
-        : m_arena(nullptr)
-    {}
-    constexpr ArenaCacheAlignedAllocator(ArenaT& arena)noexcept
-        : m_arena(&arena)
-    {}
+    using Base::Base;
+    constexpr ArenaCacheAlignedAllocator()noexcept = default;
     constexpr ArenaCacheAlignedAllocator(const ArenaCacheAlignedAllocator&)noexcept = default;
     template<typename U>
     constexpr ArenaCacheAlignedAllocator(const ArenaCacheAlignedAllocator<U, ArenaT>& other)noexcept
-        : m_arena(other.m_arena)
+        : Base(other.arenaPtr())
     {}
     constexpr ~ArenaCacheAlignedAllocator()noexcept = default;
 
@@ -479,53 +511,6 @@ public:
     [[nodiscard]] size_type max_size()const noexcept{
         return (Limit<size_type>::s_Max - Alignment()) / sizeof(value_type);
     }
-
-    constexpr void deallocate(pointer const buffer, const size_type count)noexcept{
-        FOUNDATION_ASSERT_MSG((buffer != nullptr || count == 0), FOUNDATION_TEXT("null pointer cannot point to a block of non-zero size"));
-        if(buffer == nullptr)
-            return;
-
-        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaCacheAlignedAllocator cannot deallocate without an arena"));
-        if(m_arena == nullptr)
-            return;
-
-        const size_type bytes = sizeof(value_type) * count;
-        m_arena->deallocate(buffer, Alignment(), bytes);
-    }
-
-    [[nodiscard]] constexpr pointer allocate(const size_type count){
-        const size_type bytes = SizeOf<sizeof(value_type)>(count);
-        if(bytes == 0u)
-            return nullptr;
-
-        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
-        if(m_arena == nullptr)
-            throw AllocationException{};
-
-        pointer const output = static_cast<pointer>(m_arena->allocate(Alignment(), bytes));
-        if(output == nullptr)
-            throw AllocationException{};
-
-        return output;
-    }
-
-    [[nodiscard]] ArenaT& arena()const noexcept{
-        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaCacheAlignedAllocator has no arena"));
-        return *m_arena;
-    }
-
-    [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
-
-    template<typename U, typename... Args>
-        requires (IsSame_V<ArenaT, ::ArenaBase> || IsBaseOf_V<::ArenaBase, ArenaT>)
-    FOUNDATION_INLINE void construct(U* const p, Args&&... args){
-        FOUNDATION_ASSERT_MSG(m_arena != nullptr, FOUNDATION_TEXT("ArenaAllocator cannot construct without an arena"));
-        AdaptorDetail::ConstructInArena(static_cast<::ArenaBase&>(*m_arena), p, Forward<Args>(args)...);
-    }
-
-
-private:
-    ArenaT* m_arena;
 };
 
 template<typename T, typename U, typename ArenaT>

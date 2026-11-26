@@ -18,17 +18,6 @@
 NWB_BEGIN
 namespace Tests::LoggerProtocolSdk{
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-inline constexpr b8 s_Windows = true;
-#else
-inline constexpr b8 s_Windows = false;
-#endif
-#if defined(FOUNDATION_PLATFORM_LINUX) && !defined(FOUNDATION_PLATFORM_ANDROID)
-inline constexpr b8 s_DesktopLinux = true;
-#else
-inline constexpr b8 s_DesktopLinux = false;
-#endif
-
 inline constexpr usize s_NativeCharacterBytes = sizeof(tchar);
 
 template<usize N>

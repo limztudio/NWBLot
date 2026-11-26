@@ -3,10 +3,7 @@
 
 
 import argparse
-import base64
 from dataclasses import asdict, dataclass
-import html
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -25,11 +22,14 @@ from reflection_optical_evidence import (ReflectionOpticalEvidence,
     LIT_OPTICAL_SUB_ULP, LIT_OPTICAL_TIR, LIT_OPTICAL_TIR_LIMIT, LIT_OPTICAL_UNSPECIFIED_REFERENCE,
     LIT_QUEUE_COVERAGE, LIT_REFLECTIONSMOKEOPTICS, LIT_STATISTICS)
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment
-from framebuffer_png_encoder import FramebufferPngEncoder
-from window_capture_image import read_bmp_24_rows
+from smoke_capture_suite import (
+    build_window_capture_command,
+    run_window_capture_subprocess,
+    sha256_source_files,
+    write_evidence_gallery_report,
+)
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
-
-LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
@@ -45,7 +45,6 @@ LIT_DUPLICATE_REVERSE = "duplicate_reverse"
 LIT_MIRRORED = "mirrored"
 LIT_OPTICAL = "optical_"
 LIT_BMP = ".bmp"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_LOG = ".log"
 LIT_UTF_8 = "utf-8"
 
@@ -82,32 +81,28 @@ LIMITATIONS = ("Actual renderer framebuffer pixels; independent float64 plane/bo
 
 def capture(args, spec):
     output = args.output_directory / (spec.name + LIT_BMP)
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout), LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: case " + spec.case + " created",
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: reflection mode hardware", LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: optical query limit " + str(spec.queries),
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: hardware ray budget " + str(spec.ray_budget), LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown", LIT_EXPECT_LOG_MESSAGE,
-        "Reflection resolve: hardware" if spec.ray_budget else "Reflection resolve: environment", LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEOPTICS, "--log-output", str(output.with_suffix(LIT_LOG)),
-        LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message", "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
-    if args.logserver_executable:
-        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
+    log_path = output.with_suffix(LIT_LOG)
+    expect_logs = ["ReflectionSmokeProject: case " + spec.case + " created", "ReflectionSmokeProject: reflection mode hardware",
+        "ReflectionSmokeProject: optical query limit " + str(spec.queries), "ReflectionSmokeProject: hardware ray budget " + str(spec.ray_budget),
+        "ReflectionSmokeProject: shutdown", "Reflection resolve: hardware" if spec.ray_budget else "Reflection resolve: environment", LIT_REFLECTIONSMOKEOPTICS]
+    skip_logs = ()
+    if args.require_hardware:
+        expect_logs.append("ReflectionSmokeProject: hardware available")
     else:
-        command.append("--no-logserver")
-    command.extend("--application-arg=" + argument for argument in args.application_arg)
+        skip_logs = ("ReflectionSmokeProject: hardware unavailable",)
+    command = build_window_capture_command(args, output, frames=1, log_output=log_path, expect_logs=expect_logs, skip_logs=skip_logs)
     environment = capture_environment(spec.case, LIT_HARDWARE, spec.ray_budget)
     environment.update({"NWB_REFLECTION_SMOKE_OPTICAL_QUERIES": str(spec.queries), "NWB_REFLECTION_SMOKE_TEMPORAL": "0", "NWB_REFLECTION_SMOKE_SPATIAL": "0", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "16", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1"})
     print(f"Capturing {spec.name}: ray budget {spec.ray_budget}, max {spec.queries} queries per admitted optical path...", flush=True)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode == SKIP_EXIT_CODE:
+    if run_window_capture_subprocess(command, env=environment, timeout=args.timeout, failure_message=f"{spec.name} capture failed with exit {{code}}") is None:
         return None
-    if result.returncode:
-        raise SmokeFailure(f"{spec.name} capture failed with exit {result.returncode}")
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     ReflectionImageAnalysis.validate_frame(frame)
     if frame[:2] != (960, 720):
         raise SmokeFailure("optical capture is not the actual 960x720 framebuffer")
     from reflection_roughness_smoke import CaptureSpec
     from reflection_history_evidence import ReflectionHistoryEvidence
-    log_text = output.with_suffix(LIT_LOG).read_text(encoding=LIT_UTF_8)
+    log_text = log_path.read_text(encoding=LIT_UTF_8)
     evidence = ReflectionOpticalEvidence.validate_optics(log_text, spec)
     evidence["capture_source"] = ReflectionHistoryEvidence.validate_history(log_text, evidence[LIT_STATISTICS], CaptureSpec(spec.name, case=spec.case, roughness=0, samples=16, temporal=False))
     if spec in CSG_REUSE_CAPTURES[1:]:
@@ -121,7 +116,7 @@ def capture(args, spec):
 def analyze_suite(directory, specs=CAPTURES):
     metrics = {}
     for spec in specs:
-        metrics[spec.name] = ReflectionOpticalImageEvidence.analyze_image(read_bmp_24_rows(directory / (spec.name + LIT_BMP)), spec)
+        metrics[spec.name] = ReflectionOpticalImageEvidence.analyze_image(Bmp24Codec.read_bmp_24_rows(directory / (spec.name + LIT_BMP)), spec)
     available = {spec.name for spec in specs}
     pairs = [("optical_tinted", LIT_OPTICAL + name) for name in (LIT_DUPLICATE_IDENTICAL, LIT_DUPLICATE_GROUP, LIT_DUPLICATE_REVERSE, LIT_MIRRORED)]
     pairs.append(("optical_disconnected", "optical_same_mesh"))
@@ -131,33 +126,29 @@ def analyze_suite(directory, specs=CAPTURES):
         (LIT_OPTICAL_GROUP_ENTRY, LIT_OPTICAL_CSG_GROUP_ENTRY), ("optical_dense", LIT_OPTICAL_CSG_DENSE)))
     for first, second in pairs:
         if first in available and second in available:
-            metrics[first + "_equals_" + second] = ReflectionOpticalImageEvidence.compare_invariant(read_bmp_24_rows(directory / (first + LIT_BMP)), read_bmp_24_rows(directory / (second + LIT_BMP)))
+            metrics[first + "_equals_" + second] = ReflectionOpticalImageEvidence.compare_invariant(Bmp24Codec.read_bmp_24_rows(directory / (first + LIT_BMP)), Bmp24Codec.read_bmp_24_rows(directory / (second + LIT_BMP)))
     return metrics
 
 
 def write_report(args, completed, evidence, metrics=None):
+    here = Path(__file__)
+    hashes = sha256_source_files({
+        "reference_source_sha256_lf": here.with_name("reflection_optical_reference.py"),
+        "geometry_source_sha256_lf": here.with_name("reflection_optical_geometry.py"),
+        "analyzer_source_sha256_lf": here,
+        "evidence_source_sha256_lf": here.with_name("reflection_optical_evidence.py"),
+        "png_encoder_source_sha256_lf": here.with_name("framebuffer_png_encoder.py"),
+        "image_evidence_source_sha256_lf": here.with_name("reflection_optical_image_evidence.py"),
+    })
     metadata = {"frame_source": "actual application framebuffer readback", "size": [960, 720], "presentation": {"exposure": 1, "reinhard_shoulder": 1}, "temporal": False, "spatial_filter": False,
-        "captures": [asdict(spec) for spec in completed], "completed_frame_evidence": evidence,
-        "reference_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_reference.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "geometry_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_geometry.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "analyzer_source_sha256_lf": hashlib.sha256(Path(__file__).read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "evidence_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_evidence.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "png_encoder_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("framebuffer_png_encoder.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(),
-        "image_evidence_source_sha256_lf": hashlib.sha256(Path(__file__).with_name("reflection_optical_image_evidence.py").read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest(), "metrics": metrics, "limitations": LIMITATIONS}
-    (args.output_directory / "reflection_optical_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
-    cards = []
-    for spec in completed:
-        path = args.output_directory / (spec.name + LIT_BMP)
-        png = FramebufferPngEncoder.encode(read_bmp_24_rows(path))
-        path.with_suffix(".png").write_bytes(png)
-        cards.append(f'<article><h2>{html.escape(spec.name)} / {spec.queries} queries / ray budget {spec.ray_budget}</h2>' f'<a href="{spec.name}.bmp">Raw BMP</a> / <a href="{spec.name}.log">Completed-frame log</a>'
-            f'<img alt="Actual {html.escape(spec.name)} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflected optical transport</title>'
-    document += '<style>body{font:16px system-ui;background:#141922;color:#e7edf5;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{padding:16px;background:#202937}img{display:block;width:100%;margin-top:12px}a{color:#8cf}pre{white-space:pre-wrap}</style>'
-    document += '<h1>Reflected optical transport â€” actual framebuffer captures</h1><p>' + html.escape(LIMITATIONS) + '</p>'
-    document += '<p>Glass and colored chart are behind the camera. The visible central rectangle is a smooth mirror. PNG conversion preserves every captured RGB pixel; raw BMPs remain available.</p><main>'
-    document += ''.join(cards) + '</main><pre>' + html.escape(json.dumps(metrics, indent=2) if metrics else 'Captured evidence; image assertions have not passed yet.') + '</pre></html>'
-    (args.output_directory / "reflection_optical.html").write_text(document, encoding=LIT_UTF_8)
+        "captures": [asdict(spec) for spec in completed], "completed_frame_evidence": evidence, **hashes, "metrics": metrics, "limitations": LIMITATIONS}
+    items = [(spec.name, f"{spec.name} / {spec.queries} queries / ray budget {spec.ray_budget}", spec.name + LIT_BMP, spec.name + LIT_LOG,
+        "Completed-frame log", f"Actual {spec.name} framebuffer", None) for spec in completed]
+    style = "body{font:16px system-ui;background:#141922;color:#e7edf5;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{padding:16px;background:#202937}img{display:block;width:100%;margin-top:12px}a{color:#8cf}pre{white-space:pre-wrap}"
+    write_evidence_gallery_report(args.output_directory, manifest_name="reflection_optical_manifest.json", html_name="reflection_optical.html",
+        metadata=metadata, title="Reflected optical transport", heading="Reflected optical transport - actual framebuffer captures",
+        note=LIMITATIONS, extra_paragraphs=("Glass and colored chart are behind the camera. The visible central rectangle is a smooth mirror. PNG conversion preserves every captured RGB pixel; raw BMPs remain available.",),
+        items=items, metrics=metrics, pending_message="Captured evidence; image assertions have not passed yet.", style=style)
 
 
 def run_suite(args, specs=CAPTURES):

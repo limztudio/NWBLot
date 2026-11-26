@@ -15,7 +15,7 @@ from refraction_density_evidence import RefractionDensityEvidence
 from refraction_density_capture_smoke import SANITIZED_ENVIRONMENT, launch_density_capture, selection
 from refraction_density_image_evidence import RefractionDensityImageEvidence
 from refraction_query_evidence import RefractionQueryEvidence
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip
 
 
@@ -38,13 +38,13 @@ def capture_diagnostics(args, cell):
         raise SmokeFailure("query profiling requires exactly one accepted hardware route")
     statistics = RefractionQueryEvidence.parse_completed_statistics(text)
     checks = RefractionQueryEvidence.validate_statistics(statistics, cell)
-    frame = read_bmp_24_rows(image)
+    frame = Bmp24Codec.read_bmp_24_rows(image)
     if frame[:2] != (cell.width, cell.height):
         raise SmokeFailure("query diagnostic framebuffer extent differs from the selected target")
     parity = None
     if args.reference_directory:
         reference_path = args.reference_directory / cell.extent / "hardware" / image.name
-        reference = read_bmp_24_rows(reference_path)
+        reference = Bmp24Codec.read_bmp_24_rows(reference_path)
         if frame != reference:
             raise SmokeFailure(f"query instrumentation changed exact RGB output: {cell.key}")
         parity = {"reference": str(reference_path), "exact_rgb_equal": True, "compared_pixels": cell.width * cell.height}

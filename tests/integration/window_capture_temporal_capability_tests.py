@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import csg_gi_temporal_smoke
-import window_capture_image
+from window_capture_image_codec import Bmp24Codec
 from window_capture_arguments import WindowCaptureArguments
 import window_capture_smoke
 
@@ -43,7 +43,7 @@ class TemporalLaggedCapabilityTests(unittest.TestCase):
 
                 def wait_for_capture(*_args):
                     rows = [[(255, 255, 255) if (x + y) % 2 else (0, 0, 0) for x in range(8)] for y in range(8)]
-                    window_capture_image.write_bmp_24(capture_args.output, 8, 8, rows)
+                    Bmp24Codec.write_bmp_24(capture_args.output, 8, 8, rows)
                     return application_exit, True
 
                 with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \

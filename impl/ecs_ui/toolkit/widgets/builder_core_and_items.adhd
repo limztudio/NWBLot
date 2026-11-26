@@ -78,6 +78,20 @@ b8 Builder::beginPanel(in StringView stableKey, in Rect bounds, in LayoutDirecti
     return true;
 }
 
+b8 Builder::finishRootScope(in b8 painted){
+    const b8 popped = this.m_context.popScope();
+    this.m_scope.value().m_panelActive = false;
+    this.m_scope.value().m_windowActive = false;
+    this.m_scope.value().m_window.state.reset();
+    this.m_scope.value().clearScopeStacks();
+    const b8 combosPainted = painted && popped && this.paintDeferred();
+    this.publishSliderResults(combosPainted);
+    this.releaseDeferredLoans();
+    if(!combosPainted)
+        this.m_context.fail();
+    return combosPainted;
+}
+
 b8 Builder::endPanel(){
     if(this.declarationBlocked() || !this.m_scope.value().m_panelActive || this.m_scope.value().m_windowActive || this.m_scope.value().m_popupState.has_value() || this.m_scope.value().m_stack.size() != 1u
         || this.m_context.failed() || !this.m_scope.value().m_layout.arrange(this.m_scope.value().m_bounds)){
@@ -87,44 +101,21 @@ b8 Builder::endPanel(){
     this.m_finalizing = true;
     BuilderOperationEnd finish(this.m_finalizing);
     const b8 painted = this.paintPanel();
-    const b8 popped = this.m_context.popScope();
-    this.m_scope.value().m_panelActive = false;
-    this.m_scope.value().m_stack.clear();
-    this.m_scope.value().m_scrollAreaStack.clear();
-    this.m_scope.value().m_scopeKinds.clear();
-    this.m_scope.value().m_virtualListStack.clear();
-    this.m_scope.value().m_splitterStack.clear();
-    this.m_scope.value().m_dockSpaceStack.clear();
-    const b8 combosPainted = painted && popped && this.paintDeferred();
-    this.publishSliderResults(combosPainted);
-    this.releaseDeferredLoans();
-    if(!combosPainted)
-        this.m_context.fail();
-    return combosPainted;
+    return this.finishRootScope(painted);
 }
 
 b8 Builder::endContainer(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::Container)
         || this.m_scope.value().m_scrollAreaStack.back() != s_LayoutNoParent
         || this.m_scope.value().m_virtualListStack.back() != s_LayoutNoParent
         || this.m_scope.value().m_splitterStack.back() != s_LayoutNoParent
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::Container
     ){
         this.m_context.fail();
         return false;
     }
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     return this.m_context.popScope();
 }
 
@@ -398,10 +389,6 @@ void Builder::setSkin(in borrow UiSkin skin){
     this.syncMetricsCacheSkinVersion();
 }
 
-b8 Builder::setTextShaping(in u32 scriptTag, in StringView language){
-    return this.setTextShaping(scriptTag, language, this.m_textDirection);
-}
-
 b8 Builder::setTextShaping(in u32 scriptTag, in StringView language, in TextDirection direction){
     if(!this.balanced() || this.m_context.failed()){
         this.m_context.fail();
@@ -552,7 +539,7 @@ Expected<u32> Builder::addTextItemInternal(
             this.m_context.fail();
             return MakeUnexpected(Failure());
         }
-        const Point content(textSize.x + indicatorExtent + this.m_style.gap, UiSimdMax(textSize.y, indicatorExtent));
+        const Point content(textSize.x + indicatorExtent + this.m_style.gap, Max(textSize.y, indicatorExtent));
         intrinsicSize = ResolvePaddedIntrinsicSize(content, item.padding, minimum);
         item.checkboxExtent = indicatorExtent;
     }
@@ -722,11 +709,11 @@ b8 Builder::validateDeferredStates()const{
             return false;
     }
     for(in auto frame : this.m_scope.value().m_tabBars){
-        if(!this.popupAncestorsVisible() || !frame.state.has_value() || frame.state.value().revision() != frame.stateRevision)
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.stateRevision))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_splitters){
-        if(!this.popupAncestorsVisible() || !frame.state.has_value() || frame.state.value().revision() != frame.revision)
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_treeViews){
@@ -738,27 +725,27 @@ b8 Builder::validateDeferredStates()const{
             return false;
     }
     for(in auto frame : this.m_scope.value().m_menuBars){
-        if(!this.menuBarStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_toasts){
-        if(!this.toastStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_colorPickers){
-        if(!this.colorPickerStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_dragSources){
-        if(!this.dragSourceStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().instanceGeneration(), frame.instanceGeneration))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_dropTargets){
-        if(!this.dropTargetStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().instanceGeneration(), frame.instanceGeneration))
             return false;
     }
     for(in auto frame : this.m_scope.value().m_dockSpaces){
-        if(!this.dockSpaceStateMatches(frame))
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().revision(), frame.revision))
             return false;
     }
     return true;
@@ -808,7 +795,6 @@ void Builder::releaseDeferredLoans(){
     for(mut auto frame : this.m_scope.value().m_spinBoxes){
         frame.integerModel.reset();
         frame.floatModel.reset();
-        frame.editState.reset();
     }
     for(mut auto frame : this.m_scope.value().m_treeViews){
         frame.source.reset();
@@ -976,8 +962,8 @@ b8 Builder::progress(in StringView stableKey, in f64 fraction, in ProgressOption
             this.m_context.fail();
             return false;
         }
-        frame.metrics.contentSize.x = UiSimdMax(frame.metrics.contentSize.x, cast<f32>(minLabel.x));
-        frame.metrics.contentSize.y = UiSimdMax(frame.metrics.contentSize.y, cast<f32>(minLabel.y));
+        frame.metrics.contentSize.x = Max(frame.metrics.contentSize.x, cast<f32>(minLabel.x));
+        frame.metrics.contentSize.y = Max(frame.metrics.contentSize.y, cast<f32>(minLabel.y));
     }
     auto item = this.makeItem();
     item.state = widget.value();
@@ -1492,9 +1478,9 @@ b8 Builder::paintLabel(in BuilderItem item, in LayoutBox box){
     }
     f32 originX = box.rectangle.x;
     if(item.textAlignment == TextAlignment::Center)
-        originX = box.rectangle.x + UiSimdMax(0.0f, (box.rectangle.width - activeBounds.width) * s_RectCenterFraction);
+        originX = box.rectangle.x + Max(0.0f, (box.rectangle.width - activeBounds.width) * s_RectCenterFraction);
     else if(item.textAlignment == TextAlignment::Trailing)
-        originX = box.rectangle.x + UiSimdMax(0.0f, box.rectangle.width - activeBounds.width);
+        originX = box.rectangle.x + Max(0.0f, box.rectangle.width - activeBounds.width);
     const Point origin = ResolveLabelPaintOrigin(Rect(originX, box.rectangle.y, 0.0f, 0.0f), activeBounds);
     const Rect textClip = IntersectUiRectsBounds(box.rectangle, clip);
     this.m_paint.pushClip(clip);

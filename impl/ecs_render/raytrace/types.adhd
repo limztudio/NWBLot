@@ -58,7 +58,6 @@ const usize s_TlasInitialInstanceCapacity = 128u;
 const usize s_SceneBvhInitialInstanceCapacity = 64u;
 const u32 s_SceneBvhAxisCount = 3u;
 const u32 s_SceneBvhSahBinCount = 12u;
-const f32 s_SceneBvhSahTraversalCost = 1.0f;
 const usize s_SoftwareSceneRefitFixedUseCapacity = 4u;
 const u32 s_RtOpticalBaseInstanceMask = 0x1u;
 const u32 s_RtOpticalTransparentInstanceMask = 0x2u;

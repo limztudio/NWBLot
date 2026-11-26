@@ -78,47 +78,19 @@ class SkinBinaryCodec{
     [cpp_unwind]
     public Expected<SkinBinaryReferences> deserialize(in Span<u8> binary, mut Vector<SkinInfluence4> outInfluences, mut Vector<SkeletonJointMatrix> outInverseBindMatrices)const{
         usize cursor = 0u;
-        const Expected<SkinHeaderBinary> headerResult = ReadPOD<SkinHeaderBinary>(binary, cursor);
-        if(!headerResult.has_value()){
-            error("Skin::loadBinary failed: malformed header");
+        const Expected<SkinHeaderBinary> headerResult = ReadMagicHeaderPayload<SkinHeaderBinary>(binary, s_SkinBinaryMagic, "Skin::loadBinary", "skin", cursor);
+        if(!headerResult.has_value())
             return MakeUnexpected(Failure());
-        }
         const SkinHeaderBinary header = headerResult.value();
-        if(header.magic != s_SkinBinaryMagic){
-            error("Skin::loadBinary failed: invalid skin asset format; recook required");
-            return MakeUnexpected(Failure());
-        }
         if(!this.validateHeader(header))
             return MakeUnexpected(Failure());
 
-        if(header.influenceCount > cast<u64>(usize.max / s_SkinInfluence4BinaryBytes)){
-            error("Skin::loadBinary failed: 'influences' payload byte size overflows");
+        if(
+            !ReadVectorPayload(binary, header.influenceCount, "Skin::loadBinary", "influences", cursor, outInfluences)
+            || !ReadVectorPayload(binary, header.inverseBindMatrixCount, "Skin::loadBinary", "inverse bind matrices", cursor, outInverseBindMatrices)
+            || !ReadCompletePayload(binary, cursor, "Skin::loadBinary")
+        )
             return MakeUnexpected(Failure());
-        }
-        const usize influenceCount = cast<usize>(header.influenceCount);
-        if(!CanReadBytes(binary, cursor, influenceCount * s_SkinInfluence4BinaryBytes) || !CanStoreValueCount(outInfluences, influenceCount)){
-            error("Skin::loadBinary failed: malformed 'influences' payload");
-            return MakeUnexpected(Failure());
-        }
-        if(!ReadBinaryVectorPayload(binary, influenceCount, cursor, outInfluences).has_value())
-            return MakeUnexpected(Failure());
-
-        if(header.inverseBindMatrixCount > cast<u64>(usize.max / s_SkeletonJointMatrixBinaryBytes)){
-            error("Skin::loadBinary failed: 'inverse bind matrices' payload byte size overflows");
-            return MakeUnexpected(Failure());
-        }
-        const usize matrixCount = cast<usize>(header.inverseBindMatrixCount);
-        if(!CanReadBytes(binary, cursor, matrixCount * s_SkeletonJointMatrixBinaryBytes) || !CanStoreValueCount(outInverseBindMatrices, matrixCount)){
-            error("Skin::loadBinary failed: malformed 'inverse bind matrices' payload");
-            return MakeUnexpected(Failure());
-        }
-        if(!ReadBinaryVectorPayload(binary, matrixCount, cursor, outInverseBindMatrices).has_value())
-            return MakeUnexpected(Failure());
-
-        if(cursor != binary.size()){
-            error("Skin::loadBinary failed: trailing bytes detected");
-            return MakeUnexpected(Failure());
-        }
         SkinBinaryReferences references;
         references.mesh = header.meshNameHash;
         references.skeleton = header.skeletonNameHash;

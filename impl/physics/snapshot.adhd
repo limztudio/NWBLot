@@ -294,28 +294,6 @@ class SnapshotByteReader{
         return true;
     }
 
-    public u8 readU8Unchecked(in Span<u8> data){
-        const u8 v = data[this.cursor];
-        ++this.cursor;
-        return v;
-    }
-
-    public u16 readU16Unchecked(in Span<u8> data){
-        const u16 b0 = cast<u16>(data[this.cursor]);
-        const u16 b1 = cast<u16>(data[this.cursor + 1u]);
-        this.cursor += 2u;
-        return b0 | (b1 << 8u);
-    }
-
-    public u32 readU32Unchecked(in Span<u8> data){
-        const u32 b0 = cast<u32>(data[this.cursor]);
-        const u32 b1 = cast<u32>(data[this.cursor + 1u]);
-        const u32 b2 = cast<u32>(data[this.cursor + 2u]);
-        const u32 b3 = cast<u32>(data[this.cursor + 3u]);
-        this.cursor += 4u;
-        return b0 | (b1 << 8u) | (b2 << 16u) | (b3 << 24u);
-    }
-
     public b8 readI32(in Span<u8> data, mut i32 outVal){
         u32 bits = 0u;
         if(!this.readU32(data, bits))

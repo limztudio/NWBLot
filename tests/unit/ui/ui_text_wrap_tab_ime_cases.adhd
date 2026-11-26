@@ -255,7 +255,7 @@ void VerifyUiTextWrapTabImeTests_MultiClauseImeValidationMaskingAndPaintGeometry
     request.text = view.displayText();
     request.fontSize = 14.0f;
     ASSERT_EQ(view.shape(self.m_text, request), TextLayoutStatus::Success);
-    const Expected<EditBoxPlacement> placement = view.arrange(Rect(10.0f, 10.0f, 300.0f, 40.0f), Insets(), Rect(0.0f, 0.0f, 400.0f, 100.0f), Point());
+    const Expected<EditBoxPlacement> placement = view.arrange(Rect(10.0f, 10.0f, 300.0f, 40.0f), Insets(), Rect(0.0f, 0.0f, 400.0f, 100.0f), Point(), 1.0f, true);
     ASSERT_TRUE(placement.has_value());
 
     EditBoxStyle style = EditBoxStyle();
@@ -268,7 +268,7 @@ void VerifyUiTextWrapTabImeTests_MultiClauseImeValidationMaskingAndPaintGeometry
 
     DisplayMetrics metrics = DisplayMetrics(400.0f, 100.0f, 1.0f, 1.0f);
     self.m_paint.begin(metrics, 1u, self.m_skinGeneration, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
-    ASSERT_TRUE(view.paint(self.m_text, self.m_paint, self.m_skin, placement.value(), style, flags));
+    ASSERT_TRUE(view.paint(self.m_text, self.m_paint, self.m_skin, placement.value(), style, flags, Optional<in TextLayout>()));
     EXPECT_FALSE(self.m_paint.popClip());
     const DrawSnapshot snapshot = self.m_paint.freeze();
     const Color expectedHighlight(style.preeditTarget.r * 0.25f, style.preeditTarget.g * 0.25f, style.preeditTarget.b * 0.25f, 0.25f);

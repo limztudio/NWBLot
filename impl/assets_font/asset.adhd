@@ -22,11 +22,6 @@ class Font{
         this.m_faceIndex = faceIndex;
     }
 
-    public void setFontBytes(in Vector<u8> bytes){
-        this.m_fontBytes = bytes;
-        this.m_faceIndex = 0u;
-    }
-
     public in Vector<u8> fontBytes()const{ return this.m_fontBytes; }
 
     public u32 faceIndex()const{ return this.m_faceIndex; }
@@ -42,10 +37,6 @@ class FontSourceValidator{
 
 b8 ValidateFontSource(in Span<u8> bytes, in u32 faceIndex){
     return FontSourceValidator().validate(bytes, faceIndex);
-}
-
-b8 ValidateFontSource(in Span<u8> bytes){
-    return ValidateFontSource(bytes, 0u);
 }
 
 

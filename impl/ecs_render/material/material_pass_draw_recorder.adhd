@@ -69,7 +69,6 @@ class MaterialPassDrawRecorder : NoCopy{
         in MaterialPassMeshResourceSnapshot mesh,
         in MeshFrameHeapSlots baseFrameHeapSlots,
         in b8 usesAvboit,
-        in b8 hdr10OutputActive,
         in b8 isRefractionCapture,
         in Optional<u32> clipContextHeapSlot
     );
@@ -87,7 +86,6 @@ class MaterialPassDrawRecorder : NoCopy{
         in MaterialPassPipelineResourceSnapshot pipelineResources,
         in MeshFrameHeapSlots baseFrameHeapSlots,
         in b8 usesAvboit,
-        in b8 hdr10OutputActive,
         in b8 isRefractionCapture,
         in Optional<u32> clipContextHeapSlot,
         mut GraphicsPipelineHandle lastPipeline,

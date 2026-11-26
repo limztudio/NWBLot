@@ -386,6 +386,24 @@ class TransparentSoftShadowResolveOptions{
     public b8 graphOwnsTraceToResolve = false;
 }
 
+class SoftShadowDenoiseDispatchOptions{
+    public b8 dispatchOpaqueGeometry = false;
+    public b8 dispatchOpaqueResolve = false;
+    public b8 dispatchTransparentTrace = false;
+    public b8 dispatchTransparentResolve = false;
+    public b8 graphOwnsOpaqueGeometryToResolveBoundary = false;
+    public b8 graphOwnsOpaqueToTransparentBoundary = false;
+    public b8 graphOwnsTransparentTraceToResolveBoundary = false;
+    public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
+    public b8 graphOwnsTransparentTemporalMergeEntryStates = false;
+    public b8 dispatchOpaqueResolveTail = false;
+    public b8 graphOwnsOpaqueTraceToFirstWaveletBoundary = false;
+    public b8 dispatchTransparentResolveTail = false;
+    public b8 splitTransparentResolve = false;
+    public b8 dispatchTransparentTemporalMerge = false;
+    public SoftShadowOpaqueResolvePhase opaquePhase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet;
+}
+
 class SoftwareTransparentShadowTraceInputs{
     public u32 frameIndex = 0u;
     public u32 sampleCount = 0u;

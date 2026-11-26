@@ -2,15 +2,13 @@ import ctypes
 import time
 from window_capture_outcome import SmokeSkip, SmokeFailure, write_status  # noqa: E402
 from window_capture_x11_pixels import X11DrawablePixels  # noqa: E402
-from window_capture_x11_input import (X11InputSender, LinuxXEvent, LinuxXKeyEvent, LinuxXButtonEvent, LinuxXMotionEvent, LINUX_X_INPUT_EVENT_PREFIX)  # noqa: E402
+from window_capture_x11_input import X11InputSender  # noqa: E402
 
 
 LIT_WINDOW_POLL_SECONDS = 0.1
 LIT_FOCUS_SETTLE_SECONDS = 0.1
 LIT_KEY_PRESS_SECONDS = 0.05
 LIT_CAPTURE_RAISE_SETTLE_SECONDS = 0.2
-LIT_LITTLE = "little"
-LIT_BIG = "big"
 LIT_X = "x"
 LIT_Y = "y"
 LIT_UTF_8 = "utf-8"
@@ -19,8 +17,6 @@ LIT_WIDTH = "width"
 LIT_HEIGHT = "height"
 LIT_DEPTH = "depth"
 LIT_ROOT = "root"
-LIT_TYPE = "type"
-LIT_SAME_SCREEN = "same_screen"
 class LinuxXWindowAttributes(ctypes.Structure):
     _fields_ = [(LIT_X, ctypes.c_int), (LIT_Y, ctypes.c_int), (LIT_WIDTH, ctypes.c_int), (LIT_HEIGHT, ctypes.c_int), ("border_width", ctypes.c_int), (LIT_DEPTH, ctypes.c_int), ("visual", ctypes.c_void_p), (LIT_ROOT, ctypes.c_ulong), ("class", ctypes.c_int),
         ("bit_gravity", ctypes.c_int), ("win_gravity", ctypes.c_int), ("backing_store", ctypes.c_int), ("backing_planes", ctypes.c_ulong), ("backing_pixel", ctypes.c_ulong), ("save_under", ctypes.c_int), ("colormap", ctypes.c_ulong),

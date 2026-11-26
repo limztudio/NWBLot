@@ -2,7 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma once
+#ifndef NWB_PHYSICS_SOLVER_CONTACT_HELPERS_SLANGI
+#define NWB_PHYSICS_SOLVER_CONTACT_HELPERS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "solver_body_helpers.slangi"
@@ -47,10 +51,6 @@ void nwbPhysicsApplyPointImpulse(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#ifndef NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE
-#define NWB_PHYSICS_ISLAND_ACTIVE_WG_SIZE NWB_PHYSICS_ISLAND_WORKGROUP_SIZE
-#endif
 
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
 groupshared uint g_NwbPhysicsLdsContactOffset;
@@ -102,42 +102,25 @@ void nwbPhysicsClearIslandContactWarmStartLds(
 void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constraintSlot, const uint outSlot, const bool hasRolling, const bool hasHitEvents){
     NwbPhysicsGpuContactImpulseOut outImp;
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
-    outImp.normalImpulses = g_NwbPhysicsLdsContactNormImp[constraintIdx - g_NwbPhysicsLdsContactOffset];
-    outImp.totalNormalImpulses = g_NwbPhysicsLdsContactTotalNormImp[constraintIdx - g_NwbPhysicsLdsContactOffset];
-    const float4 ftr = g_NwbPhysicsLdsContactFricTwistRest[constraintIdx - g_NwbPhysicsLdsContactOffset];
-    const float remainingNormal = outImp.normalImpulses.x + outImp.normalImpulses.y + outImp.normalImpulses.z + outImp.normalImpulses.w;
+    const uint ldsIdx = constraintIdx - g_NwbPhysicsLdsContactOffset;
+    const float4 normImp = g_NwbPhysicsLdsContactNormImp[ldsIdx];
+    const float4 totalImp = g_NwbPhysicsLdsContactTotalNormImp[ldsIdx];
+    const float4 ftr = g_NwbPhysicsLdsContactFricTwistRest[ldsIdx];
+    const float2 ft = ftr.xy;
+    const float twist = ftr.z;
     const bool anyRestitution = (ftr.w != 0.0f);
-    float maxApproach = 0.0f;
-    uint maxApproachIdx = 0u;
-    if(hasHitEvents){
-        const uint pointCount = min(g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].indicesCountFlags.z, NWB_PHYSICS_MAX_MANIFOLD_POINTS);
-        for(uint i = 0u; i < pointCount; ++i){
-            const float relVel = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].rBRelVel.w;
-            const float ti = outImp.totalNormalImpulses[i];
-            const float approach = -relVel;
-            if(approach > maxApproach && ti > 0.0f){
-                maxApproach = approach;
-                maxApproachIdx = i;
-            }
-        }
-    }
-    if(anyRestitution && remainingNormal <= 0.0f){
-        outImp.frictionTwistRollX = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        outImp.rollYZMaxApproach = float4(0.0f, 0.0f, maxApproach, asfloat(maxApproachIdx));
-    }
-    else{
-        const float3 roll = hasRolling ? g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].rollingImpulsePad.xyz : float3(0.0f, 0.0f, 0.0f);
-        outImp.frictionTwistRollX = float4(ftr.x, ftr.y, ftr.z, roll.x);
-        outImp.rollYZMaxApproach = float4(roll.y, roll.z, maxApproach, asfloat(maxApproachIdx));
-    }
-    g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx] = outImp;
+    const float3 roll = hasRolling ? g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].rollingImpulsePad.xyz : float3(0.0f, 0.0f, 0.0f);
 #else
     const float4 normImp = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalImpulses;
     const uint totalImpSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
     const float4 totalImp = g_NwbPhysicsFloat4Buffers[totalImpSlot][constraintIdx];
     const float4 rollMeta = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].rollingImpulsePad;
-    const float remainingNormal = normImp.x + normImp.y + normImp.z + normImp.w;
+    const float2 ft = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction.zw;
+    const float twist = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].centerBTwistImpulse.w;
     const bool anyRestitution = (rollMeta.w != 0.0f);
+    const float3 roll = hasRolling ? rollMeta.xyz : float3(0.0f, 0.0f, 0.0f);
+#endif
+    const float remainingNormal = normImp.x + normImp.y + normImp.z + normImp.w;
     float maxApproach = 0.0f;
     uint maxApproachIdx = 0u;
     if(hasHitEvents){
@@ -157,16 +140,12 @@ void nwbPhysicsExportContactImpulses(const uint constraintIdx, const uint constr
         outImp.rollYZMaxApproach = float4(0.0f, 0.0f, maxApproach, asfloat(maxApproachIdx));
     }
     else{
-        const float2 ft = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentMassFriction.zw;
-        const float twist = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].centerBTwistImpulse.w;
-        const float3 roll = hasRolling ? rollMeta.xyz : float3(0.0f, 0.0f, 0.0f);
         outImp.frictionTwistRollX = float4(ft.x, ft.y, twist, roll.x);
         outImp.rollYZMaxApproach = float4(roll.y, roll.z, maxApproach, asfloat(maxApproachIdx));
     }
     outImp.normalImpulses = normImp;
     outImp.totalNormalImpulses = totalImp;
     g_NwbPhysicsContactImpulseOutBuffers[outSlot][constraintIdx] = outImp;
-#endif
 }
 
 void nwbPhysicsClearContactWarmStart(const uint constraintIdx, const uint constraintSlot){
@@ -207,6 +186,34 @@ void nwbPhysicsApplyContactCustomScales(
     invIB1.xy *= sIB;
 }
 
+void nwbPhysicsLoadContactBodyPairMasses(
+    const uint bodySimSlot,
+    const uint indexA,
+    const uint indexB,
+    const uint flagsA,
+    const uint flagsB,
+    const uint customScaleFlags,
+    out bool outHasA,
+    out bool outHasB,
+    out bool outDynA,
+    out bool outDynB,
+    out float outInvMassA,
+    out float4 outInvIA0,
+    out float4 outInvIA1,
+    out float outInvMassB,
+    out float4 outInvIB0,
+    out float4 outInvIB1,
+    out float outMaxNormalImpulse
+){
+    outHasA = (indexA != NWB_PHYSICS_INVALID_INDEX);
+    outHasB = (indexB != NWB_PHYSICS_INVALID_INDEX);
+    outDynA = outHasA && ((flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
+    outDynB = outHasB && ((flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
+    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexA, flagsA, outInvMassA, outInvIA0, outInvIA1);
+    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, outInvMassB, outInvIB0, outInvIB1);
+    nwbPhysicsApplyContactCustomScales(customScaleFlags, outInvMassA, outInvIA0, outInvIA1, outInvMassB, outInvIB0, outInvIB1, outMaxNormalImpulse);
+}
+
 void nwbPhysicsWarmStartContact(
     const uint constraintIdx,
     const uint bodySimSlot,
@@ -239,25 +246,20 @@ void nwbPhysicsWarmStartContact(
     uint flagsB;
     nwbPhysicsLoadBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
 
-    const bool hasA = (indexA != NWB_PHYSICS_INVALID_INDEX);
-    const bool hasB = (indexB != NWB_PHYSICS_INVALID_INDEX);
-    const bool dynA = hasA && ((flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
-    const bool dynB = hasB && ((flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
-    if(!dynA && !dynB)
-        return;
-
+    bool hasA;
+    bool hasB;
+    bool dynA;
+    bool dynB;
     float invMassA;
     float4 invIA0;
     float4 invIA1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexA, flagsA, invMassA, invIA0, invIA1);
-
     float invMassB;
     float4 invIB0;
     float4 invIB1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, invIB0, invIB1);
-
     float dummyMaxNormalImpulse;
-    nwbPhysicsApplyContactCustomScales(meta.w, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, dummyMaxNormalImpulse);
+    nwbPhysicsLoadContactBodyPairMasses(bodySimSlot, indexA, indexB, flagsA, flagsB, meta.w, hasA, hasB, dynA, dynB, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, dummyMaxNormalImpulse);
+    if(!dynA && !dynB)
+        return;
 
     const float3 normal = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalFriction.xyz;
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
@@ -377,26 +379,22 @@ void nwbPhysicsRestitutionContact(
     uint flagsB;
     nwbPhysicsLoadBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
 
-    const bool hasA = (indexA != NWB_PHYSICS_INVALID_INDEX);
-    const bool hasB = (indexB != NWB_PHYSICS_INVALID_INDEX);
-    const bool dynA = hasA && ((flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
-    const bool dynB = hasB && ((flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
-    if(!dynA && !dynB)
-        return;
-
+    bool hasA;
+    bool hasB;
+    bool dynA;
+    bool dynB;
     float invMassA;
     float4 invIA0;
     float4 invIA1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexA, flagsA, invMassA, invIA0, invIA1);
-
     float invMassB;
     float4 invIB0;
     float4 invIB1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, invIB0, invIB1);
+    float maxNormalImpulse;
+    nwbPhysicsLoadContactBodyPairMasses(bodySimSlot, indexA, indexB, flagsA, flagsB, meta.w, hasA, hasB, dynA, dynB, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, maxNormalImpulse);
+    if(!dynA && !dynB)
+        return;
 
     const float3 normal = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalFriction.xyz;
-    float maxNormalImpulse = 3.4e38f;
-    nwbPhysicsApplyContactCustomScales(meta.w, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, maxNormalImpulse);
     const float4 normalMasses = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalMasses;
 #ifdef NWB_PHYSICS_USE_LDS_CONTACT_IMPULSES
     const uint ldsIdx = constraintIdx - g_NwbPhysicsLdsContactOffset;
@@ -499,24 +497,20 @@ void nwbPhysicsSolveContactVelocity(
     uint flagsB;
     nwbPhysicsLoadBodyState(bodyStateSlot, indexB, vB, wB, deltaPosB, deltaRotB, flagsB);
 
-    const bool hasA = (indexA != NWB_PHYSICS_INVALID_INDEX);
-    const bool hasB = (indexB != NWB_PHYSICS_INVALID_INDEX);
-    const bool dynA = hasA && ((flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
-    const bool dynB = hasB && ((flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u);
-
+    bool hasA;
+    bool hasB;
+    bool dynA;
+    bool dynB;
     float invMassA;
     float4 invIA0;
     float4 invIA1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexA, flagsA, invMassA, invIA0, invIA1);
-
     float invMassB;
     float4 invIB0;
     float4 invIB1;
-    nwbPhysicsLoadBodyInvInertia(bodySimSlot, indexB, flagsB, invMassB, invIB0, invIB1);
+    float maxNormalImpulse;
+    nwbPhysicsLoadContactBodyPairMasses(bodySimSlot, indexA, indexB, flagsA, flagsB, meta.w, hasA, hasB, dynA, dynB, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, maxNormalImpulse);
 
     const float4 nf = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].normalFriction;
-    float maxNormalImpulse = 3.4e38f;
-    nwbPhysicsApplyContactCustomScales(meta.w, invMassA, invIA0, invIA1, invMassB, invIB0, invIB1, maxNormalImpulse);
     const float3 normal = nf.xyz;
     const float friction = nf.w;
     const float4 tvrml = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].tangentVelRollMaxLever;
@@ -859,6 +853,15 @@ void nwbPhysicsIslandSolveContactsPass(
     }
 }
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -12,7 +12,6 @@ void PopulateReflectionFrameSettingsParameters(in ReflectionSettings settings, m
     outParameters.traceMode = cast<u32>(settings.traceMode);
     outParameters.samplingSeed = settings.samplingSeed;
     outParameters.maxOpticalQueries = settings.maxOpticalQueries;
-    outParameters.debugView = cast<u32>(settings.debugView);
     outParameters.maxRayDistance = settings.maxRayDistance;
     outParameters.distanceFadeStart = settings.distanceFadeStart;
     outParameters.roughnessCutoff = settings.roughnessCutoff;
@@ -92,7 +91,6 @@ void PopulateReflectionSnapshotFrameParameters(
     in ReflectionSettings settings,
     in b8 sceneValidAndHasHardwarePipeline,
     in u32 opaqueSpecularSlot,
-    in u32 glassSpecularSlot,
     in u32 historySampleIndex,
     in u32 currentOpaqueOutputSlot,
     in u32 currentOpaqueSampledSlot,
@@ -113,7 +111,6 @@ void PopulateReflectionSnapshotFrameParameters(
     else
         inOutParameters.hardwareEnabled = 0u;
     inOutParameters.opaqueSpecularSlot = opaqueSpecularSlot;
-    inOutParameters.glassSpecularSlot = glassSpecularSlot;
     inOutParameters.maxHardwareRays = Min(settings.maxHardwareRaysPerFrame, inOutParameters.queueCapacity);
     inOutParameters.sampleIndex = historySampleIndex;
     inOutParameters.opaqueOutputSlot = currentOpaqueOutputSlot;

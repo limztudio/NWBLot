@@ -4,6 +4,7 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include "ui_fixture_widget_base.adhd"
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -269,6 +270,22 @@ void BeginPaintTextFixture(mut PaintTextFixture self, in u64 generation){
 
 void BeginTextVisibleFixturePaint(mut TextVisibleFixture self, in u64 generation, in DisplayMetrics display){
     self.m_paint.begin(display, generation, 1u, MakeUiFixtureAssetRef<UiSkin>(s_TestSkinPath), self.m_skin);
+}
+
+usize UiSharedAddress<Value>(in Shared<Value> handle){
+    if(handle.valid())
+        return TestValueAddress<Value>(handle.deref());
+    return 0u;
+}
+usize UiPaintGlyphPageAddress(in SharedGlyphPage page){ return UiSharedAddress<GlyphPage>(page); }
+u64 UiPaintGlyphPageGeneration(in SharedGlyphPage page){ return page.deref().binding().generation; }
+u8 UiPaintGlyphPagePixel(in SharedGlyphPage page, in usize index){ return page.deref().pixels()[index]; }
+
+Expected<Rect> UiTextGlyphAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
+    VectorDouble rectangle(0.0);
+    if(!atlas.valid() || !LoadAtlasRectangle(glyph, atlas.deref(), size, origin, rectangle))
+        return MakeUnexpected(Failure());
+    return ToTextGlyphAtlasRect(rectangle);
 }
 
 

@@ -14,6 +14,7 @@
 
 [component("physics_parent")]
 class PhysicsParentComponent{
+    [transient]
     public EntityID parent = s_InvalidEntityId;
     public Name parentEntityName = s_NameNone;
     public b8 inheritScale = true;
@@ -56,7 +57,9 @@ class RigidBodyComponent{
     public b8 enableGyroscopicTorque = false;
     public b8 hasCustomMaxAngularVelocity = false;
     public b8 driveKinematicFromTransform = false;
+    [transient]
     public b8 dirty = true;
+    [transient]
     public BodyId runtimeBodyId;
 }
 
@@ -133,226 +136,49 @@ class ColliderShapeEntry{
 
 [component("collider")]
 class ColliderComponent{
-    public ShapeType shapeType = ShapeType::Hull;
-    public f32x4 center(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 center2(0.0f, 0.5f, 0.0f, 0.0f);
-    public f32x4 halfExtents(0.5f, 0.5f, 0.5f, 0.0f);
-    public f32x4 localRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32 radius = 0.5f;
-    public f32 skinRadius = 0.0f;
-    public f32 density = 1.0f;
-    public f32 friction = 0.6f;
-    public f32 restitution = 0.0f;
-    public f32 rollingResistance = 0.0f;
-    public f32 tangentSpeed = 0.0f;
-    public u32 categoryBits = 0x00000001u;
-    public u32 maskBits = u32.max;
-    public i32 groupIndex = 0;
-    public Name collisionLayer = s_NameNone;
-    public u64 userData = 0u;
+    public ColliderShapeEntry primaryShape;
     public Name entityTag = s_NameNone;
-    public b8 isBox = true;
-    public b8 isSensor = false;
-    public b8 enableContactEvents = false;
-    public b8 enableHitEvents = false;
-    public b8 enableSensorEvents = false;
-    public b8 enablePreSolveEvents = false;
-    public b8 invokeContactCreation = false;
-    public Vector<f32x4> hullPoints;
-    public Vector<f32x4> meshVertices;
-    public Vector<u32> meshIndices;
-    public AssetRef<Mesh> meshAsset;
-    public AssetRef<PhysicsMaterialAsset> materialAsset;
-    public AssetRef<ConvexHullAsset> convexHullAsset;
-    public AssetRef<CompoundHullAsset> compoundHullAsset;
-    public AssetRef<CollisionMeshAsset> collisionMeshAsset;
-    public AssetRef<HeightfieldAsset> heightfieldAsset;
-    public f32 staticFriction = -1.0f;
-    public f32x4 anisotropicFriction(1.0f, 1.0f, 1.0f, 0.0f);
-    public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 frictionDirection(1.0f, 0.0f, 0.0f, 0.0f);
-    public MaterialCombineMode frictionCombineMode = MaterialCombineMode::GeometricMean;
-    public MaterialCombineMode restitutionCombineMode = MaterialCombineMode::Max;
-    public b8 cullBackfaces = false;
-    public b8 autoConvexDecompose = false;
-    public u32 vhacdMaxHulls = 16u;
-    public f32 cylinderHalfHeight = 0.5f;
-    public f32 topRadius = 0.25f;
-    public f32x4 planeNormalOffset(0.0f, 1.0f, 0.0f, 0.0f);
-    public Vector<f32> heightfieldHeights;
-    public u32 heightfieldRows = 0u;
-    public u32 heightfieldCols = 0u;
-    public f32x4 heightfieldScale(1.0f, 1.0f, 1.0f, 0.0f);
-    public f32 heightfieldThickness = 0.0f;
-    public Vector<SurfaceMaterial> heightfieldMaterials;
-    public Vector<u16> heightfieldCellMaterialIndices;
-    public b8 isChain = false;
-    public Vector<f32x4> chainPoints;
-    public b8 chainClosed = false;
-    public f32 chainRadius = 0.0f;
-    public b8 heightfieldFlipDiagonal = false;
-    public Vector<u8> heightfieldCellHoles;
-    public u32 vhacdMaxRecursionDepth = 8u;
-    public f32 vhacdConcavityThreshold = 0.02f;
-    public u32 vhacdMaxVerticesPerHull = 32u;
-    public f32 vhacdMinVolumeRatio = 0.001f;
-    public b8 vhacdEnableArbitraryPlanes = true;
-    public b8 vhacdEnableHullMerging = true;
-    public f32 vhacdMergeVolumeTolerance = 0.05f;
-    public b8 syncCsgCuts = false;
-    public b8 useMeshComponentFallback = false;
     public Vector<ColliderShapeEntry> extraShapes;
+    [transient]
     public b8 dirty = true;
+    [transient]
     public ShapeId runtimeShapeId;
+    [transient]
     public Vector<ShapeId> runtimeExtraShapeIds;
+    [transient]
     public BodyId boundBodyId;
 }
 
 [arena, reflect]
 class JointEntry{
+    [transient]
     public EntityID bodyEntityA;
+    [transient]
     public EntityID bodyEntityB;
     public Name bodyEntityNameA = s_NameNone;
     public Name bodyEntityNameB = s_NameNone;
     public u64 userData = 0u;
-    public JointType type = JointType::Distance;
-    public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public b8 useReferenceRotation = false;
-    public f32 length = 1.0f;
-    public f32 minLength = 0.0f;
-    public f32 maxLength = s_HugeCoordinate;
-    public b8 enableLimit = false;
-    public f32 lowerLimit = 0.0f;
-    public f32 upperLimit = 0.0f;
-    public b8 enableMotor = false;
-    public f32 motorSpeed = 0.0f;
-    public f32 maxMotorForce = 0.0f;
-    public b8 enableSpring = false;
-    public f32 hertz = 0.0f;
-    public f32 dampingRatio = 1.0f;
-    public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 correctionFactor = 0.3f;
-    public f32 maxTorque = 0.0f;
-    public f32 swingLimit = 0.0f;
-    public f32 suspensionHertz = 4.0f;
-    public f32 suspensionDampingRatio = 0.7f;
-    public f32 breakForce = 0.0f;
-    public f32 breakTorque = 0.0f;
-    public b8 collideConnected = false;
-    public b8 enabled = true;
-    public b8 enableProjection = false;
-    public f32 projectionLinearTolerance = 0.1f;
-    public f32 projectionAngularTolerance = 0.1f;
-    public f32 invMassScaleA = 1.0f;
-    public f32 invMassScaleB = 1.0f;
-    public f32 invInertiaScaleA = 1.0f;
-    public f32 invInertiaScaleB = 1.0f;
-    public f32 limitRestitution = 0.0f;
-    public f32 limitHertz = 0.0f;
-    public f32 limitDampingRatio = 1.0f;
-    public f32 swingLimitY = 0.0f;
-    public f32 springTarget = 0.0f;
-    public f32 steeringAngle = 0.0f;
-    public f32 suspensionRestLength = 0.0f;
-    public f32 ratio = 1.0f;
-    public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 lengthA = 0.0f;
-    public f32 lengthB = 0.0f;
-    public Array<SixDofAxisConfig, 6u> sixDofAxes;
+    public JointSettings settings;
     public Vector<f32x4> pathPoints;
-    public b8 pathClosed = false;
-    public b8 pathLockRotation = false;
-    public b8 enableTwistLimit = false;
-    public b8 enableSlerpDrive = false;
-    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32 slerpHertz = 0.0f;
-    public f32 slerpDampingRatio = 1.0f;
-    public f32 slerpMaxTorque = 0.0f;
-    public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
-    public f32 sixDofSwingLimitY = 0.0f;
-    public f32 sixDofSwingLimitZ = 0.0f;
 }
 
 [component("joint")]
 class JointComponent{
-    public EntityID bodyEntityA;
-    public EntityID bodyEntityB;
-    public Name bodyEntityNameA = s_NameNone;
-    public Name bodyEntityNameB = s_NameNone;
-    public u64 userData = 0u;
-    public JointType type = JointType::Distance;
-    public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 localAxisA(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32x4 localAxisB(0.0f, 1.0f, 0.0f, 0.0f);
-    public f32x4 referenceRotation(0.0f, 0.0f, 0.0f, 1.0f);
-    public b8 useReferenceRotation = false;
-    public f32 length = 1.0f;
-    public f32 minLength = 0.0f;
-    public f32 maxLength = s_HugeCoordinate;
-    public b8 enableLimit = false;
-    public f32 lowerLimit = 0.0f;
-    public f32 upperLimit = 0.0f;
-    public b8 enableMotor = false;
-    public f32 motorSpeed = 0.0f;
-    public f32 maxMotorForce = 0.0f;
-    public b8 enableSpring = false;
-    public f32 hertz = 0.0f;
-    public f32 dampingRatio = 1.0f;
-    public f32x4 linearOffset(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 correctionFactor = 0.3f;
-    public f32 maxTorque = 0.0f;
-    public f32 swingLimit = 0.0f;
-    public f32 suspensionHertz = 4.0f;
-    public f32 suspensionDampingRatio = 0.7f;
-    public f32 breakForce = 0.0f;
-    public f32 breakTorque = 0.0f;
-    public b8 collideConnected = false;
-    public b8 enabled = true;
-    public b8 enableProjection = false;
-    public f32 projectionLinearTolerance = 0.1f;
-    public f32 projectionAngularTolerance = 0.1f;
-    public f32 invMassScaleA = 1.0f;
-    public f32 invMassScaleB = 1.0f;
-    public f32 invInertiaScaleA = 1.0f;
-    public f32 invInertiaScaleB = 1.0f;
-    public f32 limitRestitution = 0.0f;
-    public f32 limitHertz = 0.0f;
-    public f32 limitDampingRatio = 1.0f;
-    public f32 swingLimitY = 0.0f;
-    public f32 springTarget = 0.0f;
-    public f32 steeringAngle = 0.0f;
-    public f32 suspensionRestLength = 0.0f;
-    public f32 ratio = 1.0f;
-    public f32x4 groundAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 groundAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32 lengthA = 0.0f;
-    public f32 lengthB = 0.0f;
-    public Array<SixDofAxisConfig, 6u> sixDofAxes;
-    public Vector<f32x4> pathPoints;
-    public b8 pathClosed = false;
-    public b8 pathLockRotation = false;
-    public b8 enableTwistLimit = false;
-    public b8 enableSlerpDrive = false;
-    public f32x4 targetOrientation(0.0f, 0.0f, 0.0f, 1.0f);
-    public f32 slerpHertz = 0.0f;
-    public f32 slerpDampingRatio = 1.0f;
-    public f32 slerpMaxTorque = 0.0f;
-    public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
-    public f32 sixDofSwingLimitY = 0.0f;
-    public f32 sixDofSwingLimitZ = 0.0f;
+    public JointEntry primaryJoint;
     public Vector<JointEntry> extraJoints;
+    [transient]
     public b8 dirty = true;
+    [transient]
     public JointId runtimeJointId;
+    [transient]
     public BodyId boundBodyIdA;
+    [transient]
     public BodyId boundBodyIdB;
+    [transient]
     public Vector<JointId> runtimeExtraJointIds;
+    [transient]
     public Vector<BodyId> boundExtraBodyIdAs;
+    [transient]
     public Vector<BodyId> boundExtraBodyIdBs;
 }
 
@@ -384,6 +210,7 @@ class PhysicsWorldConfigComponent{
     public b8 interpolateTransforms = false;
     public b8 publishEventsToMessageBus = false;
     public b8 publishContinuousEventsToMessageBus = false;
+    [transient]
     public b8 dirty = true;
 }
 

@@ -81,38 +81,66 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     set(_nwb_gi_coverage_probe_ctest_timeout_seconds 270)
     set(_nwb_csg_gi_smoke_timeout_seconds 900)
 
+    if(TARGET nwb_logserver)
+        set(_nwb_smoke_required_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+        set(_nwb_smoke_optional_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+    else()
+        set(_nwb_smoke_required_logserver_args "--no-logserver")
+        set(_nwb_smoke_optional_logserver_args)
+    endif()
+
+    function(nwb_add_fixture_smoke_assets TARGET_NAME FIXTURE_NAME RUNTIME_ROOT DESCRIPTION)
+        cmake_parse_arguments(PARSE_ARGV 4 _nwb_fixture "" "COMMENT;INPUTS_VAR" "ASSET_ROOTS;SMOKE_ROOTS")
+        if(DEFINED _nwb_fixture_ASSET_ROOTS)
+            set(_nwb_fixture_asset_roots ${_nwb_fixture_ASSET_ROOTS})
+        else()
+            set(_nwb_fixture_asset_roots "impl/assets" "tests/smoke/assets")
+        endif()
+        foreach(_nwb_fixture_smoke_root IN LISTS _nwb_fixture_SMOKE_ROOTS)
+            list(APPEND _nwb_fixture_asset_roots "tests/smoke/${_nwb_fixture_smoke_root}")
+        endforeach()
+        set(_nwb_fixture_asset_root_args)
+        set(_nwb_fixture_input_patterns "${PROJECT_SOURCE_DIR}/global/slang/*")
+        foreach(_nwb_fixture_root IN LISTS _nwb_fixture_asset_roots)
+            list(APPEND _nwb_fixture_asset_root_args --asset-root "${_nwb_fixture_root}")
+            list(APPEND _nwb_fixture_input_patterns "${PROJECT_SOURCE_DIR}/${_nwb_fixture_root}/*")
+        endforeach()
+        file(GLOB_RECURSE _nwb_fixture_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false ${_nwb_fixture_input_patterns})
+        if(_nwb_fixture_INPUTS_VAR)
+            set(${_nwb_fixture_INPUTS_VAR} "${_nwb_fixture_asset_inputs}" PARENT_SCOPE)
+        endif()
+        set(_nwb_fixture_comment "Cooking NWB ${DESCRIPTION} smoke assets for $<CONFIG>...")
+        if(_nwb_fixture_COMMENT)
+            set(_nwb_fixture_comment "${_nwb_fixture_COMMENT}")
+        endif()
+        set(_nwb_fixture_asset_stamp "${RUNTIME_ROOT}/res/.nwb_${FIXTURE_NAME}_assets_$<CONFIG>.stamp")
+        add_custom_command(OUTPUT "${_nwb_fixture_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${RUNTIME_ROOT}/res"
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" ${_nwb_fixture_asset_root_args}
+                --output-directory "${RUNTIME_ROOT}/res" --configuration "$<CONFIG>"
+            COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_fixture_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
+                ${_nwb_fixture_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "${_nwb_fixture_comment}" VERBATIM USES_TERMINAL)
+        add_custom_target("${TARGET_NAME}" DEPENDS "${_nwb_fixture_asset_stamp}")
+    endfunction()
+
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
         cmake_parse_arguments(PARSE_ARGV 5 _nwb_smoke "" "" "CONFIGURATIONS")
 
-        if(TARGET nwb_logserver)
-            set(_nwb_smoke_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
-        else()
-            set(_nwb_smoke_logserver_args "--no-logserver")
-        endif()
         if(_nwb_smoke_CONFIGURATIONS)
             set(_nwb_smoke_configuration_args CONFIGURATIONS ${_nwb_smoke_CONFIGURATIONS})
         else()
             set(_nwb_smoke_configuration_args)
         endif()
         add_test(NAME "${TEST_NAME}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke.py" "--executable" "${EXECUTABLE_PATH}" "--working-directory" "${WORKING_DIRECTORY}"
-                "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}" "--window-title" "${WINDOW_TITLE}" ${_nwb_smoke_logserver_args} ${_nwb_smoke_UNPARSED_ARGUMENTS} ${_nwb_smoke_configuration_args})
+                "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}" "--window-title" "${WINDOW_TITLE}" ${_nwb_smoke_required_logserver_args} ${_nwb_smoke_UNPARSED_ARGUMENTS} ${_nwb_smoke_configuration_args})
         set_tests_properties("${TEST_NAME}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_window_capture_smoke_ctest_timeout_seconds})
     endfunction()
 
     if(TARGET testbed)
         set(_nwb_testbed_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/testbed_runtime/$<CONFIG>")
-        file(GLOB_RECURSE _nwb_testbed_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/assets/*")
-        set(_nwb_testbed_smoke_asset_stamp "${_nwb_testbed_smoke_runtime_root}/res/.nwb_testbed_smoke_assets_$<CONFIG>.stamp")
-        add_custom_command(OUTPUT "${_nwb_testbed_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_testbed_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
-                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "CoolStuff/Testbed/assets" --output-directory "${_nwb_testbed_smoke_runtime_root}/res"
-                --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_smoke_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_testbed_smoke_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB Testbed smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
-        add_custom_target(nwb_testbed_smoke_assets DEPENDS "${_nwb_testbed_smoke_asset_stamp}")
+        nwb_add_fixture_smoke_assets(nwb_testbed_smoke_assets testbed_smoke "${_nwb_testbed_smoke_runtime_root}" "Testbed" ASSET_ROOTS "impl/assets" "CoolStuff/Testbed/assets")
         add_dependencies(testbed nwb_testbed_smoke_assets)
         nwb_add_window_capture_smoke(nwb_testbed_window_capture_smoke testbed_window_capture.bmp "$<TARGET_FILE:testbed>" "${_nwb_testbed_smoke_runtime_root}" "NWB Testbed"
             "--timeout" "120" "--graceful-exit-timeout" "30" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
-        unset(_nwb_testbed_smoke_asset_stamp)
-        unset(_nwb_testbed_smoke_asset_inputs)
         unset(_nwb_testbed_smoke_runtime_root)
     endif()
 
@@ -162,23 +190,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         endif()
     endfunction()
 
-    function(nwb_add_fixture_smoke_assets TARGET_NAME FIXTURE_NAME RUNTIME_ROOT DESCRIPTION)
-        set(_nwb_fixture_asset_root_args --asset-root "impl/assets" --asset-root "tests/smoke/assets")
-        set(_nwb_fixture_input_patterns "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
-        foreach(_nwb_fixture_root IN LISTS ARGN)
-            list(APPEND _nwb_fixture_asset_root_args --asset-root "tests/smoke/${_nwb_fixture_root}")
-            list(APPEND _nwb_fixture_input_patterns "${CMAKE_CURRENT_LIST_DIR}/${_nwb_fixture_root}/*")
-        endforeach()
-        file(GLOB_RECURSE _nwb_fixture_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false ${_nwb_fixture_input_patterns})
-        set(_nwb_fixture_asset_stamp "${RUNTIME_ROOT}/res/.nwb_${FIXTURE_NAME}_assets_$<CONFIG>.stamp")
-        add_custom_command(OUTPUT "${_nwb_fixture_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${RUNTIME_ROOT}/res"
-            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" ${_nwb_fixture_asset_root_args}
-                --output-directory "${RUNTIME_ROOT}/res" --configuration "$<CONFIG>"
-            COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_fixture_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
-                ${_nwb_fixture_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB ${DESCRIPTION} smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
-        add_custom_target("${TARGET_NAME}" DEPENDS "${_nwb_fixture_asset_stamp}")
-    endfunction()
-
     if(TARGET nwb_loader AND TARGET nwb_asset_builder)
         set(_nwb_transparent_multi_runtime_root "${CMAKE_BINARY_DIR}/Testing/smoke_runtime/$<CONFIG>")
 
@@ -197,15 +208,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_target_adhd_definitions(nwb_frame_lagged_async_lighting_smoke NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1)
         nwb_configure_runtime_smoke_target(nwb_frame_lagged_async_lighting_smoke "${_nwb_transparent_multi_runtime_root}" transparent_multi_runtime)
 
-        file(GLOB_RECURSE _nwb_transparent_multi_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*" "${CMAKE_CURRENT_LIST_DIR}/shared_assets/*")
-
-        set(_nwb_transparent_multi_asset_stamp "${_nwb_transparent_multi_runtime_root}/res/.nwb_transparent_multi_assets_$<CONFIG>.stamp")
-        add_custom_command(OUTPUT "${_nwb_transparent_multi_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_transparent_multi_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
-                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --asset-root "tests/smoke/shared_assets"
-                --output-directory "${_nwb_transparent_multi_runtime_root}/res" --configuration "$<CONFIG>"
-                COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_transparent_multi_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB transparent smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
-        add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
+        nwb_add_fixture_smoke_assets(nwb_transparent_multi_smoke_assets transparent_multi "${_nwb_transparent_multi_runtime_root}" "transparent" SMOKE_ROOTS shared_assets INPUTS_VAR _nwb_transparent_multi_asset_inputs)
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
@@ -278,10 +281,9 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_dependencies(nwb_caustic_sphere_smoke nwb_transparent_multi_smoke_assets)
 
         add_test(NAME nwb_caustic_optical_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--executable" "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
-                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/caustic_optical" ${_nwb_reflection_logserver_args})
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}" "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/caustic_optical" ${_nwb_smoke_optional_logserver_args})
         set_tests_properties(nwb_caustic_optical_capture_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_caustic_optical_smoke_timeout_seconds})
 
-        unset(_nwb_transparent_multi_asset_stamp)
         unset(_nwb_transparent_multi_runtime_root)
         unset(_nwb_transparent_multi_asset_inputs)
 
@@ -304,7 +306,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_scene_tests.adhd"
         )
         target_link_libraries(nwb_csg_visible_scene_tests PRIVATE nwb_ecs_csg nwb_ecs_scene nwb_ecs_mesh nwb_ecs_render nwb_input nwb_common nwb_alloc nwb_presentation_smoke_types nwb_smoke_runtime_helpers)
-        nwb_add_fixture_smoke_assets(nwb_csg_visible_smoke_assets csg_visible "${_nwb_csg_visible_runtime_root}" "CSG visible" csg_visible_assets)
+        nwb_add_fixture_smoke_assets(nwb_csg_visible_smoke_assets csg_visible "${_nwb_csg_visible_runtime_root}" "CSG visible" SMOKE_ROOTS csg_visible_assets)
         add_dependencies(nwb_csg_visible_smoke nwb_csg_visible_smoke_assets)
 
         function(nwb_add_csg_temporal_smoke TEST_SUFFIX VIEW MOTION ROUTE FRAME_INTERVAL)
@@ -316,15 +318,11 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             elseif(VIEW STREQUAL "span_state")
                 set(_nwb_csg_temporal_check "--check-spans")
             endif()
-            set(_nwb_csg_temporal_logserver_args)
-            if(TARGET nwb_logserver)
-                set(_nwb_csg_temporal_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
-            endif()
             set(_nwb_csg_temporal_test "nwb_csg_gi_${TEST_SUFFIX}_smoke")
             add_test(NAME "${_nwb_csg_temporal_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_temporal_smoke.py" "--executable" "$<TARGET_FILE:nwb_csg_visible_smoke>" "--working-directory" "${_nwb_csg_visible_runtime_root}"
                     "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${TEST_SUFFIX}" "--view" "${VIEW}" "--motion" "${MOTION}" "--route" "${ROUTE}"
                     "--frame-interval" "${FRAME_INTERVAL}" "${_nwb_csg_temporal_check}" "--overwrite" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--timeout" "${_nwb_csg_temporal_script_timeout_seconds}"
-                        ${_nwb_csg_temporal_logserver_args} ${ARGN})
+                        ${_nwb_smoke_optional_logserver_args} ${ARGN})
             set_tests_properties("${_nwb_csg_temporal_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_csg_temporal_ctest_timeout_seconds})
         endfunction()
 
@@ -354,15 +352,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         )
         nwb_configure_runtime_smoke_target(nwb_csg_skinned_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" csg_skinned_visible_project nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
 
-        file(GLOB_RECURSE _nwb_csg_skinned_visible_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*" "${CMAKE_CURRENT_LIST_DIR}/shared_assets/*")
-
-        set(_nwb_csg_skinned_visible_asset_stamp "${_nwb_csg_skinned_visible_runtime_root}/res/.nwb_csg_skinned_visible_assets_$<CONFIG>.stamp")
-        add_custom_command(OUTPUT "${_nwb_csg_skinned_visible_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_skinned_visible_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
-                --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/assets" --asset-root "tests/smoke/shared_assets"
-                --output-directory "${_nwb_csg_skinned_visible_runtime_root}/res" --configuration "$<CONFIG>"
-                COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}" DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
-                "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_csg_skinned_visible_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}" COMMENT "Cooking NWB skinned CSG visible smoke assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
-        add_custom_target(nwb_csg_skinned_visible_smoke_assets DEPENDS "${_nwb_csg_skinned_visible_asset_stamp}")
+        nwb_add_fixture_smoke_assets(nwb_csg_skinned_visible_smoke_assets csg_skinned_visible "${_nwb_csg_skinned_visible_runtime_root}" "skinned CSG visible" SMOKE_ROOTS shared_assets)
         add_dependencies(nwb_csg_skinned_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
         nwb_declare_executable(nwb_csg_skinned_sphere_visible_smoke)
@@ -381,9 +371,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         nwb_configure_runtime_smoke_target(nwb_csg_skinned_transparent_sphere_visible_smoke "${_nwb_csg_skinned_visible_runtime_root}" csg_skinned_visible_project nwb_ecs_csg nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_csg_skinned_transparent_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
-        unset(_nwb_csg_skinned_visible_asset_stamp)
         unset(_nwb_csg_skinned_visible_runtime_root)
-        unset(_nwb_csg_skinned_visible_asset_inputs)
     endif()
 
     set(_nwb_skinning_culling_model_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/body.nwb")
@@ -391,11 +379,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     if(TARGET nwb_loader AND TARGET nwb_asset_builder AND EXISTS "${_nwb_skinning_culling_model_nwb}")
         set(_nwb_skinning_culling_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinning_culling_benchmark_runtime/$<CONFIG>")
         set(_nwb_skinning_culling_asset_root "${CMAKE_BINARY_DIR}/Testing/skinning_culling_generated/$<CONFIG>")
-        if(TARGET nwb_logserver)
-            set(_nwb_skinning_culling_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
-        else()
-            set(_nwb_skinning_culling_logserver_args "--no-logserver")
-        endif()
 
         nwb_declare_executable(nwb_skinning_culling_benchmark)
         nwb_target_adhd_sources(nwb_skinning_culling_benchmark NAMESPACE "NWB::Tests::Smoke" SOURCES
@@ -432,7 +415,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
 
         add_test(NAME nwb_skinned_caustic_csg_transition_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_csg_transition_smoke.py" --executable "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
                 --working-directory "${_nwb_skinning_culling_runtime_root}" --output-root "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/skinned_caustic_csg_transition" --timeout ${_nwb_skinned_caustic_transition_script_timeout_seconds}
-                    ${_nwb_skinning_culling_logserver_args} CONFIGURATIONS dbg opt)
+                    ${_nwb_smoke_required_logserver_args} CONFIGURATIONS dbg opt)
         set_tests_properties(nwb_skinned_caustic_csg_transition_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_skinned_caustic_transition_ctest_timeout_seconds})
 
         nwb_declare_executable(nwb_stress_test_smoke)
@@ -490,7 +473,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.adhd"
         )
         nwb_configure_runtime_smoke_target(nwb_soft_shadow_test_smoke "${_nwb_skinning_culling_runtime_root}" soft_shadow_test_project nwb_ecs_model nwb_ecs_mesh_skinning)
-        nwb_add_fixture_smoke_assets(nwb_soft_shadow_timing_smoke_assets soft_shadow_timing "${CMAKE_BINARY_DIR}/Testing/soft_shadow_timing_smoke_runtime/$<CONFIG>" "soft shadow timing" soft_shadow_timing_assets)
+        nwb_add_fixture_smoke_assets(nwb_soft_shadow_timing_smoke_assets soft_shadow_timing "${CMAKE_BINARY_DIR}/Testing/soft_shadow_timing_smoke_runtime/$<CONFIG>" "soft shadow timing" SMOKE_ROOTS soft_shadow_timing_assets)
         add_dependencies(nwb_soft_shadow_test_smoke nwb_skinning_culling_benchmark_assets nwb_soft_shadow_timing_smoke_assets)
 
         nwb_declare_executable(nwb_gi_test_smoke)
@@ -501,7 +484,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         )
         nwb_configure_runtime_smoke_target(nwb_gi_test_smoke "${_nwb_skinning_culling_runtime_root}" gi_test_runtime nwb_ecs_csg)
         set(_nwb_gi_runtime_root "${CMAKE_BINARY_DIR}/Testing/gi_smoke_runtime/$<CONFIG>")
-        nwb_add_fixture_smoke_assets(nwb_gi_smoke_assets gi "${_nwb_gi_runtime_root}" "GI" gi_assets)
+        nwb_add_fixture_smoke_assets(nwb_gi_smoke_assets gi "${_nwb_gi_runtime_root}" "GI" SMOKE_ROOTS gi_assets)
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets nwb_gi_smoke_assets)
 
         nwb_add_window_capture_smoke(nwb_gi_coverage_probe_capture_smoke gi_coverage_probe_capture.bmp "$<TARGET_FILE:nwb_gi_test_smoke>" "${_nwb_gi_runtime_root}" "NWB GI Test" "--application-capture" "--application-capture-frame-count" "1"
@@ -523,7 +506,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
                 endif()
                 add_test(NAME "nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_smoke.py" --executable "$<TARGET_FILE:nwb_gi_test_smoke>"
                         --working-directory "${_nwb_gi_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}" --route "${_nwb_csg_gi_route}"
-                        ${_nwb_csg_gi_lighting_args} ${_nwb_skinning_culling_logserver_args} "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
+                        ${_nwb_csg_gi_lighting_args} ${_nwb_smoke_required_logserver_args} "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
                 set_tests_properties("nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT
                     ${_nwb_csg_gi_smoke_timeout_seconds} LABELS "csg_gi")
             endforeach()
@@ -560,7 +543,6 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)
         unset(_nwb_skinning_culling_asset_inputs)
-        unset(_nwb_skinning_culling_logserver_args)
     else()
         message(STATUS "Skipping skinning culling benchmark; missing tests/smoke/assets/characters/body.nwb.")
     endif()
@@ -571,3 +553,5 @@ endif()
 if(TARGET nwb_loader AND TARGET nwb_ecs_ui AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
     add_subdirectory(ui_layer)
 endif()
+unset(_nwb_smoke_required_logserver_args)
+unset(_nwb_smoke_optional_logserver_args)

@@ -7,19 +7,9 @@
 #define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF
 #endif
 
-#ifndef NWB_ADHD_EXPORT_VISITOR_RULE
-#define NWB_ADHD_EXPORT_VISITOR_RULE(ruleName, valueType, keyType, mutableWithReceiver)
-#define NWB_ADHD_EXPORT_VISITOR_RULE_AUTO_UNDEF
-#endif
-
 #ifndef NWB_ADHD_EXPORT_FUNCTION
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_FUNCTION5
-#define NWB_ADHD_EXPORT_FUNCTION5(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule)
-#define NWB_ADHD_EXPORT_FUNCTION5_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_FUNCTION_EX
@@ -30,16 +20,6 @@
 #ifndef NWB_ADHD_EXPORT_FUNCTION_CALL
 #define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_FUNCTION_REF
-#define NWB_ADHD_EXPORT_FUNCTION_REF(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule)
-#define NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_FUNCTION_WIDE
-#define NWB_ADHD_EXPORT_FUNCTION_WIDE(adhdName, cppExportName, arity, returnTypeName, returnTypeArgName, requiredHeader, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule, arg9Rule, arg10Rule, arg11Rule, arg12Rule, arg13Rule, arg14Rule, arg15Rule, arg16Rule, arg17Rule, arg18Rule, arg19Rule)
-#define NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_SIMD_REGISTER_CALL
@@ -82,29 +62,9 @@
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_AUTO_UNDEF
 #endif
 
-#ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_EX
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_EX(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef)
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_EX_AUTO_UNDEF
-#endif
-
 #ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_REF(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_REF_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
-#endif
-
-#ifndef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
-#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE(receiverTypeName, methodName, arity, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
-#define NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_BUILTIN_FIELD
@@ -178,29 +138,9 @@
 #undef NWB_ADHD_EXPORT_BUILTIN_FIELD
 #endif
 
-#ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_NESTED
-#endif
-
-#ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_REF
-#endif
-
-#ifdef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_SIGNATURE
-#endif
-
 #ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
-#endif
-
-#ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_EX_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_EX_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_RECEIVER_METHOD_EX
 #endif
 
 #ifdef NWB_ADHD_EXPORT_RECEIVER_METHOD_AUTO_UNDEF
@@ -243,16 +183,6 @@
 #undef NWB_ADHD_EXPORT_SIMD_FLOAT_INTRINSIC
 #endif
 
-#ifdef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_FUNCTION_REF_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_FUNCTION_REF
-#endif
-
-#ifdef NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_FUNCTION_WIDE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_FUNCTION_WIDE
-#endif
-
 #ifdef NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_CALL
@@ -263,19 +193,9 @@
 #undef NWB_ADHD_EXPORT_FUNCTION_EX
 #endif
 
-#ifdef NWB_ADHD_EXPORT_FUNCTION5_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_FUNCTION5_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_FUNCTION5
-#endif
-
 #ifdef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_FUNCTION
-#endif
-
-#ifdef NWB_ADHD_EXPORT_VISITOR_RULE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_VISITOR_RULE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_VISITOR_RULE
 #endif
 
 #ifdef NWB_ADHD_EXPORT_FUNCTION_ARG_RULE_AUTO_UNDEF

@@ -93,10 +93,7 @@ struct MacroCallScanState{
 };
 
 [[nodiscard]] b8 HasUnclosedFunctionMacroCall(const MStringView text, const Preprocessor::MacroMap& macros, MacroCallScanState& state)noexcept{
-    usize i = state.scanOffset;
-    if(state.parenDepth > 0u){
-        u32 parenDepth = state.parenDepth;
-        usize scan = i;
+    const auto scanToMatchingParen = [&](usize scan, u32 parenDepth, usize& outNextOffset)noexcept -> b8 {
         while(scan < text.size() && parenDepth > 0u){
             const usize stepStart = scan;
             b8 innerTerminator = false;
@@ -120,8 +117,15 @@ struct MacroCallScanState{
             state.parenDepth = parenDepth;
             return true;
         }
+        outNextOffset = scan;
+        return false;
+    };
+
+    usize i = state.scanOffset;
+    if(state.parenDepth > 0u){
+        if(scanToMatchingParen(i, state.parenDepth, i))
+            return true;
         state.parenDepth = 0u;
-        i = scan;
     }
 
     while(i < text.size()){
@@ -146,32 +150,8 @@ struct MacroCallScanState{
             if(lookahead >= text.size() || text[lookahead] != '(')
                 continue;
 
-            u32 parenDepth = 1u;
-            usize scan = lookahead + 1u;
-            while(scan < text.size() && parenDepth > 0u){
-                const usize stepStart = scan;
-                b8 innerTerminator = false;
-                if(PreprocessorSemantics::AdvancePreprocessorScanStep(text, scan, 0u, true, innerTerminator)){
-                    if(innerTerminator){
-                        state.scanOffset = stepStart;
-                        state.parenDepth = parenDepth;
-                        return true;
-                    }
-                    continue;
-                }
-                const MChar ch = text[scan];
-                if(ch == '(')
-                    ++parenDepth;
-                else if(ch == ')')
-                    --parenDepth;
-                ++scan;
-            }
-            if(parenDepth > 0u){
-                state.scanOffset = scan;
-                state.parenDepth = parenDepth;
+            if(scanToMatchingParen(lookahead + 1u, 1u, i))
                 return true;
-            }
-            i = scan;
             continue;
         }
         ++i;

@@ -61,32 +61,10 @@ class NumericEditActions : IEditActionSink{
             return false;
         }
         NumericEditResult result;
-        if(action == EditAction::Submit){
-            if(readOnly)
-                result.valid = true;
-            else if(this.m_integer.has_value())
-                result = this.m_integer.value().submit(this.m_integerBounds.value());
-            else
-                result = this.m_float.value().submit(this.m_floatBounds.value());
-        }
-        else if(action == EditAction::Cancel){
-            if(this.m_integer.has_value())
-                result = this.m_integer.value().cancel();
-            else
-                result = this.m_float.value().cancel();
-        }
-        else if(action == EditAction::Blur && !readOnly){
-            if(this.m_integer.has_value())
-                result = this.m_integer.value().blur(this.m_integerBounds.value());
-            else
-                result = this.m_float.value().blur(this.m_floatBounds.value());
-        }
-        else if(action == EditAction::Abandon || action == EditAction::Blur){
-            if(this.m_integer.has_value())
-                result = this.m_integer.value().abandon();
-            else
-                result = this.m_float.value().abandon();
-        }
+        if(this.m_integer.has_value())
+            result = this.m_integer.value().applyAction(this.m_integerBounds.value(), action, readOnly);
+        else
+            result = this.m_float.value().applyAction(this.m_floatBounds.value(), action, readOnly);
         this.m_revision = this.currentRevision();
         MergeNumericEditResult(result, this.m_result);
         return result.valid && !this.m_context.failed();
@@ -96,10 +74,6 @@ class NumericEditActions : IEditActionSink{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-b8 IsValidVirtualListWheelRows(in f32 wheelRows){
-    return IsFinite(VectorSingle(wheelRows)) && wheelRows > 0.0f;
-}
 
 b8 NeedsListScrollOffsetRescale(
     in f32 scrollRowHeight,
@@ -214,7 +188,7 @@ b8 Builder::prepareListMetrics(mut BuilderListFrame frame){
     if(hasVariableHeights && measureKeyChanged)
         frame.contentWidth = cast<f64>(frame.options.contentWidth);
     else
-        frame.contentWidth = UiSimdMaxF64(cast<f64>(frame.options.contentWidth), state.m_contentWidth);
+        frame.contentWidth = Max(cast<f64>(frame.options.contentWidth), state.m_contentWidth);
     frame.cursorKey = state.cursorKey();
     frame.revealCursor = state.m_ensureCursor;
     return this.listMatches(frame);
@@ -228,6 +202,81 @@ ListResult Builder::virtualList(in StringView stableKey, in borrow IListDataSour
     return this.declareVirtualList(stableKey, source, Optional<in IListRowHeightProvider>(rowHeights), state, options);
 }
 
+Optional<in UiSkinRegion> Builder::declareVirtualListPreamble(
+    in StringView stableKey,
+    in borrow IListDataSource source,
+    in Optional<in IListRowHeightProvider> rowHeights,
+    mut ListState state,
+    in ListOptions options,
+    in b8 checkScopeDepth,
+    mut WidgetState outWidget,
+    mut BuilderListFrame outFrame,
+    mut ListResult outResult
+){
+    if(
+        this.itemDeclarationBlocked()
+        || (checkScopeDepth && this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth)
+        || !IsValidVirtualListDeclarationOptions(options)
+    ){
+        this.m_context.fail();
+        return Optional<in UiSkinRegion>();
+    }
+    if(!this.synchronizePopup()){
+        outResult.valid = true;
+        return Optional<in UiSkinRegion>();
+    }
+    this.m_declaring = true;
+    const auto widget = this.m_context.declare(stableKey, WidgetKind::VirtualList);
+    if(!widget.has_value())
+        return Optional<in UiSkinRegion>();
+    outWidget = widget.value();
+    const b8 previouslyFocused = this.m_context.input().focus() == outWidget.id;
+    const u64 previousSelection = state.selectedKey();
+    const usize previousSelectedCount = state.selectedCount();
+    if(!ReconcileListState(state, source)){
+        this.m_context.fail();
+        return Optional<in UiSkinRegion>();
+    }
+    ControlToken token;
+    token.instanceGeneration = state.inputGeneration();
+    token.contentGeneration = source.instanceGeneration();
+    token.contentRevision = source.revision();
+    this.m_context.input().fenceControl(outWidget.id, outWidget.declarationGeneration, token);
+    if(!options.enabled)
+        this.m_context.input().invalidateTarget(outWidget.id);
+    outResult.valid = true;
+    outResult.selectionChanged = previousSelection != state.selectedKey() || previousSelectedCount != state.selectedCount();
+    outResult.focused = options.enabled && this.m_context.input().focus() == outWidget.id;
+    ListInput input(this.m_context);
+    const ListInputMatches matches = lambda[]() -> b8{ return true; };
+    const Optional<in IListDataSource> sourceLoan(source);
+    const Optional<in ListOptions> optionsLoan(options);
+    const ListInputApplyAction apply = lambda[in sourceLoan, in optionsLoan, mut state, mut outResult](in ControlAction action) -> ListActionOutcome{
+        if(ApplyListControlAction(sourceLoan.value(), optionsLoan.value(), action, state, outResult))
+            return ListActionOutcome::Continue;
+        return ListActionOutcome::Failed;
+    };
+    if(!input.consume(
+        outWidget,
+        token,
+        options.enabled,
+        state,
+        matches,
+        apply
+    )){
+        this.m_context.fail();
+        outResult.valid = false;
+        return Optional<in UiSkinRegion>();
+    }
+    const auto background = this.prepareListFrame(source, rowHeights, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !outResult.focused, WidgetId(), outFrame);
+    if(!background.has_value()){
+        this.m_context.fail();
+        outResult.valid = false;
+        return Optional<in UiSkinRegion>();
+    }
+    return background;
+}
+
 ListResult Builder::declareVirtualList(
     in StringView stableKey,
     in borrow IListDataSource source,
@@ -236,64 +285,12 @@ ListResult Builder::declareVirtualList(
     in ListOptions options
 ){
     ListResult result;
-    if(this.itemDeclarationBlocked() || !IsValidVirtualListDeclarationOptions(options)){
-        this.m_context.fail();
-        return result;
-    }
-    if(!this.synchronizePopup()){
-        result.valid = true;
-        return result;
-    }
-    this.m_declaring = true;
     BuilderOperationEnd finish(this.m_declaring);
-    const auto widget = this.m_context.declare(stableKey, WidgetKind::VirtualList);
-    if(!widget.has_value())
-        return result;
-    const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
-    const u64 previousSelection = state.selectedKey();
-    const usize previousSelectedCount = state.selectedCount();
-    if(!ReconcileListState(state, source)){
-        this.m_context.fail();
-        return result;
-    }
-    ControlToken token;
-    token.instanceGeneration = state.inputGeneration();
-    token.contentGeneration = source.instanceGeneration();
-    token.contentRevision = source.revision();
-    this.m_context.input().fenceControl(widget.value().id, widget.value().declarationGeneration, token);
-    if(!options.enabled)
-        this.m_context.input().invalidateTarget(widget.value().id);
-    result.valid = true;
-    result.selectionChanged = previousSelection != state.selectedKey() || previousSelectedCount != state.selectedCount();
-    result.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
-    ListInput input(this.m_context);
-    const ListInputMatches matches = lambda[]() -> b8{ return true; };
-    const Optional<in IListDataSource> sourceLoan(source);
-    const Optional<in ListOptions> optionsLoan(options);
-    const ListInputApplyAction apply = lambda[in sourceLoan, in optionsLoan, mut state, mut result](in ControlAction action) -> ListActionOutcome{
-        if(ApplyListControlAction(sourceLoan.value(), optionsLoan.value(), action, state, result))
-            return ListActionOutcome::Continue;
-        return ListActionOutcome::Failed;
-    };
-    if(!input.consume(
-        widget.value(),
-        token,
-        options.enabled,
-        state,
-        matches,
-        apply
-    )){
-        this.m_context.fail();
-        result.valid = false;
-        return result;
-    }
+    WidgetState widget;
     auto frame = this.makeListFrame();
-    const auto background = this.prepareListFrame(source, rowHeights, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !result.focused, WidgetId(), frame);
-    if(!background.has_value()){
-        this.m_context.fail();
-        result.valid = false;
+    const auto background = this.declareVirtualListPreamble(stableKey, source, rowHeights, state, options, false, widget, frame, result);
+    if(!background.has_value())
         return result;
-    }
     if(rowHeights.has_value()){
         ListLayoutPreparer preparer(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
         if(!preparer.ensureVariableRowOffsets(frame, state) || !this.listMatches(frame)){
@@ -320,7 +317,7 @@ ListResult Builder::declareVirtualList(
         }
     }
     auto item = this.makeItem();
-    item.state = widget.value();
+    item.state = widget;
     item.enabled = options.enabled;
     item.list = cast<u32>(this.m_scope.value().m_lists.size());
     LayoutNodeDesc description;
@@ -354,68 +351,12 @@ b8 Builder::beginVirtualListInternal(
     mut ListResult outResult
 ){
     outResult = ListResult();
-    if(
-        this.itemDeclarationBlocked()
-        || this.m_scope.value().m_stack.size() >= s_ContextMaxScopeDepth
-        || !IsValidVirtualListDeclarationOptions(options)
-    ){
-        this.m_context.fail();
-        return false;
-    }
-    if(!this.synchronizePopup()){
-        outResult.valid = true;
-        return false;
-    }
-    this.m_declaring = true;
     BuilderOperationEnd finish(this.m_declaring);
-    const auto widget = this.m_context.declare(stableKey, WidgetKind::VirtualList);
-    if(!widget.has_value())
-        return false;
-    const b8 previouslyFocused = this.m_context.input().focus() == widget.value().id;
-    const u64 previousSelection = state.selectedKey();
-    const usize previousSelectedCount = state.selectedCount();
-    if(!ReconcileListState(state, source)){
-        this.m_context.fail();
-        return false;
-    }
-    ControlToken token;
-    token.instanceGeneration = state.inputGeneration();
-    token.contentGeneration = source.instanceGeneration();
-    token.contentRevision = source.revision();
-    this.m_context.input().fenceControl(widget.value().id, widget.value().declarationGeneration, token);
-    if(!options.enabled)
-        this.m_context.input().invalidateTarget(widget.value().id);
-    outResult.valid = true;
-    outResult.selectionChanged = previousSelection != state.selectedKey() || previousSelectedCount != state.selectedCount();
-    outResult.focused = options.enabled && this.m_context.input().focus() == widget.value().id;
-    ListInput input(this.m_context);
-    const ListInputMatches matches = lambda[]() -> b8{ return true; };
-    const Optional<in IListDataSource> sourceLoan(source);
-    const Optional<in ListOptions> optionsLoan(options);
-    const ListInputApplyAction apply = lambda[in sourceLoan, in optionsLoan, mut state, mut outResult](in ControlAction action) -> ListActionOutcome{
-        if(ApplyListControlAction(sourceLoan.value(), optionsLoan.value(), action, state, outResult))
-            return ListActionOutcome::Continue;
-        return ListActionOutcome::Failed;
-    };
-    if(!input.consume(
-        widget.value(),
-        token,
-        options.enabled,
-        state,
-        matches,
-        apply
-    )){
-        this.m_context.fail();
-        outResult.valid = false;
-        return false;
-    }
+    WidgetState widget;
     auto frame = this.makeListFrame();
-    const auto background = this.prepareListFrame(source, rowHeights, state, options, token, source.rowCount(), options.enabled && previouslyFocused && !outResult.focused, WidgetId(), frame);
-    if(!background.has_value()){
-        this.m_context.fail();
-        outResult.valid = false;
+    const auto background = this.declareVirtualListPreamble(stableKey, source, rowHeights, state, options, true, widget, frame, outResult);
+    if(!background.has_value())
         return false;
-    }
     ListLayoutPreparer preparer(this.m_scope.value(), this.m_context, this.m_text, this.m_paint);
     if(!preparer.ensureVariableRowOffsets(frame, state) || !this.listMatches(frame)){
         this.m_context.fail();
@@ -541,7 +482,7 @@ b8 Builder::beginVirtualListInternal(
     description.intrinsicSize = intrinsicSize;
     ApplyLayoutItemOptions(options.layout, description);
     auto item = this.makeItem();
-    item.state = widget.value();
+    item.state = widget;
     item.enabled = options.enabled;
     item.checked = false;
     item.listRow = s_LayoutNoParent;
@@ -636,7 +577,7 @@ b8 Builder::beginVirtualListRow(in u64 index){
     if(frame.options.horizontalScrollbar == ScrollbarPolicy::Never)
         rowDesc.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     else if(frame.options.contentWidth > 0.0f)
-        rowDesc.width = LayoutSize(LayoutSizePolicy::Fixed, UiSimdMax(frame.placement.viewport.width, frame.options.contentWidth));
+        rowDesc.width = LayoutSize(LayoutSizePolicy::Fixed, Max(frame.placement.viewport.width, frame.options.contentWidth));
     else{
         rowDesc.width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
         rowDesc.minWidth = frame.placement.viewport.width;
@@ -677,36 +618,20 @@ b8 Builder::beginVirtualListRow(in u64 index){
 b8 Builder::endVirtualListRow(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::VirtualListRow
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::VirtualListRow)
         || this.m_context.failed()
     ){
         this.m_context.fail();
         return false;
     }
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     return this.m_context.popScope();
 }
 
 b8 Builder::endVirtualList(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::VirtualList
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::VirtualList)
         || this.m_context.failed()
     ){
         this.m_context.fail();
@@ -732,11 +657,7 @@ b8 Builder::endVirtualList(){
     endItem.enabled = beginItem.enabled;
     endItem.checked = true;
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     return this.m_context.popScope();
 }
 
@@ -773,11 +694,11 @@ b8 Builder::paintScrollbarsAndTargets(in WidgetState widget, in b8 enabled, in C
         Rect beforeRect;
         Rect afterRect;
         ResolveScrollTrackBeforeAfterRects(scrollbars.vertical.track, scrollbars.vertical.thumb, false, beforeRect, afterRect);
-        const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(beforeRect, clip, token, s_TextAreaScrollVerticalBefore);
+        const HitTarget beforeTarget = targets.makeActivatablePartHitTarget(beforeRect, clip, true, token, cast<u64>(s_TextAreaScrollVerticalBefore));
         const auto beforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalBefore);
         if(!beforeId.has_value() || !this.m_context.addPartTarget(widget, beforeId.value(), beforeTarget))
             return false;
-        const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(afterRect, clip, token, s_TextAreaScrollVerticalAfter);
+        const HitTarget afterTarget = targets.makeActivatablePartHitTarget(afterRect, clip, true, token, cast<u64>(s_TextAreaScrollVerticalAfter));
         const auto afterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalAfter);
         if(!afterId.has_value() || !this.m_context.addPartTarget(widget, afterId.value(), afterTarget))
             return false;
@@ -789,11 +710,11 @@ b8 Builder::paintScrollbarsAndTargets(in WidgetState widget, in b8 enabled, in C
         Rect beforeRect;
         Rect afterRect;
         ResolveScrollTrackBeforeAfterRects(scrollbars.horizontal.track, scrollbars.horizontal.thumb, true, beforeRect, afterRect);
-        const HitTarget beforeTarget = targets.makeScrollbarTrackActionHitTarget(beforeRect, clip, token, s_TextAreaScrollHorizontalBefore);
+        const HitTarget beforeTarget = targets.makeActivatablePartHitTarget(beforeRect, clip, true, token, cast<u64>(s_TextAreaScrollHorizontalBefore));
         const auto beforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalBefore);
         if(!beforeId.has_value() || !this.m_context.addPartTarget(widget, beforeId.value(), beforeTarget))
             return false;
-        const HitTarget afterTarget = targets.makeScrollbarTrackActionHitTarget(afterRect, clip, token, s_TextAreaScrollHorizontalAfter);
+        const HitTarget afterTarget = targets.makeActivatablePartHitTarget(afterRect, clip, true, token, cast<u64>(s_TextAreaScrollHorizontalAfter));
         const auto afterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalAfter);
         if(!afterId.has_value() || !this.m_context.addPartTarget(widget, afterId.value(), afterTarget))
             return false;
@@ -828,16 +749,25 @@ b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
     in ScrollPlacement placement = measuredPlacement.value().placement;
     in ScrollViewportPlacement scrollbars = measuredPlacement.value().scrollbars;
     mut ListState state = frame.state.value();
-    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+    if(!CommitListScrollState(
+        placement,
+        scrollbars,
+        frame.rowHeight,
+        frame.token.contentGeneration,
+        frame.revealCursor,
+        frame.cursorKey,
+        state.cursorKey(),
+        state.m_scroll,
+        state.m_scrollX,
+        state.m_scrollRowHeight,
+        state.m_scrollSourceGeneration,
+        state.m_ensureCursor,
+        state.m_placement,
+        state.m_scrollbars,
+        state.m_visibleFirstRow,
+        state.m_visibleEndRow
+    ))
         return false;
-    state.m_scrollRowHeight = frame.rowHeight;
-    state.m_scrollSourceGeneration = frame.token.contentGeneration;
-    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
-        state.m_ensureCursor = false;
-    state.m_placement = placement;
-    state.m_scrollbars = scrollbars;
-    state.m_visibleFirstRow = placement.firstRow;
-    state.m_visibleEndRow = placement.endRow;
     const auto background = this.region(frame.style.background, frame.style.backgroundFallback);
     if(!background.has_value())
         return false;
@@ -848,7 +778,7 @@ b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
         return false;
     HitTargetFactory targets;
     const Span<f64> rowOffsets(state.m_rowOffsets);
-    const HitTarget host = targets.makeListHostHitTarget(
+    const HitTarget host = targets.makeScrollableListHostHitTarget(
         box.rectangle,
         clip,
         item.enabled,
@@ -856,9 +786,11 @@ b8 Builder::paintList(in BuilderItem item, in LayoutBox box){
         frame.token,
         frame.rowHeight,
         frame.options.wheelRows,
+        frame.options.horizontalScrollbar != ScrollbarPolicy::Never,
+        frame.options.wheelColumns,
+        false,
         placement,
         scrollbars,
-        frame.options,
         frame.rowCount,
         !rowOffsets.empty(),
         frame.focusOnCommit
@@ -918,7 +850,7 @@ b8 Builder::paintListRows(in BuilderItem item, in BuilderListFrame frame, in Scr
         if(!row.text.valid() || !PaintSelectable(this.m_paint, this.m_text, this.m_skin.value(), row.text.deref(), row.textBounds, frame.style.row.padding, rectangle.value(), placement.contentClip, frame.style.row, flags, frame.widgetStyle.text, frame.widgetStyle.disabledText, horizontalScroll))
             return false;
         if(item.enabled){
-            const HitTarget target = targets.makeListRowHitTarget(rectangle.value(), placement.contentClip, enabled, frame.token, key);
+            const HitTarget target = targets.makeActivatablePartHitTarget(rectangle.value(), placement.contentClip, enabled, frame.token, key);
             if(!this.m_context.addPartTarget(item.state, part.value(), target))
                 return false;
         }
@@ -953,7 +885,7 @@ b8 Builder::paintVirtualListBegin(in BuilderItem item, in LayoutBox box){
         for(u32 child = treeNodes[cast<usize>(item.node)].firstChild; child != s_LayoutNoParent; child = treeNodes[cast<usize>(child)].nextSibling){
             const Optional<LayoutBox> rowBox = this.m_scope.value().m_layout.box(child);
             if(rowBox.has_value())
-                frame.contentWidth = UiSimdMaxF64(frame.contentWidth, cast<f64>(rowBox.value().rectangle.width));
+                frame.contentWidth = Max(frame.contentWidth, cast<f64>(rowBox.value().rectangle.width));
         }
     }
     in ListState state = frame.state.value();
@@ -987,7 +919,7 @@ b8 Builder::paintVirtualListBegin(in BuilderItem item, in LayoutBox box){
     if(!painted || !popped)
         return false;
     HitTargetFactory targets;
-    const HitTarget host = targets.makeListHostHitTarget(
+    const HitTarget host = targets.makeScrollableListHostHitTarget(
         box.rectangle,
         clip,
         item.enabled,
@@ -995,9 +927,11 @@ b8 Builder::paintVirtualListBegin(in BuilderItem item, in LayoutBox box){
         frame.token,
         frame.rowHeight,
         frame.options.wheelRows,
+        frame.options.horizontalScrollbar != ScrollbarPolicy::Never,
+        frame.options.wheelColumns,
+        false,
         placed.value().placement,
         placed.value().scrollbars,
-        frame.options,
         frame.rowCount,
         !rowOffsets.empty(),
         frame.focusOnCommit
@@ -1042,21 +976,7 @@ b8 Builder::paintVirtualListRow(in BuilderItem item, in LayoutBox box){
     const b8 hover = this.m_context.input().hover() == part.value();
     const b8 rowFocused = focused && state.cursorKey() == row.key;
     in SelectableStyle rowStyle = frame.style.row;
-    Name preferred = rowStyle.normal;
-    Name fallback = rowStyle.fallback;
-    if(!enabled){
-        preferred = rowStyle.disabled;
-        fallback = rowStyle.disabledFallback;
-    }
-    else if(selected){
-        preferred = rowStyle.selected;
-        fallback = rowStyle.selectedFallback;
-    }
-    else if(hover){
-        preferred = rowStyle.hover;
-        fallback = rowStyle.hoverFallback;
-    }
-    const Optional<usize> regionIdx = this.m_paint.resolveRegionIndex(preferred, fallback);
+    const Optional<usize> regionIdx = ResolveSelectableRegionIndex(this.m_paint, rowStyle, enabled, selected, hover);
     if(!regionIdx.has_value())
         return false;
     const Rect clip = this.visibleClip(box.clip);
@@ -1072,7 +992,7 @@ b8 Builder::paintVirtualListRow(in BuilderItem item, in LayoutBox box){
         return false;
     if(item.enabled){
         HitTargetFactory targets;
-        const HitTarget target = targets.makeListRowHitTarget(box.rectangle, rowClip, enabled, frame.token, row.key);
+        const HitTarget target = targets.makeActivatablePartHitTarget(box.rectangle, rowClip, enabled, frame.token, row.key);
         if(!this.m_context.addPartTarget(item.state, part.value(), target))
             return false;
     }
@@ -1109,17 +1029,26 @@ b8 Builder::paintVirtualListEnd(in BuilderItem item, in LayoutBox box){
     mut ListState state = frame.state.value();
     in ScrollPlacement placement = frame.placement;
     in ScrollViewportPlacement scrollbars = frame.scrollbars;
-    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+    if(!CommitListScrollState(
+        placement,
+        scrollbars,
+        frame.rowHeight,
+        frame.token.contentGeneration,
+        frame.revealCursor,
+        frame.cursorKey,
+        state.cursorKey(),
+        state.m_scroll,
+        state.m_scrollX,
+        state.m_scrollRowHeight,
+        state.m_scrollSourceGeneration,
+        state.m_ensureCursor,
+        state.m_placement,
+        state.m_scrollbars,
+        state.m_visibleFirstRow,
+        state.m_visibleEndRow
+    ))
         return false;
-    state.m_scrollRowHeight = frame.rowHeight;
-    state.m_scrollSourceGeneration = frame.token.contentGeneration;
-    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
-        state.m_ensureCursor = false;
-    state.m_placement = placement;
-    state.m_scrollbars = scrollbars;
     state.m_contentWidth = frame.contentWidth;
-    state.m_visibleFirstRow = placement.firstRow;
-    state.m_visibleEndRow = placement.endRow;
     return this.paintListScrollbarsAndTargets(item, frame, scrollbars, clip) && this.listMatches(frame);
 }
 
@@ -1138,10 +1067,8 @@ NumericEditBoxResult Builder::integerEdit(in StringView stableKey, mut IntegerEd
     const usize previousCount = this.m_scope.value().m_items.size();
     result.edit = this.declareEditBox(stableKey, options.edit, model.lendDraft(), state, Optional<mut IEditActionSink>(actions), Optional<mut BuilderIntegerEditFrame>(frame), Optional<mut BuilderFloatEditFrame>());
     result.numeric.valid = result.numeric.valid && result.edit.valid;
-    if(result.edit.valid && this.m_scope.value().m_items.size() > previousCount){
-        frame.item = cast<u32>(previousCount);
+    if(result.edit.valid && this.m_scope.value().m_items.size() > previousCount)
         this.m_scope.value().m_integerEdits.push_back(frame);
-    }
     return result;
 }
 
@@ -1160,10 +1087,8 @@ NumericEditBoxResult Builder::floatEdit(in StringView stableKey, mut FloatEditMo
     const usize previousCount = this.m_scope.value().m_items.size();
     result.edit = this.declareEditBox(stableKey, options.edit, model.lendDraft(), state, Optional<mut IEditActionSink>(actions), Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>(frame));
     result.numeric.valid = result.numeric.valid && result.edit.valid;
-    if(result.edit.valid && this.m_scope.value().m_items.size() > previousCount){
-        frame.item = cast<u32>(previousCount);
+    if(result.edit.valid && this.m_scope.value().m_items.size() > previousCount)
         this.m_scope.value().m_floatEdits.push_back(frame);
-    }
     return result;
 }
 
@@ -1182,14 +1107,8 @@ b8 Builder::numericEditMatches(in BuilderItem item)const{
 b8 Builder::numericStateAvailable(in EditBoxState state)const{
     for(usize index = 0u; index <= this.m_popupFrameCount; ++index){
         in BuilderScopeFrame scope = this.readPopupFrameAt(index);
-        for(in auto frame : scope.m_integerEdits){
-            if(frame.state.has_value() && SameAddress(frame.state.value(), state))
-                return false;
-        }
-        for(in auto frame : scope.m_floatEdits){
-            if(frame.state.has_value() && SameAddress(frame.state.value(), state))
-                return false;
-        }
+        if(this.hasNumericEditState(scope.m_integerEdits, state) || this.hasNumericEditState(scope.m_floatEdits, state))
+            return false;
     }
     return true;
 }

@@ -246,10 +246,8 @@ class TextureBinaryCodec{
         );
         if(!flags.has_value())
             return MakeUnexpected(Failure());
-        if(cursor != binary.size()){
-            error("Texture::loadBinary failed: trailing bytes detected");
+        if(!ReadCompletePayload(binary, cursor, "Texture::loadBinary"))
             return MakeUnexpected(Failure());
-        }
         TextureBinaryMetadata metadata = TextureBinaryMetadata();
         metadata.width = width.value();
         metadata.height = height.value();

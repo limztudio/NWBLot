@@ -27,7 +27,7 @@ void EmitPaintSkinQuadWithTransform(
     if(!hasTransform){
         EmitPaintQuadValidated(
             recording, clip, rectangle, uv, tint, PaintMaterial::Skin, layer,
-            u32.max, u32.max, 0u, u32.max,
+            u32.max, u32.max, 0u, u32.max, u32.max,
             vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
         );
         return;
@@ -35,23 +35,21 @@ void EmitPaintSkinQuadWithTransform(
     if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !IsFinite(VectorSingle(rectangle.x + rectangle.width, rectangle.y + rectangle.height, 0.0f, 0.0f).xy))
         return;
     if(axisAlignedPositive){
-        const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
         EmitPaintQuadValidated(
-            recording, clip, scaledRect, uv, tint, PaintMaterial::Skin, layer,
-            u32.max, u32.max, 0u, u32.max,
+            recording, clip, ScaleAxisAlignedPaintRect(xf, rectangle), uv, tint, PaintMaterial::Skin, layer,
+            u32.max, u32.max, 0u, u32.max, u32.max,
             vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
         );
         return;
     }
-    const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
-    const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
-    const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
-    const Point p10(p00.x + ex.x, p00.y + ex.y);
-    const Point p01(p00.x + ey.x, p00.y + ey.y);
-    const Point p11(p10.x + ey.x, p10.y + ey.y);
+    Point p00 = Point();
+    Point p10 = Point();
+    Point p11 = Point();
+    Point p01 = Point();
+    TransformPaintRectQuad(xf, rectangle, p00, p10, p11, p01);
     EmitPaintTransformedQuad(
         recording, clip, p00, p10, p11, p01, uv, tint, PaintMaterial::Skin, layer,
-        u32.max, u32.max, 0u, u32.max,
+        u32.max, u32.max, 0u, u32.max, u32.max,
         vertices, indices, commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }
@@ -254,9 +252,9 @@ void EmitPaintNineSliceCore(
                 indices.push_back(vertexBase + 3u);
             }
         }
-        AppendPaintSolidCommand(
+        AppendPaintCommand(
             clip, firstIndex, cast<u32>(addedIndices), layer, PaintMaterial::Skin,
-            u32.max, u32.max, 0u, u32.max,
+            u32.max, u32.max, 0u, u32.max, u32.max,
             commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
         );
         return;
@@ -277,17 +275,7 @@ void EmitPaintNineSliceCore(
     const Point c10 = ApplyPaintTransform(xf, Point(x[3u], y[0u]));
     const Point c11 = ApplyPaintTransform(xf, Point(x[3u], y[3u]));
     const Point c01 = ApplyPaintTransform(xf, Point(x[0u], y[3u]));
-    const VectorSingle outerV0(c00.x, c00.y, c10.x, c10.y);
-    const VectorSingle outerV1(c11.x, c11.y, c01.x, c01.y);
-    if(!IsFinite(outerV0) || !IsFinite(outerV1))
-        return;
-    const VectorSingle outerPairMin = Min(outerV0, outerV1);
-    const VectorSingle outerPairMax = Max(outerV0, outerV1);
-    const f32 outerMinX = UiSimdMin(outerPairMin.x, outerPairMin.z);
-    const f32 outerMaxX = UiSimdMax(outerPairMax.x, outerPairMax.z);
-    const f32 outerMinY = UiSimdMin(outerPairMin.y, outerPairMin.w);
-    const f32 outerMaxY = UiSimdMax(outerPairMax.y, outerPairMax.w);
-    if(outerMaxX <= clip.rect.x || outerMaxY <= clip.rect.y || outerMinX >= clip.right || outerMinY >= clip.bottom)
+    if(!IntersectsPaintClipQuadBounds(clip, c00, c10, c11, c01))
         return;
 
     Array<Point, 16u> gridPts;
@@ -309,17 +297,7 @@ void EmitPaintNineSliceCore(
             in Point p10 = gridPts[r * 4u + c + 1u];
             in Point p11 = gridPts[(r + 1u) * 4u + c + 1u];
             in Point p01 = gridPts[(r + 1u) * 4u + c];
-            const VectorSingle cellV0(p00.x, p00.y, p10.x, p10.y);
-            const VectorSingle cellV1(p11.x, p11.y, p01.x, p01.y);
-            if(!IsFinite(cellV0) || !IsFinite(cellV1))
-                continue;
-            const VectorSingle cellPairMin = Min(cellV0, cellV1);
-            const VectorSingle cellPairMax = Max(cellV0, cellV1);
-            const f32 minX = UiSimdMin(cellPairMin.x, cellPairMin.z);
-            const f32 maxX = UiSimdMax(cellPairMax.x, cellPairMax.z);
-            const f32 minY = UiSimdMin(cellPairMin.y, cellPairMin.w);
-            const f32 maxY = UiSimdMax(cellPairMax.y, cellPairMax.w);
-            if(maxX <= clip.rect.x || maxY <= clip.rect.y || minX >= clip.right || minY >= clip.bottom)
+            if(!IntersectsPaintClipQuadBounds(clip, p00, p10, p11, p01))
                 continue;
             emitRows[emitCount] = r;
             emitCols[emitCount] = c;
@@ -361,9 +339,9 @@ void EmitPaintNineSliceCore(
         indices.push_back(vertexBase + 2u);
         indices.push_back(vertexBase + 3u);
     }
-    AppendPaintSolidCommand(
+    AppendPaintCommand(
         clip, firstIndex, cast<u32>(addedIndices), layer, PaintMaterial::Skin,
-        u32.max, u32.max, 0u, u32.max,
+        u32.max, u32.max, 0u, u32.max, u32.max,
         commands, inOutCommandsOrdered, inOutCommandsStrictlyDescending
     );
 }

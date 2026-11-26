@@ -86,24 +86,6 @@ namespace __hidden_gpu_task_scheduler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-b8 GpuTaskScheduler::submitGraph(
-    const GpuCompiledGraph& compiledGraph,
-    const GpuNativePacketRecorder& recorder,
-    const GpuTaskGraphNormalExecutionDesc& desc,
-    Alloc::ScratchArena& scratchArena,
-    GpuTaskGraph& graph,
-    GpuRecordedGraph& recordedGraph,
-    GpuGraphSubmissionTransaction& transaction,
-    GpuSubmissionPacketId* const outFailedPacket
-)const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted)
-        return false;
-    return submitGraphWithinDeviceOperation(compiledGraph, recorder, desc, scratchArena, graph, recordedGraph, transaction, outFailedPacket);
-}
-
 b8 GpuTaskScheduler::submitGraphWithinDeviceOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
@@ -119,17 +101,11 @@ b8 GpuTaskScheduler::submitGraphWithinDeviceOperation(
     if(&recorder.m_device != &device())
         return false;
 
-    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph);
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
+    CompositeSubmissionOperationScope compositeScope(graph, transaction, compiledGraph, recordedGraph, outFailedPacket);
+    if(!compositeScope.valid())
         return false;
-    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
-    if(!artifactOperation.valid())
-        return false;
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier, &artifactOperation);
-    if(!submissionOperation.valid())
-        return false;
-    SubmissionAttemptExceptionScope exceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
+    const GpuCompiledGraph::ReadView& planAccess = compositeScope.planAccess();
+    const GpuRecordedGraph::ArtifactOperation& artifactOperation = compositeScope.artifactOperation();
 
     GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskRecordedCallback> recordedCallbacks(scratchArena);
     GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
@@ -145,7 +121,7 @@ b8 GpuTaskScheduler::submitGraphWithinDeviceOperation(
             return false;
         }
         normalRange = *range;
-        exceptionScope.setFailedPacket(normalRange.first);
+        compositeScope.setFailedPacket(normalRange.first);
         if(
             (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
             || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
@@ -168,7 +144,7 @@ b8 GpuTaskScheduler::submitGraphWithinDeviceOperation(
         const usize normalRangeEnd = static_cast<usize>(normalRange.first.index) + normalRange.packetCount;
         for(usize packetIndex = normalRange.first.index; packetIndex < normalRangeEnd; ++packetIndex){
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
-            exceptionScope.setFailedPacket(packet);
+            compositeScope.setFailedPacket(packet);
             const GpuCompiledPacketView packetView = planAccess.packet(packet);
             if(!packetView.valid()){
                 if(outFailedPacket)
@@ -229,18 +205,11 @@ b8 GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
     if(!deviceOperation.m_admitted || &recorder.m_device != &device())
         return false;
 
-    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph);
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
+    CompositeSubmissionOperationScope compositeScope(graph, transaction, compiledGraph, recordedGraph, outFailedPacket);
+    if(!compositeScope.valid())
         return false;
-    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
-    if(!artifactOperation.valid())
-        return false;
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier, &artifactOperation);
-    if(!submissionOperation.valid())
-        return false;
-    SubmissionAttemptExceptionScope exceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
-
+    const GpuCompiledGraph::ReadView& planAccess = compositeScope.planAccess();
+    const GpuRecordedGraph::ArtifactOperation& artifactOperation = compositeScope.artifactOperation();
 
     const auto rejectTask = [&](const GpuTaskGraph::DeclarationReadView& declarationAccess){
         if(planAccess.validFor(declarationAccess) && transaction.validFor(planAccess) && planAccess.findTask(task).valid()){
@@ -264,7 +233,7 @@ b8 GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
         if(!declarationAccess.valid())
             return false;
         packet = planAccess.packetForTask(task);
-        exceptionScope.setFailedPacket(packet);
+        compositeScope.setFailedPacket(packet);
         if(!planAccess.validFor(declarationAccess) || !transaction.validFor(planAccess) || !planAccess.taskJoinsAcceptedQueueFrontier(task)){
             rejectTask(declarationAccess);
             return false;
@@ -302,17 +271,11 @@ b8 GpuTaskScheduler::recordAndSubmitTask(
     if(!deviceOperation.m_admitted || &recorder.m_device != &device())
         return false;
 
-    SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph);
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
+    CompositeSubmissionOperationScope compositeScope(graph, transaction, compiledGraph, recordedGraph, outFailedPacket);
+    if(!compositeScope.valid())
         return false;
-    GpuRecordedGraph::ArtifactOperation artifactOperation(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
-    if(!artifactOperation.valid())
-        return false;
-    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier, &artifactOperation);
-    if(!submissionOperation.valid())
-        return false;
-    SubmissionAttemptExceptionScope exceptionScope(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
+    const GpuCompiledGraph::ReadView& planAccess = compositeScope.planAccess();
+    const GpuRecordedGraph::ArtifactOperation& artifactOperation = compositeScope.artifactOperation();
 
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
@@ -320,7 +283,7 @@ b8 GpuTaskScheduler::recordAndSubmitTask(
             return false;
 
         const GpuSubmissionPacketId packet = planAccess.packetForTask(task);
-        exceptionScope.setFailedPacket(packet);
+        compositeScope.setFailedPacket(packet);
         if(!prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(compiledGraph, packet, artifactOperation, declarationAccess, planAccess, recorder.m_timingRecorder, graph, recordedGraph, transaction))
             return false;
     }

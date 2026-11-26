@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_mesh/components.adhd>
+#include <impl/ecs_mesh/runtime/buffer_upload.adhd>
 #include <impl/ecs_mesh/soft_body/cpu_mesh.adhd>
 #include <impl/ecs_physics/subsystem_components.adhd>
 
@@ -17,19 +18,6 @@ const Name s_SoftBodyUploadName = "soft_body_upload";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-class SoftBodyBatchUploadReadyTask{
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
-        requirements.requiresPrimaryGraphicsQueue = true;
-        return requirements;
-    }
-
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        return !commands.commandRecordingFailed();
-    }
-}
 
 class SoftBodyRuntimeMeshGpuBuffers{
     public Name meshKey = s_NameNone;
@@ -124,18 +112,7 @@ u64 ComputeSoftBodyDeformSignature(in SoftBody sb, in TransformComponent xf){
     return cast<u64>(h);
 }
 
-GpuTaskSchedulingHint MakeSoftBodyUploadScheduling(){
-    GpuTaskSchedulingHint scheduling;
-    scheduling.cost = GpuTaskCostHint::Small;
-    scheduling.overlapPreferred = false;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    return scheduling;
-}
-
-Expected<BufferHandle> CreateSoftBodyRuntimeBuffer(
+Expected<BufferHandle, BufferSetupFailure> CreateSoftBodyRuntimeBuffer(
     mut GraphicsRuntime graphics,
     in Name baseName,
     in u64 entityId,
@@ -148,22 +125,13 @@ Expected<BufferHandle> CreateSoftBodyRuntimeBuffer(
     in b8 isIndexBuffer,
     in b8 accelStructBuildInput
 ){
-    const Name bufferName = DeriveRuntimeResourceName(baseName, entityId, editRevision, suffix);
-    if(bufferName == s_NameNone || byteSize == 0u)
-        return MakeUnexpected(Failure());
-
-    BufferDesc desc = BufferDesc();
-    desc
-        .setByteSize(byteSize)
-        .setStructStride(structStride)
-        .setCanHaveUAVs(canHaveUavs)
-        .setCanHaveRawViews(canHaveRawViews)
-        .setIsIndexBuffer(isIndexBuffer)
-        .setIsAccelStructBuildInput(accelStructBuildInput)
-        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(bufferName)
-    ;
-    return graphics.createBuffer(desc);
+    return CreateRuntimeMeshBuffer(
+        graphics,
+        DeriveRuntimeResourceName(baseName, entityId, editRevision, suffix),
+        byteSize,
+        structStride,
+        BufferFlags(canHaveUavs, canHaveRawViews, accelStructBuildInput, ResourceQueueSharing::GraphicsAndAsyncCompute, isIndexBuffer)
+    );
 }
 
 [cpp_unwind]
@@ -191,21 +159,21 @@ b8 CreateSoftBodyEntryGpuBuffers(
 
     const b8 rtSupported = graphics.queryFeatureSupport(Feature::RayTracingAccelStruct);
 
-    const Expected<BufferHandle> localBoundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_LocalBoundsSuffix, cast<u64>(s_RuntimeMeshBoundsByteSize), 0u, true, true, false, false);
-    const Expected<BufferHandle> meshletLocalBoundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletLocalBoundsSuffix, cast<u64>(cpu.meshletLocalBounds.size()) * cast<u64>(s_RuntimeMeshBoundsByteSize), 0u, true, true, false, false);
-    const Expected<BufferHandle> posRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedPositionsSuffix, cast<u64>(cpu.positions.size()) * cast<u64>(size_of<f32x3u>()), cast<u32>(size_of<f32x3u>()), true, true, false, rtSupported);
-    const Expected<BufferHandle> normRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedNormalsSuffix, cast<u64>(cpu.normals.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), true, false, false, false);
-    const Expected<BufferHandle> tanRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedTangentsSuffix, cast<u64>(cpu.tangents.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), true, false, false, false);
-    const Expected<BufferHandle> uvRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_Uv0Suffix, cast<u64>(cpu.uv0.size()) * cast<u64>(size_of<f32x2u>()), cast<u32>(size_of<f32x2u>()), false, false, false, false);
-    const Expected<BufferHandle> colRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_ColorsSuffix, cast<u64>(cpu.colors.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), false, false, false, false);
-    const Expected<BufferHandle> meshletRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletsSuffix, cast<u64>(cpu.meshlets.size()) * cast<u64>(size_of<MeshletDesc>()), cast<u32>(size_of<MeshletDesc>()), false, false, false, false);
-    const Expected<BufferHandle> boundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletBoundsSuffix, cast<u64>(cpu.meshletBounds.size()) * cast<u64>(size_of<MeshletBounds>()), cast<u32>(size_of<MeshletBounds>()), true, true, false, false);
-    const Expected<BufferHandle> posDeltaRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletPositionRefDeltasSuffix, cast<u64>(posDeltaBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
-    const Expected<BufferHandle> attrDeltaRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletAttributeRefDeltasSuffix, cast<u64>(attrDeltaBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
-    const Expected<BufferHandle> localVertRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletLocalVertexRefsSuffix, cast<u64>(cpu.meshletLocalVertexRefs.size()) * cast<u64>(size_of<MeshletLocalVertexRef>()), cast<u32>(size_of<MeshletLocalVertexRef>()), false, false, false, false);
-    const Expected<BufferHandle> primRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletPrimitiveIndicesSuffix, cast<u64>(primBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
-    const Expected<BufferHandle> triIdxRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_RtTriangleIndicesBufferName, cast<u64>(cpu.triangleIndices.size()) * cast<u64>(size_of<u32>()), cast<u32>(size_of<u32>()), false, true, true, rtSupported);
-    const Expected<BufferHandle> triAttrRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_RtTriangleAttributesBufferName, cast<u64>(cpu.triangleAttributes.size()) * cast<u64>(size_of<AttribGpu>()), cast<u32>(size_of<AttribGpu>()), true, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> localBoundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_LocalBoundsSuffix, cast<u64>(s_RuntimeMeshBoundsByteSize), 0u, true, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> meshletLocalBoundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletLocalBoundsSuffix, cast<u64>(cpu.meshletLocalBounds.size()) * cast<u64>(s_RuntimeMeshBoundsByteSize), 0u, true, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> posRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedPositionsSuffix, cast<u64>(cpu.positions.size()) * cast<u64>(size_of<f32x3u>()), cast<u32>(size_of<f32x3u>()), true, true, false, rtSupported);
+    const Expected<BufferHandle, BufferSetupFailure> normRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedNormalsSuffix, cast<u64>(cpu.normals.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), true, false, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> tanRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_SkinnedTangentsSuffix, cast<u64>(cpu.tangents.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), true, false, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> uvRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_Uv0Suffix, cast<u64>(cpu.uv0.size()) * cast<u64>(size_of<f32x2u>()), cast<u32>(size_of<f32x2u>()), false, false, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> colRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_ColorsSuffix, cast<u64>(cpu.colors.size()) * cast<u64>(size_of<f16x4u>()), cast<u32>(size_of<f16x4u>()), false, false, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> meshletRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletsSuffix, cast<u64>(cpu.meshlets.size()) * cast<u64>(size_of<MeshletDesc>()), cast<u32>(size_of<MeshletDesc>()), false, false, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> boundsRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletBoundsSuffix, cast<u64>(cpu.meshletBounds.size()) * cast<u64>(size_of<MeshletBounds>()), cast<u32>(size_of<MeshletBounds>()), true, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> posDeltaRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletPositionRefDeltasSuffix, cast<u64>(posDeltaBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> attrDeltaRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletAttributeRefDeltasSuffix, cast<u64>(attrDeltaBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> localVertRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletLocalVertexRefsSuffix, cast<u64>(cpu.meshletLocalVertexRefs.size()) * cast<u64>(size_of<MeshletLocalVertexRef>()), cast<u32>(size_of<MeshletLocalVertexRef>()), false, false, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> primRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_MeshletPrimitiveIndicesSuffix, cast<u64>(primBytes.value()), cast<u32>(size_of<u8>()), false, true, false, false);
+    const Expected<BufferHandle, BufferSetupFailure> triIdxRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_RtTriangleIndicesBufferName, cast<u64>(cpu.triangleIndices.size()) * cast<u64>(size_of<u32>()), cast<u32>(size_of<u32>()), false, true, true, rtSupported);
+    const Expected<BufferHandle, BufferSetupFailure> triAttrRes = CreateSoftBodyRuntimeBuffer(graphics, baseName, entity.id, rev, s_RtTriangleAttributesBufferName, cast<u64>(cpu.triangleAttributes.size()) * cast<u64>(size_of<AttribGpu>()), cast<u32>(size_of<AttribGpu>()), true, true, false, false);
 
     if(
         !localBoundsRes.has_value()
@@ -247,98 +215,18 @@ b8 CreateSoftBodyEntryGpuBuffers(
 }
 
 [cpp_unwind]
-b8 DeclareSoftBodyBlobUpload(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in StringView label,
-    in Expected<GpuUploadBlobId> blob,
-    mut Vector<GpuTaskId> outTasks
-){
-    if(!buffer.valid() || !blob.has_value())
-        return false;
-
-    in BufferDesc description = buffer.deref().getCreationDescription();
-    GpuGraphResourceDesc resourceDesc = GpuGraphResourceDesc();
-    resourceDesc
-        .setIdentity(description.debugName)
-        .setMarkerLabel(label)
-        .setType(GpuGraphResourceType::Buffer)
-        .setInitialState(ResourceStates::Common)
-        .setQueueSharing(description.queueSharing)
-    ;
-    const Expected<GpuGraphResourceId> destination = graph.importBuffer(buffer, resourceDesc);
-    if(!destination.has_value())
-        return false;
-
-    GpuTaskDesc taskDesc = GpuTaskDesc();
-    taskDesc
-        .setIdentity(description.debugName)
-        .setMarkerLabel(label)
-        .setScheduling(MakeSoftBodyUploadScheduling())
-    ;
-    GpuUploadBufferTaskDesc upload = GpuUploadBufferTaskDesc();
-    upload.source = blob.value();
-    upload.destination = destination.value();
-    upload.finalState = ResourceStates::Common;
-    const Expected<GpuTaskId> task = graph.addUploadBufferTask(taskDesc, upload);
-    if(!task.has_value())
-        return false;
-
-    outTasks.push_back(task.value());
-    return true;
-}
-
-[cpp_unwind]
-b8 DeclareSoftBodyTypedUpload<T>(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in StringView label,
-    in Span<T> elements,
-    mut Vector<GpuTaskId> outTasks
-){
-    if(elements.empty())
-        return false;
-    return DeclareSoftBodyBlobUpload(graph, buffer, label, graph.copyUploadElements<T>(elements), outTasks);
-}
-
-[cpp_unwind]
-b8 DeclareSoftBodyPaddedRawUpload(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in StringView label,
-    in Span<u8> bytes,
-    mut Vector<GpuTaskId> outTasks
-){
-    if(bytes.empty())
-        return false;
-    const Expected<usize> paddedCount = TryComputePaddedRawByteCount(bytes.size());
-    if(!paddedCount.has_value())
-        return false;
-    if(paddedCount.value() == bytes.size())
-        return DeclareSoftBodyBlobUpload(graph, buffer, label, graph.copyUploadBytes<u8>(bytes), outTasks);
-
-    Vector<u8> padded;
-    padded.reserve(paddedCount.value());
-    for(usize i = 0u; i < bytes.size(); ++i)
-        padded.push_back(bytes[i]);
-    while(padded.size() < paddedCount.value())
-        padded.push_back(0u);
-    return DeclareSoftBodyBlobUpload(graph, buffer, label, graph.copyUploadBytes<u8>(Span<u8>(padded)), outTasks);
-}
-
-[cpp_unwind]
 b8 DeclareSoftBodyDynamicUploads(
     mut GpuTaskGraph graph,
     in SoftBodyRuntimeMeshEntry entry,
     mut Vector<GpuTaskId> outTasks
 ){
-    b8 ok = DeclareSoftBodyBlobUpload(graph, entry.gpu.localBoundsBuffer, s_LocalBoundsSuffix, graph.copyUploadValue<RuntimeMeshLocalBounds>(entry.cpu.localBounds), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<RuntimeMeshLocalBounds>(graph, entry.gpu.meshletLocalBoundsBuffer, s_MeshletLocalBoundsSuffix, Span<RuntimeMeshLocalBounds>(entry.cpu.meshletLocalBounds), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<f32x3u>(graph, entry.gpu.positionBuffer, s_RuntimeCacheSkinnedPositionLabel, Span<f32x3u>(entry.cpu.positions), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<f16x4u>(graph, entry.gpu.normalBuffer, s_RuntimeCacheSkinnedNormalLabel, Span<f16x4u>(entry.cpu.normals), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<f16x4u>(graph, entry.gpu.tangentBuffer, s_RuntimeCacheSkinnedTangentLabel, Span<f16x4u>(entry.cpu.tangents), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<MeshletBounds>(graph, entry.gpu.meshletBoundsBuffer, s_RuntimeCacheMeshletBoundsLabel, Span<MeshletBounds>(entry.cpu.meshletBounds), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<AttribGpu>(graph, entry.gpu.attributeBuffer, s_RuntimeCacheRtTriangleAttributeLabel, Span<AttribGpu>(entry.cpu.triangleAttributes), outTasks);
+    b8 ok = DeclareRuntimeMeshBatchBufferUploadBlob(graph, entry.gpu.localBoundsBuffer, s_LocalBoundsSuffix, graph.copyUploadValue<RuntimeMeshLocalBounds>(entry.cpu.localBounds), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<RuntimeMeshLocalBounds>(graph, entry.gpu.meshletLocalBoundsBuffer, s_MeshletLocalBoundsSuffix, Span<RuntimeMeshLocalBounds>(entry.cpu.meshletLocalBounds), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<f32x3u>(graph, entry.gpu.positionBuffer, s_RuntimeCacheSkinnedPositionLabel, Span<f32x3u>(entry.cpu.positions), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, entry.gpu.normalBuffer, s_RuntimeCacheSkinnedNormalLabel, Span<f16x4u>(entry.cpu.normals), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, entry.gpu.tangentBuffer, s_RuntimeCacheSkinnedTangentLabel, Span<f16x4u>(entry.cpu.tangents), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<MeshletBounds>(graph, entry.gpu.meshletBoundsBuffer, s_RuntimeCacheMeshletBoundsLabel, Span<MeshletBounds>(entry.cpu.meshletBounds), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<AttribGpu>(graph, entry.gpu.attributeBuffer, s_RuntimeCacheRtTriangleAttributeLabel, Span<AttribGpu>(entry.cpu.triangleAttributes), outTasks);
     return ok;
 }
 
@@ -348,14 +236,14 @@ b8 DeclareSoftBodyTopologyUploads(
     in SoftBodyRuntimeMeshEntry entry,
     mut Vector<GpuTaskId> outTasks
 ){
-    b8 ok = DeclareSoftBodyTypedUpload<f32x2u>(graph, entry.gpu.uv0Buffer, s_RuntimeCacheUv0Label, Span<f32x2u>(entry.cpu.uv0), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<f16x4u>(graph, entry.gpu.colorBuffer, s_RuntimeCacheColorLabel, Span<f16x4u>(entry.cpu.colors), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<MeshletDesc>(graph, entry.gpu.meshletDescBuffer, s_RuntimeCacheMeshletDescriptorLabel, Span<MeshletDesc>(entry.cpu.meshlets), outTasks);
-    ok = ok && DeclareSoftBodyPaddedRawUpload(graph, entry.gpu.meshletPositionRefDeltaBuffer, s_RuntimeCacheMeshletPositionRefDeltaLabel, Span<u8>(entry.cpu.meshletPositionRefDeltas), outTasks);
-    ok = ok && DeclareSoftBodyPaddedRawUpload(graph, entry.gpu.meshletAttributeRefDeltaBuffer, s_RuntimeCacheMeshletAttributeRefDeltaLabel, Span<u8>(entry.cpu.meshletAttributeRefDeltas), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<MeshletLocalVertexRef>(graph, entry.gpu.meshletLocalVertexRefBuffer, s_RuntimeCacheMeshletLocalVertexRefLabel, Span<MeshletLocalVertexRef>(entry.cpu.meshletLocalVertexRefs), outTasks);
-    ok = ok && DeclareSoftBodyPaddedRawUpload(graph, entry.gpu.meshletPrimitiveIndexBuffer, s_RuntimeCacheMeshletPrimitiveIndexLabel, Span<u8>(entry.cpu.meshletPrimitiveIndices), outTasks);
-    ok = ok && DeclareSoftBodyTypedUpload<u32>(graph, entry.gpu.triangleIndexBuffer, s_RuntimeCacheRtTriangleIndexLabel, Span<u32>(entry.cpu.triangleIndices), outTasks);
+    b8 ok = DeclareRuntimeMeshBatchTypedUpload<f32x2u>(graph, entry.gpu.uv0Buffer, s_RuntimeCacheUv0Label, Span<f32x2u>(entry.cpu.uv0), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, entry.gpu.colorBuffer, s_RuntimeCacheColorLabel, Span<f16x4u>(entry.cpu.colors), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<MeshletDesc>(graph, entry.gpu.meshletDescBuffer, s_RuntimeCacheMeshletDescriptorLabel, Span<MeshletDesc>(entry.cpu.meshlets), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchPaddedRawUpload(graph, entry.gpu.meshletPositionRefDeltaBuffer, s_RuntimeCacheMeshletPositionRefDeltaLabel, Span<u8>(entry.cpu.meshletPositionRefDeltas), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchPaddedRawUpload(graph, entry.gpu.meshletAttributeRefDeltaBuffer, s_RuntimeCacheMeshletAttributeRefDeltaLabel, Span<u8>(entry.cpu.meshletAttributeRefDeltas), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<MeshletLocalVertexRef>(graph, entry.gpu.meshletLocalVertexRefBuffer, s_RuntimeCacheMeshletLocalVertexRefLabel, Span<MeshletLocalVertexRef>(entry.cpu.meshletLocalVertexRefs), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchPaddedRawUpload(graph, entry.gpu.meshletPrimitiveIndexBuffer, s_RuntimeCacheMeshletPrimitiveIndexLabel, Span<u8>(entry.cpu.meshletPrimitiveIndices), outTasks);
+    ok = ok && DeclareRuntimeMeshBatchTypedUpload<u32>(graph, entry.gpu.triangleIndexBuffer, s_RuntimeCacheRtTriangleIndexLabel, Span<u32>(entry.cpu.triangleIndices), outTasks);
     ok = ok && DeclareSoftBodyDynamicUploads(graph, entry, outTasks);
     return ok;
 }
@@ -621,7 +509,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                     .setMarkerLabel("SoftBody Runtime Batch Upload Ready")
                     .setDependencies(Span<GpuTaskId>(uploadTasks))
                 ;
-                SoftBodyBatchUploadReadyTask readyTask;
+                RuntimeMeshBatchUploadReadyTask readyTask;
                 return graph.addPayloadTask(readyDesc, readyTask);
             },
             graphicsQueue

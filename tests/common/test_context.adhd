@@ -19,23 +19,8 @@ extern void RecordTestProperty(in StringView key, in StringView text);
 
 const f32 s_DefaultNearlyEqualEpsilon = 0.00001f;
 const Name s_TestArena = s_CommonCaseNameTestsCommonTestArena;
-const Name s_DefaultTestArena = s_CommonCaseNameTestsCommonDefaultTestArena;
 const Array<u32, 3u> s_TriangleIndices = Array<u32, 3u>(0u, 1u, 2u);
 const Array<u32, 6u> s_QuadTriangleIndices = Array<u32, 6u>(0u, 1u, 2u, 0u, 2u, 3u);
-
-Path RepoRootOf(in StringView sourceFile){
-    Path current = Path(sourceFile).lexicallyNormal().parentPath();
-    for(usize depth = 0u; depth < 16u && !current.empty(); ++depth){
-        const auto marker = IsRegularFile(current / "engine_namespace.h");
-        if(marker.has_value() && marker.value())
-            return current;
-        const Path parent = current.parentPath();
-        if(parent == current)
-            break;
-        current = parent;
-    }
-    return Path(sourceFile).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

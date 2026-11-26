@@ -195,13 +195,13 @@ class UiSearchComboBehaviorSource : ISearchableListDataSource{
             EXPECT_TRUE(this.m_state.query().beginComposition());
             break;
         case UiSearchComboBehaviorMutation::CompositionUpdate:
-            EXPECT_TRUE(this.m_state.query().updateComposition(s_PreeditText, 0u, 7u));
+            EXPECT_TRUE(this.m_state.query().updateComposition(s_PreeditText, 0u, 7u, Span<EditPreeditClause>()));
             break;
         case UiSearchComboBehaviorMutation::CompositionCancel:
             this.m_state.query().cancelComposition();
             break;
         case UiSearchComboBehaviorMutation::CompositionCycle:
-            EXPECT_TRUE(this.m_state.query().beginComposition() && this.m_state.query().updateComposition(s_PreeditText, 0u, 7u));
+            EXPECT_TRUE(this.m_state.query().beginComposition() && this.m_state.query().updateComposition(s_PreeditText, 0u, 7u, Span<EditPreeditClause>()));
             this.m_state.query().cancelComposition();
             break;
         }
@@ -490,7 +490,7 @@ void VerifyUiSearchComboBehaviorTests_SelectionAndPreeditUpdatesDoNotFilterOrRes
     const u64 previewGeneration = self.m_state.combo().listState().inputGeneration();
     ASSERT_TRUE(self.m_state.query().selectAll());
     ASSERT_TRUE(self.m_state.query().beginComposition());
-    ASSERT_TRUE(self.m_state.query().updateComposition("tail", 0u, 4u));
+    ASSERT_TRUE(self.m_state.query().updateComposition("tail", 0u, 4u, Span<EditPreeditClause>()));
     ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.queryView(), "all");
     EXPECT_EQ(self.m_state.combo().listState().inputGeneration(), previewGeneration);
@@ -503,7 +503,7 @@ void VerifyUiSearchComboBehaviorTests_SelectionAndPreeditUpdatesDoNotFilterOrRes
 void VerifyUiSearchComboBehaviorTests_OnlyCommittedImeTextChangesTheFilteredQuery(mut UiSearchComboBehaviorTests self){
     ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     ASSERT_TRUE(self.m_state.query().beginComposition());
-    ASSERT_TRUE(self.m_state.query().updateComposition("tail", 0u, 4u));
+    ASSERT_TRUE(self.m_state.query().updateComposition("tail", 0u, 4u, Span<EditPreeditClause>()));
     ASSERT_TRUE(FilterSearchCombo(self.m_state, self.m_source));
     EXPECT_EQ(self.m_source.filterCalls, 1u);
     ASSERT_TRUE(self.m_state.query().commitComposition("tail"));
@@ -737,7 +737,7 @@ void VerifyUiSearchComboBuilderTests_ReverseTabFromQueryCancelsPreeditAndKeepsTh
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.openSearch(2u));
     ASSERT_TRUE(self.m_search.query().beginComposition());
-    ASSERT_TRUE(self.m_search.query().updateComposition(s_UiSearchComboPreeditText, 0u, 7u));
+    ASSERT_TRUE(self.m_search.query().updateComposition(s_UiSearchComboPreeditText, 0u, 7u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.m_search.query().composition().active);
     InputEvent reverseDown = InputEvent();
     reverseDown.key = Key::Tab;
@@ -896,7 +896,7 @@ void VerifyUiSearchComboBuilderTests_OutsideDismissalCancelsQueryCompositionAndK
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
     ASSERT_TRUE(self.m_search.query().beginComposition());
-    ASSERT_TRUE(self.m_search.query().updateComposition(s_UiSearchComboPreeditText, 0u, 7u));
+    ASSERT_TRUE(self.m_search.query().updateComposition(s_UiSearchComboPreeditText, 0u, 7u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.acceptSearch(1u));
     self.click(Point(790.0f, 590.0f));
     ASSERT_TRUE(self.acceptSearch(2u));
@@ -949,7 +949,7 @@ void VerifyUiSearchComboBuilderTests_BeginningPreeditAfterDeclarationCannotPubli
     ASSERT_TRUE(self.declareSearch(2u));
     const u64 revision = self.m_search.query().revision();
     ASSERT_TRUE(self.m_search.query().beginComposition());
-    ASSERT_TRUE(self.m_search.query().updateComposition("late", 0u, 4u));
+    ASSERT_TRUE(self.m_search.query().updateComposition("late", 0u, 4u, Span<EditPreeditClause>()));
     EXPECT_EQ(self.m_search.query().revision(), revision);
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_TRUE(self.m_context.failed());
@@ -963,11 +963,11 @@ void VerifyUiSearchComboBuilderTests_UpdatingPreeditAfterDeclarationRejectsEvenW
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
     ASSERT_TRUE(self.m_search.query().beginComposition());
-    ASSERT_TRUE(self.m_search.query().updateComposition("old", 0u, 3u));
+    ASSERT_TRUE(self.m_search.query().updateComposition("old", 0u, 3u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.declareSearch(2u));
     const u64 revision = self.m_search.query().revision();
-    ASSERT_TRUE(self.m_search.query().updateComposition("new", 1u, 2u));
+    ASSERT_TRUE(self.m_search.query().updateComposition("new", 1u, 2u, Span<EditPreeditClause>()));
     EXPECT_EQ(self.m_search.query().revision(), revision);
     EXPECT_FALSE(self.m_builder.endPanel());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
@@ -979,7 +979,7 @@ void VerifyUiSearchComboBuilderTests_CancellingPreeditAfterDeclarationCannotPubl
     self.m_search.combo().select(1u);
     self.m_search.combo().open();
     ASSERT_TRUE(self.m_search.query().beginComposition());
-    ASSERT_TRUE(self.m_search.query().updateComposition("old", 0u, 3u));
+    ASSERT_TRUE(self.m_search.query().updateComposition("old", 0u, 3u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.acceptSearch(1u));
     ASSERT_TRUE(self.declareSearch(2u));
     self.m_search.query().cancelComposition();

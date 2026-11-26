@@ -4,8 +4,6 @@
 from reflection_image_analysis import ReflectionImageAnalysis
 
 import argparse
-import base64
-import html
 import json
 import os
 from pathlib import Path
@@ -14,15 +12,12 @@ import sys
 
 import caustic_quality_smoke
 from caustic_optical_image_evidence import VARIANTS, CausticOpticalImageEvidence
-from framebuffer_png_encoder import FramebufferPngEncoder
-from window_capture_image import read_bmp_24_rows
+from smoke_capture_suite import build_window_capture_command, run_window_capture_subprocess, write_evidence_gallery_report
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
-
-LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 
 LIT_GPU_VALIDATION = "--gpu-validation"
 
-LIT_COMBINED = "combined"
 LIT_REFLECTION_DISABLED = "reflection_disabled"
 LIT_CAUSTICS_DISABLED = "caustics_disabled"
 LIT_REFRACTION_DISABLED = "refraction_disabled"
@@ -32,14 +27,11 @@ LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
 LIT_TIMEOUT = "--timeout"
 LIT_LOG = ".log"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
-LIT_REJECT_LOG_MESSAGE = "--reject-log-message"
 LIT_REFLECTION_RESOLVE_HARDWARE = "Reflection resolve: hardware"
 LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED = "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"
 LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_UTF_8 = "utf-8"
-LIT_EXTERIOR_ENVIRONMENT = "exterior_environment"
 LIT_STORE_TRUE = "store_true"
 LIT_MAIN = "__main__"
 LIT_APPEND = "append"
@@ -62,62 +54,56 @@ def capture_environment(variant, software_ray_tracing=False, caustic_photon_grid
 
 def capture(args, variant):
     output = args.output_directory / (variant + ".bmp")
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "360", LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)), LIT_EXPECT_LOG_MESSAGE, "TransparentMultiSmokeProject: shutdown",
-        LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
+    log_path = output.with_suffix(LIT_LOG)
     enabled = variant != LIT_REFLECTION_DISABLED
-    command += [LIT_EXPECT_LOG_MESSAGE, "CausticSphereSmokeProject: reflection mode " + (("1" if args.software_ray_tracing else "2") if enabled else "0"), LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: "
-        + (("screen-space" if args.software_ray_tracing else LIT_HARDWARE) if enabled else LIT_DISABLED)]
-    if not enabled:
-        command += [LIT_REJECT_LOG_MESSAGE, LIT_REFLECTION_RESOLVE_HARDWARE]
-    command += [LIT_EXPECT_LOG_MESSAGE, "CausticSphereSmokeProject: camera refraction " + (LIT_DISABLED if variant == LIT_REFRACTION_DISABLED else "enabled")]
+    expect_logs = [
+        "TransparentMultiSmokeProject: shutdown",
+        "CausticSphereSmokeProject: reflection mode " + (("1" if args.software_ray_tracing else "2") if enabled else "0"),
+        "Reflection resolve: " + (("screen-space" if args.software_ray_tracing else LIT_HARDWARE) if enabled else LIT_DISABLED),
+    ]
+    reject_logs = [] if enabled else [LIT_REFLECTION_RESOLVE_HARDWARE]
+    expect_logs.append("CausticSphereSmokeProject: camera refraction " + (LIT_DISABLED if variant == LIT_REFRACTION_DISABLED else "enabled"))
     if variant == LIT_REFRACTION_DISABLED or args.software_ray_tracing:
-        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: screen-space", LIT_REJECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware"]
+        expect_logs.append("AVBOIT refraction resolve: screen-space")
+        reject_logs.append("AVBOIT refraction resolve: hardware")
     else:
-        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
-    command += [LIT_EXPECT_LOG_MESSAGE if variant != LIT_CAUSTICS_DISABLED else LIT_REJECT_LOG_MESSAGE, "caustic producer ("]
+        expect_logs.append("AVBOIT refraction resolve:")
+    if variant != LIT_CAUSTICS_DISABLED:
+        expect_logs.append("caustic producer (")
+    else:
+        reject_logs.append("caustic producer (")
+    skip_logs = []
+    extra_args = []
     if args.software_ray_tracing:
-        command += ["--application-arg=--disable-hardware-ray-tracing"]
-        for message in ("Loader: hardware ray tracing disabled before device creation", LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED, "RendererSystem: dispatched software shadow traversal",
-            "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)",):
-            command += [LIT_EXPECT_LOG_MESSAGE, message]
+        extra_args.append("--application-arg=--disable-hardware-ray-tracing")
+        expect_logs.extend(("Loader: hardware ray tracing disabled before device creation", LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED,
+            "RendererSystem: dispatched software shadow traversal", "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"))
         if variant != LIT_CAUSTICS_DISABLED:
-            command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched software caustic producer"]
-        for message in (LIT_REFLECTION_RESOLVE_HARDWARE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG, "RendererSystem: dispatched hardware caustic producer", "RendererSystem: created surfel HW trace compute pipeline",
-            "RendererSystem: created refraction resolve pipeline (hardware ray query, sparse queue)", "RendererSystem: created refraction resolve pipeline (hardware ray query, dense grid)",):
-            command += [LIT_REJECT_LOG_MESSAGE, message]
+            expect_logs.append("RendererSystem: dispatched software caustic producer")
+        reject_logs.extend((LIT_REFLECTION_RESOLVE_HARDWARE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG, "RendererSystem: dispatched hardware caustic producer",
+            "RendererSystem: created surfel HW trace compute pipeline", "RendererSystem: created refraction resolve pipeline (hardware ray query, sparse queue)",
+            "RendererSystem: created refraction resolve pipeline (hardware ray query, dense grid)"))
     else:
-        command += [LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message", "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware else LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED]
-        command += [LIT_EXPECT_LOG_MESSAGE, LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG]
-    if args.logserver_executable:
-        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
-    else:
-        command.append("--no-logserver")
-    command.extend("--application-arg=" + argument for argument in args.application_arg)
+        if args.require_hardware:
+            expect_logs.append("natural hardware shadow route selected on RayQuery-capable hardware")
+        else:
+            skip_logs.append(LIT_NATURAL_SOFTWARE_SHADOW_ROUTE_SELECTED)
+        expect_logs.append(LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG)
+    command = build_window_capture_command(args, output, frames=360, log_output=log_path, expect_logs=expect_logs, reject_logs=reject_logs,
+        skip_logs=skip_logs, extra_args=extra_args, gpu_validation=args.gpu_validation)
     print("Capturing combined caustic scene / " + variant + " at presentation360...", flush=True)
-    result = subprocess.run(command, env=capture_environment(variant, args.software_ray_tracing, args.caustic_photon_grid_divisor), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode == SKIP_EXIT_CODE:
+    if run_window_capture_subprocess(command, env=capture_environment(variant, args.software_ray_tracing, args.caustic_photon_grid_divisor),
+            timeout=args.timeout, failure_message=variant + " combined capture failed: {code}") is None:
         return None
-    if result.returncode:
-        raise SmokeFailure(variant + " combined capture failed: " + str(result.returncode))
-    caustic_quality_smoke.verify_settings(output.with_suffix(LIT_LOG).read_text(encoding=LIT_UTF_8), args.caustic_photon_grid_divisor, producer_enabled=variant != LIT_CAUSTICS_DISABLED)
-    frame = read_bmp_24_rows(output)
+    caustic_quality_smoke.verify_settings(log_path.read_text(encoding=LIT_UTF_8), args.caustic_photon_grid_divisor, producer_enabled=variant != LIT_CAUSTICS_DISABLED)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     ReflectionImageAnalysis.validate_frame(frame)
     if frame[:2] != (1280, 900):
         raise SmokeFailure("combined caustic comparison requires the actual 1280x900 framebuffer")
     return frame
 
 
-
-
-
-
 def write_report(args, frames, metrics=None):
-    cards = []
-    for name, frame in frames.items():
-        png = FramebufferPngEncoder.encode(frame)
-        (args.output_directory / (name + ".png")).write_bytes(png)
-        cards.append(f'<article><h2>{name}</h2><a href="{name}.bmp">Raw BMP</a> / <a href="{name}.log">Launch log</a>' f'<img alt="Actual {name} caustic scene" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
     note = "Actual frame360 readbacks from the same static camera, sphere, ground and light. Individual typed controls separate the visible reflection, camera refraction and caustic contributions. Ground F0 remains zero. Reflection uses a fixed bright environment. "
     if args.software_ray_tracing:
         note += "Hardware ray tracing is disabled at logical-device creation. Shadow and photon caustic tracing use software BVHs; camera refraction and reflection use screen-space approximations. A fixed unlit striped backdrop supplies opaque in-screen depth and visible refractive displacement for every software toggle. This validates separate visible contributions and localization. The hardware-only geometric ray-miss/Fresnel oracle is explicitly excluded; this is not proof of equivalent offscreen transport."
@@ -126,12 +112,11 @@ def write_report(args, frames, metrics=None):
     metadata = {"frame_source": "actual application framebuffer readback", "presentation_frame": 360, "caustic_photon_grid_divisor": args.caustic_photon_grid_divisor, "logical_device_policy": LIT_DISABLED if args.software_ray_tracing else "automatic",
         "background_fixture": "screen_refraction_stripes" if args.software_ray_tracing else "original", "optical_validation": "software_contributions" if args.software_ray_tracing else "hardware_contributions_and_exterior_radiometry",
         "variants": list(frames), "metrics": metrics, "scope": note}
-    (args.output_directory / "caustic_optical_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
-    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Combined optical caustic scene</title>'
-    document += '<style>body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}</style>'
-    document += '<h1>Caustics, camera refraction and reflection</h1><p>' + html.escape(note) + '</p><main>' + ''.join(cards) + '</main><pre>'
-    document += html.escape(json.dumps(metrics, indent=2) if metrics else 'Visual acceptance pending.') + '</pre></html>'
-    (args.output_directory / "caustic_optical.html").write_text(document, encoding=LIT_UTF_8)
+    items = [(name, name, name + ".bmp", name + LIT_LOG, "Launch log", f"Actual {name} caustic scene", frame) for name, frame in frames.items()]
+    style = "body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}"
+    write_evidence_gallery_report(args.output_directory, manifest_name="caustic_optical_manifest.json", html_name="caustic_optical.html",
+        metadata=metadata, title="Combined optical caustic scene", heading="Caustics, camera refraction and reflection",
+        note=note, items=items, metrics=metrics, pending_message="Visual acceptance pending.", style=style)
 
 
 def parse_args(argv):

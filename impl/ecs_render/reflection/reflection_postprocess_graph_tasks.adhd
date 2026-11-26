@@ -135,18 +135,17 @@ class ReflectionStatisticsReadbackTask : MoveOnly{
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
     [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
-        if(!this.m_source.valid() || !this.destination.valid() || !this.reservation.valid())
+        if(!this.reservation.valid())
             return false;
-        const GpuGraphResourceId source = this.sourceResource;
-        const GpuGraphResourceId destination = this.destinationResource;
-        in GpuTaskRecordContext contextRef = context;
-        if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in source, in destination](mut GpuCommandIrCapture capture) -> b8{
-            return capture.captureCopyBuffer(contextRef.task, contextRef.packet, contextRef.queue, source, 0u, destination, 0u, s_ReflectionReadbackCounterBytes);
-        }))
-            return false;
-        commandList.endRenderPass();
-        commandList.copyBuffer(this.destination.deref(), 0u, this.m_source.deref(), 0u, s_ReflectionReadbackCounterBytes);
-        return !commandList.commandRecordingFailed();
+        return RecordStatisticsReadbackCopy(
+            commandList,
+            context,
+            this.m_source,
+            this.destination,
+            this.sourceResource,
+            this.destinationResource,
+            s_ReflectionReadbackCounterBytes
+        );
     }
     public void accepted(in QueueSubmissionToken token){
         const b8 hardwareReady = this.m_hardwareEnabled && this.m_hardwarePreparationReady;
@@ -321,8 +320,7 @@ Expected<GpuTaskId> DeclareReflectionPostprocessTasks(
         snapshot.spatial.storageSlot,
         snapshot.deferredResourcesSlot,
         snapshot.opaqueSpecularSlot,
-        snapshot.viewSlot,
-        snapshot.history.settings.spatialRadius
+        snapshot.viewSlot
     );
     const auto spatialTask = graph.addPayloadTask(desc, ReflectionSpatialTask(graphics, snapshot.spatialPipeline, spatialParameters, s_ReflectionShaderSpatialGroupSize));
     if(!spatialTask.has_value())

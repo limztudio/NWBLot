@@ -845,25 +845,34 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
     return total;
 }
 
+[[nodiscard]] static Expected<Optional<MinidumpRecords<MINIDUMP_THREAD>>> ReadMinidumpThreadRecords(const DumpImage& dumpImage)noexcept{
+    const auto threadStream = dumpImage.stream(ThreadListStream);
+    if(!threadStream)
+        return MakeUnexpected(Failure{});
+    if(!*threadStream)
+        return Optional<MinidumpRecords<MINIDUMP_THREAD>>{};
+    const DumpImage& stream = **threadStream;
+    const auto count = stream.read<ULONG32>(0u);
+    if(!count)
+        return MakeUnexpected(Failure{});
+    const auto threads = stream.records<MINIDUMP_THREAD>(offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
+    if(!threads)
+        return MakeUnexpected(Failure{});
+    return Optional<MinidumpRecords<MINIDUMP_THREAD>>(*threads);
+}
+
 [[nodiscard]] static Expected<DumpMemoryReader> BuildDumpMemoryReader(const DumpImage& dumpImage, Core::Alloc::ScratchArena& scratchArena){
     const auto rangeCapacity = CountDumpMemoryRanges(dumpImage);
     if(!rangeCapacity)
         return MakeUnexpected(Failure{});
     DumpMemoryReader reader(scratchArena);
     reader.ranges.reserve(*rangeCapacity);
-    const auto threadStream = dumpImage.stream(ThreadListStream);
-    if(!threadStream)
+    const auto threads = ReadMinidumpThreadRecords(dumpImage);
+    if(!threads)
         return MakeUnexpected(Failure{});
-    if(*threadStream){
-        const DumpImage& stream = **threadStream;
-        const auto count = stream.read<ULONG32>(0u);
-        if(!count)
-            return MakeUnexpected(Failure{});
-        const auto threads = stream.records<MINIDUMP_THREAD>(offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
-        if(!threads)
-            return MakeUnexpected(Failure{});
-        for(usize index = 0u; index < threads->count; ++index){
-            const MINIDUMP_THREAD thread = threads->record(index);
+    if(*threads){
+        for(usize index = 0u; index < (*threads)->count; ++index){
+            const MINIDUMP_THREAD thread = (*threads)->record(index);
             if(!AddLocationMemoryRange(dumpImage, thread.Stack.StartOfMemoryRange, thread.Stack.Memory, reader))
                 return MakeUnexpected(Failure{});
         }
@@ -962,18 +971,11 @@ struct CrashContext{
     if(summary.threadId > Limit<DWORD>::s_Max)
         return MakeUnexpected(Failure{});
     const DWORD threadId = static_cast<DWORD>(summary.threadId);
-    const auto threadStream = dumpImage.stream(ThreadListStream);
-    if(!threadStream || !*threadStream)
+    const auto threads = ReadMinidumpThreadRecords(dumpImage);
+    if(!threads || !*threads)
         return MakeUnexpected(Failure{});
-    const DumpImage& stream = **threadStream;
-    const auto count = stream.read<ULONG32>(0u);
-    if(!count)
-        return MakeUnexpected(Failure{});
-    const auto threads = stream.records<MINIDUMP_THREAD>(offsetof(MINIDUMP_THREAD_LIST, Threads), *count);
-    if(!threads)
-        return MakeUnexpected(Failure{});
-    for(usize index = 0u; index < threads->count; ++index){
-        const MINIDUMP_THREAD thread = threads->record(index);
+    for(usize index = 0u; index < (*threads)->count; ++index){
+        const MINIDUMP_THREAD thread = (*threads)->record(index);
         if(threadId != 0u && thread.ThreadId != threadId)
             continue;
         return ReadCrashContext(dumpImage, thread.ThreadId, thread.ThreadContext);

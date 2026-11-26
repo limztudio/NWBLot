@@ -14,29 +14,34 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 SourceEmitter::tryEmitSimdRegisterCall(MString& out, const MStringView callee, const Expr& expr)const{
+    const MStringView registerCall = expr.callTemplateArgs.empty() ? MapSimdRegisterCall(callee) : MStringView{};
+    if(registerCall.empty())
+        return false;
+    out.append(registerCall.data(), registerCall.size());
+    out.push_back('(');
+    for(usize i = 0u; i < expr.arguments.size(); ++i){
+        if(i > 0u)
+            out.append(", ");
+        if(expr.arguments[i]){
+            if(!expr.arguments[i]->isMutArg && IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
+                emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
+            else
+                emitExpr(out, *expr.arguments[i]);
+        }
+    }
+    out.push_back(')');
+    return true;
+}
+
 b8 BuiltinCallEmitter::tryEmit(MString& out, const Expr& expr)const{
     const BuiltinFunctionInfo* scopedFn = (expr.isBuiltinCall && expr.lhs && expr.lhs->kind == ExprKind::ScopeAccess && expr.lhs->scopeChain.size() == 2u)
         ? FindBuiltinScopedFunction(expr.lhs->scopeChain[0], expr.lhs->scopeChain[1])
         : nullptr;
     if(expr.isBuiltinCall && expr.lhs && (expr.lhs->kind == ExprKind::Identifier || scopedFn != nullptr)){
         const MStringView callee = (expr.lhs->kind == ExprKind::Identifier) ? expr.lhs->text : scopedFn->adhdName;
-        const MStringView registerCall = expr.callTemplateArgs.empty() ? MapSimdRegisterCall(callee) : MStringView{};
-        if(!registerCall.empty()){
-            out.append(registerCall.data(), registerCall.size());
-            out.push_back('(');
-            for(usize i = 0u; i < expr.arguments.size(); ++i){
-                if(i > 0u)
-                    out.append(", ");
-                if(expr.arguments[i]){
-                    if(!expr.arguments[i]->isMutArg && IsRegisterPromotableSimdType(expr.arguments[i]->resolvedSimdType))
-                        m_emitter.emitSimdRegExpr(out, *expr.arguments[i], expr.arguments[i]->resolvedSimdType);
-                    else
-                        m_emitter.emitExpr(out, *expr.arguments[i]);
-                }
-            }
-            out.push_back(')');
+        if(m_emitter.tryEmitSimdRegisterCall(out, callee, expr))
             return true;
-        }
         const SpecialFunctionKind::Enum specialFn = FindSpecialFunctionKind(callee);
         if(specialFn == SpecialFunctionKind::IsFinite && expr.arguments.size() == 1u && expr.arguments[0] && (expr.arguments[0]->resolvedSimdType == FindFloatSimdRegisterTypeName(false) || expr.arguments[0]->resolvedSimdType == FindFloatSimdRegisterTypeName(true))){
             const Expr& arg0 = *expr.arguments[0];

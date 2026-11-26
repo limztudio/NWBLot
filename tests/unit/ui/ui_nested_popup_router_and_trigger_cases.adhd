@@ -450,7 +450,7 @@ class UiNestedPopupRouterTests : RouterTestFixture{
             targets[order + 1u] = MakeUiNestedPopupRouterChild(scopes[index], 1u, order + 1u, navigation);
             targets[order + 2u] = MakeUiNestedPopupRouterChild(scopes[index], 2u, order + 2u, navigation);
         }
-        return this.m_router.commitTargets(Span<HitTarget>(targets).subspan(0u, 1u + scopes.size() * 3u), generation, scopes);
+        return this.m_router.commitTargets(Span<HitTarget>(targets).subspan(0u, 1u + scopes.size() * 3u), generation, scopes, u64.max);
     }
     public b8 installEmpty(in u64 generation){ return this.installEmpty(generation, false); }
     public b8 installEmpty(in u64 generation, in b8 navigation){
@@ -461,7 +461,7 @@ class UiNestedPopupRouterTests : RouterTestFixture{
         return this.install(MakeUiSinglePopupScopeArray(scope), generation, navigation);
     }
     public b8 commitSingleScopeTargets(in Span<HitTarget> targets, in u64 generation, in PopupScope scope){
-        return this.m_router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope));
+        return this.m_router.commitTargets(targets, generation, MakeUiSinglePopupScopeArray(scope), u64.max);
     }
     public Optional<PopupScope> findPopupScope(in PopupToken token)const{
         const auto found = this.m_router.popupScope(token);
@@ -623,23 +623,6 @@ void ExpectNoNestedSourceCallbacks(in UiNestedPopupLoanMutationSource source){
     EXPECT_EQ(source.searchCalls.value(), 0u);
     EXPECT_EQ(source.textCalls.value(), 0u);
     EXPECT_EQ(source.enabledCalls.value(), 0u);
-}
-
-PopupToken MakeUiNestedPopupRouterToken(in u64 widgetValue, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
-    PopupToken token = PopupToken();
-    token.widget = WidgetId(widgetValue);
-    token.declarationGeneration = declarationGeneration;
-    token.instanceGeneration = instanceGeneration;
-    token.openGeneration = openGeneration;
-    return token;
-}
-
-ControlToken MakeUiNestedPopupRouterControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
-    ControlToken token = ControlToken();
-    token.instanceGeneration = instanceGeneration;
-    token.contentGeneration = contentGeneration;
-    token.contentRevision = contentRevision;
-    return token;
 }
 
 void VerifyUiNestedPopupLoanTests_ChildEndDefersVisibleRowCallbacksUntilTheOuterPopupEnds(mut UiNestedPopupLoanTests self){
@@ -1039,7 +1022,7 @@ void VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenPa
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 3u));
     ASSERT_EQ(self.m_router.focus().value, 201u);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Escape, false)).commandConsumed);
     PopupDismissReason reason = PopupDismissReason::None;
     const auto reasonResult1 = self.m_router.consumePopupDismissal(child.token);
     ASSERT_TRUE(reasonResult1.has_value());
@@ -1049,10 +1032,10 @@ void VerifyUiNestedPopupRouterTests_EscapeDismissesOnlyChildThenRestoresChosenPa
     EXPECT_FALSE(self.m_router.focus().valid());
     ASSERT_TRUE(self.installOne(parent, 4u));
     EXPECT_EQ(self.m_router.focus().value, 102u);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Escape, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Escape, true)).commandConsumed);
     EXPECT_FALSE(self.m_router.consumePopupDismissal(parent.token).has_value());
     EXPECT_EQ(self.m_router.focus().value, 102u);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Escape, false)).commandConsumed);
     self.key(Key::Escape);
     const auto reasonResult2 = self.m_router.consumePopupDismissal(parent.token);
     ASSERT_TRUE(reasonResult2.has_value());
@@ -1173,8 +1156,8 @@ void VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsA
     scopes[0u] = parent;
     scopes[1u] = child;
     ASSERT_TRUE(self.install(scopes, 2u, true));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Down, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Menu, false)).commandConsumed);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(175.0f, 125.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryDown, Point(175.0f, 125.0f))).pointerConsumed);
     ASSERT_EQ(self.m_router.capture().value, 201u);
@@ -1190,18 +1173,18 @@ void VerifyUiNestedPopupRouterTests_RetiringAncestorCancelsDescendantIntentionsA
     const WidgetId target201 = WidgetId(201u);
     EXPECT_FALSE(self.m_router.consumeContextMenu(target201, 10u).has_value());
     ASSERT_TRUE(self.install(scopes, 3u, true));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Menu, false)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_FALSE(self.m_router.consumeContextMenu(target201, 10u).has_value());
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(175.0f, 125.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::SecondaryUp, Point(175.0f, 125.0f))).pointerConsumed);
     EXPECT_TRUE(self.m_router.actions().empty());
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Down, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Menu, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Down, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Menu, false)).commandConsumed);
     self.key(Key::Down);
     ControlAction action = ControlAction();
-    const auto actionResult = self.m_router.consumeControlAction(target201, 10u, MakeUiNestedPopupRouterControlToken(600u, 700u, 800u));
+    const auto actionResult = self.m_router.consumeControlAction(target201, 10u, MakeUiControlToken(600u, 700u, 800u));
     ASSERT_TRUE(actionResult.has_value());
     action = actionResult.value();
     EXPECT_EQ(action.popup, child.token);
@@ -1283,7 +1266,7 @@ void VerifyUiNestedPopupRouterTests_InvalidOrMissingAncestryRejectsAtomicallyAga
     invalid.fill(child);
     ++invalid[0u].parent.openGeneration;
     invalid[1u].parent.widget = WidgetId();
-    invalid[2u].parent = MakeUiNestedPopupRouterToken(999u, 10u, 20u, 1u);
+    invalid[2u].parent = MakeUiPopupToken(999u, 10u, 20u, 1u);
     invalid[3u].parent = child.token;
     invalid[4u].parent = PopupToken();
     for(in PopupScope candidate : invalid){

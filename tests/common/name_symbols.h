@@ -29,7 +29,7 @@ private:
     Array<char, Capacity> m_chars{};
 };
 
-#if defined(NWB_BUILD_SYMBOLS)
+#if defined(FOUNDATION_BUILD_SYMBOLS)
 inline constexpr b8 s_SymbolsEnabled = true;
 #else
 inline constexpr b8 s_SymbolsEnabled = false;

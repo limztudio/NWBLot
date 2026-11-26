@@ -14,10 +14,34 @@ const f32 s_DragPreviewFallbackWidth = 100.0f;
 const f32 s_DragPreviewFallbackHeight = 24.0f;
 const f32 s_DragPreviewBorderThickness = 1.0f;
 const f32 s_HyperlinkStrikeThickness = 1.0f;
-const f32 s_RichTextFallbackCharWidth = 6.0f;
 const f32 s_PlotMinBarWidth = 2.0f;
-const f32 s_PlotHoverMaxMarkerRadius = 4.0f;
-const Color s_DragPreviewFallbackBg = Color(0.14f, 0.17f, 0.22f, 0.94f);
+
+void UpdatePlotBucketMinMax(
+    in f32 v,
+    in usize sampleIdx,
+    mut b8 inOutHasFinite,
+    mut f32 inOutMinV,
+    mut f32 inOutMaxV,
+    mut usize inOutMinIdx,
+    mut usize inOutMaxIdx
+){
+    if(!inOutHasFinite){
+        inOutHasFinite = true;
+        inOutMinV = v;
+        inOutMaxV = v;
+        inOutMinIdx = sampleIdx;
+        inOutMaxIdx = sampleIdx;
+        return;
+    }
+    if(v < inOutMinV){
+        inOutMinV = v;
+        inOutMinIdx = sampleIdx;
+    }
+    if(v > inOutMaxV){
+        inOutMaxV = v;
+        inOutMaxIdx = sampleIdx;
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,8 +60,8 @@ void EmitMeasuredRichTextRun(
     mut Vector<RichTextRun> outRuns
 ){
     in Rect tb = measured.bounds;
-    const f32 advW = UiSimdMax(0.0f, tb.width);
-    const f32 advH = UiSimdMax(fontSize * lineHeightMultiplier, tb.height);
+    const f32 advW = Max(0.0f, tb.width);
+    const f32 advH = Max(fontSize * lineHeightMultiplier, tb.height);
     RichTextRun run;
     run.lineIndex = lineIndex;
     run.x = inOutCursorX;
@@ -103,7 +127,7 @@ void AppendRichTextHardLine(
         return;
     }
     in CachedMeasuredText fullMeasured = measured.value();
-    const f32 fullAdvW = UiSimdMax(0.0f, fullMeasured.bounds.width);
+    const f32 fullAdvW = Max(0.0f, fullMeasured.bounds.width);
     if(!wrap || !(maxLineW > 0.0f) || inOutCursorX + fullAdvW <= maxLineW){
         EmitMeasuredRichTextRun(fullMeasured, sp, fontSize, req.lineHeightMultiplier, linkStyle, widgetStyle, enabled, inOutLineIndex, inOutCursorX, outRuns);
         return;
@@ -265,7 +289,6 @@ DragDropResult Builder::dragSource(in StringView stableKey, in StringView anchor
                     state.m_pendingDrop = false;
                     state.m_dropConsumed = false;
                     state.m_sourceWidget = widget.value().id;
-                    state.m_pressOrigin = g.origin;
                     state.m_pointerPosition = g.position;
                     state.m_payload = payload;
                     AdvanceNonWrappingRevision(state.m_revision);
@@ -277,7 +300,6 @@ DragDropResult Builder::dragSource(in StringView stableKey, in StringView anchor
                     state.m_pendingDrop = true;
                     state.m_dropConsumed = false;
                     state.m_sourceWidget = widget.value().id;
-                    state.m_pressOrigin = g.origin;
                     state.m_pointerPosition = g.position;
                     state.m_dropPosition = g.position;
                     state.m_dropFrame = currentFrame;
@@ -350,17 +372,14 @@ DragDropResult Builder::dropTarget(in StringView stableKey, in StringView anchor
     const Optional<Rect> prevRect = state.findTargetRect(widget.value().id);
     const b8 typeMatches = acceptType == s_NameNone || acceptType == state.m_payload.type;
     if(effectiveEnabled && typeMatches && prevRect.has_value()){
-        if(state.m_active && UiRectContainsPoint(prevRect.value(), state.m_pointerPosition)){
+        if(state.m_active && UiRectContainsPoint(prevRect.value(), state.m_pointerPosition))
             result.hovered = true;
-            state.m_hoveredTarget = widget.value().id;
-        }
         if(state.m_pendingDrop && !state.m_dropConsumed && UiRectContainsPoint(prevRect.value(), state.m_dropPosition)){
             result.dropped = true;
             result.payload = state.m_payload;
             state.m_dropConsumed = true;
             state.m_pendingDrop = false;
             state.m_active = false;
-            state.m_hoveredTarget = WidgetId();
             AdvanceNonWrappingRevision(state.m_revision);
         }
     }
@@ -383,18 +402,10 @@ DragDropResult Builder::dropTarget(in StringView stableKey, in StringView anchor
     return result;
 }
 
-b8 Builder::dragSourceStateMatches(in BuilderDragSourceFrame frame)const{
-    return frame.state.has_value() && this.popupAncestorsVisible() && frame.state.value().instanceGeneration() == frame.instanceGeneration;
-}
-
-b8 Builder::dropTargetStateMatches(in BuilderDropTargetFrame frame)const{
-    return frame.state.has_value() && this.popupAncestorsVisible() && frame.state.value().instanceGeneration() == frame.instanceGeneration;
-}
-
 b8 Builder::paintDragDrops(){
     HitTargetFactory targets;
     for(mut auto frame : this.m_scope.value().m_dropTargets){
-        if(!this.dropTargetStateMatches(frame) || frame.anchorIndex >= this.m_scope.value().m_items.size())
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().instanceGeneration(), frame.instanceGeneration) || frame.anchorIndex >= this.m_scope.value().m_items.size())
             return false;
         in BuilderItem anchor = this.m_scope.value().m_items[frame.anchorIndex];
         const Optional<LayoutBox> anchorBox = this.m_scope.value().m_layout.box(anchor.node);
@@ -413,7 +424,7 @@ b8 Builder::paintDragDrops(){
         }
     }
     for(mut auto frame : this.m_scope.value().m_dragSources){
-        if(!this.dragSourceStateMatches(frame) || frame.anchorIndex >= this.m_scope.value().m_items.size())
+        if(!frame.state.has_value() || !this.popupStateTokenMatches(frame.state.value().instanceGeneration(), frame.instanceGeneration) || frame.anchorIndex >= this.m_scope.value().m_items.size())
             return false;
         in BuilderItem anchor = this.m_scope.value().m_items[frame.anchorIndex];
         const Optional<LayoutBox> anchorBox = this.m_scope.value().m_layout.box(anchor.node);
@@ -497,7 +508,7 @@ b8 Builder::hyperlink(in StringView stableKey, in StringView text, in HyperlinkO
     item.textBounds = measured.value().bounds;
     item.hyperlink = cast<u32>(this.m_scope.value().m_hyperlinks.size());
 
-    const Point intrinsic(UiSimdMax(0.0f, item.textBounds.width), UiSimdMax(this.m_style.fontSize, item.textBounds.height));
+    const Point intrinsic(Max(0.0f, item.textBounds.width), Max(this.m_style.fontSize, item.textBounds.height));
     const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, intrinsic, options.layout);
     if(!this.addItemNode(description, item))
         return false;
@@ -533,8 +544,8 @@ b8 Builder::paintHyperlink(in BuilderItem item, in LayoutBox box){
     const b8 painted = this.m_text.paint(this.m_paint, item.text.deref(), origin, col);
     const b8 showUnderline = !frame.style.underlineOnHoverOnly || hover || pressed || focused;
     if(painted && showUnderline && item.textBounds.width > 0.0f){
-        const f32 lineY = box.rectangle.y + UiSimdMin(box.rectangle.height, item.textBounds.height);
-        const f32 lineW = UiSimdMin(box.rectangle.width, item.textBounds.width);
+        const f32 lineY = box.rectangle.y + Min(box.rectangle.height, item.textBounds.height);
+        const f32 lineW = Min(box.rectangle.width, item.textBounds.width);
         this.m_paint.drawLine(Point(box.rectangle.x, lineY), Point(box.rectangle.x + lineW, lineY), frame.style.underlineThickness, col);
     }
     const b8 innerPopped = this.m_paint.popClip();
@@ -673,8 +684,8 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
     for(in RichTextRun run : frame.runs){
         const usize li = cast<usize>(run.lineIndex);
         if(li < numLines){
-            frame.lineWidths[li] = UiSimdMax(frame.lineWidths[li], run.x + run.width);
-            this.m_richTextLineHeightsScratch[li] = UiSimdMax(this.m_richTextLineHeightsScratch[li], run.height);
+            frame.lineWidths[li] = Max(frame.lineWidths[li], run.x + run.width);
+            this.m_richTextLineHeightsScratch[li] = Max(this.m_richTextLineHeightsScratch[li], run.height);
         }
     }
 
@@ -683,7 +694,7 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
     this.m_richTextLineYScratch.clear();
     this.m_richTextLineYScratch.resize(numLines, 0.0f);
     for(usize li = 0u; li < numLines; ++li){
-        totalW = UiSimdMax(totalW, frame.lineWidths[li]);
+        totalW = Max(totalW, frame.lineWidths[li]);
         this.m_richTextLineYScratch[li] = totalH;
         totalH += this.m_richTextLineHeightsScratch[li];
         if(li + 1u < numLines)
@@ -693,7 +704,7 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
     for(mut RichTextRun run : frame.runs){
         const usize li = cast<usize>(run.lineIndex);
         if(li < numLines)
-            run.y = this.m_richTextLineYScratch[li] + UiSimdMax(0.0f, this.m_richTextLineHeightsScratch[li] - run.height);
+            run.y = this.m_richTextLineYScratch[li] + Max(0.0f, this.m_richTextLineHeightsScratch[li] - run.height);
     }
 
     auto item = this.makeItem();
@@ -720,7 +731,7 @@ b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
     in InputRouter input = this.m_context.input();
     HitTargetFactory targets;
 
-    const HitTarget host = targets.makeRichTextHostHitTarget(box.rectangle, clip, item.enabled, item.contextMenu, frame.token);
+    const HitTarget host = targets.makeFocusableHostHitTarget(box.rectangle, clip, item.enabled, item.contextMenu, frame.token);
     if(!this.m_context.addTarget(frame.widget, host))
         return false;
     this.emitAccessibleNode(
@@ -747,9 +758,9 @@ b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
         const usize li = cast<usize>(run.lineIndex);
         if(li < lineCount){
             if(frame.options.alignment == TextAlignment::Center)
-                alignOffsetX = UiSimdMax(0.0f, (box.rectangle.width - frame.lineWidths[li]) * s_RectCenterFraction);
+                alignOffsetX = Max(0.0f, (box.rectangle.width - frame.lineWidths[li]) * s_RectCenterFraction);
             else if(frame.options.alignment == TextAlignment::Trailing)
-                alignOffsetX = UiSimdMax(0.0f, box.rectangle.width - frame.lineWidths[li]);
+                alignOffsetX = Max(0.0f, box.rectangle.width - frame.lineWidths[li]);
         }
         const Rect runRect(box.rectangle.x + alignOffsetX + run.x, box.rectangle.y + run.y, run.width, run.height);
         const b8 visibleInClip = runRect.x + runRect.width > boxClip.x && runRect.x < boxClipRight && runRect.y + runRect.height > boxClip.y && runRect.y < boxClipBottom;
@@ -774,7 +785,8 @@ b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
                     drawCol = frame.linkStyle.hoverColor;
                 if(run.width > 0.0f && run.height > 0.0f){
                     const Rect linkClip = IntersectUiRectsBounds(runRect, boxClip);
-                    const HitTarget linkTarget = targets.makeRichTextLinkHitTarget(runRect, linkClip, true, frame.token, run.linkKey);
+                    HitTarget linkTarget = targets.makeActivatablePartHitTarget(runRect, linkClip, true, frame.token, run.linkKey);
+                    linkTarget.cursor = PointerCursor::Hand;
                     if(!this.m_context.addPartTarget(frame.widget, partId.value(), linkTarget)){
                         this.m_paint.popClip();
                         this.m_paint.popClip();
@@ -850,7 +862,6 @@ PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in
         ComputePlotAutoRangeSimd(series, minY, maxY);
 
     BuilderPlotFrame frame;
-    frame.widget = widget.value();
     frame.style = this.m_plotStyle;
     frame.widgetStyle = this.m_style;
     frame.options = options;
@@ -896,10 +907,10 @@ PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in
             const Rect inner = InsetUiRectBounds(prevTarget.value().rectangle, frame.style.padding);
             if(inner.width > 0.0f && inner.height > 0.0f && UiRectContainsPoint(inner, inputRef.pointerPosition())){
                 result.hovered = true;
-                f32 relX = UiSimdClamp((inputRef.pointerPosition().x - inner.x) / inner.width, 0.0f, 1.0f);
+                f32 relX = Clamp((inputRef.pointerPosition().x - inner.x) / inner.width, 0.0f, 1.0f);
                 usize sampleIdx = 0u;
                 if(frame.maxSamples > 1u)
-                    sampleIdx = cast<usize>(UiSimdMin(cast<f32>(frame.maxSamples - 1u), VectorFloor(VectorSingle(relX * cast<f32>(frame.maxSamples - 1u) + 0.5f)).x));
+                    sampleIdx = cast<usize>(Min(cast<f32>(frame.maxSamples - 1u), VectorFloor(VectorSingle(relX * cast<f32>(frame.maxSamples - 1u) + 0.5f)).x));
                 result.hoveredSampleIndex = sampleIdx;
                 if(!frame.series.empty() && sampleIdx < frame.series[0u].valueCount)
                     result.hoveredValue = frame.flatValues[frame.series[0u].valueBegin + sampleIdx];
@@ -968,10 +979,10 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
             }
         }
 
-        const f32 rangeY = UiSimdMax(1.0e-6f, frame.maxY - frame.minY);
+        const f32 rangeY = Max(1.0e-6f, frame.maxY - frame.minY);
         const f32 invRangeY = inner.height / rangeY;
         const f32 innerBottom = inner.y + inner.height;
-        const f32 zeroY = UiSimdClamp(inner.y + (frame.maxY - 0.0f) * invRangeY, inner.y, innerBottom);
+        const f32 zeroY = Clamp(inner.y + (frame.maxY - 0.0f) * invRangeY, inner.y, innerBottom);
         if(frame.options.showZeroLine && frame.minY <= 0.0f && frame.maxY >= 0.0f)
             this.m_paint.drawLine(Point(inner.x, zeroY), Point(inner.x + inner.width, zeroY), s_PlotDefaultAxisThickness, style.axisColor);
 
@@ -990,16 +1001,16 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
             if(s.kind == PlotKind::Bar){
                 const f32 slotW = inner.width / cast<f32>(n);
                 const f32 usableW = slotW * (1.0f - style.barGapFraction);
-                const f32 singleW = UiSimdMax(s_PlotMinBarWidth, usableW / cast<f32>(UiSimdMax(1u, barSeriesCount)));
+                const f32 singleW = Max(s_PlotMinBarWidth, usableW / cast<f32>(Max(1u, barSeriesCount)));
                 const f32 groupOffset = (slotW - singleW * cast<f32>(barSeriesCount)) * 0.5f + cast<f32>(barSeriesIdx) * singleW;
                 for(usize i = 0u; i < n; ++i){
                     const f32 v = frame.flatValues[s.valueBegin + i];
                     if(!IsFinite(VectorSingle(v)))
                         continue;
-                    const f32 valY = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
-                    const f32 topY = UiSimdMin(valY, zeroY);
-                    const f32 botY = UiSimdMax(valY, zeroY);
-                    const f32 bh = UiSimdMax(1.0f, botY - topY);
+                    const f32 valY = Clamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                    const f32 topY = Min(valY, zeroY);
+                    const f32 botY = Max(valY, zeroY);
+                    const f32 bh = Max(1.0f, botY - topY);
                     const f32 bx = inner.x + cast<f32>(i) * slotW + groupOffset;
                     this.m_paint.fillRect(Rect(bx, topY, singleW, bh), s.color);
                 }
@@ -1012,13 +1023,13 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                 const f32 v = frame.flatValues[s.valueBegin];
                 if(IsFinite(VectorSingle(v))){
                     const f32 px = inner.x + inner.width * 0.5f;
-                    const f32 py = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                    const f32 py = Clamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
                     pts.push_back(Point(px, py));
                 }
             }
             else if(n > 2u && cast<f32>(n) > inner.width * 2.0f){
                 const f32 xStep = inner.width / cast<f32>(n - 1u);
-                const usize bucketCount = cast<usize>(UiSimdMax(2.0f, VectorFloor(VectorSingle(inner.width)).x));
+                const usize bucketCount = cast<usize>(Max(2.0f, VectorFloor(VectorSingle(inner.width)).x));
                 pts.reserve(bucketCount * 2u);
                 for(usize bi = 0u; bi < bucketCount; ++bi){
                     const usize iBegin = (bi * n) / bucketCount;
@@ -1039,29 +1050,14 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                             frame.flatValues[s.valueBegin + i + 3u]
                         );
                         if(IsFinite(v4)){
-                            const f32 lo4 = UiSimdMin(UiSimdMin(v4.x, v4.y), UiSimdMin(v4.z, v4.w));
-                            const f32 hi4 = UiSimdMax(UiSimdMax(v4.x, v4.y), UiSimdMax(v4.z, v4.w));
+                            const VectorSingle minPair4 = Min(v4, v4.zwxy);
+                            const f32 lo4 = Min(minPair4, minPair4.yxwz).x;
+                            const VectorSingle maxPair4 = Max(v4, v4.zwxy);
+                            const f32 hi4 = Max(maxPair4, maxPair4.yxwz).x;
                             if(!hasFinite || lo4 < minV || hi4 > maxV){
                                 for(usize k = 0u; k < 4u; ++k){
                                     const usize si = i + k;
-                                    const f32 v = frame.flatValues[s.valueBegin + si];
-                                    if(!hasFinite){
-                                        hasFinite = true;
-                                        minV = v;
-                                        maxV = v;
-                                        minIdx = si;
-                                        maxIdx = si;
-                                    }
-                                    else{
-                                        if(v < minV){
-                                            minV = v;
-                                            minIdx = si;
-                                        }
-                                        if(v > maxV){
-                                            maxV = v;
-                                            maxIdx = si;
-                                        }
-                                    }
+                                    UpdatePlotBucketMinMax(frame.flatValues[s.valueBegin + si], si, hasFinite, minV, maxV, minIdx, maxIdx);
                                 }
                             }
                         }
@@ -1069,62 +1065,28 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                             for(usize k = 0u; k < 4u; ++k){
                                 const usize si = i + k;
                                 const f32 v = frame.flatValues[s.valueBegin + si];
-                                if(!IsFinite(VectorSingle(v)))
-                                    continue;
-                                if(!hasFinite){
-                                    hasFinite = true;
-                                    minV = v;
-                                    maxV = v;
-                                    minIdx = si;
-                                    maxIdx = si;
-                                }
-                                else{
-                                    if(v < minV){
-                                        minV = v;
-                                        minIdx = si;
-                                    }
-                                    if(v > maxV){
-                                        maxV = v;
-                                        maxIdx = si;
-                                    }
-                                }
+                                if(IsFinite(VectorSingle(v)))
+                                    UpdatePlotBucketMinMax(v, si, hasFinite, minV, maxV, minIdx, maxIdx);
                             }
                         }
                         i += 4u;
                     }
                     while(i < iEnd){
                         const f32 v = frame.flatValues[s.valueBegin + i];
-                        if(IsFinite(VectorSingle(v))){
-                            if(!hasFinite){
-                                hasFinite = true;
-                                minV = v;
-                                maxV = v;
-                                minIdx = i;
-                                maxIdx = i;
-                            }
-                            else{
-                                if(v < minV){
-                                    minV = v;
-                                    minIdx = i;
-                                }
-                                if(v > maxV){
-                                    maxV = v;
-                                    maxIdx = i;
-                                }
-                            }
-                        }
+                        if(IsFinite(VectorSingle(v)))
+                            UpdatePlotBucketMinMax(v, i, hasFinite, minV, maxV, minIdx, maxIdx);
                         ++i;
                     }
                     if(!hasFinite)
                         continue;
                     const f32 pxMin = inner.x + cast<f32>(minIdx) * xStep;
-                    const f32 pyMin = UiSimdClamp(inner.y + (frame.maxY - minV) * invRangeY, inner.y, innerBottom);
+                    const f32 pyMin = Clamp(inner.y + (frame.maxY - minV) * invRangeY, inner.y, innerBottom);
                     if(minIdx == maxIdx){
                         pts.push_back(Point(pxMin, pyMin));
                         continue;
                     }
                     const f32 pxMax = inner.x + cast<f32>(maxIdx) * xStep;
-                    const f32 pyMax = UiSimdClamp(inner.y + (frame.maxY - maxV) * invRangeY, inner.y, innerBottom);
+                    const f32 pyMax = Clamp(inner.y + (frame.maxY - maxV) * invRangeY, inner.y, innerBottom);
                     if(minIdx < maxIdx){
                         pts.push_back(Point(pxMin, pyMin));
                         pts.push_back(Point(pxMax, pyMax));
@@ -1168,7 +1130,7 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                             if(!IsFinite(VectorSingle(v)))
                                 continue;
                             const f32 px = inner.x + cast<f32>(si) * xStep;
-                            const f32 py = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                            const f32 py = Clamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
                             pts.push_back(Point(px, py));
                         }
                     }
@@ -1178,7 +1140,7 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                     const f32 v = frame.flatValues[s.valueBegin + i];
                     if(IsFinite(VectorSingle(v))){
                         const f32 px = inner.x + cast<f32>(i) * xStep;
-                        const f32 py = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                        const f32 py = Clamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
                         pts.push_back(Point(px, py));
                     }
                     ++i;
@@ -1202,7 +1164,7 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                         const f32 denom = p1.y - p0.y;
                         f32 t = 0.5f;
                         if(Abs(VectorSingle(denom)).x > 1.0e-5f)
-                            t = UiSimdClamp((zeroY - p0.y) / denom, 0.0f, 1.0f);
+                            t = Clamp((zeroY - p0.y) / denom, 0.0f, 1.0f);
                         const Point mid(p0.x + (p1.x - p0.x) * t, zeroY);
                         Array<Point, 3u> tri0;
                         tri0[0u] = p0;
@@ -1223,7 +1185,7 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                 this.m_paint.drawPolyline(Span<Point>(pts), false, lineStyle, s.color);
             }
             else if(pts.size() == 1u)
-                this.m_paint.fillCircle(pts[0u], UiSimdMax(2.0f, s.lineThickness), s.color);
+                this.m_paint.fillCircle(pts[0u], Max(2.0f, s.lineThickness), s.color);
         }
 
         if(frame.hovered && frame.options.showCrosshair && frame.maxSamples > 0u){
@@ -1232,7 +1194,7 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                 cx = inner.x + (cast<f32>(frame.hoveredSampleIndex) / cast<f32>(frame.maxSamples - 1u)) * inner.width;
             this.m_paint.drawLine(Point(cx, inner.y), Point(cx, inner.y + inner.height), s_PlotDefaultCrosshairThickness, style.crosshairColor);
             if(IsFinite(VectorSingle(frame.hoveredValue))){
-                const f32 cy = UiSimdClamp(inner.y + ((frame.maxY - frame.hoveredValue) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+                const f32 cy = Clamp(inner.y + ((frame.maxY - frame.hoveredValue) / rangeY) * inner.height, inner.y, inner.y + inner.height);
                 this.m_paint.fillCircle(Point(cx, cy), s_PlotDefaultMarkerRadius, style.crosshairColor);
             }
         }

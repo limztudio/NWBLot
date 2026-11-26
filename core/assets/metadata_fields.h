@@ -316,26 +316,6 @@ inline b8 VisitMetadataAssetMap(const ::Path<PathArenaT>& nwbFilePath, const Met
     }
 }
 
-template<typename NamedEnumT, typename PathArenaT, typename MetadataValue>
-[[nodiscard]] inline Expected<NamedEnumT> ParseNamedMetadataEnumField(
-    const ::Path<PathArenaT>& nwbFilePath,
-    const MetadataValue& object,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldName,
-    const Span<const ::NamedEnumCase<NamedEnumT>> cases,
-    const AStringView errorDetailText
-){
-    const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, true);
-    if(!text)
-        return MakeUnexpected(text.error());
-    const auto value = ParseNamedEnumText<NamedEnumT>(text->text, cases);
-    if(value)
-        return value;
-
-    NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} '{}': field '{}' {}"), ConvertString(diagnosticPrefix), PathToString<tchar>(nwbFilePath), ConvertString(fieldName), ConvertString(errorDetailText));
-    return MakeUnexpected(Failure{});
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

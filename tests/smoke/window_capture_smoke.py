@@ -3,24 +3,27 @@
 import fnmatch
 import os
 from pathlib import Path
-from types import SimpleNamespace
 import platform
 import secrets
 import subprocess
 import sys
 import time
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+from launcher.readiness import READINESS_OPTION  # noqa: E402
 from smoke_failure_reporting import write_failure_report
 from window_capture_arguments import WindowCaptureArguments
-from window_capture_process_closer import WindowProcessCloser
 from window_capture_output_reader import CaptureOutputReader
 from window_capture_process_output import CapturedProcessOutput
 from window_capture_termination import CaptureProcessTermination
 from window_capture_frame import WindowFrameCapture
 from window_capture_outcome import SmokeFailure, SmokeSkip, write_status  # noqa: E402
-from window_capture_image import TRANSPARENT_CSG_REGIONS, read_bmp_24, validate_surfel_coverage_probe  # noqa: E402
+from window_capture_image import read_bmp_24  # noqa: E402
+from window_capture_scene_evidence import SurfelCoverageImageEvidence  # noqa: E402
 from window_capture_x11 import LinuxX11Capture  # noqa: E402
 from window_capture_win32 import WindowsCapture  # noqa: E402
-from window_capture_logs import READINESS_OPTION, ScopedLogBaseline, choose_free_port, collect_log_delta, full_log_scope, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_log_message, wait_for_tcp_port  # noqa: E402
+from window_capture_logs import ScopedLogBaseline, choose_free_port, collect_log_delta, full_log_scope, snapshot_log_files, standalone_log_pattern, wait_for_log_drain, wait_for_tcp_port  # noqa: E402
 from window_capture_environment import application_capture_partial_path, build_launch_environment, executable_sibling, prepare_application_capture_environment  # noqa: E402
 from window_capture_validation import validate_application_capture_log_text, validate_capture_for_args, validate_expected_log_messages  # noqa: E402
 
@@ -375,7 +378,7 @@ def main(argv):
             analysis = result.texture_smoke
             status = (f"{status}; sampled texture hues " f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}; " f"receiver red GI={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}")
         if args.expect_surfel_coverage_probe:
-            probe = validate_surfel_coverage_probe(args.output)
+            probe = SurfelCoverageImageEvidence.validate_surfel_coverage_probe(args.output)
             status = (f"{status}; surfel coverage probe " f"front={probe[LIT_FRONT][0]}/{probe[LIT_FRONT][1]}, " f"side={probe[LIT_SIDE][0]}/{probe[LIT_SIDE][1]}")
         write_status(status)
         return 0

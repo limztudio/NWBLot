@@ -313,66 +313,77 @@ void VerifyUiTextureImageBuilderTests_TransparentAndZeroAxisImagesAreValidWithou
     EXPECT_FALSE(SampleUiTextureImage(snapshot, UiTextureImageGeneration(source)).has_value());
 }
 
-void VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput(mut UiTextureImageBuilderTests self){
+void SeedAcceptedBeforeTextureImageFrame(
+    mut UiTextureImageBuilderTests self,
+    mut SharedImageSource outSource,
+    mut WidgetId outBefore,
+    mut HitTarget outAccepted,
+    mut usize outTargetCount
+){
     auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
     ASSERT_TRUE(sourceResult.has_value());
-    const SharedImageSource source = sourceResult.value();
-    ASSERT_TRUE(cast<b8>(source));
+    outSource = sourceResult.value();
+    ASSERT_TRUE(cast<b8>(outSource));
     ASSERT_TRUE(self.panel(1u));
     EXPECT_FALSE(self.m_builder.button(s_UiTextureBeforeKey, "Before"));
-    ASSERT_TRUE(self.m_builder.image("image", source));
+    ASSERT_TRUE(self.m_builder.image("image", outSource));
     ASSERT_TRUE(self.finishPanel());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const WidgetId before = self.id(s_UiTextureBeforeKey, s_UiTexturePanelKey);
-    const auto foundAccepted = self.tryTarget(before);
+    outBefore = self.id(s_UiTextureBeforeKey, s_UiTexturePanelKey);
+    const auto foundAccepted = self.tryTarget(outBefore);
     ASSERT_TRUE(foundAccepted.has_value());
-    const HitTarget accepted = foundAccepted.value();
-    const usize count = self.m_context.input().targets().size();
-    EXPECT_TRUE(self.send(MakeUiTextureTabKeyEvent(InputEventType::KeyDown)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiTextureTabKeyEvent(InputEventType::KeyUp)).commandConsumed);
-    ASSERT_EQ(self.m_context.input().focus(), before);
-    ASSERT_TRUE(self.panel(2u));
-    ImageOptions options = MakeUiTextureFixedOptions(0.0f, 0.0f);
-    options.tint.a = 0.0f;
-    EXPECT_FALSE(self.m_builder.image("image", SharedImageSource(), options));
-    EXPECT_TRUE(self.m_context.failed());
-    EXPECT_FALSE(self.m_context.commitFrame(2u));
-    const auto foundCurrent = self.tryTarget(before);
-    ASSERT_TRUE(foundCurrent.has_value());
-    const HitTarget current = foundCurrent.value();
-    EXPECT_EQ(current.declarationGeneration, accepted.declarationGeneration);
-    EXPECT_FLOAT_EQ(current.rectangle.x, accepted.rectangle.x);
-    EXPECT_EQ(self.m_context.input().targets().size(), count);
-    EXPECT_EQ(self.m_context.input().focus(), before);
+    outAccepted = foundAccepted.value();
+    outTargetCount = self.m_context.input().targets().size();
 }
 
-void VerifyUiTextureImageBuilderTests_InvalidOptionsDoNotReplaceTheAcceptedInputFrame(mut UiTextureImageBuilderTests self){
-    auto sourceResult = MakeSeededImage("tests/ui/builder_image", 37u, 20u, 12u, self.pool);
-    ASSERT_TRUE(sourceResult.has_value());
-    const SharedImageSource source = sourceResult.value();
-    ASSERT_TRUE(cast<b8>(source));
-    ASSERT_TRUE(self.panel(1u));
-    EXPECT_FALSE(self.m_builder.button(s_UiTextureBeforeKey, "Before"));
-    ASSERT_TRUE(self.m_builder.image("image", source));
-    ASSERT_TRUE(self.finishPanel());
-    ASSERT_TRUE(self.m_context.commitFrame(1u));
-    const WidgetId before = self.id(s_UiTextureBeforeKey, s_UiTexturePanelKey);
-    const auto foundAccepted = self.tryTarget(before);
-    ASSERT_TRUE(foundAccepted.has_value());
-    const HitTarget accepted = foundAccepted.value();
-    const usize count = self.m_context.input().targets().size();
+void ExpectRejectedTextureImageFramePreservesBeforeTarget(
+    mut UiTextureImageBuilderTests self,
+    in SharedImageSource source,
+    in ImageOptions options,
+    in WidgetId before,
+    in HitTarget accepted,
+    in usize count,
+    mut HitTarget outCurrent
+){
     ASSERT_TRUE(self.panel(2u));
-    ImageOptions options = MakeUiTextureFixedOptions();
-    options.tint.r = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
     EXPECT_FALSE(self.m_builder.image("image", source, options));
     EXPECT_TRUE(self.m_context.failed());
     EXPECT_FALSE(self.m_context.commitFrame(2u));
     const auto foundCurrent = self.tryTarget(before);
     ASSERT_TRUE(foundCurrent.has_value());
-    const HitTarget current = foundCurrent.value();
-    EXPECT_EQ(current.declarationGeneration, accepted.declarationGeneration);
-    EXPECT_FLOAT_EQ(current.rectangle.width, accepted.rectangle.width);
+    outCurrent = foundCurrent.value();
+    EXPECT_EQ(outCurrent.declarationGeneration, accepted.declarationGeneration);
     EXPECT_EQ(self.m_context.input().targets().size(), count);
+}
+
+void VerifyUiTextureImageBuilderTests_ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput(mut UiTextureImageBuilderTests self){
+    SharedImageSource source = SharedImageSource();
+    WidgetId before = WidgetId();
+    HitTarget accepted = HitTarget();
+    HitTarget current = HitTarget();
+    usize count = 0u;
+    SeedAcceptedBeforeTextureImageFrame(self, source, before, accepted, count);
+    EXPECT_TRUE(self.send(MakeUiTextureTabKeyEvent(InputEventType::KeyDown)).commandConsumed);
+    EXPECT_TRUE(self.send(MakeUiTextureTabKeyEvent(InputEventType::KeyUp)).commandConsumed);
+    ASSERT_EQ(self.m_context.input().focus(), before);
+    ImageOptions options = MakeUiTextureFixedOptions(0.0f, 0.0f);
+    options.tint.a = 0.0f;
+    ExpectRejectedTextureImageFramePreservesBeforeTarget(self, SharedImageSource(), options, before, accepted, count, current);
+    EXPECT_FLOAT_EQ(current.rectangle.x, accepted.rectangle.x);
+    EXPECT_EQ(self.m_context.input().focus(), before);
+}
+
+void VerifyUiTextureImageBuilderTests_InvalidOptionsDoNotReplaceTheAcceptedInputFrame(mut UiTextureImageBuilderTests self){
+    SharedImageSource source = SharedImageSource();
+    WidgetId before = WidgetId();
+    HitTarget accepted = HitTarget();
+    HitTarget current = HitTarget();
+    usize count = 0u;
+    SeedAcceptedBeforeTextureImageFrame(self, source, before, accepted, count);
+    ImageOptions options = MakeUiTextureFixedOptions();
+    options.tint.r = bit_cast<f32>(s_UiTextureQuietNaNF32Bits);
+    ExpectRejectedTextureImageFramePreservesBeforeTarget(self, source, options, before, accepted, count, current);
+    EXPECT_FLOAT_EQ(current.rectangle.width, accepted.rectangle.width);
 }
 
 void VerifyUiTextureImageBuilderTests_EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints(mut UiTextureImageBuilderTests self){
@@ -536,7 +547,7 @@ void VerifyTextureImageLayoutFixture_ZeroFixedExtentAndEmptyPlacementRemainValid
     ASSERT_TRUE(metricsResult.has_value());
     EXPECT_FLOAT_EQ(metricsResult.value().contentSize.x, 8.0f);
     EXPECT_FLOAT_EQ(metricsResult.value().contentSize.y, 4.0f);
-    const auto placementResult = PlaceImage(Rect(10.0f, 20.0f, 0.0f, 0.0f), Rect(0.0f, 0.0f, 100.0f, 100.0f));
+    const auto placementResult = PlaceImage(Rect(10.0f, 20.0f, 0.0f, 0.0f), Rect(0.0f, 0.0f, 100.0f, 100.0f), Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
     ASSERT_TRUE(placementResult.has_value());
     EXPECT_FLOAT_EQ(placementResult.value().bounds.width, 0.0f);
     EXPECT_FLOAT_EQ(placementResult.value().clip.height, 0.0f);

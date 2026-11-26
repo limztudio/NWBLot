@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import re
 import sys
 import time
@@ -12,22 +10,13 @@ from guarded_native import GuardedNativeInput
 from probe_common import center
 from popup_tools_probe import observe_popup_tools, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main, SmokeFailure, ensure_process_running
+from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS, prepare_guarded_checkpoint
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_CURSOR = "cursor"
 LIT_RECTANGLES = "rectangles"
 LIT_ANCHOR = "anchor"
-LIT_LOGICAL_EXTENT = "logical_extent"
-LIT_PASSED = "passed"
-LIT_UTF_8 = "utf-8"
 LIT_COUNTER = "counter"
 LIT_MENU = "Menu"
 LIT_DOWN = "Down"
@@ -35,32 +24,13 @@ LIT_RETURN = "Return"
 LIT_F10 = "F10"
 LIT_SECOND = "second"
 LIT_F9 = "F9"
-LIT_UI_POPUP_TOOLS_FIXTURE = "UI popup tools fixture"
 LIT_POPUP_TOOLS_GRACEFUL_EXIT_TIMEOUT_SECONDS = 60.0
 
 
-class PopupToolsRun:
+class PopupToolsRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = GuardedNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-        self.failure_report = None
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=GuardedNativeInput(backend, handle))
         self.expected = {"tooltip": 0, "open": 0, LIT_CURSOR: 0, "command": 0, "commits": 0, "anchor_clicks": 0, "underlying": 0, "sentinel_focused": 0, "enabled": 1, "reversed": 0, "source_revision": 1, "source_generation": 1, "text_bytes": 8}
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
-        return round(x * scale_x), round(y * scale_y)
 
     def click(self, name):
         self.native.confirmed_click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])), deadline=self.deadline)
@@ -86,35 +56,17 @@ class PopupToolsRun:
         self.native.confirmed_click(*self.point(*center(self.snapshot[LIT_RECTANGLES][LIT_ANCHOR])), deadline=self.deadline, secondary=True)
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), settle=0.25, **changes):
-        path, stage_deadline = prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
-        if name in ("delayed_tooltip_keeps_edit_focus", "tooltip_reappears_after_new_delay"):
-            stage_deadline = min(self.deadline, time.monotonic() + 20.0)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during popup tools UI capture")
-            self.native.maintain_pointer()
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
-                raise SmokeSkip("the popup tools fixture needs a logical client of at least 600x400")
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
-            report = observe_popup_tools(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report[LIT_PASSED]:
-                accept_checkpoint(self, name, path, snapshot, report, dynamic)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        fail_checkpoint(self, name, path, report, "popup tools")
+        prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
+        stage_timeout = 20.0 if name in ("delayed_tooltip_keeps_edit_focus", "tooltip_reappears_after_new_delay") else CHECKPOINT_STAGE_TIMEOUT_SECONDS
+        self.poll_checkpoint(name, stage_timeout=stage_timeout, minimum_extent=(600.0, 400.0), minimum_extent_message="the popup tools fixture needs a logical client of at least 600x400",
+            process_stage="during popup tools UI capture", snapshot_reader=snapshot_from_logs,
+            evaluate=lambda frame, snapshot: observe_popup_tools(frame, snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra),
+            raw_windows=True, failure_label="popup tools", maintain_pointer=True, accept_extras=lambda _: {"native_window": self.native.observe_window()}, dynamic=dynamic, failure_extras=True)
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report,
-            "input_path": "Win32 physical hover positioning with posted motion/buttons/Menu keys and native Shift+F10 modifiers" if self.native.windows else "X11 XSendEvent keys/button1/button3 and XSetInputFocus",
-            "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
-        (self.args.output_directory / "popup_tools.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("popup_tools.json", passed, include_failure=True,
+            input_path="Win32 physical hover positioning with posted motion/buttons/Menu keys and native Shift+F10 modifiers" if self.native.windows else "X11 XSendEvent keys/button1/button3 and XSetInputFocus",
+            runtime_limit="No live IME, native Wayland, physical pointer-grab, or native Linux qualification.")
 
     def execute(self):
         self.native.pointer(4, 4)
@@ -228,54 +180,8 @@ class PopupToolsRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "POPUP_TOOLS", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = popup_tools_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the popup tools fixture appeared")
-            raise SmokeFailure("custom popup tools fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiPopupToolsSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        popup_tools_run = PopupToolsRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        popup_tools_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_POPUP_TOOLS_FIXTURE, handle, graceful_exit_timeout=LIT_POPUP_TOOLS_GRACEFUL_EXIT_TIMEOUT_SECONDS)
-                require_normal_process_exit(exit_code, tail, LIT_UI_POPUP_TOOLS_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "popup_tools.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                try:
-                    if logserver is not None:
-                        CaptureProcessTermination.terminate_process(logserver, "UI popup tools logserver")
-                finally:
-                    try:
-                        if popup_tools_run is not None:
-                            popup_tools_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    popup_tools_run.write_report(True)
-    print(f"UI popup tools: {len(popup_tools_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="POPUP_TOOLS", display_marker="UiPopupToolsSmoke: display", driver_type=PopupToolsRun, log_name="popup_tools.log", label="UI popup tools",
+        window_label="popup tools", process_label="popup tools", raw_windows=True, restore_pointer=True, graceful_exit_timeout=LIT_POPUP_TOOLS_GRACEFUL_EXIT_TIMEOUT_SECONDS)
 
 
 def main(argv):

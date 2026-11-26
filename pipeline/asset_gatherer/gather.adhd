@@ -23,12 +23,6 @@ class AssetGatherOptions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StringView SelectEffectiveGatherConfiguration(in StringView canonicalConfiguration){
-    if(canonicalConfiguration.empty())
-        return s_DefaultGatherConfig;
-    return canonicalConfiguration;
-}
-
 void LogConflictingBuiltAssetIdentity(in Name virtualPath){
     error("AssetGatherer: conflicting built asset identity '{}'", virtualPath.resolvedText());
 }

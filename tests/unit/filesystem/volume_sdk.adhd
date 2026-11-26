@@ -25,8 +25,6 @@ extern b8 PublishTestStaged(in StagedDirectoryPaths paths, in Path directory, in
 extern b8 PublishTestVolume(in StagedDirectoryPaths paths, in Path directory, in StringView name, in usize count, mut TestScratchAllocator scratch);
 [cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::CreateWithFactory")]
 extern Expected<UniquePtr<IFilesystem>> CreateWithFactory<Factory>(mut HeapStorage storage, in VolumeMountDesc desc);
-[cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::s_Windows")]
-extern const b8 s_WindowsFilesystem;
 [cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::s_WarningsEnabled")]
 extern const b8 s_FilesystemWarnings;
 [cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeHeaderDisk"), cpp_flags(self_defaulted, binary_serializable)]

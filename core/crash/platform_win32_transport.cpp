@@ -44,16 +44,9 @@ CrashDumpTransportStatus::Enum WindowsCrashTransport::Request(CrashState& state,
     if(state.requestWriteHandle == INVALID_HANDLE_VALUE)
         return CrashDumpTransportStatus::Failed;
 
-    static thread_local b8 s_InTransport = false;
-    if(s_InTransport)
+    CrashTransportFlightGuard flightGuard(state.transportInFlight);
+    if(!flightGuard.entered())
         return CrashDumpTransportStatus::Failed;
-    s_InTransport = true;
-
-    u32 expected = 0u;
-    if(!state.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-        s_InTransport = false;
-        return CrashDumpTransportStatus::Failed;
-    }
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
     do{
@@ -95,8 +88,6 @@ CrashDumpTransportStatus::Enum WindowsCrashTransport::Request(CrashState& state,
         status = CrashDumpTransportStatus::Failed;
     }while(false);
 
-    state.transportInFlight.store(0u, MemoryOrder::release);
-    s_InTransport = false;
     return status;
 }
 

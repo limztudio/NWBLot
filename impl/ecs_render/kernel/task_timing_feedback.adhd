@@ -8,8 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(u32(RendererTaskTimingFeedbackCollectionAction::None) == 0u);
-
 class PendingRendererTimingSubscription : NoCopy{
     private mut GpuTimingRecorder m_recorder;
     private GpuTimingSampleSubscription m_subscription;

@@ -65,12 +65,6 @@ class UiMultilineViewTests : MultilineViewFixture{
         request.text = text;
         return this.m_layoutBuilder.layout(request);
     }
-    public Expected<TextLayout, TextLayoutStatus> buildDirectionalLayout(in StringView text, in TextDirection direction){
-        ShapeRequest request;
-        request.text = text;
-        request.direction = direction;
-        return this.m_layoutBuilder.layout(request);
-    }
     public b8 adoptBuiltLayout(mut Expected<TextLayout, TextLayoutStatus> layout){ return this.m_view.adoptLayout(layout.value()); }
 }
 
@@ -758,7 +752,7 @@ void VerifyUiMultilineViewTests_CrossLinePreeditKeepsNativeScalarCaretInsideItsG
     ASSERT_TRUE(self.m_model.setText("A\nB\nC"));
     ASSERT_TRUE(self.m_model.setSelection(2u, 3u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\n\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab", 0u, 5u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\n\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab", 0u, 5u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.shapeView());
     EXPECT_EQ(self.m_model.text(), "A\nB\nC");
     EXPECT_EQ(self.m_view.displayText(), "A\nx\n\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab\nC");
@@ -812,7 +806,7 @@ void VerifyUiMultilineViewTests_PaddingAndOuterClipIntersectWithoutChangingLogic
         Rect(10.0f, 20.0f, 100.0f, 40.0f),
         Insets(8.0f, 4.0f, 8.0f, 4.0f),
         Rect(30.0f, 22.0f, 20.0f, 40.0f),
-        Point()
+        Point(), 1.0f, true
    );
     ASSERT_TRUE(arranged.has_value());
     self.m_placement = arranged.value();
@@ -845,9 +839,9 @@ void VerifyUiMultilineViewTests_FailedPlacementPreservesStateAndInvalidHitsAreRe
     ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.place(20.0f, 12.0f, Point(0.0f, -1.0f)));
     ExpectUiEditBoxPlacement(self.m_placement, previous);
-    EXPECT_FALSE(self.m_view.arrange(Rect(10.0f, 20.0f, -1.0f, 20.0f), Insets(), Rect(), Point()).has_value());
+    EXPECT_FALSE(self.m_view.arrange(Rect(10.0f, 20.0f, -1.0f, 20.0f), Insets(), Rect(), Point(), 1.0f, true).has_value());
     ExpectUiEditBoxPlacement(self.m_placement, previous);
-    EXPECT_FALSE(self.m_view.arrange(previous.bounds, Insets(0.0f, -1.0f, 0.0f, 0.0f), previous.clip, Point()).has_value());
+    EXPECT_FALSE(self.m_view.arrange(previous.bounds, Insets(0.0f, -1.0f, 0.0f, 0.0f), previous.clip, Point(), 1.0f, true).has_value());
     ExpectUiEditBoxPlacement(self.m_placement, previous);
     EXPECT_FALSE(self.m_view.arrange(previous.bounds, Insets(), previous.clip, Point(), 0.0f).has_value());
     ExpectUiEditBoxPlacement(self.m_placement, previous);
@@ -870,7 +864,7 @@ void VerifyUiMultilineViewTests_FailedLayoutAdoptionRetainsMultilineGeometryAndP
     EXPECT_TRUE(self.m_view.ready());
     ASSERT_TRUE(self.place());
     ExpectUiEditBoxPlacement(self.m_placement, previous);
-    EXPECT_NE(self.m_view.shape(self.m_text), TextLayoutStatus::Success);
+    EXPECT_NE(self.m_view.shape(self.m_text, ShapeRequest()), TextLayoutStatus::Success);
     ASSERT_TRUE(self.place());
     ExpectUiEditBoxPlacement(self.m_placement, previous);
 }
@@ -879,7 +873,7 @@ void VerifyUiMultilineViewTests_MovingTheViewRetainsOwnedPreeditLineMappingsAndR
     ASSERT_TRUE(self.m_model.setText("ab\ncd"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.shapeView());
     ASSERT_TRUE(self.place());
     const EditBoxPlacement previous = self.m_placement;
@@ -895,7 +889,7 @@ void VerifyUiMultilineViewTests_MovingTheViewRetainsOwnedPreeditLineMappingsAndR
     EXPECT_EQ(assigned.layout().utf8(), "ax\nyd");
     EXPECT_TRUE(assigned.composing());
     EXPECT_TRUE(assigned.ready());
-    const auto arranged = assigned.arrange(previous.bounds, Insets(), previous.clip, Point());
+    const auto arranged = assigned.arrange(previous.bounds, Insets(), previous.clip, Point(), 1.0f, true);
     ASSERT_TRUE(arranged.has_value());
     self.m_placement = arranged.value();
     ExpectUiEditBoxPlacement(self.m_placement, previous);
@@ -909,7 +903,7 @@ void VerifyUiMultilineViewTests_PaintOwnsSelectionSegmentsIncludingAnEmptySelect
     ASSERT_TRUE(self.m_model.setText("ab\n\ncd\n"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 6u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
-    ASSERT_EQ(self.m_view.shape(self.m_text), TextLayoutStatus::Success);
+    ASSERT_EQ(self.m_view.shape(self.m_text, ShapeRequest()), TextLayoutStatus::Success);
     ASSERT_TRUE(self.place(300.0f, 200.0f));
     ASSERT_TRUE(self.m_model.setText("changed"));
     EditBoxStyle style = EditBoxStyle();
@@ -938,9 +932,9 @@ void VerifyUiMultilineViewTests_PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLi
     ASSERT_TRUE(self.m_model.setText("A\nB\nC"));
     ASSERT_TRUE(self.m_model.setSelection(2u, 3u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\n\nz", 0u, 4u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\n\nz", 0u, 4u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
-    ASSERT_EQ(self.m_view.shape(self.m_text), TextLayoutStatus::Success);
+    ASSERT_EQ(self.m_view.shape(self.m_text, ShapeRequest()), TextLayoutStatus::Success);
     ASSERT_TRUE(self.place(300.0f, 200.0f));
     self.m_model.cancelComposition();
     ASSERT_TRUE(self.m_model.setText("changed"));
@@ -1569,7 +1563,7 @@ void VerifyUiNestedPopupLifetimeTests_SearchParentReplacementCancelsStalePreedit
     const PopupToken oldSearch = oldQueryTarget.value().popup;
     const u64 loans = self.m_host.loans;
     ASSERT_TRUE(self.m_search.query().beginComposition());
-    ASSERT_TRUE(self.m_search.query().updateComposition("preedit", 0u, 7u));
+    ASSERT_TRUE(self.m_search.query().updateComposition("preedit", 0u, 7u, Span<EditPreeditClause>()));
     self.reopenParent();
     ASSERT_TRUE(self.acceptSearch(2u));
     EXPECT_TRUE(self.m_searchResult.combo.closed);

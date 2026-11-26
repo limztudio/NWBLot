@@ -105,7 +105,7 @@ VectorSingle SolveCharacterMultiPlaneLcp(in Span<f32x4> planeNormals, in VectorS
                 continue;
             const f32 c = Vector3Dot(ni, v).x;
             const f32 oldL = lambdas[i];
-            const f32 newL = SimdMax(0.0f, oldL - c);
+            const f32 newL = Max(0.0f, oldL - c);
             const f32 dl = newL - oldL;
             if(dl != 0.0f){
                 v = v + ni * dl;
@@ -147,35 +147,11 @@ class CharacterController{
     private Vector<CharacterContactInfo> m_scratchStepContacts;
     private f32 m_cachedSlopeAngleRad = -1.0f;
     private f32 m_minWalkableCos = 0.70710678f;
-    private ShapeProxy m_cachedProxy;
-    private ShapeProxy m_cachedSkinProxy;
-    private f32 m_cachedProxyRadius = -1.0f;
-    private f32 m_cachedProxyHalfHeight = -1.0f;
-    private f32 m_cachedProxySkinWidth = -1.0f;
 
     private void syncWalkableCos(){
         if(this.m_cachedSlopeAngleRad != this.def.maxSlopeAngleRad){
             this.m_cachedSlopeAngleRad = this.def.maxSlopeAngleRad;
             this.m_minWalkableCos = Cos(Clamp(VectorSingle(this.def.maxSlopeAngleRad), VectorSingle(0.0f), VectorSingle(1.56f))).x;
-        }
-    }
-
-    private void syncCachedProxies(){
-        if(
-            this.m_cachedProxyRadius != this.def.radius
-            || this.m_cachedProxyHalfHeight != this.def.halfHeight
-            || this.m_cachedProxySkinWidth != this.def.skinWidth
-        ){
-            const VectorSingle upLocal(0.0f, 1.0f, 0.0f, 0.0f);
-            CapsuleShape cap;
-            cap.center1Radius = f32x4(upLocal * (-this.def.halfHeight), this.def.radius);
-            cap.center2 = f32x4(upLocal * this.def.halfHeight, 0.0f);
-            this.m_cachedProxy = MakeCapsuleProxy(cap);
-            cap.center1Radius = f32x4(upLocal * (-this.def.halfHeight), this.def.radius + SimdMax(0.0f, this.def.skinWidth));
-            this.m_cachedSkinProxy = MakeCapsuleProxy(cap);
-            this.m_cachedProxyRadius = this.def.radius;
-            this.m_cachedProxyHalfHeight = this.def.halfHeight;
-            this.m_cachedProxySkinWidth = this.def.skinWidth;
         }
     }
 
@@ -198,8 +174,6 @@ class CharacterController{
         this.def.up = f32x4(upVec, 0.0f);
         this.m_cachedSlopeAngleRad = -1.0f;
         this.syncWalkableCos();
-        this.m_cachedProxyRadius = -1.0f;
-        this.syncCachedProxies();
     }
 
     public void applyDefInPlace(in CharacterControllerDef inDef){
@@ -214,8 +188,6 @@ class CharacterController{
         this.m_groundConveyorVelocity = f32x4(groundConveyorVel, 0.0f);
         this.m_cachedSlopeAngleRad = -1.0f;
         this.syncWalkableCos();
-        this.m_cachedProxyRadius = -1.0f;
-        this.syncCachedProxies();
         this.stepEvents.clear();
     }
 
@@ -246,17 +218,17 @@ class CharacterController{
 
     public f32 footHalfHeight()const{
         if(this.def.shapeType == CharacterShapeType::Cylinder)
-            return SimdMax(0.01f, this.def.halfHeight);
+            return Max(0.01f, this.def.halfHeight);
         if(this.def.shapeType == CharacterShapeType::Sphere)
             return this.def.radius;
         if(this.def.shapeType == CharacterShapeType::Box)
-            return SimdMax(0.05f, this.def.boxHalfExtents.y);
+            return Max(0.05f, this.def.boxHalfExtents.y);
         return this.def.halfHeight + this.def.radius;
     }
 
     public f32 horizontalExtent()const{
         if(this.def.shapeType == CharacterShapeType::Box)
-            return SimdMax(SimdMax(0.05f, this.def.boxHalfExtents.x), SimdMax(0.05f, this.def.boxHalfExtents.z));
+            return Max(Max(0.05f, this.def.boxHalfExtents.x), Max(0.05f, this.def.boxHalfExtents.z));
         return this.def.radius;
     }
 
@@ -267,26 +239,8 @@ class CharacterController{
         return Vector3Dot(SafeNormalizeVec3(normal, this.upDirection()), this.upDirection()).x >= minCos - 1.0e-4f;
     }
 
-    public ShapeProxy makeCapsuleProxy(in f32 extraRadius)const{
-        const f32 clampedExtra = SimdMax(0.0f, extraRadius);
-        if(
-            this.m_cachedProxyRadius == this.def.radius
-            && this.m_cachedProxyHalfHeight == this.def.halfHeight
-        ){
-            if(clampedExtra == 0.0f)
-                return this.m_cachedProxy;
-            if(clampedExtra == SimdMax(0.0f, this.def.skinWidth))
-                return this.m_cachedSkinProxy;
-        }
-        const VectorSingle upLocal(0.0f, 1.0f, 0.0f, 0.0f);
-        CapsuleShape cap;
-        cap.center1Radius = f32x4(upLocal * (-this.def.halfHeight), this.def.radius + clampedExtra);
-        cap.center2 = f32x4(upLocal * this.def.halfHeight, 0.0f);
-        return MakeCapsuleProxy(cap);
-    }
-
     private ShapeProxyView makeShapeProxyView(in f32 extraRadius, mut Array<f32x3u, 8u> outPts)const{
-        const f32 extra = SimdMax(0.0f, extraRadius);
+        const f32 extra = Max(0.0f, extraRadius);
         if(this.def.shapeType == CharacterShapeType::Sphere){
             outPts[0u] = f32x3u(0.0f, 0.0f, 0.0f);
             return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 1u), this.def.radius + extra);
@@ -295,7 +249,7 @@ class CharacterController{
             ShapeProxyView view;
             view.kind = ProxyKind::Cylinder;
             view.param0 = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
-            view.param1 = f32x4(SimdMax(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
+            view.param1 = f32x4(Max(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
             view.radius = extra;
             return view;
         }
@@ -360,7 +314,7 @@ class CharacterController{
                 dstContacts[i].triangleIndex = triIdx;
                 dstContacts[i].point = f32x4(point, 0.0f);
                 dstContacts[i].normal = f32x4(outNormal, 0.0f);
-                dstContacts[i].penetrationDepth = SimdMax(dstContacts[i].penetrationDepth, depth);
+                dstContacts[i].penetrationDepth = Max(dstContacts[i].penetrationDepth, depth);
                 dstContacts[i].isWalkable = this.isWalkableNormal(outNormal);
                 return;
             }
@@ -395,10 +349,10 @@ class CharacterController{
         f32 otherMass = 1.0f;
         if(massRes.has_value() && massRes.value() > 0.0f)
             otherMass = massRes.value();
-        const f32 reducedMass = (this.def.mass * otherMass) / SimdMax(1.0e-4f, this.def.mass + otherMass);
+        const f32 reducedMass = (this.def.mass * otherMass) / Max(1.0e-4f, this.def.mass + otherMass);
         const f32 desiredImpulse = reducedMass * approachSpeed;
-        const f32 maxImpulse = SimdMax(0.0f, this.def.maxStrength) * dt;
-        const f32 impMag = SimdMin(desiredImpulse, maxImpulse);
+        const f32 maxImpulse = Max(0.0f, this.def.maxStrength) * dt;
+        const f32 impMag = Min(desiredImpulse, maxImpulse);
         if(impMag > 1.0e-5f)
             world.applyLinearImpulseAtPoint(otherBody, outNormal * (-impMag), hitPt, true);
     }
@@ -457,15 +411,11 @@ class CharacterController{
         in b8 emitSlideEvents,
         mut PhysicsWorld world,
         mut Vector<CharacterContactInfo> dstContacts,
-        mut b8 outHitObstacle,
         mut b8 outHitSteepWall,
-        mut b8 outHitCeiling,
-        mut VectorSingle outEndNormal
+        mut b8 outHitCeiling
     ){
-        outHitObstacle = false;
         outHitSteepWall = false;
         outHitCeiling = false;
-        outEndNormal = this.upDirection();
         const VectorSingle up = this.upDirection();
         VectorSingle curPos = startPos;
         VectorSingle remDelta = initialDelta;
@@ -483,9 +433,7 @@ class CharacterController{
                 break;
             }
 
-            outHitObstacle = true;
             const VectorSingle n = SafeNormalizeVec3(VectorSingle(hit.normal), up);
-            outEndNormal = n;
             const b8 walkable = this.isWalkableNormal(n);
             const f32 nDotUp = Vector3Dot(n, up).x;
             if(nDotUp < -0.5f)
@@ -493,7 +441,7 @@ class CharacterController{
             if(!walkable)
                 outHitSteepWall = true;
 
-            const VectorSingle approachVel = remDelta / SimdMax(dt * remFrac, 1.0e-4f);
+            const VectorSingle approachVel = remDelta / Max(dt * remFrac, 1.0e-4f);
             if(emitSlideEvents && (nDotUp < -0.5f || !walkable)){
                 CharacterControllerEvent ev;
                 if(nDotUp < -0.5f)
@@ -506,16 +454,16 @@ class CharacterController{
                     ev.otherBodyId = world.makeBodyId(world.m_shapes[hit.shapeId.index].bodyId);
                 ev.point = hit.point;
                 ev.normal = f32x4(n, 0.0f);
-                ev.speed = SimdMax(0.0f, -Vector3Dot(approachVel, n).x);
+                ev.speed = Max(0.0f, -Vector3Dot(approachVel, n).x);
                 this.pushOrMergeStepEvent(ev);
             }
-            const f32 safeFrac = SimdMax(0.0f, hit.fraction - 0.002f);
+            const f32 safeFrac = Max(0.0f, hit.fraction - 0.002f);
             f32 pushClear = 2.0e-4f;
             if(hit.fraction <= 1.0e-4f)
-                pushClear = SimdMax(1.0e-3f, this.def.skinWidth * 0.25f);
+                pushClear = Max(1.0e-3f, this.def.skinWidth * 0.25f);
             curPos = curPos + remDelta * safeFrac + n * pushClear;
             remDelta = remDelta * (1.0f - safeFrac);
-            remFrac = SimdMax(1.0e-3f, remFrac * (1.0f - safeFrac));
+            remFrac = Max(1.0e-3f, remFrac * (1.0f - safeFrac));
 
             if(pushBodies)
                 this.pushDynamicBody(world, hit.shapeId, VectorSingle(hit.point), n, approachVel, dt);
@@ -567,17 +515,15 @@ class CharacterController{
         const ShapeCastHit upHit = this.castCapsule(world, startPos, upVec);
         f32 lifted = this.def.stepUpHeight;
         if(upHit.hit)
-            lifted = SimdMax(0.0f, upHit.fraction - 0.002f) * this.def.stepUpHeight;
+            lifted = Max(0.0f, upHit.fraction - 0.002f) * this.def.stepUpHeight;
         if(lifted <= this.def.skinWidth)
             return false;
 
         this.m_scratchStepContacts.clear();
         const VectorSingle topPos = startPos + up * lifted;
-        b8 hitObs = false;
         b8 hitSteep = false;
         b8 hitCeil = false;
-        VectorSingle unusedN(0.0f);
-        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, false, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
+        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, false, false, world, this.m_scratchStepContacts, hitSteep, hitCeil);
 
         const VectorSingle downVec = up * (-(lifted + this.def.stepDownHeight));
         ShapeCastHit downHit = this.castCapsule(world, movedTop, downVec);
@@ -592,10 +538,10 @@ class CharacterController{
             if(horizLenSq <= 1.0e-10f)
                 return false;
             const f32 effR = this.horizontalExtent() + this.def.skinWidth;
-            const f32 maxSlopeSin = SqrtFast(SimdMax(0.0f, 1.0f - this.m_minWalkableCos * this.m_minWalkableCos));
+            const f32 maxSlopeSin = Sqrt(Max(0.0f, 1.0f - this.m_minWalkableCos * this.m_minWalkableCos));
             const f32 extraForward = effR * (1.0f - maxSlopeSin) + 0.02f;
             const VectorSingle extraHoriz = horizDelta * (extraForward * Rsqrt(VectorSingle(horizLenSq)).x);
-            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, false, false, world, this.m_scratchStepContacts, hitObs, hitSteep, hitCeil, unusedN);
+            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, false, false, world, this.m_scratchStepContacts, hitSteep, hitCeil);
             const ShapeCastHit probeDown = this.castCapsule(world, probeTop, downVec);
             if(!probeDown.hit)
                 return false;
@@ -607,7 +553,7 @@ class CharacterController{
             landN = probeLandN;
         }
 
-        const VectorSingle candidate = movedTop + downVec * SimdMax(0.0f, downHit.fraction - 0.001f) + up * 0.002f;
+        const VectorSingle candidate = movedTop + downVec * Max(0.0f, downHit.fraction - 0.001f) + up * 0.002f;
         const VectorSingle deltaCand = candidate - startPos;
         const VectorSingle horizCand = deltaCand - up * Vector3Dot(deltaCand, up).x;
         const f32 candDistSq = Vector3LengthSq(VectorSingle(horizCand, 0.0f)).x;
@@ -651,7 +597,7 @@ class CharacterController{
     private void updateGroundState(in PhysicsWorld world){
         const VectorSingle up = this.upDirection();
         const VectorSingle curPos = VectorSingle(this.position);
-        const f32 probeDist = this.def.skinWidth + SimdMax(0.02f, this.def.predictiveContactDistance);
+        const f32 probeDist = this.def.skinWidth + Max(0.02f, this.def.predictiveContactDistance);
         const ShapeCastHit groundHit = this.castCapsule(world, curPos, up * (-probeDist));
 
         if(groundHit.hit){
@@ -781,7 +727,6 @@ class CharacterController{
             return;
         world.ensureCpuBroadphaseSynced();
         this.syncWalkableCos();
-        this.syncCachedProxies();
         this.activeContacts.clear();
         this.hitCeiling = false;
         const VectorSingle up = this.upDirection();
@@ -798,11 +743,9 @@ class CharacterController{
                 const VectorSingle carryDelta = carriedP - VectorSingle(this.position);
                 if(Vector3LengthSq(VectorSingle(carryDelta, 0.0f)).x > 1.0e-10f){
                     this.m_scratchStepContacts.clear();
-                    b8 carryObs = false;
                     b8 carrySteep = false;
                     b8 carryCeil = false;
-                    VectorSingle carryN = up;
-                    const VectorSingle carriedEnd = this.slideMoveFrom(VectorSingle(this.position), carryDelta, dt, false, false, world, this.m_scratchStepContacts, carryObs, carrySteep, carryCeil, carryN);
+                    const VectorSingle carriedEnd = this.slideMoveFrom(VectorSingle(this.position), carryDelta, dt, false, false, world, this.m_scratchStepContacts, carrySteep, carryCeil);
                     this.position = f32x4(carriedEnd, 0.0f);
                     for(usize ci = 0u; ci < this.m_scratchStepContacts.size(); ++ci){
                         in CharacterContactInfo sc = this.m_scratchStepContacts[ci];
@@ -830,29 +773,24 @@ class CharacterController{
         const VectorSingle horizDelta = fullDelta - vertDelta;
 
         const VectorSingle curPos = VectorSingle(this.position);
-        b8 hitObs = false;
         b8 hitSteep = false;
         b8 hitCeil = false;
         VectorSingle flatEndPos = curPos;
 
         const f32 fullDistSq = Vector3LengthSq(VectorSingle(fullDelta, 0.0f)).x;
-        const f32 maxStepDist = SimdMax(0.1f, this.horizontalExtent() * 0.75f);
+        const f32 maxStepDist = Max(0.1f, this.horizontalExtent() * 0.75f);
         u32 moveSubSteps = 1u;
         if(fullDistSq > maxStepDist * maxStepDist){
-            const f32 fullDist = SqrtFast(fullDistSq);
+            const f32 fullDist = Sqrt(fullDistSq);
             moveSubSteps = Clamp(cast<u32>(fullDist / maxStepDist) + 1u, 1u, 8u);
         }
         const f32 invSub = 1.0f / cast<f32>(moveSubSteps);
         const VectorSingle subDelta = fullDelta * invSub;
         const f32 subDt = dt * invSub;
         for(u32 ms = 0u; ms < moveSubSteps; ++ms){
-            b8 subObs = false;
             b8 subSteep = false;
             b8 subCeil = false;
-            VectorSingle subEndN = up;
-            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, world, this.activeContacts, subObs, subSteep, subCeil, subEndN);
-            if(subObs)
-                hitObs = true;
+            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, world, this.activeContacts, subSteep, subCeil);
             if(subSteep)
                 hitSteep = true;
             if(subCeil)
@@ -889,7 +827,7 @@ class CharacterController{
                     }
                     stepEv.point = f32x4(steppedPos, 0.0f);
                     stepEv.normal = f32x4(up, 0.0f);
-                    stepEv.speed = SimdMax(0.0f, Vector3Dot(steppedPos - curPos, up).x);
+                    stepEv.speed = Max(0.0f, Vector3Dot(steppedPos - curPos, up).x);
                     this.stepEvents.push_back(stepEv);
                 }
             }
@@ -904,7 +842,7 @@ class CharacterController{
                 if(this.isWalkableNormal(n)){
                     const f32 dropDist = (this.def.stepDownHeight + this.def.skinWidth) * floorProbe.fraction;
                     if(dropDist > this.def.skinWidth){
-                        const VectorSingle snapped = VectorSingle(this.position) + up * (-SimdMax(0.0f, dropDist - 1.0e-3f));
+                        const VectorSingle snapped = VectorSingle(this.position) + up * (-Max(0.0f, dropDist - 1.0e-3f));
                         this.position = f32x4(snapped, 0.0f);
                     }
                 }
@@ -922,7 +860,7 @@ class CharacterController{
             landEv.triangleIndex = this.groundTriangleIndex;
             landEv.point = this.groundPoint;
             landEv.normal = this.groundNormal;
-            landEv.speed = SimdMax(0.0f, -Vector3Dot(vel, up).x);
+            landEv.speed = Max(0.0f, -Vector3Dot(vel, up).x);
             this.stepEvents.push_back(landEv);
         }
         else if(wasGroundedAny && !nowGroundedAny){
@@ -1001,7 +939,7 @@ class CharacterController{
             else if(this.def.shapeType == CharacterShapeType::Cylinder){
                 CylinderShape cy;
                 cy.centerRadius = f32x4(0.0f, 0.0f, 0.0f, this.def.radius);
-                cy.halfHeightRadiusConvex = f32x4(SimdMax(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
+                cy.halfHeightRadiusConvex = f32x4(Max(0.01f, this.def.halfHeight), 0.0f, 0.0f, 0.0f);
                 world.setCylinderShape(targetShapeId, cy, updMass);
             }
             else if(this.def.shapeType == CharacterShapeType::Box){
@@ -1012,7 +950,7 @@ class CharacterController{
             }
             else{
                 CapsuleShape cap;
-                const f32 hh = SimdMax(this.def.halfHeight, 0.5f * s_MinCapsuleLength + 1.0e-3f);
+                const f32 hh = Max(this.def.halfHeight, 0.5f * s_MinCapsuleLength + 1.0e-3f);
                 cap.center1Radius = f32x4(0.0f, -hh, 0.0f, this.def.radius);
                 cap.center2 = f32x4(0.0f, hh, 0.0f, 0.0f);
                 world.setCapsuleShape(targetShapeId, cap, updMass);
@@ -1034,13 +972,11 @@ class CharacterController{
         this.def.halfHeight = newHalfHeight;
         const f32 footDelta = this.footHalfHeight() - oldFoot;
         const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
-        this.syncCachedProxies();
         this.gatherOverlapsAt(world, testPos, 0.0f);
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
             if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
                 this.def.radius = oldR;
                 this.def.halfHeight = oldH;
-                this.syncCachedProxies();
                 return false;
             }
         }
@@ -1061,12 +997,10 @@ class CharacterController{
         this.def.boxHalfExtents = f32x4(clamped, 0.0f);
         const f32 footDelta = this.footHalfHeight() - oldFoot;
         const VectorSingle testPos = VectorSingle(this.position) + this.upDirection() * footDelta;
-        this.syncCachedProxies();
         this.gatherOverlapsAt(world, testPos, 0.0f);
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
             if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth){
                 this.def.boxHalfExtents = oldExt;
-                this.syncCachedProxies();
                 return false;
             }
         }

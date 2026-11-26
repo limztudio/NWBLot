@@ -929,7 +929,7 @@ ShapeProxyView MakeShapeProxyViewFromShape(
         const TaperedCapsuleShape tc = shape.taperedCapsuleShape();
         const f32 r1 = tc.radius1();
         const f32 r2 = tc.radius2();
-        const f32 minR = SimdMin(r1, r2);
+        const f32 minR = Min(r1, r2);
         ShapeProxyView v;
         v.kind = ProxyKind::TaperedCapsule;
         v.param0 = f32x4(tc.center1(), r1 - minR);
@@ -1022,21 +1022,10 @@ Manifold CollidePlaneAndMeshRaw(
     const f32 thresh = meshR + maxDistance;
 
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
-    Array<u32, 256u> stack;
-    stack[0u] = 0u;
-    u32 stackCount = 1u;
-    Vector<u32> overflowStack;
-    b8 useOverflow = false;
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32 nodeIdx = 0u;
-        if(useOverflow){
-            nodeIdx = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            nodeIdx = stack[stackCount];
-        }
+    BvhSpillStack<u32, 256u> stack;
+    stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(ComputeAabbMinSignedDistToPlaneValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), planeNInB, planeDInB) > thresh)
             continue;
@@ -1071,8 +1060,8 @@ Manifold CollidePlaneAndMeshRaw(
             }
         }
         else{
-            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
         }
     }
     if(!candidates.empty())
@@ -1536,12 +1525,8 @@ f32 CombineMaterialFriction(in f32 a, in f32 b){
     return Sqrt(VectorSingle(clamped.x * clamped.y)).x;
 }
 
-f32 CombineMaterialRestitution(in f32 a, in f32 b){
-    return SimdMax(a, b);
-}
-
 f32 CombineMaterialRollingResistance(in f32 a, in f32 b){
-    return SimdMax(a, b);
+    return Max(a, b);
 }
 
 MaterialCombineMode ResolveMaterialCombineMode(
@@ -1565,11 +1550,11 @@ f32 CombineMaterialWithMode(in f32 a, in f32 b, in MaterialCombineMode mode){
     case MaterialCombineMode::Average:
         return 0.5f * (a + b);
     case MaterialCombineMode::Min:
-        return SimdMin(a, b);
+        return Min(a, b);
     case MaterialCombineMode::Multiply:
         return a * b;
     case MaterialCombineMode::Max:
-        return SimdMax(a, b);
+        return Max(a, b);
     case MaterialCombineMode::GeometricMean:
     default:
         return CombineMaterialFriction(a, b);
@@ -1586,8 +1571,8 @@ void CombineResolvedSurfaceMaterialsValues(
     const MaterialCombineMode fricMode = ResolveMaterialCombineMode(matA.frictionCombineMode, matB.frictionCombineMode, MaterialCombineMode::GeometricMean);
     const MaterialCombineMode restMode = ResolveMaterialCombineMode(matA.restitutionCombineMode, matB.restitutionCombineMode, MaterialCombineMode::Max);
 
-    outContact.friction = CombineMaterialWithMode(SimdMax(matA.friction, 0.0f), SimdMax(matB.friction, 0.0f), fricMode);
-    outContact.restitution = SimdMax(CombineMaterialWithMode(matA.restitution, matB.restitution, restMode), 0.0f);
+    outContact.friction = CombineMaterialWithMode(Max(matA.friction, 0.0f), Max(matB.friction, 0.0f), fricMode);
+    outContact.restitution = Max(CombineMaterialWithMode(matA.restitution, matB.restitution, restMode), 0.0f);
     outContact.rollingResistance = CombineMaterialRollingResistance(matA.rollingResistance, matB.rollingResistance);
     outContact.tangentSpeed = matA.tangentSpeed + matB.tangentSpeed;
 
@@ -1597,7 +1582,7 @@ void CombineResolvedSurfaceMaterialsValues(
     f32 statB = matB.staticFriction;
     if(statB < 0.0f)
         statB = matB.friction;
-    outContact.staticFriction = SimdMax(CombineMaterialWithMode(SimdMax(statA, 0.0f), SimdMax(statB, 0.0f), fricMode), outContact.friction);
+    outContact.staticFriction = Max(CombineMaterialWithMode(Max(statA, 0.0f), Max(statB, 0.0f), fricMode), outContact.friction);
 
     outContact.flags &= ~(cast<u32>(ContactFlags::HasSurfaceVelocity) | cast<u32>(ContactFlags::HasAnisotropicFriction));
     if(matA.surfaceVelocity.w != 0.0f || matB.surfaceVelocity.w != 0.0f){

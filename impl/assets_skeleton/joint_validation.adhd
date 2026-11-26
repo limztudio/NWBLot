@@ -211,23 +211,14 @@ b8 DeserializeSkeletonBinaryPayload(
     mut HashMap<Name, u32> outJointIndices
 ){
     usize cursor = 0u;
-    const Expected<SkeletonHeaderBinary> headerResult = ReadPOD<SkeletonHeaderBinary>(binary, cursor);
-    if(!headerResult.has_value()){
-        error("Skeleton::loadBinary failed: malformed header");
+    const Expected<SkeletonHeaderBinary> headerResult = ReadMagicHeaderPayload<SkeletonHeaderBinary>(
+        binary, s_SkeletonBinaryMagic, "Skeleton::loadBinary", "skeleton", cursor
+    );
+    if(!headerResult.has_value())
         return false;
-    }
-    const SkeletonHeaderBinary header = headerResult.value();
-    if(header.magic != s_SkeletonBinaryMagic){
-        error("Skeleton::loadBinary failed: invalid skeleton asset format; recook required");
+    if(!ReadSkeletonJointsPayload(binary, headerResult.value(), cursor, outJoints, outJointIndices))
         return false;
-    }
-    if(!ReadSkeletonJointsPayload(binary, header, cursor, outJoints, outJointIndices))
-        return false;
-    if(cursor != binary.size()){
-        error("Skeleton::loadBinary failed: trailing bytes detected");
-        return false;
-    }
-    return true;
+    return ReadCompletePayload(binary, cursor, "Skeleton::loadBinary");
 }
 
 

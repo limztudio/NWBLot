@@ -43,6 +43,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             continue;
         const uint slot = coarseLight.slot;
 
+        bool enqueued = false;
         if(coarseLight.isEdge){
             uint appendIndex;
             InterlockedAdd(g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND], 1u, appendIndex);
@@ -50,14 +51,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const uint base = appendIndex * NWB_SW_SHADOW_EDGE_RECORD_WORDS;
                 g_NwbSwShadowEdgeList[base] = nwbSwShadowPackPixel(pixel);
                 g_NwbSwShadowEdgeList[base + 1u] = i;
-            }
-            else{
-                const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
-                const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
-                g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
+                enqueued = true;
             }
         }
-        else{
+        if(!enqueued){
             const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
             const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
             g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);

@@ -2,55 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "physics_common.slangi"
+#include "broadphase_helpers.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool nwbPhysicsShouldCollideFields(const uint4 metaA, const uint4 filterA, const uint4 metaB, const uint4 filterB){
-    const uint bodyIdxA = metaA.x;
-    const uint bodyIdxB = metaB.x;
-    if(bodyIdxA == bodyIdxB)
-        return false;
-
-    const uint flagsUnion = metaA.w | metaB.w;
-    const bool anyAwake = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_AWAKE_BODY) != 0u;
-    if(!anyAwake)
-        return false;
-
-    const bool anyDynamic = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_DYNAMIC_BODY) != 0u;
-    const bool anySensor = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u;
-    const bool anyKinematic = (flagsUnion & NWB_PHYSICS_SHAPE_FLAG_KINEMATIC_BODY) != 0u;
-    if(!anyDynamic && !(anySensor && anyKinematic))
-        return false;
-
-    const int groupA = asint(filterA.z);
-    const int groupB = asint(filterB.z);
-    if(groupA == groupB && groupA != 0)
-        return groupA > 0;
-
-    return ((filterA.x & filterB.y) != 0u) && ((filterB.x & filterA.y) != 0u);
-}
-
-bool nwbPhysicsAabbOverlaps(const float3 minA, const float3 maxA, const float3 minB, const float3 maxB){
-    return all(minA <= maxB) && all(minB <= maxA);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool nwbPhysicsIsComplexPair(const uint4 metaA, const uint4 metaB){
-    const uint typeA = metaA.y;
-    const uint typeB = metaB.y;
-    const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaA.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-    const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaB.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-    return (typeA >= NWB_PHYSICS_SHAPE_TYPE_MESH)
-        || (typeB >= NWB_PHYSICS_SHAPE_TYPE_MESH)
-        || (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA)
-        || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB);
-}
 
 uint nwbPhysicsHashCell(const int3 cell, const uint tableMask){
     const uint hx = asuint(cell.x) * 73856093u;
@@ -64,39 +20,6 @@ groupshared float3 s_LargeMin[NWB_PHYSICS_WORKGROUP_SIZE];
 groupshared float3 s_LargeMax[NWB_PHYSICS_WORKGROUP_SIZE];
 groupshared uint4 s_LargeMeta[NWB_PHYSICS_WORKGROUP_SIZE];
 groupshared uint4 s_LargeFilter[NWB_PHYSICS_WORKGROUP_SIZE];
-
-void nwbPhysicsEmitBroadphasePair(
-    const uint pairSlot,
-    const uint counterSlot,
-    const uint maxPairs,
-    const uint idxA,
-    const uint idxB,
-    const uint bodyA,
-    const uint bodyB,
-    const bool isComplex
-){
-    const uint primOffset = WavePrefixCountBits(!isComplex);
-    const uint primCount = WaveActiveCountBits(!isComplex);
-    const uint cpxOffset = WavePrefixCountBits(isComplex);
-    const uint cpxCount = WaveActiveCountBits(isComplex);
-    uint primBase = 0u;
-    uint cpxBase = 0u;
-    if(WaveIsFirstLane()){
-        if(primCount > 0u)
-            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][0u], primCount, primBase);
-        if(cpxCount > 0u)
-            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][1u], cpxCount, cpxBase);
-    }
-    primBase = WaveReadLaneFirst(primBase);
-    cpxBase = WaveReadLaneFirst(cpxBase);
-    const uint writeIndex = isComplex ? (cpxBase + cpxOffset) : (primBase + primOffset);
-    if(writeIndex < maxPairs){
-        NwbPhysicsGpuBroadphasePair pairOut;
-        pairOut.indices = uint4(idxA, idxB, bodyA, bodyB);
-        const uint dstIdx = isComplex ? (maxPairs - 1u - writeIndex) : writeIndex;
-        g_NwbPhysicsBroadphasePairBuffers[pairSlot][dstIdx] = pairOut;
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

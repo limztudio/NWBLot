@@ -6,6 +6,7 @@
 #include "global_file_access.adhd"
 #include "name_case_types.adhd"
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/platform_features.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/common/value_storage.adhd>
 
@@ -177,7 +178,7 @@ void VerifyGlobal_PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdv
         HeapStorage storage;
         StringView rawPath = "/Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/";
         PlatformStringView rootText = PlatformTextLiteral("/");
-        if(s_WindowsPath){
+        if(s_IsWindowsPlatform){
             rawPath = "C:\\Root//./\xED\x95\x9C\xEA\xB8\x80/File.TXT/";
             rootText = PlatformTextLiteral("C:\\");
         }
@@ -778,7 +779,7 @@ void VerifyGlobal_SharedLibraryInvalidNamePreservesNativeFailureStatusWithoutOpe
         missingLibraryFailed = !missing.has_value();
         if(missingLibraryFailed){
             missingErrorCode = missing.error().code.value();
-            if(!s_WindowsPath){
+            if(!s_IsWindowsPlatform){
                 nonWindowsBuild = true;
                 missingDetail.assign(missing.error().detail.view());
             }

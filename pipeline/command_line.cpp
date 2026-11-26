@@ -61,7 +61,7 @@ static b8 AssignInputs(const Span<const AInteropString> values, Core::Assets::As
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PipelineCommandLine::PipelineCommandLine(PipelineTool::Enum)
+PipelineCommandLine::PipelineCommandLine()
     : m_app(s_PipelineAppDescription.data())
 {
     m_app.add_option(s_PipelineInputOption.data(), m_inputs, "Input assets; accepts multiple paths and repeated options");

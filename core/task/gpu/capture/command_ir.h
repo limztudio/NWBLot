@@ -381,8 +381,6 @@ public:
 
 
 private:
-    [[nodiscard]] b8 initializeValidatedHeader(BinaryByteView headerSource, GpuCommandIrStreamHeader& outHeader)noexcept;
-    void finalizeValidatedHeader(const GpuCommandIrStreamHeader& header, BinaryByteView commandBytes, BinaryByteView blobBytes)noexcept;
     void fail(GpuCommandIrStreamValidationError::Enum error, usize byteOffset, u64 recordIndex)noexcept;
 
 

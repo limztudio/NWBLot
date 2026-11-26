@@ -279,16 +279,7 @@ Expected<CpuTaskScheduler::TaskHandle, CpuTaskAdmissionError::Enum> CpuTaskSched
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
-        if(!scope && inScheduler && !activeExec->task.valid() && activeExec->rangeGroup && activeExec->rangeGroup->fastUnscoped){
-            ParallelRangeGroup& activeRange = *activeExec->rangeGroup;
-            if(!activeRange.lazyChildScope){
-                CpuTaskScope* const constructed = ::new(activeRange.lazyChildScopeStorage) CpuTaskScope(*this, {});
-                constructed->m_allowCallerWork = true;
-                activeRange.lazyChildScope = constructed;
-                activeRange.hasChildScope.store(true, MemoryOrder::release);
-            }
-            scope = activeRange.lazyChildScope;
-        }
+        scope = resolveLazyChildScopeLocked(scope, activeExec, inScheduler);
         if(isScopeCanceledLocked(scope))
             return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
         const auto reservation = reserveTaskLocked();
@@ -431,16 +422,7 @@ Expected<void, CpuTaskAdmissionError::Enum> CpuTaskScheduler::submitRepeatedImpl
         ScopedLock lock(m_mutex);
         if(m_aborting)
             return MakeUnexpected(CpuTaskAdmissionError::Aborting);
-        if(!scope && inScheduler && !activeExec->task.valid() && activeExec->rangeGroup && activeExec->rangeGroup->fastUnscoped){
-            ParallelRangeGroup& activeRange = *activeExec->rangeGroup;
-            if(!activeRange.lazyChildScope){
-                CpuTaskScope* const constructed = ::new(activeRange.lazyChildScopeStorage) CpuTaskScope(*this, {});
-                constructed->m_allowCallerWork = true;
-                activeRange.lazyChildScope = constructed;
-                activeRange.hasChildScope.store(true, MemoryOrder::release);
-            }
-            scope = activeRange.lazyChildScope;
-        }
+        scope = resolveLazyChildScopeLocked(scope, activeExec, inScheduler);
         if(isScopeCanceledLocked(scope))
             return MakeUnexpected(CpuTaskAdmissionError::ScopeCanceled);
 
@@ -588,6 +570,31 @@ u16 CpuTaskScheduler::eligibleQueueMaskLocked(const CpuAffinity::Enum affinity, 
     return static_cast<u16>(costMask | (costMask << s_CostSlotCount) | (costMask << (2u * s_CostSlotCount)));
 }
 
+CpuTaskScope* CpuTaskScheduler::resolveLazyChildScopeLocked(CpuTaskScope* scope, Execution* const activeExec, const b8 inScheduler)noexcept{
+    if(!scope && inScheduler && !activeExec->task.valid() && activeExec->rangeGroup && activeExec->rangeGroup->fastUnscoped){
+        ParallelRangeGroup& activeRange = *activeExec->rangeGroup;
+        if(!activeRange.lazyChildScope){
+            CpuTaskScope* const constructed = ::new(activeRange.lazyChildScopeStorage) CpuTaskScope(*this, {});
+            constructed->m_allowCallerWork = true;
+            activeRange.lazyChildScope = constructed;
+            activeRange.hasChildScope.store(true, MemoryOrder::release);
+        }
+        return activeRange.lazyChildScope;
+    }
+    return scope;
+}
+
+void CpuTaskScheduler::activateDequeuedReadyNodeLocked(ReadyQueue& queue, const usize queueIndex, TaskMeta& meta, TaskMeta*& outMeta)noexcept{
+    if(queue.head == TaskHandle::s_InvalidIndex)
+        m_nonEmptyReadyMask &= static_cast<u16>(~(1u << queueIndex));
+    meta.next = TaskHandle::s_InvalidIndex;
+    meta.state = TaskState::Running;
+    if(meta.target == CpuTaskTarget::Worker)
+        --m_readyWorkerCosts[meta.cost];
+    ++m_dispatchCount;
+    outMeta = &meta;
+}
+
 u32 CpuTaskScheduler::claimTaskLocked(const u16 candidateMask, const CpuAffinity::Enum affinity, ScopeWait* const preferredScope, TaskMeta*& outMeta)noexcept{
     static constexpr u64 s_BackgroundAdmissionPeriod = __hidden_cpu_task_scheduler::s_BackgroundAdmissionPeriod;
     static constexpr u64 s_BackgroundAdmissionTick = __hidden_cpu_task_scheduler::s_BackgroundAdmissionTick;
@@ -626,14 +633,7 @@ u32 CpuTaskScheduler::claimTaskLocked(const u16 candidateMask, const CpuAffinity
             queue.head = meta.next;
             if(queue.tail == nodeIndex)
                 queue.tail = TaskHandle::s_InvalidIndex;
-            if(queue.head == TaskHandle::s_InvalidIndex)
-                m_nonEmptyReadyMask &= static_cast<u16>(~(1u << index));
-            meta.next = TaskHandle::s_InvalidIndex;
-            meta.state = TaskState::Running;
-            if(meta.target == CpuTaskTarget::Worker)
-                --m_readyWorkerCosts[meta.cost];
-            ++m_dispatchCount;
-            outMeta = &meta;
+            activateDequeuedReadyNodeLocked(queue, index, meta, outMeta);
             return nodeIndex;
         }
         outMeta = nullptr;
@@ -665,14 +665,7 @@ u32 CpuTaskScheduler::claimTaskLocked(const u16 candidateMask, const CpuAffinity
                 m_slabs.meta(previous).next = nextNode;
             if(queue.tail == nodeIndex)
                 queue.tail = previous;
-            if(queue.head == TaskHandle::s_InvalidIndex)
-                m_nonEmptyReadyMask &= static_cast<u16>(~(1u << index));
-            meta.next = TaskHandle::s_InvalidIndex;
-            meta.state = TaskState::Running;
-            if(meta.target == CpuTaskTarget::Worker)
-                --m_readyWorkerCosts[meta.cost];
-            ++m_dispatchCount;
-            outMeta = &meta;
+            activateDequeuedReadyNodeLocked(queue, index, meta, outMeta);
             return nodeIndex;
         }
     }
@@ -783,31 +776,6 @@ b8 CpuTaskScheduler::claimNextLocked(const CpuAffinity::Enum affinity, const b8 
                 takeWorkerWakePlanLocked(outClaim.wakePlan);
             takeRangeWakePlanLocked(*range, 2u, outClaim.wakePlan);
             return true;
-        }
-    }
-    return false;
-}
-
-b8 CpuTaskScheduler::hasReadyLocked(const CpuAffinity::Enum affinity, const b8 mainThread, const b8 executing, const b8 cooperative, ScopeWait* const preferredScope)noexcept{
-    const u16 eligibleMask = eligibleQueueMaskLocked(affinity, mainThread, executing, cooperative);
-    const u16 candidateMask = static_cast<u16>(m_nonEmptyReadyMask & eligibleMask);
-    if(candidateMask != 0u){
-        if(!preferredScope)
-            return true;
-        for(u32 bits = candidateMask; bits != 0u; bits &= bits - 1u){
-            const usize index = static_cast<usize>(CountTrailingZeros(bits));
-            u32 previous = TaskHandle::s_InvalidIndex;
-            if(findScopeReadyLocked(index, *preferredScope, previous) != TaskHandle::s_InvalidIndex)
-                return true;
-        }
-    }
-    for(ParallelRangeGroup* group = m_activeRangeHead; group; group = group->next){
-        if(group->remainingHelperClaims == 0u || group->nextChunk.load(MemoryOrder::relaxed) >= group->chunkCount)
-            continue;
-        const u16 costBit = static_cast<u16>(1u << static_cast<usize>(group->options.cost));
-        if((eligibleMask & costBit) != 0u){
-            if(!preferredScope || group->scope == &preferredScope->scope || (!group->fastUnscoped && contributesToScopeLocked(group->anchorHandle.index, *preferredScope)))
-                return true;
         }
     }
     return false;
@@ -1241,24 +1209,6 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
         claimed.resetFast();
         active = next;
     }
-}
-
-b8 CpuTaskScheduler::executeOne(const b8 cooperative, ScopeWait* const preferredScope){
-    ClaimedExecution claimed;
-    const Execution* const activeExec = s_Execution;
-    const b8 executing = activeExec && &activeExec->scheduler == this;
-    const usize workerIndex = executing ? activeExec->workerIndex : 0u;
-    const CpuAffinity::Enum affinity = executing ? activeExec->affinity : CpuAffinity::Any;
-    const b8 mainThread = isMainThread();
-    b8 claimedWork = false;
-    {
-        ScopedLock lock(m_mutex);
-        claimedWork = claimNextLocked(affinity, mainThread, executing, cooperative, preferredScope, workerIndex, claimed);
-    }
-    if(!claimedWork || !claimed.hasWork())
-        return false;
-    executeClaimed(claimed, workerIndex, affinity);
-    return true;
 }
 
 void CpuTaskScheduler::ensureSearchBuffersLocked(){

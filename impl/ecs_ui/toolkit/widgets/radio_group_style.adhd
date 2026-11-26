@@ -289,15 +289,6 @@ u64 ResolveRadioGroupNavigationTarget(
     return FindEnabledRadioGroupChoice(choices, start, reverse);
 }
 
-u64 ResolveRadioGroupNavigationTarget(in RadioGroupChoices choices, in u64 cursor, in ControlActionKind kind){
-    return ResolveRadioGroupNavigationTarget(choices, cursor, kind, RadioGroupOrientation::Vertical, 1u);
-}
-
-void ApplySkinPaletteToRadioGroupStyle(in UiSkinPalette palette, mut RadioGroupStyle style){
-    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
-    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
-    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

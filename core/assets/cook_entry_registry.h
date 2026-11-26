@@ -388,9 +388,6 @@ public:
     explicit CookEntryAutoRegistrar(CookEntryRegistrationFunction function);
 };
 
-#define NWB_DEFINE_COOK_ENTRY_REGISTRAR(registrarVariable, registerFunction) \
-    Core::Assets::CookEntryAutoRegistrar registrarVariable(&registerFunction)
-
 template<typename EntryT, typename AssetT, typename CodecT>
 [[nodiscard]] inline b8 RegisterDocumentValueCookEntry(
     const TStringView assetKindText,

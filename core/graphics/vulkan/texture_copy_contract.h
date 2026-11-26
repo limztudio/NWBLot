@@ -31,7 +31,7 @@ struct TextureCopyContract{
     VulkanDetail::TextureFormatBlockLayout formatLayout;
     VkImageType imageType = VK_IMAGE_TYPE_MAX_ENUM;
     VkImageAspectFlags aspectMask = 0u;
-    TextureCopyQueueRequirement::Enum queueRequirement = TextureCopyQueueRequirement::Transfer;
+    TextureQueueRequirement::Enum queueRequirement = TextureQueueRequirement::Transfer;
 };
 
 [[nodiscard]] Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDesc, const TextureSlice& sourceSlice, const TextureDesc& destinationDesc, const TextureSlice& destinationSlice)noexcept;

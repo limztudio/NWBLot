@@ -345,7 +345,10 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         return true;
     }
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, cast<u32>(s_ShaderSwShadowGroupSize));
-    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, true, false, false, graphOwnsOpaqueToTransparentBoundary, false, false, false, false, false);
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.dispatchTransparentTrace = true;
+    denoiseOptions.graphOwnsOpaqueToTransparentBoundary = graphOwnsOpaqueToTransparentBoundary;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, denoiseOptions);
     if(composeCsg){
         commandList.setTextureState(targets.transparentSoftHalf.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess, true);
         commandList.commitBarriers();
@@ -372,11 +375,11 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
         || !this.m_rayTracingState.softShadow.m_softTransparentTemporalReady)
         return false;
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, cast<u32>(s_ShaderSwShadowGroupSize));
-    this.dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y,
-        false, false, false, false, false, false, true, false, graphOwnsTransparentTemporalMergeEntryStates,
-        false, false, false, false, true
-    );
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.graphOwnsTransparentTraceToResolveBoundary = true;
+    denoiseOptions.graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates;
+    denoiseOptions.dispatchTransparentTemporalMerge = true;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, denoiseOptions);
     return true;
 }
 
@@ -390,8 +393,11 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     if(!CanRenderSoftTransparentShadow(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask))
         return false;
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, cast<u32>(s_ShaderSwShadowGroupSize));
-    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, false, true, false, false, graphOwnsTransparentWaveletInputBoundary,
-        false, false, false, false, false, true, false);
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.dispatchTransparentResolve = true;
+    denoiseOptions.graphOwnsTransparentTraceToResolveBoundary = graphOwnsTransparentWaveletInputBoundary;
+    denoiseOptions.splitTransparentResolve = true;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, denoiseOptions);
     return true;
 }
 
@@ -399,7 +405,9 @@ b8 RendererRayTracingSystem::renderSoftTransparentShadowFold(mut CommandList com
     if(!CanRenderSoftTransparentShadow(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask))
         return false;
     const RayTracingDispatchGroups groups = ResolveRayTracingDispatchGroups(targets.width, targets.height, targets.shadowReceiverFactor, cast<u32>(s_ShaderSwShadowGroupSize));
-    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, false, false, false, false, false, false, false, false, false, false, false, true);
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.dispatchTransparentResolveTail = true;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, groups.x, groups.y, denoiseOptions);
     return true;
 }
 
@@ -475,22 +483,23 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     in u32 frameIndex,
     in u32 softGroupsX,
     in u32 softGroupsY,
-    in b8 dispatchOpaqueGeometry,
-    in b8 dispatchOpaqueResolve,
-    in b8 dispatchTransparentTrace,
-    in b8 dispatchTransparentResolve,
-    in b8 graphOwnsOpaqueGeometryToResolveBoundary,
-    in b8 graphOwnsOpaqueToTransparentBoundary,
-    in b8 graphOwnsTransparentTraceToResolveBoundary,
-    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    in b8 graphOwnsTransparentTemporalMergeEntryStates,
-    in b8 dispatchOpaqueResolveTail,
-    in b8 graphOwnsOpaqueTraceToFirstWaveletBoundary,
-    in b8 dispatchTransparentResolveTail,
-    in b8 splitTransparentResolve,
-    in b8 dispatchTransparentTemporalMerge,
-    in SoftShadowOpaqueResolvePhase opaquePhase
+    in SoftShadowDenoiseDispatchOptions options
 ){
+    const b8 dispatchOpaqueGeometry = options.dispatchOpaqueGeometry;
+    const b8 dispatchOpaqueResolve = options.dispatchOpaqueResolve;
+    const b8 dispatchTransparentTrace = options.dispatchTransparentTrace;
+    const b8 dispatchTransparentResolve = options.dispatchTransparentResolve;
+    const b8 graphOwnsOpaqueGeometryToResolveBoundary = options.graphOwnsOpaqueGeometryToResolveBoundary;
+    const b8 graphOwnsOpaqueToTransparentBoundary = options.graphOwnsOpaqueToTransparentBoundary;
+    const b8 graphOwnsTransparentTraceToResolveBoundary = options.graphOwnsTransparentTraceToResolveBoundary;
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates = options.graphOwnsOpaqueTemporalMergeEntryStates;
+    const b8 graphOwnsTransparentTemporalMergeEntryStates = options.graphOwnsTransparentTemporalMergeEntryStates;
+    const b8 dispatchOpaqueResolveTail = options.dispatchOpaqueResolveTail;
+    const b8 graphOwnsOpaqueTraceToFirstWaveletBoundary = options.graphOwnsOpaqueTraceToFirstWaveletBoundary;
+    const b8 dispatchTransparentResolveTail = options.dispatchTransparentResolveTail;
+    const b8 splitTransparentResolve = options.splitTransparentResolve;
+    const b8 dispatchTransparentTemporalMerge = options.dispatchTransparentTemporalMerge;
+    const SoftShadowOpaqueResolvePhase opaquePhase = options.opaquePhase;
     assert(targets.bindless.valid());
     assert(deferredLightingResources.valid());
 
@@ -571,7 +580,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             if(dispatchOpaqueResolve && dispatchOpaqueResolveTail){
                 GpuTimingMeasure opaqueResolveTiming(this.m_graphics.gpuTiming(), s_TimingScopeShadowOpaqueResolve, this.m_graphics.getDevice(), commandList);
 
-                this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch);
+                this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch, true, true);
             }
             else if(dispatchOpaqueResolve)
                 this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, opaqueDispatch, true, false);
@@ -626,7 +635,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             if(dispatchTransparentResolve && !splitTransparentResolve){
                 GpuTimingMeasure transparentResolveTiming(this.m_graphics.gpuTiming(), s_TimingScopeShadowTransparentResolve, this.m_graphics.getDevice(), commandList);
 
-                this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch);
+                this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch, true, true);
             }
             else if(dispatchTransparentResolve)
                 this.dispatchSoftShadowResolve(commandList, targets, deferredLightingResources, 0u, slotRangeCount, transparentDispatch, true, false);

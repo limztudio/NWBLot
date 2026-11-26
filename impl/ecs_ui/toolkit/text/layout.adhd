@@ -333,6 +333,32 @@ class TextLayout : MoveOnly{
     }
 
     [cpp_unwind]
+    private TextLayoutStatus shapeBidiLogicalRuns(
+        in ShapeRequest request,
+        in BidiParagraph bidiPara,
+        in usize rangeBegin,
+        in usize rangeEnd,
+        mut Vector<BidiVisualRun> logicalRuns,
+        mut Vector<ShapedRun> logicalShaped,
+        mut ITextRunShaperSink shaper,
+        mut Vector<BidiWrapCluster> wrapClusters
+    ){
+        ResolveBidiLogicalRuns(bidiPara, cast<u32>(rangeBegin), cast<u32>(rangeEnd), logicalRuns);
+        if(logicalShaped.size() < logicalRuns.size())
+            logicalShaped.resize(logicalRuns.size());
+        wrapClusters.clear();
+        for(usize li = 0u; li < logicalRuns.size(); ++li){
+            in BidiVisualRun lrun = logicalRuns[li];
+            const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, lrun.byteBegin, lrun.byteEnd, lrun.direction);
+            const TextLayoutStatus runStatus = shaper.shapeInto(runReq, logicalShaped[li]);
+            if(runStatus != TextLayoutStatus::Success)
+                return runStatus;
+            AppendLogicalRunWrapClusters(lrun, logicalShaped[li].glyphs, wrapClusters);
+        }
+        return TextLayoutStatus::Success;
+    }
+
+    [cpp_unwind]
     private TextLayoutStatus shapeBidiInto(in ShapeRequest request, mut ITextRunShaperSink shaper){
         BidiScratch bidiScratch;
         BidiParagraph bidiPara;
@@ -369,65 +395,32 @@ class TextLayout : MoveOnly{
                 if(lineStatus != TextLayoutStatus::Success)
                     return lineStatus;
             }
-            else if(!TextSliceContainsTab(request.text, byteBegin, byteEnd)){
-                ResolveBidiLogicalRuns(bidiPara, cast<u32>(byteBegin), cast<u32>(byteEnd), logicalRuns);
-                if(logicalShaped.size() < logicalRuns.size())
-                    logicalShaped.resize(logicalRuns.size());
-                wrapClusters.clear();
-                for(usize li = 0u; li < logicalRuns.size(); ++li){
-                    in BidiVisualRun lrun = logicalRuns[li];
-                    const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, lrun.byteBegin, lrun.byteEnd, lrun.direction);
-                    const TextLayoutStatus runStatus = shaper.shapeInto(runReq, logicalShaped[li]);
+            else{
+                const b8 hasTab = TextSliceContainsTab(request.text, byteBegin, byteEnd);
+                if(!hasTab){
+                    const TextLayoutStatus runStatus = this.shapeBidiLogicalRuns(
+                        request, bidiPara, byteBegin, byteEnd, logicalRuns, logicalShaped, shaper, wrapClusters
+                    );
                     if(runStatus != TextLayoutStatus::Success)
                         return runStatus;
-                    AppendLogicalRunWrapClusters(lrun, logicalShaped[li].glyphs, wrapClusters);
                 }
                 usize segBegin = byteBegin;
                 usize clusterCursor = 0u;
                 while(true){
+                    if(hasTab){
+                        const TextLayoutStatus runStatus = this.shapeBidiLogicalRuns(
+                            request, bidiPara, segBegin, byteEnd, logicalRuns, logicalShaped, shaper, wrapClusters
+                        );
+                        if(runStatus != TextLayoutStatus::Success)
+                            return runStatus;
+                        clusterCursor = 0u;
+                    }
                     usize visualEnd = byteEnd;
                     usize segBreakEnd = breakEnd;
                     usize nextSegBegin = byteEnd;
                     ResolveNextWrappedBidiSegment(
                         request.text, segBegin, byteEnd, breakEnd, request,
                         Span<BidiWrapCluster>(wrapClusters), clusterCursor,
-                        visualEnd, segBreakEnd, nextSegBegin
-                    );
-                    const TextLayoutStatus bidiStatus = this.placeBidiVisualSegment(
-                        request, bidiPara, segBegin, visualEnd, segBreakEnd,
-                        logicalRuns, logicalShaped, shaper, bidiScratch,
-                        hasEmptyMetrics, emptyMetrics, scratchEmptyRun, visualRuns, splitShaped, runSourceIdx, lineRuns,
-                        inkBounds, hasInk
-                    );
-                    if(bidiStatus != TextLayoutStatus::Success)
-                        return bidiStatus;
-                    if(nextSegBegin >= byteEnd)
-                        break;
-                    segBegin = nextSegBegin;
-                }
-            }
-            else{
-                usize segBegin = byteBegin;
-                while(true){
-                    ResolveBidiLogicalRuns(bidiPara, cast<u32>(segBegin), cast<u32>(byteEnd), logicalRuns);
-                    if(logicalShaped.size() < logicalRuns.size())
-                        logicalShaped.resize(logicalRuns.size());
-                    wrapClusters.clear();
-                    for(usize li = 0u; li < logicalRuns.size(); ++li){
-                        in BidiVisualRun lrun = logicalRuns[li];
-                        const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, lrun.byteBegin, lrun.byteEnd, lrun.direction);
-                        const TextLayoutStatus runStatus = shaper.shapeInto(runReq, logicalShaped[li]);
-                        if(runStatus != TextLayoutStatus::Success)
-                            return runStatus;
-                        AppendLogicalRunWrapClusters(lrun, logicalShaped[li].glyphs, wrapClusters);
-                    }
-                    usize visualEnd = byteEnd;
-                    usize segBreakEnd = breakEnd;
-                    usize nextSegBegin = byteEnd;
-                    usize tabClusterCursor = 0u;
-                    ResolveNextWrappedBidiSegment(
-                        request.text, segBegin, byteEnd, breakEnd, request,
-                        Span<BidiWrapCluster>(wrapClusters), tabClusterCursor,
                         visualEnd, segBreakEnd, nextSegBegin
                     );
                     const TextLayoutStatus bidiStatus = this.placeBidiVisualSegment(
@@ -627,7 +620,7 @@ class TextLayout : MoveOnly{
     }
 
     [cpp_unwind]
-    public TextLayoutStatus shapeInto(in ShapeRequest request, mut ITextShaper shaper){
+    private TextLayoutStatus shapeIntoWithSink(in ShapeRequest request, mut ITextRunShaperSink sink){
         const TextLayoutStatus validation = ValidateTextRequest(request, true);
         if(validation != TextLayoutStatus::Success)
             return validation;
@@ -643,33 +636,21 @@ class TextLayout : MoveOnly{
         this.m_glyphs.reserve(request.text.size());
         this.m_clusters.reserve(request.text.size());
         this.m_lines.reserve(1u);
-        InterfaceTextRunShaperSink sink(shaper);
         if(request.bidiMode != TextBidiMode::None)
             return this.shapeBidiInto(request, sink);
         return this.shapeHardLinesNonBidi(request, sink);
     }
 
     [cpp_unwind]
+    public TextLayoutStatus shapeInto(in ShapeRequest request, mut ITextShaper shaper){
+        InterfaceTextRunShaperSink sink(shaper);
+        return this.shapeIntoWithSink(request, sink);
+    }
+
+    [cpp_unwind]
     public TextLayoutStatus shapeIntoDirect(in ShapeRequest request, mut TextShaper shaper){
-        const TextLayoutStatus validation = ValidateTextRequest(request, true);
-        if(validation != TextLayoutStatus::Success)
-            return validation;
-        this.m_text.assign(request.text);
-        this.m_glyphs.clear();
-        this.m_clusters.clear();
-        this.m_lines.clear();
-        this.m_measure = Point();
-        this.m_inkBounds = Rect();
-        this.m_fontSize = request.fontSize;
-        this.m_direction = request.direction;
-        this.m_hasBidiRuns = false;
-        this.m_glyphs.reserve(request.text.size());
-        this.m_clusters.reserve(request.text.size());
-        this.m_lines.reserve(1u);
         DirectTextRunShaperSink sink(shaper);
-        if(request.bidiMode != TextBidiMode::None)
-            return this.shapeBidiInto(request, sink);
-        return this.shapeHardLinesNonBidi(request, sink);
+        return this.shapeIntoWithSink(request, sink);
     }
 
     [cpp_unwind, owner_result]

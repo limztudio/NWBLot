@@ -22,7 +22,6 @@
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
 struct NwbDeferredLightingPushConstants{
     uint resourceSlots;
-    uint presentationMode;
 };
 
 [[vk::push_constant]] ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConstants;
@@ -32,18 +31,6 @@ struct NwbDeferredLightingPushConstants{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool nwbDeferredPresentationIsHdr10(){
-    return g_NwbDeferredLightingPushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10;
-}
-
-bool nwbBxdfPresentationIsHdr10(){
-    return nwbDeferredPresentationIsHdr10();
-}
-
-bool nwbBxdfRequiresLinearOutput(){
-    return true;
-}
 
 #define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE nwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.y)

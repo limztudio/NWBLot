@@ -178,7 +178,7 @@ b8 PaintSpinBoxStepButton(
         Color iconColor = style.disabledText;
         if(canStep)
             iconColor = style.text;
-        const f32 span = UiSimdMin(buttonRect.width, buttonRect.height) * s_SpinBoxGlyphExtentFraction;
+        const f32 span = Min(buttonRect.width, buttonRect.height) * s_SpinBoxGlyphExtentFraction;
         if(span >= 2.0f){
             const f32 midX = buttonRect.x + buttonRect.width * s_RectCenterFraction;
             const f32 midY = buttonRect.y + buttonRect.height * s_RectCenterFraction;
@@ -254,7 +254,7 @@ b8 Builder::beginSplitter(in StringView stableKey, mut SplitterState state, in S
         this.m_context.input().invalidateTarget(widget.id);
         state.m_activeGestureSequence = 0u;
     }
-    f32 ratio = UiSimdMax(0.0f, UiSimdMin(1.0f, state.ratio()));
+    f32 ratio = Max(0.0f, Min(1.0f, state.ratio()));
     if(state.m_bounds.width > 0.0f || state.m_bounds.height > 0.0f){
         const f32 available = ResolveSplitterAvailableExtent(state.m_bounds, options.orientation, options.handleThickness);
         ratio = ResolveClampedSplitterRatio(ratio, available, options.minFirst, options.minSecond);
@@ -343,7 +343,6 @@ b8 Builder::beginSplitter(in StringView stableKey, mut SplitterState state, in S
     frame.revision = state.revision();
     frame.containerNode = containerNode;
     frame.firstPaneNode = firstAdmitted.value();
-    frame.handleNode = handleAdmitted.value();
     frame.secondPaneNode = secondAdmitted.value();
     frame.secondPaneStarted = false;
     auto handleItem = this.makeItem();
@@ -400,23 +399,13 @@ b8 Builder::splitterSecondPane(){
 b8 Builder::endSplitter(){
     if(
         this.declarationBlocked()
-        || !this.m_scope.value().m_panelActive
-        || this.m_scope.value().m_stack.size() <= 1u
-        || this.m_scope.value().m_scrollAreaStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_virtualListStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_splitterStack.size() != this.m_scope.value().m_stack.size()
-        || this.m_scope.value().m_scopeKinds.back() != BuilderScopeKind::SplitterSecond
+        || !this.m_scope.value().canPopChildScope(BuilderScopeKind::SplitterSecond)
         || this.m_context.failed()
     ){
         this.m_context.fail();
         return false;
     }
-    this.m_scope.value().m_stack.pop_back();
-    this.m_scope.value().m_scrollAreaStack.pop_back();
-    this.m_scope.value().m_scopeKinds.pop_back();
-    this.m_scope.value().m_virtualListStack.pop_back();
-    this.m_scope.value().m_splitterStack.pop_back();
+    this.m_scope.value().popChildScopeStacks();
     const b8 poppedPane = this.m_context.popScope();
     const b8 poppedContainer = this.m_context.popScope();
     return poppedPane && poppedContainer;
@@ -475,20 +464,15 @@ b8 Builder::paintSplitterHandle(in BuilderItem item, in LayoutBox box){
     if(enabled && this.m_context.input().focus() == frame.widget.id)
         this.m_paint.tryDrawRegion(this.itemWidgetStyle(item).focus, box.rectangle);
     if(box.rectangle.width > 0.0f && box.rectangle.height > 0.0f){
-        if(frame.options.orientation == SplitterOrientation::Horizontal){
-            const f32 gripH = UiSimdMin(box.rectangle.height, UiSimdMax(s_SplitterGripMinLength, box.rectangle.height * s_SplitterGripLengthFraction));
-            const f32 gripW = UiSimdMin(box.rectangle.width, s_SplitterGripThickness);
-            const f32 gx = box.rectangle.x + UiSimdMax(0.0f, (box.rectangle.width - gripW) * s_RectCenterFraction);
-            const f32 gy = box.rectangle.y + UiSimdMax(0.0f, (box.rectangle.height - gripH) * s_RectCenterFraction);
-            this.m_paint.fillRect(Rect(gx, gy, gripW, gripH), frame.style.gripColor);
+        f32 gripW = Min(box.rectangle.width, s_SplitterGripThickness);
+        f32 gripH = Min(box.rectangle.height, Max(s_SplitterGripMinLength, box.rectangle.height * s_SplitterGripLengthFraction));
+        if(frame.options.orientation != SplitterOrientation::Horizontal){
+            gripW = Min(box.rectangle.width, Max(s_SplitterGripMinLength, box.rectangle.width * s_SplitterGripLengthFraction));
+            gripH = Min(box.rectangle.height, s_SplitterGripThickness);
         }
-        else{
-            const f32 gripW = UiSimdMin(box.rectangle.width, UiSimdMax(s_SplitterGripMinLength, box.rectangle.width * s_SplitterGripLengthFraction));
-            const f32 gripH = UiSimdMin(box.rectangle.height, s_SplitterGripThickness);
-            const f32 gx = box.rectangle.x + UiSimdMax(0.0f, (box.rectangle.width - gripW) * s_RectCenterFraction);
-            const f32 gy = box.rectangle.y + UiSimdMax(0.0f, (box.rectangle.height - gripH) * s_RectCenterFraction);
-            this.m_paint.fillRect(Rect(gx, gy, gripW, gripH), frame.style.gripColor);
-        }
+        const f32 gx = box.rectangle.x + Max(0.0f, (box.rectangle.width - gripW) * s_RectCenterFraction);
+        const f32 gy = box.rectangle.y + Max(0.0f, (box.rectangle.height - gripH) * s_RectCenterFraction);
+        this.m_paint.fillRect(Rect(gx, gy, gripW, gripH), frame.style.gripColor);
     }
     if(!this.m_paint.popClip())
         return false;
@@ -519,36 +503,124 @@ b8 Builder::paintSplitterHandle(in BuilderItem item, in LayoutBox box){
     return true;
 }
 
-NumericEditBoxResult Builder::integerSpinBox(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerSpinBoxOptions options){
-    NumericEditBoxResult result;
-    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidIntegerSpinBoxOptions(options)){
+b8 Builder::prepareSpinBoxDeclaration(
+    in StringView stableKey,
+    in b8 validOptions,
+    in u64 instanceGeneration,
+    mut NumericEditBoxResult outResult,
+    mut WidgetState outWidget,
+    mut ControlToken outToken,
+    mut WidgetId outDecId,
+    mut WidgetId outIncId
+){
+    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !validOptions){
         this.m_context.fail();
-        return result;
+        return false;
     }
     if(!this.synchronizePopup()){
-        result.numeric.valid = true;
-        result.edit.valid = true;
-        return result;
+        outResult.numeric.valid = true;
+        outResult.edit.valid = true;
+        return false;
     }
     const auto declared = this.m_context.declare(stableKey, WidgetKind::SpinBox);
     if(!declared.has_value()){
         this.m_context.fail();
-        return result;
+        return false;
     }
-    mut WidgetState widget = declared.value();
-    if(!this.m_context.claimState(widget, model.draft().instanceGeneration())){
+    outWidget = declared.value();
+    if(!this.m_context.claimState(outWidget, instanceGeneration)){
         this.m_context.fail();
-        return result;
+        return false;
     }
-    const ControlToken token(model.draft().instanceGeneration(), model.draft().instanceGeneration(), 1u);
-    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
-    const b8 canStep = options.edit.edit.enabled && !options.edit.edit.readOnly;
-    const auto decId = TryMakeWidgetId(widget.id, s_WidgetPartSpinDec);
-    const auto incId = TryMakeWidgetId(widget.id, s_WidgetPartSpinInc);
+    outToken = ControlToken(instanceGeneration, instanceGeneration, 1u);
+    this.m_context.input().fenceControl(outWidget.id, outWidget.declarationGeneration, outToken);
+    const auto decId = TryMakeWidgetId(outWidget.id, s_WidgetPartSpinDec);
+    const auto incId = TryMakeWidgetId(outWidget.id, s_WidgetPartSpinInc);
     if(!decId.has_value() || !incId.has_value()){
         this.m_context.fail();
-        return result;
+        return false;
     }
+    outDecId = decId.value();
+    outIncId = incId.value();
+    return true;
+}
+
+b8 Builder::beginSpinBoxContainer(
+    in StringView stableKey,
+    in WidgetState widget,
+    in u32 spinBoxIndex,
+    in LayoutSize width,
+    in LayoutSize height,
+    in LayoutItemOptions layoutOptions,
+    in b8 canStep,
+    in b8 enabled,
+    mut u32 outContainerNode,
+    mut usize outItemsBefore,
+    mut u32 outBeginStyleIndex
+){
+    if(!canStep)
+        this.m_context.input().invalidateTarget(widget.id);
+    if(!this.pushSpinBoxScope(stableKey, width, height, layoutOptions, outContainerNode)){
+        this.m_context.fail();
+        return false;
+    }
+    outBeginStyleIndex = this.currentItemStyleIndex();
+    auto beginItem = this.makeItem();
+    beginItem.styleIndex = outBeginStyleIndex;
+    beginItem.state = widget;
+    beginItem.node = outContainerNode;
+    beginItem.spinBox = spinBoxIndex;
+    beginItem.enabled = enabled;
+    beginItem.checked = false;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, beginItem);
+    outItemsBefore = this.m_scope.value().m_items.size();
+    return true;
+}
+
+b8 Builder::finishSpinBoxContainer(
+    in u32 containerNode,
+    in usize itemsBefore,
+    in f32 buttonWidth,
+    in WidgetState widget,
+    in u32 spinBoxIndex,
+    in u32 beginStyleIndex,
+    in b8 enabled,
+    in NumericEditResult spinNumeric,
+    mut BuilderSpinBoxFrame ioFrame,
+    mut NumericEditBoxResult inOutResult
+){
+    this.popSpinBoxScope();
+    u32 decNode = s_LayoutNoParent;
+    u32 incNode = s_LayoutNoParent;
+    if(!inOutResult.edit.valid || this.m_scope.value().m_items.size() <= itemsBefore || !this.appendSpinBoxStepButtons(containerNode, buttonWidth, decNode, incNode)){
+        this.m_context.fail();
+        return false;
+    }
+    this.m_scope.value().m_items.back().spinBox = spinBoxIndex;
+    ioFrame.decNode = decNode;
+    ioFrame.incNode = incNode;
+    AppendOwned<BuilderSpinBoxFrame>(this.m_scope.value().m_spinBoxes, ioFrame);
+    auto endItem = this.makeItem();
+    endItem.styleIndex = beginStyleIndex;
+    endItem.state = widget;
+    endItem.node = containerNode;
+    endItem.spinBox = spinBoxIndex;
+    endItem.enabled = enabled;
+    endItem.checked = true;
+    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
+    MergeSpinBoxNumericResult(spinNumeric, inOutResult.numeric);
+    return true;
+}
+
+NumericEditBoxResult Builder::integerSpinBox(in StringView stableKey, mut IntegerEditModel model, mut EditBoxState state, in IntegerSpinBoxOptions options){
+    NumericEditBoxResult result;
+    WidgetState widget;
+    ControlToken token;
+    WidgetId decId;
+    WidgetId incId;
+    const b8 canStep = options.edit.edit.enabled && !options.edit.edit.readOnly;
+    if(!this.prepareSpinBoxDeclaration(stableKey, IsValidIntegerSpinBoxOptions(options), model.draft().instanceGeneration(), result, widget, token, decId, incId))
+        return result;
     NumericEditResult spinNumeric;
     spinNumeric.valid = true;
     while(canStep){
@@ -560,7 +632,7 @@ NumericEditBoxResult Builder::integerSpinBox(in StringView stableKey, mut Intege
         b8 isStep = false;
         b8 useFast = false;
         f64 rawSteps = 0.0;
-        if(!TryDecodeSpinBoxAction(action, decId.value(), incId.value(), options.allowWheel, isSubmit, isStep, useFast, rawSteps)){
+        if(!TryDecodeSpinBoxAction(action, decId, incId, options.allowWheel, isSubmit, isStep, useFast, rawSteps)){
             this.m_context.fail();
             return result;
         }
@@ -617,101 +689,40 @@ NumericEditBoxResult Builder::integerSpinBox(in StringView stableKey, mut Intege
             spinNumeric.valueChanged = spinNumeric.valueChanged || HasIntegerEditValueChanged(candidateVal, prev);
         }
     }
-    if(!canStep)
-        this.m_context.input().invalidateTarget(widget.id);
     const u32 spinBoxIndex = cast<u32>(this.m_scope.value().m_spinBoxes.size());
     u32 containerNode = s_LayoutNoParent;
-    u32 decNode = s_LayoutNoParent;
-    u32 incNode = s_LayoutNoParent;
-    if(!this.pushSpinBoxScope(
-        stableKey,
-        options.width,
-        options.height,
-        options.layout,
-        containerNode
-    )){
-        this.m_context.fail();
+    usize itemsBefore = 0u;
+    u32 beginStyleIndex = 0u;
+    if(!this.beginSpinBoxContainer(stableKey, widget, spinBoxIndex, options.width, options.height, options.layout, canStep, options.edit.edit.enabled, containerNode, itemsBefore, beginStyleIndex))
         return result;
-    }
-    auto beginItem = this.makeItem();
-    beginItem.styleIndex = this.currentItemStyleIndex();
-    beginItem.state = widget;
-    beginItem.node = containerNode;
-    beginItem.spinBox = spinBoxIndex;
-    beginItem.enabled = options.edit.edit.enabled;
-    beginItem.checked = false;
-    AppendOwned<BuilderItem>(this.m_scope.value().m_items, beginItem);
     IntegerEditOptions innerEdit = options.edit;
     innerEdit.edit.layout = LayoutItemOptions();
     innerEdit.edit.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     if(options.height.policy != LayoutSizePolicy::Content)
         innerEdit.edit.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
-    const usize itemsBefore = this.m_scope.value().m_items.size();
     result = this.integerEdit("edit", model, state, innerEdit);
-    this.popSpinBoxScope();
-    if(!result.edit.valid || this.m_scope.value().m_items.size() <= itemsBefore || !this.appendSpinBoxStepButtons(containerNode, options.buttonWidth, decNode, incNode)){
-        this.m_context.fail();
-        return result;
-    }
-    this.m_scope.value().m_items.back().spinBox = spinBoxIndex;
     BuilderSpinBoxFrame frame;
     frame.widget = widget;
     frame.integerModel = Optional<mut IntegerEditModel>(model);
     frame.integerBounds = options.edit.bounds;
-    frame.editState = Optional<mut EditBoxState>(state);
     frame.token = token;
-    frame.decNode = decNode;
-    frame.incNode = incNode;
-    frame.buttonWidth = options.buttonWidth;
     frame.canStep = canStep;
     frame.allowWheel = options.allowWheel;
-    frame.wrap = options.wrap;
     frame.isFloat = false;
     frame.integerStep = options.step;
-    frame.integerFastStep = options.fastStep;
-    AppendOwned<BuilderSpinBoxFrame>(this.m_scope.value().m_spinBoxes, frame);
-    auto endItem = this.makeItem();
-    endItem.styleIndex = beginItem.styleIndex;
-    endItem.state = widget;
-    endItem.node = containerNode;
-    endItem.spinBox = spinBoxIndex;
-    endItem.enabled = options.edit.edit.enabled;
-    endItem.checked = true;
-    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
-    MergeSpinBoxNumericResult(spinNumeric, result.numeric);
+    this.finishSpinBoxContainer(containerNode, itemsBefore, options.buttonWidth, widget, spinBoxIndex, beginStyleIndex, options.edit.edit.enabled, spinNumeric, frame, result);
     return result;
 }
 
 NumericEditBoxResult Builder::floatSpinBox(in StringView stableKey, mut FloatEditModel model, mut EditBoxState state, in FloatSpinBoxOptions options){
     NumericEditBoxResult result;
-    if(this.itemDeclarationBlocked() || !this.m_skin.has_value() || !IsValidFloatSpinBoxOptions(options)){
-        this.m_context.fail();
-        return result;
-    }
-    if(!this.synchronizePopup()){
-        result.numeric.valid = true;
-        result.edit.valid = true;
-        return result;
-    }
-    const auto declared = this.m_context.declare(stableKey, WidgetKind::SpinBox);
-    if(!declared.has_value()){
-        this.m_context.fail();
-        return result;
-    }
-    mut WidgetState widget = declared.value();
-    if(!this.m_context.claimState(widget, model.draft().instanceGeneration())){
-        this.m_context.fail();
-        return result;
-    }
-    const ControlToken token(model.draft().instanceGeneration(), model.draft().instanceGeneration(), 1u);
-    this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
+    WidgetState widget;
+    ControlToken token;
+    WidgetId decId;
+    WidgetId incId;
     const b8 canStep = options.edit.edit.enabled && !options.edit.edit.readOnly;
-    const auto decId = TryMakeWidgetId(widget.id, s_WidgetPartSpinDec);
-    const auto incId = TryMakeWidgetId(widget.id, s_WidgetPartSpinInc);
-    if(!decId.has_value() || !incId.has_value()){
-        this.m_context.fail();
+    if(!this.prepareSpinBoxDeclaration(stableKey, IsValidFloatSpinBoxOptions(options), model.draft().instanceGeneration(), result, widget, token, decId, incId))
         return result;
-    }
     NumericEditResult spinNumeric;
     spinNumeric.valid = true;
     while(canStep){
@@ -723,7 +734,7 @@ NumericEditBoxResult Builder::floatSpinBox(in StringView stableKey, mut FloatEdi
         b8 isStep = false;
         b8 useFast = false;
         f64 rawSteps = 0.0;
-        if(!TryDecodeSpinBoxAction(action, decId.value(), incId.value(), options.allowWheel, isSubmit, isStep, useFast, rawSteps)){
+        if(!TryDecodeSpinBoxAction(action, decId, incId, options.allowWheel, isSubmit, isStep, useFast, rawSteps)){
             this.m_context.fail();
             return result;
         }
@@ -750,79 +761,35 @@ NumericEditBoxResult Builder::floatSpinBox(in StringView stableKey, mut FloatEdi
     }
     f64 a11yRequested = 0.0;
     if(canStep && this.m_context.takeAccessibleNumericValue(widget, a11yRequested)){
-        f64 candidateVal = a11yRequested;
-        if(candidateVal < options.edit.bounds.minimum)
-            candidateVal = options.edit.bounds.minimum;
-        if(candidateVal > options.edit.bounds.maximum)
-            candidateVal = options.edit.bounds.maximum;
+        const f64 candidateVal = Clamp(a11yRequested, options.edit.bounds.minimum, options.edit.bounds.maximum);
         const f64 prev = model.value();
         if(model.setValue(candidateVal)){
             spinNumeric.committed = true;
             spinNumeric.valueChanged = spinNumeric.valueChanged || HasFloatEditBitsChanged(candidateVal, prev);
         }
     }
-    if(!canStep)
-        this.m_context.input().invalidateTarget(widget.id);
     const u32 spinBoxIndex = cast<u32>(this.m_scope.value().m_spinBoxes.size());
     u32 containerNode = s_LayoutNoParent;
-    u32 decNode = s_LayoutNoParent;
-    u32 incNode = s_LayoutNoParent;
-    if(!this.pushSpinBoxScope(
-        stableKey,
-        options.width,
-        options.height,
-        options.layout,
-        containerNode
-    )){
-        this.m_context.fail();
+    usize itemsBefore = 0u;
+    u32 beginStyleIndex = 0u;
+    if(!this.beginSpinBoxContainer(stableKey, widget, spinBoxIndex, options.width, options.height, options.layout, canStep, options.edit.edit.enabled, containerNode, itemsBefore, beginStyleIndex))
         return result;
-    }
-    auto beginItem = this.makeItem();
-    beginItem.styleIndex = this.currentItemStyleIndex();
-    beginItem.state = widget;
-    beginItem.node = containerNode;
-    beginItem.spinBox = spinBoxIndex;
-    beginItem.enabled = options.edit.edit.enabled;
-    beginItem.checked = false;
-    AppendOwned<BuilderItem>(this.m_scope.value().m_items, beginItem);
     FloatEditOptions innerEdit = options.edit;
     innerEdit.edit.layout = LayoutItemOptions();
     innerEdit.edit.width = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
     if(options.height.policy != LayoutSizePolicy::Content)
         innerEdit.edit.height = LayoutSize(LayoutSizePolicy::Stretch, 1.0f);
-    const usize itemsBefore = this.m_scope.value().m_items.size();
     result = this.floatEdit("edit", model, state, innerEdit);
-    this.popSpinBoxScope();
-    if(!result.edit.valid || this.m_scope.value().m_items.size() <= itemsBefore || !this.appendSpinBoxStepButtons(containerNode, options.buttonWidth, decNode, incNode)){
-        this.m_context.fail();
-        return result;
-    }
-    this.m_scope.value().m_items.back().spinBox = spinBoxIndex;
     BuilderSpinBoxFrame frame;
     frame.widget = widget;
     frame.floatModel = Optional<mut FloatEditModel>(model);
     frame.floatBounds = options.edit.bounds;
-    frame.editState = Optional<mut EditBoxState>(state);
     frame.token = token;
-    frame.decNode = decNode;
-    frame.incNode = incNode;
-    frame.buttonWidth = options.buttonWidth;
     frame.canStep = canStep;
     frame.allowWheel = options.allowWheel;
-    frame.wrap = options.wrap;
     frame.isFloat = true;
     frame.floatStep = options.step;
-    frame.floatFastStep = options.fastStep;
-    AppendOwned<BuilderSpinBoxFrame>(this.m_scope.value().m_spinBoxes, frame);
-    auto endItem = this.makeItem();
-    endItem.styleIndex = beginItem.styleIndex;
-    endItem.state = widget;
-    endItem.node = containerNode;
-    endItem.spinBox = spinBoxIndex;
-    endItem.enabled = options.edit.edit.enabled;
-    endItem.checked = true;
-    AppendOwned<BuilderItem>(this.m_scope.value().m_items, endItem);
-    MergeSpinBoxNumericResult(spinNumeric, result.numeric);
+    this.finishSpinBoxContainer(containerNode, itemsBefore, options.buttonWidth, widget, spinBoxIndex, beginStyleIndex, options.edit.edit.enabled, spinNumeric, frame, result);
     return result;
 }
 
@@ -908,8 +875,8 @@ b8 Builder::paintSpinBoxEnd(in BuilderItem item, in LayoutBox box){
     if(!frame.canStep)
         return true;
     HitTargetFactory targets;
-    const HitTarget decTarget = targets.makeSpinBoxButtonHitTarget(decBox.rectangle, clip, frame.canStep, frame.token, 1u);
-    const HitTarget incTarget = targets.makeSpinBoxButtonHitTarget(incBox.rectangle, clip, frame.canStep, frame.token, 2u);
+    const HitTarget decTarget = targets.makeActivatablePartHitTarget(decBox.rectangle, clip, frame.canStep, frame.token, 1u);
+    const HitTarget incTarget = targets.makeActivatablePartHitTarget(incBox.rectangle, clip, frame.canStep, frame.token, 2u);
     return this.m_context.addPartTarget(frame.widget, decId.value(), decTarget)
         && this.m_context.addPartTarget(frame.widget, incId.value(), incTarget);
 }

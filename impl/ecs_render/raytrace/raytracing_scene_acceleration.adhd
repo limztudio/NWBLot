@@ -716,11 +716,8 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             this.m_sceneGatherScratch.clearHandles();
             return false;
         }
-        mut Vector<u32> indices = this.m_sceneGatherScratch.swBvhIndices;
-        mut Vector<u32> instanceLeafCost = this.m_sceneGatherScratch.swBvhInstanceLeafCost;
-        mut Vector<SceneBvhNodeCalculation> buildNodes = this.m_sceneGatherScratch.swBvhBuildNodes;
         mut Vector<NwbBvhNodeGpu> nodes = this.m_sceneGatherScratch.swBvhNodes;
-        if(!BuildAndPackSceneBvhNodesInto(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives), indices, instanceLeafCost, buildNodes, nodes)){
+        if(!BuildAndPackSceneBvhNodesInto(Span<SceneSwBvhInstanceGpu>(instances), Span<SceneBvhPrimitiveCalculation>(instanceBvhPrimitives), nodes)){
             this.m_sceneGatherScratch.clearHandles();
             return false;
         }

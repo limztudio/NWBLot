@@ -27,9 +27,6 @@ namespace __hidden_state_tracking_buffers{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
-
-
 [[nodiscard]] VkBufferMemoryBarrier2 BuildCopyDestBufferBarrier(const VkBuffer buffer, const BufferRange range, const ResourceStates::Mask oldState, const b8 rayTracingStageAvailable, const b8 computeOnlyQueue)noexcept{
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     if(oldState == ResourceStates::Unknown || oldState == ResourceStates::Common){
@@ -335,7 +332,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     Buffer& buffer = *bufferResource;
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc)){
-        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
+        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_ByteRangeOutsideBufferReason);
         return;
     }
     setBufferStateValidated(buffer, stateBits, forceMemoryDependency, resolvedRange);
@@ -555,22 +552,28 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const GpuPhysic
     BufferOwnershipTransfer(*this).release(bufferResource, destinationQueue, range);
 }
 
+b8 CommandList::validateBufferStateInit(Buffer* const buffer, const ResourceStates::Mask stateBits, const BufferRange range, const TStringView operationName){
+    if(!validateCommandRecordingScope(operationName))
+        return false;
+    if(stateBits == ResourceStates::Unknown){
+        rejectCommandRecording(operationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
+        return false;
+    }
+    if(!validateBufferForGpuStateValidated(buffer, stateBits, operationName))
+        return false;
+    if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
+        rejectCommandRecording(operationName, VulkanStateTrackingDetail::s_ByteRangeOutsideBufferReason);
+        return false;
+    }
+    return true;
+}
+
 void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits, const BufferRange range){
     if(!buffer)
         return;
     constexpr TStringView s_OperationName = FOUNDATION_TEXT("begin tracking buffer state");
-    if(!validateCommandRecordingScope(s_OperationName))
+    if(!validateBufferStateInit(buffer, stateBits, range, s_OperationName))
         return;
-    if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
-        return;
-    }
-    if(!validateBufferForGpuStateValidated(buffer, stateBits, s_OperationName))
-        return;
-    if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
-        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
-        return;
-    }
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
         rejectCommandRecording(s_OperationName, FOUNDATION_TEXT("initial state conflicts with the permanent buffer state"));
@@ -584,18 +587,8 @@ void CommandList::seedBufferState(Buffer* buffer, ResourceStates::Mask stateBits
     if(!buffer)
         return;
     constexpr TStringView s_OperationName = FOUNDATION_TEXT("seed buffer state");
-    if(!validateCommandRecordingScope(s_OperationName))
+    if(!validateBufferStateInit(buffer, stateBits, range, s_OperationName))
         return;
-    if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_InitialStateUnknownReason);
-        return;
-    }
-    if(!validateBufferForGpuStateValidated(buffer, stateBits, s_OperationName))
-        return;
-    if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer->m_creationDesc)){
-        rejectCommandRecording(s_OperationName, __hidden_state_tracking_buffers::s_ByteRangeOutsideBufferReason);
-        return;
-    }
     if(!m_stateTracker.isPermanentBuffer(*buffer))
         m_stateTracker.beginTrackingTransientBuffer(*buffer, stateBits, range, true);
     retainResource(buffer);

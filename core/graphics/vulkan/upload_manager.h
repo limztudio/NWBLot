@@ -69,6 +69,10 @@ private:
         };
     };
 
+    static constexpr u8 s_UploadBit = static_cast<u8>(1u << static_cast<usize>(ChunkKind::Upload));
+    static constexpr u8 s_ScratchBit = static_cast<u8>(1u << static_cast<usize>(ChunkKind::Scratch));
+    static constexpr u8 s_AccelInputBit = static_cast<u8>(1u << static_cast<usize>(ChunkKind::AccelStructBuildInput));
+
     using BufferChunk = UploadManagerChunk;
 
 

@@ -151,18 +151,6 @@ b8 CanAcceptMeshFrameBindingCapacities(
     return bindingValid && instanceBufferCapacity >= instanceCount && materialTypedBufferCapacity >= materialTypedByteCount;
 }
 
-RendererTaskTimingFeedbackCollectionAction ResolveRendererTaskTimingFeedbackCollectionAction(
-    in b8 rendererActive,
-    in b8 currentEnabled,
-    in b8 requestedEnabled
-){
-    if(!rendererActive || currentEnabled == requestedEnabled)
-        return RendererTaskTimingFeedbackCollectionAction::None;
-    if(requestedEnabled)
-        return RendererTaskTimingFeedbackCollectionAction::Enable;
-    return RendererTaskTimingFeedbackCollectionAction::Disable;
-}
-
 b8 IsValidRendererTaskTimingSampleDuration(in f64 durationSeconds){
     return IsFinite(VectorDouble(durationSeconds)) && durationSeconds > 0.0 && durationSeconds < f64.max;
 }

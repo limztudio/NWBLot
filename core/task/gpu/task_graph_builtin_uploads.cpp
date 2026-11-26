@@ -188,6 +188,30 @@ Expected<GpuUploadBlobId> GpuTaskGraph::copyUploadData(const void* const data, c
     return GpuUploadBlobId{ .generation = m_generation, .index = index };
 }
 
+const GpuTaskGraphDetail::GpuGraphResourceNode* GpuTaskGraph::validateUploadTaskInputsWithinMutation(
+    const GpuTaskDesc& desc,
+    const GpuUploadBlobId& sourceId,
+    const GpuGraphResourceId& destinationId,
+    const ResourceStates::Mask finalState,
+    const GpuGraphResourceType::Enum expectedType,
+    const DeclarationMutationScope& mutation,
+    const GpuUploadBlobNode*& outSource
+)const noexcept{
+    outSource = nullptr;
+    if(!mutation.valid() || !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(sourceId) || !validResource(destinationId) || finalState == ResourceStates::Unknown)
+        return nullptr;
+
+    const GpuUploadBlobNode* const source = findUploadBlob(sourceId);
+    const GpuGraphResourceNode& destinationResource = m_resources[destinationId.index];
+    FOUNDATION_ASSERT(source && source->dataSize != 0u);
+    if(destinationResource.type != expectedType)
+        return nullptr;
+    if(expectedType == GpuGraphResourceType::Buffer ? !destinationResource.buffer : !destinationResource.texture)
+        return nullptr;
+    outSource = source;
+    return &destinationResource;
+}
+
 Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc){
     if(uploadDesc.acceptedToken)
         *uploadDesc.acceptedToken = {};
@@ -196,56 +220,41 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadBufferTask(const GpuTaskDesc& desc, c
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
 
-    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(uploadDesc.source) || !validResource(uploadDesc.destination) || uploadDesc.finalState == ResourceStates::Unknown)
+    const GpuUploadBlobNode* source = nullptr;
+    const GpuGraphResourceNode* const destinationResource = validateUploadTaskInputsWithinMutation(desc, uploadDesc.source, uploadDesc.destination, uploadDesc.finalState, GpuGraphResourceType::Buffer, mutation, source);
+    if(!destinationResource)
         return MakeUnexpected(Failure{});
 
-    const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
-    const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    FOUNDATION_ASSERT(source && source->dataSize != 0u);
-    if(destinationResource.type != GpuGraphResourceType::Buffer || !destinationResource.buffer)
-        return MakeUnexpected(Failure{});
-
-    const BufferDesc& destinationDesc = destinationResource.buffer->getCreationDescription();
+    const BufferDesc& destinationDesc = destinationResource->buffer->getCreationDescription();
     if(
         uploadDesc.destinationOffsetBytes > destinationDesc.byteSize
         || source->dataSize > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (source->dataSize & (sizeof(u32) - 1u)) != 0u
-        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState)
+        || !GpuTaskGraphBuiltinDetail::BuiltInTaskCanMaterializeRetainedState(destinationDesc, destinationResource->initialState, destinationResource->externalFinalState)
         || (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
     )
         return MakeUnexpected(Failure{});
 
     using UploadTask = __hidden_gpu_task_graph_builtin_uploads::UploadBufferTask;
-    UploadTask::Payload* const payloadObject = NewArenaObject<UploadTask::Payload>(m_arena);
-    if(!payloadObject)
-        return MakeUnexpected(Failure{});
-    ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
-    payload->source = uploadDesc.source;
-    payload->destinationResource = uploadDesc.destination;
-    payload->destination = destinationResource.buffer;
-    payload->destinationOffsetBytes = uploadDesc.destinationOffsetBytes;
-    payload->finalState = uploadDesc.finalState;
-    payload->acceptedToken = uploadDesc.acceptedToken;
-
-    const Array<GpuTaskResourceUse, 2> resourceUses = {{
-        GpuTaskResourceUse{
-            .resource = uploadDesc.destination,
-            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->dataSize) },
-            .requiredState = ResourceStates::CopyDest,
-            .access = GpuTaskResourceAccess::Write,
-        },
-        GpuTaskResourceUse{
-            .resource = uploadDesc.destination,
-            .range = GpuTaskResourceRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->dataSize) },
-            .requiredState = uploadDesc.finalState,
-            .access = GpuTaskResourceAccess::Write,
-        },
-    }};
-    const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : resourceUses.size();
-    GpuTaskDesc resolvedDesc = desc;
-    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(resourceUses.data(), resourceUseCount));
-    return appendBuiltinTaskWithinMutation<UploadTask>(payload, resolvedDesc, mutation);
+    const GpuTaskResourceRange uploadRange{ .bufferRange = BufferRange(uploadDesc.destinationOffsetBytes, source->dataSize) };
+    constexpr GpuTaskCommandRequirements s_Commands{ GpuQueueCapability::Transfer };
+    return appendUploadTaskWithinMutation<UploadTask>(
+        desc,
+        uploadDesc.destination,
+        uploadRange,
+        uploadDesc.finalState,
+        s_Commands,
+        mutation,
+        [&](UploadTask::Payload& payload)noexcept{
+            payload.source = uploadDesc.source;
+            payload.destinationResource = uploadDesc.destination;
+            payload.destination = destinationResource->buffer;
+            payload.destinationOffsetBytes = uploadDesc.destinationOffsetBytes;
+            payload.finalState = uploadDesc.finalState;
+            payload.acceptedToken = uploadDesc.acceptedToken;
+        }
+    );
 }
 
 Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc){
@@ -256,23 +265,19 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, 
     if(!mutation.valid())
         return MakeUnexpected(Failure{});
 
-    if(!GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc) || !validUploadBlob(uploadDesc.source) || !validResource(uploadDesc.destination) || uploadDesc.finalState == ResourceStates::Unknown)
-        return MakeUnexpected(Failure{});
-
-    const GpuUploadBlobNode* const source = findUploadBlob(uploadDesc.source);
-    const GpuGraphResourceNode& destinationResource = m_resources[uploadDesc.destination.index];
-    FOUNDATION_ASSERT(source && source->dataSize != 0u);
-    if(destinationResource.type != GpuGraphResourceType::Texture || !destinationResource.texture)
+    const GpuUploadBlobNode* source = nullptr;
+    const GpuGraphResourceNode* const destinationResource = validateUploadTaskInputsWithinMutation(desc, uploadDesc.source, uploadDesc.destination, uploadDesc.finalState, GpuGraphResourceType::Texture, mutation, source);
+    if(!destinationResource)
         return MakeUnexpected(Failure{});
 
     Expected<usize> requiredBytes = MakeUnexpected(Failure{});
-    const TextureDesc& destinationDesc = destinationResource.texture->getCreationDescription();
+    const TextureDesc& destinationDesc = destinationResource->texture->getCreationDescription();
     const FormatInfo& destinationFormatInfo = GetFormatInfo(destinationDesc.format);
     const auto resolvedAspect = ResolveTextureUploadAspect(destinationFormatInfo, uploadDesc.aspect);
     if(!resolvedAspect)
         return MakeUnexpected(Failure{});
     if(
-        !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(destinationDesc, destinationResource.initialState, destinationResource.externalFinalState, uploadDesc.finalState)
+        !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(destinationDesc, destinationResource->initialState, destinationResource->externalFinalState, uploadDesc.finalState)
         ||
         !(requiredBytes = ComputeTextureUploadByteSize(destinationDesc, uploadDesc.arraySlice, uploadDesc.mipLevel, uploadDesc.rowPitch, uploadDesc.depthPitch, uploadDesc.aspect))
         || source->dataSize < *requiredBytes
@@ -280,38 +285,35 @@ Expected<GpuTaskId> GpuTaskGraph::addUploadTextureTask(const GpuTaskDesc& desc, 
         return MakeUnexpected(Failure{});
 
     using UploadTask = __hidden_gpu_task_graph_builtin_uploads::UploadTextureTask;
-    UploadTask::Payload* const payloadObject = NewArenaObject<UploadTask::Payload>(m_arena);
-    if(!payloadObject)
-        return MakeUnexpected(Failure{});
-    ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
-    payload->source = uploadDesc.source;
-    payload->destinationResource = uploadDesc.destination;
-    payload->destination = destinationResource.texture;
-    TextureSlice destinationSlice;
-    destinationSlice.mipLevel = uploadDesc.mipLevel;
-    destinationSlice.arraySlice = uploadDesc.arraySlice;
-    payload->destinationSlice = destinationSlice.resolve(destinationDesc);
-    payload->arraySlice = uploadDesc.arraySlice;
-    payload->mipLevel = uploadDesc.mipLevel;
-    payload->rowPitch = uploadDesc.rowPitch;
-    payload->depthPitch = uploadDesc.depthPitch;
-    payload->requiredBytes = *requiredBytes;
-    payload->finalState = uploadDesc.finalState;
-    payload->acceptedToken = uploadDesc.acceptedToken;
-    payload->aspect = uploadDesc.aspect;
-
     const GpuTaskResourceRange uploadRange{ .textureSubresources = TextureSubresourceSet(uploadDesc.mipLevel, 1u, uploadDesc.arraySlice, 1u), };
-    const Array<GpuTaskResourceUse, 2> resourceUses = {{
-        GpuTaskResourceUse{ .resource = uploadDesc.destination, .range = uploadRange, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, },
-        GpuTaskResourceUse{ .resource = uploadDesc.destination, .range = uploadRange, .requiredState = uploadDesc.finalState, .access = GpuTaskResourceAccess::Write, },
-    }};
-    const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : resourceUses.size();
-    GpuTaskDesc resolvedDesc = desc;
     GpuTaskCommandRequirements commands{ GpuQueueCapability::Transfer };
     if(*resolvedAspect != TextureUploadAspect::Color)
         commands.requiredCapabilities |= GpuQueueCapability::Graphics;
-    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(resourceUses.data(), resourceUseCount));
-    return appendBuiltinTaskWithinMutation<UploadTask>(payload, resolvedDesc, mutation, commands);
+    return appendUploadTaskWithinMutation<UploadTask>(
+        desc,
+        uploadDesc.destination,
+        uploadRange,
+        uploadDesc.finalState,
+        commands,
+        mutation,
+        [&](UploadTask::Payload& payload)noexcept{
+            payload.source = uploadDesc.source;
+            payload.destinationResource = uploadDesc.destination;
+            payload.destination = destinationResource->texture;
+            TextureSlice destinationSlice;
+            destinationSlice.mipLevel = uploadDesc.mipLevel;
+            destinationSlice.arraySlice = uploadDesc.arraySlice;
+            payload.destinationSlice = destinationSlice.resolve(destinationDesc);
+            payload.arraySlice = uploadDesc.arraySlice;
+            payload.mipLevel = uploadDesc.mipLevel;
+            payload.rowPitch = uploadDesc.rowPitch;
+            payload.depthPitch = uploadDesc.depthPitch;
+            payload.requiredBytes = *requiredBytes;
+            payload.finalState = uploadDesc.finalState;
+            payload.acceptedToken = uploadDesc.acceptedToken;
+            payload.aspect = uploadDesc.aspect;
+        }
+    );
 }
 
 

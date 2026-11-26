@@ -142,6 +142,51 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(const GpuCompiledGraph& compi
     beginPacketSubmissionAcceptanceBatch(compiledGraph, planAccess, Span<const GpuSubmissionPacketId>(&packet, 1u), &receipt, &leasePtr);
 }
 
+GpuCompiledPacketView GpuTaskGraph::validateSubmittingPacketLeaseWithinLock(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuSubmissionPacketId packet,
+    const GpuPacketSubmissionLease* const leasePtr,
+    const TaskLifecycleState::Enum expectedState,
+    const b8 requireNonEmptyTasks,
+    const char* const leaseContext,
+    const char* const taskContext
+)const noexcept{
+    const b8 inputValid = planAccess.validPacket(packet) && leasePtr != nullptr && leasePtr->valid() && (!requireNonEmptyTasks || (leasePtr->m_packet == packet && leasePtr->m_planGeneration == planAccess.planGeneration()));
+    FOUNDATION_FATAL_ASSERT_MSG(inputValid, leaseContext);
+    const GpuPacketSubmissionLease& lease = *leasePtr;
+    const GpuCompiledPacketView packetView = planAccess.packet(packet);
+    const b8 packetValid = packetView.valid() && (!requireNonEmptyTasks || packetView.plan->taskCount != 0u);
+    FOUNDATION_FATAL_ASSERT_MSG(packetValid, requireNonEmptyTasks ? "native-accepted packet must retain its compiled task range" : "native-accepted completion must retain its compiled task range");
+    const GpuSubmissionPacket& packetPlan = *packetView.plan;
+    const GpuTaskId* const tasks = packetView.tasks;
+
+    const b8 bindingValid = matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration) && m_activeSubmissionBinding == lease.m_submissionBinding;
+    FOUNDATION_FATAL_ASSERT_MSG(bindingValid, requireNonEmptyTasks ? "native-accepted packet must retain its graph submission binding" : "native-accepted completion must retain its graph submission binding");
+
+    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+        const GpuTaskId taskID = tasks[taskIndex];
+        if(!validTask(taskID))
+            TerminateInvariant();
+        const GpuTaskNode& task = m_tasks[taskID.index];
+        const b8 taskValid = task.lifecycleState() == expectedState && task.lifecycleAttemptGeneration == lease.m_recordingAttemptGeneration && task.submissionClaimGeneration == lease.m_claimGeneration;
+        FOUNDATION_FATAL_ASSERT_MSG(taskValid, taskContext);
+    }
+    return packetView;
+}
+
+void GpuTaskGraph::markPacketAcceptedWithinLock(const GpuCompiledGraph::ReadView& planAccess, const GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept{
+    const GpuCompiledPacketView packetView = planAccess.packet(packet);
+    const GpuSubmissionPacket& packetPlan = *packetView.plan;
+    const GpuTaskId* const tasks = packetView.tasks;
+    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        task.submissionClaimGeneration = 0u;
+        task.setLifecycle(TaskLifecycleState::Accepted);
+    }
+    lease.reset();
+}
+
 void GpuTaskGraph::beginPacketSubmissionAcceptanceBatch(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, const Span<const GpuSubmissionPacketId> packets, const QueueSubmissionReceipt* const receipts, GpuPacketSubmissionLease* const* const leases)const noexcept{
     const b8 batchInputValid = planAccess.validFor(compiledGraph) && !packets.empty() && receipts != nullptr && leases != nullptr;
     FOUNDATION_FATAL_ASSERT_MSG(batchInputValid, "native-accepted packet batch must retain its exact graph submission leases");
@@ -150,27 +195,19 @@ void GpuTaskGraph::beginPacketSubmissionAcceptanceBatch(const GpuCompiledGraph& 
     for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
         const GpuSubmissionPacketId packet = packets[packetIndex];
         const QueueSubmissionToken& token = receipts[packetIndex].token;
-        GpuPacketSubmissionLease* const leasePtr = leases[packetIndex];
-        const b8 inputValid = planAccess.validPacket(packet) && token.valid() && leasePtr != nullptr && leasePtr->valid() && leasePtr->m_packet == packet && leasePtr->m_planGeneration == planAccess.planGeneration();
-        FOUNDATION_FATAL_ASSERT_MSG(inputValid, "native-accepted packet must retain its exact graph submission lease");
-        const GpuPacketSubmissionLease& lease = *leasePtr;
-        const GpuCompiledPacketView packetView = planAccess.packet(packet);
-        const b8 packetValid = packetView.valid() && packetView.plan->taskCount != 0u;
-        FOUNDATION_FATAL_ASSERT_MSG(packetValid, "native-accepted packet must retain its compiled task range");
+        FOUNDATION_FATAL_ASSERT_MSG(token.valid(), "native-accepted packet must retain its exact graph submission lease");
+        const GpuCompiledPacketView packetView = validateSubmittingPacketLeaseWithinLock(
+            compiledGraph,
+            planAccess,
+            packet,
+            leases[packetIndex],
+            TaskLifecycleState::Submitting,
+            true,
+            "native-accepted packet must retain its exact graph submission lease",
+            "native-accepted task must retain its exact submission claim"
+        );
         const GpuSubmissionPacket& packetPlan = *packetView.plan;
         const GpuTaskId* const tasks = packetView.tasks;
-
-        const b8 bindingValid = matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration) && m_activeSubmissionBinding == lease.m_submissionBinding;
-        FOUNDATION_FATAL_ASSERT_MSG(bindingValid, "native-accepted packet must retain its graph submission binding");
-
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskId taskID = tasks[taskIndex];
-            if(!validTask(taskID))
-                TerminateInvariant();
-            const GpuTaskNode& task = m_tasks[taskID.index];
-            const b8 taskValid = task.lifecycleState() == TaskLifecycleState::Submitting && task.lifecycleAttemptGeneration == lease.m_recordingAttemptGeneration && task.submissionClaimGeneration == lease.m_claimGeneration;
-            FOUNDATION_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact submission claim");
-        }
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex)
             m_tasks[tasks[taskIndex].index].setLifecycle(TaskLifecycleState::Accepting);
     }
@@ -208,31 +245,17 @@ void GpuTaskGraph::completePacketSubmissionAcceptanceBatch(const GpuCompiledGrap
     for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
         const GpuSubmissionPacketId packet = packets[packetIndex];
         GpuPacketSubmissionLease* const leasePtr = leases[packetIndex];
-        const b8 inputValid = planAccess.validPacket(packet) && leasePtr != nullptr && leasePtr->valid();
-        FOUNDATION_FATAL_ASSERT_MSG(inputValid, "native-accepted completion must retain its exact graph submission lease");
-        GpuPacketSubmissionLease& lease = *leasePtr;
-
-        const GpuCompiledPacketView packetView = planAccess.packet(packet);
-        FOUNDATION_FATAL_ASSERT_MSG(packetView.valid(), "native-accepted completion must retain its compiled task range");
-        const GpuSubmissionPacket& packetPlan = *packetView.plan;
-        const GpuTaskId* const tasks = packetView.tasks;
-
-        const b8 bindingValid = matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration) && m_activeSubmissionBinding == lease.m_submissionBinding;
-        FOUNDATION_FATAL_ASSERT_MSG(bindingValid, "native-accepted completion must retain its graph submission binding");
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskId taskID = tasks[taskIndex];
-            if(!validTask(taskID))
-                TerminateInvariant();
-            const GpuTaskNode& task = m_tasks[taskID.index];
-            const b8 taskValid = task.lifecycleState() == TaskLifecycleState::Accepting && task.lifecycleAttemptGeneration == lease.m_recordingAttemptGeneration && task.submissionClaimGeneration == lease.m_claimGeneration;
-            FOUNDATION_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact accepting claim");
-        }
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.submissionClaimGeneration = 0u;
-            task.setLifecycle(TaskLifecycleState::Accepted);
-        }
-        lease.reset();
+        (void)validateSubmittingPacketLeaseWithinLock(
+            compiledGraph,
+            planAccess,
+            packet,
+            leasePtr,
+            TaskLifecycleState::Accepting,
+            false,
+            "native-accepted completion must retain its exact graph submission lease",
+            "native-accepted task must retain its exact accepting claim"
+        );
+        markPacketAcceptedWithinLock(planAccess, packet, *leasePtr);
     }
 }
 
@@ -250,44 +273,28 @@ b8 GpuTaskGraph::acceptPacketSubmissionBatchWithoutCallbacks(
     for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
         const GpuSubmissionPacketId packet = packets[packetIndex];
         const QueueSubmissionToken& token = receipts[packetIndex].token;
-        GpuPacketSubmissionLease* const leasePtr = leases[packetIndex];
-        const b8 inputValid = planAccess.validPacket(packet) && token.valid() && leasePtr != nullptr && leasePtr->valid() && leasePtr->m_packet == packet && leasePtr->m_planGeneration == planAccess.planGeneration();
-        FOUNDATION_FATAL_ASSERT_MSG(inputValid, "native-accepted packet must retain its exact graph submission lease");
-        const GpuPacketSubmissionLease& lease = *leasePtr;
-        const GpuCompiledPacketView packetView = planAccess.packet(packet);
-        const b8 packetValid = packetView.valid() && packetView.plan->taskCount != 0u;
-        FOUNDATION_FATAL_ASSERT_MSG(packetValid, "native-accepted packet must retain its compiled task range");
+        FOUNDATION_FATAL_ASSERT_MSG(token.valid(), "native-accepted packet must retain its exact graph submission lease");
+        const GpuCompiledPacketView packetView = validateSubmittingPacketLeaseWithinLock(
+            compiledGraph,
+            planAccess,
+            packet,
+            leases[packetIndex],
+            TaskLifecycleState::Submitting,
+            true,
+            "native-accepted packet must retain its exact graph submission lease",
+            "native-accepted task must retain its exact submission claim"
+        );
         const GpuSubmissionPacket& packetPlan = *packetView.plan;
         const GpuTaskId* const tasks = packetView.tasks;
-
-        const b8 bindingValid = matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration) && m_activeSubmissionBinding == lease.m_submissionBinding;
-        FOUNDATION_FATAL_ASSERT_MSG(bindingValid, "native-accepted packet must retain its graph submission binding");
-
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskId taskID = tasks[taskIndex];
-            if(!validTask(taskID))
-                TerminateInvariant();
-            const GpuTaskNode& task = m_tasks[taskID.index];
-            const b8 taskValid = task.lifecycleState() == TaskLifecycleState::Submitting && task.lifecycleAttemptGeneration == lease.m_recordingAttemptGeneration && task.submissionClaimGeneration == lease.m_claimGeneration;
-            FOUNDATION_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact submission claim");
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
             if(task.payload && task.acceptPayload)
                 return false;
         }
     }
 
-    for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex){
-        const GpuSubmissionPacketId packet = packets[packetIndex];
-        GpuPacketSubmissionLease& lease = *leases[packetIndex];
-        const GpuCompiledPacketView packetView = planAccess.packet(packet);
-        const GpuSubmissionPacket& packetPlan = *packetView.plan;
-        const GpuTaskId* const tasks = packetView.tasks;
-        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-            task.submissionClaimGeneration = 0u;
-            task.setLifecycle(TaskLifecycleState::Accepted);
-        }
-        lease.reset();
-    }
+    for(usize packetIndex = 0u; packetIndex < packets.size(); ++packetIndex)
+        markPacketAcceptedWithinLock(planAccess, packets[packetIndex], *leases[packetIndex]);
     return true;
 }
 

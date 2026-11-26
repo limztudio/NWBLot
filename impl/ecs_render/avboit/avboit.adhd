@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererAvboitPushConstants BuildRendererAvboitPushConstants(in AvboitFrameTargets targets, in b8 hdr10OutputActive){
+RendererAvboitPushConstants BuildRendererAvboitPushConstants(in AvboitFrameTargets targets){
     ValidateAvboitPushConstantTargets(targets);
     return ResolveRendererAvboitPushConstants(
         AvboitTargetsFullWidth(targets),
@@ -18,7 +18,6 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(in AvboitFrameTarge
         AvboitTargetsLowHeight(targets),
         AvboitTargetsVirtualSliceCount(targets),
         AvboitTargetsPhysicalSliceCount(targets),
-        hdr10OutputActive,
         AvboitTargetsHasRefractionFramebuffer(targets),
         AvboitTargetsDeferredSlotsBufferSlot(targets)
     );

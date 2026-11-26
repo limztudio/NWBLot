@@ -83,14 +83,6 @@ b8 ValidateMaterialSurfaceCount(in usize count){
     return true;
 }
 
-b8 ValidateGeneratedMaterialMeshShader(in usize generatedCount, in Name meshShaderName){
-    if(generatedCount > 0u && meshShaderName == s_NameNone){
-        error("Material pixel shader generation: missing shared mesh shader name");
-        return false;
-    }
-    return true;
-}
-
 b8 ValidateTransparentMaterialInterface(in StringView materialPath, in StringView materialInterface, in StringView passLabel){
     if(materialInterface.empty()){
         error("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader", materialPath, passLabel);

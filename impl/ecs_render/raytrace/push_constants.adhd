@@ -98,7 +98,6 @@ class SoftwareSceneRefitInstanceGpu{
 
 [serialize]
 class BvhSortPushConstants{
-    public u32 elementCount = 0u;
     public u32 compareDistance = 0u;
     public u32 sequenceSize = 0u;
     public u32 mode = s_BvhSortModeLocalTile;
@@ -160,7 +159,6 @@ u32 ResolveBvhPaddedSortCount(in u32 primitiveCount){
 }
 
 BvhSortPushConstants MakeBvhSortPushConstants(
-    in u32 elementCount,
     in u32 compareDistance,
     in u32 sequenceSize,
     in u32 mode,
@@ -168,7 +166,6 @@ BvhSortPushConstants MakeBvhSortPushConstants(
     in u32 payloadHeapSlot
 ){
     BvhSortPushConstants pushConstants;
-    pushConstants.elementCount = elementCount;
     pushConstants.compareDistance = compareDistance;
     pushConstants.sequenceSize = sequenceSize;
     pushConstants.mode = mode;

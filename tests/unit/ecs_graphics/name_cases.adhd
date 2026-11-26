@@ -204,15 +204,6 @@ void ExpectArenaMemoryUnchanged(in ArenaMemoryStats before, in ArenaMemoryStats 
     EXPECT_EQ(after.deallocationCount, before.deallocationCount);
 }
 
-void ExpectPolicyEqual(in GpuTaskTimingFeedbackPolicy actual, in GpuTaskTimingFeedbackPolicy expected){
-    EXPECT_EQ(actual.enabled, expected.enabled);
-    EXPECT_EQ(actual.minimumSampleCount, expected.minimumSampleCount);
-    EXPECT_EQ(actual.calibrationIntervalFrames, expected.calibrationIntervalFrames);
-    EXPECT_EQ(actual.minimumAbsoluteBenefitSeconds, expected.minimumAbsoluteBenefitSeconds);
-    EXPECT_EQ(actual.minimumRelativeBenefit, expected.minimumRelativeBenefit);
-    EXPECT_EQ(actual.minimumFramesBetweenSwitches, expected.minimumFramesBetweenSwitches);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

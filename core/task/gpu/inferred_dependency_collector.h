@@ -34,10 +34,6 @@ private:
     };
 
 public:
-    static constexpr usize s_FlatMatrixMaxTasks = 64u;
-
-
-public:
     GpuInferredDependencyCollector(Alloc::ScratchArena& arena, GraphicsVector<GpuTaskDependencyEdge>& edges, GraphicsVector<GpuTaskDependencyEdge>& inferredEdges, usize& explicitEdgeCount, usize& inferredEdgeCount, usize& resourceVersionEdgeCount);
     void reserve(usize expectedEdgeCount, usize taskCount = 0u);
     void appendRaw(const GpuTaskDependencyEdge& edge);

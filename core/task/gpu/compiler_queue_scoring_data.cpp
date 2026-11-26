@@ -381,6 +381,15 @@ u64 GpuTaskQueueScoringData::independentQueueCostByIndex(const GpuTaskScheduling
     const InterleavedCostWord* const qWords = queueCostWords.data() + queueIndex * costWordsPerGroup;
     const b8 singleCostGroup = (nonEmptyCostGroupMask & (nonEmptyCostGroupMask - 1u)) == 0u;
 
+    const auto weightedPopcount4 = [](const u64 mask, const InterleavedCostWord& cw)noexcept -> u64{
+        return
+            static_cast<u64>(CountSetBits(mask & cw.groups[0u]))
+            + (static_cast<u64>(CountSetBits(mask & cw.groups[1u])) << 1u)
+            + (static_cast<u64>(CountSetBits(mask & cw.groups[2u])) << 2u)
+            + (static_cast<u64>(CountSetBits(mask & cw.groups[3u])) << 3u)
+        ;
+    };
+
     if(members.size() == 1u){
         const usize taskIndex = members[0u].task.index;
         const u64 relatedAll = relatedAllTaskCost(reachability, taskIndex);
@@ -392,69 +401,37 @@ u64 GpuTaskQueueScoringData::independentQueueCostByIndex(const GpuTaskScheduling
         const usize lastWord = range.end;
         const usize rowOffset = reachability.m_rowOffsets.empty() ? (taskIndex * costWordsPerGroup) : reachability.m_rowOffsets[taskIndex];
         u64 relatedOnQueue = 0u;
+        const auto loadSingleRelated = [&](const usize wordIndex)noexcept -> u64{
+            return reachability.m_rowOffsets.empty()
+                ? reachability.m_words[rowOffset + wordIndex]
+                : reachability.m_words[rowOffset + wordIndex - firstWord];
+        };
+        const usize singleGroupIndex = singleCostGroup ? static_cast<usize>(CountTrailingZeros(static_cast<u32>(nonEmptyCostGroupMask))) : 0u;
+        const auto accumulateSingleWord = [&](const usize wordIndex)noexcept{
+            const u64 related = loadSingleRelated(wordIndex);
+            if(related == 0u)
+                return;
+            if(singleCostGroup)
+                relatedOnQueue += static_cast<u64>(CountSetBits(related & qWords[wordIndex].groups[singleGroupIndex]));
+            else
+                relatedOnQueue += weightedPopcount4(related, qWords[wordIndex]);
+        };
         if(!queueNonEmptyWordMasks.empty() && firstWord < lastWord){
             const u64 hiMask = lastWord >= s_BitsPerWord ? ~static_cast<u64>(0u) : ((static_cast<u64>(1u) << lastWord) - 1u);
             const u64 loMask = ~static_cast<u64>(0u) << firstWord;
             u64 activeWords = queueNonEmptyWordMasks[queueIndex] & (hiMask & loMask);
-            if(singleCostGroup){
-                const usize costGroup = static_cast<usize>(CountTrailingZeros(static_cast<u32>(nonEmptyCostGroupMask)));
-                u64 matchedBits = 0u;
-                while(activeWords != 0u){
-                    const usize wordIndex = static_cast<usize>(CountTrailingZeros(activeWords));
-                    activeWords &= activeWords - 1u;
-                    const u64 related = reachability.m_rowOffsets.empty()
-                        ? reachability.m_words[rowOffset + wordIndex]
-                        : reachability.m_words[rowOffset + wordIndex - firstWord];
-                    if(related != 0u)
-                        matchedBits += static_cast<u64>(CountSetBits(related & qWords[wordIndex].groups[costGroup]));
-                }
-                relatedOnQueue = matchedBits * costGroupWeights[costGroup];
+            while(activeWords != 0u){
+                const usize wordIndex = static_cast<usize>(CountTrailingZeros(activeWords));
+                activeWords &= activeWords - 1u;
+                accumulateSingleWord(wordIndex);
             }
-            else{
-                while(activeWords != 0u){
-                    const usize wordIndex = static_cast<usize>(CountTrailingZeros(activeWords));
-                    activeWords &= activeWords - 1u;
-                    const u64 related = reachability.m_rowOffsets.empty()
-                        ? reachability.m_words[rowOffset + wordIndex]
-                        : reachability.m_words[rowOffset + wordIndex - firstWord];
-                    if(related == 0u)
-                        continue;
-                    const InterleavedCostWord& cw = qWords[wordIndex];
-                    relatedOnQueue += static_cast<u64>(CountSetBits(related & cw.groups[0u]))
-                        + (static_cast<u64>(CountSetBits(related & cw.groups[1u])) << 1u)
-                        + (static_cast<u64>(CountSetBits(related & cw.groups[2u])) << 2u)
-                        + (static_cast<u64>(CountSetBits(related & cw.groups[3u])) << 3u)
-                    ;
-                }
-            }
-        }
-        else if(singleCostGroup){
-            const usize costGroup = static_cast<usize>(CountTrailingZeros(static_cast<u32>(nonEmptyCostGroupMask)));
-            u64 matchedBits = 0u;
-            for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
-                const u64 related = reachability.m_rowOffsets.empty()
-                    ? reachability.m_words[rowOffset + wordIndex]
-                    : reachability.m_words[rowOffset + wordIndex - firstWord];
-                if(related != 0u)
-                    matchedBits += static_cast<u64>(CountSetBits(related & qWords[wordIndex].groups[costGroup]));
-            }
-            relatedOnQueue = matchedBits * costGroupWeights[costGroup];
         }
         else{
-            for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
-                const u64 related = reachability.m_rowOffsets.empty()
-                    ? reachability.m_words[rowOffset + wordIndex]
-                    : reachability.m_words[rowOffset + wordIndex - firstWord];
-                if(related == 0u)
-                    continue;
-                const InterleavedCostWord& cw = qWords[wordIndex];
-                relatedOnQueue += static_cast<u64>(CountSetBits(related & cw.groups[0u]))
-                    + (static_cast<u64>(CountSetBits(related & cw.groups[1u])) << 1u)
-                    + (static_cast<u64>(CountSetBits(related & cw.groups[2u])) << 2u)
-                    + (static_cast<u64>(CountSetBits(related & cw.groups[3u])) << 3u)
-                ;
-            }
+            for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex)
+                accumulateSingleWord(wordIndex);
         }
+        if(singleCostGroup)
+            relatedOnQueue *= costGroupWeights[singleGroupIndex];
         return otherQueueCost - (relatedAll - relatedOnQueue);
     }
 
@@ -465,37 +442,7 @@ u64 GpuTaskQueueScoringData::independentQueueCostByIndex(const GpuTaskScheduling
         firstWord = Min(firstWord, range.begin);
         lastWord = Max(lastWord, range.end);
     }
-    u64 independentCost = otherQueueCost;
-    if(singleCostGroup){
-        const usize costGroup = static_cast<usize>(CountTrailingZeros(static_cast<u32>(nonEmptyCostGroupMask)));
-        const u64 groupWeight = costGroupWeights[costGroup];
-        u64 matchedBits = 0u;
-        for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
-            u64 related = 0u;
-            if(reachability.m_rowOffsets.empty()){
-                for(const GpuTaskQueueAssignment& member : members)
-                    related |= reachability.m_words[member.task.index * costWordsPerGroup + wordIndex];
-            }
-            else{
-                for(const GpuTaskQueueAssignment& member : members){
-                    const usize taskIndex = member.task.index;
-                    const auto& range = reachability.m_relatedWordRanges[taskIndex];
-                    if(wordIndex >= range.begin && wordIndex < range.end)
-                        related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.begin];
-                }
-            }
-            if(related == 0u)
-                continue;
-            const u64 offQueue = queueEstimatedCost == 0u
-                ? allCostWords[wordIndex].groups[costGroup]
-                : (allCostWords[wordIndex].groups[costGroup] & ~qWords[wordIndex].groups[costGroup])
-            ;
-            matchedBits += static_cast<u64>(CountSetBits(related & offQueue));
-        }
-        return independentCost - matchedBits * groupWeight;
-    }
-
-    for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
+    const auto loadMergedRelated = [&](const usize wordIndex)noexcept -> u64{
         u64 related = 0u;
         if(reachability.m_rowOffsets.empty()){
             for(const GpuTaskQueueAssignment& member : members)
@@ -509,23 +456,40 @@ u64 GpuTaskQueueScoringData::independentQueueCostByIndex(const GpuTaskScheduling
                     related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.begin];
             }
         }
+        return related;
+    };
+    u64 independentCost = otherQueueCost;
+    if(singleCostGroup){
+        const usize costGroup = static_cast<usize>(CountTrailingZeros(static_cast<u32>(nonEmptyCostGroupMask)));
+        const u64 groupWeight = costGroupWeights[costGroup];
+        u64 matchedBits = 0u;
+        for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
+            const u64 related = loadMergedRelated(wordIndex);
+            if(related == 0u)
+                continue;
+            const u64 offQueue = queueEstimatedCost == 0u
+                ? allCostWords[wordIndex].groups[costGroup]
+                : (allCostWords[wordIndex].groups[costGroup] & ~qWords[wordIndex].groups[costGroup])
+            ;
+            matchedBits += static_cast<u64>(CountSetBits(related & offQueue));
+        }
+        return independentCost - matchedBits * groupWeight;
+    }
+
+    for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
+        const u64 related = loadMergedRelated(wordIndex);
         if(related == 0u)
             continue;
         const InterleavedCostWord& allWord = allCostWords[wordIndex];
         if(queueEstimatedCost == 0u){
-            independentCost -= static_cast<u64>(CountSetBits(related & allWord.groups[0u]))
-                + (static_cast<u64>(CountSetBits(related & allWord.groups[1u])) << 1u)
-                + (static_cast<u64>(CountSetBits(related & allWord.groups[2u])) << 2u)
-                + (static_cast<u64>(CountSetBits(related & allWord.groups[3u])) << 3u)
-            ;
+            independentCost -= weightedPopcount4(related, allWord);
         }
         else{
             const InterleavedCostWord& qWord = qWords[wordIndex];
-            independentCost -= static_cast<u64>(CountSetBits(related & (allWord.groups[0u] & ~qWord.groups[0u])))
-                + (static_cast<u64>(CountSetBits(related & (allWord.groups[1u] & ~qWord.groups[1u]))) << 1u)
-                + (static_cast<u64>(CountSetBits(related & (allWord.groups[2u] & ~qWord.groups[2u]))) << 2u)
-                + (static_cast<u64>(CountSetBits(related & (allWord.groups[3u] & ~qWord.groups[3u]))) << 3u)
-            ;
+            InterleavedCostWord offQueueWord;
+            for(usize g = 0u; g < GpuTaskCostHint::kCount; ++g)
+                offQueueWord.groups[g] = allWord.groups[g] & ~qWord.groups[g];
+            independentCost -= weightedPopcount4(related, offQueueWord);
         }
     }
     return independentCost;

@@ -16,6 +16,9 @@ extern Expected<Path> ResolveCookVirtualAssetPath(in CookResolvedPaths paths, in
 [cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::PrepareGeneratedIncludeRoot")]
 extern b8 PrepareGeneratedIncludeRoot(in Path a0, in StringView a1);
 
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::WriteGeneratedIncludeFile")]
+extern b8 WriteGeneratedIncludeFile(in Path a0, in StringView a1, in StringView a2);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

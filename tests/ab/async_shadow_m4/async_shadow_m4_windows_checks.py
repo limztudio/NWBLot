@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
+from window_capture_outcome import SmokeSkip
+
 
 LIT_SCREEN_CLIENT = "screen-client"
 LIT_CURSOR = "cursor"
@@ -109,7 +111,7 @@ class M4WindowsCaptureChecks:
         unsupported_capture._prepare_capture_window = lambda hwnd: unsupported_calls.append((LIT_PREPARE, hwnd))
         try:
             unsupported_capture.prepare_raw_client_window(17)
-        except harness.SmokeSkip as error:
+        except SmokeSkip as error:
             assert "Windows 11 build 22000 or later" in str(error)
             assert "0x80070057" in str(error)
         else:

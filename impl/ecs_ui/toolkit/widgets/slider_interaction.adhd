@@ -46,17 +46,17 @@ Expected<f64> SnapSliderValueToStep(in f64 value, in f64 minimum, in f64 maximum
         return MakeUnexpected(Failure());
     if(step <= 0.0 || minimum == maximum)
         return value;
-    const f64 clamped = UiSimdClampF64(value, minimum, maximum);
+    const f64 clamped = Clamp(value, minimum, maximum);
     const f64 offset = clamped - minimum;
     if(!IsFinite(VectorDouble(offset)))
         return clamped;
     const f64 steps = offset / step;
     if(!IsFinite(VectorDouble(steps)))
         return clamped;
-    const f64 snappedIndex = VectorDoubleFloor(VectorDouble(UiSimdMaxF64(0.0, steps) + 0.5)).x;
+    const f64 snappedIndex = VectorDoubleFloor(VectorDouble(Max(0.0, steps) + 0.5)).x;
     const f64 snapped = minimum + snappedIndex * step;
     if(!IsFinite(VectorDouble(snapped)) || snapped > maximum){
-        const f64 lower = minimum + UiSimdMaxF64(0.0, snappedIndex - 1.0) * step;
+        const f64 lower = minimum + Max(0.0, snappedIndex - 1.0) * step;
         if(IsFinite(VectorDouble(lower)) && lower >= minimum && lower <= maximum && (clamped - lower) < (maximum - clamped))
             return lower;
         return maximum;
@@ -66,7 +66,7 @@ Expected<f64> SnapSliderValueToStep(in f64 value, in f64 minimum, in f64 maximum
         if((!IsFinite(VectorDouble(nextStep)) || nextStep > maximum) && (maximum - clamped) < (clamped - snapped))
             return maximum;
     }
-    const f64 result = UiSimdClampF64(snapped, minimum, maximum);
+    const f64 result = Clamp(snapped, minimum, maximum);
     if(result == 0.0)
         return 0.0;
     return result;
@@ -129,7 +129,7 @@ Expected<f64> TryComputeSliderSeekValue(in SliderOptions options, in PointerGest
         normalizedValue = (cast<f64>(gesture.position.x) - cast<f64>(gesture.referenceRectangle.x)) / cast<f64>(gesture.referenceRectangle.width);
     f64 normalized = 0.0;
     if(normalizedValue > 0.0)
-        normalized = UiSimdMinF64(1.0, normalizedValue);
+        normalized = Min(1.0, normalizedValue);
     const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, normalized);
     if(!interpolated.has_value())
         return MakeUnexpected(Failure());
@@ -159,7 +159,7 @@ Expected<SliderDragResult> TryComputeSliderDragValue(in f64 currentValue, in f64
     const f64 normalizedValue = normalized.value() + delta / travel;
     f64 dragged = 0.0;
     if(normalizedValue > 0.0)
-        dragged = UiSimdMinF64(1.0, normalizedValue);
+        dragged = Min(1.0, normalizedValue);
     const Expected<f64> interpolated = InterpolateFiniteRange(options.minimum, options.maximum, dragged);
     if(!interpolated.has_value())
         return MakeUnexpected(Failure());

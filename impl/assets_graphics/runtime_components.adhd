@@ -29,7 +29,6 @@ const StringView s_MeshComponentLoadPayloadContext = "MeshComponentAsset::loadCo
 const StringView s_MeshComponentValidatePayloadContext = "MeshComponentAsset::validatePayload";
 const StringView s_MeshComponentKindLabel = "mesh_component";
 
-const StringView s_SkinnedMeshBindingLoadPayloadContext = "SkinnedMeshBindingComponentAsset::loadComponentPayload";
 const StringView s_SkinnedMeshBindingValidatePayloadContext = "SkinnedMeshBindingComponentAsset::validatePayload";
 const StringView s_SkinnedMeshBindingKindLabel = "skinned_mesh_binding_component";
 const StringView s_CsgReceiverLoadPayloadContext = "CsgReceiverComponentAsset::loadComponentPayload";

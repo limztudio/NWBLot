@@ -18,7 +18,6 @@ const f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 class CameraProjection{
     public f32x4 projectionParams(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 aspectRatio = 0.0f;

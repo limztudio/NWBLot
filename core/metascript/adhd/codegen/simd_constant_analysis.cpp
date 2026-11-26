@@ -314,10 +314,6 @@ namespace __hidden_simd_constant_analysis{
     return __hidden_simd_constant_analysis::IsSimdUnitOrNegUnitFloatVectorExpr(expr, isDouble, false, symbols);
 }
 
-[[nodiscard]] b8 SimdConstantAnalysis::IsSimdNegativeUnitFloatVectorExpr(const Expr& expr, const b8 isDouble, const SymbolTable* const symbols)noexcept{
-    return __hidden_simd_constant_analysis::IsSimdUnitOrNegUnitFloatVectorExpr(expr, isDouble, true, symbols);
-}
-
 [[nodiscard]] b8 SimdConstantAnalysis::IsIdentityMatrixCtorArgs(const Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept{
     const usize count = arguments.size();
     if(count == 1u && arguments[0] && arguments[0]->kind == ExprKind::Identifier){

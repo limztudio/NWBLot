@@ -45,11 +45,7 @@ Expected<UniquePtr<IFilesystem>> CreateWithFactory(HeapStorage& owner, const Vol
     return CreateFilesystem(owner.arena, mount, [](Core::Alloc::GlobalArena&, const VolumeMountDesc&){ return Factory{}.create(); });
 }
 
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-inline constexpr b8 s_Windows = true;
-#else
-inline constexpr b8 s_Windows = false;
-#endif
+
 #if FOUNDATION_OCCUR_WARNING
 inline constexpr b8 s_WarningsEnabled = true;
 #else

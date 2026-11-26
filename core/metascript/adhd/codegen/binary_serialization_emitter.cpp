@@ -58,51 +58,68 @@ struct BinaryFieldClassInfo{
     return info;
 }
 
-void EmitSerializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const MStringView hashMemberSuffix, const b8 singleLineReturn){
+void EmitNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const MStringView hashMemberSuffix, const b8 singleLineReturn, const b8 isSerialize){
+    const MStringView limitName = isSerialize ? MStringView("bufferCapacity") : MStringView("bufferSize");
+    const MStringView failReturn = isSerialize ? MStringView("return 0u;\r\n") : MStringView("return false;\r\n");
     out.append(indent.data(), indent.size());
-    out.append(singleLineReturn
-        ? "if(offset + sizeof(::NameHash) > bufferCapacity) return 0u;\r\n"
-        : "if(offset + sizeof(::NameHash) > bufferCapacity)\r\n");
+    out.append("if(offset + sizeof(::NameHash) > ");
+    out.append(limitName.data(), limitName.size());
+    out.append(singleLineReturn ? ") " : ")\r\n");
     if(!singleLineReturn){
         out.append(indent.data(), indent.size());
-        out.append("    return 0u;\r\n");
+        out.append("    ");
     }
+    out.append(failReturn.data(), failReturn.size());
     out.append(indent.data(), indent.size());
-    out.append("FOUNDATION_MEMCPY(outBuffer + offset, bufferCapacity - offset, &");
-    out.append(targetPrefix.data(), targetPrefix.size());
-    out.append(targetName.data(), targetName.size());
-    out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
-    out.append(".identityHash(), sizeof(::NameHash));\r\n");
+    if(isSerialize){
+        out.append("FOUNDATION_MEMCPY(outBuffer + offset, bufferCapacity - offset, &");
+        out.append(targetPrefix.data(), targetPrefix.size());
+        out.append(targetName.data(), targetName.size());
+        out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
+        out.append(".identityHash(), sizeof(::NameHash));\r\n");
+    }
+    else{
+        out.append("{ ::NameHash __hash{}; FOUNDATION_MEMCPY(&__hash, sizeof(::NameHash), inBuffer + offset, sizeof(::NameHash)); ");
+        out.append(targetPrefix.data(), targetPrefix.size());
+        out.append(targetName.data(), targetName.size());
+        out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
+        out.append(" = ::Name(__hash); }\r\n");
+    }
     out.append(indent.data(), indent.size());
     out.append("offset += sizeof(::NameHash);\r\n");
 }
 
-void EmitSerializeSubObjectStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 singleLineReturn){
+void EmitSubObjectStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 singleLineReturn, const b8 isSerialize){
+    const MStringView limitName = isSerialize ? MStringView("bufferCapacity") : MStringView("bufferSize");
+    const MStringView failReturn = isSerialize ? MStringView("return 0u;\r\n") : MStringView("return false;\r\n");
     out.append(indent.data(), indent.size());
     out.append("if(offset + ");
     out.append(targetPrefix.data(), targetPrefix.size());
     out.append(targetName.data(), targetName.size());
-    out.append(singleLineReturn
-        ? ".serializedBinarySize() > bufferCapacity) return 0u;\r\n"
-        : ".serializedBinarySize() > bufferCapacity)\r\n");
+    out.append(".serializedBinarySize() > ");
+    out.append(limitName.data(), limitName.size());
+    out.append(singleLineReturn ? ") " : ")\r\n");
     if(!singleLineReturn){
         out.append(indent.data(), indent.size());
-        out.append("    return 0u;\r\n");
+        out.append("    ");
     }
+    out.append(failReturn.data(), failReturn.size());
     out.append(indent.data(), indent.size());
-    out.append("if(");
+    out.append(isSerialize ? "if(" : "if(!");
     out.append(targetPrefix.data(), targetPrefix.size());
     out.append(targetName.data(), targetName.size());
-    out.append(".serializeBinary(outBuffer + offset, bufferCapacity - offset) != ");
-    out.append(targetPrefix.data(), targetPrefix.size());
-    out.append(targetName.data(), targetName.size());
-    out.append(singleLineReturn
-        ? ".serializedBinarySize()) return 0u;\r\n"
-        : ".serializedBinarySize())\r\n");
+    out.append(isSerialize ? ".serializeBinary(outBuffer + offset, bufferCapacity - offset) != " : ".deserializeBinary(inBuffer + offset, bufferSize - offset)");
+    if(isSerialize){
+        out.append(targetPrefix.data(), targetPrefix.size());
+        out.append(targetName.data(), targetName.size());
+        out.append(".serializedBinarySize()");
+    }
+    out.append(singleLineReturn ? ") " : ")\r\n");
     if(!singleLineReturn){
         out.append(indent.data(), indent.size());
-        out.append("    return 0u;\r\n");
+        out.append("    ");
     }
+    out.append(failReturn.data(), failReturn.size());
     out.append(indent.data(), indent.size());
     out.append("offset += ");
     out.append(targetPrefix.data(), targetPrefix.size());
@@ -110,53 +127,74 @@ void EmitSerializeSubObjectStep(MString& out, const MStringView indent, const MS
     out.append(".serializedBinarySize();\r\n");
 }
 
-void EmitDeserializeNameOrAssetRefStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const MStringView hashMemberSuffix, const b8 singleLineReturn){
-    out.append(indent.data(), indent.size());
-    out.append(singleLineReturn
-        ? "if(offset + sizeof(::NameHash) > bufferSize) return false;\r\n"
-        : "if(offset + sizeof(::NameHash) > bufferSize)\r\n");
-    if(!singleLineReturn){
-        out.append(indent.data(), indent.size());
-        out.append("    return false;\r\n");
-    }
-    out.append(indent.data(), indent.size());
-    out.append("{ ::NameHash __hash{}; FOUNDATION_MEMCPY(&__hash, sizeof(::NameHash), inBuffer + offset, sizeof(::NameHash)); ");
-    out.append(targetPrefix.data(), targetPrefix.size());
-    out.append(targetName.data(), targetName.size());
-    out.append(hashMemberSuffix.data(), hashMemberSuffix.size());
-    out.append(" = ::Name(__hash); }\r\n");
-    out.append(indent.data(), indent.size());
-    out.append("offset += sizeof(::NameHash);\r\n");
-}
+void EmitBinaryTransferBody(MString& out, const SymbolTable& symbols, const Span<const FieldDecl* const> fields, const MStringView indent, const b8 isSerialize){
+    MString innerIndent(out.get_allocator());
+    innerIndent.append(indent.data(), indent.size());
+    innerIndent.append("    ");
+    const MStringView innerIndentView(innerIndent.data(), innerIndent.size());
+    const MStringView limitName = isSerialize ? MStringView("bufferCapacity") : MStringView("bufferSize");
+    const MStringView failReturn = isSerialize ? MStringView("return 0u;\r\n") : MStringView("return false;\r\n");
 
-void EmitDeserializeSubObjectStep(MString& out, const MStringView indent, const MStringView targetPrefix, const MStringView targetName, const b8 singleLineReturn){
     out.append(indent.data(), indent.size());
-    out.append("if(offset + ");
-    out.append(targetPrefix.data(), targetPrefix.size());
-    out.append(targetName.data(), targetName.size());
-    out.append(singleLineReturn
-        ? ".serializedBinarySize() > bufferSize) return false;\r\n"
-        : ".serializedBinarySize() > bufferSize)\r\n");
-    if(!singleLineReturn){
+    out.append(isSerialize ? "usize offset = 0u;\r\n" : "[[maybe_unused]] usize offset = 0u;\r\n");
+    for(const FieldDecl* field : fields){
+        if(!field || field->isTransient || !field->type)
+            continue;
+        const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, symbols);
+        if(!info.isArray && info.isNameOrAssetRef){
+            EmitNameOrAssetRefStep(out, indent, "this->", field->name, info.hashMemberSuffix, false, isSerialize);
+            continue;
+        }
+        if(!info.isArray && info.isSerializeSubObject){
+            EmitSubObjectStep(out, indent, "this->", field->name, false, isSerialize);
+            continue;
+        }
+        if(info.isArray && (info.isNameOrAssetRef || info.isSerializeSubObject)){
+            out.append(indent.data(), indent.size());
+            out.append(isSerialize ? "for(const auto& __elem : this->" : "for(auto& __elem : this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("){\r\n");
+            if(info.isNameOrAssetRef)
+                EmitNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.hashMemberSuffix, true, isSerialize);
+            else
+                EmitSubObjectStep(out, innerIndentView, "", "__elem", true, isSerialize);
+            out.append(indent.data(), indent.size());
+            out.append("}\r\n");
+            continue;
+        }
         out.append(indent.data(), indent.size());
-        out.append("    return false;\r\n");
+        out.append("if(offset + sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(") > ");
+        out.append(limitName.data(), limitName.size());
+        out.append(")\r\n");
+        out.append(indent.data(), indent.size());
+        out.append("    ");
+        out.append(failReturn.data(), failReturn.size());
+        out.append(indent.data(), indent.size());
+        if(isSerialize){
+            out.append("FOUNDATION_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(", sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("));\r\n");
+        }
+        else{
+            out.append("FOUNDATION_MEMCPY(&this->");
+            out.append(field->name.data(), field->name.size());
+            out.append(", sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("), inBuffer + offset, sizeof(this->");
+            out.append(field->name.data(), field->name.size());
+            out.append("));\r\n");
+        }
+        out.append(indent.data(), indent.size());
+        out.append("offset += sizeof(this->");
+        out.append(field->name.data(), field->name.size());
+        out.append(");\r\n");
     }
     out.append(indent.data(), indent.size());
-    out.append("if(!");
-    out.append(targetPrefix.data(), targetPrefix.size());
-    out.append(targetName.data(), targetName.size());
-    out.append(singleLineReturn
-        ? ".deserializeBinary(inBuffer + offset, bufferSize - offset)) return false;\r\n"
-        : ".deserializeBinary(inBuffer + offset, bufferSize - offset))\r\n");
-    if(!singleLineReturn){
-        out.append(indent.data(), indent.size());
-        out.append("    return false;\r\n");
-    }
-    out.append(indent.data(), indent.size());
-    out.append("offset += ");
-    out.append(targetPrefix.data(), targetPrefix.size());
-    out.append(targetName.data(), targetName.size());
-    out.append(".serializedBinarySize();\r\n");
+    out.append(isSerialize ? "return offset;\r\n" : "return true;\r\n");
 }
 
 
@@ -220,117 +258,11 @@ void BinarySerializationEmitter::emitSizeMethod(MString& out, const Span<const F
 }
 
 void BinarySerializationEmitter::emitSerializeBody(MString& out, const Span<const FieldDecl* const> fields, const MStringView indent)const{
-    using namespace __hidden_adhd_binary_serialization_emitter;
-
-    MString innerIndent(out.get_allocator());
-    innerIndent.append(indent.data(), indent.size());
-    innerIndent.append("    ");
-    const MStringView innerIndentView(innerIndent.data(), innerIndent.size());
-
-    out.append(indent.data(), indent.size());
-    out.append("usize offset = 0u;\r\n");
-    for(const FieldDecl* field : fields){
-        if(!field || field->isTransient || !field->type)
-            continue;
-        const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, m_symbols);
-        if(!info.isArray && info.isNameOrAssetRef){
-            EmitSerializeNameOrAssetRefStep(out, indent, "this->", field->name, info.hashMemberSuffix, false);
-            continue;
-        }
-        if(!info.isArray && info.isSerializeSubObject){
-            EmitSerializeSubObjectStep(out, indent, "this->", field->name, false);
-            continue;
-        }
-        if(info.isArray && (info.isNameOrAssetRef || info.isSerializeSubObject)){
-            out.append(indent.data(), indent.size());
-            out.append("for(const auto& __elem : this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("){\r\n");
-            if(info.isNameOrAssetRef)
-                EmitSerializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.hashMemberSuffix, true);
-            else
-                EmitSerializeSubObjectStep(out, innerIndentView, "", "__elem", true);
-            out.append(indent.data(), indent.size());
-            out.append("}\r\n");
-            continue;
-        }
-        out.append(indent.data(), indent.size());
-        out.append("if(offset + sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(") > bufferCapacity)\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("    return 0u;\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("FOUNDATION_MEMCPY(outBuffer + offset, bufferCapacity - offset, &this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(", sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append("));\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("offset += sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(");\r\n");
-    }
-    out.append(indent.data(), indent.size());
-    out.append("return offset;\r\n");
+    __hidden_adhd_binary_serialization_emitter::EmitBinaryTransferBody(out, m_symbols, fields, indent, true);
 }
 
 void BinarySerializationEmitter::emitDeserializeBody(MString& out, const Span<const FieldDecl* const> fields, const MStringView indent)const{
-    using namespace __hidden_adhd_binary_serialization_emitter;
-
-    MString innerIndent(out.get_allocator());
-    innerIndent.append(indent.data(), indent.size());
-    innerIndent.append("    ");
-    const MStringView innerIndentView(innerIndent.data(), innerIndent.size());
-
-    out.append(indent.data(), indent.size());
-    out.append("[[maybe_unused]] usize offset = 0u;\r\n");
-    for(const FieldDecl* field : fields){
-        if(!field || field->isTransient || !field->type)
-            continue;
-        const BinaryFieldClassInfo info = ClassifyBinarySerializedField(*field, m_symbols);
-        if(!info.isArray && info.isNameOrAssetRef){
-            EmitDeserializeNameOrAssetRefStep(out, indent, "this->", field->name, info.hashMemberSuffix, false);
-            continue;
-        }
-        if(!info.isArray && info.isSerializeSubObject){
-            EmitDeserializeSubObjectStep(out, indent, "this->", field->name, false);
-            continue;
-        }
-        if(info.isArray && (info.isNameOrAssetRef || info.isSerializeSubObject)){
-            out.append(indent.data(), indent.size());
-            out.append("for(auto& __elem : this->");
-            out.append(field->name.data(), field->name.size());
-            out.append("){\r\n");
-            if(info.isNameOrAssetRef)
-                EmitDeserializeNameOrAssetRefStep(out, innerIndentView, "", "__elem", info.hashMemberSuffix, true);
-            else
-                EmitDeserializeSubObjectStep(out, innerIndentView, "", "__elem", true);
-            out.append(indent.data(), indent.size());
-            out.append("}\r\n");
-            continue;
-        }
-        out.append(indent.data(), indent.size());
-        out.append("if(offset + sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(") > bufferSize)\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("    return false;\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("FOUNDATION_MEMCPY(&this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(", sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append("), inBuffer + offset, sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append("));\r\n");
-        out.append(indent.data(), indent.size());
-        out.append("offset += sizeof(this->");
-        out.append(field->name.data(), field->name.size());
-        out.append(");\r\n");
-    }
-    out.append(indent.data(), indent.size());
-    out.append("return true;\r\n");
+    __hidden_adhd_binary_serialization_emitter::EmitBinaryTransferBody(out, m_symbols, fields, indent, false);
 }
 
 

@@ -3,12 +3,9 @@
 
 import argparse
 from dataclasses import asdict
-import json
 import math
 from pathlib import Path
 import re
-import statistics
-import subprocess
 import sys
 import time
 from types import SimpleNamespace
@@ -22,7 +19,7 @@ from experiment_statistics import PairedExperimentAnalysis
 from smoke_volume_identity import file_identity
 from smoke_failure_reporting import write_failure_report
 from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
+from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, build_launch_environment, create_capture_backend, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, window_capture_source_paths, write_status,)
 from window_capture_validation import validate_expected_log_text
 
@@ -216,34 +213,27 @@ def run(args):
     ab.write_json(args.output_directory / "plan.json", plan)
     if args.plan_only:
         return 0
-    by_name = {arm.name: arm for arm in arms}
-    trials, signature = [], None
-    try:
-        for block, order in enumerate(orders):
-            for position, name in enumerate(order):
-                RendererBenchmarkIdentity.verify_frozen(arms, identities, shared)
-                write_status(f"CPU gather {args.workload}/{args.mode} block {block + 1}/{args.blocks}: {name}")
-                trial = acquire(args, by_name[name], block, position)
-                RendererBenchmarkIdentity.verify_frozen(arms, identities, shared)
-                if signature is not None and trial[LIT_RUNTIME_SIGNATURE] != signature:
-                    raise SmokeFailure("physical device, material route, or vsync changed")
-                signature = trial[LIT_RUNTIME_SIGNATURE]
-                trials.append(trial)
-                ab.write_json(args.output_directory / "trials.json", trials)
+
+    def finish(trials):
         comparison = GatherComparison.compare(trials, orders, args.mode, args.analysis_seed)
         ab.write_json(args.output_directory / "report.json", {"plan": plan, "trials": trials, "comparison": comparison})
         return 0
-    except Exception as error:
-        write_failure_report(ab.write_json, args.output_directory / "failure.json", {"error": str(error), "completed_trials": len(trials)})
-        raise
+
+    return ab.run_paired_trials(
+        args,
+        arms,
+        orders,
+        identities,
+        shared,
+        acquire_fn=acquire,
+        status_fn=lambda block, name: f"CPU gather {args.workload}/{args.mode} block {block + 1}/{args.blocks}: {name}",
+        mismatch_message="physical device, material route, or vsync changed",
+        finish_fn=finish,
+    )
 
 
 def main(argv=None):
-    try:
-        return run(parse_args(argv))
-    except (SmokeFailure, SmokeSkip, OSError, ValueError, subprocess.SubprocessError) as error:
-        write_status(f"FAIL: {error}")
-        return 1
+    return ab.run_benchmark_main(parse_args, run, argv)
 
 
 if __name__ == LIT_MAIN:

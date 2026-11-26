@@ -18,14 +18,7 @@
 #error "light-space resolve requires the opaque or transparent compile-time class"
 #endif
 
-#define NWB_SW_SHADOW_OCCLUDER NWB_LIGHT_SPACE_OCCLUDER
-#define g_NwbSwShadowPush g_NwbLightSpacePush
-#define g_NwbSwShadowMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
-#define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
-#include "light_space_receiver.slangi"
-#define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
-#include "../scene/buffer.slangi"
+#include "light_space_deferred.slangi"
 
 #ifndef NWB_LIGHT_SPACE_MAP_ONLY
 #define NWB_LIGHT_SPACE_MAP_ONLY 0

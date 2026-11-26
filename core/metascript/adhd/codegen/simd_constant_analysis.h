@@ -29,7 +29,6 @@ public:
     [[nodiscard]] static MStringView TryMatchKnownSimdFloatVectorConstant(Span<const Expr* const> arguments, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
     [[nodiscard]] static b8 IsSimdZeroFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
     [[nodiscard]] static b8 IsSimdUnitFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
-    [[nodiscard]] static b8 IsSimdNegativeUnitFloatVectorExpr(const Expr& expr, b8 isDouble, const SymbolTable* symbols = nullptr)noexcept;
     [[nodiscard]] static b8 IsIdentityMatrixCtorArgs(Span<const Expr* const> arguments, const SymbolTable& symbols)noexcept;
 };
 

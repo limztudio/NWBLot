@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_TRACE_BINDLESS_SLANGI
+#define NWB_GRAPHICS_GI_TRACE_BINDLESS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define g_NwbGiBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiBindlessResources.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiBindlessResources.avboitSlots.w
+
+#define g_NwbGiMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot)
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbGiMaterialContextSlots.sceneSlots.w;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbGiMaterialContextSlots.materialSlots.x;
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u;
+}
+#include "../mesh/bindless_heap_mesh.slangi"
+
+#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
+
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

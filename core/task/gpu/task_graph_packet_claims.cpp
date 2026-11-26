@@ -73,11 +73,33 @@ GpuPacketRecordingAbort::~GpuPacketRecordingAbort()noexcept{
         FOUNDATION_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
 }
 
+namespace __hidden_gpu_task_graph_packet_claims{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ClaimT>
+void ResetClaimIdentity(ClaimT& claim, GpuSubmissionPacketId& outPacket, u64& outPlanGeneration, u64& outRecordingAttemptGeneration, u64& outClaimGeneration)noexcept{
+    (void)claim;
+    outPacket = {};
+    outPlanGeneration = 0u;
+    outRecordingAttemptGeneration = 0u;
+    outClaimGeneration = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void GpuPacketRecordingAbort::reset()noexcept{
-    m_packet = {};
-    m_planGeneration = 0u;
-    m_recordingAttemptGeneration = 0u;
-    m_claimGeneration = 0u;
+    __hidden_gpu_task_graph_packet_claims::ResetClaimIdentity(*this, m_packet, m_planGeneration, m_recordingAttemptGeneration, m_claimGeneration);
 }
 
 
@@ -109,10 +131,7 @@ b8 GpuPacketRecordingLease::validFor(const GpuTaskGraph& graph, const GpuCompile
 }
 
 void GpuPacketRecordingLease::reset()noexcept{
-    m_packet = {};
-    m_planGeneration = 0u;
-    m_recordingAttemptGeneration = 0u;
-    m_claimGeneration = 0u;
+    __hidden_gpu_task_graph_packet_claims::ResetClaimIdentity(*this, m_packet, m_planGeneration, m_recordingAttemptGeneration, m_claimGeneration);
 }
 
 
@@ -162,10 +181,7 @@ b8 GpuPacketRecordingAccess::validForTask(const GpuTaskGraph& graph, const GpuCo
 
 
 void GpuPacketSubmissionLease::reset()noexcept{
-    m_packet = {};
-    m_planGeneration = 0u;
-    m_recordingAttemptGeneration = 0u;
-    m_claimGeneration = 0u;
+    __hidden_gpu_task_graph_packet_claims::ResetClaimIdentity(*this, m_packet, m_planGeneration, m_recordingAttemptGeneration, m_claimGeneration);
     m_submissionBinding = {};
 }
 

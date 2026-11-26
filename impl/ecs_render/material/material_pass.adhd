@@ -128,7 +128,6 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstantsPrepared(
     in MaterialPassMeshResourceSnapshot mesh,
     in MeshFrameHeapSlots baseFrameHeapSlots,
     in b8 usesAvboit,
-    in b8 hdr10OutputActive,
     in b8 isRefractionCapture,
     in Optional<u32> clipContextHeapSlot
 ){
@@ -162,7 +161,6 @@ b8 MaterialPassDrawRecorder::setMaterialPassDrawPushConstantsPrepared(
             context.avboitTargets.value(),
             baseFrameHeapSlots,
             dispatchFlags,
-            hdr10OutputActive,
             csgContextHeapSlot,
             isRefractionCapture
         );
@@ -239,7 +237,6 @@ void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItemPrepared(
     in MaterialPassPipelineResourceSnapshot pipelineResources,
     in MeshFrameHeapSlots baseFrameHeapSlots,
     in b8 usesAvboit,
-    in b8 hdr10OutputActive,
     in b8 isRefractionCapture,
     in Optional<u32> clipContextHeapSlot,
     mut GraphicsPipelineHandle lastPipeline,
@@ -282,7 +279,7 @@ void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItemPrepared(
         lastPipeline = pipeline;
     }
 
-    if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, hdr10OutputActive, isRefractionCapture, clipContextHeapSlot))
+    if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, isRefractionCapture, clipContextHeapSlot))
         return;
 
     DrawArguments drawArgs;
@@ -308,7 +305,6 @@ void MaterialPassDrawRecorder::drawComputeMaterialPassDrawItem(mut MaterialPassD
         pipelineResources,
         ResolveMeshFrameHeapSlots(context.frameBindings),
         MaterialPipelinePassUsesRendererAvboit(context.pass),
-        this.m_graphics.isHDR10OutputActive(),
         context.pass == MaterialPipelinePass::AvboitRefractionCapture,
         clipContextHeapSlot,
         lastPipeline,
@@ -339,7 +335,6 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassD
 
     const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
     const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-    const b8 hdr10OutputActive = this.m_graphics.isHDR10OutputActive();
     const b8 isRefractionCapture = context.pass == MaterialPipelinePass::AvboitRefractionCapture;
     const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -363,7 +358,7 @@ void MaterialPassDrawRecorder::renderMeshMaterialPassDrawItems(mut MaterialPassD
             lastPipeline = pipelineResources.meshletPipeline;
         }
 
-        if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, hdr10OutputActive, isRefractionCapture, clipContextHeapSlot))
+        if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, isRefractionCapture, clipContextHeapSlot))
             continue;
 
         context.commandList.dispatchMesh(mesh.meshletCount, 1u, 1u);
@@ -420,7 +415,6 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(mut 
 
     const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
     const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-    const b8 hdr10OutputActive = this.m_graphics.isHDR10OutputActive();
     const b8 isRefractionCapture = context.pass == MaterialPipelinePass::AvboitRefractionCapture;
     const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
     GraphicsPipelineHandle lastPipeline;
@@ -442,7 +436,6 @@ void MaterialPassDrawRecorder::renderComputeMaterialPassDrawItemsRasterOnly(mut 
             pipelineResources,
             baseFrameHeapSlots,
             usesAvboit,
-            hdr10OutputActive,
             isRefractionCapture,
             clipContextHeapSlot,
             lastPipeline,
@@ -503,7 +496,6 @@ void MaterialPassDrawRecorder::renderIndexedMaterialPassDrawItems(mut MaterialPa
 
     const MeshFrameHeapSlots baseFrameHeapSlots = ResolveMeshFrameHeapSlots(context.frameBindings);
     const b8 usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-    const b8 hdr10OutputActive = this.m_graphics.isHDR10OutputActive();
     const b8 isRefractionCapture = context.pass == MaterialPipelinePass::AvboitRefractionCapture;
     const Optional<u32> clipContextHeapSlot = ResolveClipContextHeapSlot(context.csgResources);
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -539,7 +531,7 @@ void MaterialPassDrawRecorder::renderIndexedMaterialPassDrawItems(mut MaterialPa
             heap.bindGraphics(context.commandList, pipeline.deref());
             lastPipeline = pipeline;
         }
-        if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, hdr10OutputActive, isRefractionCapture, clipContextHeapSlot))
+        if(!this.setMaterialPassDrawPushConstantsPrepared(context, drawItem, mesh, baseFrameHeapSlots, usesAvboit, isRefractionCapture, clipContextHeapSlot))
             continue;
         DrawArguments arguments;
         arguments.setVertexCount(cache.indexCount);

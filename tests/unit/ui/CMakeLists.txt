@@ -16,7 +16,7 @@ target_sources(nwb_ui_tests PRIVATE glyph_shader_host.cpp)
 set_source_files_properties(
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_ui_tests/tests/unit/ui/ui_paint_and_overlay_cases.adhd.cpp"
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_ui_tests/tests/unit/ui/ui_wheel_and_window_cases.adhd.cpp"
-    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=strict>;$<$<CXX_COMPILER_ID:GNU>:-frounding-math>;$<$<CXX_COMPILER_ID:MSVC>:/fp:strict>"
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=strict>"
 )
 target_include_directories(nwb_ui_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
 target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_name_cases nwb_ui_gpu nwb_ui_images nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb_assets_font_atlas nwb::harfbuzz)

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import math
-import re
 
-from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
+from probe_common import FrameProbeRecorder, MARKER_TOLERANCE, compile_smoke_patterns, snapshot_from_patterns
+from probe_reference import linear_channels, linear_rgb_bytes
 
 LIT_SEQUENCE = "sequence"
 LIT_SKIN = "skin"
@@ -21,9 +20,6 @@ LIT_TRIGGER = "trigger"
 LIT_ALTERNATE = "alternate"
 LIT_QUERY_FOCUSED = "query_focused"
 
-NUMBER = r"[0-9.eE+-]+"
-MARKER_TOLERANCE = 5
-
 
 class ComboProbe:
     def __init__(self, prefix, fields, rectangles, *, searchable=False):
@@ -32,45 +28,19 @@ class ComboProbe:
         self.searchable = searchable
         self.marker_origin = 16.0 if searchable else 18.0
         self.marker_stride = 12.0 if searchable else 16.0
-        self.display = re.compile(rf"{prefix}: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-        self.state = re.compile(rf"{prefix}: state sequence=(\d+) values=((?:\d+,){{{len(fields) - 1}}}\d+)")
-        self.geometry = re.compile(rf"{prefix}: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-        self.skin = re.compile(rf"{prefix}: skin=(default|alternate)")
+        self.display, self.state, self.geometry, self.skin = compile_smoke_patterns(prefix, len(fields))
 
     def snapshot(self, text):
-        states, displays, skins = list(self.state.finditer(text)), list(self.display.finditer(text)), list(self.skin.finditer(text))
-        if not states or not displays or not skins:
-            return None
-        state = states[-1]
-        sequence = int(state[1])
-        values = tuple(map(int, state[2].split(",")))
-        rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in self.geometry.finditer(text) if int(match[1]) == sequence}
-        if any(name not in rectangles for name in self.rectangles):
-            return None
-        display = tuple(map(float, displays[-1].groups()))
-        geometry_values = (value for rectangle in rectangles.values() for value in rectangle)
-        if not all(math.isfinite(value) for value in (*display, *geometry_values)) or not all(value > 0.0 for value in display):
-            raise SmokeFailure("combo fixture reported invalid geometry or display metrics")
-        return {LIT_SEQUENCE: sequence, LIT_SKIN: skins[-1][1], LIT_VALUES: values, **dict(zip(self.fields, values)), LIT_LOGICAL_EXTENT: display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles}
+        return snapshot_from_patterns(text, self.state, self.display, self.skin, self.geometry, self.fields, self.rectangles, fixture="combo")
 
     def observe(self, frame, snapshot, expected, *, extent=None, skin="default", extra=None):
-        width, height, rows = frame
+        width, height, _ = frame
         scale_x, scale_y = snapshot[LIT_SCALE]
-        probes = []
+        recorder = FrameProbeRecorder(frame, snapshot[LIT_SCALE], "combo")
+        probes = recorder.probes
+        probe = recorder.probe
 
-        def probe(name, position, color, tolerance=MARKER_TOLERANCE):
-            x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-            if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-                raise SmokeFailure(f"combo probe '{name}' falls outside {width}x{height}: ({x},{y})")
-            pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-            observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
-            error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-            probes.append({"name": name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-        for index, value in enumerate((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE])):
-            for part in range(2):
-                marker = index * 2 + part
-                probe(f"model_{index}_{part}", (self.marker_origin + marker * self.marker_stride, height / scale_y - 14.0), encoded_marker(value >> (part * 12)))
+        recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), self.marker_origin, self.marker_stride, height / scale_y - 14.0, tolerance=MARKER_TOLERANCE)
         first, past = snapshot["first"], snapshot["past"]
         viewport = snapshot[LIT_RECTANGLES]["viewport"]
         bounded = snapshot[LIT_LABEL_READS] <= 2

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import math
-import re
 
-from probe_common import snapshot_from_patterns
-from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker
+from probe_common import FrameProbeRecorder, compile_smoke_patterns, snapshot_from_patterns
 
 LIT_LIST = "list"
 LIT_EXPECTED = "expected"
@@ -14,13 +11,9 @@ LIT_RECTANGLES = "rectangles"
 LIT_COUNT = "count"
 LIT_ALTERNATE = "alternate"
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiListSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiListSmoke: state sequence=(\d+) values=((?:\d+,){11}\d+)")
-GEOMETRY = re.compile(rf"UiListSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiListSmoke: skin=(default|alternate)")
 FIELDS = ("selected", "cursor", "count", "first", "past", "label_reads", "focused", "reversed", "removed", "visible", "commits", "underlying")
 RECTANGLES = ("list", "viewport", "first_row", "track", "thumb", "selected_row", "counter")
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiListSmoke", len(FIELDS))
 MARKER_TOLERANCE = 5
 
 
@@ -29,23 +22,13 @@ def snapshot_from_logs(text):
 
 
 def observe_list(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
-    width, height, rows = frame
-    scale_x, scale_y = snapshot["scale"]
-    probes = []
+    width, height, _ = frame
+    _, scale_y = snapshot["scale"]
+    recorder = FrameProbeRecorder(frame, snapshot["scale"], LIT_LIST)
+    probes = recorder.probes
+    probe = lambda name, position, color, tolerance=MARKER_TOLERANCE: recorder.probe(name, position, color, tolerance)
 
-    def probe(name, position, color, tolerance=MARKER_TOLERANCE):
-        x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"list probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-        observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-    for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
-        for part in range(2):
-            marker = index * 2 + part
-            probe(f"model_{index}_{part}", (19.0 + marker * 20.0, height / scale_y - 14.0), encoded_marker(value >> (part * 12)))
+    recorder.probe_markers((*snapshot["values"], snapshot["sequence"]), 19.0, 20.0, height / scale_y - 14.0, tolerance=MARKER_TOLERANCE)
     first, past = snapshot["first"], snapshot["past"]
     viewport = snapshot[LIT_RECTANGLES]["viewport"]
     bounded = first <= past <= snapshot[LIT_COUNT] and snapshot["label_reads"] <= max(0, past - first) + 2

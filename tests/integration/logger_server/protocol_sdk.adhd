@@ -17,10 +17,6 @@ extern class ProtocolClient{
 [cpp_header("<core/common/log.h>"), cpp_name("::NWB::Core::Common::LoggerDetail::EnqueueMessage")]
 extern void EnqueueLogMessage(mut ProtocolClient client, in LogType kind, in StringView message);
 
-[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::s_Windows")]
-extern const b8 s_IsWindowsLoggerPlatform;
-[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::s_DesktopLinux")]
-extern const b8 s_IsDesktopLinuxLoggerPlatform;
 [cpp_header("<global/filesystem/exclusive_publication.h>"), cpp_name("::PublishNewFileDurable")]
 extern FilePublicationResult PublishBytesView(in auto destination, in BinaryByteView bytes);
 

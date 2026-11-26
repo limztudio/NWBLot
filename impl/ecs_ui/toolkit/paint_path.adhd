@@ -121,11 +121,11 @@ class PaintPath{
             return;
         const f32 twoPi = 2.0f * s_Pi;
         const f32 halfPi = 0.5f * s_Pi;
-        const f32 sweep = UiSimdClamp(sweepAngleRadians, -twoPi, twoPi);
+        const f32 sweep = Clamp(sweepAngleRadians, -twoPi, twoPi);
         const f32 absSweep = Abs(VectorSingle(sweep)).x;
         usize segmentCount = 1u;
         if(absSweep > halfPi)
-            segmentCount = cast<usize>(UiSimdClamp(Ceil(VectorSingle(absSweep / halfPi)).x, 1.0f, 4.0f));
+            segmentCount = cast<usize>(Clamp(Ceil(VectorSingle(absSweep / halfPi)).x, 1.0f, 4.0f));
         const f32 segAngle = sweep / cast<f32>(segmentCount);
         const f32 quarterAngle = 0.25f * segAngle;
 
@@ -180,8 +180,8 @@ class PaintPath{
     public void addRoundedRect(in Rect rect, in f32 radius){
         if(!(rect.width > 0.0f) || !(rect.height > 0.0f) || !IsFinite(VectorSingle(rect.x, rect.y, rect.width, rect.height)) || !IsFinite(VectorSingle(radius)))
             return;
-        const f32 halfMin = 0.5f * UiSimdMin(rect.width, rect.height);
-        const f32 r = UiSimdClamp(radius, 0.0f, halfMin);
+        const f32 halfMin = 0.5f * Min(rect.width, rect.height);
+        const f32 r = Clamp(radius, 0.0f, halfMin);
         if(r <= 1.0e-3f){
             this.addRect(rect);
             return;
@@ -303,11 +303,19 @@ void FinalizeFlatPathSubpath(
         outPoints.resize(subpathBegin);
 }
 
-void FlattenPaintQuadSegment(
+void PushSampledBezierPoint(in Point pt, in b8 deduplicate, in usize subpathBegin, mut Vector<Point> outPoints){
+    if(deduplicate)
+        PushFlatPathUniquePoint(pt, subpathBegin, outPoints);
+    else
+        outPoints.push_back(pt);
+}
+
+void SamplePaintQuadraticBezier(
     in Point p0,
     in Point p1,
     in Point p2,
     in f32 transformScale,
+    in b8 deduplicate,
     in usize subpathBegin,
     mut Vector<Point> outPoints
 ){
@@ -316,7 +324,11 @@ void FlattenPaintQuadSegment(
     const f32 chordX = p2.x - p0.x;
     const f32 chordY = p2.y - p0.y;
     const VectorSingle lens = Sqrt(VectorSingle(devX * devX + devY * devY, chordX * chordX + chordY * chordY, 0.0f, 0.0f));
-    const usize steps = cast<usize>(UiSimdClamp((lens.x * 2.0f + lens.y * 0.25f) * transformScale / 4.0f + 4.0f, 4.0f, 32.0f));
+    const usize steps = cast<usize>(Clamp((lens.x * 2.0f + lens.y * 0.25f) * transformScale / 4.0f + 4.0f, 4.0f, 32.0f));
+    if(!deduplicate){
+        outPoints.reserve(outPoints.size() + steps + 1u);
+        outPoints.push_back(p0);
+    }
     const f32 invSteps = 1.0f / cast<f32>(steps);
     const VectorSingle invStepsVec(invSteps);
     const VectorSingle oneVec(1.0f);
@@ -337,10 +349,10 @@ void FlattenPaintQuadSegment(
         const VectorSingle w2 = tVec * tVec;
         const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x;
         const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y;
-        PushFlatPathUniquePoint(Point(rx.x, ry.x), subpathBegin, outPoints);
-        PushFlatPathUniquePoint(Point(rx.y, ry.y), subpathBegin, outPoints);
-        PushFlatPathUniquePoint(Point(rx.z, ry.z), subpathBegin, outPoints);
-        PushFlatPathUniquePoint(Point(rx.w, ry.w), subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.x, ry.x), deduplicate, subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.y, ry.y), deduplicate, subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.z, ry.z), deduplicate, subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.w, ry.w), deduplicate, subpathBegin, outPoints);
         i += 4u;
     }
     while(i <= steps){
@@ -349,17 +361,18 @@ void FlattenPaintQuadSegment(
         const f32 w0 = u * u;
         const f32 w1 = 2.0f * u * t;
         const f32 w2 = t * t;
-        PushFlatPathUniquePoint(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y), subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x, w0 * p0.y + w1 * p1.y + w2 * p2.y), deduplicate, subpathBegin, outPoints);
         ++i;
     }
 }
 
-void FlattenPaintCubicSegment(
+void SamplePaintCubicBezier(
     in Point p0,
     in Point p1,
     in Point p2,
     in Point p3,
     in f32 transformScale,
+    in b8 deduplicate,
     in usize subpathBegin,
     mut Vector<Point> outPoints
 ){
@@ -371,7 +384,11 @@ void FlattenPaintCubicSegment(
     const f32 chordY = p3.y - p0.y;
     const VectorSingle lens = Sqrt(VectorSingle(d1x * d1x + d1y * d1y, d2x * d2x + d2y * d2y, chordX * chordX + chordY * chordY, 0.0f));
     const f32 dev = lens.x + lens.y;
-    const usize steps = cast<usize>(UiSimdClamp((dev * 1.5f + lens.z * 0.25f) * transformScale / 4.0f + 4.0f, 4.0f, 48.0f));
+    const usize steps = cast<usize>(Clamp((dev * 1.5f + lens.z * 0.25f) * transformScale / 4.0f + 4.0f, 4.0f, 48.0f));
+    if(!deduplicate){
+        outPoints.reserve(outPoints.size() + steps + 1u);
+        outPoints.push_back(p0);
+    }
     const f32 invSteps = 1.0f / cast<f32>(steps);
     const VectorSingle invStepsVec(invSteps);
     const VectorSingle oneVec(1.0f);
@@ -397,10 +414,10 @@ void FlattenPaintCubicSegment(
         const VectorSingle w3 = tt * tVec;
         const VectorSingle rx = w0 * p0x + w1 * p1x + w2 * p2x + w3 * p3x;
         const VectorSingle ry = w0 * p0y + w1 * p1y + w2 * p2y + w3 * p3y;
-        PushFlatPathUniquePoint(Point(rx.x, ry.x), subpathBegin, outPoints);
-        PushFlatPathUniquePoint(Point(rx.y, ry.y), subpathBegin, outPoints);
-        PushFlatPathUniquePoint(Point(rx.z, ry.z), subpathBegin, outPoints);
-        PushFlatPathUniquePoint(Point(rx.w, ry.w), subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.x, ry.x), deduplicate, subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.y, ry.y), deduplicate, subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.z, ry.z), deduplicate, subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(rx.w, ry.w), deduplicate, subpathBegin, outPoints);
         i += 4u;
     }
     while(i <= steps){
@@ -412,7 +429,7 @@ void FlattenPaintCubicSegment(
         const f32 w1 = 3.0f * uu * t;
         const f32 w2 = 3.0f * u * tt;
         const f32 w3 = tt * t;
-        PushFlatPathUniquePoint(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y), subpathBegin, outPoints);
+        PushSampledBezierPoint(Point(w0 * p0.x + w1 * p1.x + w2 * p2.x + w3 * p3.x, w0 * p0.y + w1 * p1.y + w2 * p2.y + w3 * p3.y), deduplicate, subpathBegin, outPoints);
         ++i;
     }
 }
@@ -490,7 +507,7 @@ void FlattenPaintPath(
                 start = current;
                 hasOpen = true;
             }
-            FlattenPaintQuadSegment(current, c, e, transformScale, subpathBegin, outPoints);
+            SamplePaintQuadraticBezier(current, c, e, transformScale, true, subpathBegin, outPoints);
             current = e;
             subpathClosed = false;
         }
@@ -513,7 +530,7 @@ void FlattenPaintPath(
                 start = current;
                 hasOpen = true;
             }
-            FlattenPaintCubicSegment(current, c1, c2, e, transformScale, subpathBegin, outPoints);
+            SamplePaintCubicBezier(current, c1, c2, e, transformScale, true, subpathBegin, outPoints);
             current = e;
             subpathClosed = false;
         }
@@ -923,10 +940,10 @@ void EarClipRingIntoIndices(
         if(cross > threshold){
             isEar = true;
             if(cross > s_PaintPathEarCrossEpsilon && !reflexNodes.empty()){
-                const f32 triMinX = UiSimdMin(p.x, UiSimdMin(v.x, n.x)) - 1.0e-4f;
-                const f32 triMaxX = UiSimdMax(p.x, UiSimdMax(v.x, n.x)) + 1.0e-4f;
-                const f32 triMinY = UiSimdMin(p.y, UiSimdMin(v.y, n.y)) - 1.0e-4f;
-                const f32 triMaxY = UiSimdMax(p.y, UiSimdMax(v.y, n.y)) + 1.0e-4f;
+                const f32 triMinX = Min(p.x, Min(v.x, n.x)) - 1.0e-4f;
+                const f32 triMaxX = Max(p.x, Max(v.x, n.x)) + 1.0e-4f;
+                const f32 triMinY = Min(p.y, Min(v.y, n.y)) - 1.0e-4f;
+                const f32 triMaxY = Max(p.y, Max(v.y, n.y)) + 1.0e-4f;
                 for(in usize qNode : reflexNodes){
                     if(
                         nodes[qNode].vertIndex != nodes[pNode].vertIndex

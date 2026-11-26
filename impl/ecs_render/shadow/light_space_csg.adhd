@@ -97,23 +97,6 @@ u64 BuildLightSpaceCsgCaptureIdentityWithMaterialHash(
     return identity;
 }
 
-u64 BuildLightSpaceCsgCaptureIdentity(
-    in LightSpaceCsgState state,
-    in Span<NwbRtInstanceMaterialGpu> materials,
-    in Span<InstanceGpuData> instances,
-    in Span<u8> materialBytes,
-    in Span<TextureHandle> textures
-){
-    return BuildLightSpaceCsgCaptureIdentityWithMaterialHash(
-        state,
-        materials,
-        instances,
-        materialBytes.size(),
-        UpdateFnv64(s_Fnv64OffsetBasis, materialBytes),
-        textures
-    );
-}
-
 [cpp_unwind]
 void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in usize capacity, in b8 hardware){
     state.gathering = HasCsgFrameCandidates(world);

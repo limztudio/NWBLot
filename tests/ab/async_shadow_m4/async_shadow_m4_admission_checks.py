@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from unittest import mock
 
+from async_shadow_m4_lane import DedicatedComputeUnavailable
+
 
 LIT_SYNC_EXECUTABLE = "--sync-executable"
 LIT_ASYNC_EXECUTABLE = "--async-executable"
@@ -67,7 +69,7 @@ class M4AdmissionChecks:
             assert invalid_lane is not None
             try:
                 invalid_lane.validate_for_mode(LIT_ASYNC)
-            except harness.DedicatedComputeUnavailable:
+            except DedicatedComputeUnavailable:
                 raise AssertionError("M4 contradictory queue evidence was classified as a hardware skip")
             except harness.SmokeFailure:
                 pass
@@ -80,7 +82,7 @@ class M4AdmissionChecks:
             assert unavailable_lane is not None
             try:
                 unavailable_lane.validate_for_mode(LIT_ASYNC)
-            except harness.DedicatedComputeUnavailable:
+            except DedicatedComputeUnavailable:
                 pass
             else:
                 raise AssertionError("M4 unavailable dedicated compute transport was not a capability skip")

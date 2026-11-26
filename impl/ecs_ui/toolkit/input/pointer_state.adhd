@@ -215,14 +215,6 @@ class InputPointerState : NoCopy{
         return this.m_interactionPosition;
     }
 
-    public mut Point secondaryPosition(){
-        return this.m_secondaryPosition;
-    }
-
-    public in Point secondaryPosition()const{
-        return this.m_secondaryPosition;
-    }
-
     public mut InputSource activeSource(){
         return this.m_activePointerSource;
     }

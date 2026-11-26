@@ -53,10 +53,10 @@ Expected<usize> TryFindNearestEditCaretStop(in Span<EditCaretLine> lines, in Spa
     for(usize index = first + 1u; index < end; ++index){
         if(!IsFinite(VectorSingle(stops[index].x)) || stops[index].x < 0.0f)
             return MakeUnexpected(Failure());
-        minimumX = UiSimdMin(minimumX, stops[index].x);
-        maximumX = UiSimdMax(maximumX, stops[index].x);
+        minimumX = Min(minimumX, stops[index].x);
+        maximumX = Max(maximumX, stops[index].x);
     }
-    const f32 queryX = UiSimdClamp(point.x, minimumX, maximumX);
+    const f32 queryX = Clamp(point.x, minimumX, maximumX);
     f64 nearestY = 0.0;
     f32 nearestX = 0.0f;
     b8 haveBest = false;
@@ -203,7 +203,7 @@ Expected<usize> ResolveEditCaretPageTarget(
     const f64 maximum = cast<f64>(last.top) + (cast<f64>(last.height) * s_RectCenterFractionF64);
     if(!IsFinite(VectorDouble(target, minimum, maximum, 0.0)) || minimum > maximum)
         return MakeUnexpected(Failure());
-    const Point point(preferredX, cast<f32>(UiSimdClampF64(target, minimum, maximum)));
+    const Point point(preferredX, cast<f32>(Clamp(target, minimum, maximum)));
     if(!IsFinite(VectorSingle(point.y)))
         return MakeUnexpected(Failure());
     const Expected<usize> result = HitEditCaretGeometry(lines, stops, point);

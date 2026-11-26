@@ -26,9 +26,6 @@
 
 
 type ControlActionKindEnum = ControlActionKind;
-type UiSkinAssetRef = AssetRef<UiSkin>;
-type UiFontAssetRef = AssetRef<Font>;
-type UiTextureAssetRef = AssetRef<Texture>;
 type KeyEnum = Key;
 type LayoutSizePolicyEnum = LayoutSizePolicy;
 type UiSkinDrawModeEnum = UiSkinDrawMode;
@@ -77,7 +74,6 @@ enum<u8> UiFixtureSliderCallbackMutation{
     SetValue,
     ResetBuilder,
     PanelBuilder,
-    ClosePopup,
 }
 
 enum<u8> UiFixtureAreaEventKind{
@@ -231,26 +227,11 @@ InputEvent MakeUiBareInputEvent(in InputEventType eventType){
     return event;
 }
 
-InputEvent MakeUiKeyEvent(in InputEventType eventType, in KeyEnum key){
-    InputEvent event = InputEvent();
-    event.type = eventType;
-    event.key = key;
-    return event;
-}
-
-InputEvent MakeUiRepeatedKeyEvent(in InputEventType eventType, in KeyEnum key, in b8 repeat){
-    InputEvent event = InputEvent();
-    event.type = eventType;
-    event.key = key;
-    event.repeat = repeat;
-    return event;
-}
-
-InputSource MakeUiInputSource(in u64 device, in u64 control){
-    InputSource source = InputSource();
-    source.device = device;
-    source.control = control;
-    return source;
+void ExpectUiSelectionResult<Result>(in Result actual, in Result expected){
+    EXPECT_EQ(actual.valid, expected.valid);
+    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
+    EXPECT_EQ(actual.activated, expected.activated);
+    EXPECT_EQ(actual.focused, expected.focused);
 }
 
 Array<HitTarget, 1u> MakeUiSingleHitTargetArray(in HitTarget target){
@@ -263,15 +244,6 @@ Array<PopupScope, 1u> MakeUiSinglePopupScopeArray(in PopupScope scope){
     Array<PopupScope, 1u> scopes = Array<PopupScope, 1u>();
     scopes[0u] = scope;
     return scopes;
-}
-
-PopupToken MakeUiPopupToken(in WidgetId widget, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
-    PopupToken token = PopupToken();
-    token.widget = widget;
-    token.declarationGeneration = declarationGeneration;
-    token.instanceGeneration = instanceGeneration;
-    token.openGeneration = openGeneration;
-    return token;
 }
 
 WidgetId RequireUiRootId(in WidgetRoot root){

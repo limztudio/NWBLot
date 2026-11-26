@@ -102,6 +102,7 @@ private:
     void emitSimdRegExpr(MString& out, const Expr& expr, MStringView expectedSimdType)const;
     [[nodiscard]] b8 tryEmitScalarFloatExpr(MString& out, const Expr& expr)const;
     [[nodiscard]] b8 tryEmitScalarFloatCall(MString& out, const Expr& expr)const;
+    [[nodiscard]] b8 tryEmitSimdRegisterCall(MString& out, MStringView callee, const Expr& expr)const;
     [[nodiscard]] b8 tryEmitFusedSimdLogicChain(MString& out, const Expr& expr, b8 omitOuterBinaryParens)const;
 
 

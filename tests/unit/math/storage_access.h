@@ -69,18 +69,6 @@ using WideStorageInteger = i64;
 inline constexpr b8 s_HasInt128Storage = false;
 #endif
 
-#if defined(FOUNDATION_HAS_SSE2)
-inline constexpr b8 s_Sse2Storage = true;
-#else
-inline constexpr b8 s_Sse2Storage = false;
-#endif
-
-#if defined(__linux__)
-inline constexpr b8 s_LinuxStorage = true;
-#else
-inline constexpr b8 s_LinuxStorage = false;
-#endif
-
 [[nodiscard]] inline WideStorageInteger WideStorageBit(const usize bit)noexcept{ return WideStorageInteger{1} << bit; }
 [[nodiscard]] inline WideStorageInteger AddWide(const WideStorageInteger left, const WideStorageInteger right)noexcept{ return left + right; }
 [[nodiscard]] inline WideStorageInteger NegateWide(const WideStorageInteger value)noexcept{ return -value; }

@@ -240,7 +240,7 @@ class ChoiceSource : IListDataSource{
             break;
         case RadioSourceMutation::Reconcile:{
             RadioGroupResult nestedResult;
-            this.nestedSucceeded.value() = ReconcileRadioGroup(this, this.state.value(), nestedResult).has_value();
+            this.nestedSucceeded.value() = ReconcileRadioGroup(this, AlwaysCurrentRadioGroupGuard(), this.state.value(), nestedResult).has_value();
             break;
         }
         case RadioSourceMutation::Apply:{
@@ -375,14 +375,6 @@ RadioGroupResult MakeUiRadioGroupResult(in b8 valid, in b8 selectionChanged, in 
     result.focused = focused;
     return result;
 }
-
-void ExpectUiRadioGroupResult(in RadioGroupResult actual, in RadioGroupResult expected){
-    EXPECT_EQ(actual.valid, expected.valid);
-    EXPECT_EQ(actual.selectionChanged, expected.selectionChanged);
-    EXPECT_EQ(actual.activated, expected.activated);
-    EXPECT_EQ(actual.focused, expected.focused);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -571,9 +563,9 @@ void VerifyUiProgressLayoutTests_ZeroSkipsFillAndFullCopiesTheExactContentEndpoi
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
-    const auto zero = PlaceProgress(bounds, bounds, metrics.value(), 0.0);
+    const auto zero = PlaceProgress(bounds, bounds, metrics.value(), 0.0, false, 0.0);
     ASSERT_TRUE(zero.has_value());
-    const auto full = PlaceProgress(bounds, bounds, metrics.value(), 1.0);
+    const auto full = PlaceProgress(bounds, bounds, metrics.value(), 1.0, false, 0.0);
     ASSERT_TRUE(full.has_value());
     ExpectUiRectExact(zero.value().fillReveal, Rect(18.0f, 28.0f, 0.0f, 16.0f));
     ExpectUiRectExact(zero.value().fillCanvas, zero.value().fillReveal);
@@ -595,7 +587,7 @@ void VerifyUiProgressLayoutTests_FiniteFractionsOutsideTheUnitIntervalClampVisua
     fractions[2u] = 1.1;
     fractions[3u] = f64.max;
     for(in f64 fraction : fractions){
-        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), fraction);
+        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), fraction, false, 0.0);
         ASSERT_TRUE(placement.has_value());
         if(fraction < 0.0){
             EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 0.0f);
@@ -613,7 +605,7 @@ void VerifyUiProgressLayoutTests_SmallFractionsRevealOnlyPartOfAMinimumSizedSkin
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
-    const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.01);
+    const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.01, false, 0.0);
     ASSERT_TRUE(placement.has_value());
     EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 1.84f);
     ExpectUiRectExact(placement.value().fillCanvas, Rect(18.0f, 28.0f, 12.0f, 16.0f));
@@ -626,7 +618,7 @@ void VerifyUiProgressLayoutTests_AMinimumCanvasNeverExtendsPastContentNarrowerTh
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     const Rect bounds = Rect(10.0f, 20.0f, 20.0f, 32.0f);
-    const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5);
+    const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5, false, 0.0);
     ASSERT_TRUE(placement.has_value());
     ExpectUiRectExact(placement.value().content, Rect(18.0f, 28.0f, 4.0f, 16.0f));
     ExpectUiRectExact(placement.value().fillReveal, Rect(18.0f, 28.0f, 2.0f, 16.0f));
@@ -638,9 +630,9 @@ void VerifyUiProgressLayoutTests_ClippingChangesVisibilityWithoutChangingTheProg
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
-    const auto full = PlaceProgress(bounds, bounds, metrics.value(), 0.25);
+    const auto full = PlaceProgress(bounds, bounds, metrics.value(), 0.25, false, 0.0);
     ASSERT_TRUE(full.has_value());
-    const auto clipped = PlaceProgress(bounds, Rect(40.0f, 24.0f, 60.0f, 12.0f), metrics.value(), 0.25);
+    const auto clipped = PlaceProgress(bounds, Rect(40.0f, 24.0f, 60.0f, 12.0f), metrics.value(), 0.25, false, 0.0);
     ASSERT_TRUE(clipped.has_value());
     ExpectUiRectExact(clipped.value().clip, Rect(40.0f, 24.0f, 60.0f, 12.0f));
     ExpectUiRectExact(clipped.value().content, full.value().content);
@@ -653,7 +645,7 @@ void VerifyUiProgressLayoutTests_ACompletelyDisjointClipProducesValidEmptyVisibi
     const auto metrics = MeasureProgress(ProgressOptions(), ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     const Rect bounds = Rect(10.0f, 20.0f, 200.0f, 32.0f);
-    const auto placement = PlaceProgress(bounds, Rect(300.0f, 20.0f, 10.0f, 10.0f), metrics.value(), 0.5);
+    const auto placement = PlaceProgress(bounds, Rect(300.0f, 20.0f, 10.0f, 10.0f), metrics.value(), 0.5, false, 0.0);
     ASSERT_TRUE(placement.has_value());
     EXPECT_FLOAT_EQ(placement.value().clip.width, 0.0f);
     EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 92.0f);
@@ -668,7 +660,7 @@ void VerifyUiProgressLayoutTests_TinyAndEmptyAreasBoundPaddingWithoutNegativeCon
     areas[0u] = Rect(10.0f, 20.0f, 4.0f, 3.0f);
     areas[1u] = Rect(10.0f, 20.0f, 0.0f, 0.0f);
     for(in Rect bounds : areas){
-        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5);
+        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), 0.5, false, 0.0);
         ASSERT_TRUE(placement.has_value());
         EXPECT_FLOAT_EQ(placement.value().content.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.value().content.height, 0.0f);
@@ -688,7 +680,7 @@ void VerifyUiProgressLayoutTests_PositiveSubnormalAndUnrepresentableRevealEdgesR
     fractions[0u] = bit_cast<f64>(cast<u64>(1u));
     fractions[1u] = 1.0e-15;
     for(in f64 fraction : fractions){
-        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), fraction);
+        const auto placement = PlaceProgress(bounds, bounds, metrics.value(), fraction, false, 0.0);
         ASSERT_TRUE(placement.has_value());
         EXPECT_FLOAT_EQ(placement.value().fillReveal.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.value().fillCanvas.width, 0.0f);
@@ -701,7 +693,7 @@ void VerifyUiProgressLayoutTests_RepresentableFloatSubnormalRevealIsPreservedAtT
     metrics.contentSize = Point(1.0f, 1.0f);
     const Rect bounds = Rect(0.0f, 0.0f, 1.0f, 1.0f);
     const f32 leastPositive = bit_cast<f32>(1u);
-    const auto placement = PlaceProgress(bounds, bounds, metrics, cast<f64>(leastPositive));
+    const auto placement = PlaceProgress(bounds, bounds, metrics, cast<f64>(leastPositive), false, 0.0);
     ASSERT_TRUE(placement.has_value());
     EXPECT_EQ(bit_cast<u32>(placement.value().fillReveal.width), 1u);
     ExpectUiRectExact(placement.value().fillCanvas, placement.value().fillReveal);
@@ -716,7 +708,7 @@ void VerifyUiProgressLayoutTests_ZeroIntrinsicMetricsAndEmptyBoundsAreValid(){
     const auto metrics = MeasureProgress(options, ProgressStyle(), region, region, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     ExpectUiProgressPointExact(metrics.value().contentSize, Point());
-    const auto placement = PlaceProgress(Rect(), Rect(), metrics.value(), 1.0);
+    const auto placement = PlaceProgress(Rect(), Rect(), metrics.value(), 1.0, false, 0.0);
     ASSERT_TRUE(placement.has_value());
     ExpectUiRectExact(placement.value().content, Rect());
     ExpectUiRectExact(placement.value().fillReveal, Rect());
@@ -920,7 +912,7 @@ void VerifyUiProgressLayoutTests_InvalidProspectiveRectanglesMetricsAndFractions
             fraction = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
             break;
         }
-        EXPECT_FALSE(PlaceProgress(bounds, clip, invalid, fraction).has_value());
+        EXPECT_FALSE(PlaceProgress(bounds, clip, invalid, fraction, false, 0.0).has_value());
     }
 }
 
@@ -928,12 +920,12 @@ void VerifyUiProgressLayoutTests_FiniteExtremeCoordinatesRetainValidExactFullEnd
     ProgressMetrics metrics = ProgressMetrics();
     metrics.contentSize = Point(f32.max, 32.0f);
     const Rect bounds = Rect(-f32.max, 0.0f, f32.max, 32.0f);
-    auto placement = PlaceProgress(bounds, bounds, metrics, 1.0);
+    auto placement = PlaceProgress(bounds, bounds, metrics, 1.0, false, 0.0);
     ASSERT_TRUE(placement.has_value());
     ExpectUiRectExact(placement.value().content, bounds);
     ExpectUiRectExact(placement.value().fillReveal, bounds);
     ExpectUiRectExact(placement.value().fillCanvas, bounds);
-    placement = PlaceProgress(bounds, bounds, metrics, 0.5);
+    placement = PlaceProgress(bounds, bounds, metrics, 0.5, false, 0.0);
     ASSERT_TRUE(placement.has_value());
     EXPECT_FLOAT_EQ(placement.value().fillReveal.width, f32.max * 0.5f);
     EXPECT_FLOAT_EQ(placement.value().fillReveal.x, -f32.max);
@@ -948,8 +940,8 @@ void VerifyUiProgressLayoutTests_OverflowingAndCollapsedPositiveInputEndpointsRe
     invalidRects[1u] = Rect(f32.max, 0.0f, 1.0f, 1.0f);
     invalidRects[2u] = Rect(0.0f, f32.max, 1.0f, 1.0f);
     for(in Rect invalid : invalidRects){
-        EXPECT_FALSE(PlaceProgress(invalid, normal, metrics, 0.5).has_value());
-        EXPECT_FALSE(PlaceProgress(normal, invalid, metrics, 0.5).has_value());
+        EXPECT_FALSE(PlaceProgress(invalid, normal, metrics, 0.5, false, 0.0).has_value());
+        EXPECT_FALSE(PlaceProgress(normal, invalid, metrics, 0.5, false, 0.0).has_value());
     }
 }
 
@@ -964,7 +956,7 @@ void VerifyUiRadioGroupBehaviorTests_DisabledCheckedChoiceIsPreservedWhileCursor
     RadioGroupState state = RadioGroupState();
     state.select(2u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 4u);
@@ -977,14 +969,14 @@ void VerifyUiRadioGroupBehaviorTests_RevisionReorderPreservesStableKeys(){
     RadioGroupState state = RadioGroupState();
     state.select(3u);
     RadioGroupResult result = RadioGroupResult();
-    auto choices = ReconcileRadioGroup(source, state, result);
+    auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     const RadioGroupChoice swapped = source.rows[0u];
     source.rows[0u] = source.rows[2u];
     source.rows[2u] = swapped;
     ++source.revisionValue.value();
     result = RadioGroupResult();
-    choices = ReconcileRadioGroup(source, state, result);
+    choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 3u);
     EXPECT_EQ(state.cursorKey(), 3u);
@@ -997,22 +989,22 @@ void VerifyUiRadioGroupBehaviorTests_RemovedSelectionAndSourceReplacementClearKn
     RadioGroupState state = RadioGroupState();
     state.select(4u);
     RadioGroupResult result = RadioGroupResult();
-    auto choices = ReconcileRadioGroup(source, state, result);
+    auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     source.count.value() = 3u;
     ++source.revisionValue.value();
     result = RadioGroupResult();
-    choices = ReconcileRadioGroup(source, state, result);
+    choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 1u);
     EXPECT_TRUE(result.selectionChanged);
     state.select(2u);
-    choices = ReconcileRadioGroup(source, state, result);
+    choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     ++source.generation.value();
     result = RadioGroupResult();
-    choices = ReconcileRadioGroup(source, state, result);
+    choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 1u);
@@ -1023,12 +1015,12 @@ void VerifyUiRadioGroupBehaviorTests_ResetAllowsExplicitChoiceOnANewFirstBinding
     ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    auto choices = ReconcileRadioGroup(source, state, result);
+    auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     state.reset();
     state.select(3u);
     ++source.generation.value();
-    choices = ReconcileRadioGroup(source, state, result);
+    choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 3u);
 }
@@ -1038,7 +1030,7 @@ void VerifyUiRadioGroupBehaviorTests_EmptyAndAllDisabledSourcesAreValidWithoutAu
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
     source.count.value() = 0u;
-    auto choices = ReconcileRadioGroup(source, state, result);
+    auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_TRUE(result.valid);
     EXPECT_EQ(state.selectedKey(), 0u);
@@ -1048,7 +1040,7 @@ void VerifyUiRadioGroupBehaviorTests_EmptyAndAllDisabledSourcesAreValidWithoutAu
         source.rows[index].enabled = false;
     ++source.revisionValue.value();
     state.select(2u);
-    choices = ReconcileRadioGroup(source, state, result);
+    choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 0u);
@@ -1065,7 +1057,7 @@ void VerifyUiRadioGroupBehaviorTests_AllFourArrowsWrapAndSkipDisabledChoices(){
     RadioGroupState state = RadioGroupState();
     state.select(1u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     const u64 input = state.inputGeneration();
     Array<ControlActionKindEnum, 4u> kinds = Array<ControlActionKindEnum, 4u>();
@@ -1095,7 +1087,7 @@ void VerifyUiRadioGroupBehaviorTests_HomeEndChooseEnabledEndpoints(){
     source.rows[3u].enabled = false;
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::End), state, result));
     EXPECT_EQ(state.selectedKey(), 3u);
@@ -1110,7 +1102,7 @@ void VerifyUiRadioGroupBehaviorTests_IdenticalNavigationAndIgnoredPageIntentAdva
     RadioGroupState state = RadioGroupState();
     state.select(1u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     const RadioGroupSnapshot before = state.snapshot();
     ASSERT_TRUE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
@@ -1128,24 +1120,24 @@ void VerifyUiRadioGroupBehaviorTests_RejectedActionsPreserveStateAndResult(){
     RadioGroupState state = RadioGroupState();
     state.select(1u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expected = MakeUiRadioGroupResult(true, true, true, true);
     result = expected;
     EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), MakeUiRadioGroupActionKey(state, ControlActionKind::Activate, 2u), state, result));
     EXPECT_TRUE(state.matches(before));
-    ExpectUiRadioGroupResult(result, expected);
+    ExpectUiSelectionResult(result, expected);
     RadioGroupOptions disabled = RadioGroupOptions();
     disabled.enabled = false;
     EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), disabled, MakeUiRadioGroupAction(state, ControlActionKind::Down), state, result));
     EXPECT_TRUE(state.matches(before));
-    ExpectUiRadioGroupResult(result, expected);
+    ExpectUiSelectionResult(result, expected);
     ControlAction stale = MakeUiRadioGroupAction(state, ControlActionKind::Down);
     ++stale.control.contentRevision;
     EXPECT_FALSE(ApplyRadioGroupControlAction(choices.value(), RadioGroupOptions(), stale, state, result));
     EXPECT_TRUE(state.matches(before));
-    ExpectUiRadioGroupResult(result, expected);
+    ExpectUiSelectionResult(result, expected);
 }
 
 void VerifyUiRadioGroupBehaviorTests_IdenticalPublicSelectionRejectsCopiedOlderInput(){
@@ -1153,7 +1145,7 @@ void VerifyUiRadioGroupBehaviorTests_IdenticalPublicSelectionRejectsCopiedOlderI
     RadioGroupState state = RadioGroupState();
     state.select(2u);
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     const ControlAction action = MakeUiRadioGroupAction(state, ControlActionKind::Down);
     state.select(2u);
@@ -1170,16 +1162,16 @@ void VerifyUiRadioGroupBehaviorTests_FullBoundIsAcceptedAndOversizedSourcePreser
     source.count.value() = 128u;
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    const auto choices = ReconcileRadioGroup(source, state, result);
+    const auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
     ASSERT_TRUE(choices.has_value());
     EXPECT_EQ(choices.value().count, 128u);
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expectedResult = result;
     source.count.value() = cast<u64>(u32.max) + 1u;
     source.keyCalls.value() = 0u;
-    EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+    EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
     EXPECT_TRUE(state.matches(before));
-    ExpectUiRadioGroupResult(result, expectedResult);
+    ExpectUiSelectionResult(result, expectedResult);
     EXPECT_EQ(source.keyCalls.value(), 0u);
 }
 
@@ -1211,9 +1203,9 @@ void VerifyUiRadioGroupBehaviorTests_MalformedKeysAndLookupsRejectAtomically(){
             source.revisionValue.value() = 0u;
             break;
         }
-        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         EXPECT_TRUE(state.matches(before));
-        ExpectUiRadioGroupResult(result, expectedResult);
+        ExpectUiSelectionResult(result, expectedResult);
     }
 }
 
@@ -1230,19 +1222,19 @@ void VerifyUiRadioGroupBehaviorTests_EverySourceCallbackRejectsStateSelectionAba
         RadioGroupState state = RadioGroupState();
         state.select(2u);
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
         source.bindState(state);
         source.phase = phase;
         source.mutation = RadioSourceMutation::SelectAba;
         source.armed.value() = true;
-        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         EXPECT_EQ(state.selectedKey(), before.selectedKey);
         EXPECT_EQ(state.cursorKey(), before.cursorKey);
         EXPECT_EQ(state.revision(), before.revision + 2u);
         EXPECT_NE(state.inputGeneration(), before.inputGeneration);
-        ExpectUiRadioGroupResult(result, expectedResult);
+        ExpectUiSelectionResult(result, expectedResult);
     }
 }
 
@@ -1255,13 +1247,13 @@ void VerifyUiRadioGroupBehaviorTests_CallbackIdenticalSelectionAndResetRemainAut
         RadioGroupState state = RadioGroupState();
         state.select(2u);
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         source.bindState(state);
         source.phase = RadioCallbackPhase::Lookup;
         source.mutation = mutation;
         source.armed.value() = true;
-        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         EXPECT_EQ(state.revision(), before.revision + 1u);
         EXPECT_NE(state.inputGeneration(), before.inputGeneration);
         u64 expectedKey = 2u;
@@ -1279,7 +1271,7 @@ void VerifyUiRadioGroupBehaviorTests_ReentrantBehaviorRejectsTheOuterReconciliat
         ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         RadioGroupResult result = RadioGroupResult();
-        auto choices = ReconcileRadioGroup(source, state, result);
+        auto choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
         ASSERT_TRUE(choices.has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
@@ -1288,11 +1280,11 @@ void VerifyUiRadioGroupBehaviorTests_ReentrantBehaviorRejectsTheOuterReconciliat
         source.phase = RadioCallbackPhase::Enabled;
         source.mutation = mutation;
         source.armed.value() = true;
-        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         EXPECT_FALSE(source.nestedSucceeded.value());
         EXPECT_TRUE(state.matches(before));
-        ExpectUiRadioGroupResult(result, expectedResult);
-        choices = ReconcileRadioGroup(source, state, result);
+        ExpectUiSelectionResult(result, expectedResult);
+        choices = ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result);
         ASSERT_TRUE(choices.has_value());
     }
 }
@@ -1306,15 +1298,15 @@ void VerifyUiRadioGroupBehaviorTests_SourceMutationDuringChoiceCallbacksRejectsW
         ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
         source.phase = RadioCallbackPhase::Enabled;
         source.mutation = mutation;
         source.armed.value() = true;
-        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         EXPECT_TRUE(state.matches(before));
-        ExpectUiRadioGroupResult(result, expectedResult);
+        ExpectUiSelectionResult(result, expectedResult);
     }
 }
 
@@ -1326,7 +1318,7 @@ void VerifyUiRadioGroupBehaviorTests_FinalOneShotMetadataMutationIsRejectedBefor
         ChoiceSource source = ChoiceSource();
         RadioGroupState state = RadioGroupState();
         RadioGroupResult result = RadioGroupResult();
-        ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
+        ASSERT_TRUE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupResult expectedResult = result;
         source.countCalls.value() = 0u;
@@ -1334,10 +1326,10 @@ void VerifyUiRadioGroupBehaviorTests_FinalOneShotMetadataMutationIsRejectedBefor
         source.mutation = mutation;
         source.triggerCount = cast<u32>(source.count.value()) * 3u + 3u;
         source.armed.value() = true;
-        EXPECT_FALSE(ReconcileRadioGroup(source, state, result).has_value());
+        EXPECT_FALSE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
         EXPECT_FALSE(source.armed.value());
         EXPECT_TRUE(state.matches(before));
-        ExpectUiRadioGroupResult(result, expectedResult);
+        ExpectUiSelectionResult(result, expectedResult);
     }
 }
 
@@ -1345,7 +1337,7 @@ void VerifyUiRadioGroupBehaviorTests_FailedBorrowedGuardStopsAllFurtherSourceCal
     ChoiceSource source = ChoiceSource();
     RadioGroupState state = RadioGroupState();
     RadioGroupResult result = RadioGroupResult();
-    ASSERT_TRUE(ReconcileRadioGroup(source, state, result).has_value());
+    ASSERT_TRUE(ReconcileRadioGroup(source, AlwaysCurrentRadioGroupGuard(), state, result).has_value());
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expectedResult = result;
     ReconcileGate gate = ReconcileGate();
@@ -1356,7 +1348,7 @@ void VerifyUiRadioGroupBehaviorTests_FailedBorrowedGuardStopsAllFurtherSourceCal
     EXPECT_FALSE(ReconcileRadioGroup(source, gate, state, result).has_value());
     EXPECT_EQ(source.callbackCalls.value(), source.callbacksAtMutation.value());
     EXPECT_TRUE(state.matches(before));
-    ExpectUiRadioGroupResult(result, expectedResult);
+    ExpectUiSelectionResult(result, expectedResult);
 }
 
 void VerifyUiRadioGroupBehaviorTests_BorrowedGuardMutationIsRejectedBeforeTheFirstSourceCall(){
@@ -1478,11 +1470,11 @@ void VerifyUiRadioGroupBuilderTests_EscapeBeforeReleaseCancelsPointerAndKeyboard
     EXPECT_FALSE(self.m_result.selectionChanged);
     self.press(Key::Tab);
     ASSERT_EQ(self.m_context.input().focus(), self.host());
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_FALSE(self.m_result.activated);
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_EQ(self.m_state.selectedKey(), 10u);
     EXPECT_FALSE(self.m_result.activated);
@@ -1698,8 +1690,8 @@ void VerifyUiProgressLayoutTests_VerticalAndIndeterminatePhaseWrapAndNanReject()
     const Expected<ProgressMetrics> metrics = MeasureProgress(vertical, ProgressStyle(), track, fill, 1.0f);
     ASSERT_TRUE(metrics.has_value());
     const Rect bounds = Rect(10.0f, 20.0f, 24.0f, 100.0f);
-    const Expected<ProgressPlacement> empty = PlaceProgress(bounds, bounds, metrics.value(), 0.0);
-    const Expected<ProgressPlacement> quarter = PlaceProgress(bounds, bounds, metrics.value(), 0.25);
+    const Expected<ProgressPlacement> empty = PlaceProgress(bounds, bounds, metrics.value(), 0.0, false, 0.0);
+    const Expected<ProgressPlacement> quarter = PlaceProgress(bounds, bounds, metrics.value(), 0.25, false, 0.0);
     ASSERT_TRUE(empty.has_value());
     ASSERT_TRUE(quarter.has_value());
     EXPECT_FLOAT_EQ(empty.value().fillReveal.height, 0.0f);

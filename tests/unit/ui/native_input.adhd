@@ -18,12 +18,7 @@ class InputTestFixtureBase{
     public in InputRouter inputRouter()const{ return this.m_input.value(); }
     public Optional<in HitTarget> target(in WidgetId widget)const{ return FindHitTarget(this.inputRouter().targets(), widget); }
     public b8 hasTarget(in WidgetId widget)const{ return this.target(widget).has_value(); }
-    public Expected<HitTarget> tryTarget(in WidgetId widget)const{
-        const auto found = this.target(widget);
-        if(found.has_value())
-            return found.value();
-        return MakeUnexpected(Failure());
-    }
+    public Expected<HitTarget> tryTarget(in WidgetId widget)const{ return TryFindHitTarget(this.inputRouter().targets(), widget); }
     public InputRoutingResult send(in InputEvent event){ return SendUiNativeInput(this.inputRouter(), event); }
     public InputRoutingResult send(in PointerInput input){ return SendUiPointerInput(this.inputRouter(), input); }
     public void click(){ this.click(Point(15.0f, 15.0f)); }
@@ -159,6 +154,41 @@ void ClickUiInputRouter(mut InputRouter router, in Point position){
 void SendUiKeyTap(mut InputRouter router, in Key value, in b8 shift){
     EXPECT_TRUE(SendUiNativeInput(router, Key(InputEventType::KeyDown, value, false, shift)).commandConsumed);
     EXPECT_TRUE(SendUiNativeInput(router, Key(InputEventType::KeyUp, value, false, shift)).commandConsumed);
+}
+
+Expected<HitTarget> TryFindHitTarget(in Span<HitTarget> targets, in WidgetId widget){
+    const auto found = FindHitTarget(targets, widget);
+    if(found.has_value())
+        return found.value();
+    return MakeUnexpected(Failure());
+}
+
+InputSource MakeUiInputSource(in u64 device, in u64 control){
+    InputSource source = InputSource();
+    source.device = device;
+    source.control = control;
+    return source;
+}
+
+ControlToken MakeUiControlToken(in u64 instanceGeneration, in u64 contentGeneration, in u64 contentRevision){
+    ControlToken token = ControlToken();
+    token.instanceGeneration = instanceGeneration;
+    token.contentGeneration = contentGeneration;
+    token.contentRevision = contentRevision;
+    return token;
+}
+
+PopupToken MakeUiPopupToken(in WidgetId widget, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
+    PopupToken token = PopupToken();
+    token.widget = widget;
+    token.declarationGeneration = declarationGeneration;
+    token.instanceGeneration = instanceGeneration;
+    token.openGeneration = openGeneration;
+    return token;
+}
+
+PopupToken MakeUiPopupToken(in u64 widgetValue, in u64 declarationGeneration, in u64 instanceGeneration, in u64 openGeneration){
+    return MakeUiPopupToken(WidgetId(widgetValue), declarationGeneration, instanceGeneration, openGeneration);
 }
 
 

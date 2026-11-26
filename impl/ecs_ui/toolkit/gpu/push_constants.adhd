@@ -122,7 +122,6 @@ enum<u8> GpuCommandRecordingMode{
 }
 
 enum<u8> GpuSampledTextureImportError{
-    Identity,
     Completion,
     Texture,
 }
@@ -136,7 +135,6 @@ class GpuPaintPushConstants{
     public u32 material = 0u;
     public u32 sdfChannel = 0u;
     public u32 sdfSpreadPixels = 0u;
-    public u32 sdfDistanceEncoding = 0u;
     public u32 effectBufferSlot = 0xffffffffu;
     public u32 effectOffset = 0xffffffffu;
     public u32 clipMaskOffset = 0xffffffffu;

@@ -102,6 +102,48 @@ private:
         b8 m_active = true;
     };
 
+    class CompositeSubmissionOperationScope final : NoCopy{
+    public:
+        CompositeSubmissionOperationScope(
+            GpuTaskGraph& graph,
+            GpuGraphSubmissionTransaction& transaction,
+            const GpuCompiledGraph& compiledGraph,
+            GpuRecordedGraph& recordedGraph,
+            GpuSubmissionPacketId* outFailedPacket = nullptr
+        )noexcept
+            : m_exceptionFinalizer(graph, transaction, compiledGraph, recordedGraph)
+            , m_planAccess(compiledGraph)
+        {
+            if(!m_planAccess.valid())
+                return;
+            m_artifactOperation.emplace(recordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
+            if(!m_artifactOperation->valid())
+                return;
+            m_submissionOperation.emplace(transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::CompositeBarrier, &*m_artifactOperation);
+            if(!m_submissionOperation->valid())
+                return;
+            m_exceptionScope.emplace(compiledGraph, recordedGraph, graph, transaction, outFailedPacket);
+            m_valid = true;
+        }
+
+
+    public:
+        [[nodiscard]] b8 valid()const noexcept{ return m_valid; }
+        [[nodiscard]] const GpuCompiledGraph::ReadView& planAccess()const noexcept{ return m_planAccess; }
+        [[nodiscard]] const GpuRecordedGraph::ArtifactOperation& artifactOperation()const noexcept{ return *m_artifactOperation; }
+
+        void setFailedPacket(const GpuSubmissionPacketId packet)noexcept{ m_exceptionScope->setFailedPacket(packet); }
+
+
+    private:
+        SubmissionAttemptExceptionFinalizer m_exceptionFinalizer;
+        GpuCompiledGraph::ReadView m_planAccess;
+        Optional<GpuRecordedGraph::ArtifactOperation> m_artifactOperation;
+        Optional<GpuGraphSubmissionTransaction::SubmissionOperation> m_submissionOperation;
+        Optional<SubmissionAttemptExceptionScope> m_exceptionScope;
+        b8 m_valid = false;
+    };
+
 
 public:
     GpuTaskScheduler()noexcept = default;
@@ -220,16 +262,6 @@ private:
         GpuRecordedGraph& recordedGraph,
         GpuGraphSubmissionTransaction& transaction
     )const;
-    [[nodiscard]] b8 submitGraph(
-        const GpuCompiledGraph& compiledGraph,
-        const GpuNativePacketRecorder& recorder,
-        const GpuTaskGraphNormalExecutionDesc& desc,
-        Alloc::ScratchArena& scratchArena,
-        GpuTaskGraph& graph,
-        GpuRecordedGraph& recordedGraph,
-        GpuGraphSubmissionTransaction& transaction,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
-    )const;
     [[nodiscard]] b8 submitGraphWithinDeviceOperation(
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
@@ -268,6 +300,13 @@ private:
 
 
 private:
+    template<typename Fn>
+    [[nodiscard]] b8 executeWithinDeviceOperation(
+        GpuTimingRecorder* timingRecorder,
+        GpuSubmissionPacketId* outFailedPacket,
+        Fn&& fn
+    )const;
+
     [[nodiscard]] Device& device()const noexcept;
     [[nodiscard]] b8 recordPacketRange(
         const GpuTaskGraph& graph,

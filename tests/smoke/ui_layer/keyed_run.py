@@ -2,49 +2,22 @@ from __future__ import annotations
 
 import time
 
-from probe_common import center
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS, admit_fixture_processes, prepare_fixture_launch
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination, LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS
-from window_capture_smoke import (STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect)
-from window_capture_validation import validate_expected_log_text
+from checkpoint_report import CHECKPOINT_SETTLE_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
+from window_capture_smoke import SmokeFailure
+from window_capture_termination import LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS
 
 LIT_RECTANGLES = "rectangles"
-LIT_LOGICAL_EXTENT = "logical_extent"
 
 
-class KeyedRun:
+class KeyedRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern, *, native_type, snapshot_reader, observer, minimum_height, fixture, capture_stage):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = native_type(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=native_type(backend, handle))
         self.snapshot_reader = snapshot_reader
         self.observer = observer
         self.minimum_height = minimum_height
         self.fixture = fixture
         self.capture_stage = capture_stage
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
-        return round(x * scale_x), round(y * scale_y)
-
-    def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def row(self, offset):
         x, y, width, height = self.snapshot[LIT_RECTANGLES]["first_row"]
@@ -60,62 +33,15 @@ class KeyedRun:
         for field in dynamic:
             self.expected.pop(field, None)
         if self.snapshot is not None:
-            self.native.pointer(*self.point(*center(self.snapshot[LIT_RECTANGLES]["counter"])))
+            self.native.pointer(*self.rectangle_point("counter"))
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, self.capture_stage)
-            snapshot = self.snapshot_reader(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 600.0 or snapshot[LIT_LOGICAL_EXTENT][1] < self.minimum_height:
-                raise SmokeSkip(f"the {self.fixture} fixture needs a logical client of at least 600x{self.minimum_height:g}")
-            self.backend.capture_client_window(self.handle, path)
-            report = self.observer(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report["passed"]:
-                self.snapshot = snapshot
-                for field in dynamic:
-                    self.expected[field] = snapshot[field]
-                report.update({"stage": name, "capture": str(path)})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        raise SmokeFailure(f"{self.fixture} displayed-state gate '{name}' failed: {report}")
+        self.poll_checkpoint(name, minimum_extent=(600.0, self.minimum_height),
+            minimum_extent_message=f"the {self.fixture} fixture needs a logical client of at least 600x{self.minimum_height:g}",
+            process_stage=self.capture_stage, snapshot_reader=self.snapshot_reader,
+            evaluate=lambda frame, snapshot: self.observer(frame, snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra),
+            raw_windows=False, failure_label=self.fixture, dynamic=dynamic)
 
 
 def run_keyed_fixture(args, *, fixture, display_marker, driver_type, log_name, label, window_label, process_label, graceful_exit_timeout=LIT_GRACEFUL_EXIT_TIMEOUT_SECONDS):
-    launch = prepare_fixture_launch(args, fixture, build_launch_environment=build_launch_environment, build_fixture_environment=build_fixture_environment, create_capture_backend=create_capture_backend)
-    driver = None
-    try:
-        admit_fixture_processes(args, launch, launch_logserver=launch_logserver, launch_testbed=launch_testbed)
-        if not launch.handle:
-            ensure_process_running(launch.application, f"before the {window_label} fixture appeared")
-            raise SmokeFailure(f"custom {process_label} fixture did not appear")
-        launch.backend.prepare_window(launch.handle)
-        wait_for_log_message(launch.log_directory, launch.log_baseline, launch.log_pattern, display_marker, min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        driver = driver_type(args, launch.backend, launch.handle, launch.application, launch.log_directory, launch.log_baseline, launch.log_pattern)
-        driver.execute()
-    finally:
-        try:
-            if launch.application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(launch.application, f"UI {process_label} fixture", launch.handle, graceful_exit_timeout=graceful_exit_timeout)
-                require_normal_process_exit(exit_code, tail, f"UI {process_label} fixture")
-        finally:
-            try:
-                text = ""
-                if launch.log_directory is not None:
-                    text = shutdown_logserver_and_collect(launch.logserver, launch.log_directory, launch.log_baseline, launch.log_pattern)
-                    launch.logserver = None
-                    (args.output_directory / log_name).write_text(text, encoding="utf-8")
-            finally:
-                if launch.logserver is not None:
-                    CaptureProcessTermination.terminate_process(launch.logserver, f"UI {process_label} logserver")
-                launch.backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    driver.write_report(True)
-    print(f"{label}: {len(driver.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture=fixture, display_marker=display_marker, driver_type=driver_type, log_name=log_name, label=label,
+        window_label=window_label, process_label=process_label, raw_windows=False, restore_pointer=False, graceful_exit_timeout=graceful_exit_timeout)

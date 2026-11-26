@@ -39,7 +39,6 @@ class RagdollBoneDef{
     public BodyDef bodyDef;
     public CapsuleShape capsule;
     public f32x4 boxHalfExtents(0.1f, 0.2f, 0.1f, 0.0f);
-    public b8 useBox = false;
     public RagdollBoneShapeType shapeType = RagdollBoneShapeType::Capsule;
     public SphereShape sphere;
     public FixedVector<f32x4, 32u> hullVertices;
@@ -88,8 +87,6 @@ class RagdollAutoGenParams{
     public f32 maxCapsuleRadius = 0.22f;
     public f32 defaultDensity = 1000.0f;
     public f32 defaultSwingLimit = 0.7f;
-    public f32 defaultTwistMin = -0.5f;
-    public f32 defaultTwistMax = 0.5f;
     public b8 useBoxForRoot = true;
 }
 
@@ -97,7 +94,7 @@ f32 ExtractBoneMaxInertia(in PhysicsWorld world, in BodyId bodyId){
     const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
     if(inRes.has_value()){
         in Mat3 inMat = inRes.value();
-        return SimdMax(1.0e-4f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
+        return Max(1.0e-4f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
     }
     return 0.5f;
 }
@@ -114,18 +111,18 @@ VectorSingle QuatFromRagdollBasisCols(in VectorSingle c0, in VectorSingle c1, in
     const f32 m22 = c2.z;
     const f32 trace = m00 + m11 + m22;
     if(trace > 0.0f){
-        const f32 s = 2.0f * SqrtFast(SimdMax(1.0e-8f, 1.0f + trace));
+        const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + trace));
         return SafeNormalizeQuat(VectorSingle((m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25f * s));
     }
     if(m00 >= m11 && m00 >= m22){
-        const f32 s = 2.0f * SqrtFast(SimdMax(1.0e-8f, 1.0f + m00 - m11 - m22));
+        const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + m00 - m11 - m22));
         return SafeNormalizeQuat(VectorSingle(0.25f * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s));
     }
     if(m11 >= m22){
-        const f32 s = 2.0f * SqrtFast(SimdMax(1.0e-8f, 1.0f + m11 - m00 - m22));
+        const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + m11 - m00 - m22));
         return SafeNormalizeQuat(VectorSingle((m01 + m10) / s, 0.25f * s, (m12 + m21) / s, (m02 - m20) / s));
     }
-    const f32 s = 2.0f * SqrtFast(SimdMax(1.0e-8f, 1.0f + m22 - m00 - m11));
+    const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + m22 - m00 - m11));
     return SafeNormalizeQuat(VectorSingle((m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s));
 }
 
@@ -386,14 +383,10 @@ class RagdollInstance{
                 return false;
             }
             const BodyId bodyId = bodyRes.value();
-            RagdollBoneShapeType primaryType = bDef.shapeType;
-            if(primaryType == RagdollBoneShapeType::Capsule && bDef.useBox)
-                primaryType = RagdollBoneShapeType::Box;
-
             b8 shapeOk = AttachRagdollShape(
                 world,
                 bodyId,
-                primaryType,
+                bDef.shapeType,
                 bDef.capsule,
                 bDef.sphere,
                 VectorSingle(bDef.boxHalfExtents),
@@ -460,40 +453,40 @@ class RagdollInstance{
             JointDef jd;
             jd.bodyIdA = bodyA;
             jd.bodyIdB = bodyB;
-            jd.collideConnected = false;
-            jd.enableProjection = true;
-            jd.projectionLinearTolerance = 0.02f;
-            jd.projectionAngularTolerance = 0.05f;
+            jd.settings.collideConnected = false;
+            jd.settings.enableProjection = true;
+            jd.settings.projectionLinearTolerance = 0.02f;
+            jd.settings.projectionAngularTolerance = 0.05f;
             const VectorSingle anchorW = VectorSingle(bDef.jointAnchorWorld);
             const VectorSingle axisW = SafeNormalizeVec3(VectorSingle(bDef.jointAxisWorld), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            jd.localAnchorA = f32x4(InverseTransformPointValues(VectorSingle(xfA.position), VectorSingle(xfA.rotation), anchorW), 0.0f);
-            jd.localAnchorB = f32x4(InverseTransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), anchorW), 0.0f);
-            jd.localAxisA = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
-            jd.localAxisB = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+            jd.settings.localAnchorA = f32x4(InverseTransformPointValues(VectorSingle(xfA.position), VectorSingle(xfA.rotation), anchorW), 0.0f);
+            jd.settings.localAnchorB = f32x4(InverseTransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), anchorW), 0.0f);
+            jd.settings.localAxisA = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfA.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+            jd.settings.localAxisB = f32x4(SafeNormalizeVec3(Vector3InverseRotate(axisW, VectorSingle(xfB.rotation)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
             const VectorSingle qRel = SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(VectorSingle(xfA.rotation)), VectorSingle(xfB.rotation)));
-            jd.referenceRotation = f32x4(qRel);
-            jd.useReferenceRotation = true;
+            jd.settings.referenceRotation = f32x4(qRel);
+            jd.settings.useReferenceRotation = true;
             this.m_jointRestRefQ[i] = f32x4(qRel);
 
             if(bDef.useSixDof){
-                jd.type = JointType::SixDof;
+                jd.settings.type = JointType::SixDof;
                 for(usize k = 0u; k < 6u; ++k)
-                    jd.sixDofAxes[k] = bDef.sixDofAxes[k];
+                    jd.settings.sixDofAxes[k] = bDef.sixDofAxes[k];
             }
             else{
-                jd.type = JointType::Spherical;
-                jd.enableLimit = (bDef.swingLimitY > 0.0f || bDef.swingLimitZ > 0.0f || bDef.twistMax > bDef.twistMin);
+                jd.settings.type = JointType::Spherical;
+                jd.settings.enableLimit = (bDef.swingLimitY > 0.0f || bDef.swingLimitZ > 0.0f || bDef.twistMax > bDef.twistMin);
                 const VectorSingle swingLim = Max(VectorSingle(bDef.swingLimitY, bDef.swingLimitZ, 0.0f, 0.0f), VectorSingle(0.0f));
-                jd.swingLimit = swingLim.x;
-                jd.swingLimitY = swingLim.y;
-                jd.lowerLimit = bDef.twistMin;
-                jd.upperLimit = bDef.twistMax;
+                jd.settings.swingLimit = swingLim.x;
+                jd.settings.swingLimitY = swingLim.y;
+                jd.settings.lowerLimit = bDef.twistMin;
+                jd.settings.upperLimit = bDef.twistMax;
             }
             if(bDef.useSolverMotors && bDef.motorHertz > 0.0f){
-                jd.enableSlerpDrive = false;
-                jd.slerpHertz = SimdMax(0.0f, bDef.motorHertz);
-                jd.slerpDampingRatio = SimdMax(0.0f, bDef.motorDamping);
-                jd.slerpMaxTorque = SimdMax(0.0f, bDef.motorMaxTorque);
+                jd.settings.enableSlerpDrive = false;
+                jd.settings.slerpHertz = Max(0.0f, bDef.motorHertz);
+                jd.settings.slerpDampingRatio = Max(0.0f, bDef.motorDamping);
+                jd.settings.slerpMaxTorque = Max(0.0f, bDef.motorMaxTorque);
             }
 
             const Expected<JointId> jRes = world.createJoint(jd);
@@ -604,7 +597,7 @@ class RagdollInstance{
     }
 
     public void blendPose(in Span<Transform3D> targetWorldTransforms, in f32 alpha, in b8 resetVelocities, mut PhysicsWorld world){
-        const f32 t = SimdClamp(alpha, 0.0f, 1.0f);
+        const f32 t = Clamp(alpha, 0.0f, 1.0f);
         const VectorSingle tVec(t);
         const VectorSingle zero(0.0f);
         const usize count = Min(this.boneBodies.size(), targetWorldTransforms.size());
@@ -682,7 +675,7 @@ class RagdollInstance{
             this.m_driveFlags[i] = flags;
         }
 
-        const f32 gainScale = SimdMax(0.0f, strengthMultiplier);
+        const f32 gainScale = Max(0.0f, strengthMultiplier);
         for(usize i = 0u; i < count; ++i){
             const f32 maxTorque = this.maxMotorTorques[i] * gainScale;
             const f32 hertz = this.motorHertzes[i];
@@ -753,7 +746,7 @@ class RagdollInstance{
             f32 effInertia = this.m_boneMaxInertias[i];
             if(parentIsDynamic){
                 const f32 parI = this.m_boneMaxInertias[pIdx];
-                effInertia = (effInertia * parI) / SimdMax(1.0e-6f, effInertia + parI);
+                effInertia = (effInertia * parI) / Max(1.0e-6f, effInertia + parI);
             }
             const f32 impDenom = 1.0f + dt * (kd + dt * kp);
             const VectorSingle relAv = VectorSingle(this.m_driveAngVel[i]) - refAngVel;
@@ -866,7 +859,7 @@ Expected<Vector<RagdollBoneDef>> BuildRagdollBonesFromSkeleton(
         }
     }
 
-    const f32 minLen = SimdMax(0.01f, params.minBoneLength);
+    const f32 minLen = Max(0.01f, params.minBoneLength);
     Vector<RagdollBoneDef> outBones;
     outBones.resize(n);
     for(usize i = 0u; i < n; ++i){
@@ -881,16 +874,16 @@ Expected<Vector<RagdollBoneDef>> BuildRagdollBonesFromSkeleton(
             const VectorSingle parDelta = jPos - VectorSingle(worldXfs[jIn.parentIndex].position);
             const f32 parLen = Vector3Length(parDelta).x;
             const VectorSingle leafDir = SafeNormalizeVec3(parDelta, Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), jRot));
-            endPos = jPos + leafDir * SimdMax(minLen, parLen * 0.5f);
+            endPos = jPos + leafDir * Max(minLen, parLen * 0.5f);
         }
 
         const VectorSingle boneVec = endPos - jPos;
         const f32 rawLen = Vector3Length(boneVec).x;
-        const f32 effLen = SimdMax(minLen, rawLen);
+        const f32 effLen = Max(minLen, rawLen);
         const VectorSingle boneDir = SafeNormalizeVec3(boneVec, Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), jRot));
         const VectorSingle midPos = jPos + boneDir * (effLen * 0.5f);
 
-        f32 radius = SimdClamp(effLen * params.defaultRadiusRatio, params.minCapsuleRadius, params.maxCapsuleRadius);
+        f32 radius = Clamp(effLen * params.defaultRadiusRatio, params.minCapsuleRadius, params.maxCapsuleRadius);
         if(jIn.capsuleRadius > 0.0f)
             radius = jIn.capsuleRadius;
         f32 density = params.defaultDensity;
@@ -920,13 +913,11 @@ Expected<Vector<RagdollBoneDef>> BuildRagdollBonesFromSkeleton(
         const VectorSingle pALoc = InverseTransformPointValues(midPos, jRot, jPos);
         const VectorSingle pBLoc = InverseTransformPointValues(midPos, jRot, jPos + boneDir * effLen);
         if(jIn.parentIndex == s_NullIndex && params.useBoxForRoot){
-            bDef.useBox = true;
             bDef.shapeType = RagdollBoneShapeType::Box;
             const VectorSingle localHalf = Abs(InverseTransformPointValues(midPos, jRot, jPos + boneDir * effLen) - pALoc) * 0.5f;
             bDef.boxHalfExtents = f32x4(Max(localHalf, VectorSingle(radius)), 0.0f);
         }
         else{
-            bDef.useBox = false;
             bDef.shapeType = RagdollBoneShapeType::Capsule;
             bDef.capsule.center1Radius = f32x4(pALoc, radius);
             bDef.capsule.center2 = f32x4(pBLoc, 0.0f);

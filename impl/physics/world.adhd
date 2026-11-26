@@ -15,39 +15,6 @@ f32 AabbPairMinDistanceSq(in VectorSingle minA, in VectorSingle maxA, in VectorS
     return Vector3LengthSq(d).x;
 }
 
-void PushMeshDistNodeWithSpill(
-    in u32 nodeIdx,
-    in f32 lbSq,
-    mut Array<u32, 256u> fixedNodes,
-    mut Array<f32, 256u> fixedLbSq,
-    mut u32 fixedCount,
-    mut Vector<u32> overflowNodes,
-    mut Vector<f32> overflowLbSq,
-    mut b8 useOverflow
-){
-    if(useOverflow){
-        overflowNodes.push_back(nodeIdx);
-        overflowLbSq.push_back(lbSq);
-        return;
-    }
-    if(fixedCount < 256u){
-        fixedNodes[fixedCount] = nodeIdx;
-        fixedLbSq[fixedCount] = lbSq;
-        ++fixedCount;
-        return;
-    }
-    useOverflow = true;
-    overflowNodes.reserve(512u);
-    overflowLbSq.reserve(512u);
-    for(u32 i = 0u; i < fixedCount; ++i){
-        overflowNodes.push_back(fixedNodes[i]);
-        overflowLbSq.push_back(fixedLbSq[i]);
-    }
-    fixedCount = 0u;
-    overflowNodes.push_back(nodeIdx);
-    overflowLbSq.push_back(lbSq);
-}
-
 Expected<DistanceOutput> ComputeInfinitePlaneVsInfinitePlaneDistance(
     in PlaneShape plA,
     in VectorSingle posA,
@@ -123,21 +90,10 @@ Expected<DistanceOutput> ComputeInfinitePlaneMeshDistance(
     f32 minSd = s_MaxF32;
     VectorSingle bestPtM(0.0f);
 
-    Array<u32, 256u> stack;
-    stack[0u] = 0u;
-    u32 stackCount = 1u;
-    Vector<u32> overflowStack;
-    b8 useOverflow = false;
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32 nodeIdx = 0u;
-        if(useOverflow){
-            nodeIdx = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            nodeIdx = stack[stackCount];
-        }
+    BvhSpillStack<u32, 256u> stack;
+    stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
         in MeshBvhNode node = mesh.nodes[nodeIdx];
         const f32 nodeMinSd = ComputeAabbMinSignedDistToPlaneValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), planeNInM, planeDInM) - meshR;
         if(foundAny && nodeMinSd >= minSd)
@@ -171,15 +127,15 @@ Expected<DistanceOutput> ComputeInfinitePlaneMeshDistance(
             const f32 rMinSd = ComputeAabbMinSignedDistToPlaneValues(VectorSingle(rightNode.aabbMinLeft, 0.0f), VectorSingle(rightNode.aabbMaxRight, 0.0f), planeNInM, planeDInM) - meshR;
             if(lMinSd < rMinSd){
                 if(!foundAny || rMinSd < minSd)
-                    PushBvhNodeWithSpill(rightIdx, stack, stackCount, overflowStack, useOverflow);
+                    stack.push(rightIdx);
                 if(!foundAny || lMinSd < minSd)
-                    PushBvhNodeWithSpill(leftIdx, stack, stackCount, overflowStack, useOverflow);
+                    stack.push(leftIdx);
             }
             else{
                 if(!foundAny || lMinSd < minSd)
-                    PushBvhNodeWithSpill(leftIdx, stack, stackCount, overflowStack, useOverflow);
+                    stack.push(leftIdx);
                 if(!foundAny || rMinSd < minSd)
-                    PushBvhNodeWithSpill(rightIdx, stack, stackCount, overflowStack, useOverflow);
+                    stack.push(rightIdx);
             }
         }
     }
@@ -188,7 +144,7 @@ Expected<DistanceOutput> ComputeInfinitePlaneMeshDistance(
 
     const VectorSingle ptMeshW = TransformPointValues(posMesh, rotMesh, bestPtM);
     const f32 signedGap = Vector3Dot(VectorSingle(ptMeshW - planeOriginW, 0.0f), worldPlaneN).x;
-    const f32 dist = SimdMax(0.0f, signedGap);
+    const f32 dist = Max(0.0f, signedGap);
     const VectorSingle ptPlaneW = ptMeshW - worldPlaneN * signedGap;
     DistanceOutput outD;
     if(flipOrder){
@@ -258,7 +214,7 @@ Expected<DistanceOutput> ComputeInfinitePlaneHeightfieldDistance(
 
     const VectorSingle ptHfW = TransformPointValues(posHf, rotHf, bestPtHf);
     const f32 signedGap = Vector3Dot(VectorSingle(ptHfW - planeOriginW, 0.0f), worldPlaneN).x;
-    const f32 dist = SimdMax(0.0f, signedGap);
+    const f32 dist = Max(0.0f, signedGap);
     const VectorSingle ptPlaneW = ptHfW - worldPlaneN * signedGap;
     DistanceOutput outD;
     if(flipOrder){
@@ -401,6 +357,137 @@ VectorSingle ComputeShapeProxyLocalCenter(in ShapeProxy proxy){
     return ComputeShapeProxyViewLocalCenter(MakeShapeProxyView(proxy));
 }
 
+b8 LoadHeightfieldCellVerticesInCoreBound(
+    in HeightfieldShape hf,
+    in u32 cx,
+    in u32 cz,
+    in b8 hasBound,
+    in VectorSingle cMin,
+    in VectorSingle cMax,
+    in f32 bestCoreBoundSq,
+    mut VectorSingle outV00,
+    mut VectorSingle outV10,
+    mut VectorSingle outV01,
+    mut VectorSingle outV11
+){
+    if(!LoadHeightfieldCellVertices(hf, cx, cz, outV00, outV10, outV01, outV11))
+        return false;
+    const VectorSingle hCol0(outV00.y, outV01.y, 0.0f, 0.0f);
+    const VectorSingle hCol1(outV10.y, outV11.y, 0.0f, 0.0f);
+    const VectorSingle hPairMin = Min(hCol0, hCol1);
+    const VectorSingle hPairMax = Max(hCol0, hCol1);
+    const f32 cellMinY = Min(hPairMin.x, hPairMin.y);
+    const f32 cellMaxY = Max(hPairMax.x, hPairMax.y);
+    if(hasBound && AabbPairMinDistanceSq(cMin, cMax, VectorSingle(outV00.x, cellMinY, outV00.z, 0.0f), VectorSingle(outV11.x, cellMaxY, outV11.z, 0.0f)) > bestCoreBoundSq)
+        return false;
+    return true;
+}
+
+void TraverseHeightfieldDistanceRings<EvalCellFn>(
+    in HeightfieldShape hf,
+    in VectorSingle cMin,
+    in VectorSingle cMax,
+    in b8 stopAtZero,
+    in f32 initialBestSurfDist,
+    mut f32 bestSurfDist,
+    mut f32 bestCoreBoundSq,
+    mut b8 outBestFound,
+    mut b8 outHasBound,
+    in EvalCellFn evalCell
+){
+    const u32 cellCols = hf.cols - 1u;
+    const u32 cellRows = hf.rows - 1u;
+    const f32 sx = hf.cellSizeX();
+    const f32 sz = hf.cellSizeZ();
+    const f32 ox = hf.originMaxY.x;
+    const f32 oz = hf.originMaxY.z;
+    const VectorSingle gridClamp = Clamp(
+        VectorSingle((cMin.x - ox) / sx, (cMax.x - ox) / sx, (cMin.z - oz) / sz, (cMax.z - oz) / sz),
+        VectorSingle(0.0f),
+        VectorSingle(
+            cast<f32>(cellCols) - 1.0e-4f,
+            cast<f32>(cellCols) - 1.0e-4f,
+            cast<f32>(cellRows) - 1.0e-4f,
+            cast<f32>(cellRows) - 1.0e-4f
+        )
+    );
+    const isize bx0 = cast<isize>(gridClamp.x);
+    const isize bx1 = cast<isize>(gridClamp.y);
+    const isize bz0 = cast<isize>(gridClamp.z);
+    const isize bz1 = cast<isize>(gridClamp.w);
+    const isize maxRing = cast<isize>(Max(cellCols, cellRows));
+
+    for(isize ring = 0; ring <= maxRing; ++ring){
+        if(stopAtZero && outBestFound && bestSurfDist <= 0.0f)
+            break;
+        if(ring == 0){
+            for(isize cz = bz0; cz <= bz1; ++cz){
+                for(isize cx = bx0; cx <= bx1; ++cx)
+                    evalCell(cast<u32>(cx), cast<u32>(cz));
+            }
+            if(!outBestFound && outHasBound && bestSurfDist < initialBestSurfDist)
+                outBestFound = true;
+            continue;
+        }
+
+        const b8 hasTop = (bz0 >= ring);
+        const b8 hasBot = (bz1 + ring < cast<isize>(cellRows));
+        const b8 hasLeft = (bx0 >= ring);
+        const b8 hasRight = (bx1 + ring < cast<isize>(cellCols));
+        if(!hasTop && !hasBot && !hasLeft && !hasRight)
+            break;
+
+        if(outHasBound){
+            f32 minSideSq = s_MaxF32;
+            if(hasTop){
+                const f32 dz = Max(0.0f, cMin.z - (oz + cast<f32>(bz0 - ring + 1) * sz));
+                minSideSq = Min(minSideSq, dz * dz);
+            }
+            if(hasBot){
+                const f32 dz = Max(0.0f, (oz + cast<f32>(bz1 + ring) * sz) - cMax.z);
+                minSideSq = Min(minSideSq, dz * dz);
+            }
+            if(hasLeft){
+                const f32 dx = Max(0.0f, cMin.x - (ox + cast<f32>(bx0 - ring + 1) * sx));
+                minSideSq = Min(minSideSq, dx * dx);
+            }
+            if(hasRight){
+                const f32 dx = Max(0.0f, (ox + cast<f32>(bx1 + ring) * sx) - cMax.x);
+                minSideSq = Min(minSideSq, dx * dx);
+            }
+            if(minSideSq > bestCoreBoundSq)
+                break;
+        }
+
+        const isize xSpan0 = Max(cast<isize>(0), bx0 - ring);
+        const isize xSpan1 = Min(cast<isize>(cellCols) - 1, bx1 + ring);
+        const isize zSpan0 = Max(cast<isize>(0), bz0 - ring + 1);
+        const isize zSpan1 = Min(cast<isize>(cellRows) - 1, bz1 + ring - 1);
+        if(hasTop){
+            const u32 cz = cast<u32>(bz0 - ring);
+            for(isize cx = xSpan0; cx <= xSpan1; ++cx)
+                evalCell(cast<u32>(cx), cz);
+        }
+        if(hasBot){
+            const u32 cz = cast<u32>(bz1 + ring);
+            for(isize cx = xSpan0; cx <= xSpan1; ++cx)
+                evalCell(cast<u32>(cx), cz);
+        }
+        if(hasLeft){
+            const u32 cx = cast<u32>(bx0 - ring);
+            for(isize cz = zSpan0; cz <= zSpan1; ++cz)
+                evalCell(cx, cast<u32>(cz));
+        }
+        if(hasRight){
+            const u32 cx = cast<u32>(bx1 + ring);
+            for(isize cz = zSpan0; cz <= zSpan1; ++cz)
+                evalCell(cx, cast<u32>(cz));
+        }
+        if(!outBestFound && outHasBound && bestSurfDist < initialBestSurfDist)
+            outBestFound = true;
+    }
+}
+
 void EvalHeightfieldDistanceCell(
     in HeightfieldShape hf,
     in u32 cx,
@@ -424,30 +511,19 @@ void EvalHeightfieldDistanceCell(
     VectorSingle v10(0.0f);
     VectorSingle v01(0.0f);
     VectorSingle v11(0.0f);
-    if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
-        return;
-    const VectorSingle hCol0(v00.y, v01.y, 0.0f, 0.0f);
-    const VectorSingle hCol1(v10.y, v11.y, 0.0f, 0.0f);
-    const VectorSingle hPairMin = Min(hCol0, hCol1);
-    const VectorSingle hPairMax = Max(hCol0, hCol1);
-    const f32 cellMinY = SimdMin(hPairMin.x, hPairMin.y);
-    const f32 cellMaxY = SimdMax(hPairMax.x, hPairMax.y);
-    if(bestFound && AabbPairMinDistanceSq(cMin, cMax, VectorSingle(v00.x, cellMinY, v00.z, 0.0f), VectorSingle(v11.x, cellMaxY, v11.z, 0.0f)) > bestCoreBoundSq)
+    if(!LoadHeightfieldCellVerticesInCoreBound(hf, cx, cz, bestFound, cMin, cMax, bestCoreBoundSq, v00, v10, v01, v11))
         return;
 
     const u32 cellBaseKey = (cz * cellCols + cx) * 2u;
     for(usize ti = 0u; ti < 2u; ++ti){
+        VectorSingle tv0(0.0f);
+        VectorSingle tv1(0.0f);
+        VectorSingle tv2(0.0f);
+        ExtractHeightfieldCellTriangle(hf.flipDiagonal, ti, v00, v10, v01, v11, tv0, tv1, tv2);
         Array<f32x3u, 3u> triPts;
-        if(ti == 0u){
-            triPts[0u] = f32x3u(v00);
-            triPts[1u] = f32x3u(v01);
-            triPts[2u] = f32x3u(v10);
-        }
-        else{
-            triPts[0u] = f32x3u(v10);
-            triPts[1u] = f32x3u(v01);
-            triPts[2u] = f32x3u(v11);
-        }
+        triPts[0u] = f32x3u(tv0);
+        triPts[1u] = f32x3u(tv1);
+        triPts[2u] = f32x3u(tv2);
         const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
         SimplexCache cache;
         DistanceOutput d;
@@ -1232,7 +1308,7 @@ class PhysicsWorld{
             contact.friction = customRes.friction;
         if(IsFinite(VectorSingle(customRes.staticFriction))){
             if(customRes.staticFriction >= 0.0f)
-                contact.staticFriction = SimdMax(customRes.staticFriction, contact.friction);
+                contact.staticFriction = Max(customRes.staticFriction, contact.friction);
             else
                 contact.staticFriction = contact.friction;
         }
@@ -1384,7 +1460,7 @@ class PhysicsWorld{
     public u32 gpuDispatchThreshold()const{ return this.m_gpuDispatchThreshold; }
     public void setGpuWorkloadFraction(in f32 fraction){
         if(IsFinite(VectorSingle(fraction)))
-            this.m_gpuWorkloadFraction = SimdClamp(fraction, 0.0f, 1.0f);
+            this.m_gpuWorkloadFraction = Clamp(fraction, 0.0f, 1.0f);
     }
     public f32 gpuWorkloadFraction()const{ return this.m_gpuWorkloadFraction; }
     public void setWarmStarting(in b8 enabled){ this.m_enableWarmStarting = enabled; }
@@ -2744,7 +2820,7 @@ class PhysicsWorld{
         const f32 sinHalf = Vector3Length(qImag).x;
         VectorSingle angVel(0.0f);
         if(sinHalf > 1.0e-6f){
-            const f32 angle = 2.0f * ATan2(VectorSingle(sinHalf), VectorSingle(SimdClamp(qDelta.w, -1.0f, 1.0f))).x;
+            const f32 angle = 2.0f * ATan2(VectorSingle(sinHalf), VectorSingle(Clamp(qDelta.w, -1.0f, 1.0f))).x;
             const VectorSingle axis = qImag / sinHalf;
             angVel = ApplyAngularLocks(axis * (angle * invDt), body.flags);
         }
@@ -4978,69 +5054,70 @@ class PhysicsWorld{
             return MakeUnexpected(Failure());
         if(this.m_bodies[bodyIdA].type != BodyType::Dynamic && this.m_bodies[bodyIdB].type != BodyType::Dynamic)
             return MakeUnexpected(Failure());
-        if(cast<u8>(def.type) >= cast<u8>(JointType::kCount))
+        in JointSettings ds = def.settings;
+        if(cast<u8>(ds.type) >= cast<u8>(JointType::kCount))
             return MakeUnexpected(Failure());
 
         if(
-            !IsFiniteVec3(VectorSingle(def.localAnchorA))
-            || !IsFiniteVec3(VectorSingle(def.localAnchorB))
-            || !IsFiniteVec3(VectorSingle(def.localAxisA))
-            || !IsFiniteVec3(VectorSingle(def.localAxisB))
-            || !IsFiniteQuat(VectorSingle(def.referenceRotation))
-            || !IsFinite(VectorSingle(def.length, def.minLength, def.maxLength, def.lowerLimit))
-            || !IsFinite(VectorSingle(def.upperLimit, def.motorSpeed, def.maxMotorForce, def.hertz))
-            || !IsFinite(VectorSingle(def.dampingRatio, def.correctionFactor, def.maxTorque, def.swingLimit))
-            || !IsFiniteVec3(VectorSingle(def.linearOffset))
-            || !IsFinite(VectorSingle(def.swingLimitY, def.springTarget, def.steeringAngle, def.suspensionRestLength))
-            || !IsFinite(VectorSingle(def.suspensionHertz, def.suspensionDampingRatio, def.breakForce, def.breakTorque))
-            || !IsFinite(VectorSingle(def.invMassScaleA, def.invMassScaleB, def.invInertiaScaleA, def.invInertiaScaleB))
-            || !IsFinite(VectorSingle(def.limitRestitution, def.limitHertz, def.limitDampingRatio, def.projectionLinearTolerance))
-            || !IsFinite(VectorSingle(def.projectionAngularTolerance, def.ratio, def.lengthA, def.lengthB))
-            || !IsFiniteVec3(VectorSingle(def.groundAnchorA))
-            || !IsFiniteVec3(VectorSingle(def.groundAnchorB))
-            || !IsFiniteQuat(VectorSingle(def.targetOrientation))
-            || !IsFinite(VectorSingle(def.slerpHertz, def.slerpDampingRatio, def.slerpMaxTorque, def.sixDofSwingLimitY))
-            || !IsFinite(VectorSingle(def.sixDofSwingLimitZ))
-            || cast<u8>(def.sixDofSwingLimitMode) >= cast<u8>(SixDofSwingLimitMode::kCount)
-            || def.length < 0.0f
-            || def.minLength < 0.0f
-            || def.maxLength < def.minLength
-            || def.upperLimit < def.lowerLimit
-            || def.hertz < 0.0f
-            || def.dampingRatio < 0.0f
-            || def.maxMotorForce < 0.0f
-            || def.correctionFactor < 0.0f
-            || def.maxTorque < 0.0f
-            || def.swingLimit < 0.0f
-            || def.swingLimitY < 0.0f
-            || def.suspensionHertz < 0.0f
-            || def.suspensionDampingRatio < 0.0f
-            || def.breakForce < 0.0f
-            || def.breakTorque < 0.0f
-            || def.invMassScaleA < 0.0f
-            || def.invMassScaleB < 0.0f
-            || def.invInertiaScaleA < 0.0f
-            || def.invInertiaScaleB < 0.0f
-            || def.limitRestitution < 0.0f
-            || def.limitHertz < 0.0f
-            || def.limitDampingRatio < 0.0f
-            || def.projectionLinearTolerance < 0.0f
-            || def.projectionAngularTolerance < 0.0f
-            || def.lengthA < 0.0f
-            || def.lengthB < 0.0f
-            || def.slerpHertz < 0.0f
-            || def.slerpDampingRatio < 0.0f
-            || def.slerpMaxTorque < 0.0f
-            || def.sixDofSwingLimitY < 0.0f
-            || def.sixDofSwingLimitZ < 0.0f
+            !IsFiniteVec3(VectorSingle(ds.localAnchorA))
+            || !IsFiniteVec3(VectorSingle(ds.localAnchorB))
+            || !IsFiniteVec3(VectorSingle(ds.localAxisA))
+            || !IsFiniteVec3(VectorSingle(ds.localAxisB))
+            || !IsFiniteQuat(VectorSingle(ds.referenceRotation))
+            || !IsFinite(VectorSingle(ds.length, ds.minLength, ds.maxLength, ds.lowerLimit))
+            || !IsFinite(VectorSingle(ds.upperLimit, ds.motorSpeed, ds.maxMotorForce, ds.hertz))
+            || !IsFinite(VectorSingle(ds.dampingRatio, ds.correctionFactor, ds.maxTorque, ds.swingLimit))
+            || !IsFiniteVec3(VectorSingle(ds.linearOffset))
+            || !IsFinite(VectorSingle(ds.swingLimitY, ds.springTarget, ds.steeringAngle, ds.suspensionRestLength))
+            || !IsFinite(VectorSingle(ds.suspensionHertz, ds.suspensionDampingRatio, ds.breakForce, ds.breakTorque))
+            || !IsFinite(VectorSingle(ds.invMassScaleA, ds.invMassScaleB, ds.invInertiaScaleA, ds.invInertiaScaleB))
+            || !IsFinite(VectorSingle(ds.limitRestitution, ds.limitHertz, ds.limitDampingRatio, ds.projectionLinearTolerance))
+            || !IsFinite(VectorSingle(ds.projectionAngularTolerance, ds.ratio, ds.lengthA, ds.lengthB))
+            || !IsFiniteVec3(VectorSingle(ds.groundAnchorA))
+            || !IsFiniteVec3(VectorSingle(ds.groundAnchorB))
+            || !IsFiniteQuat(VectorSingle(ds.targetOrientation))
+            || !IsFinite(VectorSingle(ds.slerpHertz, ds.slerpDampingRatio, ds.slerpMaxTorque, ds.sixDofSwingLimitY))
+            || !IsFinite(VectorSingle(ds.sixDofSwingLimitZ))
+            || cast<u8>(ds.sixDofSwingLimitMode) >= cast<u8>(SixDofSwingLimitMode::kCount)
+            || ds.length < 0.0f
+            || ds.minLength < 0.0f
+            || ds.maxLength < ds.minLength
+            || ds.upperLimit < ds.lowerLimit
+            || ds.hertz < 0.0f
+            || ds.dampingRatio < 0.0f
+            || ds.maxMotorForce < 0.0f
+            || ds.correctionFactor < 0.0f
+            || ds.maxTorque < 0.0f
+            || ds.swingLimit < 0.0f
+            || ds.swingLimitY < 0.0f
+            || ds.suspensionHertz < 0.0f
+            || ds.suspensionDampingRatio < 0.0f
+            || ds.breakForce < 0.0f
+            || ds.breakTorque < 0.0f
+            || ds.invMassScaleA < 0.0f
+            || ds.invMassScaleB < 0.0f
+            || ds.invInertiaScaleA < 0.0f
+            || ds.invInertiaScaleB < 0.0f
+            || ds.limitRestitution < 0.0f
+            || ds.limitHertz < 0.0f
+            || ds.limitDampingRatio < 0.0f
+            || ds.projectionLinearTolerance < 0.0f
+            || ds.projectionAngularTolerance < 0.0f
+            || ds.lengthA < 0.0f
+            || ds.lengthB < 0.0f
+            || ds.slerpHertz < 0.0f
+            || ds.slerpDampingRatio < 0.0f
+            || ds.slerpMaxTorque < 0.0f
+            || ds.sixDofSwingLimitY < 0.0f
+            || ds.sixDofSwingLimitZ < 0.0f
         )
             return MakeUnexpected(Failure());
 
-        if((def.type == JointType::Gear || def.type == JointType::RackAndPinion) && Abs(VectorSingle(def.ratio)).x <= 1.0e-7f)
+        if((ds.type == JointType::Gear || ds.type == JointType::RackAndPinion) && Abs(VectorSingle(ds.ratio)).x <= 1.0e-7f)
             return MakeUnexpected(Failure());
-        if(def.type == JointType::Pulley && def.ratio <= 0.0f)
+        if(ds.type == JointType::Pulley && ds.ratio <= 0.0f)
             return MakeUnexpected(Failure());
-        if(def.type == JointType::Path){
+        if(ds.type == JointType::Path){
             if(def.pathPoints.size() < 2u)
                 return MakeUnexpected(Failure());
             for(usize pi = 0u; pi < def.pathPoints.size(); ++pi){
@@ -5048,9 +5125,9 @@ class PhysicsWorld{
                     return MakeUnexpected(Failure());
             }
         }
-        if(def.type == JointType::SixDof){
+        if(ds.type == JointType::SixDof){
             for(usize k = 0u; k < 6u; ++k){
-                in SixDofAxisConfig cfg = def.sixDofAxes[k];
+                in SixDofAxisConfig cfg = ds.sixDofAxes[k];
                 if(
                     cast<u8>(cfg.motion) >= cast<u8>(JointMotion::kCount)
                     || !IsFinite(VectorSingle(cfg.lowerLimit, cfg.upperLimit, cfg.motorTargetVelocity, cfg.motorTargetPosition))
@@ -5065,24 +5142,24 @@ class PhysicsWorld{
         }
 
         const b8 needsAxisA =
-            (def.type == JointType::Spherical)
-            || (def.type == JointType::Revolute)
-            || (def.type == JointType::Prismatic)
-            || (def.type == JointType::Wheel)
-            || (def.type == JointType::Gear)
-            || (def.type == JointType::RackAndPinion)
+            (ds.type == JointType::Spherical)
+            || (ds.type == JointType::Revolute)
+            || (ds.type == JointType::Prismatic)
+            || (ds.type == JointType::Wheel)
+            || (ds.type == JointType::Gear)
+            || (ds.type == JointType::RackAndPinion)
         ;
         const b8 needsAxisB =
-            (def.type == JointType::Spherical)
-            || (def.type == JointType::Revolute)
-            || (def.type == JointType::Wheel)
-            || (def.type == JointType::Gear)
-            || (def.type == JointType::RackAndPinion)
-            || (def.type == JointType::Path && def.pathLockRotation)
+            (ds.type == JointType::Spherical)
+            || (ds.type == JointType::Revolute)
+            || (ds.type == JointType::Wheel)
+            || (ds.type == JointType::Gear)
+            || (ds.type == JointType::RackAndPinion)
+            || (ds.type == JointType::Path && ds.pathLockRotation)
         ;
-        if(needsAxisA && Vector3LengthSq(VectorSingle(def.localAxisA, 0.0f)).x <= s_NormalizeEpsilonSq)
+        if(needsAxisA && Vector3LengthSq(VectorSingle(ds.localAxisA, 0.0f)).x <= s_NormalizeEpsilonSq)
             return MakeUnexpected(Failure());
-        if(needsAxisB && Vector3LengthSq(VectorSingle(def.localAxisB, 0.0f)).x <= s_NormalizeEpsilonSq)
+        if(needsAxisB && Vector3LengthSq(VectorSingle(ds.localAxisB, 0.0f)).x <= s_NormalizeEpsilonSq)
             return MakeUnexpected(Failure());
 
         u32 jIdx = s_NullIndex;
@@ -5103,14 +5180,14 @@ class PhysicsWorld{
         joint = Joint();
         joint.jointId = jIdx;
         joint.generation = nextGen;
-        joint.type = def.type;
-        joint.setLocalAnchorA(VectorSingle(def.localAnchorA));
-        joint.setLocalAnchorB(VectorSingle(def.localAnchorB));
-        joint.setLocalAxisA(SafeNormalizeVec3(VectorSingle(def.localAxisA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
-        joint.setLocalAxisB(SafeNormalizeVec3(VectorSingle(def.localAxisB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
+        joint.type = ds.type;
+        joint.setLocalAnchorA(VectorSingle(ds.localAnchorA));
+        joint.setLocalAnchorB(VectorSingle(ds.localAnchorB));
+        joint.setLocalAxisA(SafeNormalizeVec3(VectorSingle(ds.localAxisA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
+        joint.setLocalAxisB(SafeNormalizeVec3(VectorSingle(ds.localAxisB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
 
-        if(def.useReferenceRotation){
-            joint.referenceRotation = f32x4(SafeNormalizeQuat(VectorSingle(def.referenceRotation)));
+        if(ds.useReferenceRotation){
+            joint.referenceRotation = f32x4(SafeNormalizeQuat(VectorSingle(ds.referenceRotation)));
         }
         else{
             in Body bA = this.m_bodies[bodyIdA];
@@ -5120,84 +5197,84 @@ class PhysicsWorld{
             joint.referenceRotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(qA), qB)));
         }
 
-        joint.setLength(def.length);
-        joint.setMinLength(def.minLength);
-        f32 maxLen = def.maxLength;
-        if(def.type == JointType::Rope && maxLen >= s_HugeCoordinate * 0.5f)
-            maxLen = def.length;
+        joint.setLength(ds.length);
+        joint.setMinLength(ds.minLength);
+        f32 maxLen = ds.maxLength;
+        if(ds.type == JointType::Rope && maxLen >= s_HugeCoordinate * 0.5f)
+            maxLen = ds.length;
         joint.setMaxLength(maxLen);
-        joint.setLowerLimit(def.lowerLimit);
-        joint.setUpperLimit(def.upperLimit);
-        joint.setMotorSpeed(def.motorSpeed);
-        joint.maxMotorForce = def.maxMotorForce;
-        joint.hertz = def.hertz;
-        joint.dampingRatio = def.dampingRatio;
-        joint.setLinearOffset(VectorSingle(def.linearOffset));
-        joint.correctionFactor = SimdClamp(def.correctionFactor, 0.0f, 1.0f);
-        joint.maxTorque = def.maxTorque;
-        joint.swingLimit = def.swingLimit;
-        joint.swingLimitY = def.swingLimitY;
-        joint.springTarget = def.springTarget;
-        joint.steeringAngle = def.steeringAngle;
-        joint.suspensionRestLength = def.suspensionRestLength;
-        joint.suspensionHertz = def.suspensionHertz;
-        joint.suspensionDampingRatio = def.suspensionDampingRatio;
-        joint.invMassScaleA = def.invMassScaleA;
-        joint.invMassScaleB = def.invMassScaleB;
-        joint.invInertiaScaleA = def.invInertiaScaleA;
-        joint.invInertiaScaleB = def.invInertiaScaleB;
-        joint.limitRestitution = def.limitRestitution;
-        joint.limitHertz = def.limitHertz;
-        joint.limitDampingRatio = def.limitDampingRatio;
-        joint.projectionLinearTolerance = def.projectionLinearTolerance;
-        joint.projectionAngularTolerance = def.projectionAngularTolerance;
-        joint.ratio = def.ratio;
-        joint.breakForce = def.breakForce;
-        joint.breakTorque = def.breakTorque;
+        joint.setLowerLimit(ds.lowerLimit);
+        joint.setUpperLimit(ds.upperLimit);
+        joint.setMotorSpeed(ds.motorSpeed);
+        joint.maxMotorForce = ds.maxMotorForce;
+        joint.hertz = ds.hertz;
+        joint.dampingRatio = ds.dampingRatio;
+        joint.setLinearOffset(VectorSingle(ds.linearOffset));
+        joint.correctionFactor = Clamp(ds.correctionFactor, 0.0f, 1.0f);
+        joint.maxTorque = ds.maxTorque;
+        joint.swingLimit = ds.swingLimit;
+        joint.swingLimitY = ds.swingLimitY;
+        joint.springTarget = ds.springTarget;
+        joint.steeringAngle = ds.steeringAngle;
+        joint.suspensionRestLength = ds.suspensionRestLength;
+        joint.suspensionHertz = ds.suspensionHertz;
+        joint.suspensionDampingRatio = ds.suspensionDampingRatio;
+        joint.invMassScaleA = ds.invMassScaleA;
+        joint.invMassScaleB = ds.invMassScaleB;
+        joint.invInertiaScaleA = ds.invInertiaScaleA;
+        joint.invInertiaScaleB = ds.invInertiaScaleB;
+        joint.limitRestitution = ds.limitRestitution;
+        joint.limitHertz = ds.limitHertz;
+        joint.limitDampingRatio = ds.limitDampingRatio;
+        joint.projectionLinearTolerance = ds.projectionLinearTolerance;
+        joint.projectionAngularTolerance = ds.projectionAngularTolerance;
+        joint.ratio = ds.ratio;
+        joint.breakForce = ds.breakForce;
+        joint.breakTorque = ds.breakTorque;
         if(joint.breakForce > 0.0f || joint.breakTorque > 0.0f)
             ++this.m_breakableJointCount;
-        joint.setFlag(JointFlags::EnableLimit, def.enableLimit);
-        b8 enableMot = def.enableMotor;
-        if(def.type == JointType::Motor)
+        joint.setFlag(JointFlags::EnableLimit, ds.enableLimit);
+        b8 enableMot = ds.enableMotor;
+        if(ds.type == JointType::Motor)
             enableMot = true;
         joint.setFlag(JointFlags::EnableMotor, enableMot);
-        joint.setFlag(JointFlags::EnableSpring, def.enableSpring);
-        joint.setFlag(JointFlags::CollideConnected, def.collideConnected);
-        joint.setFlag(JointFlags::Enabled, def.enabled);
-        joint.setFlag(JointFlags::EnableProjection, def.enableProjection);
-        joint.setFlag(JointFlags::EnableTwistLimit, def.enableTwistLimit);
+        joint.setFlag(JointFlags::EnableSpring, ds.enableSpring);
+        joint.setFlag(JointFlags::CollideConnected, ds.collideConnected);
+        joint.setFlag(JointFlags::Enabled, ds.enabled);
+        joint.setFlag(JointFlags::EnableProjection, ds.enableProjection);
+        joint.setFlag(JointFlags::EnableTwistLimit, ds.enableTwistLimit);
         joint.userData = def.userData;
         joint.setFlag(JointFlags::Alive, true);
 
-        const b8 needSphericalExtra = (def.type == JointType::Spherical && (def.enableSlerpDrive || def.slerpHertz > 0.0f));
-        if(def.type == JointType::SixDof || def.type == JointType::Pulley || def.type == JointType::Path || needSphericalExtra){
+        const b8 needSphericalExtra = (ds.type == JointType::Spherical && (ds.enableSlerpDrive || ds.slerpHertz > 0.0f));
+        if(ds.type == JointType::SixDof || ds.type == JointType::Pulley || ds.type == JointType::Path || needSphericalExtra){
             const u32 extraIdx = this.allocJointExtraDataInternal();
             joint.extraDataIndex = extraIdx;
             mut JointExtraData extra = this.m_jointExtraData[extraIdx];
-            if(def.type == JointType::SixDof){
+            if(ds.type == JointType::SixDof){
                 for(usize k = 0u; k < 6u; ++k)
-                    extra.sixDofAxes[k] = def.sixDofAxes[k];
-                extra.sixDofSwingLimitMode = def.sixDofSwingLimitMode;
-                extra.sixDofSwingLimitY = def.sixDofSwingLimitY;
-                extra.sixDofSwingLimitZ = def.sixDofSwingLimitZ;
-                extra.enableSlerpDrive = def.enableSlerpDrive;
-                extra.targetOrientation = f32x4(SafeNormalizeQuat(VectorSingle(def.targetOrientation)));
-                extra.slerpHertz = def.slerpHertz;
-                extra.slerpDampingRatio = def.slerpDampingRatio;
-                extra.slerpMaxTorque = def.slerpMaxTorque;
+                    extra.sixDofAxes[k] = ds.sixDofAxes[k];
+                extra.sixDofSwingLimitMode = ds.sixDofSwingLimitMode;
+                extra.sixDofSwingLimitY = ds.sixDofSwingLimitY;
+                extra.sixDofSwingLimitZ = ds.sixDofSwingLimitZ;
+                extra.enableSlerpDrive = ds.enableSlerpDrive;
+                extra.targetOrientation = f32x4(SafeNormalizeQuat(VectorSingle(ds.targetOrientation)));
+                extra.slerpHertz = ds.slerpHertz;
+                extra.slerpDampingRatio = ds.slerpDampingRatio;
+                extra.slerpMaxTorque = ds.slerpMaxTorque;
             }
-            else if(def.type == JointType::Spherical){
-                extra.enableSlerpDrive = def.enableSlerpDrive;
-                extra.targetOrientation = f32x4(SafeNormalizeQuat(VectorSingle(def.targetOrientation)));
-                extra.slerpHertz = def.slerpHertz;
-                extra.slerpDampingRatio = def.slerpDampingRatio;
-                extra.slerpMaxTorque = def.slerpMaxTorque;
+            else if(ds.type == JointType::Spherical){
+                extra.enableSlerpDrive = ds.enableSlerpDrive;
+                extra.targetOrientation = f32x4(SafeNormalizeQuat(VectorSingle(ds.targetOrientation)));
+                extra.slerpHertz = ds.slerpHertz;
+                extra.slerpDampingRatio = ds.slerpDampingRatio;
+                extra.slerpMaxTorque = ds.slerpMaxTorque;
             }
-            else if(def.type == JointType::Pulley){
-                extra.groundAnchorA = def.groundAnchorA;
-                extra.groundAnchorB = def.groundAnchorB;
-                if(def.lengthA > 0.0f || def.lengthB > 0.0f){
-                    extra.pulleyConstant = def.lengthA + def.ratio * def.lengthB;
+            else if(ds.type == JointType::Pulley){
+                extra.groundAnchorA = ds.groundAnchorA;
+                extra.groundAnchorB = ds.groundAnchorB;
+                if(ds.lengthA > 0.0f || ds.lengthB > 0.0f){
+                    extra.pulleyConstant = ds.lengthA + ds.ratio * ds.lengthB;
                 }
                 else{
                     in Body bA = this.m_bodies[bodyIdA];
@@ -5206,20 +5283,20 @@ class PhysicsWorld{
                     in Transform3D xfB = this.m_solverSets[bB.setIndex].sims[bB.localIndex].transform;
                     const VectorSingle pA0 = TransformPointValues(VectorSingle(xfA.position), VectorSingle(xfA.rotation), joint.localAnchorA());
                     const VectorSingle pB0 = TransformPointValues(VectorSingle(xfB.position), VectorSingle(xfB.rotation), joint.localAnchorB());
-                    const f32 dA = Vector3Length(VectorSingle(pA0 - VectorSingle(def.groundAnchorA), 0.0f)).x;
-                    const f32 dB = Vector3Length(VectorSingle(pB0 - VectorSingle(def.groundAnchorB), 0.0f)).x;
-                    extra.pulleyConstant = dA + def.ratio * dB;
-                    if(extra.pulleyConstant <= 0.0f && def.length > 0.0f)
-                        extra.pulleyConstant = def.length;
+                    const f32 dA = Vector3Length(VectorSingle(pA0 - VectorSingle(ds.groundAnchorA), 0.0f)).x;
+                    const f32 dB = Vector3Length(VectorSingle(pB0 - VectorSingle(ds.groundAnchorB), 0.0f)).x;
+                    extra.pulleyConstant = dA + ds.ratio * dB;
+                    if(extra.pulleyConstant <= 0.0f && ds.length > 0.0f)
+                        extra.pulleyConstant = ds.length;
                 }
                 joint.setLength(extra.pulleyConstant);
             }
-            else if(def.type == JointType::Path){
+            else if(ds.type == JointType::Path){
                 extra.pathPoints.reserve(def.pathPoints.size());
                 for(usize pi = 0u; pi < def.pathPoints.size(); ++pi)
                     extra.pathPoints.push_back(def.pathPoints[pi]);
-                extra.pathClosed = def.pathClosed;
-                extra.pathLockRotation = def.pathLockRotation;
+                extra.pathClosed = ds.pathClosed;
+                extra.pathLockRotation = ds.pathLockRotation;
                 extra.rebuildPathCache();
             }
         }
@@ -5246,12 +5323,12 @@ class PhysicsWorld{
         this.m_bodies[bodyIdB].headJointKey = EncodeJointKey(jIdx, 1u);
         ++this.m_bodies[bodyIdB].jointCount;
 
-        if(def.enabled && !def.collideConnected){
+        if(ds.enabled && !ds.collideConnected){
             ++this.m_nonCollideJointVersion;
             this.wakeJointCollisionPeersInternal(bodyIdA, bodyIdB, false);
         }
 
-        if(def.enabled && this.m_bodies[bodyIdA].setIndex != s_DisabledSetIndex && this.m_bodies[bodyIdB].setIndex != s_DisabledSetIndex){
+        if(ds.enabled && this.m_bodies[bodyIdA].setIndex != s_DisabledSetIndex && this.m_bodies[bodyIdB].setIndex != s_DisabledSetIndex){
             LinkJointToIslandWithGraph(
                 this.m_graph,
                 this.m_bodies,
@@ -5463,7 +5540,7 @@ class PhysicsWorld{
     public b8 setJointCorrectionFactor(in JointId jointId, in f32 correctionFactor){
         if(!this.isValidJoint(jointId) || !IsFinite(VectorSingle(correctionFactor)) || correctionFactor < 0.0f)
             return false;
-        this.m_joints[jointId.index].correctionFactor = SimdClamp(correctionFactor, 0.0f, 1.0f);
+        this.m_joints[jointId.index].correctionFactor = Clamp(correctionFactor, 0.0f, 1.0f);
         this.wakeJointBodies(jointId.index);
         return true;
     }
@@ -7125,8 +7202,8 @@ class PhysicsWorld{
                     if(stopped || curMaxFrac <= 0.0f)
                         return 0.0f;
                     if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
-                        return SimdMin(maxFraction, curMaxFrac);
-                    const f32 effMax = SimdMin(maxFraction, curMaxFrac);
+                        return Min(maxFraction, curMaxFrac);
+                    const f32 effMax = Min(maxFraction, curMaxFrac);
                     curMaxFrac = effMax;
                     return this.evalRayCastCollectShape(shapeIdx, inputRef, filterRef, origin, translation, collectorRef, curMaxFrac, stopped);
                 }
@@ -7412,7 +7489,7 @@ class PhysicsWorld{
                     const VectorSingle nextXfPos = VectorSingle(supW) + trans * maxFraction;
                     const f32 sdEnd = Vector3Dot(VectorSingle(nextXfPos - planePt, 0.0f), worldN).x;
                     if(sdEnd < sd && sdEnd <= s_LinearSlop){
-                        bestT = SimdClamp((sd - 0.0f) / SimdMax(sd - sdEnd, 1.0e-8f) * maxFraction, 0.0f, maxFraction);
+                        bestT = Clamp((sd - 0.0f) / Max(sd - sdEnd, 1.0e-8f) * maxFraction, 0.0f, maxFraction);
                         bestPt = (supW + trans * bestT);
                         bestPt = bestPt - worldN * Vector3Dot(VectorSingle(bestPt - planePt, 0.0f), worldN).x;
                     }
@@ -7445,7 +7522,7 @@ class PhysicsWorld{
         if(shapeIdx >= this.m_shapes.size() || !this.m_shapes[shapeIdx].alive())
             return hit;
         in Shape shape = this.m_shapes[shapeIdx];
-        const ShapeProxy sphereProxy = MakePointProxy(VectorSingle(0.0f), SimdMax(radius, 0.0f));
+        const ShapeProxy sphereProxy = MakePointProxy(VectorSingle(0.0f), Max(radius, 0.0f));
         u32 triIdx = s_NullIndex;
         f32x2u bary(0.0f, 0.0f);
         const LocalRayHit castHit = this.shapeCastSingleShape(
@@ -7714,40 +7791,6 @@ class PhysicsWorld{
         return this.shapeCastAnyImpl(queryProxy, input, queryFilter);
     }
 
-    private b8 evalShapeCastAllCandidate(
-        in u32 shapeIdx,
-        in ShapeProxy queryProxyRef,
-        in VectorSingle normOriginPos,
-        in VectorSingle normOriginRot,
-        in VectorSingle endRot,
-        in ShapeCastInput inputRef,
-        in Optional<ShapeQueryFilterCallback> filterRef,
-        in VectorSingle trans,
-        mut Vector<ShapeCastHit> outHits
-    )const{
-        if(!this.passesQueryShapeFilter(shapeIdx, inputRef.filter, inputRef.ignoreBodyId, inputRef.ignoreShapeId, inputRef.hitSensors, inputRef.useCustomFilter, filterRef))
-            return true;
-
-        in Shape shape = this.m_shapes[shapeIdx];
-        in Body body = this.m_bodies[shape.bodyId];
-        in Transform3D xfB = this.m_solverSets[body.setIndex].sims[body.localIndex].transform;
-        u32 triIdx = s_NullIndex;
-        f32x2u bary(0.0f, 0.0f);
-        const LocalRayHit castHit = this.shapeCastSingleShape(shape, VectorSingle(xfB.position), VectorSingle(xfB.rotation), MakeShapeProxyView(queryProxyRef), normOriginPos, normOriginRot, trans, inputRef.hasRotation, endRot, 1.0f, triIdx, bary);
-        if(castHit.hit()){
-            ShapeCastHit hit;
-            hit.hit = true;
-            hit.fraction = castHit.fraction();
-            hit.point = f32x4(castHit.point(), 0.0f);
-            hit.normal = f32x4(-castHit.normal(), 0.0f);
-            hit.shapeId = this.makeShapeId(shapeIdx);
-            hit.triangleIndex = triIdx;
-            hit.barycentrics = bary;
-            outHits.push_back(hit);
-        }
-        return true;
-    }
-
     private void shapeCastAllImpl(
         in ShapeProxy queryProxy,
         in ShapeCastInput input,
@@ -7755,60 +7798,15 @@ class PhysicsWorld{
         mut Vector<ShapeCastHit> outHits
     )const{
         outHits.clear();
-        if(
-            !this.validateShapeQueryProxy(queryProxy)
-            || !IsFinite(VectorSingle(input.radius))
-            || input.radius < 0.0f
-            || !IsValidPositionVec3(VectorSingle(input.originTransform.position))
-            || !IsFiniteQuat(VectorSingle(input.originTransform.rotation))
-            || !IsFiniteVec3(VectorSingle(input.translation))
-            || (input.hasRotation && !IsFiniteQuat(VectorSingle(input.endRotation)))
-        )
-            return;
-
-        VectorSingle normOriginPos(0.0f);
-        VectorSingle normOriginRot(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle endRot(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle sweepMin(0.0f);
-        VectorSingle sweepMax(0.0f);
-        this.computeQuerySweepAabbValues(queryProxy, input, normOriginPos, normOriginRot, endRot, sweepMin, sweepMax);
-        const Aabb3D sweepBox(sweepMin, sweepMax);
-        const VectorSingle trans = VectorSingle(input.translation);
-
-        ShapeProxy effectiveProxy = queryProxy;
-        effectiveProxy.radius += input.radius;
-
-        const u32 queryMask = this.broadPhaseQueryMask(input.filter);
-        if(queryMask == 0u)
-            return;
-        u8 reqNodeFlags = s_TreeNodeHasNonSensor;
-        if(input.hitSensors)
-            reqNodeFlags = 0u;
-        in ShapeProxy effectiveProxyRef = effectiveProxy;
-        in ShapeCastInput inputRef = input;
-        in Optional<ShapeQueryFilterCallback> filterRef = queryFilter;
-        for(usize t = 0u; t < s_TreeCount; ++t){
-            this.m_broadPhase.trees[t].queryAabbFiltered(
-                sweepBox,
-                queryMask,
-                reqNodeFlags,
-                lambda[in this, in t, in effectiveProxyRef, in normOriginPos, in normOriginRot, in endRot, in inputRef, in filterRef, in trans, mut outHits](in u32 proxyId, in u32 shapeIdx) -> b8{
-                    if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
-                        return true;
-                    return this.evalShapeCastAllCandidate(shapeIdx, effectiveProxyRef, normOriginPos, normOriginRot, endRot, inputRef, filterRef, trans, outHits);
-                }
-            );
-        }
-        this.queryAwakeShapesAabb(
-            sweepMin,
-            sweepMax,
-            queryMask,
-            reqNodeFlags,
-            lambda[in this, in effectiveProxyRef, in normOriginPos, in normOriginRot, in endRot, in inputRef, in filterRef, in trans, mut outHits](in u32 shapeIdx) -> b8{
-                return this.evalShapeCastAllCandidate(shapeIdx, effectiveProxyRef, normOriginPos, normOriginRot, endRot, inputRef, filterRef, trans, outHits);
+        this.shapeCastCollectImpl(
+            queryProxy,
+            input,
+            queryFilter,
+            lambda[mut outHits](in ShapeCastHit hit) -> f32{
+                outHits.push_back(hit);
+                return 1.0f;
             }
         );
-
         SortSequence<ShapeCastHit>(outHits, lambda[](in ShapeCastHit lhs, in ShapeCastHit rhs) -> b8{
             return lhs.fraction < rhs.fraction;
         });
@@ -8022,7 +8020,7 @@ class PhysicsWorld{
                 const VectorSingle supLocal = ComputeProxyViewSupport(pQuad, Vector3InverseRotate(-worldPlaneN, rotFin), dummyIdx);
                 const VectorSingle ptC = TransformPointValues(posFin, rotFin, supLocal);
                 const f32 signedD = Vector3Dot(VectorSingle(ptC - planeOrigin, 0.0f), worldPlaneN).x;
-                const f32 dist = SimdMax(0.0f, signedD);
+                const f32 dist = Max(0.0f, signedD);
                 const VectorSingle ptP = ptC - worldPlaneN * signedD;
                 DistanceOutput outD;
                 if(infIsA){
@@ -8119,7 +8117,7 @@ class PhysicsWorld{
             u8 dummyIdx = 0xffu;
             const VectorSingle supLocal = ComputeProxyViewSupport(pConvex, Vector3InverseRotate(-worldPlaneN, rotConvex), dummyIdx);
             const VectorSingle ptC = TransformPointValues(posConvex, rotConvex, supLocal) - worldPlaneN * pConvex.radius;
-            const f32 dist = SimdMax(0.0f, Vector3Dot(VectorSingle(ptC - planeOrigin, 0.0f), worldPlaneN).x);
+            const f32 dist = Max(0.0f, Vector3Dot(VectorSingle(ptC - planeOrigin, 0.0f), worldPlaneN).x);
             const VectorSingle ptP = ptC - worldPlaneN * Vector3Dot(VectorSingle(ptC - planeOrigin, 0.0f), worldPlaneN).x;
             DistanceOutput outD;
             if(sA.type == ShapeType::Plane){
@@ -8251,9 +8249,7 @@ class PhysicsWorld{
                 }
             }
             else{
-                Array<MeshDistBvhPair, 256u> pairStack;
-                u32 stackCount = 0u;
-                Vector<MeshDistBvhPair> overflowStack;
+                BvhSpillStack<MeshDistBvhPair, 256u> stack;
                 MeshDistBvhPair rootPair;
                 rootPair.nodeA = 0u;
                 rootPair.nodeB = 0u;
@@ -8263,19 +8259,10 @@ class PhysicsWorld{
                 VectorSingle rMaxB(0.0f);
                 TransformAabbValuesWithBasis(VectorSingle(rootNodeB.aabbMinLeft, 0.0f), VectorSingle(rootNodeB.aabbMaxRight, 0.0f), relPosB, ax0, ax1, ax2, absAx0, absAx1, absAx2, rMinB, rMaxB);
                 rootPair.lowerBoundSq = AabbPairMinDistanceSq(VectorSingle(rootNodeA.aabbMinLeft, 0.0f), VectorSingle(rootNodeA.aabbMaxRight, 0.0f), rMinB, rMaxB);
-                pairStack[0u] = rootPair;
-                stackCount = 1u;
+                stack.push(rootPair);
 
-                while(stackCount > 0u || !overflowStack.empty()){
-                    MeshDistBvhPair topPair;
-                    if(!overflowStack.empty()){
-                        topPair = overflowStack[overflowStack.size() - 1u];
-                        overflowStack.pop_back();
-                    }
-                    else{
-                        --stackCount;
-                        topPair = pairStack[stackCount];
-                    }
+                MeshDistBvhPair topPair;
+                while(stack.pop(topPair)){
                     if(bestFound && topPair.lowerBoundSq > bestCoreBoundSq)
                         continue;
 
@@ -8404,38 +8391,14 @@ class PhysicsWorld{
                             pushFirst = c1;
                             pushSecond = c0;
                         }
-                        if(stackCount < 256u){
-                            pairStack[stackCount] = pushFirst;
-                            ++stackCount;
-                        }
-                        else{
-                            overflowStack.push_back(pushFirst);
-                        }
-                        if(stackCount < 256u){
-                            pairStack[stackCount] = pushSecond;
-                            ++stackCount;
-                        }
-                        else{
-                            overflowStack.push_back(pushSecond);
-                        }
+                        stack.push(pushFirst);
+                        stack.push(pushSecond);
                     }
                     else if(keep0){
-                        if(stackCount < 256u){
-                            pairStack[stackCount] = c0;
-                            ++stackCount;
-                        }
-                        else{
-                            overflowStack.push_back(c0);
-                        }
+                        stack.push(c0);
                     }
                     else if(keep1){
-                        if(stackCount < 256u){
-                            pairStack[stackCount] = c1;
-                            ++stackCount;
-                        }
-                        else{
-                            overflowStack.push_back(c1);
-                        }
+                        stack.push(c1);
                     }
                 }
             }
@@ -8495,27 +8458,6 @@ class PhysicsWorld{
         const f32 combR = pConvex.radius + hf.thickness;
 
         const u32 cellCols = hf.cols - 1u;
-        const u32 cellRows = hf.rows - 1u;
-        const f32 sx = hf.cellSizeX();
-        const f32 sz = hf.cellSizeZ();
-        const f32 ox = hf.originMaxY.x;
-        const f32 oz = hf.originMaxY.z;
-        const VectorSingle gridClamp = Clamp(
-            VectorSingle((cMin.x - ox) / sx, (cMax.x - ox) / sx, (cMin.z - oz) / sz, (cMax.z - oz) / sz),
-            VectorSingle(0.0f),
-            VectorSingle(
-                cast<f32>(cellCols) - 1.0e-4f,
-                cast<f32>(cellCols) - 1.0e-4f,
-                cast<f32>(cellRows) - 1.0e-4f,
-                cast<f32>(cellRows) - 1.0e-4f
-            )
-        );
-        const isize bx0 = cast<isize>(gridClamp.x);
-        const isize bx1 = cast<isize>(gridClamp.y);
-        const isize bz0 = cast<isize>(gridClamp.z);
-        const isize bz1 = cast<isize>(gridClamp.w);
-        const isize maxRing = cast<isize>(Max(cellCols, cellRows));
-
         b8 bestFound = false;
         b8 hasBound = hasInitialBound;
         DistanceOutput bestOut;
@@ -8525,73 +8467,23 @@ class PhysicsWorld{
         f32 bestCoreBoundSq = initialCoreBoundSq;
         u32 bestKey = s_NullIndex;
 
-        for(isize ring = 0; ring <= maxRing; ++ring){
-            if(ring == 0){
-                for(isize cz = bz0; cz <= bz1; ++cz){
-                    for(isize cx = bx0; cx <= bx1; ++cx)
-                        EvalHeightfieldDistanceCell(hf, cast<u32>(cx), cast<u32>(cz), cellCols, cMin, cMax, combR, convexViewInHf, pConvex, posConvexInHf, rotConvexInHf, useLocalPts, hasBound, bestOut, bestSurfDist, bestCoreBoundSq, bestKey);
-                }
-                if(!bestFound && hasBound && bestSurfDist < initialBestSurfDist)
-                    bestFound = true;
-                continue;
+        in HeightfieldShape hfRef = hf;
+        in ShapeProxyView convexViewRef = convexViewInHf;
+        in ShapeProxyView pConvexRef = pConvex;
+        TraverseHeightfieldDistanceRings(
+            hf,
+            cMin,
+            cMax,
+            false,
+            initialBestSurfDist,
+            bestSurfDist,
+            bestCoreBoundSq,
+            bestFound,
+            hasBound,
+            lambda[in hfRef, in cellCols, in cMin, in cMax, in combR, in convexViewRef, in pConvexRef, in posConvexInHf, in rotConvexInHf, in useLocalPts, mut hasBound, mut bestOut, mut bestSurfDist, mut bestCoreBoundSq, mut bestKey](in u32 cx, in u32 cz) -> void{
+                EvalHeightfieldDistanceCell(hfRef, cx, cz, cellCols, cMin, cMax, combR, convexViewRef, pConvexRef, posConvexInHf, rotConvexInHf, useLocalPts, hasBound, bestOut, bestSurfDist, bestCoreBoundSq, bestKey);
             }
-
-            const b8 hasTop = (bz0 >= ring);
-            const b8 hasBot = (bz1 + ring < cast<isize>(cellRows));
-            const b8 hasLeft = (bx0 >= ring);
-            const b8 hasRight = (bx1 + ring < cast<isize>(cellCols));
-            if(!hasTop && !hasBot && !hasLeft && !hasRight)
-                break;
-
-            if(hasBound){
-                f32 minSideSq = s_MaxF32;
-                if(hasTop){
-                    const f32 dz = SimdMax(0.0f, cMin.z - (oz + cast<f32>(bz0 - ring + 1) * sz));
-                    minSideSq = SimdMin(minSideSq, dz * dz);
-                }
-                if(hasBot){
-                    const f32 dz = SimdMax(0.0f, (oz + cast<f32>(bz1 + ring) * sz) - cMax.z);
-                    minSideSq = SimdMin(minSideSq, dz * dz);
-                }
-                if(hasLeft){
-                    const f32 dx = SimdMax(0.0f, cMin.x - (ox + cast<f32>(bx0 - ring + 1) * sx));
-                    minSideSq = SimdMin(minSideSq, dx * dx);
-                }
-                if(hasRight){
-                    const f32 dx = SimdMax(0.0f, (ox + cast<f32>(bx1 + ring) * sx) - cMax.x);
-                    minSideSq = SimdMin(minSideSq, dx * dx);
-                }
-                if(minSideSq > bestCoreBoundSq)
-                    break;
-            }
-
-            const isize xSpan0 = Max(cast<isize>(0), bx0 - ring);
-            const isize xSpan1 = Min(cast<isize>(cellCols) - 1, bx1 + ring);
-            const isize zSpan0 = Max(cast<isize>(0), bz0 - ring + 1);
-            const isize zSpan1 = Min(cast<isize>(cellRows) - 1, bz1 + ring - 1);
-            if(hasTop){
-                const u32 cz = cast<u32>(bz0 - ring);
-                for(isize cx = xSpan0; cx <= xSpan1; ++cx)
-                    EvalHeightfieldDistanceCell(hf, cast<u32>(cx), cz, cellCols, cMin, cMax, combR, convexViewInHf, pConvex, posConvexInHf, rotConvexInHf, useLocalPts, hasBound, bestOut, bestSurfDist, bestCoreBoundSq, bestKey);
-            }
-            if(hasBot){
-                const u32 cz = cast<u32>(bz1 + ring);
-                for(isize cx = xSpan0; cx <= xSpan1; ++cx)
-                    EvalHeightfieldDistanceCell(hf, cast<u32>(cx), cz, cellCols, cMin, cMax, combR, convexViewInHf, pConvex, posConvexInHf, rotConvexInHf, useLocalPts, hasBound, bestOut, bestSurfDist, bestCoreBoundSq, bestKey);
-            }
-            if(hasLeft){
-                const u32 cx = cast<u32>(bx0 - ring);
-                for(isize cz = zSpan0; cz <= zSpan1; ++cz)
-                    EvalHeightfieldDistanceCell(hf, cx, cast<u32>(cz), cellCols, cMin, cMax, combR, convexViewInHf, pConvex, posConvexInHf, rotConvexInHf, useLocalPts, hasBound, bestOut, bestSurfDist, bestCoreBoundSq, bestKey);
-            }
-            if(hasRight){
-                const u32 cx = cast<u32>(bx1 + ring);
-                for(isize cz = zSpan0; cz <= zSpan1; ++cz)
-                    EvalHeightfieldDistanceCell(hf, cx, cast<u32>(cz), cellCols, cMin, cMax, combR, convexViewInHf, pConvex, posConvexInHf, rotConvexInHf, useLocalPts, hasBound, bestOut, bestSurfDist, bestCoreBoundSq, bestKey);
-            }
-            if(!bestFound && hasBound && bestSurfDist < initialBestSurfDist)
-                bestFound = true;
-        }
+        );
 
         if(hasInitialBound && !bestFound)
             return MakeUnexpected(Failure());
@@ -8662,29 +8554,18 @@ class PhysicsWorld{
         VectorSingle v10(0.0f);
         VectorSingle v01(0.0f);
         VectorSingle v11(0.0f);
-        if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
-            return;
-        const VectorSingle hCol0(v00.y, v01.y, 0.0f, 0.0f);
-        const VectorSingle hCol1(v10.y, v11.y, 0.0f, 0.0f);
-        const VectorSingle hPairMin = Min(hCol0, hCol1);
-        const VectorSingle hPairMax = Max(hCol0, hCol1);
-        const f32 cellMinY = SimdMin(hPairMin.x, hPairMin.y);
-        const f32 cellMaxY = SimdMax(hPairMax.x, hPairMax.y);
-        if(bestFound && AabbPairMinDistanceSq(cMin, cMax, VectorSingle(v00.x, cellMinY, v00.z, 0.0f), VectorSingle(v11.x, cellMaxY, v11.z, 0.0f)) > bestCoreBoundSq)
+        if(!LoadHeightfieldCellVerticesInCoreBound(hf, cx, cz, bestFound, cMin, cMax, bestCoreBoundSq, v00, v10, v01, v11))
             return;
 
         for(usize ti = 0u; ti < 2u; ++ti){
+            VectorSingle tv0(0.0f);
+            VectorSingle tv1(0.0f);
+            VectorSingle tv2(0.0f);
+            ExtractHeightfieldCellTriangle(hf.flipDiagonal, ti, v00, v10, v01, v11, tv0, tv1, tv2);
             Array<f32x3u, 3u> triPts;
-            if(ti == 0u){
-                triPts[0u] = f32x3u(v00);
-                triPts[1u] = f32x3u(v01);
-                triPts[2u] = f32x3u(v10);
-            }
-            else{
-                triPts[0u] = f32x3u(v10);
-                triPts[1u] = f32x3u(v01);
-                triPts[2u] = f32x3u(v11);
-            }
+            triPts[0u] = f32x3u(tv0);
+            triPts[1u] = f32x3u(tv1);
+            triPts[2u] = f32x3u(tv2);
             const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), hf.thickness);
             Expected<DistanceOutput> triRes = MakeUnexpected(Failure());
             if(targetIsMesh)
@@ -8731,26 +8612,6 @@ class PhysicsWorld{
         TransformLocalAabbValuesToWorld(VectorSingle(otherLocalBox.lowerBound), VectorSingle(otherLocalBox.upperBound), 0.0f, relPosOther, relRotOther, cMin, cMax);
 
         const u32 cellCols = hf.cols - 1u;
-        const u32 cellRows = hf.rows - 1u;
-        const f32 sx = hf.cellSizeX();
-        const f32 sz = hf.cellSizeZ();
-        const f32 ox = hf.originMaxY.x;
-        const f32 oz = hf.originMaxY.z;
-        const VectorSingle gridClamp = Clamp(
-            VectorSingle((cMin.x - ox) / sx, (cMax.x - ox) / sx, (cMin.z - oz) / sz, (cMax.z - oz) / sz),
-            VectorSingle(0.0f),
-            VectorSingle(
-                cast<f32>(cellCols) - 1.0e-4f,
-                cast<f32>(cellCols) - 1.0e-4f,
-                cast<f32>(cellRows) - 1.0e-4f,
-                cast<f32>(cellRows) - 1.0e-4f
-            )
-        );
-        const isize bx0 = cast<isize>(gridClamp.x);
-        const isize bx1 = cast<isize>(gridClamp.y);
-        const isize bz0 = cast<isize>(gridClamp.z);
-        const isize bz1 = cast<isize>(gridClamp.w);
-        const isize maxRing = cast<isize>(Max(cellCols, cellRows));
         const f32 combR = hf.thickness + otherRad;
 
         b8 bestFound = false;
@@ -8760,71 +8621,21 @@ class PhysicsWorld{
         f32 bestSurfDist = s_MaxF32;
         f32 bestCoreBoundSq = s_MaxF32;
 
-        for(isize ring = 0; ring <= maxRing; ++ring){
-            if(bestFound && bestSurfDist <= 0.0f)
-                break;
-            if(ring == 0){
-                for(isize cz = bz0; cz <= bz1; ++cz){
-                    for(isize cx = bx0; cx <= bx1; ++cx)
-                        this.evalHeightfieldNonConvexDistanceCell(hf, cast<u32>(cx), cast<u32>(cz), cellCols, cMin, cMax, combR, posHf, rotHf, posOther, rotOther, posHfInOther, rotHfInOther, targetIsMesh, meshIdx, hfBIdx, flipOrder, bestFound, bestOut, bestSurfDist, bestCoreBoundSq);
-                }
-                continue;
+        in HeightfieldShape hfRef = hf;
+        TraverseHeightfieldDistanceRings(
+            hf,
+            cMin,
+            cMax,
+            true,
+            s_MaxF32,
+            bestSurfDist,
+            bestCoreBoundSq,
+            bestFound,
+            bestFound,
+            lambda[in this, in hfRef, in cellCols, in cMin, in cMax, in combR, in posHf, in rotHf, in posOther, in rotOther, in posHfInOther, in rotHfInOther, in targetIsMesh, in meshIdx, in hfBIdx, in flipOrder, mut bestFound, mut bestOut, mut bestSurfDist, mut bestCoreBoundSq](in u32 cx, in u32 cz) -> void{
+                this.evalHeightfieldNonConvexDistanceCell(hfRef, cx, cz, cellCols, cMin, cMax, combR, posHf, rotHf, posOther, rotOther, posHfInOther, rotHfInOther, targetIsMesh, meshIdx, hfBIdx, flipOrder, bestFound, bestOut, bestSurfDist, bestCoreBoundSq);
             }
-
-            const b8 hasTop = (bz0 >= ring);
-            const b8 hasBot = (bz1 + ring < cast<isize>(cellRows));
-            const b8 hasLeft = (bx0 >= ring);
-            const b8 hasRight = (bx1 + ring < cast<isize>(cellCols));
-            if(!hasTop && !hasBot && !hasLeft && !hasRight)
-                break;
-
-            if(bestFound){
-                f32 minSideSq = s_MaxF32;
-                if(hasTop){
-                    const f32 dz = SimdMax(0.0f, cMin.z - (oz + cast<f32>(bz0 - ring + 1) * sz));
-                    minSideSq = SimdMin(minSideSq, dz * dz);
-                }
-                if(hasBot){
-                    const f32 dz = SimdMax(0.0f, (oz + cast<f32>(bz1 + ring) * sz) - cMax.z);
-                    minSideSq = SimdMin(minSideSq, dz * dz);
-                }
-                if(hasLeft){
-                    const f32 dx = SimdMax(0.0f, cMin.x - (ox + cast<f32>(bx0 - ring + 1) * sx));
-                    minSideSq = SimdMin(minSideSq, dx * dx);
-                }
-                if(hasRight){
-                    const f32 dx = SimdMax(0.0f, (ox + cast<f32>(bx1 + ring) * sx) - cMax.x);
-                    minSideSq = SimdMin(minSideSq, dx * dx);
-                }
-                if(minSideSq > bestCoreBoundSq)
-                    break;
-            }
-
-            const isize xSpan0 = Max(cast<isize>(0), bx0 - ring);
-            const isize xSpan1 = Min(cast<isize>(cellCols) - 1, bx1 + ring);
-            const isize zSpan0 = Max(cast<isize>(0), bz0 - ring + 1);
-            const isize zSpan1 = Min(cast<isize>(cellRows) - 1, bz1 + ring - 1);
-            if(hasTop){
-                const u32 cz = cast<u32>(bz0 - ring);
-                for(isize cx = xSpan0; cx <= xSpan1; ++cx)
-                    this.evalHeightfieldNonConvexDistanceCell(hf, cast<u32>(cx), cz, cellCols, cMin, cMax, combR, posHf, rotHf, posOther, rotOther, posHfInOther, rotHfInOther, targetIsMesh, meshIdx, hfBIdx, flipOrder, bestFound, bestOut, bestSurfDist, bestCoreBoundSq);
-            }
-            if(hasBot){
-                const u32 cz = cast<u32>(bz1 + ring);
-                for(isize cx = xSpan0; cx <= xSpan1; ++cx)
-                    this.evalHeightfieldNonConvexDistanceCell(hf, cast<u32>(cx), cz, cellCols, cMin, cMax, combR, posHf, rotHf, posOther, rotOther, posHfInOther, rotHfInOther, targetIsMesh, meshIdx, hfBIdx, flipOrder, bestFound, bestOut, bestSurfDist, bestCoreBoundSq);
-            }
-            if(hasLeft){
-                const u32 cx = cast<u32>(bx0 - ring);
-                for(isize cz = zSpan0; cz <= zSpan1; ++cz)
-                    this.evalHeightfieldNonConvexDistanceCell(hf, cx, cast<u32>(cz), cellCols, cMin, cMax, combR, posHf, rotHf, posOther, rotOther, posHfInOther, rotHfInOther, targetIsMesh, meshIdx, hfBIdx, flipOrder, bestFound, bestOut, bestSurfDist, bestCoreBoundSq);
-            }
-            if(hasRight){
-                const u32 cx = cast<u32>(bx1 + ring);
-                for(isize cz = zSpan0; cz <= zSpan1; ++cz)
-                    this.evalHeightfieldNonConvexDistanceCell(hf, cx, cast<u32>(cz), cellCols, cMin, cMax, combR, posHf, rotHf, posOther, rotOther, posHfInOther, rotHfInOther, targetIsMesh, meshIdx, hfBIdx, flipOrder, bestFound, bestOut, bestSurfDist, bestCoreBoundSq);
-            }
-        }
+        );
         return bestOut;
     }
 
@@ -8886,29 +8697,12 @@ class PhysicsWorld{
             }
         }
         else{
-            Array<u32, 256u> stack;
-            Array<f32, 256u> stackLbSq;
-            stack[0u] = 0u;
+            BvhMetricSpillStack<256u> stack;
             in MeshBvhNode rootNode = mesh.nodes[0u];
-            stackLbSq[0u] = AabbPairMinDistanceSq(cMin, cMax, VectorSingle(rootNode.aabbMinLeft, 0.0f), VectorSingle(rootNode.aabbMaxRight, 0.0f));
-            u32 stackCount = 1u;
-            Vector<u32> overflowStack;
-            Vector<f32> overflowLbSq;
-            b8 useOverflow = false;
-            while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-                f32 lbSq = 0.0f;
-                u32 nodeIdx = 0u;
-                if(useOverflow){
-                    nodeIdx = overflowStack.back();
-                    lbSq = overflowLbSq.back();
-                    overflowStack.pop_back();
-                    overflowLbSq.pop_back();
-                }
-                else{
-                    --stackCount;
-                    lbSq = stackLbSq[stackCount];
-                    nodeIdx = stack[stackCount];
-                }
+            stack.push(0u, AabbPairMinDistanceSq(cMin, cMax, VectorSingle(rootNode.aabbMinLeft, 0.0f), VectorSingle(rootNode.aabbMaxRight, 0.0f)));
+            f32 lbSq = 0.0f;
+            u32 nodeIdx = 0u;
+            while(stack.pop(nodeIdx, lbSq)){
                 if(hasBound && lbSq > bestCoreBoundSq)
                     continue;
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
@@ -8954,22 +8748,7 @@ class PhysicsWorld{
                     const f32 lbRight = AabbPairMinDistanceSq(cMin, cMax, VectorSingle(nRight.aabbMinLeft, 0.0f), VectorSingle(nRight.aabbMaxRight, 0.0f));
                     const b8 keepL = (!hasBound || lbLeft <= bestCoreBoundSq);
                     const b8 keepR = (!hasBound || lbRight <= bestCoreBoundSq);
-                    if(keepL && keepR){
-                        if(lbLeft <= lbRight){
-                            PushMeshDistNodeWithSpill(rightIdx, lbRight, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
-                            PushMeshDistNodeWithSpill(leftIdx, lbLeft, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
-                        }
-                        else{
-                            PushMeshDistNodeWithSpill(leftIdx, lbLeft, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
-                            PushMeshDistNodeWithSpill(rightIdx, lbRight, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
-                        }
-                    }
-                    else if(keepL){
-                        PushMeshDistNodeWithSpill(leftIdx, lbLeft, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
-                    }
-                    else if(keepR){
-                        PushMeshDistNodeWithSpill(rightIdx, lbRight, stack, stackLbSq, stackCount, overflowStack, overflowLbSq, useOverflow);
-                    }
+                    stack.pushOrderedPair(leftIdx, keepL, lbLeft, rightIdx, keepR, lbRight);
                 }
             }
         }
@@ -9051,7 +8830,7 @@ class PhysicsWorld{
             const f32 lenSq = Vector3LengthSq(ab).x;
             VectorSingle segPt = c1;
             if(lenSq > s_NormalizeEpsilonSq)
-                segPt = c1 + ab * SimdClamp(Vector3Dot(VectorSingle(localPt - c1, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+                segPt = c1 + ab * Clamp(Vector3Dot(VectorSingle(localPt - c1, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
             const VectorSingle delta = VectorSingle(localPt - segPt, 0.0f);
             const f32 dSq = Vector3LengthSq(delta).x;
             const f32 r = cap.radius();
@@ -9092,7 +8871,7 @@ class PhysicsWorld{
         if(!evaluated)
             return hit;
         const VectorSingle worldClosest = TransformPointValues(xfPos, xfRot, localClosest);
-        const f32 dist = SqrtFast(Vector3LengthSq(VectorSingle(worldPoint - worldClosest, 0.0f)).x);
+        const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(worldPoint - worldClosest, 0.0f)).x);
         if(dist <= maxDistance){
             hit.hit = true;
             hit.distance = dist;
@@ -9209,7 +8988,7 @@ class PhysicsWorld{
             const f32 lenSq = Vector3LengthSq(ab).x;
             VectorSingle closest = a;
             if(lenSq > s_NormalizeEpsilonSq){
-                const f32 t = SimdClamp(Vector3Dot(VectorSingle(localPt - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+                const f32 t = Clamp(Vector3Dot(VectorSingle(localPt - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
                 closest = a + ab * t;
             }
             return Vector3LengthSq(VectorSingle(localPt - closest, 0.0f)).x <= capsule.radius() * capsule.radius();
@@ -9251,24 +9030,13 @@ class PhysicsWorld{
             in MeshShape mesh = this.m_meshShapes[shape.geometryIndex];
             if(mesh.nodes.empty() || mesh.triangles.empty())
                 return false;
-            const f32 r = SimdMax(mesh.radius(), 1.0e-4f);
+            const f32 r = Max(mesh.radius(), 1.0e-4f);
             const f32 rSq = r * r;
             const VectorSingle rVec(r, r, r, 0.0f);
-            Array<u32, 256u> stack;
-            stack[0u] = 0u;
-            u32 stackCount = 1u;
-            Vector<u32> overflowStack;
-            b8 useOverflow = false;
-            while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-                u32 nodeIdx = 0u;
-                if(useOverflow){
-                    nodeIdx = overflowStack.back();
-                    overflowStack.pop_back();
-                }
-                else{
-                    --stackCount;
-                    nodeIdx = stack[stackCount];
-                }
+            BvhSpillStack<u32, 256u> stack;
+            stack.push(0u);
+            u32 nodeIdx = 0u;
+            while(stack.pop(nodeIdx)){
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
                 if(!AabbContainsValues(VectorSingle(node.aabbMinLeft, 0.0f) - rVec, VectorSingle(node.aabbMaxRight, 0.0f) + rVec, localPt, localPt))
                     continue;
@@ -9282,8 +9050,8 @@ class PhysicsWorld{
                     }
                 }
                 else{
-                    PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-                    PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+                    stack.push(node.leftOrFirst());
+                    stack.push(node.rightOrCount());
                 }
             }
             if(mesh.isClosed() && IsPointInsideClosedMesh(mesh, localPt))
@@ -9323,10 +9091,10 @@ class PhysicsWorld{
             const f32 hhCore = cyl.halfHeight();
             const f32 lim = cyl.convexRadius() + 1.0e-5f;
             const f32 radialSq = d.x * d.x + d.z * d.z;
-            const f32 dy = SimdMax(Abs(VectorSingle(d.y)).x - hhCore, 0.0f);
+            const f32 dy = Max(Abs(VectorSingle(d.y)).x - hhCore, 0.0f);
             if(radialSq <= rCore * rCore)
                 return dy <= lim;
-            const f32 dr = SqrtFast(radialSq) - rCore;
+            const f32 dr = Sqrt(radialSq) - rCore;
             return (dr * dr + dy * dy) <= lim * lim;
         }
         else if(shape.type == ShapeType::Cone){
@@ -9338,7 +9106,7 @@ class PhysicsWorld{
             const f32 radialSq = d.x * d.x + d.z * d.z;
             if(Abs(VectorSingle(d.y)).x > hh + lim || radialSq > (r + lim) * (r + lim))
                 return false;
-            const f32 tApex = SimdClamp((hh - d.y) / SimdMax(2.0f * hh, 1.0e-6f), 0.0f, 1.0f);
+            const f32 tApex = Clamp((hh - d.y) / Max(2.0f * hh, 1.0e-6f), 0.0f, 1.0f);
             const f32 rAtY = r * tApex;
             if(d.y >= -hh && d.y <= hh && radialSq <= rAtY * rAtY)
                 return true;
@@ -9349,12 +9117,12 @@ class PhysicsWorld{
             const VectorSingle ab = VectorSingle(tc.center2() - a, 0.0f);
             const f32 r1 = tc.radius1();
             const f32 r2 = tc.radius2();
-            const f32 maxLim = SimdMax(r1, r2) + 1.0e-5f;
-            const f32 minLim = SimdMin(r1, r2) + 1.0e-5f;
+            const f32 maxLim = Max(r1, r2) + 1.0e-5f;
+            const f32 minLim = Min(r1, r2) + 1.0e-5f;
             const f32 lenSq = Vector3LengthSq(ab).x;
             if(lenSq <= s_NormalizeEpsilonSq)
                 return Vector3LengthSq(VectorSingle(localPt - a, 0.0f)).x <= maxLim * maxLim;
-            const f32 u = SimdClamp(Vector3Dot(VectorSingle(localPt - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+            const f32 u = Clamp(Vector3Dot(VectorSingle(localPt - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
             const f32 dSq = Vector3LengthSq(VectorSingle(localPt - (a + ab * u), 0.0f)).x;
             if(dSq > maxLim * maxLim)
                 return false;
@@ -9530,21 +9298,10 @@ class PhysicsWorld{
             const VectorSingle localMin = cMin - crVec;
             const VectorSingle localMax = cMax + crVec;
 
-            Array<u32, 256u> stack;
-            stack[0u] = 0u;
-            u32 stackCount = 1u;
-            Vector<u32> overflowStack;
-            b8 useOverflow = false;
-            while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-                u32 nodeIdx = 0u;
-                if(useOverflow){
-                    nodeIdx = overflowStack.back();
-                    overflowStack.pop_back();
-                }
-                else{
-                    --stackCount;
-                    nodeIdx = stack[stackCount];
-                }
+            BvhSpillStack<u32, 256u> stack;
+            stack.push(0u);
+            u32 nodeIdx = 0u;
+            while(stack.pop(nodeIdx)){
                 in MeshBvhNode node = mesh.nodes[nodeIdx];
                 if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localMin, localMax))
                     continue;
@@ -9575,8 +9332,8 @@ class PhysicsWorld{
                     }
                 }
                 else{
-                    PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-                    PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+                    stack.push(node.leftOrFirst());
+                    stack.push(node.rightOrCount());
                 }
             }
             if(mesh.isClosed()){
@@ -9716,48 +9473,6 @@ class PhysicsWorld{
             outHit,
             outHasHit
         );
-    }
-
-    private b8 evalOverlapShapeDetailedCandidate(
-        in u32 shapeIdx,
-        in ShapeProxyView queryViewRef,
-        in VectorSingle queryPos,
-        in VectorSingle queryRot,
-        in Filter filterRef,
-        in b8 hitSensors,
-        in BodyId ignoreBodyId,
-        in ShapeId ignoreShapeId,
-        in Optional<ShapeQueryFilterCallback> queryFilter,
-        in SphereShape qSphereRef,
-        in CapsuleShape qCapRef,
-        mut u8 queryKind,
-        mut b8 queryHullAttempted,
-        mut HullShape queryHull,
-        mut Vector<ShapeOverlapHit> outHits
-    )const{
-        ShapeOverlapHit singleHit;
-        b8 hasHit = false;
-        const b8 keepGoing = this.evalOverlapShapeSingleCandidate(
-            shapeIdx,
-            queryViewRef,
-            queryPos,
-            queryRot,
-            filterRef,
-            hitSensors,
-            ignoreBodyId,
-            ignoreShapeId,
-            queryFilter,
-            qSphereRef,
-            qCapRef,
-            queryKind,
-            queryHullAttempted,
-            queryHull,
-            singleHit,
-            hasHit
-        );
-        if(hasHit)
-            outHits.push_back(singleHit);
-        return keepGoing;
     }
 
     private b8 evalOverlapShapeSingleCore(
@@ -9906,21 +9621,10 @@ class PhysicsWorld{
                         }
                     }
                     else{
-                        Array<u32, 256u> stack;
-                        stack[0u] = 0u;
-                        u32 stackCount = 1u;
-                        Vector<u32> overflowStack;
-                        b8 useOverflow = false;
-                        while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-                            u32 nodeIdx = 0u;
-                            if(useOverflow){
-                                nodeIdx = overflowStack.back();
-                                overflowStack.pop_back();
-                            }
-                            else{
-                                --stackCount;
-                                nodeIdx = stack[stackCount];
-                            }
+                        BvhSpillStack<u32, 256u> stack;
+                        stack.push(0u);
+                        u32 nodeIdx = 0u;
+                        while(stack.pop(nodeIdx)){
                             in MeshBvhNode node = mesh.nodes[nodeIdx];
                             if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localMin, localMax))
                                 continue;
@@ -9955,8 +9659,8 @@ class PhysicsWorld{
                                 }
                             }
                             else{
-                                PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
-                                PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
+                                stack.push(node.rightOrCount());
+                                stack.push(node.leftOrFirst());
                             }
                         }
                     }
@@ -9965,7 +9669,7 @@ class PhysicsWorld{
                 if(foundFallback){
                     outHit.shapeId = this.makeShapeId(shapeIdx);
                     outHit.normal = f32x4(SafeNormalizeVec3(Vector3Rotate(bestFallbackDist.normal(), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
-                    outHit.penetrationDepth = SimdMax(0.0f, combR - bestFallbackDist.distance());
+                    outHit.penetrationDepth = Max(0.0f, combR - bestFallbackDist.distance());
                     outHit.pointA = f32x4(TransformPointValues(posB, rotB, bestFallbackDist.pointA()), 0.0f);
                     outHit.pointB = f32x4(TransformPointValues(posB, rotB, VectorSingle(bestFallbackDist.pointB)), 0.0f);
                     outHit.triangleIndex = bestFallbackTri;
@@ -9984,7 +9688,7 @@ class PhysicsWorld{
                             const VectorSingle worldOutN = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                             outHit.shapeId = this.makeShapeId(shapeIdx);
                             outHit.normal = f32x4(-worldOutN, 0.0f);
-                            outHit.penetrationDepth = SimdMax(0.0f, combR + distToSurf);
+                            outHit.penetrationDepth = Max(0.0f, combR + distToSurf);
                             outHit.pointA = f32x4(TransformPointValues(posB, rotB, localOrigin), 0.0f);
                             outHit.pointB = f32x4(TransformPointValues(posB, rotB, closePt), 0.0f);
                             outHit.triangleIndex = closeTri;
@@ -10003,7 +9707,7 @@ class PhysicsWorld{
                 if(d.distance() <= combR){
                     outHit.shapeId = this.makeShapeId(shapeIdx);
                     outHit.normal = f32x4(d.normal(), 0.0f);
-                    outHit.penetrationDepth = SimdMax(0.0f, combR - d.distance());
+                    outHit.penetrationDepth = Max(0.0f, combR - d.distance());
                     outHit.pointA = f32x4(d.pointA(), 0.0f);
                     outHit.pointB = f32x4(VectorSingle(d.pointB), 0.0f);
                     outHasHit = true;
@@ -10032,7 +9736,7 @@ class PhysicsWorld{
         in ManifoldPoint mp = m.points[bestPt];
         ShapeOverlapHit ov;
         ov.shapeId = shapeId;
-        ov.penetrationDepth = SimdMax(0.0f, -bestSep);
+        ov.penetrationDepth = Max(0.0f, -bestSep);
         if(flipOrder){
             ov.normal = f32x4(-m.normal(), 0.0f);
             ov.pointA = f32x4(posB + mp.anchorB(), 0.0f);
@@ -10116,64 +9820,17 @@ class PhysicsWorld{
         mut Vector<ShapeOverlapHit> outHits
     )const{
         outHits.clear();
-        const VectorSingle queryPos(queryTransform.position);
-        const VectorSingle rawQueryRot(queryTransform.rotation);
-        if(!this.validateShapeQueryProxyView(queryView) || !IsValidPositionVec3(queryPos) || !IsFiniteQuat(rawQueryRot))
-            return;
-
-        const VectorSingle queryRot = SafeNormalizeQuat(rawQueryRot);
-        VectorSingle qMin(0.0f);
-        VectorSingle qMax(0.0f);
-        ComputeShapeProxyViewWorldAabbValues(queryView, queryPos, queryRot, 0.0f, qMin, qMax);
-        const Aabb3D queryBox(qMin, qMax);
-
-        const u32 queryMask = this.broadPhaseQueryMask(filter);
-        if(queryMask == 0u)
-            return;
-        u8 reqNodeFlags = s_TreeNodeHasNonSensor;
-        if(hitSensors)
-            reqNodeFlags = 0u;
-
-        SphereShape querySphere;
-        CapsuleShape queryCapsule;
-        HullShape queryHull;
-        u8 queryKind = 0u;
-        b8 queryHullAttempted = false;
-        if(queryView.kind == ProxyKind::PointCloud){
-            if(queryView.points.size() == 1u){
-                queryKind = 1u;
-                querySphere.centerRadius = f32x4(VectorSingle(queryView.points[0u], 0.0f), queryView.radius);
-            }
-            else if(queryView.points.size() == 2u){
-                queryKind = 2u;
-                queryCapsule.center1Radius = f32x4(VectorSingle(queryView.points[0u], 0.0f), queryView.radius);
-                queryCapsule.center2 = f32x4(VectorSingle(queryView.points[1u], 0.0f), 0.0f);
-            }
-        }
-
-        in ShapeProxyView queryViewRef = queryView;
-        in Filter filterRef = filter;
-        in SphereShape qSphereRef = querySphere;
-        in CapsuleShape qCapRef = queryCapsule;
-        for(usize t = 0u; t < s_TreeCount; ++t){
-            this.m_broadPhase.trees[t].queryAabbFiltered(
-                queryBox,
-                queryMask,
-                reqNodeFlags,
-                lambda[in this, in t, in queryViewRef, in queryPos, in queryRot, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in queryFilter, in qSphereRef, in qCapRef, mut queryKind, mut queryHullAttempted, mut queryHull, mut outHits](in u32 proxyId, in u32 shapeIdx) -> b8{
-                    if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
-                        return true;
-                    return this.evalOverlapShapeDetailedCandidate(shapeIdx, queryViewRef, queryPos, queryRot, filterRef, hitSensors, ignoreBodyId, ignoreShapeId, queryFilter, qSphereRef, qCapRef, queryKind, queryHullAttempted, queryHull, outHits);
-                }
-            );
-        }
-        this.queryAwakeShapesAabb(
-            qMin,
-            qMax,
-            queryMask,
-            reqNodeFlags,
-            lambda[in this, in queryViewRef, in queryPos, in queryRot, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in queryFilter, in qSphereRef, in qCapRef, mut queryKind, mut queryHullAttempted, mut queryHull, mut outHits](in u32 shapeIdx) -> b8{
-                return this.evalOverlapShapeDetailedCandidate(shapeIdx, queryViewRef, queryPos, queryRot, filterRef, hitSensors, ignoreBodyId, ignoreShapeId, queryFilter, qSphereRef, qCapRef, queryKind, queryHullAttempted, queryHull, outHits);
+        this.overlapShapeCollectImpl(
+            queryView,
+            queryTransform,
+            filter,
+            hitSensors,
+            ignoreBodyId,
+            ignoreShapeId,
+            queryFilter,
+            lambda[mut outHits](in ShapeOverlapHit hit) -> b8{
+                outHits.push_back(hit);
+                return true;
             }
         );
     }
@@ -10439,7 +10096,7 @@ class PhysicsWorld{
                     const f32 dSq = Vector3LengthSq(d).x;
                     const f32 r = sp.radius();
                     if(dSq > r * r){
-                        const f32 dist = SqrtFast(dSq);
+                        const f32 dist = Sqrt(dSq);
                         surfDist = dist - r;
                         if(surfDist >= maxR)
                             return true;
@@ -10456,12 +10113,12 @@ class PhysicsWorld{
                     const f32 abLenSq = Vector3LengthSq(ab).x;
                     VectorSingle segPt = c1;
                     if(abLenSq > s_NormalizeEpsilonSq)
-                        segPt = c1 + ab * SimdClamp(Vector3Dot(VectorSingle(localPt - c1, 0.0f), ab).x / abLenSq, 0.0f, 1.0f);
+                        segPt = c1 + ab * Clamp(Vector3Dot(VectorSingle(localPt - c1, 0.0f), ab).x / abLenSq, 0.0f, 1.0f);
                     const VectorSingle d = VectorSingle(localPt - segPt, 0.0f);
                     const f32 dSq = Vector3LengthSq(d).x;
                     const f32 r = cap.radius();
                     if(dSq > r * r){
-                        const f32 dist = SqrtFast(dSq);
+                        const f32 dist = Sqrt(dSq);
                         surfDist = dist - r;
                         if(surfDist >= maxR)
                             return true;
@@ -10482,7 +10139,7 @@ class PhysicsWorld{
                     const f32 dSq = Vector3LengthSq(diff).x;
                     const f32 r = hull.radius();
                     if(dSq > r * r){
-                        const f32 dist = SqrtFast(dSq);
+                        const f32 dist = Sqrt(dSq);
                         surfDist = dist - r;
                         if(surfDist >= maxR)
                             return true;
@@ -10500,12 +10157,12 @@ class PhysicsWorld{
                     ComputeTangentBasisFromUnitNormal(nLocal, t1, t2);
                     const VectorSingle centerLocal = nLocal * pl.offset();
                     const VectorSingle rel = VectorSingle(localPt - centerLocal, 0.0f);
-                    const f32 u = SimdClamp(Vector3Dot(rel, t1).x, -pl.halfExtent.x, pl.halfExtent.x);
-                    const f32 v = SimdClamp(Vector3Dot(rel, t2).x, -pl.halfExtent.z, pl.halfExtent.z);
+                    const f32 u = Clamp(Vector3Dot(rel, t1).x, -pl.halfExtent.x, pl.halfExtent.x);
+                    const f32 v = Clamp(Vector3Dot(rel, t2).x, -pl.halfExtent.z, pl.halfExtent.z);
                     const VectorSingle closestLocal = centerLocal + t1 * u + t2 * v;
                     const f32 dSq = Vector3LengthSq(VectorSingle(localPt - closestLocal, 0.0f)).x;
                     if(dSq > 0.0f){
-                        surfDist = SqrtFast(dSq);
+                        surfDist = Sqrt(dSq);
                         if(surfDist >= maxR)
                             return true;
                         contactPt = TransformPointValues(posB, rotB, closestLocal);
@@ -10516,7 +10173,7 @@ class PhysicsWorld{
                     const ShapeProxyView targetProxy = MakeShapeProxyViewFromShape(shape, this.m_hullShapes, inlineTargetPts);
                     SimplexCache cache;
                     const DistanceOutput distOut = ShapeDistanceProxyViews(ptViewRef, ptPos, ptRot, targetProxy, posB, rotB, false, cache);
-                    surfDist = SimdMax(0.0f, distOut.distance() - targetProxy.radius);
+                    surfDist = Max(0.0f, distOut.distance() - targetProxy.radius);
                     if(surfDist >= maxR)
                         return true;
                     if(distOut.distance() > targetProxy.radius && distOut.distance() > 1.0e-5f){
@@ -10564,7 +10221,7 @@ class PhysicsWorld{
             f32 falloffScale = 1.0f;
             if(dist > def.radius){
                 if(def.falloff > 0.0f)
-                    falloffScale = SimdClamp(1.0f - (dist - def.radius) / def.falloff, 0.0f, 1.0f);
+                    falloffScale = Clamp(1.0f - (dist - def.radius) / def.falloff, 0.0f, 1.0f);
                 else
                     falloffScale = 0.0f;
             }
@@ -10574,7 +10231,7 @@ class PhysicsWorld{
             in Body body = this.m_bodies[bodyIdx];
             in BodySim sim = this.m_solverSets[body.setIndex].sims[body.localIndex];
             const VectorSingle dir = SafeNormalizeVec3(sim.center() - pos, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-            const f32 charLen = SimdMax(0.1f, sim.maxExtent() * 2.0f);
+            const f32 charLen = Max(0.1f, sim.maxExtent() * 2.0f);
             this.applyLinearImpulseAtPoint(this.makeBodyId(bodyIdx), dir * (def.impulsePerLength * falloffScale * charLen), VectorSingle(hitBodyPoints[i]), true);
         }
     }

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import re
-
-from probe_common import snapshot_from_patterns
-from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker, linear_rgb_bytes
+from probe_common import FrameProbeRecorder, compile_smoke_patterns, snapshot_from_patterns
+from probe_reference import linear_rgb_bytes
 
 LIT_POPUP = "popup"
 LIT_LOGICAL_EXTENT = "logical_extent"
@@ -14,13 +11,9 @@ LIT_EXPECTED = "expected"
 LIT_PASSED = "passed"
 LIT_RECTANGLES = "rectangles"
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiPopupSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiPopupSmoke: state sequence=(\d+) values=((?:\d+,){11}\d+)")
-GEOMETRY = re.compile(rf"UiPopupSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiPopupSmoke: skin=(default|alternate)")
 FIELDS = ("open", "modal", "underlying", "selected", "checked", "edit_focused", "outside_focused", "edge", "right", "visible", "text_bytes", "side")
 RECTANGLES = ("popup", "viewport", "trigger", "modal", "counter", "outside", "first", "second", "check", "edit")
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiPopupSmoke", len(FIELDS))
 TOLERANCE = 5
 BACKDROP_COLOR = (0.72, 0.02, 0.04)
 SENTINEL_COLOR = (0.12, 0.52, 0.86)
@@ -38,22 +31,14 @@ def expected_placement(snapshot):
 
 
 def observe_popup(frame, snapshot, expected, *, extent=None, skin="default"):
-    width, height, rows = frame
-    scale_x, scale_y = snapshot["scale"]
+    width, height, _ = frame
+    _, scale_y = snapshot["scale"]
     dimmed = bool(snapshot[LIT_OPEN] and snapshot["modal"])
-    probes = []
+    recorder = FrameProbeRecorder(frame, snapshot["scale"], LIT_POPUP)
+    probes = recorder.probes
+    probe = lambda name, position, color, tolerance=TOLERANCE: recorder.probe(name, position, color, tolerance)
 
-    def probe(name, position, color, tolerance=TOLERANCE):
-        x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"popup probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-        observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-    for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
-        probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded_marker(value, 0.6 if dimmed else 1.0))
+    recorder.probe_markers((*snapshot["values"], snapshot["sequence"]), 19.0, 20.0, height / scale_y - 14.0, parts=1, tolerance=TOLERANCE, dim=0.6 if dimmed else 1.0)
     logical_width = snapshot[LIT_LOGICAL_EXTENT][0]
     probe("late_root_modal_sentinel", (logical_width - 32.0, 32.0), linear_rgb_bytes(tuple(value * (0.6 if dimmed else 1.0) for value in SENTINEL_COLOR)))
     bx, by, bw, bh = snapshot[LIT_RECTANGLES][LIT_POPUP]

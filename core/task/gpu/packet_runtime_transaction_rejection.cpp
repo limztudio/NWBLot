@@ -119,19 +119,11 @@ public:
             return;
 
         SubmissionOperation submissionOperation(m_transaction, SubmissionOperationMode::ExceptionFinalizer);
-        if(!submissionOperation.valid()){
-            if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
-                return;
-            TerminateInvariant();
-        }
-        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
+        if(!GpuGraphSubmissionTransaction::AcquireExceptionClosingStep(submissionOperation.valid(), m_transaction, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
             return;
         GpuCompiledGraph::ReadView planAccess(m_compiledGraph);
-        if(!planAccess.valid()){
-            if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
-                return;
-            TerminateInvariant();
-        }
+        if(!GpuGraphSubmissionTransaction::AcquireExceptionClosingStep(planAccess.valid(), m_transaction, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
+            return;
         m_transaction.completeSubmissionExceptionClosingWithinSubmissionOperation(m_graph, m_compiledGraph, planAccess, m_recordingAttemptGeneration, m_submissionBinding);
     }
 

@@ -4,6 +4,7 @@
 
 #include "memory_probe_kernels.adhd"
 #include "memory_measurement.adhd"
+#include <tests/common/platform_features.adhd>
 #include <tests/common/posix_child.adhd>
 #include <utilities/cli/tool_cli.adhd>
 
@@ -180,7 +181,7 @@ b8 RejectedBeforeAccess(in ByteAddress source, in usize count, in usize capacity
 }
 
 b8 QualifyProtectedRanges(){
-    if(!s_ProbeLinux)
+    if(!s_IsLinuxPlatform)
         return true;
     GuardedBytes source;
     GuardedBytes destination;

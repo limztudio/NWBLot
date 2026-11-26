@@ -186,16 +186,10 @@ class EditCommandResult{
     public b8 cancelled = false;
 }
 
-class MultilineTextStep{
+class EditTextStep{
     public usize sourceBytes = 0u;
     public usize outputBytes = 0u;
     public u8 replacement = 0u;
-}
-
-class SingleLineTextStep{
-    public usize sourceBytes = 0u;
-    public usize outputBytes = 0u;
-    public b8 space = false;
 }
 
 

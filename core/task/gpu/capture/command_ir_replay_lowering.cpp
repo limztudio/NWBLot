@@ -20,6 +20,85 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_gpu_command_ir_replay_lowering{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u8 s_BufferResourceKind = 1u;
+inline constexpr u8 s_TextureResourceKind = 2u;
+
+template<u8 ResourceKind, typename ResourceT>
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateCachedBuiltinResource(
+    const GpuGraphResourceId resourceID,
+    ResourceT& resource,
+    const ResourceStates::Mask requiredState,
+    const GpuPhysicalQueueInfo& commandQueue,
+    CommandList& commandList,
+    GpuCommandIrDetail::BuiltinBackendResourceCache& resourceCache
+)noexcept{
+    const auto isResourceReady = [&]()noexcept{
+        if constexpr(ResourceKind == s_BufferResourceKind)
+            return GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &resource, requiredState);
+        else
+            return GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &resource, requiredState);
+    };
+
+    const usize slotIndex = resourceID.index & (GpuCommandIrDetail::BuiltinBackendResourceCache::s_SlotCount - 1u);
+    const u16 slotBit = static_cast<u16>(1u << slotIndex);
+    auto& slot = resourceCache.slots[slotIndex];
+    const b8 matchesSlot =
+        (resourceCache.populatedMask & slotBit) != 0u
+        && slot.resourceIndex == resourceID.index
+        && slot.resourceGeneration == resourceID.generation
+        && slot.resourceKind == ResourceKind
+    ;
+    if(matchesSlot){
+        if(slot.hasValidatedState && slot.validatedState == requiredState)
+            return GpuCommandIrReplayError::None;
+        if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
+            if(!isResourceReady() || !ResourceQueueAdmissionAdmitsQueue(resource.getQueueAdmissionSnapshot(), commandQueue))
+                return GpuCommandIrReplayError::BackendResourceNotReady;
+            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+        }
+    }
+    if(!isResourceReady() || !ResourceQueueAdmissionAdmitsQueue(resource.getQueueAdmissionSnapshot(), commandQueue))
+        return GpuCommandIrReplayError::BackendResourceNotReady;
+
+    ResourceStates::Mask permanentState = ResourceStates::Unknown;
+    if(matchesSlot && slot.permanentStateKnown)
+        permanentState = slot.permanentState;
+    else{
+        if constexpr(ResourceKind == s_BufferResourceKind)
+            permanentState = commandList.getPermanentBufferState(&resource);
+        else
+            permanentState = commandList.getPermanentTextureState(&resource);
+        slot.resourceGeneration = resourceID.generation;
+        slot.resourceIndex = resourceID.index;
+        slot.resourceKind = ResourceKind;
+        slot.permanentState = permanentState;
+        slot.permanentStateKnown = true;
+        slot.hasValidatedState = false;
+        resourceCache.populatedMask |= slotBit;
+    }
+    if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+        return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+    slot.validatedState = requiredState;
+    slot.hasValidatedState = true;
+    return GpuCommandIrReplayError::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GpuCommandIrDetail{
 
 
@@ -35,105 +114,36 @@ GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(const CommandListPa
 }
 
 GpuCommandIrReplayError::Enum ValidateBuiltinBackendOperand(const GpuCommandIrBuiltinTaskRecord& record, const GpuTaskGraphDeclarationReadView& graph, const GpuPhysicalQueueInfo& commandQueue, CommandList& commandList, BuiltinBackendResourceCache& resourceCache)noexcept{
-    const auto validateBuffer = [&](const GpuGraphResourceId resourceID, Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
-        const usize slotIndex = resourceID.index & (BuiltinBackendResourceCache::s_SlotCount - 1u);
-        const u16 slotBit = static_cast<u16>(1u << slotIndex);
-        auto& slot = resourceCache.slots[slotIndex];
-        const b8 matchesSlot = (resourceCache.populatedMask & slotBit) != 0u && slot.resourceIndex == resourceID.index && slot.resourceGeneration == resourceID.generation && slot.resourceKind == 1u;
-        if(matchesSlot){
-            if(slot.hasValidatedState && slot.validatedState == requiredState)
-                return GpuCommandIrReplayError::None;
-            if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
-                if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
-                    return GpuCommandIrReplayError::BackendResourceNotReady;
-                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-            }
-        }
-        if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
-            return GpuCommandIrReplayError::BackendResourceNotReady;
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(matchesSlot && slot.permanentStateKnown)
-            permanentState = slot.permanentState;
-        else{
-            permanentState = commandList.getPermanentBufferState(&buffer);
-            slot.resourceGeneration = resourceID.generation;
-            slot.resourceIndex = resourceID.index;
-            slot.resourceKind = 1u;
-            slot.permanentState = permanentState;
-            slot.permanentStateKnown = true;
-            slot.hasValidatedState = false;
-            resourceCache.populatedMask |= slotBit;
-        }
-        if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
-            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-        slot.validatedState = requiredState;
-        slot.hasValidatedState = true;
-        return GpuCommandIrReplayError::None;
-    };
-    const auto validateTexture = [&](const GpuGraphResourceId resourceID, Texture& texture, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
-        const usize slotIndex = resourceID.index & (BuiltinBackendResourceCache::s_SlotCount - 1u);
-        const u16 slotBit = static_cast<u16>(1u << slotIndex);
-        auto& slot = resourceCache.slots[slotIndex];
-        const b8 matchesSlot = (resourceCache.populatedMask & slotBit) != 0u && slot.resourceIndex == resourceID.index && slot.resourceGeneration == resourceID.generation && slot.resourceKind == 2u;
-        if(matchesSlot){
-            if(slot.hasValidatedState && slot.validatedState == requiredState)
-                return GpuCommandIrReplayError::None;
-            if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
-                if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
-                    return GpuCommandIrReplayError::BackendResourceNotReady;
-                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-            }
-        }
-        if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
-            return GpuCommandIrReplayError::BackendResourceNotReady;
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(matchesSlot && slot.permanentStateKnown)
-            permanentState = slot.permanentState;
-        else{
-            permanentState = commandList.getPermanentTextureState(&texture);
-            slot.resourceGeneration = resourceID.generation;
-            slot.resourceIndex = resourceID.index;
-            slot.resourceKind = 2u;
-            slot.permanentState = permanentState;
-            slot.permanentStateKnown = true;
-            slot.hasValidatedState = false;
-            resourceCache.populatedMask |= slotBit;
-        }
-        if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
-            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-        slot.validatedState = requiredState;
-        slot.hasValidatedState = true;
-        return GpuCommandIrReplayError::None;
-    };
+    using namespace __hidden_gpu_command_ir_replay_lowering;
 
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:{
         auto& source = *MakeNotNull(graph.bufferForResource(record.source));
         auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
         if(&source == &destination)
-            return validateBuffer(record.source, source, ResourceStates::CopySource | ResourceStates::CopyDest);
+            return ValidateCachedBuiltinResource<s_BufferResourceKind>(record.source, source, ResourceStates::CopySource | ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
 
-        const GpuCommandIrReplayError::Enum sourceError = validateBuffer(record.source, source, ResourceStates::CopySource);
+        const GpuCommandIrReplayError::Enum sourceError = ValidateCachedBuiltinResource<s_BufferResourceKind>(record.source, source, ResourceStates::CopySource, commandQueue, commandList, resourceCache);
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
-        return validateBuffer(record.destination, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_BufferResourceKind>(record.destination, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrOpcode::CopyTexture:{
         auto& source = *MakeNotNull(graph.textureForResource(record.source));
         auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
-        const GpuCommandIrReplayError::Enum sourceError = validateTexture(record.source, source, ResourceStates::CopySource);
+        const GpuCommandIrReplayError::Enum sourceError = ValidateCachedBuiltinResource<s_TextureResourceKind>(record.source, source, ResourceStates::CopySource, commandQueue, commandList, resourceCache);
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
-        return validateTexture(record.destination, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_TextureResourceKind>(record.destination, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrOpcode::ClearBuffer:{
         auto& destination = *MakeNotNull(graph.bufferForResource(record.destination));
-        return validateBuffer(record.destination, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_BufferResourceKind>(record.destination, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrOpcode::ClearTexture:
     case GpuCommandIrOpcode::ClearTextureRectUInt:{
         auto& destination = *MakeNotNull(graph.textureForResource(record.destination));
-        return validateTexture(record.destination, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_TextureResourceKind>(record.destination, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrOpcode::UploadBuffer:
     case GpuCommandIrOpcode::UploadTexture:
@@ -152,76 +162,7 @@ GpuCommandIrReplayError::Enum ValidateBuiltinWireBackendOperand(
     CommandList& commandList,
     BuiltinBackendResourceCache& resourceCache
 )noexcept{
-    const auto validateBuffer = [&](const GpuGraphResourceId resourceID, Buffer& buffer, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
-        const usize slotIndex = resourceID.index & (BuiltinBackendResourceCache::s_SlotCount - 1u);
-        const u16 slotBit = static_cast<u16>(1u << slotIndex);
-        auto& slot = resourceCache.slots[slotIndex];
-        const b8 matchesSlot = (resourceCache.populatedMask & slotBit) != 0u && slot.resourceIndex == resourceID.index && slot.resourceGeneration == resourceID.generation && slot.resourceKind == 1u;
-        if(matchesSlot){
-            if(slot.hasValidatedState && slot.validatedState == requiredState)
-                return GpuCommandIrReplayError::None;
-            if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
-                if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
-                    return GpuCommandIrReplayError::BackendResourceNotReady;
-                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-            }
-        }
-        if(!GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), &buffer, requiredState) || !ResourceQueueAdmissionAdmitsQueue(buffer.getQueueAdmissionSnapshot(), commandQueue))
-            return GpuCommandIrReplayError::BackendResourceNotReady;
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(matchesSlot && slot.permanentStateKnown)
-            permanentState = slot.permanentState;
-        else{
-            permanentState = commandList.getPermanentBufferState(&buffer);
-            slot.resourceGeneration = resourceID.generation;
-            slot.resourceIndex = resourceID.index;
-            slot.resourceKind = 1u;
-            slot.permanentState = permanentState;
-            slot.permanentStateKnown = true;
-            slot.hasValidatedState = false;
-            resourceCache.populatedMask |= slotBit;
-        }
-        if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
-            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-        slot.validatedState = requiredState;
-        slot.hasValidatedState = true;
-        return GpuCommandIrReplayError::None;
-    };
-    const auto validateTexture = [&](const GpuGraphResourceId resourceID, Texture& texture, const ResourceStates::Mask requiredState)noexcept -> GpuCommandIrReplayError::Enum{
-        const usize slotIndex = resourceID.index & (BuiltinBackendResourceCache::s_SlotCount - 1u);
-        const u16 slotBit = static_cast<u16>(1u << slotIndex);
-        auto& slot = resourceCache.slots[slotIndex];
-        const b8 matchesSlot = (resourceCache.populatedMask & slotBit) != 0u && slot.resourceIndex == resourceID.index && slot.resourceGeneration == resourceID.generation && slot.resourceKind == 2u;
-        if(matchesSlot){
-            if(slot.hasValidatedState && slot.validatedState == requiredState)
-                return GpuCommandIrReplayError::None;
-            if(slot.permanentStateKnown && slot.permanentState != ResourceStates::Unknown && slot.permanentState != requiredState){
-                if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
-                    return GpuCommandIrReplayError::BackendResourceNotReady;
-                return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-            }
-        }
-        if(!GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), &texture, requiredState) || !ResourceQueueAdmissionAdmitsQueue(texture.getQueueAdmissionSnapshot(), commandQueue))
-            return GpuCommandIrReplayError::BackendResourceNotReady;
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(matchesSlot && slot.permanentStateKnown)
-            permanentState = slot.permanentState;
-        else{
-            permanentState = commandList.getPermanentTextureState(&texture);
-            slot.resourceGeneration = resourceID.generation;
-            slot.resourceIndex = resourceID.index;
-            slot.resourceKind = 2u;
-            slot.permanentState = permanentState;
-            slot.permanentStateKnown = true;
-            slot.hasValidatedState = false;
-            resourceCache.populatedMask |= slotBit;
-        }
-        if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
-            return GpuCommandIrReplayError::PermanentResourceStateMismatch;
-        slot.validatedState = requiredState;
-        slot.hasValidatedState = true;
-        return GpuCommandIrReplayError::None;
-    };
+    using namespace __hidden_gpu_command_ir_replay_lowering;
 
     switch(opcode){
     case GpuCommandIrWireOpcode::CopyBuffer:{
@@ -231,12 +172,12 @@ GpuCommandIrReplayError::Enum ValidateBuiltinWireBackendOperand(
         auto& source = *MakeNotNull(graph.bufferForResource(sourceId));
         auto& destination = *MakeNotNull(graph.bufferForResource(destinationId));
         if(&source == &destination)
-            return validateBuffer(sourceId, source, ResourceStates::CopySource | ResourceStates::CopyDest);
+            return ValidateCachedBuiltinResource<s_BufferResourceKind>(sourceId, source, ResourceStates::CopySource | ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
 
-        const GpuCommandIrReplayError::Enum sourceError = validateBuffer(sourceId, source, ResourceStates::CopySource);
+        const GpuCommandIrReplayError::Enum sourceError = ValidateCachedBuiltinResource<s_BufferResourceKind>(sourceId, source, ResourceStates::CopySource, commandQueue, commandList, resourceCache);
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
-        return validateBuffer(destinationId, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_BufferResourceKind>(destinationId, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrWireOpcode::CopyTexture:{
         const auto wire = ReadWirePod<GpuCommandIrCopyTextureRecord>(recordPtr);
@@ -244,28 +185,28 @@ GpuCommandIrReplayError::Enum ValidateBuiltinWireBackendOperand(
         const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
         auto& source = *MakeNotNull(graph.textureForResource(sourceId));
         auto& destination = *MakeNotNull(graph.textureForResource(destinationId));
-        const GpuCommandIrReplayError::Enum sourceError = validateTexture(sourceId, source, ResourceStates::CopySource);
+        const GpuCommandIrReplayError::Enum sourceError = ValidateCachedBuiltinResource<s_TextureResourceKind>(sourceId, source, ResourceStates::CopySource, commandQueue, commandList, resourceCache);
         if(sourceError != GpuCommandIrReplayError::None)
             return sourceError;
-        return validateTexture(destinationId, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_TextureResourceKind>(destinationId, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrWireOpcode::ClearBuffer:{
         const auto wire = ReadWirePod<GpuCommandIrClearBufferRecord>(recordPtr);
         const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
         auto& destination = *MakeNotNull(graph.bufferForResource(destinationId));
-        return validateBuffer(destinationId, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_BufferResourceKind>(destinationId, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrWireOpcode::ClearTexture:{
         const auto wire = ReadWirePod<GpuCommandIrClearTextureRecord>(recordPtr);
         const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
         auto& destination = *MakeNotNull(graph.textureForResource(destinationId));
-        return validateTexture(destinationId, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_TextureResourceKind>(destinationId, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrWireOpcode::ClearTextureRectUInt:{
         const auto wire = ReadWirePod<GpuCommandIrClearTextureRectUIntRecord>(recordPtr);
         const GpuGraphResourceId destinationId{ .generation = graphGeneration, .index = wire.destinationResourceIndex };
         auto& destination = *MakeNotNull(graph.textureForResource(destinationId));
-        return validateTexture(destinationId, destination, ResourceStates::CopyDest);
+        return ValidateCachedBuiltinResource<s_TextureResourceKind>(destinationId, destination, ResourceStates::CopyDest, commandQueue, commandList, resourceCache);
     }
     case GpuCommandIrWireOpcode::UploadBuffer:
     case GpuCommandIrWireOpcode::UploadTexture:

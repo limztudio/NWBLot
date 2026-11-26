@@ -597,12 +597,13 @@ private:
     [[nodiscard]] b8 wasCanceledLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] b8 isScopeCanceledLocked(const CpuTaskScope* scope)const noexcept;
     [[nodiscard]] b8 isRangeCanceled(const CpuTaskScope* scope)const noexcept;
+    [[nodiscard]] CpuTaskScope* resolveLazyChildScopeLocked(CpuTaskScope* scope, Execution* activeExec, b8 inScheduler)noexcept;
     void enqueueLocked(u32 index, TaskMeta& meta)noexcept;
     [[nodiscard]] u16 eligibleQueueMaskLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative)const noexcept;
+    void activateDequeuedReadyNodeLocked(ReadyQueue& queue, usize queueIndex, TaskMeta& meta, TaskMeta*& outMeta)noexcept;
     [[nodiscard]] u32 claimTaskLocked(u16 candidateMask, CpuAffinity::Enum affinity, ScopeWait* preferredScope, TaskMeta*& outMeta)noexcept;
     [[nodiscard]] ParallelRangeGroup* claimRangeLocked(u16 eligibleMask, ScopeWait* preferredScope)noexcept;
     [[nodiscard]] b8 claimNextLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative, ScopeWait* preferredScope, usize workerIndex, ClaimedExecution& outClaim, b8 countDepth = true)noexcept;
-    [[nodiscard]] b8 hasReadyLocked(CpuAffinity::Enum affinity, b8 mainThread, b8 executing, b8 cooperative, ScopeWait* preferredScope = nullptr)noexcept;
     [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
     void invalidateScopeSearchLocked(b8 publication)noexcept;
     void ensureSearchBuffersLocked();
@@ -626,7 +627,6 @@ private:
     void waitWorkerSlot(usize slotIndex)noexcept;
     void waitJoinEpoch(u32 expectedEpoch)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
-    [[nodiscard]] b8 executeOne(b8 cooperative, ScopeWait* preferredScope = nullptr);
     void drainTask(TaskHandle handle)noexcept;
     void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);

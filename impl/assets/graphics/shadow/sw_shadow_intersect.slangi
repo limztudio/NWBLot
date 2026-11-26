@@ -28,15 +28,6 @@ float nwbSwShadowRayAabbEntryTFma(const float3 invDir, const float3 minBias, con
     return nwbBvhRayAabbIntervalPaddedFma(invDir, minBias, maxBias, tMin, tMax, boxMin, boxMax, tEntry) ? tEntry : NWB_SW_SHADOW_AABB_MISS;
 }
 
-bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    return nwbBvhRayAabb(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING);
-}
-
-float nwbSwShadowRayAabbEntryT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
-    float tEntry;
-    return nwbBvhRayAabbT(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING, tEntry) ? tEntry : NWB_SW_SHADOW_AABB_MISS;
-}
-
 float3 nwbSwShadowSafeInvDir(const float3 direction){
     return nwbBvhSafeInvDir(direction);
 }
@@ -130,10 +121,6 @@ NwbSwShadowTriangleHit nwbSwShadowRayTriangleWoop(const NwbSwShadowWoopRay ray, 
     result.v = w * invDet;
     result.w = u * invDet;
     return result;
-}
-
-NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
-    return nwbSwShadowRayTriangleWoop(nwbSwShadowMakeWoopRay(origin, direction), tMin, tMax, v0, v1, v2);
 }
 
 

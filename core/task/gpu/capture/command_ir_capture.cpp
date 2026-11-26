@@ -23,7 +23,6 @@ namespace GpuCommandIrDetail{
 
 
 [[nodiscard]] b8 ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
-    constexpr u32 s_AllowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
     if(record.opcode >= GpuCommandIrOpcode::kCount || !record.task.valid() || !record.packet.valid() || !record.queue.valid() || !record.destination.valid() || record.destination.generation != record.task.generation)
         return false;
 
@@ -59,15 +58,7 @@ namespace GpuCommandIrDetail{
             && record.finalState != ResourceStates::Unknown
             && (static_cast<u32>(record.finalState) & ~s_AllowedResourceStates) == 0u
             && record.uploadAspect < TextureUploadAspect::kCount
-            && record.destinationSlice.x == 0u
-            && record.destinationSlice.y == 0u
-            && record.destinationSlice.z == 0u
-            && record.destinationSlice.width != 0u
-            && record.destinationSlice.height != 0u
-            && record.destinationSlice.depth != 0u
-            && record.destinationSlice.width != TextureSlice::s_AllDimensions
-            && record.destinationSlice.height != TextureSlice::s_AllDimensions
-            && record.destinationSlice.depth != TextureSlice::s_AllDimensions
+            && ValidateUploadTextureSlice(record.destinationSlice)
         ;
     default:
         return false;

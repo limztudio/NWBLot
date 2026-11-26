@@ -11,8 +11,6 @@
 
 
 const StringView s_NumericPanelKey = "panel";
-const StringView s_IntegerEditKey = "integer";
-const StringView s_DecimalEditKey = "decimal";
 const StringView s_PopupToolsPanelKey = "panel";
 const StringView s_AnchorKey = "anchor";
 const StringView s_TooltipKey = "tip";
@@ -280,7 +278,7 @@ b8 ApplyNumericHostEvent(in NumericEvent event, in EditBoxOptions options, mut E
     }
     if(options.enabled && event.kind == UiFixtureNumericEventKind::Preedit && !options.readOnly){
         const StringView textView = StringView(event.text);
-        if(!draft.beginComposition() || !draft.updateComposition(textView, textView.size(), textView.size())){
+        if(!draft.beginComposition() || !draft.updateComposition(textView, textView.size(), textView.size(), Span<EditPreeditClause>())){
             result.valid = false;
             return false;
         }

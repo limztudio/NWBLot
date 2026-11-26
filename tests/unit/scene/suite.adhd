@@ -364,9 +364,9 @@ void VerifyFlyCameraMotion_PointerCaptureAndNonfiniteInputResetTheAnchor(){
 
 void VerifyFlyCameraMotion_CapturedKeyboardAndNonfiniteDeltaDoNotMove(){
     const FlyCameraMotion motion = FlyCameraMotion();
-    const VectorSingle axesOut = motion.buildMoveAxes(true, true, false, true, false);
+    const VectorSingle axesOut = motion.buildMoveAxes(true, true, false, true, false, false, false);
     const VectorSingle position = VectorSingle(1.0f, 2.0f, 3.0f, 0.0f);
-    const VectorSingle resultOut = motion.resolvePosition(position, VectorSingle(1.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), BitCast<f32>(0x7f800000u), true);
+    const VectorSingle resultOut = motion.resolvePosition(position, VectorSingle(1.0f, 1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 1.0f), BitCast<f32>(0x7f800000u), true, 1.0f);
     EXPECT_FLOAT_EQ(axesOut.x, 0.0f);
     EXPECT_FLOAT_EQ(axesOut.y, 0.0f);
     EXPECT_FLOAT_EQ(resultOut.x, 1.0f);

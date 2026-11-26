@@ -53,11 +53,7 @@ class UiEditClipboardPolicy{
             if(retainedBytes > maxModelBytes)
                 return UiEditClipboardStatus::TooLarge;
             const usize maxBytes = maxModelBytes - retainedBytes;
-            Expected<usize, EditTextStatus> normalized = MakeUnexpected(EditTextStatus::InvalidText);
-            if(textMode == EditTextMode::Multiline)
-                normalized = NormalizeMultilineTextInto(completionText, maxBytes, inOutInsertText);
-            else
-                normalized = NormalizeSingleLineTextInto(completionText, maxBytes, inOutInsertText);
+            const Expected<usize, EditTextStatus> normalized = NormalizeEditTextInto(completionText, maxBytes, textMode == EditTextMode::Multiline, inOutInsertText);
             if(!normalized.has_value()){
                 if(normalized.error() == EditTextStatus::TooLarge)
                     return UiEditClipboardStatus::TooLarge;

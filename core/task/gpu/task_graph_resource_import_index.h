@@ -17,6 +17,11 @@ NWB_CORE_BEGIN
 
 
 class GpuGraphResourceImportIndex final : NoCopy{
+public:
+    static constexpr usize s_InlineImportIndexCount = 32u;
+    static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
+
+
 private:
     using ResourcePointerKey = GpuTaskGraphDetail::ResourcePointerKey;
     using ResourceImportMatch = GpuTaskGraphDetail::ResourceImportMatch;
@@ -118,9 +123,7 @@ public:
 
 private:
     [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const ResourceNode& resource)noexcept;
-    static constexpr usize s_InlineImportIndexCount = 32u;
     static constexpr usize s_MinTableSlotCount = 64u;
-    static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
     IdentityIndex m_resourceIdentityIndex;
     PointerIndex m_resourcePointerIndex;
     IdentityIndex m_resourceSetIdentityIndex;

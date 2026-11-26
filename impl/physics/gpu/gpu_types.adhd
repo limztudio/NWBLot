@@ -72,12 +72,6 @@ extern const u32 s_GpuBroadphaseModeGridEmitLargePairs;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BROADPHASE_MODE_FINALIZE_LARGE_INDIRECT")]
 extern const u32 s_GpuBroadphaseModeFinalizeLargeIndirect;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NARROWPHASE_MODE_CONTACTS")]
-extern const u32 s_GpuNarrowphaseModeContacts;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_NARROWPHASE_MODE_BULLET_TOI")]
-extern const u32 s_GpuNarrowphaseModeBulletToi;
-
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_BUCKET_STRIDE")]
 extern const u32 s_GpuGridBucketStride;
 
@@ -290,9 +284,6 @@ extern const u32 s_ShaderPhysicsBodyFlagGyroscopic;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL")]
 extern const u32 s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_SLEEPING")]
-extern const u32 s_ShaderPhysicsBodyFlagSleeping;
-
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_ALLOW_SLEEP")]
 extern const u32 s_ShaderPhysicsBodyFlagAllowSleep;
 
@@ -328,9 +319,6 @@ extern const u32 s_GpuContactAuxHasFrictionExt;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_HAS_CUSTOM_SCALE")]
 extern const u32 s_GpuContactAuxHasCustomScale;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_STRIDE_FLOAT4")]
-extern const u32 s_GpuContactAuxStrideFloat4;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_COMPUTE_MORTON")]
 extern const u32 s_GpuLbvhModeComputeMorton;
@@ -439,9 +427,6 @@ extern const u32 s_GpuShapeMaterialBytes;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_WARM_CACHE_ENTRY_BYTES")]
 extern const u32 s_GpuWarmCacheEntryBytes;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_WARM_CACHE_MAX_PROBE")]
-extern const u32 s_GpuWarmCacheMaxProbe;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_EVENT_BYTES")]
 extern const u32 s_GpuEventBytes;
@@ -1029,8 +1014,8 @@ class SoftBodyColorSlice{
 }
 
 u32 PackGpuSoftBackstopNormalXY(in f32 nx, in f32 ny){
-    const u32 qx = cast<u32>(SimdClamp(nx, -1.0f, 1.0f) * 32767.0f + 32767.5f);
-    const u32 qy = cast<u32>(SimdClamp(ny, -1.0f, 1.0f) * 32767.0f + 32767.5f);
+    const u32 qx = cast<u32>(Clamp(nx, -1.0f, 1.0f) * 32767.0f + 32767.5f);
+    const u32 qy = cast<u32>(Clamp(ny, -1.0f, 1.0f) * 32767.0f + 32767.5f);
     return (qx & 0xffffu) | ((qy & 0xffffu) << 16u);
 }
 

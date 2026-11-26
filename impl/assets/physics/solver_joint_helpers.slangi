@@ -2,7 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma once
+#ifndef NWB_PHYSICS_SOLVER_JOINT_HELPERS_SLANGI
+#define NWB_PHYSICS_SOLVER_JOINT_HELPERS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "solver_body_helpers.slangi"
@@ -10,20 +14,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void nwbPhysicsComputeTangentBasis(const float3 n, out float3 outU1, out float3 outU2){
-    const float3 up = abs(n.y) < 0.9f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
-    outU1 = nwbPhysicsSafeNormal(cross(up, n), float3(1.0f, 0.0f, 0.0f));
-    outU2 = cross(n, outU1);
-}
-
-float3 nwbPhysicsMulSym3(const float4 i0, const float2 i1, const float3 v){
-    return float3(
-        i0.x * v.x + i0.y * v.y + i0.z * v.z,
-        i0.y * v.x + i0.w * v.y + i1.x * v.z,
-        i0.z * v.x + i1.x * v.y + i1.y * v.z
-    );
-}
 
 void nwbPhysicsInvertSymmetric3(
     const float4 a0,
@@ -87,11 +77,6 @@ void nwbPhysicsInvertSymmetric3(
     inv1 = float2(0.0f, 0.0f);
 }
 
-float nwbPhysicsLinearInvMassDot(const float3 a, const float3 b, const float invMass, const uint flags){
-    const float3 ma = ((flags & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(a, flags) : a;
-    return invMass * dot(ma, b);
-}
-
 void nwbPhysicsComputePointEffectiveMass(
     const float invMassA,
     const float invMassB,
@@ -147,11 +132,11 @@ void nwbPhysicsApplyLinearImpulsePair(
     inout float3 wB
 ){
     vA -= invMassA * pairImpulse;
-    wA -= nwbPhysicsMulSym3(invIA0, invIA1, cross(rA, pairImpulse));
+    wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA, pairImpulse));
     if((flagsA & 0x07u) != 0u)
         vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
     vB += invMassB * pairImpulse;
-    wB += nwbPhysicsMulSym3(invIB0, invIB1, cross(rB, pairImpulse));
+    wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB, pairImpulse));
     if((flagsB & 0x07u) != 0u)
         vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
 }
@@ -165,8 +150,8 @@ void nwbPhysicsApplyAngularImpulsePair(
     inout float3 wA,
     inout float3 wB
 ){
-    wA -= nwbPhysicsMulSym3(invIA0, invIA1, impulse);
-    wB += nwbPhysicsMulSym3(invIB0, invIB1, impulse);
+    wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, impulse);
+    wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, impulse);
 }
 
 float3 nwbPhysicsClampVecLen(const float3 v, const float maxLen){
@@ -202,7 +187,7 @@ void nwbPhysicsSolve3DPointRow(
     nwbPhysicsComputePointEffectiveMass(invMassA, invMassB, invIA0, invIA1, invIB0, invIB1, rA, rB, flagsA, flagsB, kInv0, kInv1);
     const float3 dv = (vB + cross(wB, rB)) - (vA + cross(wA, rA));
     const float3 oldP = inOutImpulse;
-    const float3 dP = nwbPhysicsMulSym3(kInv0, kInv1, -(dv + bias)) * mScale - oldP * iScale;
+    const float3 dP = nwbPhysicsMulSymmetric3(kInv0, kInv1, -(dv + bias)) * mScale - oldP * iScale;
     float3 appliedP = dP;
     float3 newP = oldP + dP;
     if(maxImpulse > 0.0f){
@@ -249,10 +234,10 @@ void nwbPhysicsSolve2DLinearPlaneRows(
     const float3 rBu1 = cross(rB, u1);
     const float3 rAu2 = cross(rA, u2);
     const float3 rBu2 = cross(rB, u2);
-    const float3 irAu1 = nwbPhysicsMulSym3(invIA0, invIA1, rAu1);
-    const float3 irBu1 = nwbPhysicsMulSym3(invIB0, invIB1, rBu1);
-    const float3 irAu2 = nwbPhysicsMulSym3(invIA0, invIA1, rAu2);
-    const float3 irBu2 = nwbPhysicsMulSym3(invIB0, invIB1, rBu2);
+    const float3 irAu1 = nwbPhysicsMulSymmetric3(invIA0, invIA1, rAu1);
+    const float3 irBu1 = nwbPhysicsMulSymmetric3(invIB0, invIB1, rBu1);
+    const float3 irAu2 = nwbPhysicsMulSymmetric3(invIA0, invIA1, rAu2);
+    const float3 irBu2 = nwbPhysicsMulSymmetric3(invIB0, invIB1, rBu2);
 
     const float m00 = nwbPhysicsLinearInvMassDot(u1, u1, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(u1, u1, invMassB, flagsB);
     const float m01 = nwbPhysicsLinearInvMassDot(u1, u2, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(u1, u2, invMassB, flagsB);
@@ -325,7 +310,7 @@ void nwbPhysicsSolve3DAngularLockRow(
 
     const float3 oldL = inOutImpulse;
     const float3 relW = wB - wA;
-    const float3 deltaL = nwbPhysicsMulSym3(kAngInv0, kAngInv1, -(relW + bias)) * mScale - oldL * iScale;
+    const float3 deltaL = nwbPhysicsMulSymmetric3(kAngInv0, kAngInv1, -(relW + bias)) * mScale - oldL * iScale;
     float3 appliedL = deltaL;
     float3 newL = oldL + deltaL;
     if(maxImpulse > 0.0f){
@@ -359,10 +344,10 @@ void nwbPhysicsSolve2DAngularPerpRows(
 
     const float e1 = dot(crossAB, u1);
     const float e2 = dot(crossAB, u2);
-    const float3 iaU1 = nwbPhysicsMulSym3(invIA0, invIA1, u1);
-    const float3 ibU1 = nwbPhysicsMulSym3(invIB0, invIB1, u1);
-    const float3 iaU2 = nwbPhysicsMulSym3(invIA0, invIA1, u2);
-    const float3 ibU2 = nwbPhysicsMulSym3(invIB0, invIB1, u2);
+    const float3 iaU1 = nwbPhysicsMulSymmetric3(invIA0, invIA1, u1);
+    const float3 ibU1 = nwbPhysicsMulSymmetric3(invIB0, invIB1, u1);
+    const float3 iaU2 = nwbPhysicsMulSymmetric3(invIA0, invIA1, u2);
+    const float3 ibU2 = nwbPhysicsMulSymmetric3(invIB0, invIB1, u2);
     const float3 su1 = iaU1 + ibU1;
     const float3 su2 = iaU2 + ibU2;
     const float m00 = dot(u1, su1);
@@ -860,10 +845,6 @@ void nwbPhysicsEvaluatePathClosestPoint(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS
-#define NWB_PHYSICS_ISLAND_LDS_MAX_JOINTS NWB_PHYSICS_ISLAND_MAX_JOINTS
-#endif
-
 void nwbPhysicsClearJointAuxWarmStart(const uint jointIdx, const uint jointSlot){
     const uint auxSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.w);
     if(auxSlot == NWB_PHYSICS_INVALID_INDEX)
@@ -1029,8 +1010,8 @@ void nwbPhysicsWarmStartSingleJoint(
         const float3 localAxisB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisBUpperLimit.xyz;
         const float3 axisA0 = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisA, qA0), float3(0.0f, 1.0f, 0.0f));
         const float3 axisB0 = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisB, qB0), float3(0.0f, 1.0f, 0.0f));
-        wA += nwbPhysicsMulSym3(invIA0, invIA1, axisA0 * gImp);
-        wB += nwbPhysicsMulSym3(invIB0, invIB1, axisB0 * (inertiaSwingRatio.w * gImp));
+        wA += nwbPhysicsMulSymmetric3(invIA0, invIA1, axisA0 * gImp);
+        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, axisB0 * (inertiaSwingRatio.w * gImp));
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
         return;
@@ -1047,9 +1028,9 @@ void nwbPhysicsWarmStartSingleJoint(
         const float3 pA = uA0 * pImp;
         const float3 pB = uB0 * (inertiaSwingRatio.w * pImp);
         vA += invMassA * pA;
-        wA += nwbPhysicsMulSym3(invIA0, invIA1, cross(rA0, pA));
+        wA += nwbPhysicsMulSymmetric3(invIA0, invIA1, cross(rA0, pA));
         vB += invMassB * pB;
-        wB += nwbPhysicsMulSym3(invIB0, invIB1, cross(rB0, pB));
+        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, cross(rB0, pB));
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
         return;
@@ -1068,9 +1049,9 @@ void nwbPhysicsWarmStartSingleJoint(
         const float3 wImpA = (cross(rA0, axisA0) - axisB0 * inertiaSwingRatio.w) * rpImp;
         const float3 wImpB = (-cross(rB0, axisA0) + axisB0 * inertiaSwingRatio.w) * rpImp;
         vA += axisA0 * (invMassA * rpImp);
-        wA += nwbPhysicsMulSym3(invIA0, invIA1, wImpA);
+        wA += nwbPhysicsMulSymmetric3(invIA0, invIA1, wImpA);
         vB -= axisA0 * (invMassB * rpImp);
-        wB += nwbPhysicsMulSym3(invIB0, invIB1, wImpB);
+        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, wImpB);
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexA, vA, wA, flagsA);
         nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
         return;
@@ -1216,6 +1197,62 @@ void nwbPhysicsWarmStartSingleJoint(
     nwbPhysicsStoreBodyVelocity(bodyStateSlot, indexB, vB, wB, flagsB);
 }
 
+void nwbPhysicsResolveJointAnchorFrame(
+    const uint jointSlot,
+    const uint jointIdx,
+    const uint jType,
+    const bool enableLimit,
+    const bool enableTwistLimit,
+    const bool enableMotor,
+    const bool hasAux,
+    const uint indexA,
+    const uint flagsA,
+    const float3 deltaPosA,
+    const float4 deltaRotA,
+    const uint indexB,
+    const uint flagsB,
+    const float3 deltaPosB,
+    const float4 deltaRotB,
+    out float3 outRA0,
+    out float3 outRB0,
+    out float4 outBaseCenterDeltaMaxMotor,
+    out bool outHasDeltaRotA,
+    out float outInvMassA,
+    out float outInvMassB,
+    out float3 outRA,
+    out float3 outRB,
+    out float3 outD,
+    out float4 outQA,
+    out float4 outQB
+){
+    const float4 rA0InvMassA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA;
+    const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
+    outRA0 = rA0InvMassA.xyz;
+    outRB0 = rB0InvMassB.xyz;
+    outInvMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
+    outInvMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
+    outBaseCenterDeltaMaxMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor;
+
+    outHasDeltaRotA = (dot(deltaRotA.xyz, deltaRotA.xyz) > 1.0e-12f);
+    const bool hasDeltaRotB = (dot(deltaRotB.xyz, deltaRotB.xyz) > 1.0e-12f);
+    outRA = outHasDeltaRotA ? nwbPhysicsQuatRotate(outRA0, deltaRotA) : outRA0;
+    outRB = hasDeltaRotB ? nwbPhysicsQuatRotate(outRB0, deltaRotB) : outRB0;
+    outD = outBaseCenterDeltaMaxMotor.xyz + deltaPosB - deltaPosA + outRB - outRA;
+
+    const bool needQuats = (jType != NWB_PHYSICS_JOINT_TYPE_DISTANCE)
+        && (jType != NWB_PHYSICS_JOINT_TYPE_ROPE)
+        && (jType != NWB_PHYSICS_JOINT_TYPE_PULLEY)
+        && (jType != NWB_PHYSICS_JOINT_TYPE_SPHERICAL || enableLimit || enableTwistLimit || enableMotor || hasAux);
+    outQA = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    outQB = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    if(needQuats){
+        const float4 qA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qA0;
+        const float4 qB0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qB0;
+        outQA = outHasDeltaRotA ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotA, qA0)) : qA0;
+        outQB = hasDeltaRotB ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotB, qB0)) : qB0;
+    }
+}
+
 void nwbPhysicsSolveSingleJoint(
     const uint jointIdx,
     const bool useBias,
@@ -1282,32 +1319,18 @@ void nwbPhysicsSolveSingleJoint(
     const float4 invIB0 = rawIB0 * inertiaSwingRatio.y;
     const float2 invIB1 = rawIB1.xy * inertiaSwingRatio.y;
 
-    const float4 rA0InvMassA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA;
-    const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
-    const float3 rA0 = rA0InvMassA.xyz;
-    const float3 rB0 = rB0InvMassB.xyz;
-    const float invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
-    const float invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
-    const float4 baseCenterDeltaMaxMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor;
-
-    const bool hasDeltaRotA = (dot(deltaRotA.xyz, deltaRotA.xyz) > 1.0e-12f);
-    const bool hasDeltaRotB = (dot(deltaRotB.xyz, deltaRotB.xyz) > 1.0e-12f);
-    const float3 rA = hasDeltaRotA ? nwbPhysicsQuatRotate(rA0, deltaRotA) : rA0;
-    const float3 rB = hasDeltaRotB ? nwbPhysicsQuatRotate(rB0, deltaRotB) : rB0;
-    const float3 d = baseCenterDeltaMaxMotor.xyz + deltaPosB - deltaPosA + rB - rA;
-
-    const bool needQuats = (jType != NWB_PHYSICS_JOINT_TYPE_DISTANCE)
-        && (jType != NWB_PHYSICS_JOINT_TYPE_ROPE)
-        && (jType != NWB_PHYSICS_JOINT_TYPE_PULLEY)
-        && (jType != NWB_PHYSICS_JOINT_TYPE_SPHERICAL || enableLimit || enableTwistLimit || enableMotor || hasAux);
-    float4 qA = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    float4 qB = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    if(needQuats){
-        const float4 qA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qA0;
-        const float4 qB0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qB0;
-        qA = hasDeltaRotA ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotA, qA0)) : qA0;
-        qB = hasDeltaRotB ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotB, qB0)) : qB0;
-    }
+    float3 rA0;
+    float3 rB0;
+    float4 baseCenterDeltaMaxMotor;
+    bool hasDeltaRotA;
+    float invMassA;
+    float invMassB;
+    float3 rA;
+    float3 rB;
+    float3 d;
+    float4 qA;
+    float4 qB;
+    nwbPhysicsResolveJointAnchorFrame(jointSlot, jointIdx, jType, enableLimit, enableTwistLimit, enableMotor, hasAux, indexA, flagsA, deltaPosA, deltaRotA, indexB, flagsB, deltaPosB, deltaRotB, rA0, rB0, baseCenterDeltaMaxMotor, hasDeltaRotA, invMassA, invMassB, rA, rB, d, qA, qB);
 
     bool writeAng = false;
     bool writeLim = false;
@@ -1319,8 +1342,8 @@ void nwbPhysicsSolveSingleJoint(
         const float3 u = (dLenSq > 1.0e-12f) ? (d * dInvLen) : float3(0.0f, 1.0f, 0.0f);
         const float3 rnA = cross(rA, u);
         const float3 rnB = cross(rB, u);
-        const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-        const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+        const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+        const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
         const float k = nwbPhysicsLinearInvMassDot(u, u, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(u, u, invMassB, flagsB)
             + dot(rnA, iRnA) + dot(rnB, iRnB);
         const float effMass = k > 1.0e-12f ? (1.0f / k) : 0.0f;
@@ -1433,8 +1456,8 @@ void nwbPhysicsSolveSingleJoint(
                         float3 swingAxis;
                         float swingViol;
                         nwbPhysicsComputeSphericalConeSwingAxisAndViolation(localAxisLower.xyz, qA, axisA, axisB, swingLimit, swingLimitY, swingAxis, swingViol);
-                        const float3 iaSw = nwbPhysicsMulSym3(invIA0, invIA1, swingAxis);
-                        const float3 ibSw = nwbPhysicsMulSym3(invIB0, invIB1, swingAxis);
+                        const float3 iaSw = nwbPhysicsMulSymmetric3(invIA0, invIA1, swingAxis);
+                        const float3 ibSw = nwbPhysicsMulSymmetric3(invIB0, invIB1, swingAxis);
                         float appliedCone = 0.0f;
                         if(swingViol > 0.0f){
                             const float kSwing = dot(swingAxis, iaSw + ibSw);
@@ -1452,8 +1475,8 @@ void nwbPhysicsSolveSingleJoint(
                     }
                     if(wantSphericalTwistLim || wantSphericalMotor){
                         writeLim = true;
-                        const float3 iaTw = nwbPhysicsMulSym3(invIA0, invIA1, axisB);
-                        const float3 ibTw = nwbPhysicsMulSym3(invIB0, invIB1, axisB);
+                        const float3 iaTw = nwbPhysicsMulSymmetric3(invIA0, invIA1, axisB);
+                        const float3 ibTw = nwbPhysicsMulSymmetric3(invIB0, invIB1, axisB);
                         const float kTwist = dot(axisB, iaTw + ibTw);
                         const float twistMass = kTwist > 1.0e-12f ? (1.0f / kTwist) : 0.0f;
                         if(wantSphericalMotor && twistMass > 0.0f){
@@ -1518,8 +1541,8 @@ void nwbPhysicsSolveSingleJoint(
                 const float4 revAux = hasRevAux ? g_NwbPhysicsFloat4Buffers[auxSlot][auxOff] : float4(0.0f, 0.0f, 0.0f, 0.0f);
                 const bool hasContAngle = hasRevAux && (revAux.z != 0.0f);
                 if(hasContAngle || (enableMotor && maxMotorForce > 0.0f) || (enableLimit && lowLim <= highLim) || hasFreeSpring){
-                    const float3 iaAx = nwbPhysicsMulSym3(invIA0, invIA1, axisA);
-                    const float3 ibAx = nwbPhysicsMulSym3(invIB0, invIB1, axisA);
+                    const float3 iaAx = nwbPhysicsMulSymmetric3(invIA0, invIA1, axisA);
+                    const float3 ibAx = nwbPhysicsMulSymmetric3(invIB0, invIB1, axisA);
                     const float kAxis = dot(axisA, iaAx + ibAx);
                     const float axialMass = kAxis > 1.0e-12f ? (1.0f / kAxis) : 0.0f;
                     float angle = 0.0f;
@@ -1618,8 +1641,8 @@ void nwbPhysicsSolveSingleJoint(
                 writeLim = true;
                 const float3 rnA = cross(rAEff, axisA);
                 const float3 rnB = cross(rB, axisA);
-                const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-                const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+                const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+                const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
                 const float kAxis = nwbPhysicsLinearInvMassDot(axisA, axisA, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(axisA, axisA, invMassB, flagsB)
                     + dot(rnA, iRnA) + dot(rnB, iRnB);
                 const float axialMass = kAxis > 1.0e-12f ? (1.0f / kAxis) : 0.0f;
@@ -1672,8 +1695,8 @@ void nwbPhysicsSolveSingleJoint(
             writeLim = true;
             const float3 rnA = cross(rAEff, axisA);
             const float3 rnB = cross(rB, axisA);
-            const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-            const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+            const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+            const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
             const float kSusp = nwbPhysicsLinearInvMassDot(axisA, axisA, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(axisA, axisA, invMassB, flagsB)
                 + dot(rnA, iRnA) + dot(rnB, iRnB);
             const float suspMass = kSusp > 1.0e-12f ? (1.0f / kSusp) : 0.0f;
@@ -1706,8 +1729,8 @@ void nwbPhysicsSolveSingleJoint(
             angularImpulse.xyz = angImp;
 
             if(enableMotor && maxMotorForce > 0.0f){
-                const float3 iaAx = nwbPhysicsMulSym3(invIA0, invIA1, axleA);
-                const float3 ibAx = nwbPhysicsMulSym3(invIB0, invIB1, axleA);
+                const float3 iaAx = nwbPhysicsMulSymmetric3(invIA0, invIA1, axleA);
+                const float3 ibAx = nwbPhysicsMulSymmetric3(invIB0, invIB1, axleA);
                 const float kAxle = dot(axleA, iaAx + ibAx);
                 if(kAxle > 1.0e-12f){
                     const float axleMass = 1.0f / kAxle;
@@ -1730,8 +1753,8 @@ void nwbPhysicsSolveSingleJoint(
         const float3 localAxisB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisBUpperLimit.xyz;
         const float3 axisA = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisA, qA), float3(0.0f, 1.0f, 0.0f));
         const float3 axisB = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisB, qB), float3(0.0f, 1.0f, 0.0f));
-        const float3 iaAx = nwbPhysicsMulSym3(invIA0, invIA1, axisA);
-        const float3 ibAx = nwbPhysicsMulSym3(invIB0, invIB1, axisB);
+        const float3 iaAx = nwbPhysicsMulSymmetric3(invIA0, invIA1, axisA);
+        const float3 ibAx = nwbPhysicsMulSymmetric3(invIB0, invIB1, axisB);
         const float kGear = dot(axisA, iaAx) + ratio * ratio * dot(axisB, ibAx);
         if(kGear > 1.0e-12f){
             float phaseErr0 = 0.0f;
@@ -1771,8 +1794,8 @@ void nwbPhysicsSolveSingleJoint(
         const float3 uB = (lenBSq > 1.0e-12f) ? (vecB * invLenB) : float3(0.0f, 1.0f, 0.0f);
         const float3 rnA = cross(rA, uA);
         const float3 rnB = cross(rB, uB);
-        const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-        const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+        const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+        const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
         const float kPull = nwbPhysicsLinearInvMassDot(uA, uA, invMassA, flagsA)
             + dot(rnA, iRnA)
             + ratio * ratio * (nwbPhysicsLinearInvMassDot(uB, uB, invMassB, flagsB) + dot(rnB, iRnB));
@@ -1823,8 +1846,8 @@ void nwbPhysicsSolveSingleJoint(
         const float3 axisB = nwbPhysicsSafeNormal(nwbPhysicsQuatRotate(localAxisB, qB), float3(0.0f, 0.0f, 1.0f));
         const float3 jWA = cross(rA, axisA) - axisB * ratio;
         const float3 jWB = -cross(rB, axisA) + axisB * ratio;
-        const float3 iJwA = nwbPhysicsMulSym3(invIA0, invIA1, jWA);
-        const float3 iJwB = nwbPhysicsMulSym3(invIB0, invIB1, jWB);
+        const float3 iJwA = nwbPhysicsMulSymmetric3(invIA0, invIA1, jWA);
+        const float3 iJwB = nwbPhysicsMulSymmetric3(invIB0, invIB1, jWB);
         const float kRp = nwbPhysicsLinearInvMassDot(axisA, axisA, invMassA, flagsA)
             + nwbPhysicsLinearInvMassDot(axisA, axisA, invMassB, flagsB)
             + dot(jWA, iJwA) + dot(jWB, iJwB);
@@ -1889,8 +1912,8 @@ void nwbPhysicsSolveSingleJoint(
                 const float3 axis = axes[k];
                 const float3 rnA = cross(rAEff, axis);
                 const float3 rnB = cross(rB, axis);
-                const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-                const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+                const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+                const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
                 const float kLin = nwbPhysicsLinearInvMassDot(axis, axis, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(axis, axis, invMassB, flagsB) + dot(rnA, iRnA) + dot(rnB, iRnB);
                 const float effM = kLin > 1.0e-12f ? (1.0f / kLin) : 0.0f;
                 float lockImp = linearImpulse[k];
@@ -1956,8 +1979,8 @@ void nwbPhysicsSolveSingleJoint(
                     const float4 c2 = g_NwbPhysicsFloat4Buffers[auxSlot][aBase + 2u];
                     float4 c3 = g_NwbPhysicsFloat4Buffers[auxSlot][aBase + 3u];
                     const float3 axis = axes[k];
-                    const float3 iaAx = nwbPhysicsMulSym3(invIA0, invIA1, axis);
-                    const float3 ibAx = nwbPhysicsMulSym3(invIB0, invIB1, axis);
+                    const float3 iaAx = nwbPhysicsMulSymmetric3(invIA0, invIA1, axis);
+                    const float3 ibAx = nwbPhysicsMulSymmetric3(invIB0, invIB1, axis);
                     const float kAng = dot(axis, iaAx + ibAx);
                     const float effM = kAng > 1.0e-12f ? (1.0f / kAng) : 0.0f;
                     float lockImp = angularImpulse[k];
@@ -1982,8 +2005,8 @@ void nwbPhysicsSolveSingleJoint(
                     float swingViol;
                     const bool coneViolated = nwbPhysicsComputeSixDofConeSwingAxisAndViolation(e1, e2, swingVec, swingY, swingZ, swingMode, swingHdr.y, swingHdr.z, swingDir, swingViol);
                     if(coneViolated){
-                        const float3 iaSw = nwbPhysicsMulSym3(invIA0, invIA1, swingDir);
-                        const float3 ibSw = nwbPhysicsMulSym3(invIB0, invIB1, swingDir);
+                        const float3 iaSw = nwbPhysicsMulSymmetric3(invIA0, invIA1, swingDir);
+                        const float3 ibSw = nwbPhysicsMulSymmetric3(invIB0, invIB1, swingDir);
                         const float kSwing = dot(swingDir, iaSw + ibSw);
                         const float swingMass = kSwing > 1.0e-12f ? (1.0f / kSwing) : 0.0f;
                         const float appliedCone = nwbPhysicsStepJointLimitScalar(true, swingViol, dot(wB - wA, swingDir), swingMass, limitSoftRest.xyz, limitSoftRest.w, useBias, false, swingImp);
@@ -1997,8 +2020,8 @@ void nwbPhysicsSolveSingleJoint(
                         const float3 undoDir = nwbPhysicsSafeNormal(swingVec, e1);
                         const float appliedCone = -swingImp;
                         g_NwbPhysicsFloat4Buffers[auxSlot][auxOff].w = 0.0f;
-                        wA -= nwbPhysicsMulSym3(invIA0, invIA1, undoDir * appliedCone);
-                        wB += nwbPhysicsMulSym3(invIB0, invIB1, undoDir * appliedCone);
+                        wA -= nwbPhysicsMulSymmetric3(invIA0, invIA1, undoDir * appliedCone);
+                        wB += nwbPhysicsMulSymmetric3(invIB0, invIB1, undoDir * appliedCone);
                     }
                 }
 
@@ -2046,8 +2069,8 @@ void nwbPhysicsSolveSingleJoint(
 
             const float3 rnA = cross(rAEff, tanWorld);
             const float3 rnB = cross(rB, tanWorld);
-            const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-            const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+            const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+            const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
             const float kTan = nwbPhysicsLinearInvMassDot(tanWorld, tanWorld, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(tanWorld, tanWorld, invMassB, flagsB) + dot(rnA, iRnA) + dot(rnB, iRnB);
             const float tanMass = kTan > 1.0e-12f ? (1.0f / kTan) : 0.0f;
 
@@ -2103,8 +2126,8 @@ void nwbPhysicsSolveSingleJoint(
         const float3 u = (dLenSq > 1.0e-12f) ? (d * dInvLen) : float3(0.0f, 1.0f, 0.0f);
         const float3 rnA = cross(rA, u);
         const float3 rnB = cross(rB, u);
-        const float3 iRnA = nwbPhysicsMulSym3(invIA0, invIA1, rnA);
-        const float3 iRnB = nwbPhysicsMulSym3(invIB0, invIB1, rnB);
+        const float3 iRnA = nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA);
+        const float3 iRnB = nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB);
         const float k = nwbPhysicsLinearInvMassDot(u, u, invMassA, flagsA) + nwbPhysicsLinearInvMassDot(u, u, invMassB, flagsB)
             + dot(rnA, iRnA) + dot(rnB, iRnB);
         const float effMass = k > 1.0e-12f ? (1.0f / k) : 0.0f;
@@ -2377,32 +2400,18 @@ bool nwbPhysicsProjectSingleJoint(
     uint flagsB;
     nwbPhysicsLoadBodyState(bodyStateSlot, indexB, dummyVB, dummyWB, deltaPosB, deltaRotB, flagsB);
 
-    const float4 rA0InvMassA = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rA0InvMassA;
-    const float4 rB0InvMassB = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].rB0InvMassB;
-    const float3 rA0 = rA0InvMassA.xyz;
-    const float3 rB0 = rB0InvMassB.xyz;
-    const float invMassA = (indexA != NWB_PHYSICS_INVALID_INDEX && (flagsA & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsA & 0x07u) != 0x07u) ? rA0InvMassA.w : 0.0f;
-    const float invMassB = (indexB != NWB_PHYSICS_INVALID_INDEX && (flagsB & NWB_PHYSICS_BODY_FLAG_DYNAMIC) != 0u && (flagsB & 0x07u) != 0x07u) ? rB0InvMassB.w : 0.0f;
-
-    const float4 baseCenterDeltaMaxMotor = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].baseCenterDeltaMaxMotor;
-    const bool hasDeltaRotA = (dot(deltaRotA.xyz, deltaRotA.xyz) > 1.0e-12f);
-    const bool hasDeltaRotB = (dot(deltaRotB.xyz, deltaRotB.xyz) > 1.0e-12f);
-    const float3 rA = hasDeltaRotA ? nwbPhysicsQuatRotate(rA0, deltaRotA) : rA0;
-    const float3 rB = hasDeltaRotB ? nwbPhysicsQuatRotate(rB0, deltaRotB) : rB0;
-    const float3 d = baseCenterDeltaMaxMotor.xyz + deltaPosB - deltaPosA + rB - rA;
-
-    const bool needQuats = (jType != NWB_PHYSICS_JOINT_TYPE_DISTANCE)
-        && (jType != NWB_PHYSICS_JOINT_TYPE_ROPE)
-        && (jType != NWB_PHYSICS_JOINT_TYPE_PULLEY)
-        && (jType != NWB_PHYSICS_JOINT_TYPE_SPHERICAL || enableLimit || enableTwistLimit || enableMotor || hasAux);
-    float4 qA = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    float4 qB = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    if(needQuats){
-        const float4 qA0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qA0;
-        const float4 qB0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].qB0;
-        qA = hasDeltaRotA ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotA, qA0)) : qA0;
-        qB = hasDeltaRotB ? nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(deltaRotB, qB0)) : qB0;
-    }
+    float3 rA0;
+    float3 rB0;
+    float4 baseCenterDeltaMaxMotor;
+    bool hasDeltaRotA;
+    float invMassA;
+    float invMassB;
+    float3 rA;
+    float3 rB;
+    float3 d;
+    float4 qA;
+    float4 qB;
+    nwbPhysicsResolveJointAnchorFrame(jointSlot, jointIdx, jType, enableLimit, enableTwistLimit, enableMotor, hasAux, indexA, flagsA, deltaPosA, deltaRotA, indexB, flagsB, deltaPosB, deltaRotB, rA0, rB0, baseCenterDeltaMaxMotor, hasDeltaRotA, invMassA, invMassB, rA, rB, d, qA, qB);
 
     const float4 params0 = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].params0;
     const float4 localAxisLower = g_NwbPhysicsJointConstraintBuffers[jointSlot][jointIdx].localAxisALowerLimit;
@@ -2582,8 +2591,8 @@ bool nwbPhysicsProjectSingleJoint(
             const float2 invIA1 = rawIA1.xy * inertiaSwingRatio.x;
             const float4 invIB0 = rawIB0 * inertiaSwingRatio.y;
             const float2 invIB1 = rawIB1.xy * inertiaSwingRatio.y;
-            const float3 iaAx = nwbPhysicsMulSym3(invIA0, invIA1, axisA);
-            const float3 ibAx = nwbPhysicsMulSym3(invIB0, invIB1, axisB);
+            const float3 iaAx = nwbPhysicsMulSymmetric3(invIA0, invIA1, axisA);
+            const float3 ibAx = nwbPhysicsMulSymmetric3(invIB0, invIB1, axisB);
             const float kGear = dot(axisA, iaAx) + ratio * ratio * dot(axisB, ibAx);
             if(kGear > 1.0e-12f){
                 const float corr = -cErr / kGear;
@@ -2630,8 +2639,8 @@ bool nwbPhysicsProjectSingleJoint(
             const float2 invIB1 = rawIB1.xy * inertiaSwingRatio.y;
             const float3 jWA = cross(rA, axisA) - axisB * ratio;
             const float3 jWB = -cross(rB, axisA) + axisB * ratio;
-            const float3 iJwA = nwbPhysicsMulSym3(invIA0, invIA1, jWA);
-            const float3 iJwB = nwbPhysicsMulSym3(invIB0, invIB1, jWB);
+            const float3 iJwA = nwbPhysicsMulSymmetric3(invIA0, invIA1, jWA);
+            const float3 iJwB = nwbPhysicsMulSymmetric3(invIB0, invIB1, jWB);
             const float kRp = nwbPhysicsLinearInvMassDot(axisA, axisA, invMassA, flagsA)
                 + nwbPhysicsLinearInvMassDot(axisA, axisA, invMassB, flagsB)
                 + dot(jWA, iJwA) + dot(jWB, iJwB);
@@ -2826,8 +2835,8 @@ bool nwbPhysicsProjectSingleJoint(
             const float4 invIB0 = rawIB0 * inertiaSwingRatio.y;
             const float2 invIB1 = rawIB1.xy * inertiaSwingRatio.y;
             const float3 angDir = angErr * (1.0f / angMag);
-            const float3 iaAx = nwbPhysicsMulSym3(invIA0, invIA1, angDir);
-            const float3 ibAx = nwbPhysicsMulSym3(invIB0, invIB1, angDir);
+            const float3 iaAx = nwbPhysicsMulSymmetric3(invIA0, invIA1, angDir);
+            const float3 ibAx = nwbPhysicsMulSymmetric3(invIB0, invIB1, angDir);
             const float kAng = dot(angDir, iaAx + ibAx);
             if(kAng > 1.0e-12f){
                 const float thetaScale = angMag / kAng;
@@ -2851,6 +2860,15 @@ bool nwbPhysicsProjectSingleJoint(
         nwbPhysicsWriteBodyDeltaPose(bodyStateSlot, indexB, deltaPosB, deltaRotB);
     return dirtyA || dirtyB;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

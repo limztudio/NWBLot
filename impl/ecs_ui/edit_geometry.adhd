@@ -47,7 +47,7 @@ class UiEditGeometry{
         return Point(local.x, local.y);
     }
 
-    public Expected<usize> hitCaret(
+    private Expected<Point> resolveLocalStopTablePosition(
         in UiEditBoxGeometry geometry,
         in UiTextEditOwner owner,
         in PopupToken popup,
@@ -56,7 +56,7 @@ class UiEditGeometry{
         if(!geometry.stopTable.valid())
             return MakeUnexpected(Failure());
         in EditCaretStopTable stopTable = geometry.stopTable.deref();
-        const Expected<Point> local = this.localTextPosition(
+        return this.localTextPosition(
             geometry.generation,
             stopTable.stops,
             stopTable.lines,
@@ -68,8 +68,18 @@ class UiEditGeometry{
             popup,
             position
         );
+    }
+
+    public Expected<usize> hitCaret(
+        in UiEditBoxGeometry geometry,
+        in UiTextEditOwner owner,
+        in PopupToken popup,
+        in Point position
+    )const{
+        const Expected<Point> local = this.resolveLocalStopTablePosition(geometry, owner, popup, position);
         if(!local.has_value())
             return MakeUnexpected(Failure());
+        in EditCaretStopTable stopTable = geometry.stopTable.deref();
         return HitEditCaretGeometry(stopTable.lines, stopTable.stops, local.value());
     }
 
@@ -79,23 +89,10 @@ class UiEditGeometry{
         in PopupToken popup,
         in Point position
     )const{
-        if(!geometry.stopTable.valid())
-            return MakeUnexpected(Failure());
-        in EditCaretStopTable stopTable = geometry.stopTable.deref();
-        const Expected<Point> local = this.localTextPosition(
-            geometry.generation,
-            stopTable.stops,
-            stopTable.lines,
-            geometry.modelGeneration,
-            geometry.popup,
-            geometry.textMode,
-            geometry.placement,
-            owner,
-            popup,
-            position
-        );
+        const Expected<Point> local = this.resolveLocalStopTablePosition(geometry, owner, popup, position);
         if(!local.has_value())
             return MakeUnexpected(Failure());
+        in EditCaretStopTable stopTable = geometry.stopTable.deref();
         return TryHitEditWordCaretGeometry(stopTable.lines, stopTable.stops, local.value());
     }
 

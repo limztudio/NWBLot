@@ -651,12 +651,12 @@ class Articulation{
         )
             return SymMat3(diagClamped.x, 0.0f, 0.0f, diagClamped.y, 0.0f, diagClamped.z);
         return SymMat3(
-            SimdMax(1.0e-4f, t.m00),
+            Max(1.0e-4f, t.m00),
             t.m01,
             t.m02,
-            SimdMax(1.0e-4f, t.m11),
+            Max(1.0e-4f, t.m11),
             t.m12,
-            SimdMax(1.0e-4f, t.m22)
+            Max(1.0e-4f, t.m22)
         );
     }
 
@@ -839,7 +839,7 @@ class Articulation{
         for(usize i = 0u; i < n; ++i){
             in ArticulationLinkDef d = this.linkDefs[i];
             if(sizeMismatch || !this.cacheKeyMatches(d, this.m_linkCacheKeys[i])){
-                const f32 safeMass = SimdMax(1.0e-3f, d.mass);
+                const f32 safeMass = Max(1.0e-3f, d.mass);
                 this.m_linkSpatialInertia[i] = SpatialInertiaMatrix(safeMass, VectorSingle(d.comLocal), this.resolveLinkInertiaSym(d));
                 if(i == 0u)
                     this.m_linkSubspaces[i] = ArticulationSubspace();
@@ -881,7 +881,7 @@ class Articulation{
                 return false;
             if(cast<u8>(d.jointType) >= cast<u8>(ArticulationJointType::kCount))
                 d.jointType = ArticulationJointType::Fixed;
-            d.mass = SimdMax(1.0e-3f, d.mass);
+            d.mass = Max(1.0e-3f, d.mass);
             const VectorSingle clampedInertia = Max(VectorSingle(1.0e-4f), VectorSingle(d.inertiaDiag));
             d.inertiaDiag = f32x4(clampedInertia.x, clampedInertia.y, clampedInertia.z, 0.0f);
             d.jointAxisLocal = f32x4(SafeNormalizeVec3(VectorSingle(d.jointAxisLocal), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f)), 0.0f);
@@ -1065,7 +1065,7 @@ class Articulation{
 
             const SpatialVec mv = SpatialMulMat6Vec(iBody, s.spatialVelocity);
             const VectorSingle wG = Vector3InverseRotate(gravityWorld, VectorSingle(s.worldTransform.rotation));
-            const f32 safeMass = SimdMax(1.0e-3f, d.mass);
+            const f32 safeMass = Max(1.0e-3f, d.mass);
             const SpatialVec gForce = SpatialVecMake(Cross(VectorSingle(d.comLocal), wG * safeMass), wG * safeMass);
             const SpatialVec totExt = SpatialAdd(s.externalForce, gForce);
             const SpatialVec zBias = SpatialSub(SpatialCrossForce(s.spatialVelocity, mv), totExt);
@@ -1102,7 +1102,7 @@ class Articulation{
                     f32 tgtVel = 0.0f;
                     this.resolveAxisDriveTargets(d, a, tgtPos, tgtVel);
                     f32 dTau = d.driveStiffness * (tgtPos - qArr[a]) + d.driveDamping * (tgtVel - qdArr[a]);
-                    dTau = SimdClamp(dTau, -d.driveMaxForce, d.driveMaxForce);
+                    dTau = Clamp(dTau, -d.driveMaxForce, d.driveMaxForce);
                     actTau += dTau;
                 }
                 if(d.enableLimit && d.limitStiffness > 0.0f){
@@ -1118,7 +1118,7 @@ class Articulation{
                 }
                 actTau -= d.jointDamping * qdArr[a];
                 if(d.jointFriction > 0.0f){
-                    f32 fricSign = SimdClamp(qdArr[a] * 1.0e3f, -1.0f, 1.0f);
+                    f32 fricSign = Clamp(qdArr[a] * 1.0e3f, -1.0f, 1.0f);
                     if(qdArr[a] > 1.0e-3f)
                         fricSign = 1.0f;
                     else if(qdArr[a] < -1.0e-3f)
@@ -1414,7 +1414,7 @@ class Articulation{
         const VectorSingle rLocal = Vector3InverseRotate(worldPoint - VectorSingle(lXf.position), qLink);
         const VectorSingle vPtLocal = VectorSingle(tmpDv[linkIdx].lin) + Cross(VectorSingle(tmpDv[linkIdx].ang), rLocal);
         const VectorSingle vPtWorld = Vector3Rotate(vPtLocal, qLink);
-        return SimdMax(0.0f, Vector3Dot(dir, vPtWorld).x);
+        return Max(0.0f, Vector3Dot(dir, vPtWorld).x);
     }
 
     public f32 computeLinkEffectiveInvMassAlong(in usize linkIdx, in VectorSingle worldPoint, in VectorSingle unitDir)const{
@@ -1519,7 +1519,7 @@ class Articulation{
                 work[i].a = SpatialAdd(SpatialAdd(SpatialTransformMotionP2C(rpPos, rpRot, work[d.parentIndex].a), aJ), bTerm);
             }
 
-            const f32 safeMass = SimdMax(1.0e-3f, d.mass);
+            const f32 safeMass = Max(1.0e-3f, d.mass);
             const SpatialMat6 iBody = SpatialInertiaMatrix(safeMass, VectorSingle(d.comLocal), this.resolveLinkInertiaSym(d));
             const SpatialVec mv = SpatialMulMat6Vec(iBody, work[i].v);
             const SpatialVec ma = SpatialMulMat6Vec(iBody, work[i].a);
@@ -1600,7 +1600,7 @@ class Articulation{
                 if(!this.evaluateGeneralImpulseSweep(Span<SpatialVec>(), Span<f32x4>(this.m_constraintJointImpScratch), this.m_impU3, this.m_impDv, this.m_sweepPAccumScratch, this.m_sweepUValScratch))
                     continue;
                 const f32 effInv = this.readLinkDofVal(VectorSingle(this.m_impU3[mc.linkIndex]), mc.dofIndex) - mc.gearRatio * this.readLinkDofVal(VectorSingle(this.m_impU3[mc.targetLinkIndex]), mc.targetDofIndex);
-                const f32 regEff = effInv + SimdMax(0.0f, mc.compliance) * (invSubDt * invSubDt);
+                const f32 regEff = effInv + Max(0.0f, mc.compliance) * (invSubDt * invSubDt);
                 if(regEff <= 1.0e-9f)
                     continue;
                 const f32 jImpulse = -(cDot + 0.25f * invSubDt * c) / regEff;
@@ -1654,7 +1654,7 @@ class Articulation{
                     if(lIdx > 0u && lIdx < cast<u32>(n) && dIdx < this.m_linkSubspaces[lIdx].dofCount)
                         effInv += tc.coefficients[k] * this.readLinkDofVal(VectorSingle(this.m_impU3[lIdx]), dIdx);
                 }
-                const f32 regEff = effInv + SimdMax(0.0f, tc.compliance) * (invSubDt * invSubDt);
+                const f32 regEff = effInv + Max(0.0f, tc.compliance) * (invSubDt * invSubDt);
                 if(regEff <= 1.0e-9f)
                     continue;
                 f32 jImpulse = -(vel + 0.25f * invSubDt * posErr) / regEff;
@@ -1700,7 +1700,7 @@ class Articulation{
                             continue;
                         const VectorSingle dvAW = Vector3Rotate(VectorSingle(this.m_impDv[lc.linkIndexA].lin) + Cross(VectorSingle(this.m_impDv[lc.linkIndexA].ang), rALoc), qA);
                         const VectorSingle dvBW = Vector3Rotate(VectorSingle(this.m_impDv[lc.linkIndexB].lin) + Cross(VectorSingle(this.m_impDv[lc.linkIndexB].ang), rBLoc), qB);
-                        const f32 effInv = Vector3Dot(dirW, dvAW - dvBW).x + SimdMax(0.0f, lc.compliance) * (invSubDt * invSubDt);
+                        const f32 effInv = Vector3Dot(dirW, dvAW - dvBW).x + Max(0.0f, lc.compliance) * (invSubDt * invSubDt);
                         if(effInv <= 1.0e-9f)
                             continue;
                         const VectorSingle vA = this.linkPointWorldVelocity(lc.linkIndexA, pA);
@@ -1728,7 +1728,7 @@ class Articulation{
                                 continue;
                             const VectorSingle dwAW = Vector3Rotate(VectorSingle(this.m_impDv[lc.linkIndexA].ang), qA);
                             const VectorSingle dwBW = Vector3Rotate(VectorSingle(this.m_impDv[lc.linkIndexB].ang), qB);
-                            const f32 effInv = Vector3Dot(dirW, dwAW - dwBW).x + SimdMax(0.0f, lc.compliance) * (invSubDt * invSubDt);
+                            const f32 effInv = Vector3Dot(dirW, dwAW - dwBW).x + Max(0.0f, lc.compliance) * (invSubDt * invSubDt);
                             if(effInv <= 1.0e-9f)
                                 continue;
                             const VectorSingle wA = Vector3Rotate(VectorSingle(this.linkStates[lc.linkIndexA].spatialVelocity.ang), qA);
@@ -1748,10 +1748,10 @@ class Articulation{
         const usize n = this.linkDefs.size();
         if(n < 2u)
             return;
-        const f32 restCoeff = SimdClamp(this.contactRestitution, 0.0f, 1.0f);
-        const f32 baseFriction = SimdMax(0.0f, this.contactFriction);
+        const f32 restCoeff = Clamp(this.contactRestitution, 0.0f, 1.0f);
+        const f32 baseFriction = Max(0.0f, this.contactFriction);
         const f32 invSubDt = 1.0f / subDt;
-        const f32 margin = SimdMax(0.0f, this.selfCollisionMargin);
+        const f32 margin = Max(0.0f, this.selfCollisionMargin);
         const VectorSingle padVec(margin, margin, margin, 0.0f);
 
         this.m_selfColLinkAabbsScratch.resize(n);
@@ -1867,14 +1867,14 @@ class Articulation{
                             continue;
                         const VectorSingle nA2B = SafeNormalizeVec3(m.normal(), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                         const VectorSingle nOut = -nA2B;
-                        const f32 mu = SqrtFast(SimdMax(0.0f, sA.material.friction) * SimdMax(0.0f, sB.material.friction));
-                        const f32 effMu = SimdMax(baseFriction, mu);
+                        const f32 mu = Sqrt(Max(0.0f, sA.material.friction) * Max(0.0f, sB.material.friction));
+                        const f32 effMu = Max(baseFriction, mu);
 
                         for(u32 pi = 0u; pi < pCnt; ++pi){
                             const f32 sep = m.points[pi].separation();
                             if(sep > margin)
                                 continue;
-                            const f32 depth = SimdMax(0.0f, -sep);
+                            const f32 depth = Max(0.0f, -sep);
                             const VectorSingle ptW = m.points[pi].point();
                             const VectorSingle rALoc = Vector3InverseRotate(ptW - posA, rotA);
                             const VectorSingle rBLoc = Vector3InverseRotate(ptW - posB, rotB);
@@ -1896,11 +1896,11 @@ class Articulation{
 
                             const VectorSingle vRel = this.linkPointWorldVelocity(i, ptW) - this.linkPointWorldVelocity(j, ptW);
                             const f32 vRelN = Vector3Dot(vRel, nOut).x;
-                            const f32 biasVel = SimdMax(0.0f, depth - 0.002f) * (0.2f * invSubDt);
+                            const f32 biasVel = Max(0.0f, depth - 0.002f) * (0.2f * invSubDt);
                             f32 targetRelN = 0.0f;
                             if(vRelN < -0.5f)
                                 targetRelN = -restCoeff * vRelN;
-                            const f32 deltaVelN = SimdMax(targetRelN, biasVel) - vRelN;
+                            const f32 deltaVelN = Max(targetRelN, biasVel) - vRelN;
                             if(deltaVelN <= 0.0f)
                                 continue;
                             const f32 jN = deltaVelN / effInvN;
@@ -1927,7 +1927,7 @@ class Articulation{
                             const f32 effInvT = Vector3Dot(tDir, dvtAW - dvtBW).x;
                             if(effInvT <= 1.0e-8f)
                                 continue;
-                            const f32 jT = SimdClamp(-vRelT / effInvT, -effMu * jN, 0.0f);
+                            const f32 jT = Clamp(-vRelT / effInvT, -effMu * jN, 0.0f);
                             if(jT != 0.0f)
                                 this.applyImpulseSweepDelta(this.m_impU3, this.m_impDv, jT);
                         }
@@ -1939,8 +1939,8 @@ class Articulation{
 
     private void solveSubstepContactCoupling(mut PhysicsWorld world, in f32 subDt){
         const usize n = this.linkDefs.size();
-        const f32 baseRest = SimdClamp(this.contactRestitution, 0.0f, 1.0f);
-        const f32 baseFriction = SimdMax(0.0f, this.contactFriction);
+        const f32 baseRest = Clamp(this.contactRestitution, 0.0f, 1.0f);
+        const f32 baseFriction = Max(0.0f, this.contactFriction);
         const f32 invSubDt = 1.0f / subDt;
 
         for(usize i = 0u; i < n; ++i){
@@ -2019,9 +2019,9 @@ class Articulation{
                     f32 effFriction = tmpContact.friction;
                     if(Abs(VectorSingle(baseFriction - 0.5f)).x > 1.0e-5f && !world.m_materialCombineCallback.has_value()){
                         const SurfaceMaterial resolvedHitMat = world.resolveShapeContactMaterial(hitShape, ov.triangleIndex);
-                        effFriction = SqrtFast(baseFriction * SimdMax(0.0f, resolvedHitMat.friction));
+                        effFriction = Sqrt(baseFriction * Max(0.0f, resolvedHitMat.friction));
                     }
-                    f32 effRestitution = SimdMax(baseRest, tmpContact.restitution);
+                    f32 effRestitution = Max(baseRest, tmpContact.restitution);
                     f32 invMassScaleA = 1.0f;
                     f32 invMassScaleB = 1.0f;
                     f32 invInertiaScaleA = 1.0f;
@@ -2052,14 +2052,14 @@ class Articulation{
                             continue;
                         nA2B = SafeNormalizeVec3(VectorSingle(ctx.normal), nA2B);
                         nOut = -nA2B;
-                        effDepth = SimdMax(0.0f, -ctx.pointSeparation(0u));
-                        effFriction = SimdMax(0.0f, ctx.friction);
-                        effRestitution = SimdClamp(ctx.restitution, 0.0f, 1.0f);
-                        invMassScaleA = SimdMax(0.0f, ctx.invMassScaleA);
-                        invMassScaleB = SimdMax(0.0f, ctx.invMassScaleB);
-                        invInertiaScaleA = SimdMax(0.0f, ctx.invInertiaScaleA);
-                        invInertiaScaleB = SimdMax(0.0f, ctx.invInertiaScaleB);
-                        maxNormalImp = SimdMax(0.0f, ctx.maxNormalImpulse);
+                        effDepth = Max(0.0f, -ctx.pointSeparation(0u));
+                        effFriction = Max(0.0f, ctx.friction);
+                        effRestitution = Clamp(ctx.restitution, 0.0f, 1.0f);
+                        invMassScaleA = Max(0.0f, ctx.invMassScaleA);
+                        invMassScaleB = Max(0.0f, ctx.invMassScaleB);
+                        invInertiaScaleA = Max(0.0f, ctx.invInertiaScaleA);
+                        invInertiaScaleB = Max(0.0f, ctx.invInertiaScaleB);
+                        maxNormalImp = Max(0.0f, ctx.maxNormalImpulse);
                         if(ctx.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.surfaceVelocity)))
                             effSurfVel = VectorSingle(ctx.surfaceVelocity, 0.0f);
                         else
@@ -2068,15 +2068,15 @@ class Articulation{
 
                     const VectorSingle vLinkW = this.linkPointWorldVelocity(i, ptA);
                     const f32 vRelN = Vector3Dot(vLinkW - vHitW, nOut).x;
-                    const f32 biasVel = SimdMax(0.0f, effDepth - 0.002f) * (0.2f * invSubDt);
+                    const f32 biasVel = Max(0.0f, effDepth - 0.002f) * (0.2f * invSubDt);
                     f32 targetRelN = 0.0f;
                     if(vRelN < -0.5f)
                         targetRelN = -effRestitution * vRelN;
-                    const f32 deltaVelN = SimdMax(targetRelN, biasVel) - vRelN;
+                    const f32 deltaVelN = Max(targetRelN, biasVel) - vRelN;
                     if(deltaVelN <= 0.0f)
                         continue;
 
-                    const f32 invArtN = this.computeLinkEffectiveInvMassAlongScratch(i, ptA, nOut, this.m_impU3, this.m_impDv, this.m_sweepExtImpScratch, this.m_sweepPAccumScratch, this.m_sweepUValScratch) * SimdMax(invMassScaleA, invInertiaScaleA);
+                    const f32 invArtN = this.computeLinkEffectiveInvMassAlongScratch(i, ptA, nOut, this.m_impU3, this.m_impDv, this.m_sweepExtImpScratch, this.m_sweepPAccumScratch, this.m_sweepUValScratch) * Max(invMassScaleA, invInertiaScaleA);
                     const VectorSingle rB = ptB - comHit;
                     const VectorSingle rxn = Cross(rB, nOut);
                     const f32 invHitN = (invMassHit * invMassScaleB) + (Vector3Dot(rxn, Matrix3MulVec(invInertiaHitWorld, rxn)).x * invInertiaScaleB);
@@ -2084,13 +2084,13 @@ class Articulation{
                     if(effInvN <= 1.0e-8f)
                         continue;
 
-                    const f32 jN = SimdMin(maxNormalImp, deltaVelN / effInvN);
+                    const f32 jN = Min(maxNormalImp, deltaVelN / effInvN);
                     if(jN <= 0.0f)
                         continue;
-                    if(SimdMax(invMassScaleA, invInertiaScaleA) > 0.0f)
-                        this.applyImpulseSweepDelta(this.m_impU3, this.m_impDv, jN * SimdMax(invMassScaleA, invInertiaScaleA));
-                    if(hitIsDynamic && SimdMax(invMassScaleB, invInertiaScaleB) > 0.0f)
-                        world.applyLinearImpulseAtPoint(hitBodyId, -nOut * (jN * SimdMax(invMassScaleB, invInertiaScaleB)), ptB, true);
+                    if(Max(invMassScaleA, invInertiaScaleA) > 0.0f)
+                        this.applyImpulseSweepDelta(this.m_impU3, this.m_impDv, jN * Max(invMassScaleA, invInertiaScaleA));
+                    if(hitIsDynamic && Max(invMassScaleB, invInertiaScaleB) > 0.0f)
+                        world.applyLinearImpulseAtPoint(hitBodyId, -nOut * (jN * Max(invMassScaleB, invInertiaScaleB)), ptB, true);
 
                     const f32 hitApproach = -vRelN;
                     if((linkShape.enableHitEvents() || hitShape.enableHitEvents()) && hitApproach >= world.m_def.hitEventThreshold){
@@ -2121,20 +2121,20 @@ class Articulation{
 
                     const VectorSingle tDir = vRelTan * Rsqrt(VectorSingle(tanLenSq)).x;
                     const f32 vRelT = Vector3Dot(vRelAfter, tDir).x;
-                    const f32 invArtT = this.computeLinkEffectiveInvMassAlongScratch(i, ptA, tDir, this.m_impU3, this.m_impDv, this.m_sweepExtImpScratch, this.m_sweepPAccumScratch, this.m_sweepUValScratch) * SimdMax(invMassScaleA, invInertiaScaleA);
+                    const f32 invArtT = this.computeLinkEffectiveInvMassAlongScratch(i, ptA, tDir, this.m_impU3, this.m_impDv, this.m_sweepExtImpScratch, this.m_sweepPAccumScratch, this.m_sweepUValScratch) * Max(invMassScaleA, invInertiaScaleA);
                     const VectorSingle rxt = Cross(rB, tDir);
                     const f32 invHitT = (invMassHit * invMassScaleB) + (Vector3Dot(rxt, Matrix3MulVec(invInertiaHitWorld, rxt)).x * invInertiaScaleB);
                     const f32 effInvT = invArtT + invHitT;
                     if(effInvT <= 1.0e-8f)
                         continue;
 
-                    const f32 jT = SimdClamp(-vRelT / effInvT, -effFriction * jN, 0.0f);
+                    const f32 jT = Clamp(-vRelT / effInvT, -effFriction * jN, 0.0f);
                     if(Abs(VectorSingle(jT)).x <= 0.0f)
                         continue;
-                    if(SimdMax(invMassScaleA, invInertiaScaleA) > 0.0f)
-                        this.applyImpulseSweepDelta(this.m_impU3, this.m_impDv, jT * SimdMax(invMassScaleA, invInertiaScaleA));
-                    if(hitIsDynamic && SimdMax(invMassScaleB, invInertiaScaleB) > 0.0f)
-                        world.applyLinearImpulseAtPoint(hitBodyId, -tDir * (jT * SimdMax(invMassScaleB, invInertiaScaleB)), ptB, true);
+                    if(Max(invMassScaleA, invInertiaScaleA) > 0.0f)
+                        this.applyImpulseSweepDelta(this.m_impU3, this.m_impDv, jT * Max(invMassScaleA, invInertiaScaleA));
+                    if(hitIsDynamic && Max(invMassScaleB, invInertiaScaleB) > 0.0f)
+                        world.applyLinearImpulseAtPoint(hitBodyId, -tDir * (jT * Max(invMassScaleB, invInertiaScaleB)), ptB, true);
                 }
             }
         }
@@ -2285,7 +2285,7 @@ class Articulation{
                             continue;
                         f32 curQ = this.readLinkDofVal(VectorSingle(s.q3), a);
                         const f32 oldQd = this.readLinkDofVal(VectorSingle(s.qd3), a);
-                        const f32 e = SimdClamp(d.limitRestitution, 0.0f, 1.0f);
+                        const f32 e = Clamp(d.limitRestitution, 0.0f, 1.0f);
                         b8 hitLimit = false;
                         f32 targetQd = oldQd;
                         if(curQ < limLo){
@@ -2359,13 +2359,13 @@ class Articulation{
             f32 maxAngSp = 0.0f;
             for(usize i = 0u; i < this.linkStates.size(); ++i){
                 in SpatialVec sv = this.linkStates[i].spatialVelocity;
-                maxLinSp = SimdMax(maxLinSp, Vector3Length(VectorSingle(sv.lin)).x);
-                maxAngSp = SimdMax(maxAngSp, Vector3Length(VectorSingle(sv.ang)).x);
-                maxAngSp = SimdMax(maxAngSp, Vector3Length(VectorSingle(this.linkStates[i].qd3)).x);
+                maxLinSp = Max(maxLinSp, Vector3Length(VectorSingle(sv.lin)).x);
+                maxAngSp = Max(maxAngSp, Vector3Length(VectorSingle(sv.ang)).x);
+                maxAngSp = Max(maxAngSp, Vector3Length(VectorSingle(this.linkStates[i].qd3)).x);
             }
             if(maxLinSp <= this.sleepLinearThreshold && maxAngSp <= this.sleepAngularThreshold && !this.checkSleepWakeNeeded(world)){
                 this.sleepTimer += dt;
-                if(this.sleepTimer >= SimdMax(0.0f, this.sleepTimeThreshold)){
+                if(this.sleepTimer >= Max(0.0f, this.sleepTimeThreshold)){
                     this.isSleeping = true;
                     this.baseVelocity = SpatialVec();
                     for(usize i = 0u; i < this.linkStates.size(); ++i){

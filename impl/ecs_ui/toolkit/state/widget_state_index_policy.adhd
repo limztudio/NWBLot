@@ -213,21 +213,6 @@ class WidgetStateIndexPolicy{
         ++inOutNextDeclarationGeneration;
         return newIndex;
     }
-
-    public Expected<usize> touch(
-        in WidgetId id,
-        in WidgetRoot root,
-        in WidgetKind kind,
-        in u64 frameGeneration,
-        mut Vector<WidgetState> inOutEntries,
-        mut HashMap<u64, usize> inOutIndex,
-        mut u64 inOutNextDeclarationGeneration,
-        mut b8 inOutIndexDirty,
-        mut b8 outInvariantFailed
-    )const{
-        b8 kindChanged = false;
-        return this.touch(id, root, kind, frameGeneration, inOutEntries, inOutIndex, inOutNextDeclarationGeneration, inOutIndexDirty, outInvariantFailed, kindChanged);
-    }
 };
 
 

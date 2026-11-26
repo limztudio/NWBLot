@@ -16,11 +16,11 @@ from reflection_smoke import capture_environment
 from reflection_history_evidence import ReflectionHistoryEvidence
 from reflection_spatial_owner_evidence import SELECTIONS, ReflectionSpatialOwnerEvidence
 from reflection_spatial_owner_image_evidence import ReflectionSpatialOwnerImageEvidence
+from smoke_capture_suite import build_window_capture_command, run_window_capture_subprocess
 from smoke_volume_identity import file_identity
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SmokeFailure, window_capture_source_paths
 
-LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 LIT_MAXIMUM_CAPTURE_TIMEOUT_SECONDS = 180
 
 LIT_GPUDBG = "--gpudbg"
@@ -28,7 +28,6 @@ LIT_GPUDBG_2 = "--gpudbg="
 LIT_ROUGH = "rough"
 LIT_HARDWARE = "hardware"
 LIT_TIMEOUT = "--timeout"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_UTF_8 = "utf-8"
 LIT_STATUS = "status"
 LIT_CAPTURES = "captures"
@@ -60,20 +59,14 @@ def capture_environment_for(selection):
 def capture(args, selection):
     output = args.output_directory / (selection + ".bmp")
     log = output.with_suffix(".log")
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--logserver-executable", str(args.logserver_executable), "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout), "--log-output", str(log)]
-    for expected in ("ReflectionSmokeProject: case rough created", "ReflectionSmokeProject: shutdown", "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: reflection mode hardware",
-            "Reflection resolve: hardware", "ReflectionSpatialOwnerCapture:", "ReflectionSpatialOwnerWork:"):
-        command += [LIT_EXPECT_LOG_MESSAGE, expected]
+    expect_logs = ["ReflectionSmokeProject: case rough created", "ReflectionSmokeProject: shutdown", "ReflectionSmokeProject: hardware available",
+        "ReflectionSmokeProject: reflection mode hardware", "Reflection resolve: hardware", "ReflectionSpatialOwnerCapture:", "ReflectionSpatialOwnerWork:"]
     if any(value == LIT_GPUDBG or value.startswith(LIT_GPUDBG_2) for value in args.application_arg):
-        for marker in GPU_DEBUG_MARKERS:
-            command += [LIT_EXPECT_LOG_MESSAGE, marker]
-    command.extend("--application-arg=" + value for value in args.application_arg)
+        expect_logs.extend(GPU_DEBUG_MARKERS)
+    command = build_window_capture_command(args, output, frames=1, log_output=log, expect_logs=expect_logs)
     print("Capturing production spatial owner " + selection, flush=True)
-    result = subprocess.run(command, env=capture_environment_for(selection), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode:
-        raise SmokeFailure(selection + " capture failed or skipped: " + str(result.returncode))
-    frame = read_bmp_24_rows(output)
+    run_window_capture_subprocess(command, env=capture_environment_for(selection), timeout=args.timeout, failure_message=selection + " capture failed or skipped: {code}", allow_skip=False)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     ReflectionImageAnalysis.validate_frame(frame)
     if frame[:2] != (960, 720):
         raise SmokeFailure("owner capture has the wrong extent")
@@ -106,7 +99,7 @@ def main(argv=None):
     arm = ab.Arm("qualification", args.executable, args.working_directory, args.source_manifest)
     identity = RendererBenchmarkIdentity.freeze_arm(arm)
     shared = {str(Path(module.__file__).resolve()): file_identity(Path(module.__file__)) for module in (sys.modules[__name__], ab, sys.modules["renderer_wall_frame_evidence"], sys.modules["renderer_workload_log_policy"], sys.modules["renderer_workload_registry"], sys.modules["renderer_trial_comparison"], sys.modules["gpu_timing_evidence"], sys.modules["reflection_smoke"], sys.modules["reflection_statistics"], sys.modules["reflection_image_analysis"], sys.modules["reflection_roughness_oracle"], sys.modules["reflection_history_evidence"], sys.modules["reflection_spatial_owner_evidence"], sys.modules["reflection_spatial_owner_image_evidence"], sys.modules["renderer_benchmark_identity"], sys.modules["framebuffer_png_encoder"],
-            sys.modules["window_capture_smoke"], sys.modules["smoke_volume_identity"])}
+            sys.modules["window_capture_smoke"], sys.modules["smoke_capture_suite"], sys.modules["smoke_volume_identity"])}
     shared.update({str(path): file_identity(path) for path in window_capture_source_paths()})
     logger_identity = RendererBenchmarkIdentity.binary_identity(args.logserver_executable)
     for name, saved in logger_identity.items():

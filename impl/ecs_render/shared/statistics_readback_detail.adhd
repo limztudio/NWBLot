@@ -8,6 +8,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
+b8 RecordStatisticsReadbackCopy(
+    mut CommandList commandList,
+    in GpuTaskRecordContext context,
+    in BufferHandle sourceBuffer,
+    in BufferHandle destinationBuffer,
+    in GpuGraphResourceId sourceResource,
+    in GpuGraphResourceId destinationResource,
+    in usize byteCount
+){
+    if(!sourceBuffer.valid() || !destinationBuffer.valid())
+        return false;
+    const GpuGraphResourceId source = sourceResource;
+    const GpuGraphResourceId destination = destinationResource;
+    const usize copyBytes = byteCount;
+    in GpuTaskRecordContext contextRef = context;
+    if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in source, in destination, in copyBytes](mut GpuCommandIrCapture capture) -> b8{
+        return capture.captureCopyBuffer(contextRef.task, contextRef.packet, contextRef.queue, source, 0u, destination, 0u, copyBytes);
+    }))
+        return false;
+    commandList.endRenderPass();
+    commandList.copyBuffer(destinationBuffer.deref(), 0u, sourceBuffer.deref(), 0u, byteCount);
+    return !commandList.commandRecordingFailed();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class StatisticsReadbackBuffers<StatisticsT, OutcomeT : IStatisticsOutcome<StatisticsT>, const usize CounterCount> : NoCopy{
     private SharedPool m_versions = SharedPool();
     public mut GraphicsRuntime graphics;

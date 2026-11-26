@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 from refraction_lifecycle_analysis import PHASES, RefractionLifecycleAnalysis
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 
@@ -42,7 +42,7 @@ def capture_route(args, name, hardware):
     if len(routes) != 1:
         raise SmokeFailure("lifecycle requires one unambiguous runtime refraction route")
     trace_route = routes.pop()
-    frames = {phase: read_bmp_24_rows(output if phase == PHASES[-1] else Path(str(output) + f".{phase}.bmp")) for phase in PHASES}
+    frames = {phase: Bmp24Codec.read_bmp_24_rows(output if phase == PHASES[-1] else Path(str(output) + f".{phase}.bmp")) for phase in PHASES}
     return {"graphics_source_frames": frame_indices, "trace_route": trace_route, "images": RefractionLifecycleAnalysis.analyze_lifecycle(frames, trace_route)}
 
 

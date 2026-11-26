@@ -8,9 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasAvx")]
-extern const b8 s_MaskHasAvx;
-
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::AvxMoveMask")]
 extern u32 BenchmarkAvxMoveMask(in VectorDouble value);
 
@@ -36,7 +33,7 @@ class MaskDataset{
 }
 
 u32 MaskKernelBaselineMoveDouble(in VectorDouble value){
-    if(s_MaskHasAvx)
+    if(s_HasAvxInstructionSet)
         return BenchmarkAvxMoveMask(value);
     if(s_BenchmarkUsesSsePairs)
         return BenchmarkPairMoveMask(value, false) | (BenchmarkPairMoveMask(value, true) << 2u);

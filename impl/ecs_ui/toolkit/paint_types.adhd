@@ -54,52 +54,6 @@ b8 IsValidDisplayMetricsForGpuSubmit(in DisplayMetrics display){
     ;
 }
 
-b8 ValidDrawCommandGlyphBinding(in DrawCommand command, in usize pageCount){
-    if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::ColorGlyph)
-        return cast<usize>(command.glyphPageIndex) < pageCount && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
-    if(command.material == PaintMaterial::SdfGlyph)
-        return command.glyphPageIndex == 0xffffffffu;
-    if(
-        command.material == PaintMaterial::Solid
-        || command.material == PaintMaterial::Skin
-        || command.material == PaintMaterial::Image
-        || command.material == PaintMaterial::Gradient
-        || command.material == PaintMaterial::DropShadow
-        || command.material == PaintMaterial::Blur
-        || command.material == PaintMaterial::EffectLayerComposite
-    )
-        return command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
-    return false;
-}
-
-b8 ValidateDrawCommandGlyphBindings(in Span<DrawCommand> commands, in usize pageCount){
-    for(in DrawCommand command : commands){
-        if(!ValidDrawCommandGlyphBinding(command, pageCount))
-            return false;
-    }
-    return true;
-}
-
-b8 ValidDrawCommandImageBinding(in DrawCommand command, in usize imageCount){
-    if(command.material == PaintMaterial::Image)
-        return cast<usize>(command.textureImageIndex) < imageCount && command.glyphPageIndex == 0xffffffffu && command.sdfPageIndex == 0xffffffffu && command.sdfChannel == 0u;
-    return command.textureImageIndex == 0xffffffffu;
-}
-
-b8 ValidateDrawCommandImageBindings(in Span<DrawCommand> commands, in usize imageCount){
-    for(in DrawCommand command : commands){
-        if(!ValidDrawCommandImageBinding(command, imageCount))
-            return false;
-    }
-    return true;
-}
-
-b8 ValidDrawCommandSdfBinding(in DrawCommand command, in usize pageCount, in u32 pageChannelCount){
-    if(command.material == PaintMaterial::SdfGlyph)
-        return cast<usize>(command.sdfPageIndex) < pageCount && command.sdfChannel < pageChannelCount;
-    return true;
-}
-
 b8 ValidSnapshotImageCounts(in usize glyphPageCount, in usize sdfPageCount, in usize textureImageCount){
     return
         glyphPageCount <= s_PaintMaxImages
@@ -373,7 +327,7 @@ b8 IsValidPaintShadowStyle(in PaintShadowStyle style){
 Color ApplyPaintOpacity(in Color color, in f32 opacity){
     if(opacity >= 1.0f)
         return color;
-    const f32 clamped = UiSimdClamp(opacity, 0.0f, 1.0f);
+    const f32 clamped = Clamp(opacity, 0.0f, 1.0f);
     return Color(color.r, color.g, color.b, color.a * clamped);
 }
 

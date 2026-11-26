@@ -126,7 +126,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 n1 = float3(a1.normal);
         const float3 n2 = float3(a2.normal);
         const float3 normal = n0 * weights.x + n1 * weights.y + n2 * weights.z;
-        const float spread = max(max(dot(n0 - n1, n0 - n1), dot(n1 - n2, n1 - n2)), dot(n2 - n0, n2 - n0));
         const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? normalize(view.originOrDirection.xyz - world) : view.originOrDirection.xyz;
         const float3 objectDirection = nwbSwBvhTransformVector(instance, towardLight);
         NwbShadowHit hit;
@@ -140,7 +139,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
         const half cosI = nwbShadowCosineToRay(nwbSwBvhTransformNormal(instance, geometric), towardLight);
         const half smoothCosI = nwbShadowCosineToRay(hit.worldNormal, towardLight);
-        const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MIN, NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MAX, spread))));
+        const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, nwbShadowSmoothNormalWeight(n0, n1, n2)));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
         const bool valid = all(isfinite(world)) && isfinite(depth) && all(isfinite(float3(absorption))) && isfinite(float(fresnel));
         const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;

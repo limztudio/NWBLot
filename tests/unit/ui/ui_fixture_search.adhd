@@ -222,7 +222,7 @@ EditBoxResult EditSearchHostInPopup(mut SearchEditHost self, in WidgetState widg
         self.m_changeText = false;
     }
     if(self.preedit){
-        result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u);
+        result.valid = result.valid && model.beginComposition() && model.updateComposition(s_PreeditText, 0u, 7u, Span<EditPreeditClause>());
         self.preedit = false;
     }
     return result;

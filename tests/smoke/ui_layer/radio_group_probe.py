@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import math
-import re
 
-from window_capture_smoke import SmokeFailure
-from probe_common import snapshot_from_patterns
-from probe_reference import compose, encoded_marker, linear_channels, sampled_tile
+from probe_common import FrameProbeRecorder, compile_smoke_patterns, snapshot_from_patterns
+from probe_reference import compose, linear_channels, sampled_tile
 
 LIT_LABEL_READS = "label_reads"
 LIT_DISABLED_SELECTED = "disabled_selected"
@@ -29,61 +27,35 @@ LIT_PARENT = "parent"
 LIT_POPUP_GROUP = "popup_group"
 
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiRadioGroupSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiRadioGroupSmoke: state sequence=(\d+) values=((?:\d+,){21}\d+)")
-GEOMETRY = re.compile(rf"UiRadioGroupSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiRadioGroupSmoke: skin=(default|alternate)")
 FIELDS = ("main_selected", "main_cursor", "focus_code", "changes", "activations", "before_clicks", "after_clicks", "enabled", "source_revision", "source_generation", "reversed", "removed", "parent", "popup_selected",
     "popup_cursor", "popup_changes", "popup_activations", "popup_count", "focus_scope", LIT_LABEL_READS, LIT_DISABLED_SELECTED, LIT_CHOICE_COUNT)
 KEYS = (10, 20, 30, 40, 50)
 RECTANGLES = ("before", "group", "after", "open", "disabled_group", "parent", "popup_group", "popup_close", "disabled_row30", "disabled_indicator30", "disabled_mark30") + tuple(
         f"{prefix}{part}{key}" for prefix in ("", LIT_POPUP) for key in KEYS for part in (LIT_ROW, LIT_INDICATOR, LIT_MARK))
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiRadioGroupSmoke", len(FIELDS))
 MARKER_TOLERANCE = 5
 SKIN_TOLERANCE = 8
 NORMAL = ((20, 27, 36), (81, 103, 129))
 CHECKED = ((40, 102, 164), (110, 186, 245))
-MARK = (235, 245, 255)
 
 
 MAX_MARKER_24BIT_VALUE = 0xFFFFFF
 
 
 def snapshot_from_logs(text):
-    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="radio")
-    if snapshot is None:
-        return None
-    values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
-    if any(rectangle[2] < 0.0 or rectangle[3] < 0.0 for rectangle in rectangles.values()):
-        raise SmokeFailure("radio fixture reported a negative placement extent")
-    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)):
-        raise SmokeFailure("radio fixture exceeds its two-part 24-bit displayed marker schema")
-    return snapshot
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="radio", non_negative_extents=True, max_value=MAX_MARKER_24BIT_VALUE)
 
 
 def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default", extra=None, pressed=None):
     width, height, rows = frame
     scale = snapshot["scale"]
     rectangles = snapshot[LIT_RECTANGLES]
-    probes = []
+    recorder = FrameProbeRecorder(frame, scale, "radio")
+    probes = recorder.probes
+    record = lambda name, pixel, color, tolerance=SKIN_TOLERANCE: recorder.record(name, pixel, color, tolerance, radius=0)
+    probe = lambda name, point, color, tolerance=SKIN_TOLERANCE: recorder.probe(name, point, color, tolerance, radius=0)
 
-    def record(name, pixel, color, tolerance=SKIN_TOLERANCE):
-        x, y = pixel
-        if not 0 <= x < width or not 0 <= y < height:
-            raise SmokeFailure(f"radio probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        observed = rows[y][x]
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        result = {LIT_NAME: name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance}
-        probes.append(result)
-        return result
-
-    def probe(name, point, color, tolerance=SKIN_TOLERANCE):
-        pixel = round(point[0] * scale[0]), round(point[1] * scale[1])
-        return record(name, pixel, color, tolerance)
-
-    for index, value in enumerate((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE])):
-        for part in range(2):
-            probe(f"model_{index}_{part}", (16.0 + 12.0 * (index * 2 + part), snapshot[LIT_LOGICAL_EXTENT][1] - 14.0), encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
+    recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), 16.0, 12.0, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0, tolerance=MARKER_TOLERANCE, radius=0)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     gx, gy, gw, gh = rectangles[LIT_GROUP]
     probe("replacement_panel_gutter", (gx + gw - 8.0, gy + gh + 2.0), panel)

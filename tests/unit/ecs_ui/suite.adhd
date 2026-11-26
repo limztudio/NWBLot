@@ -98,7 +98,7 @@ class UiEditNavigationHostTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Rect DefaultNavigationBounds(){ return MakeEcsUiRect(10.0f, 20.0f, 180.0f, 48.0f); }
+Rect DefaultNavigationBounds(){ return Rect(10.0f, 20.0f, 180.0f, 48.0f); }
 
 Expected<EditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNavigationResolver self, in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot navigation, in f32 viewportHeight){
     NavigationCall record = NavigationCall();
@@ -126,7 +126,7 @@ Expected<EditNavigationResult> ResolveEcsUiEditViewNavigation(mut RecordingNavig
                 if(direction == EditNavigationDirection::PageDown){
                     distance = viewportHeight;
                 }
-                target = view.caretGeometry().hitTest(MakeEcsUiPoint(preferredX, caret.value().y + caret.value().height * 0.5f + distance));
+                target = view.caretGeometry().hitTest(Point(preferredX, caret.value().y + caret.value().height * 0.5f + distance));
             }
             if(target){
                 EditNavigationResult resolved = EditNavigationResult();
@@ -177,8 +177,8 @@ b8 PrepareEcsUiNavigationModel(mut UiEditNavigationHostTests self, mut EditModel
     }
     self.core.m_otherWidget = declaredOther.value();
     HitTarget other = HitTarget();
-    other.rectangle = MakeEcsUiRect(230.0f, 20.0f, 100.0f, 30.0f);
-    other.clip = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
+    other.rectangle = Rect(230.0f, 20.0f, 100.0f, 30.0f);
+    other.clip = Rect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
     other.focusable = true;
     other.activatable = true;
     if(!self.core.m_context.addTarget(self.core.m_otherWidget, other) || !self.core.m_context.endRoot() || !self.core.m_context.finishFrame()){

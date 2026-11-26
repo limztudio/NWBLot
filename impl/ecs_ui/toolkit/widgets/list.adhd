@@ -120,6 +120,34 @@ void CopyListSelectionContainers(in Span<u64> sourceKeys, mut Vector<u64> outKey
     }
 }
 
+void ApplySingleListSelection(
+    in b8 selectOnNavigate,
+    in b8 activate,
+    in u64 candidate,
+    mut Vector<u64> inOutKeys,
+    mut HashSet<u64> inOutKeySet,
+    mut u64 inOutSelected,
+    mut u64 outCursor,
+    mut u64 inOutAnchor,
+    mut b8 outEnsureCursor,
+    mut ListResult inOutResult
+){
+    const u64 prevSelected = inOutSelected;
+    ListOptions opts;
+    opts.selectOnNavigate = selectOnNavigate;
+    ApplyListCandidateSelection(opts, activate, candidate, inOutSelected, outCursor, outEnsureCursor, inOutResult);
+    if(inOutSelected != prevSelected || (inOutSelected != 0u && inOutKeySet.find(inOutSelected) == inOutKeySet.end()) || (inOutSelected == 0u && !inOutKeys.empty())){
+        inOutKeys.clear();
+        inOutKeySet.clear();
+        if(inOutSelected != 0u){
+            inOutKeys.push_back(inOutSelected);
+            inOutKeySet.insert(inOutSelected);
+        }
+    }
+    if(candidate != 0u && (activate || selectOnNavigate))
+        inOutAnchor = inOutSelected;
+}
+
 b8 ApplyIndexedMultiSelectionMutation(
     in ListSelectionMode selectionMode,
     in b8 selectOnNavigate,
@@ -342,42 +370,14 @@ b8 ApplyListControlAction(in IListDataSource source, in ListOptions options, in 
     )
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        f64 nextY = state.m_scroll.offset();
-        if(action.delta != 0.0 || action.deltaX == 0.0){
-            const Expected<f64> offset = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
-            if(!offset.has_value() || state.m_inputGeneration != inputGeneration)
-                return false;
-            nextY = offset.value();
-        }
-        f64 nextX = state.m_scrollX.offset();
-        if(action.deltaX != 0.0 && action.stepX > 0.0){
-            const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), action.deltaX, action.stepX, action.maximumX);
-            if(!offsetX.has_value() || state.m_inputGeneration != inputGeneration)
-                return false;
-            nextX = offsetX.value();
-        }
-        if(!state.m_scroll.setOffset(nextY) || !state.m_scrollX.setOffset(nextX))
+        if(!ApplyListWheelScroll(action, inputGeneration, true, true, state.m_scroll, state.m_scrollX, state.m_inputGeneration, state.m_ensureCursor))
             return false;
-        state.m_ensureCursor = false;
         result.valid = true;
         return true;
     }
     if(action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right){
-        if(options.horizontalScrollbar != ScrollbarPolicy::Never){
-            f64 deltaX = 1.0;
-            if(action.kind == ControlActionKind::Left)
-                deltaX = -1.0;
-            f64 stepX = action.stepX;
-            if(stepX <= 0.0)
-                stepX = cast<f64>(options.wheelColumns);
-            f64 maxX = action.maximumX;
-            if(maxX <= 0.0 && state.m_scrollbars.horizontal.maximum > 0.0)
-                maxX = state.m_scrollbars.horizontal.maximum;
-            const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), deltaX, stepX, maxX);
-            if(!offsetX.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scrollX.setOffset(offsetX.value()))
-                return false;
-            state.m_ensureCursor = false;
-        }
+        if(!ApplyListHorizontalKeyScroll(action, options.horizontalScrollbar, options.wheelColumns, state.m_scrollbars.horizontal.maximum, inputGeneration, state.m_scrollX, state.m_inputGeneration, state.m_ensureCursor))
+            return false;
         result.valid = true;
         return true;
     }
@@ -406,18 +406,18 @@ b8 ApplyListControlAction(in IListDataSource source, in ListOptions options, in 
     if(options.selectionMode == ListSelectionMode::Single){
         if(!MatchesListSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
             return false;
-        const u64 prevSelected = state.m_selected;
-        ApplyListCandidateSelection(options, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, result);
-        if(state.m_selected != prevSelected || (state.m_selected != 0u && state.m_selectedKeySet.find(state.m_selected) == state.m_selectedKeySet.end()) || (state.m_selected == 0u && !state.m_selectedKeys.empty())){
-            state.m_selectedKeys.clear();
-            state.m_selectedKeySet.clear();
-            if(state.m_selected != 0u){
-                state.m_selectedKeys.push_back(state.m_selected);
-                state.m_selectedKeySet.insert(state.m_selected);
-            }
-        }
-        if(candidate != 0u && (activate || options.selectOnNavigate))
-            state.m_anchor = state.m_selected;
+        ApplySingleListSelection(
+            options.selectOnNavigate,
+            activate,
+            candidate,
+            state.m_selectedKeys,
+            state.m_selectedKeySet,
+            state.m_selected,
+            state.m_cursor,
+            state.m_anchor,
+            state.m_ensureCursor,
+            result
+        );
         return true;
     }
     if(candidate == 0u){
@@ -463,99 +463,22 @@ b8 ApplyListControlAction(in IListDataSource source, in ListOptions options, in 
     }
     if(!MatchesListSource(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
         return false;
-    Vector<u64> nextKeys;
-    HashSet<u64> nextSet;
-    u64 nextSelected = state.m_selected;
-    if(rangeSelect){
-        if(action.toggle){
-            nextKeys = state.m_selectedKeys;
-            nextSet = state.m_selectedKeySet;
-        }
-        else{
-            nextKeys.reserve(rangeKeys.size());
-        }
-        for(in u64 key : rangeKeys){
-            if(nextSet.find(key) == nextSet.end()){
-                nextKeys.push_back(key);
-                nextSet.insert(key);
-            }
-        }
-        nextSelected = candidate;
-    }
-    else if(options.selectionMode == ListSelectionMode::Multiple){
-        nextKeys = state.m_selectedKeys;
-        nextSet = state.m_selectedKeySet;
-        if(activate){
-            if(nextSet.find(candidate) != nextSet.end()){
-                nextSet.erase(candidate);
-                for(usize idx = 0u; idx < nextKeys.size(); ++idx){
-                    if(nextKeys[idx] == candidate){
-                        nextKeys.erase(nextKeys.begin() + cast<isize>(idx));
-                        break;
-                    }
-                }
-                if(nextSelected == candidate){
-                    if(nextKeys.empty())
-                        nextSelected = 0u;
-                    else
-                        nextSelected = nextKeys.back();
-                }
-            }
-            else{
-                nextKeys.push_back(candidate);
-                nextSet.insert(candidate);
-                nextSelected = candidate;
-            }
-            nextAnchor = candidate;
-        }
-    }
-    else{
-        if(activate && action.toggle){
-            nextKeys = state.m_selectedKeys;
-            nextSet = state.m_selectedKeySet;
-            if(nextSet.find(candidate) != nextSet.end()){
-                nextSet.erase(candidate);
-                for(usize idx = 0u; idx < nextKeys.size(); ++idx){
-                    if(nextKeys[idx] == candidate){
-                        nextKeys.erase(nextKeys.begin() + cast<isize>(idx));
-                        break;
-                    }
-                }
-                if(nextSelected == candidate){
-                    if(nextKeys.empty())
-                        nextSelected = 0u;
-                    else
-                        nextSelected = nextKeys.back();
-                }
-            }
-            else{
-                nextKeys.push_back(candidate);
-                nextSet.insert(candidate);
-                nextSelected = candidate;
-            }
-            nextAnchor = candidate;
-        }
-        else if(action.toggle){
-            nextKeys = state.m_selectedKeys;
-            nextSet = state.m_selectedKeySet;
-        }
-        else if(activate || options.selectOnNavigate){
-            nextKeys.push_back(candidate);
-            nextSet.insert(candidate);
-            nextSelected = candidate;
-            nextAnchor = candidate;
-        }
-        else{
-            nextKeys = state.m_selectedKeys;
-            nextSet = state.m_selectedKeySet;
-        }
-    }
-    const b8 changed = DidListSelectionSetChange(state.m_selectedKeySet, nextSet);
-    CopyListSelectionContainers(Span<u64>(nextKeys), state.m_selectedKeys, state.m_selectedKeySet);
-    state.m_selected = nextSelected;
-    state.m_cursor = candidate;
-    state.m_anchor = nextAnchor;
-    state.m_ensureCursor = true;
+    const b8 changed = ApplyIndexedMultiSelectionMutation(
+        options.selectionMode,
+        options.selectOnNavigate,
+        activate,
+        rangeSelect,
+        action.toggle,
+        candidate,
+        nextAnchor,
+        Span<u64>(rangeKeys),
+        state.m_selectedKeys,
+        state.m_selectedKeySet,
+        state.m_selected,
+        state.m_cursor,
+        state.m_anchor,
+        state.m_ensureCursor
+    );
     result.selectionChanged = result.selectionChanged || changed;
     result.activated = result.activated || activate;
     result.valid = true;

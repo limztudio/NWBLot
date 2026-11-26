@@ -40,6 +40,10 @@ public:
 
 
 private:
+    [[nodiscard]] b8 rebuildClauses(AStringView text, Span<const TextInputPreeditClauseStyle::Enum> styles);
+
+
+private:
     AString<Alloc::GlobalArena> m_text;
     AString<Alloc::GlobalArena> m_candidate;
     Vector<TextInputPreeditClauseStyle::Enum, Alloc::GlobalArena> m_scalarStyles;

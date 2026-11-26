@@ -2,7 +2,6 @@
 """Exercise skinned window behavior through native input and displayed geometry."""
 from __future__ import annotations
 
-import json
 import platform
 import sys
 import time
@@ -10,25 +9,17 @@ import time
 from native_input import NativeInput
 from probe_common import center
 from window_probe import ACTION, observe_window, snapshot_from_logs
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
+from window_capture_smoke import run_smoke_main, SmokeFailure
 from smoke_arguments import parse_ui_smoke_args
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from checkpoint_report import CHECKPOINT_SETTLE_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_SCALE = "scale"
 LIT_RECTANGLES = "rectangles"
-LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_PASSED = "passed"
 LIT_CAPTURE_CHANGE_CANCEL = "capture_change_cancel"
 LIT_CAPTURE_CHANGE_RECOVERY = "capture_change_recovery"
 LIT_POINTER_LEAVE_DRAG = "pointer_leave_drag"
-LIT_UTF_8 = "utf-8"
 LIT_MINIMUM = "minimum"
 LIT_BUTTON = "button"
 LIT_RESIZE = "resize"
@@ -43,29 +34,9 @@ def parse_args(argv):
     return parse_ui_smoke_args(argv, description=__doc__, include_skin=True)
 
 
-class WindowRun:
+class WindowRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = NativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot[LIT_SCALE]
-        return round(x * scale_x), round(y * scale_y)
-
-    def click(self, rectangle):
-        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][rectangle])))
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=NativeInput(backend, handle))
 
     def title_point(self):
         x, y, width, height = self.snapshot[LIT_RECTANGLES]["title"]
@@ -84,33 +55,15 @@ class WindowRun:
 
     def checkpoint(self, name, bounds, count, collapsed=False, locked=False, *, extent=None):
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during window UI capture")
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 430.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 270.0:
-                raise SmokeSkip("the window fixture needs a logical client of at least 430x270 for separate model markers")
-            self.backend.capture_client_window(self.handle, path)
-            report = observe_window(read_bmp_24_rows(path), snapshot, bounds, count, collapsed, locked, extent=extent, skin=self.args.skin)
-            if report[LIT_PASSED]:
-                self.snapshot = snapshot
-                report.update({"stage": name, "capture": str(path)})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        raise SmokeFailure(f"window displayed-state gate '{name}' failed: {report}")
+        self.poll_checkpoint(name, minimum_extent=(430.0, 270.0), minimum_extent_message="the window fixture needs a logical client of at least 430x270 for separate model markers",
+            process_stage="during window UI capture", snapshot_reader=snapshot_from_logs,
+            evaluate=lambda frame, snapshot: observe_window(frame, snapshot, bounds, count, collapsed, locked, extent=extent, skin=self.args.skin), failure_label="window")
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted button/motion/leave/capture-change/activation messages"
-                if self.native.windows else "X11 XSendEvent and XSetInputFocus", "runtime_limit": "No physical pointer grab or native Wayland input qualification",
-            "omitted_platform_stages": [] if self.native.windows else [LIT_CAPTURE_CHANGE_CANCEL, LIT_CAPTURE_CHANGE_RECOVERY, LIT_POINTER_LEAVE_DRAG]}
-        (self.args.output_directory / "window.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_json_report("window.json", {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
+            "input_path": "Win32 posted button/motion/leave/capture-change/activation messages" if self.native.windows else "X11 XSendEvent and XSetInputFocus",
+            "runtime_limit": "No physical pointer grab or native Wayland input qualification",
+            "omitted_platform_stages": [] if self.native.windows else [LIT_CAPTURE_CHANGE_CANCEL, LIT_CAPTURE_CHANGE_RECOVERY, LIT_POINTER_LEAVE_DRAG]})
 
     def execute(self):
         bounds = (40.0, 40.0, 300.0, 180.0)
@@ -180,50 +133,17 @@ def expected_actions(windows):
     return actions
 
 
-def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "WINDOW", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = window_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the window fixture appeared")
-            raise SmokeFailure("custom window fixture did not appear")
-        backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiWindowSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        window_run = WindowRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        window_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_WINDOW_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_WINDOW_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "window.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                if logserver is not None:
-                    CaptureProcessTermination.terminate_process(logserver, "UI window logserver")
-                backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
+def verify_window_actions(text, driver):
     observed = [(action, int(count), int(locked), int(sequence)) for action, count, locked, sequence in ACTION.findall(text)]
-    expected = expected_actions(window_run.native.windows)
+    expected = expected_actions(driver.native.windows)
     if observed != expected:
         raise SmokeFailure(f"unexpected window action sequence: {observed}; expected {expected}")
-    window_run.write_report(True)
-    print(f"UI window: {len(window_run.stages)} displayed gates, {len(expected)} exact actions", flush=True)
-    return 0
+
+
+def run(args):
+    return run_ui_fixture(args, fixture="WINDOW", display_marker="UiWindowSmoke: display", driver_type=WindowRun, log_name="window.log", label="UI window",
+        window_label="window", process_label="window", after_collect=verify_window_actions,
+        summary_formatter=lambda driver: f"UI window: {len(driver.stages)} displayed gates, {len(expected_actions(driver.native.windows))} exact actions")
 
 
 def main(argv):

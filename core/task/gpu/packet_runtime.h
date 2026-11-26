@@ -354,6 +354,14 @@ private:
 
 private:
     [[nodiscard]] static b8 WaitForSubmissionExceptionClosing(GpuGraphSubmissionTransaction& transaction, GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept;
+    [[nodiscard]] static b8 AcquireExceptionClosingStep(b8 acquired, GpuGraphSubmissionTransaction& transaction, const GpuCompiledGraph& compiledGraph, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)noexcept{
+        if(!acquired){
+            if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+                return false;
+            TerminateInvariant();
+        }
+        return !transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
+    }
 
 
 public:

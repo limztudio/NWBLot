@@ -25,6 +25,35 @@ class FloatingPointEnvironmentGuard{
     }
 }
 
+const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+const Array<i32, 3u> s_DirectedRoundingModes = Array<i32, 3u>(FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
+const i32 s_FeAllExcept = FE_ALL_EXCEPT;
+const i32 s_FeInvalid = FE_INVALID;
+const i32 s_FeOverflow = FE_OVERFLOW;
+const i32 s_FeDivByZero = FE_DIVBYZERO;
+const i32 s_FeInexact = FE_INEXACT;
+
+class ScopedHeldFloatingPointEnvironment : NoCopy{
+    private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
+    private b8 m_active = true;
+
+    public ~ScopedHeldFloatingPointEnvironment(){
+        if(this.m_active && this.m_original.has_value() && !SetFloatingPointEnvironment(this.m_original.value()).has_value()){
+            assert(false, "Failed to restore floating-point environment");
+            TerminateInvariant();
+        }
+    }
+
+    public b8 valid()const{ return this.m_original.has_value(); }
+
+    public b8 restoreNow(){
+        if(!this.m_original.has_value() || !SetFloatingPointEnvironment(this.m_original.value()).has_value())
+            return false;
+        this.m_active = false;
+        return true;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

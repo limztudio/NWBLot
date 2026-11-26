@@ -206,7 +206,7 @@ class EmptySelectionCase : IUiBenchmarkCase{
 
     public b8 operation()override{
         this.m_paint.begin(MakeDisplayMetrics(500.0f, 200.0f), 1u, 1u, AssetRef<UiSkin>(s_SkinPath), this.m_skin);
-        if(!this.m_view.paint(this.m_text, this.m_paint, this.m_skin, this.m_placement))
+        if(!this.m_view.paint(this.m_text, this.m_paint, this.m_skin, this.m_placement, s_DefaultEditBoxStyle, s_DefaultEditBoxPaintFlags, Optional<in TextLayout>()))
             return false;
         this.m_snapshot = this.m_paint.freeze();
         return this.m_snapshot.commands().size() == 1u && this.m_snapshot.indices().size() == 6u;
@@ -351,7 +351,7 @@ class PointerWorkload : IUiBenchmarkCase{
 
     public b8 initialize(){
         ++this.m_generation;
-        if(!this.m_router.commitTargets(this.m_targets, this.m_generation))
+        if(!this.m_router.commitTargets(this.m_targets, this.m_generation, Span<PopupScope>(), u64.max))
             return false;
         if(this.m_kind == PointerWorkloadKind::CursorHover || this.m_kind == PointerWorkloadKind::CommitTargets)
             return true;
@@ -379,7 +379,7 @@ class PointerWorkload : IUiBenchmarkCase{
     public b8 operation()override{
         if(this.m_kind == PointerWorkloadKind::CommitTargets){
             ++this.m_generation;
-            return this.m_router.commitTargets(this.m_targets, this.m_generation);
+            return this.m_router.commitTargets(this.m_targets, this.m_generation, Span<PopupScope>(), u64.max);
         }
         if(this.m_kind == PointerWorkloadKind::PressedSweep){
             usize pressed = 0u;
@@ -417,7 +417,7 @@ class PointerWorkload : IUiBenchmarkCase{
         if(this.m_kind != PointerWorkloadKind::CommitTargets && this.m_kind != PointerWorkloadKind::CursorHover){
             for(usize contact = 1u; contact <= this.m_contactCount; ++contact){
                 const InputSource source = MakeInputSource(s_FirstPointerDevice, cast<u64>(contact));
-                hash = MixChecksum(hash, BoolToU64(this.m_router.ownsPointerSource(source)));
+                hash = MixChecksum(hash, BoolToU64(this.m_router.ownsPointerSource(source, PointerIntent::Activate)));
             }
         }
         return hash;

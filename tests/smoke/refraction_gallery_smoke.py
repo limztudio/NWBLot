@@ -3,7 +3,6 @@
 
 import argparse
 from datetime import datetime, timezone
-import json
 import os
 from pathlib import Path
 import shutil
@@ -11,7 +10,9 @@ import subprocess
 import sys
 import tempfile
 
-from window_capture_image import analyze_rgb_rows, read_bmp_24_rows
+from smoke_capture_suite import build_window_capture_command, run_window_capture_subprocess
+from window_capture_image import analyze_rgb_rows
+from window_capture_image_codec import Bmp24Codec
 from refraction_gallery_publisher import LIT_GALLERY_HTML, RefractionGalleryPublisher
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
@@ -36,10 +37,8 @@ LIT_CHANGED_PIXELS = "changed_pixels"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
 LIT_TIMEOUT = "--timeout"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_AVBOIT_REFRACTION_RESOLVE = "AVBOIT refraction resolve:"
-LIT_UTF_8 = "utf-8"
 LIT_LIMITS = "limits"
 LIT_CASES = "cases"
 LIT_CAPTURES = "captures"
@@ -186,21 +185,17 @@ def stage_logserver(executable, output_directory):
 
 def capture(args, case, variant):
     output = args.output_directory / f"{case}_{variant}.bmp"
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--log-output", str(output.with_suffix(".log")), "--application-capture", "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
-        LIT_EXPECT_LOG_MESSAGE, f"RefractionSmokeProject: gallery case {case} created", LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown", LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + (
-            LIT_DISABLED if variant in (LIT_GEOMETRY, LIT_DISABLED) else "enabled"),]
-    if args.logserver_executable:
-        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
-    else:
-        command.append("--no-logserver")
+    expect_logs = [f"RefractionSmokeProject: gallery case {case} created", "RefractionSmokeProject: shutdown",
+        "RefractionSmokeProject: refraction " + (LIT_DISABLED if variant in (LIT_GEOMETRY, LIT_DISABLED) else "enabled")]
+    reject_logs = ()
     if variant == LIT_AUTOMATIC:
-        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware" if args.require_hardware else LIT_AVBOIT_REFRACTION_RESOLVE]
+        expect_logs.append("AVBOIT refraction resolve: hardware" if args.require_hardware else LIT_AVBOIT_REFRACTION_RESOLVE)
     elif variant == LIT_SCREEN:
-        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: screen-space"]
+        expect_logs.append("AVBOIT refraction resolve: screen-space")
     else:
-        command += ["--reject-log-message", LIT_AVBOIT_REFRACTION_RESOLVE]
-    command.extend("--application-arg=" + argument for argument in args.application_arg)
+        reject_logs = (LIT_AVBOIT_REFRACTION_RESOLVE,)
+    command = build_window_capture_command(args, output, frames=args.frames, log_output=output.with_suffix(".log"),
+        expect_logs=expect_logs, reject_logs=reject_logs)
     print(f"Capturing {case}/{variant} ({args.frames} frames)...", flush=True)
     environment = capture_environment(case, variant)
     library_directory = getattr(args, "logserver_library_directory", None)
@@ -208,12 +203,10 @@ def capture(args, case, variant):
         for variable in ("PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
             previous = environment.get(variable, "")
             environment[variable] = str(library_directory) + (os.pathsep + previous if previous else "")
-    completed = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if completed.returncode == SKIP_EXIT_CODE:
+    if run_window_capture_subprocess(command, env=environment, timeout=args.timeout, failure_message=f"{case}/{variant}: capture failed with exit {{code}}",
+            timeout_margin=LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS) is None:
         return None
-    if completed.returncode != 0:
-        raise SmokeFailure(f"{case}/{variant}: capture failed with exit {completed.returncode}")
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     validate_frame(frame, case, variant)
     return frame
 

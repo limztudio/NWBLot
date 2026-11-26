@@ -207,11 +207,8 @@ RayTracingRefractionGraphResources RefractionRenderer::snapshotRefractionGraphRe
     return resources;
 }
 
-[cpp_unwind]
-b8 RefractionRenderer::recordRefractionTileClassification(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const{
-    if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height) || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid())
-        return false;
-    const auto push = ResolveRefractionPushConstants(
+RefractionPushConstants MakeRefractionPassPushConstants(in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources){
+    return ResolveRefractionPushConstants(
         targets.width,
         targets.height,
         targets.bindless.slotsBufferDescriptor.slot(),
@@ -224,6 +221,13 @@ b8 RefractionRenderer::recordRefractionTileClassification(mut CommandList comman
         resources.statistics.counterDescriptor.slot(),
         resources.certifiedInstanceIndex
     );
+}
+
+[cpp_unwind]
+b8 RefractionRenderer::recordRefractionTileClassification(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const{
+    if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height) || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid())
+        return false;
+    const auto push = MakeRefractionPassPushConstants(targets, resources);
     ComputeState state;
     state.setPipeline(resources.classifyTilesPipeline.deref());
     commandList.setComputeState(state);
@@ -247,19 +251,7 @@ b8 RefractionRenderer::recordRefractionResolve(mut CommandList commandList, in D
     if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height))
         return false;
 
-    const auto push = ResolveRefractionPushConstants(
-        targets.width,
-        targets.height,
-        targets.bindless.slotsBufferDescriptor.slot(),
-        resources.materialContextSlotsHeapSlot,
-        resources.viewHeapSlot,
-        resources.opaqueReflectionSlot,
-        resources.refractionEnabled,
-        targets.avboit.refractionTileListDescriptor.slot(),
-        targets.avboit.refractionTileArgumentsDescriptor.slot(),
-        resources.statistics.counterDescriptor.slot(),
-        resources.certifiedInstanceIndex
-    );
+    const auto push = MakeRefractionPassPushConstants(targets, resources);
     ComputeState state;
     state.setPipeline(resources.pipeline.deref()).setIndirectParams(targets.avboit.refractionTileArguments.deref());
     commandList.setComputeState(state);

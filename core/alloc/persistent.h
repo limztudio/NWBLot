@@ -41,6 +41,10 @@ private:
 
 
 public:
+    static constexpr usize s_FreeBinCount = 64u;
+
+
+public:
     [[nodiscard]] static usize StructureAlignedSize(const usize byte){ return StructureAlignedSize(byte, alignof(MaxAlign)); }
     [[nodiscard]] static usize StructureAlignedSize(usize byte, usize align);
 
@@ -58,11 +62,6 @@ public:
 
 private:
     [[nodiscard]] Expected<Allocation> allocateLocked(usize align, usize size)noexcept;
-    void deallocateBlockLocked(NotNull<void*> blockPointer)noexcept;
-
-
-private:
-    static constexpr usize s_FreeBinCount = 64u;
 
 
 private:

@@ -179,37 +179,6 @@ public:
         return (entry && entry->isOverloadable) ? entry->symbol : MStringView{};
     }
 
-    [[nodiscard]] static constexpr b8 IsOverloadableOperatorSymbol(const MStringView sym)noexcept{
-        return !InternOverloadableOperatorSymbol(sym).empty();
-    }
-
-    [[nodiscard]] static constexpr u8 MaxBinaryOperatorPrecedence()noexcept{
-        u8 maxPrec = 0u;
-        for(const OperatorTokenInfo& entry : s_OperatorTokens){
-            if(entry.precedence > maxPrec)
-                maxPrec = entry.precedence;
-        }
-        return maxPrec;
-    }
-
-    [[nodiscard]] static constexpr b8 IsOperatorSymbolChar(const MChar ch)noexcept{
-        for(const OperatorTokenInfo& entry : s_OperatorTokens){
-            for(const MChar c : entry.symbol){
-                if(c == ch)
-                    return true;
-            }
-        }
-        return false;
-    }
-
-    [[nodiscard]] static constexpr b8 HasDoubledOperatorToken(const MChar ch)noexcept{
-        for(const OperatorTokenInfo& entry : s_OperatorTokens){
-            if(entry.symbol.size() == 2u && entry.symbol[0] == ch && entry.symbol[1] == ch)
-                return true;
-        }
-        return false;
-    }
-
     [[nodiscard]] static constexpr b8 IsCompoundOrSimpleAssignment(const TokenType::Enum op)noexcept{
         const OperatorTokenInfo* entry = FindOperatorToken(op);
         return entry && entry->isAssignment;

@@ -79,13 +79,6 @@ template<typename ArenaT>
 }
 
 
-template<typename ArenaT, typename Predicate>
-[[nodiscard]] inline b8 ValidateWithNativeText(const TStringView nativeText, ArenaT& arena, Predicate&& predicate){
-    AString<ArenaT> convertedText(arena);
-    return predicate(NativeTextView(nativeText, convertedText));
-}
-
-
 template<typename PathArenaT>
 struct RelativeAssetPathLayout{
     typename ::Path<PathArenaT>::const_iterator acceptedEnd;
@@ -253,8 +246,6 @@ template<typename ArenaT, typename PathArenaT>
         return MakeUnexpected(Failure{});
     return PathToString(arena, *source);
 }
-
-[[nodiscard]] Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AssetArena& arena, Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

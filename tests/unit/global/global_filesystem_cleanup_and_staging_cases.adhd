@@ -7,6 +7,7 @@
 #include "global_text_access.adhd"
 #include <tests/common/filesystem_platform.adhd>
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/platform_features.adhd>
 #include <tests/common/posix_child.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/common/threads.adhd>
@@ -95,7 +96,7 @@ void VerifyGlobalFilesystemCleanup_DirectoryAndRootLinksWithTrailingSeparatorsDo
         ASSERT_TRUE(EnsureDirectories(tree).has_value());
         ASSERT_TRUE(EnsureDirectories(outside).has_value());
         ASSERT_TRUE(WriteTextFile(outside / "payload", "retained"));
-        if(s_WindowsPath){
+        if(s_IsWindowsPlatform){
             const auto absoluteOutside = AbsolutePath(outside);
             ASSERT_TRUE(absoluteOutside.has_value());
             const i32 status = WindowsSymlink(link, absoluteOutside.value(), true);
@@ -137,7 +138,7 @@ void VerifyGlobalFilesystemCleanup_RemoveAllIfExistsRemovesDanglingLinkWithoutTo
         const Path root = Path("global_test_artifacts/cleanup_dangling_link");
         const Path link = root / "dangling";
         ASSERT_TRUE(EnsureEmptyDirectory(root).has_value());
-        if(s_WindowsPath){
+        if(s_IsWindowsPlatform){
             const i32 status = WindowsSymlink(link, Path("missing"), false);
             if(status != 0){
                 ASSERT_TRUE(RemoveAllForCleanup(root).has_value());

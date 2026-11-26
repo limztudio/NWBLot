@@ -20,17 +20,7 @@ namespace SimdOptimizationBenchmark::MemoryProbe{
 using NWB::Tests::ByteAddress;
 using NWB::Tests::ReadAddress;
 
-#if defined(FOUNDATION_HAS_AVX)
-inline constexpr b8 s_HasAvx = true;
-#else
-inline constexpr b8 s_HasAvx = false;
-#endif
 
-#if defined(FOUNDATION_PLATFORM_LINUX)
-inline constexpr b8 s_Linux = true;
-#else
-inline constexpr b8 s_Linux = false;
-#endif
 
 class AlignedProbeBytes final : NoCopy{
 public:

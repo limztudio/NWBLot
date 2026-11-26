@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 import time
 
@@ -13,15 +11,9 @@ from edit_probe import caret_pixel_column
 from caret_capture import wait_for_caret_phase
 from probe_common import center, text_hash
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, accept_checkpoint, fail_checkpoint, prepare_guarded_checkpoint
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main, SmokeFailure, ensure_process_running
+from checkpoint_report import prepare_guarded_checkpoint
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 from probe_reference import linear_rgb_bytes
 
 LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS = 2.0
@@ -37,7 +29,6 @@ LIT_RECTANGLES = "rectangles"
 LIT_INTEGER = "integer"
 LIT_FLOAT = "float"
 LIT_UTF_8 = "utf-8"
-LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_PASSED = "passed"
 LIT_OS_CLIPBOARD = "os_clipboard"
 LIT_EXPECTED = "expected"
@@ -60,7 +51,6 @@ LIT_F6 = "F6"
 LIT_F7 = "F7"
 LIT_INTEGER_CARET = "integer_caret"
 LIT_INTEGER_CONTENT = "integer_content"
-LIT_UI_NUMERIC_EDITOR_FIXTURE = "UI numeric editor fixture"
 LIT_COMMITTED_INTEGER_TEXT = "7"
 LIT_COMMITTED_FLOAT_TEXT = "1.25"
 LIT_INTEGER_OVERFLOW_TEXT = "9223372036854775808"
@@ -85,29 +75,11 @@ CLIPBOARD_VERIFY_POLL_SECONDS = 0.05
 COUNTERS = ("commits", "cancels", "rejects", "clamps", "restored")
 
 
-class NumericEditRun:
+class NumericEditRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = NumericEditNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-        self.failure_report = None
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=NumericEditNativeInput(backend, handle))
         self.expected = {"integer_bits": integer_bits(7), "float_bits": float_bits(1.25), "i_focus": 0, "f_focus": 0, "clipboard_focus": 0, LIT_ENABLED: 1, LIT_READONLY: 0, "clamp": 1, "coherent": 1,
             **draft_fields(LIT_I, LIT_COMMITTED_INTEGER_TEXT, anchor=1, caret=1, status=0, dirty=False), **draft_fields(LIT_F, LIT_COMMITTED_FLOAT_TEXT, anchor=4, caret=4, status=0, dirty=False), **draft_fields(LIT_CLIPBOARD, "", anchor=0, caret=0)}
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot[LIT_SCALE]
-        return round(x * scale_x), round(y * scale_y)
 
     def counters(self, **increments):
         return {name: self.snapshot[name] + count for name, count in increments.items()}
@@ -121,18 +93,9 @@ class NumericEditRun:
         self.checkpoint(name, **draft_fields(prefix, text, anchor=end if anchor is None else anchor, caret=end if caret is None else caret, status=status, dirty=dirty), **changes)
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), settle=0.25, **changes):
-        path, stage_deadline = prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
-        stage_deadline = min(self.deadline, time.monotonic() + NUMERIC_CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during numeric edit UI capture")
-            self.native.maintain_pointer()
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 640.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
-                raise SmokeSkip("the numeric editor fixture needs a logical client of at least 640x400")
+        prepare_guarded_checkpoint(self, name, changes, dynamic, settle)
+
+        def before_capture(snapshot, report, stage_deadline):
             if report is not None and report["model_matches"] and report["geometry_matches"] and report["extra_matches"]:
                 if (extent is None or tuple(report["extent"]) == extent) and all(probe[LIT_PASSED] or probe["name"].endswith("_caret") for probe in report["probes"]):
                     sample = self._caret_probe_sample(snapshot)
@@ -141,13 +104,13 @@ class NumericEditRun:
                         pixels = self.backend.sample_client_pixels(self.handle, column, first_row, 1, end_row - first_row)
                         if not any(max(abs(actual - expected) for actual, expected in zip(row[0], color)) <= tolerance for row in pixels):
                             wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
-            self.backend.capture_prepared_raw_client_window(self.handle, path)
-            report = observe_numeric_edit(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report[LIT_PASSED]:
-                accept_checkpoint(self, name, path, snapshot, report, dynamic)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        fail_checkpoint(self, name, path, report, "numeric edit")
+            return True
+
+        self.poll_checkpoint(name, stage_timeout=NUMERIC_CHECKPOINT_STAGE_TIMEOUT_SECONDS, minimum_extent=(640.0, 400.0),
+            minimum_extent_message="the numeric editor fixture needs a logical client of at least 640x400",
+            process_stage="during numeric edit UI capture", snapshot_reader=snapshot_from_logs, before_capture=before_capture,
+            evaluate=lambda frame, snapshot: observe_numeric_edit(frame, snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra),
+            raw_windows=True, failure_label="numeric edit", maintain_pointer=True, accept_extras=lambda _: {"native_window": self.native.observe_window()}, dynamic=dynamic, failure_extras=True)
 
     def _caret_probe_sample(self, snapshot):
         width, height = self.backend.client_size(self.handle)
@@ -183,10 +146,10 @@ class NumericEditRun:
         raise SmokeFailure(f"numeric copy did not publish the expected OS clipboard text: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "marker_count_per_gate": 73,
-            "input_path": "Win32 maintained cursor, posted WM_CHAR/keys/buttons, and real modifier chords; CF_UNICODETEXT read" if self.native.windows else "X11 XSendEvent ASCII keys/buttons, native focus, and UTF8_STRING selection read",
-            "ordered_batch_scope": "Enter then text is posted without an intermediate displayed-state wait; delivery may cross frames.", "runtime_limit": "Synthetic input does not qualify live IME, native Wayland, or physical keyboard hardware."}
-        (self.args.output_directory / "numeric_edit.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("numeric_edit.json", passed, include_failure=True, marker_count_per_gate=73,
+            input_path="Win32 maintained cursor, posted WM_CHAR/keys/buttons, and real modifier chords; CF_UNICODETEXT read" if self.native.windows else "X11 XSendEvent ASCII keys/buttons, native focus, and UTF8_STRING selection read",
+            ordered_batch_scope="Enter then text is posted without an intermediate displayed-state wait; delivery may cross frames.",
+            runtime_limit="Synthetic input does not qualify live IME, native Wayland, or physical keyboard hardware.")
 
     def execute(self):
         self.native.pointer(4, 4)
@@ -368,54 +331,8 @@ class NumericEditRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "NUMERIC_EDIT", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = numeric_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the numeric editor fixture appeared")
-            raise SmokeFailure("custom numeric editor fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiNumericEditSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        numeric_run = NumericEditRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        numeric_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_NUMERIC_EDITOR_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_NUMERIC_EDITOR_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "numeric_edit.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                try:
-                    if logserver is not None:
-                        CaptureProcessTermination.terminate_process(logserver, "UI numeric editor logserver")
-                finally:
-                    try:
-                        if numeric_run is not None:
-                            numeric_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    numeric_run.write_report(True)
-    print(f"UI numeric editor: {len(numeric_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="NUMERIC_EDIT", display_marker="UiNumericEditSmoke: display", driver_type=NumericEditRun, log_name="numeric_edit.log", label="UI numeric editor",
+        window_label="numeric editor", process_label="numeric editor", raw_windows=True, restore_pointer=True)
 
 
 def main(argv):

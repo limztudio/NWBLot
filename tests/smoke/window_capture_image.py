@@ -1,32 +1,10 @@
 from dataclasses import dataclass
-from window_capture_image_codec import Bmp24Codec, NativePixelCodec
-from window_capture_image_regions import ImageRegions
+from window_capture_image_codec import Bmp24Codec
 from window_capture_scene_evidence import (
-    LIT_FRONT, LIT_SIDE, TEXTURE_SMOKE_RECEIVER_REGION, TEXTURE_SMOKE_RECEIVER_MIN_RED,
-    TEXTURE_SMOKE_RECEIVER_RED_CHROMA, TRANSPARENT_CSG_REGIONS, TransparentMultiAnalysis,
-    TransparentCsgAnalysis, TextureSmokeAnalysis, SurfelCoverageImageEvidence,
-    TransparentImageEvidence, TextureSmokeImageEvidence,
+    TRANSPARENT_CSG_REGIONS,
+    TransparentImageEvidence,
+    TextureSmokeImageEvidence,
 )
-
-
-estimate_background_rgb = ImageRegions.estimate_background_rgb
-normalized_region = ImageRegions.normalized_region
-region_pixel_count = ImageRegions.region_pixel_count
-count_foreground_pixels = ImageRegions.count_foreground_pixels
-count_foreground_pixels_in_region = ImageRegions.count_foreground_pixels_in_region
-count_background_like_pixels = ImageRegions.count_background_like_pixels
-
-validate_surfel_coverage_probe = SurfelCoverageImageEvidence.validate_surfel_coverage_probe
-analyze_transparent_multi_rows = TransparentImageEvidence.analyze_transparent_multi_rows
-transparent_csg_regions = TransparentImageEvidence.transparent_csg_regions
-analyze_transparent_csg_rows = TransparentImageEvidence.analyze_transparent_csg_rows
-analyze_texture_smoke_rows = TextureSmokeImageEvidence.analyze_texture_smoke_rows
-
-write_bmp_24 = Bmp24Codec.write_bmp_24
-read_bmp_24_rows = Bmp24Codec.read_bmp_24_rows
-channel_from_mask = NativePixelCodec.channel_from_mask
-ximage_rgb_rows = NativePixelCodec.ximage_rgb_rows
-bgra_rgb_rows = NativePixelCodec.bgra_rgb_rows
 
 
 @dataclass(frozen=True)
@@ -56,12 +34,12 @@ def capture_result_from_rgb_rows(handle, width, height, rows_rgb):
 
 
 def write_capture_rows(handle, width, height, rows_rgb, output_path):
-    write_bmp_24(output_path, width, height, rows_rgb)
+    Bmp24Codec.write_bmp_24(output_path, width, height, rows_rgb)
     return capture_result_from_rgb_rows(handle, width, height, rows_rgb)
 
 
 def read_bmp_24(path, handle=0):
-    width, height, rows_rgb = read_bmp_24_rows(path)
+    width, height, rows_rgb = Bmp24Codec.read_bmp_24_rows(path)
     return capture_result_from_rgb_rows(handle, width, height, rows_rgb)
 
 

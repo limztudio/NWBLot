@@ -26,27 +26,19 @@ class UiListSource : IListDataSource, NoCopy{
     public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, cast<usize>(s_VirtualListRowCount), 0u); }
 }
 
-class UiPopupToolsSource : IListDataSource{
+class UiImmutableLabelListSource<ResolverT : IUiLabelResolver, const usize LabelCount, const u64 DisabledKey> : IListDataSource{
     public u64 instanceGeneration()const override{ return 1u; }
     public u64 revision()const override{ return 1u; }
-    public u64 rowCount()const override{ return cast<u64>(s_PopupToolsLabelCount); }
-    public u64 key(in u64 index)const override{ return ResolveImmutableListSourceKey(index, s_PopupToolsLabelCount); }
-    public Expected<u64> indexOf(in u64 keyValue)const override{ return TryResolveImmutableListSourceIndex(keyValue, s_PopupToolsLabelCount); }
-    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, s_PopupToolsLabelCount, s_PopupToolsDisabledKey); }
-    public StringView text(in u64 index)const override{ return ResolvePopupToolsLabel(index); }
-    public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, s_PopupToolsLabelCount, s_PopupToolsDisabledKey); }
+    public u64 rowCount()const override{ return cast<u64>(LabelCount); }
+    public u64 key(in u64 index)const override{ return ResolveImmutableListSourceKey(index, LabelCount); }
+    public Expected<u64> indexOf(in u64 keyValue)const override{ return TryResolveImmutableListSourceIndex(keyValue, LabelCount); }
+    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, LabelCount, DisabledKey); }
+    public StringView text(in u64 index)const override{ return ResolverT().label(index); }
+    public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, LabelCount, DisabledKey); }
 }
 
-class UiRadioGroupSource : IListDataSource{
-    public u64 instanceGeneration()const override{ return 1u; }
-    public u64 revision()const override{ return 1u; }
-    public u64 rowCount()const override{ return cast<u64>(s_RadioGroupLabelCount); }
-    public u64 key(in u64 index)const override{ return ResolveImmutableListSourceKey(index, s_RadioGroupLabelCount); }
-    public Expected<u64> indexOf(in u64 keyValue)const override{ return TryResolveImmutableListSourceIndex(keyValue, s_RadioGroupLabelCount); }
-    public Expected<u64> findEnabled(in u64 start, in b8 reverse)const override{ return FindEnabledImmutableListSourceRow(start, reverse, s_RadioGroupLabelCount, s_RadioGroupDisabledKey); }
-    public StringView text(in u64 index)const override{ return ResolveRadioGroupLabel(index); }
-    public b8 enabled(in u64 index)const override{ return IsImmutableListSourceRowEnabled(index, s_RadioGroupLabelCount, s_RadioGroupDisabledKey); }
-}
+type UiPopupToolsSource = UiImmutableLabelListSource<UiPopupToolsLabelResolver, s_PopupToolsLabelCount, s_PopupToolsDisabledKey>;
+type UiRadioGroupSource = UiImmutableLabelListSource<UiRadioGroupLabelResolver, s_RadioGroupLabelCount, s_RadioGroupDisabledKey>;
 
 class UiListGallery{
     public void paint(mut UiPaintContext context, in f32 x, in f32 y){

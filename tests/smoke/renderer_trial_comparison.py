@@ -1,8 +1,8 @@
 import math
 import statistics
 
-import reflection_benchmark as reflection
 from reflection_benchmark import LIT_POSITIVE_FRAME_REPORTS
+from reflection_gpu_coverage import DEPTH
 from gpu_timing_parse import MAXIMUM_INCONCLUSIVE_POSITIVE_INTERVALS
 from experiment_statistics import PairedExperimentAnalysis
 from renderer_wall_frame_evidence import WALL_FRAME_POLICY, SYNTHETIC_FRAME_REASON
@@ -87,7 +87,7 @@ class RendererTrialComparison:
                     block[LIT_CANDIDATE][LIT_WALL_FRAME][LIT_MEAN_FPS] - block[LIT_BASELINE][LIT_WALL_FRAME][LIT_MEAN_FPS] for block in blocks.values()]).items()},
                 LIT_COMPARISON: "candidate minus baseline; equal-weight independent blocks with paired bootstrap 95% intervals"}
         return {"status": status, "practical_threshold_ms": threshold, LIT_MEANS_MS: means, LIT_WALL_FRAME: wall_frame, "frame": paired[FRAME], LIT_SECONDARY_SCOPE: workload.secondary_scope,
-            "secondary": paired[workload.secondary_scope], LIT_CONTROLS: controls, "scope_deltas": paired, "secondary_scope_units": "milliseconds per completed mip-reduction range" if workload.secondary_scope == reflection.DEPTH
+            "secondary": paired[workload.secondary_scope], LIT_CONTROLS: controls, "scope_deltas": paired, "secondary_scope_units": "milliseconds per completed mip-reduction range" if workload.secondary_scope == DEPTH
                 else "milliseconds per completed scope range; a range may contain multiple native dispatches", "secondary_per_frame_work": {LIT_MEANS_MS: secondary_frame_means, "delta": secondary_frame_delta,
                 LIT_UNITS: "sum of measured secondary-scope milliseconds per completed GPU frame; not a frame-time attribution"}, LIT_COMPLETED_TRIALS: len(trials), "completed_blocks": len(blocks),
             "completed_gpu_frames": sum(t[LIT_SCOPES][FRAME][LIT_GPU_SAMPLES] for t in trials), LIT_UNITS: "milliseconds per completed scope range; frame is the primary endpoint", "multiplicity": "per-comparison 95% intervals; no simultaneous family-wide claim"}

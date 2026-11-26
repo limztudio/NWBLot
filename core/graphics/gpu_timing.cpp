@@ -601,11 +601,6 @@ void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>& timing){
     timing.reset();
 }
 
-void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* const timing){
-    if(timing)
-        DiscardGpuTimingMeasure(*timing);
-}
-
 b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>& timing){
     if(!timing.has_value())
         return false;
@@ -613,10 +608,6 @@ b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>& timing){
         return true;
     DiscardGpuTimingMeasure(timing);
     return false;
-}
-
-b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>* const timing){
-    return timing ? FinishSplitGpuTimingMarker(*timing) : false;
 }
 
 

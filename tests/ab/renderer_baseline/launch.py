@@ -22,8 +22,6 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 
 import launch as AB_LAUNCH  # noqa: E402
 from launcher.build import BuildController  # noqa: E402
-from launcher.cli import LauncherCli  # noqa: E402
-from launcher.cmake_settings import CmakeSettings  # noqa: E402
 from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 from profiles import get_profile, profile_names  # noqa: E402
 
@@ -53,8 +51,8 @@ def default_output_directory(root: Path, profile_name: str) -> Path:
 def resolve_paths(args: argparse.Namespace, settings) -> BaselinePaths:
     profile = get_profile(args.profile)
     executable = BuildController.resolve_executable_path(settings, profile.target, args.executable, None, args.dry_run)
-    runtime_directory = (CmakeSettings.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / profile.runtime_directory / settings.config)
-    output_directory = (CmakeSettings.resolve_path(settings.root, args.output_dir) if args.output_dir is not None else default_output_directory(settings.root, args.profile))
+    runtime_directory = AB_LAUNCH.resolve_ab_runtime_directory(settings, args.runtime_dir, profile.runtime_directory)
+    output_directory = AB_LAUNCH.resolve_ab_output_directory(settings, args.output_dir, f"{LIT_RENDERER_BASELINE}/{args.profile}")
     return BaselinePaths(executable, runtime_directory, output_directory)
 
 
@@ -70,7 +68,7 @@ def runner_command(args: argparse.Namespace, paths: BaselinePaths) -> List[objec
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    LauncherCli.add_build_options(parser)
+    AB_LAUNCH.LauncherCli.add_build_options(parser)
     parser.add_argument("profile", nargs="?", choices=profile_names(), help="Renderer scene to capture.")
     parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the selected smoke executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the selected cooked smoke runtime directory.")
@@ -92,11 +90,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run(args: argparse.Namespace) -> int:
-    environment = BuildController.build_environment(args)
-    settings = CmakeSettings.resolve_launch_settings(args, DEFAULT_DOMAIN)
-    CmakeSettings.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
-    settings = CmakeSettings.refresh_launch_settings(settings, args.domain)
-    build_target(args, settings, environment)
+    profile = get_profile(args.profile)
+    settings = AB_LAUNCH.configure_and_build_ab_targets(args, DEFAULT_DOMAIN, REQUIRED_DEFINES, (profile.target,))
     paths = resolve_paths(args, settings)
     return AB_LAUNCH.run_ab_runner(
         runner_command(args, paths),

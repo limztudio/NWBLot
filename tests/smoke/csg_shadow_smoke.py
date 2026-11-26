@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 from csg_shadow_reference import ANALYTIC_ARMS, ARMS, compare_analytic_frames, compare_frames
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
@@ -102,7 +102,7 @@ def capture_arm(args, arm):
         return None
     if result.returncode:
         raise SmokeFailure(f"CSG shadow {arm} capture failed: {result.returncode}")
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("CSG shadow smoke requires the actual 960x720 framebuffer")
     return frame

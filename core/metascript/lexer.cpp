@@ -311,6 +311,24 @@ Token Lexer::readNumber()noexcept{
         return makeNumberToken(TokenType::IntegerLiteral);
     };
 
+    const auto consumeExponentAndTrailingSeparator = [&](Optional<Token>& outError)noexcept -> b8 {
+        isDouble = true;
+        advance();
+        if(!isAtEnd() && (peek() == '+' || peek() == '-'))
+            advance();
+        if(isAtEnd() || !IsAsciiDigit(peek())){
+            outError = makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
+            return false;
+        }
+        consumeSeparatedDigits(isDecimalDigit);
+        if(!isAtEnd() && peek() == '\''){
+            advance();
+            outError = makeErrorToken(MStringView("invalid digit separator in numeric literal"), startLine, startColumn);
+            return false;
+        }
+        return true;
+    };
+
     if(peek() == '0' && (peekNext() == 'x' || peekNext() == 'X')){
         advance();
         advance();
@@ -338,17 +356,9 @@ Token Lexer::readNumber()noexcept{
         if(!hasHexDigits)
             return makeErrorToken(MStringView("invalid hexadecimal integer literal"), startLine, startColumn);
         if(!isAtEnd() && (peek() == 'p' || peek() == 'P')){
-            isDouble = true;
-            advance();
-            if(!isAtEnd() && (peek() == '+' || peek() == '-'))
-                advance();
-            if(isAtEnd() || !IsAsciiDigit(peek()))
-                return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
-            consumeSeparatedDigits(isDecimalDigit);
-            if(!isAtEnd() && peek() == '\''){
-                advance();
-                return makeErrorToken(MStringView("invalid digit separator in numeric literal"), startLine, startColumn);
-            }
+            Optional<Token> errorToken;
+            if(!consumeExponentAndTrailingSeparator(errorToken))
+                return *errorToken;
             if(!isAtEnd() && (peek() == 'f' || peek() == 'F')){
                 isFloat = true;
                 advance();
@@ -384,13 +394,9 @@ Token Lexer::readNumber()noexcept{
     }
 
     if(!isAtEnd() && (peek() == 'e' || peek() == 'E')){
-        isDouble = true;
-        advance();
-        if(!isAtEnd() && (peek() == '+' || peek() == '-'))
-            advance();
-        if(isAtEnd() || !IsAsciiDigit(peek()))
-            return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
-        consumeSeparatedDigits(isDecimalDigit);
+        Optional<Token> errorToken;
+        if(!consumeExponentAndTrailingSeparator(errorToken))
+            return *errorToken;
     }
 
     if(!isAtEnd() && peek() == '\''){

@@ -103,35 +103,8 @@ b8 X11PreeditBuffer::replace(const usize firstCharacter, const usize characterCo
 
     const b8 hasFeedback = m_hasFeedback || !insertionStyles.empty();
     m_clauses.clear();
-    if(hasFeedback && !m_candidate.empty()){
-        m_clauses.reserve(m_scalarStylesCandidate.size());
-        usize byteOffset = 0u;
-        usize scalarIndex = 0u;
-        TextInputPreeditClause activeClause;
-        b8 hasActiveClause = false;
-        while(byteOffset < m_candidate.size() && scalarIndex < m_scalarStylesCandidate.size()){
-            const auto decoded = DecodeUtf8Scalar(AStringView(m_candidate).substr(byteOffset));
-            if(!decoded || decoded->byteCount == 0u)
-                return false;
-            const usize nextByte = byteOffset + static_cast<usize>(decoded->byteCount);
-            const TextInputPreeditClauseStyle::Enum style = m_scalarStylesCandidate[scalarIndex];
-            if(hasActiveClause && activeClause.style == style && activeClause.endByte == byteOffset){
-                activeClause.endByte = nextByte;
-            }
-            else{
-                if(hasActiveClause)
-                    m_clauses.push_back(activeClause);
-                activeClause.beginByte = byteOffset;
-                activeClause.endByte = nextByte;
-                activeClause.style = style;
-                hasActiveClause = true;
-            }
-            byteOffset = nextByte;
-            ++scalarIndex;
-        }
-        if(hasActiveClause)
-            m_clauses.push_back(activeClause);
-    }
+    if(hasFeedback && !m_candidate.empty() && !rebuildClauses(m_candidate, Span<const TextInputPreeditClauseStyle::Enum>(m_scalarStylesCandidate.data(), m_scalarStylesCandidate.size())))
+        return false;
 
     m_hasFeedback = hasFeedback;
     m_text.swap(m_candidate);
@@ -152,36 +125,40 @@ b8 X11PreeditBuffer::updateFeedback(const usize firstCharacter, const usize char
         m_scalarStyles[firstCharacter + index] = styles[index];
     m_hasFeedback = true;
     m_clauses.clear();
-    if(!m_text.empty()){
-        m_clauses.reserve(m_scalarStyles.size());
-        usize byteOffset = 0u;
-        usize scalarIndex = 0u;
-        TextInputPreeditClause activeClause;
-        b8 hasActiveClause = false;
-        while(byteOffset < m_text.size() && scalarIndex < m_scalarStyles.size()){
-            const auto decoded = DecodeUtf8Scalar(AStringView(m_text).substr(byteOffset));
-            if(!decoded || decoded->byteCount == 0u)
-                return false;
-            const usize nextByte = byteOffset + static_cast<usize>(decoded->byteCount);
-            const TextInputPreeditClauseStyle::Enum style = m_scalarStyles[scalarIndex];
-            if(hasActiveClause && activeClause.style == style && activeClause.endByte == byteOffset){
-                activeClause.endByte = nextByte;
-            }
-            else{
-                if(hasActiveClause)
-                    m_clauses.push_back(activeClause);
-                activeClause.beginByte = byteOffset;
-                activeClause.endByte = nextByte;
-                activeClause.style = style;
-                hasActiveClause = true;
-            }
-            byteOffset = nextByte;
-            ++scalarIndex;
-        }
-        if(hasActiveClause)
-            m_clauses.push_back(activeClause);
-    }
+    if(!m_text.empty() && !rebuildClauses(m_text, Span<const TextInputPreeditClauseStyle::Enum>(m_scalarStyles.data(), m_scalarStyles.size())))
+        return false;
     m_caretByte = *caretByte;
+    return true;
+}
+
+b8 X11PreeditBuffer::rebuildClauses(const AStringView text, const Span<const TextInputPreeditClauseStyle::Enum> styles){
+    m_clauses.reserve(styles.size());
+    usize byteOffset = 0u;
+    usize scalarIndex = 0u;
+    TextInputPreeditClause activeClause;
+    b8 hasActiveClause = false;
+    while(byteOffset < text.size() && scalarIndex < styles.size()){
+        const auto decoded = DecodeUtf8Scalar(text.substr(byteOffset));
+        if(!decoded || decoded->byteCount == 0u)
+            return false;
+        const usize nextByte = byteOffset + static_cast<usize>(decoded->byteCount);
+        const TextInputPreeditClauseStyle::Enum style = styles[scalarIndex];
+        if(hasActiveClause && activeClause.style == style && activeClause.endByte == byteOffset){
+            activeClause.endByte = nextByte;
+        }
+        else{
+            if(hasActiveClause)
+                m_clauses.push_back(activeClause);
+            activeClause.beginByte = byteOffset;
+            activeClause.endByte = nextByte;
+            activeClause.style = style;
+            hasActiveClause = true;
+        }
+        byteOffset = nextByte;
+        ++scalarIndex;
+    }
+    if(hasActiveClause)
+        m_clauses.push_back(activeClause);
     return true;
 }
 

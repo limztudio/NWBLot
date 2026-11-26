@@ -32,7 +32,7 @@ namespace TextureClearValueKind{
     };
 };
 
-namespace TextureClearQueueRequirement{
+namespace TextureQueueRequirement{
     enum Enum : u8{
         Transfer,
         ComputeOrGraphics,
@@ -42,32 +42,24 @@ namespace TextureClearQueueRequirement{
 
 struct TextureClearContract{
     TextureSubresourceSet subresources;
-    TextureClearQueueRequirement::Enum queueRequirement = TextureClearQueueRequirement::Transfer;
-};
-
-namespace TextureCopyQueueRequirement{
-    enum Enum : u8{
-        Transfer,
-        ComputeOrGraphics,
-        Graphics,
-    };
+    TextureQueueRequirement::Enum queueRequirement = TextureQueueRequirement::Transfer;
 };
 
 struct TextureCopyContract{
     TextureSlice sourceSlice;
     TextureSlice destinationSlice;
-    TextureCopyQueueRequirement::Enum queueRequirement = TextureCopyQueueRequirement::Transfer;
+    TextureQueueRequirement::Enum queueRequirement = TextureQueueRequirement::Transfer;
 };
 
-[[nodiscard]] inline b8 TextureClearQueueRequirementSatisfied(const TextureClearQueueRequirement::Enum requirement, const GpuQueueCapability::Mask declaredCapabilities, const GpuQueueCapability::Mask physicalCapabilities)noexcept{
+[[nodiscard]] inline b8 TextureQueueRequirementSatisfied(const TextureQueueRequirement::Enum requirement, const GpuQueueCapability::Mask declaredCapabilities, const GpuQueueCapability::Mask physicalCapabilities)noexcept{
     const u8 declaredBits = static_cast<u8>(declaredCapabilities);
     const u8 physicalBits = static_cast<u8>(physicalCapabilities);
     switch(requirement){
-    case TextureClearQueueRequirement::Transfer:
+    case TextureQueueRequirement::Transfer:
         return (declaredBits & physicalBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
-    case TextureClearQueueRequirement::ComputeOrGraphics:
+    case TextureQueueRequirement::ComputeOrGraphics:
         return (declaredBits & physicalBits & static_cast<u8>(GpuQueueCapability::Compute | GpuQueueCapability::Graphics)) != 0u;
-    case TextureClearQueueRequirement::Graphics:
+    case TextureQueueRequirement::Graphics:
         return (declaredBits & physicalBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
     default:
         return false;

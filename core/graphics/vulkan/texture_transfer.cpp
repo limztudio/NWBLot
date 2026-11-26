@@ -173,11 +173,11 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     region.extent = { contract->destinationSlice.width, contract->destinationSlice.height, contract->destinationSlice.depth, };
 
     switch(contract->queueRequirement){
-    case TextureCopyQueueRequirement::Graphics:
+    case TextureQueueRequirement::Graphics:
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
         break;
-    case TextureCopyQueueRequirement::ComputeOrGraphics:
+    case TextureQueueRequirement::ComputeOrGraphics:
         if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
             return;
         break;

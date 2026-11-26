@@ -45,7 +45,6 @@ class HdrUastcOutputLayout{
     public u32 rowBlocksOrPixels = 0u;
 }
 
-[reflect]
 class TextureMipLevel{
     public u64 offsetBytes = 0u;
     public u64 sizeBytes = 0u;

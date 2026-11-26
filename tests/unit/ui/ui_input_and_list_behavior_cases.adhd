@@ -41,15 +41,15 @@ class UiInputTests : RouterTestFixture{
     public void tab(in b8 reverse){
         this.key(Key::Tab, reverse);
     }
-    public b8 commitSingle(in HitTarget target, in u64 generation){ return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation); }
+    public b8 commitSingle(in HitTarget target, in u64 generation){ return this.m_router.commitTargets(MakeUiSingleHitTargetArray(target), generation, Span<PopupScope>(), u64.max); }
     public b8 commitSpan(in Span<HitTarget> targets, in u64 generation){
-        return this.m_router.commitTargets(targets, generation);
+        return this.m_router.commitTargets(targets, generation, Span<PopupScope>(), u64.max);
     }
-    public b8 commitEmpty(in u64 generation){ return this.m_router.commitTargets(Span<HitTarget>(), generation); }
+    public b8 commitEmpty(in u64 generation){ return this.m_router.commitTargets(Span<HitTarget>(), generation, Span<PopupScope>(), u64.max); }
     public b8 commitOverflowSingle(in HitTarget target, in usize overflowCount, in u64 generation){
         Vector<HitTarget> targets;
         targets.resize(overflowCount, target);
-        return this.m_router.commitTargets(targets, generation);
+        return this.m_router.commitTargets(targets, generation, Span<PopupScope>(), u64.max);
     }
     public b8 commitOverflowSpan(in Span<HitTarget> targets, in u64 generation){
         Vector<HitTarget> oversized;
@@ -57,7 +57,7 @@ class UiInputTests : RouterTestFixture{
         for(in HitTarget target : targets)
             oversized.push_back(target);
         oversized.push_back(HitTarget());
-        return this.m_router.commitTargets(oversized, generation);
+        return this.m_router.commitTargets(oversized, generation, Span<PopupScope>(), u64.max);
     }
     public usize findTargetAddress(in WidgetId id)const{ return this.findTargetAddress(id, 0u); }
     public usize findTargetAddress(in WidgetId id, in u64 declarationGeneration)const{
@@ -1436,7 +1436,7 @@ void VerifyUiListBehaviorTests_MissingDisabledOrMalformedActivationDoesNotModify
     EXPECT_FALSE(ApplyListControlAction(source, ListOptions(), action, state, result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 2u);
-    ExpectUiListResult(result, previous);
+    ExpectUiSelectionResult(result, previous);
 }
 
 void VerifyUiListBehaviorTests_MalformedEnabledSearchFailsAtomically(){

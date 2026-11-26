@@ -14,18 +14,17 @@ class ContextScrollOwnerEntry{
     public PopupToken popup;
 }
 
-class ContextFocusGroupEntry{
-    public u32 id = 0u;
-    public b8 trapDirectional = false;
-    public PopupToken popup;
-}
-
 b8 LessWindowPressSequence(in WindowPressRecord lhs, in WindowPressRecord rhs){
     return lhs.sequence < rhs.sequence;
 }
 
-b8 TryAppendContextTarget(
-    in WidgetState state,
+b8 TryAppendAdmittedContextTarget(
+    in WidgetId targetId,
+    in u64 declarationGeneration,
+    in b8 setOwner,
+    in WidgetId ownerId,
+    in u64 ownerDeclarationGeneration,
+    in WidgetRoot root,
     in PopupToken currentPopup,
     in u32 popupLayer,
     in u32 windowZOrder,
@@ -40,8 +39,12 @@ b8 TryAppendContextTarget(
     if(targets.size() >= s_InputMaxTargets)
         return false;
     HitTarget admitted = target;
-    admitted.id = state.id;
-    admitted.declarationGeneration = state.declarationGeneration;
+    admitted.id = targetId;
+    admitted.declarationGeneration = declarationGeneration;
+    if(setOwner){
+        admitted.owner = ownerId;
+        admitted.ownerDeclarationGeneration = ownerDeclarationGeneration;
+    }
     admitted.paintOrder = cast<u32>(targets.size());
     admitted.popup = currentPopup;
     admitted.layer = popupLayer;
@@ -64,8 +67,41 @@ b8 TryAppendContextTarget(
         admitted.scrollOwnerDeclarationGeneration = 0u;
     }
     targets.push_back(admitted);
-    targetRoots.push_back(state.root);
+    targetRoots.push_back(root);
     return true;
+}
+
+b8 TryAppendContextTarget(
+    in WidgetState state,
+    in PopupToken currentPopup,
+    in u32 popupLayer,
+    in u32 windowZOrder,
+    in WidgetId windowId,
+    in u64 windowDeclarationGeneration,
+    in WidgetId scrollOwnerId,
+    in u64 scrollOwnerDeclarationGeneration,
+    in HitTarget target,
+    mut Vector<HitTarget> targets,
+    mut Vector<WidgetRoot> targetRoots
+){
+    return TryAppendAdmittedContextTarget(
+        state.id,
+        state.declarationGeneration,
+        false,
+        WidgetId(),
+        0u,
+        state.root,
+        currentPopup,
+        popupLayer,
+        windowZOrder,
+        windowId,
+        windowDeclarationGeneration,
+        scrollOwnerId,
+        scrollOwnerDeclarationGeneration,
+        target,
+        targets,
+        targetRoots
+    );
 }
 
 b8 TryAppendContextPartTarget(
@@ -82,37 +118,26 @@ b8 TryAppendContextPartTarget(
     mut Vector<HitTarget> targets,
     mut Vector<WidgetRoot> targetRoots
 ){
-    if(!part.valid() || part == owner.id || targets.size() >= s_InputMaxTargets)
+    if(!part.valid() || part == owner.id)
         return false;
-    HitTarget admitted = target;
-    admitted.id = part;
-    admitted.declarationGeneration = owner.declarationGeneration;
-    admitted.owner = owner.id;
-    admitted.ownerDeclarationGeneration = owner.declarationGeneration;
-    admitted.paintOrder = cast<u32>(targets.size());
-    admitted.popup = currentPopup;
-    admitted.layer = popupLayer;
-    if(!currentPopup.valid()){
-        admitted.zOrder = windowZOrder;
-        admitted.windowId = windowId;
-        admitted.windowDeclarationGeneration = windowDeclarationGeneration;
-    }
-    else{
-        admitted.zOrder = 0u;
-        admitted.windowId = WidgetId();
-        admitted.windowDeclarationGeneration = 0u;
-    }
-    if(scrollOwnerId.valid() && scrollOwnerId != admitted.id && scrollOwnerId != admitted.owner){
-        admitted.scrollOwner = scrollOwnerId;
-        admitted.scrollOwnerDeclarationGeneration = scrollOwnerDeclarationGeneration;
-    }
-    else{
-        admitted.scrollOwner = WidgetId();
-        admitted.scrollOwnerDeclarationGeneration = 0u;
-    }
-    targets.push_back(admitted);
-    targetRoots.push_back(owner.root);
-    return true;
+    return TryAppendAdmittedContextTarget(
+        part,
+        owner.declarationGeneration,
+        true,
+        owner.id,
+        owner.declarationGeneration,
+        owner.root,
+        currentPopup,
+        popupLayer,
+        windowZOrder,
+        windowId,
+        windowDeclarationGeneration,
+        scrollOwnerId,
+        scrollOwnerDeclarationGeneration,
+        target,
+        targets,
+        targetRoots
+    );
 }
 
 void ExtractContextCommitPopups(

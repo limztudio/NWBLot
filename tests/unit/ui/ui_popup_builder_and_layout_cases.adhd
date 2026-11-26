@@ -1094,8 +1094,8 @@ void VerifyUiPopupContextTests_AutofocusDisabledChangesFocusOnlyAtAcceptanceAndT
     EXPECT_TRUE(self.m_context.input().hasPopup());
     EXPECT_FALSE(self.m_context.input().focus().valid());
     EXPECT_TRUE(self.m_context.input().wantsCommands());
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Tab)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), candidate.child.id);
 }
 

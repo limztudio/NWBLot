@@ -69,12 +69,7 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = {
     return (value << count) | (value >> (ShaBe32Detail::s_WordBits - count));
 }
 
-void CompressBlocks(Array<u32, s_StateWordCount>& state, const u8* blocks, usize blockCount)noexcept;
 [[nodiscard]] Sha1Digest ComputeSha1Impl(BinaryByteView input)noexcept;
-
-inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)noexcept{
-    CompressBlocks(state, block, 1u);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

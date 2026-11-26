@@ -19,8 +19,6 @@ const u32 s_AvboitCoverageSlicesPerWord = 32u;
 const f32 s_AvboitExtinctionFixedScale = 45.985905f;
 const f32 s_AvboitSelfOcclusionSliceBias = 2.0f;
 const usize s_AvboitControlWordCount = 8u;
-const f32 s_AvboitPresentationSdr = 0.0f;
-const f32 s_AvboitPresentationHdr10 = 1.0f;
 const f32 s_AvboitRefractionDisabled = 0.0f;
 const f32 s_AvboitRefractionCapture = 1.0f;
 const f32 s_AvboitRefractionAccumulate = 2.0f;
@@ -153,7 +151,6 @@ RendererAvboitPushConstants ResolveRendererAvboitPushConstants(
     in u32 lowHeight,
     in u32 virtualSliceCount,
     in u32 physicalSliceCount,
-    in b8 hdr10OutputActive,
     in b8 hasRefractionFramebuffer,
     in u32 deferredSlotsBufferSlot
 ){
@@ -167,14 +164,11 @@ RendererAvboitPushConstants ResolveRendererAvboitPushConstants(
     const u32 physicalExtinctionWordCount = DivideUpWrappingU32(physicalSliceCount, s_AvboitExtinctionSlicesPerWord);
     pushConstants.volume[2u] = cast<u32>(cast<u64>(lowWidth) * cast<u64>(lowHeight) * cast<u64>(physicalExtinctionWordCount));
     pushConstants.volume[3u] = DivideUpWrappingU32(virtualSliceCount, s_AvboitCoverageSlicesPerWord);
-    f32 presentationMode = s_AvboitPresentationSdr;
-    if(hdr10OutputActive)
-        presentationMode = s_AvboitPresentationHdr10;
     f32 refractionMode = s_AvboitRefractionDisabled;
     if(hasRefractionFramebuffer)
         refractionMode = s_AvboitRefractionAccumulate;
     pushConstants.params = f32x4(
-        presentationMode,
+        0.0f,
         s_AvboitExtinctionFixedScale,
         s_AvboitSelfOcclusionSliceBias,
         refractionMode

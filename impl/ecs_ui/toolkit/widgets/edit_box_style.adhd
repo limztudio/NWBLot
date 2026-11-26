@@ -269,8 +269,8 @@ void ApplySkinPaletteToEditBoxStyle(in UiSkinPalette palette, mut EditBoxStyle s
 
 void PlaceEditPreeditUnderline(in Point textOrigin, in f32 caretWidth, mut Rect segment){
     if(segment.width > 0.0f){
-        const f32 thickness = UiSimdMin(caretWidth, segment.height);
-        const f32 verticalOffset = textOrigin.y + UiSimdMax(0.0f, segment.height - thickness);
+        const f32 thickness = Min(caretWidth, segment.height);
+        const f32 verticalOffset = textOrigin.y + Max(0.0f, segment.height - thickness);
         const VectorSingle shifted = VectorSingle(segment.x, segment.y, segment.x, segment.y) + VectorSingle(textOrigin.x, verticalOffset, textOrigin.x, verticalOffset);
         segment.x = shifted.x;
         segment.y = shifted.y;

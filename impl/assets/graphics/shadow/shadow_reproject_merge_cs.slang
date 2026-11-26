@@ -58,29 +58,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint slotStart = g_NwbShadowMergePush.lightSlotStart;
     const uint slotEnd = min(slotStart + g_NwbShadowMergePush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
-    const half4 gc = nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, texel);
-    const bool valid = gc.w > half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD);
+    bool valid;
     NwbShadowMergeReprojection reprojection;
-    reprojection.texel = int2(0, 0);
-    reprojection.onScreen = false;
-    bool historyAccepted = false;
-    uint validTapMask = 0u;
-    if(valid){
-        const float3 currentNormal = nwbOctDecodeNormal(float2(gc.xy));
-        const float currentCameraDistance = float(gc.z);
-        const int2 full = int2(min((int)h.x * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.width - 1), min((int)h.y * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.height - 1));
-        const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
-        const float3 currentWorldPosition = float3(worldPositionSample);
-        reprojection = nwbShadowReprojectHistory(currentWorldPosition, g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid, halfWidth, halfHeight);
-        historyAccepted = nwbShadowMergeHistoryAccepted(reprojection, true, g_NwbShadowMergePush.geometryPrevSlot, currentNormal, currentCameraDistance);
-        [unroll] for(int dy = -1; dy <= 1; ++dy){
-            [unroll] for(int dx = -1; dx <= 1; ++dx){
-                const int2 tap = clamp(texel + int2(dx, dy), int2(0), int2(hw - 1, hh - 1));
-                if(!(nwbShadowMergeGeometry(g_NwbShadowMergePush.geometryCurrSlot, tap).w <= half(NWB_SHADOW_GEOMETRY_VALID_THRESHOLD)))
-                    validTapMask |= 1u << uint((dy + 1) * 3 + dx + 1);
-            }
-        }
-    }
+    bool historyAccepted;
+    uint validTapMask;
+    nwbShadowMergePreparePixel(
+        h, hw, hh, halfWidth, halfHeight,
+        g_NwbShadowMergePush.width, g_NwbShadowMergePush.height, g_NwbShadowMergePush.receiverFactor,
+        g_NwbShadowMergePush.prevWorldToClip, g_NwbShadowMergePush.historyValid,
+        g_NwbShadowMergePush.geometryCurrSlot, g_NwbShadowMergePush.geometryPrevSlot, g_NwbShadowMergePush.worldPositionSlot,
+        valid, reprojection, historyAccepted, validTapMask
+    );
 
     for(uint slot = slotStart; slot < slotEnd; ++slot){
         const NwbShadowMergeResult result = nwbShadowMergeChannel<true>(

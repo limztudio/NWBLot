@@ -24,7 +24,6 @@
 
 const StringView s_UiLayerSystemOwnerName = "UiLayerSystem";
 type UiGpuRenderer = GpuRenderer;
-type UiLayerShaderPathResolveCallback = ShaderArchivePathResolver;
 type UiInputKeyBinding = InputKeyBinding;
 type UiPaintBuilder = PaintBuilder;
 type UiTextService = TextService;
@@ -68,7 +67,6 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private UiDisplayMetrics m_display;
     private UiPoint m_pointer;
     private u64 m_frameGeneration = 0u;
-    private u64 m_lastPublishedA11yGeneration = 0u;
     private u64 m_lastPublishedA11yRevision = 0u;
     private u64 m_lastAnnouncedA11yGeneration = 0u;
     private f32 m_lastPublishedA11yScaleX = 0.0f;
@@ -97,7 +95,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
         mut ICursorService cursor,
         mut IAccessibilityService accessibility,
         mut AssetManager assetManager,
-        in UiLayerShaderPathResolveCallback shaderPathResolver,
+        in ShaderArchivePathResolver shaderPathResolver,
         in AssetRef<UiSkin> skin,
         in UiLayerPresentation presentation
     ){
@@ -149,11 +147,7 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     [cpp_unwind]
     public b8 setInputBindings(in Span<UiInputKeyBinding> bindings);
     [cpp_unwind]
-    public b8 dispatchInputEvent(in UiInputEvent event);
-    [cpp_unwind]
     public b8 dispatchInputEvent(in UiInputEvent event, mut b8 outBlockText);
-    [cpp_unwind]
-    public b8 dispatchPointerInput(in UiPointerInput input);
     [cpp_unwind]
     public b8 dispatchPointerInput(in UiPointerInput input, mut b8 outConsumed);
     [cpp_unwind]
@@ -605,21 +599,9 @@ b8 UiLayerSystem::wantsPointer()const{
 }
 
 [cpp_unwind]
-b8 UiLayerSystem::dispatchInputEvent(in UiInputEvent event){
-    b8 unusedBlockText = false;
-    return this.dispatchInputEvent(event, unusedBlockText);
-}
-
-[cpp_unwind]
 b8 UiLayerSystem::dispatchInputEvent(in UiInputEvent event, mut b8 outBlockText){
     this.synchronizeNativeInput();
     return this.routeInput(event, outBlockText);
-}
-
-[cpp_unwind]
-b8 UiLayerSystem::dispatchPointerInput(in UiPointerInput input){
-    b8 unusedConsumed = false;
-    return this.dispatchPointerInput(input, unusedConsumed);
 }
 
 [cpp_unwind]
@@ -992,7 +974,6 @@ void UiLayerSystem::synchronizeAccessibility(){
         );
         if(publishedOk){
             this.m_lastPublishedA11yRevision = contentRev;
-            this.m_lastPublishedA11yGeneration = gen;
             this.m_lastPublishedA11yFocus = focused;
             this.m_lastPublishedA11yScaleX = this.m_display.pixelScaleX;
             this.m_lastPublishedA11yScaleY = this.m_display.pixelScaleY;

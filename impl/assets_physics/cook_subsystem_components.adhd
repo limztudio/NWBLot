@@ -68,24 +68,12 @@ b8 ParsePhysicsTransformMap(in Path file, in MetascriptValue mapVal, in StringVi
             outXf.position = f32x4(v, 0.0f);
             return true;
         }
-        if(key == "rotation" || key == "rotation_euler" || key == "rotation_euler_degrees"){
-            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-            if(!ReadPhysicsRotationVectorValue(
-                file,
-                fieldVal,
-                prefix,
-                key,
-                "rotation",
-                "rotation_euler",
-                "rotation_euler_degrees",
-                key == "rotation",
-                key == "rotation_euler_degrees",
-                rotFieldCount,
-                q
-            ))
-                return false;
-            outXf.rotation = f32x4(q);
-            return true;
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        b8 rotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "rotation", "rotation_euler", "rotation_euler_degrees", rotFieldCount, q, rotOk)){
+            if(rotOk)
+                outXf.rotation = f32x4(q);
+            return rotOk;
         }
         error("{} '{}': unsupported transform field '{}'", prefix, PathToString(file), key);
         return false;
@@ -176,24 +164,12 @@ b8 ParsePhysicsBodyDefMap(in Path file, in MetascriptValue mapVal, in StringView
             outDef.position = f32x4(v, 0.0f);
             return true;
         }
-        if(key == "rotation" || key == "rotation_euler" || key == "rotation_euler_degrees"){
-            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-            if(!ReadPhysicsRotationVectorValue(
-                file,
-                fieldVal,
-                prefix,
-                key,
-                "rotation",
-                "rotation_euler",
-                "rotation_euler_degrees",
-                key == "rotation",
-                key == "rotation_euler_degrees",
-                rotFieldCount,
-                q
-            ))
-                return false;
-            outDef.rotation = f32x4(q);
-            return true;
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        b8 rotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "rotation", "rotation_euler", "rotation_euler_degrees", rotFieldCount, q, rotOk)){
+            if(rotOk)
+                outDef.rotation = f32x4(q);
+            return rotOk;
         }
         if(key == "linear_velocity"){
             VectorSingle v(0.0f);
@@ -410,7 +386,7 @@ Expected<VehicleComponentCookEntry> ParseVehicleComponentCookMetadata(in Name vi
             if(key == "reverse_ratio") return ReadPhysicsF32Value(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, entry.component.engine.reverseRatio);
             if(key == "forward_gear_ratios"){
                 Vector<f32> ratios;
-                if(!ReadPhysicsF32ArrayValue(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, ratios))
+                if(!ReadPhysicsF32ArrayValue(file, fieldVal, s_VehicleComponentDiagnosticPrefix, key, false, ratios))
                     return false;
                 if(ratios.size() > 6u){
                     error("{} '{}': field 'forward_gear_ratios' exceeds 6 gears", s_VehicleComponentDiagnosticPrefix, PathToString(file));
@@ -555,10 +531,7 @@ b8 ApplyRagdollShapeField(
     in Path file,
     in StringView key,
     in MetascriptValue fieldVal,
-    in b8 allowLegacyUseBox,
     mut RagdollBoneShapeType outShapeType,
-    mut b8 outShapeTypeExplicit,
-    mut b8 outUseBox,
     mut CapsuleShape outCapsule,
     mut SphereShape outSphere,
     mut VectorSingle outBoxHalfExtents,
@@ -580,9 +553,6 @@ b8 ApplyRagdollShapeField(
             error("{} '{}': field 'shape_type' must be 'capsule', 'box', 'sphere', or 'hull'", s_RagdollComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
-        outShapeTypeExplicit = true;
-        if(allowLegacyUseBox)
-            outUseBox = (outShapeType == RagdollBoneShapeType::Box);
         return true;
     }
     if(key == "capsule_center1"){
@@ -635,19 +605,14 @@ b8 ApplyRagdollShapeField(
 
 b8 ParseRagdollExtraShapeMap(in Path file, in MetascriptValue mapVal, mut RagdollExtraShapeDef outExtra){
     u32 rotFieldCount = 0u;
-    b8 shapeTypeExplicit = false;
-    b8 unusedUseBox = false;
-    return mapVal.forEachMapEntry(lambda[in file, mut outExtra, mut rotFieldCount, mut shapeTypeExplicit, mut unusedUseBox](in StringView key, in MetascriptValue fieldVal) -> b8{
+    return mapVal.forEachMapEntry(lambda[in file, mut outExtra, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
         b8 handled = false;
         VectorSingle boxHalfExtents(outExtra.boxHalfExtents);
         if(!ApplyRagdollShapeField(
             file,
             key,
             fieldVal,
-            false,
             outExtra.shapeType,
-            shapeTypeExplicit,
-            unusedUseBox,
             outExtra.capsule,
             outExtra.sphere,
             boxHalfExtents,
@@ -667,24 +632,12 @@ b8 ParseRagdollExtraShapeMap(in Path file, in MetascriptValue mapVal, mut Ragdol
             outExtra.localOffset = f32x4(v, 0.0f);
             return true;
         }
-        if(key == "local_rotation" || key == "local_rotation_euler" || key == "local_rotation_euler_degrees"){
-            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-            if(!ReadPhysicsRotationVectorValue(
-                file,
-                fieldVal,
-                s_RagdollComponentDiagnosticPrefix,
-                key,
-                "local_rotation",
-                "local_rotation_euler",
-                "local_rotation_euler_degrees",
-                key == "local_rotation",
-                key == "local_rotation_euler_degrees",
-                rotFieldCount,
-                q
-            ))
-                return false;
-            outExtra.localRotation = f32x4(q);
-            return true;
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        b8 rotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, s_RagdollComponentDiagnosticPrefix, "local_rotation", "local_rotation_euler", "local_rotation_euler_degrees", rotFieldCount, q, rotOk)){
+            if(rotOk)
+                outExtra.localRotation = f32x4(q);
+            return rotOk;
         }
         error("{} '{}': unsupported extra shape field '{}'", s_RagdollComponentDiagnosticPrefix, PathToString(file), key);
         return false;
@@ -692,31 +645,16 @@ b8 ParseRagdollExtraShapeMap(in Path file, in MetascriptValue mapVal, mut Ragdol
 }
 
 b8 ParseRagdollBoneMap(in Path file, in MetascriptValue mapVal, mut RagdollBoneDef outBone){
-    b8 shapeTypeExplicit = false;
-    return mapVal.forEachMapEntry(lambda[in file, mut outBone, mut shapeTypeExplicit](in StringView key, in MetascriptValue fieldVal) -> b8{
+    return mapVal.forEachMapEntry(lambda[in file, mut outBone](in StringView key, in MetascriptValue fieldVal) -> b8{
         if(key == "parent_index") return ReadPhysicsU32Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.parentIndex);
         if(key == "body_def") return ParsePhysicsBodyDefMap(file, fieldVal, s_RagdollComponentDiagnosticPrefix, outBone.bodyDef);
-        if(key == "use_box"){
-            if(!ReadPhysicsBoolValue(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.useBox))
-                return false;
-            if(!shapeTypeExplicit){
-                if(outBone.useBox)
-                    outBone.shapeType = RagdollBoneShapeType::Box;
-                else
-                    outBone.shapeType = RagdollBoneShapeType::Capsule;
-            }
-            return true;
-        }
         b8 shapeHandled = false;
         VectorSingle boxHalfExtents(outBone.boxHalfExtents);
         if(!ApplyRagdollShapeField(
             file,
             key,
             fieldVal,
-            true,
             outBone.shapeType,
-            shapeTypeExplicit,
-            outBone.useBox,
             outBone.capsule,
             outBone.sphere,
             boxHalfExtents,
@@ -1079,7 +1017,7 @@ b8 ParseArticulationLinkMap(in Path file, in MetascriptValue mapVal, mut Articul
         }
         if(key == "inertia_tensor"){
             Vector<f32> coeffs;
-            if(!ReadPhysicsF32ArrayValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, coeffs))
+            if(!ReadPhysicsF32ArrayValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, false, coeffs))
                 return false;
             if(coeffs.size() != 6u){
                 error("{} '{}': field 'inertia_tensor' must have 6 floats [m00, m01, m02, m11, m12, m22]", s_ArticulationComponentDiagnosticPrefix, PathToString(file));
@@ -1176,7 +1114,7 @@ b8 ParseArticulationTendonMap(in Path file, in MetascriptValue mapVal, mut Artic
         }
         if(key == "coefficients"){
             Vector<f32> vals;
-            if(!ReadPhysicsF32ArrayValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, vals))
+            if(!ReadPhysicsF32ArrayValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, false, vals))
                 return false;
             if(vals.size() > 8u){
                 error("{} '{}': field 'coefficients' accepts at most 8 terms", s_ArticulationComponentDiagnosticPrefix, PathToString(file));
@@ -1216,24 +1154,12 @@ b8 ParseArticulationLoopMap(in Path file, in MetascriptValue mapVal, mut Articul
             return true;
         }
         if(key == "lock_orientation") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLoop.lockOrientation);
-        if(key == "rel_orientation" || key == "rel_orientation_euler" || key == "rel_orientation_euler_degrees"){
-            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-            if(!ReadPhysicsRotationVectorValue(
-                file,
-                fieldVal,
-                s_ArticulationComponentDiagnosticPrefix,
-                key,
-                "rel_orientation",
-                "rel_orientation_euler",
-                "rel_orientation_euler_degrees",
-                key == "rel_orientation",
-                key == "rel_orientation_euler_degrees",
-                rotFieldCount,
-                q
-            ))
-                return false;
-            outLoop.relOrientation = f32x4(q);
-            return true;
+        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+        b8 rotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, s_ArticulationComponentDiagnosticPrefix, "rel_orientation", "rel_orientation_euler", "rel_orientation_euler_degrees", rotFieldCount, q, rotOk)){
+            if(rotOk)
+                outLoop.relOrientation = f32x4(q);
+            return rotOk;
         }
         if(key == "compliance") return ReadPhysicsF32Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLoop.compliance);
         if(key == "enabled") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLoop.enabled);

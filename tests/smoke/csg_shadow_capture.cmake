@@ -6,7 +6,7 @@
         )
         nwb_target_adhd_definitions(nwb_csg_shadow_smoke NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_shadow_smoke "${_nwb_csg_shadow_runtime_root}" csg_shadow_runtime)
-        nwb_add_fixture_smoke_assets(nwb_csg_shadow_smoke_assets csg_shadow "${_nwb_csg_shadow_runtime_root}" "CSG shadow" csg_shadow_assets)
+        nwb_add_fixture_smoke_assets(nwb_csg_shadow_smoke_assets csg_shadow "${_nwb_csg_shadow_runtime_root}" "CSG shadow" SMOKE_ROOTS csg_shadow_assets)
         add_dependencies(nwb_csg_shadow_smoke nwb_csg_shadow_smoke_assets)
         foreach(_nwb_csg_route IN ITEMS hardware software)
             foreach(_nwb_csg_light IN ITEMS directional point)
@@ -55,7 +55,7 @@
         )
         nwb_target_adhd_definitions(nwb_csg_caustic_smoke NWB_CSG_CAUSTIC_SMOKE=1 NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(nwb_csg_caustic_smoke "${_nwb_csg_caustic_runtime_root}" csg_shadow_runtime nwb_ecs_csg)
-        nwb_add_fixture_smoke_assets(nwb_csg_caustic_smoke_assets csg_caustic "${_nwb_csg_caustic_runtime_root}" "CSG caustic" csg_caustic_assets)
+        nwb_add_fixture_smoke_assets(nwb_csg_caustic_smoke_assets csg_caustic "${_nwb_csg_caustic_runtime_root}" "CSG caustic" SMOKE_ROOTS csg_caustic_assets)
         add_dependencies(nwb_csg_caustic_smoke nwb_csg_caustic_smoke_assets)
         add_test(NAME nwb_csg_caustic_capture_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_caustic_smoke.py" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" --executable "$<TARGET_FILE:nwb_csg_caustic_smoke>"
                 --working-directory "${_nwb_csg_caustic_runtime_root}" --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_caustic")

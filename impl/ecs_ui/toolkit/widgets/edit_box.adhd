@@ -44,8 +44,6 @@ class EditBoxView : MoveOnly{
     }
 
     [cpp_unwind]
-    public TextLayoutStatus shape(mut TextService text){ return this.shape(text, ShapeRequest()); }
-    [cpp_unwind]
     public TextLayoutStatus shape(mut TextService text, in ShapeRequest options){
         ShapeRequest request = options;
         const TextLayoutStatus validation = PrepareEditBoxShapeRequest(this.m_revision, this.displayText(), this.m_textMode, request);
@@ -78,9 +76,6 @@ class EditBoxView : MoveOnly{
         return true;
     }
 
-    public Expected<EditBoxPlacement> arrange(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll)const{
-        return this.arrange(bounds, padding, clip, previousScroll, 1.0f, true);
-    }
     public Expected<EditBoxPlacement> arrange(in Rect bounds, in Insets padding, in Rect clip, in Point previousScroll, in f32 caretWidth)const{
         return this.arrange(bounds, padding, clip, previousScroll, caretWidth, true);
     }
@@ -93,12 +88,6 @@ class EditBoxView : MoveOnly{
         );
     }
 
-    public Expected<EditBoxPlacement> arrangeViewport(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll)const{
-        return this.arrangeViewport(bounds, viewport, clip, previousScroll, 1.0f, true);
-    }
-    public Expected<EditBoxPlacement> arrangeViewport(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth)const{
-        return this.arrangeViewport(bounds, viewport, clip, previousScroll, caretWidth, true);
-    }
     public Expected<EditBoxPlacement> arrangeViewport(in Rect bounds, in Rect viewport, in Rect clip, in Point previousScroll, in f32 caretWidth, in b8 revealCaret)const{
         return TryArrangeEditBoxViewport(
             this.m_ready, bounds, viewport, clip, previousScroll, caretWidth, revealCaret, this.m_textMode,
@@ -112,18 +101,6 @@ class EditBoxView : MoveOnly{
         return TryHitTestEditBoxView(this.m_ready, this.m_geometry.ready(), point, placement, this.m_geometry.lines(), this.m_geometry.caretStops());
     }
 
-    [cpp_unwind]
-    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement)const{
-        return this.paint(text, paint, skin, placement, s_DefaultEditBoxStyle, s_DefaultEditBoxPaintFlags, Optional<in TextLayout>());
-    }
-    [cpp_unwind]
-    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style)const{
-        return this.paint(text, paint, skin, placement, style, s_DefaultEditBoxPaintFlags, Optional<in TextLayout>());
-    }
-    [cpp_unwind]
-    public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags)const{
-        return this.paint(text, paint, skin, placement, style, flags, Optional<in TextLayout>());
-    }
     [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags, in Optional<in TextLayout> placeholder)const{
         if(!this.m_ready)

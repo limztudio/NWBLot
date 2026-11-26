@@ -113,12 +113,6 @@ flag<u32> BodyFlags{
     LastStepGpuSolved = 0x00080000u,
 }
 
-const u32 s_BodyFixedRotationFlags =
-    cast<u32>(BodyFlags::LockAngularX)
-    | cast<u32>(BodyFlags::LockAngularY)
-    | cast<u32>(BodyFlags::LockAngularZ)
-;
-
 class BodyId{
     public u32 index = s_NullIndex;
     public u16 generation = 0u;
@@ -425,9 +419,7 @@ class SixDofAxisConfig{
     public b8 enableSpring = false;
 }
 
-class JointDef{
-    public BodyId bodyIdA;
-    public BodyId bodyIdB;
+class JointSettings{
     public JointType type = JointType::Distance;
     public f32x4 localAnchorA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localAnchorB(0.0f, 0.0f, 0.0f, 0.0f);
@@ -477,7 +469,6 @@ class JointDef{
     public f32 lengthA = 0.0f;
     public f32 lengthB = 0.0f;
     public Array<SixDofAxisConfig, 6u> sixDofAxes;
-    public Vector<f32x4> pathPoints;
     public b8 pathClosed = false;
     public b8 pathLockRotation = false;
     public b8 enableTwistLimit = false;
@@ -489,6 +480,13 @@ class JointDef{
     public SixDofSwingLimitMode sixDofSwingLimitMode = SixDofSwingLimitMode::None;
     public f32 sixDofSwingLimitY = 0.0f;
     public f32 sixDofSwingLimitZ = 0.0f;
+}
+
+class JointDef{
+    public BodyId bodyIdA;
+    public BodyId bodyIdB;
+    public JointSettings settings;
+    public Vector<f32x4> pathPoints;
     public u64 userData = 0u;
 }
 

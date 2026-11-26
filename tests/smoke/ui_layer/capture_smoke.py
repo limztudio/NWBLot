@@ -17,7 +17,7 @@ LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90.0
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
-from window_capture_image import read_bmp_24_rows  # noqa: E402
+from window_capture_image_codec import Bmp24Codec  # noqa: E402
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure  # noqa: E402
 from fixture_environment import build_fixture_environment
 
@@ -99,7 +99,7 @@ def run(args):
         expected_extents.append((800, 600))
     reports = []
     for path, expected_extent in zip(capture_paths, expected_extents):
-        frame = read_bmp_24_rows(path)
+        frame = Bmp24Codec.read_bmp_24_rows(path)
         if frame[:2] != expected_extent:
             raise SmokeFailure(f"UI capture '{path.name}' has extent {frame[:2]}, expected {expected_extent}")
         report = analyze_frame(frame)

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import math
-import re
 import struct
 
-from window_capture_smoke import SmokeFailure
-from probe_common import center, snapshot_from_patterns
-from probe_reference import compose, encoded_marker, linear_channels, sampled_region
+from probe_common import FrameProbeRecorder, center, compile_smoke_patterns, snapshot_from_patterns
+from probe_reference import compose, linear_channels, sampled_region
 
 LIT_VALUES = "values"
 LIT_SEQUENCE = "sequence"
@@ -24,13 +22,9 @@ STRUCT_DOUBLE = "<d"
 STRUCT_FLOAT = "<f"
 
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiSliderSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiSliderSmoke: state sequence=(\d+) values=((?:\d+,){15}\d+) bits=((?:\d+,){3}\d+)")
-GEOMETRY = re.compile(rf"UiSliderSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiSliderSmoke: skin=(default|alternate)")
 FIELDS = ("focus_code", "changes", "popup_changes", "before_clicks", "after_clicks", "enabled", "range_code", "step_code", "parent", "popup_count", "focus_scope", "main_valid", "main_dragging", "popup_valid", "popup_dragging", "external_intents",)
 BIT_FIELDS = ("main_bits", "disabled_bits", "constant_bits", "popup_bits")
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiSliderSmoke", len(FIELDS), bit_count=len(BIT_FIELDS))
 PREFIXES = ("main", "disabled", "constant", "popup")
 PARTS = ("bounds", "clip", "travel", "track", "center", "thumb")
 RECTANGLES = ("before", "after", "open", "parent", "popup_close") + tuple(f"{prefix}_{part}" for prefix in PREFIXES for part in PARTS)
@@ -58,18 +52,8 @@ MAX_UINT64_VALUE = 0xFFFFFFFFFFFFFFFF
 
 
 def snapshot_from_logs(text):
-    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="slider", bit_fields=BIT_FIELDS)
-    if snapshot is None:
-        return None
-    values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
-    bits = snapshot[LIT_BITS]
-    if any(rectangle[2] < 0.0 or rectangle[3] < 0.0 for rectangle in rectangles.values()):
-        raise SmokeFailure("slider fixture reported a negative placement extent")
-    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)) or any(value > MAX_UINT64_VALUE for value in bits):
-        raise SmokeFailure("slider fixture exceeds its displayed marker schema")
-    if not all(math.isfinite(bits_value(value)) for value in bits):
-        raise SmokeFailure("slider fixture reported a nonfinite typed value")
-    return snapshot
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="slider", bit_fields=BIT_FIELDS,
+        non_negative_extents=True, max_value=MAX_MARKER_24BIT_VALUE, max_bit=MAX_UINT64_VALUE, bit_validator=lambda value: math.isfinite(bits_value(value)))
 
 
 def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", extra=None, modes=None):
@@ -77,24 +61,14 @@ def observe_slider(frame, snapshot, expected, *, extent=None, skin="default", ex
     scale = snapshot["scale"]
     rectangles = snapshot[LIT_RECTANGLES]
     modes = modes or {}
-    probes = []
+    recorder = FrameProbeRecorder(frame, scale, "slider")
+    probes = recorder.probes
+    pixel = recorder.pixel
+    record = lambda name, pixel_pos, color, tolerance=SKIN_TOLERANCE: recorder.record(name, pixel_pos, color, tolerance, radius=0)
 
-    def record(name, pixel, color, tolerance=SKIN_TOLERANCE):
-        x, y = pixel
-        if not 0 <= x < width or not 0 <= y < height:
-            raise SmokeFailure(f"slider probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        observed = rows[y][x]
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({ LIT_NAME: name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance, })
-
-    def pixel(point):
-        return round(point[0] * scale[0]), round(point[1] * scale[1])
-
-    marker = 0
-    for value, parts in (*((value, 2) for value in snapshot[LIT_VALUES]), *((value, 6) for value in snapshot[LIT_BITS]), (snapshot[LIT_SEQUENCE], 2)):
-        for part in range(parts):
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0)), encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
-            marker += 1
+    marker_values = (*snapshot[LIT_VALUES], *snapshot[LIT_BITS], snapshot[LIT_SEQUENCE])
+    marker_parts = (*((2,) * len(snapshot[LIT_VALUES])), *((6,) * len(snapshot[LIT_BITS])), 2)
+    recorder.probe_markers(marker_values, 16.0, 12.0, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0, parts=marker_parts, tolerance=MARKER_TOLERANCE, radius=0, flat_names=True)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     bounds = rectangles["main_bounds"]
     record("replacement_panel_gutter", pixel((bounds[0] + bounds[2] - 8.0, bounds[1] + bounds[3] + 2.0)), panel)

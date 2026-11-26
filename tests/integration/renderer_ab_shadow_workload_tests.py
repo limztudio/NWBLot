@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
 
-import contextlib
 import copy
-import io
 from pathlib import Path
 import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from renderer_workload_log_policy import RendererWorkloadLogPolicy, SHADOW_ROUTES
+from renderer_workload_log_policy import RendererWorkloadLogPolicy
 import renderer_ab_benchmark as benchmark
-from renderer_trial_comparison import LIT_MEANS_MS, RendererTrialComparison
-from renderer_workload_registry import RendererWorkloadRegistry, FRAME, CONTROLS, SHADOW_INACTIVE, SHADOW_PHASES
-from gpu_timing_evidence import GpuTimingEvidence
-
-TIMING_EVIDENCE = GpuTimingEvidence()
-from renderer_ab_benchmark_test_support import scopes, trial_matrix
+from renderer_workload_registry import RendererWorkloadRegistry, FRAME, SHADOW_INACTIVE, SHADOW_PHASES
+from renderer_ab_benchmark_test_support import scopes
 
 
 from renderer_ab_workload_fixture import (

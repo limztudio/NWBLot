@@ -32,9 +32,6 @@ extern usize ConvertFloatsToHalves(mut auto packed, in auto source);
 [cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::ConvertHalvesToFloats")]
 extern usize ConvertHalvesToFloats(mut auto values, in auto packed);
 
-[cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("::NWB::Tests::MathCases::s_HasAvx2")]
-extern const b8 s_HasAvx2;
-
 
 [cpp_header("<tests/unit/math/simd_abi.h>"), cpp_name("NWB_GTEST_LINUX_AVX2_CASE")]
 extern registration GoogleTestLinuxAvx2Case(suite, caseName, verifier);

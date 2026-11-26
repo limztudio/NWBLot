@@ -51,9 +51,6 @@ class RayTracingSceneGatherScratch : NoCopy{
     public Vector<BufferHandle> swSceneRefitRoots;
     public Vector<SceneBvhPrimitiveCalculation> swInstanceBvhPrimitives;
     public Vector<PreparedSceneSwBvhMesh> swPreparedMeshes;
-    public Vector<u32> swBvhIndices;
-    public Vector<u32> swBvhInstanceLeafCost;
-    public Vector<SceneBvhNodeCalculation> swBvhBuildNodes;
     public Vector<NwbBvhNodeGpu> swBvhNodes;
     public RayTracingOpticalSceneGather opticalScene;
 
@@ -77,13 +74,59 @@ class RayTracingSceneGatherScratch : NoCopy{
         this.swInstances.clear();
         this.swSceneRefitInputs.clear();
         this.swInstanceBvhPrimitives.clear();
-        this.swBvhIndices.clear();
-        this.swBvhInstanceLeafCost.clear();
-        this.swBvhBuildNodes.clear();
         this.swBvhNodes.clear();
         this.opticalScene.reset(0u);
         this.pendingMeshBuildSnapshots.clear();
         this.clearHandles();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ShadowVisibilityRenderOptions{
+    public b8 splitSoftTransparentFold = false;
+    public b8 graphOwnsOpaqueTemporalMergeEntryStates = false;
+    public b8 splitOpaqueSoftResolve = false;
+    public Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan;
+    public Optional<in LightSpaceShadowSnapshot> lightSpace;
+}
+
+class SoftShadowSplitTaskContext{
+    public mut DeferredFrameTargets targets;
+    public DeferredLightingGraphResources deferredLightingResources;
+    public mut GpuTimingSubmissionTicket timingTicket;
+    public mut Optional<GpuTimingMeasure> asyncTiming;
+    public mut Optional<GpuTimingMeasure> shadowVisibilityTiming;
+    public mut Optional<GpuTimingMeasure> opaqueResolveTiming;
+    public mut Optional<GpuTimingMeasure> transparentResolveTiming;
+    public mut b8 opaqueProduced;
+    public mut u32 opaqueFrameIndex;
+    public mut b8 transparentTraceProduced;
+
+    public SoftShadowSplitTaskContext(
+        mut DeferredFrameTargets targets,
+        in DeferredLightingGraphResources deferredLightingResources,
+        mut GpuTimingSubmissionTicket timingTicket,
+        mut Optional<GpuTimingMeasure> asyncTiming,
+        mut Optional<GpuTimingMeasure> shadowVisibilityTiming,
+        mut Optional<GpuTimingMeasure> opaqueResolveTiming,
+        mut Optional<GpuTimingMeasure> transparentResolveTiming,
+        mut b8 opaqueProduced,
+        mut u32 opaqueFrameIndex,
+        mut b8 transparentTraceProduced
+    ){
+        this.targets = targets;
+        this.deferredLightingResources = deferredLightingResources;
+        this.timingTicket = timingTicket;
+        this.asyncTiming = asyncTiming;
+        this.shadowVisibilityTiming = shadowVisibilityTiming;
+        this.opaqueResolveTiming = opaqueResolveTiming;
+        this.transparentResolveTiming = transparentResolveTiming;
+        this.opaqueProduced = opaqueProduced;
+        this.opaqueFrameIndex = opaqueFrameIndex;
+        this.transparentTraceProduced = transparentTraceProduced;
     }
 }
 

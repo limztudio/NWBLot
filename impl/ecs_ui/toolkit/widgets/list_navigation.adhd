@@ -9,6 +9,181 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void SelectListKey(
+    in u64 key,
+    mut u64 outInputGeneration,
+    mut Vector<u64> outSelectedKeys,
+    mut HashSet<u64> outSelectedKeySet,
+    mut u64 outSelected,
+    mut u64 outCursor,
+    mut u64 outAnchor,
+    mut b8 outEnsureCursor
+){
+    outInputGeneration = AllocateServiceIdentity();
+    outSelectedKeys.clear();
+    outSelectedKeySet.clear();
+    if(key != 0u){
+        outSelectedKeys.push_back(key);
+        outSelectedKeySet.insert(key);
+    }
+    outSelected = key;
+    outCursor = key;
+    outAnchor = key;
+    outEnsureCursor = key != 0u;
+}
+
+void ClearListSelection(
+    mut u64 outInputGeneration,
+    mut Vector<u64> outSelectedKeys,
+    mut HashSet<u64> outSelectedKeySet,
+    mut u64 outSelected,
+    mut u64 outAnchor
+){
+    outInputGeneration = AllocateServiceIdentity();
+    outSelectedKeys.clear();
+    outSelectedKeySet.clear();
+    outSelected = 0u;
+    outAnchor = 0u;
+}
+
+b8 ApplyListWheelScroll(
+    in ControlAction action,
+    in u64 expectedInputGeneration,
+    in b8 allowHorizontal,
+    in b8 allowZeroDeltaY,
+    mut ScrollState inOutScroll,
+    mut ScrollState inOutScrollX,
+    in u64 currentInputGeneration,
+    mut b8 outEnsureCursor
+){
+    f64 nextY = inOutScroll.offset();
+    b8 scrolled = false;
+    if(action.delta != 0.0 || (allowZeroDeltaY && action.deltaX == 0.0)){
+        const Expected<f64> offset = TryComputeListWheelOffset(nextY, action.delta, action.step, action.maximum);
+        if(!offset.has_value() || currentInputGeneration != expectedInputGeneration)
+            return false;
+        nextY = offset.value();
+        scrolled = true;
+    }
+    f64 nextX = inOutScrollX.offset();
+    if(action.deltaX != 0.0 && ((allowZeroDeltaY && action.stepX > 0.0) || (!allowZeroDeltaY && allowHorizontal))){
+        const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(nextX, action.deltaX, action.stepX, action.maximumX);
+        if(!offsetX.has_value() || currentInputGeneration != expectedInputGeneration)
+            return false;
+        nextX = offsetX.value();
+        scrolled = true;
+    }
+    if(!inOutScroll.setOffset(nextY) || !inOutScrollX.setOffset(nextX))
+        return false;
+    if(scrolled || allowZeroDeltaY)
+        outEnsureCursor = false;
+    return true;
+}
+
+b8 ApplyListHorizontalKeyScroll(
+    in ControlAction action,
+    in ScrollbarPolicy horizontalScrollbar,
+    in f32 wheelColumns,
+    in f64 fallbackMaximumX,
+    in u64 expectedInputGeneration,
+    mut ScrollState inOutScrollX,
+    in u64 currentInputGeneration,
+    mut b8 outEnsureCursor
+){
+    if(horizontalScrollbar == ScrollbarPolicy::Never)
+        return true;
+    f64 deltaX = 1.0;
+    if(action.kind == ControlActionKind::Left)
+        deltaX = -1.0;
+    f64 stepX = action.stepX;
+    if(stepX <= 0.0)
+        stepX = cast<f64>(wheelColumns);
+    f64 maxX = action.maximumX;
+    if(maxX <= 0.0 && fallbackMaximumX > 0.0)
+        maxX = fallbackMaximumX;
+    const Expected<f64> offsetX = TryComputeListHorizontalWheelOffset(inOutScrollX.offset(), deltaX, stepX, maxX);
+    if(!offsetX.has_value() || currentInputGeneration != expectedInputGeneration || !inOutScrollX.setOffset(offsetX.value()))
+        return false;
+    outEnsureCursor = false;
+    return true;
+}
+
+Expected<ListScrollPlacementResult> PlaceListScrollWithCursor(
+    in Rect bounds,
+    in Rect clip,
+    in Insets padding,
+    in f32 scrollbarWidth,
+    in f32 minimumThumb,
+    in u64 rowCount,
+    in f32 rowHeight,
+    in Span<f64> rowOffsets,
+    in f64 contentWidth,
+    in f64 scrollX,
+    in f64 initialScrollY,
+    in ScrollbarPolicy horizontalScrollbar,
+    in ScrollbarPolicy verticalScrollbar,
+    in b8 hasCursorIndex,
+    in u64 cursorIndex
+){
+    f64 scrollY = initialScrollY;
+    auto placed = CalculateListScrollPlacement(
+        bounds, clip, padding, scrollbarWidth, minimumThumb,
+        rowCount, rowHeight, rowOffsets, contentWidth, scrollX, scrollY,
+        horizontalScrollbar, verticalScrollbar
+    );
+    if(!placed.has_value())
+        return MakeUnexpected(Failure());
+    if(hasCursorIndex){
+        const f64 start = cast<f64>(cursorIndex) * cast<f64>(rowHeight);
+        const f64 end = start + cast<f64>(rowHeight);
+        const Expected<f64> ensured = TryEnsureScrollVisible(scrollY, start, end, cast<f64>(placed.value().placement.viewport.height));
+        if(!ensured.has_value())
+            return MakeUnexpected(Failure());
+        if(ensured.value() != scrollY){
+            scrollY = ensured.value();
+            placed = CalculateListScrollPlacement(
+                bounds, clip, padding, scrollbarWidth, minimumThumb,
+                rowCount, rowHeight, rowOffsets, contentWidth, scrollX, scrollY,
+                horizontalScrollbar, verticalScrollbar
+            );
+            if(!placed.has_value())
+                return MakeUnexpected(Failure());
+        }
+    }
+    return placed;
+}
+
+b8 CommitListScrollState(
+    in ScrollPlacement placement,
+    in ScrollViewportPlacement scrollbars,
+    in f32 rowHeight,
+    in u64 contentGeneration,
+    in b8 revealCursor,
+    in u64 frameCursorKey,
+    in u64 currentCursorKey,
+    mut ScrollState inOutScroll,
+    mut ScrollState inOutScrollX,
+    mut f32 outScrollRowHeight,
+    mut u64 outScrollSourceGeneration,
+    mut b8 inOutEnsureCursor,
+    mut ScrollPlacement outPlacement,
+    mut ScrollViewportPlacement outScrollbars,
+    mut u64 outVisibleFirstRow,
+    mut u64 outVisibleEndRow
+){
+    if(!inOutScroll.setOffset(placement.offset) || !inOutScrollX.setOffset(scrollbars.horizontal.offset))
+        return false;
+    outScrollRowHeight = rowHeight;
+    outScrollSourceGeneration = contentGeneration;
+    if(revealCursor && currentCursorKey == frameCursorKey)
+        inOutEnsureCursor = false;
+    outPlacement = placement;
+    outScrollbars = scrollbars;
+    outVisibleFirstRow = placement.firstRow;
+    outVisibleEndRow = placement.endRow;
+    return true;
+}
+
 class ListState : NoCopy{
     public ListMeasureKey m_measureKey;
     public Vector<u64> m_selectedKeys;
@@ -91,17 +266,16 @@ class ListState : NoCopy{
     }
 
     public void select(in u64 key){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_selectedKeys.clear();
-        this.m_selectedKeySet.clear();
-        if(key != 0u){
-            this.m_selectedKeys.push_back(key);
-            this.m_selectedKeySet.insert(key);
-        }
-        this.m_selected = key;
-        this.m_cursor = key;
-        this.m_anchor = key;
-        this.m_ensureCursor = key != 0u;
+        SelectListKey(
+            key,
+            this.m_inputGeneration,
+            this.m_selectedKeys,
+            this.m_selectedKeySet,
+            this.m_selected,
+            this.m_cursor,
+            this.m_anchor,
+            this.m_ensureCursor
+        );
     }
 
     public void setSelected(in u64 key, in b8 selected){
@@ -138,11 +312,7 @@ class ListState : NoCopy{
     }
 
     public void clearSelection(){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_selectedKeys.clear();
-        this.m_selectedKeySet.clear();
-        this.m_selected = 0u;
-        this.m_anchor = 0u;
+        ClearListSelection(this.m_inputGeneration, this.m_selectedKeys, this.m_selectedKeySet, this.m_selected, this.m_anchor);
     }
 
     public b8 scrollTo(in f64 offset){
@@ -165,7 +335,7 @@ class ListState : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 ResolveListNavigationStartIndex(in u64 count, in ListKeyResolution current, in ControlAction action){
+u64 ResolveIndexNavigationStart(in u64 count, in b8 currentPresent, in u64 currentIndex, in ControlAction action){
     const b8 reverse = IsReverseListControlAction(action.kind);
     u64 start = 0u;
     if(reverse)
@@ -174,16 +344,20 @@ u64 ResolveListNavigationStartIndex(in u64 count, in ListKeyResolution current, 
         start = 0u;
     else if(action.kind == ControlActionKind::End)
         start = count - 1u;
-    else if(current.present){
+    else if(currentPresent){
         u64 distance = 1u;
         if(action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown)
             distance = action.pageRows;
         if(reverse)
-            start = current.index - Min(distance, current.index);
+            start = currentIndex - Min(distance, currentIndex);
         else
-            start = current.index + Min(distance, count - 1u - current.index);
+            start = currentIndex + Min(distance, count - 1u - currentIndex);
     }
     return start;
+}
+
+u64 ResolveListNavigationStartIndex(in u64 count, in ListKeyResolution current, in ControlAction action){
+    return ResolveIndexNavigationStart(count, current.present, current.index, action);
 }
 
 b8 ValidateListEnabledSearchIndex(in u64 index, in u64 count, in u64 start, in b8 reverse){
@@ -242,7 +416,7 @@ f64 ComputeListExpandedScrollOffset(
     const f64 firstRow = cast<f64>(candidateFirstRow);
     const f64 within = (candidateOffset + clippedTop) - (firstRow * cast<f64>(oldRowHeight));
     const f64 offset = ((firstRow * cast<f64>(newRowHeight)) + within) - clippedTop;
-    return UiSimdMaxF64(0.0, offset);
+    return Max(0.0, offset);
 }
 
 f64 ComputeListRescaledScrollOffset(
@@ -253,20 +427,25 @@ f64 ComputeListRescaledScrollOffset(
     in f32 newRowHeight
 ){
     const f64 clippedTop = cast<f64>(contentClipY) - cast<f64>(viewportY);
-    const f64 anchor = UiSimdMaxF64(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
-    return UiSimdMaxF64(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
+    const f64 anchor = Max(0.0, scrollOffset + clippedTop) / cast<f64>(oldRowHeight);
+    return Max(0.0, anchor * cast<f64>(newRowHeight) - clippedTop);
 }
 
-Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture){
-    const f64 travel = cast<f64>(gesture.referenceRectangle.height) - cast<f64>(gesture.targetRectangle.height);
-    if(!IsFinite(VectorDouble(cast<f64>(travel), cast<f64>(gesture.maximum), 0.0, 0.0)) || travel <= 0.0 || gesture.maximum < 0.0)
+Expected<f64> TryComputeListGestureScrollOffset(in PointerGesture gesture, in b8 horizontal){
+    f64 travel = cast<f64>(gesture.referenceRectangle.height) - cast<f64>(gesture.targetRectangle.height);
+    f64 start = cast<f64>(gesture.targetRectangle.y) - cast<f64>(gesture.referenceRectangle.y);
+    f64 delta = cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y);
+    if(horizontal){
+        travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
+        start = cast<f64>(gesture.targetRectangle.x) - cast<f64>(gesture.referenceRectangle.x);
+        delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
+    }
+    if(!IsFinite(VectorDouble(travel, cast<f64>(gesture.maximum), 0.0, 0.0)) || travel <= 0.0 || gesture.maximum < 0.0)
         return MakeUnexpected(Failure());
-    const f64 start = cast<f64>(gesture.targetRectangle.y) - cast<f64>(gesture.referenceRectangle.y);
-    const f64 delta = cast<f64>(gesture.position.y) - cast<f64>(gesture.origin.y);
     const f64 fractionValue = (start + delta) / travel;
     f64 fraction = 0.0;
     if(fractionValue > 0.0)
-        fraction = UiSimdMinF64(1.0, fractionValue);
+        fraction = Min(1.0, fractionValue);
     return fraction * gesture.maximum;
 }
 
@@ -274,19 +453,6 @@ Expected<f64> TryComputeListHorizontalWheelOffset(in f64 current, in f64 deltaX,
     if(!IsFinite(VectorDouble(deltaX, stepX, maximumX, 0.0)) || stepX <= 0.0 || maximumX < 0.0)
         return MakeUnexpected(Failure());
     return TryComputeListWheelOffset(current, -deltaX, stepX, maximumX);
-}
-
-Expected<f64> TryComputeListHorizontalGestureScrollOffset(in PointerGesture gesture){
-    const f64 travel = cast<f64>(gesture.referenceRectangle.width) - cast<f64>(gesture.targetRectangle.width);
-    if(!IsFinite(VectorDouble(cast<f64>(travel), cast<f64>(gesture.maximum), 0.0, 0.0)) || travel <= 0.0 || gesture.maximum < 0.0)
-        return MakeUnexpected(Failure());
-    const f64 start = cast<f64>(gesture.targetRectangle.x) - cast<f64>(gesture.referenceRectangle.x);
-    const f64 delta = cast<f64>(gesture.position.x) - cast<f64>(gesture.origin.x);
-    const f64 fractionValue = (start + delta) / travel;
-    f64 fraction = 0.0;
-    if(fractionValue > 0.0)
-        fraction = UiSimdMinF64(1.0, fractionValue);
-    return fraction * gesture.maximum;
 }
 
 Expected<ListMeasureKey> TryBuildListMeasureKey(
@@ -365,7 +531,7 @@ Expected<ListMeasureKey> TryBuildListMeasureKey(
 }
 
 Rect ResolveListProbeRect(in UiSkinRegion background, in Insets padding, in f32 scrollbarWidth, in f32 rowHeight){
-    const f32 minimumWidth = UiSimdMax(s_StyleMinimumFieldWidth, background.minimumWidth);
+    const f32 minimumWidth = Max(s_StyleMinimumFieldWidth, background.minimumWidth);
     const f32 paddedWidth = padding.left + padding.right + scrollbarWidth + rowHeight;
     const f32 paddedHeight = rowHeight + padding.top + padding.bottom;
     const VectorSingle size = Max(VectorSingle(minimumWidth, background.minimumHeight, minimumWidth, background.minimumHeight), VectorSingle(paddedWidth, paddedHeight, paddedWidth, paddedHeight));
@@ -381,7 +547,7 @@ Point ResolveListIntrinsicSize(in UiSkinRegion background, in Insets padding, in
 }
 
 f32 ResolveListRowBaseHeight(in SelectableMetrics metrics, in f32 textHeight){
-    return UiSimdMax(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
+    return Max(metrics.minimum.y, textHeight + metrics.padding.top + metrics.padding.bottom);
 }
 
 void CommitListReconcileState(

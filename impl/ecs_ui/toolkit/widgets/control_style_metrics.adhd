@@ -151,7 +151,7 @@ class ControlStyleMetrics{
         const Expected<Point> minimum = TryResolveSkinRegionMinimumSize(skinRegion.value(), referenceDensity);
         if(!minimum.has_value())
             return false;
-        inOutIndicatorExtent = UiSimdMax(inOutIndicatorExtent, UiSimdMax(minimum.value().x, minimum.value().y));
+        inOutIndicatorExtent = Max(inOutIndicatorExtent, Max(minimum.value().x, minimum.value().y));
         return true;
     }
 
@@ -173,8 +173,8 @@ class ControlStyleMetrics{
         if(!normalMinimum.has_value() || !checkedMinimum.has_value())
             return MakeUnexpected(Failure());
         f32 indicatorExtent = inOutStyle.indicatorExtent;
-        indicatorExtent = UiSimdMax(indicatorExtent, UiSimdMax(normalMinimum.value().x, normalMinimum.value().y));
-        indicatorExtent = UiSimdMax(indicatorExtent, UiSimdMax(checkedMinimum.value().x, checkedMinimum.value().y));
+        indicatorExtent = Max(indicatorExtent, Max(normalMinimum.value().x, normalMinimum.value().y));
+        indicatorExtent = Max(indicatorExtent, Max(checkedMinimum.value().x, checkedMinimum.value().y));
         if(
             !this.accumulateRadioIndicator(skin, inOutStyle.hover, referenceDensity, indicatorExtent)
             || !this.accumulateRadioIndicator(skin, inOutStyle.pressed, referenceDensity, indicatorExtent)
@@ -222,9 +222,9 @@ class ControlStyleMetrics{
         if(!trackMinimum.has_value() || !normalMinimum.has_value())
             return MakeUnexpected(Failure());
         if(options.orientation == SliderOrientation::Vertical)
-            inOutStyle.trackHeight = UiSimdMax(inOutStyle.trackHeight, trackMinimum.value().x);
+            inOutStyle.trackHeight = Max(inOutStyle.trackHeight, trackMinimum.value().x);
         else
-            inOutStyle.trackHeight = UiSimdMax(inOutStyle.trackHeight, trackMinimum.value().y);
+            inOutStyle.trackHeight = Max(inOutStyle.trackHeight, trackMinimum.value().y);
         const VectorSingle extent = Max(VectorSingle(inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y, inOutStyle.thumbExtent.x, inOutStyle.thumbExtent.y), VectorSingle(normalMinimum.value().x, normalMinimum.value().y, normalMinimum.value().x, normalMinimum.value().y));
         Point thumbExtent = Point(extent.x, extent.y);
         if(
@@ -412,16 +412,16 @@ class ControlStyleMetrics{
             f64 closeWidth = 0.0;
             if(tabs[index].closable && style.closeExtent > 0.0f){
                 closeWidth = cast<f64>(style.closeGap) + cast<f64>(style.closeExtent);
-                closeBoxH = UiSimdMaxF64(closeBoxH, cast<f64>(style.closeExtent));
+                closeBoxH = Max(closeBoxH, cast<f64>(style.closeExtent));
             }
             const f64 natural = padX + cast<f64>(labelWidths[index]) + closeWidth;
-            const f64 minTab = UiSimdMaxF64(cast<f64>(tabMinimum.x), cast<f64>(style.minimumTabWidth));
-            totalWidth += UiSimdMaxF64(natural, minTab);
+            const f64 minTab = Max(cast<f64>(tabMinimum.x), cast<f64>(style.minimumTabWidth));
+            totalWidth += Max(natural, minTab);
             if(index > 0u)
                 totalWidth += cast<f64>(style.tabGap);
         }
-        const f64 contentMinH = UiSimdMaxF64(cast<f64>(maxLabelHeight), closeBoxH) + padY;
-        const f64 height = UiSimdMaxF64(cast<f64>(tabMinimum.y), UiSimdMaxF64(contentMinH, cast<f64>(style.activeIndicatorHeight)));
+        const f64 contentMinH = Max(cast<f64>(maxLabelHeight), closeBoxH) + padY;
+        const f64 height = Max(cast<f64>(tabMinimum.y), Max(contentMinH, cast<f64>(style.activeIndicatorHeight)));
         if(totalWidth > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
             return MakeUnexpected(Failure());
         metrics.contentSize = Point(cast<f32>(totalWidth), cast<f32>(height));

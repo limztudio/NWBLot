@@ -100,11 +100,6 @@ namespace __hidden_cpp_header_importer{
     }
 #endif
 
-#if defined(NWB_LIBCLANG_DEFAULT_RUNTIME_PATH)
-    if(probeBasePath(NWB_LIBCLANG_DEFAULT_RUNTIME_PATH))
-        return result;
-#endif
-
     const auto exeDir = ExecutablePaths(arena).directory();
     if(exeDir){
         const AString<MetaArena> exeDirUtf8 = PathToString<char>(arena, *exeDir);
@@ -167,17 +162,17 @@ void BuildClangArguments(
     };
 
 #if defined(FOUNDATION_PLATFORM_WINDOWS)
-#if defined(FOUNDATION_ARCH_ARM64) || defined(_M_ARM64) || defined(__aarch64__)
+#if defined(_M_ARM64) || defined(__aarch64__)
     pushArg(CppImporterSemantics::s_TargetArm64WindowsMsvc);
-#elif defined(FOUNDATION_ARCH_X86_64) || defined(_M_X64) || defined(__x86_64__)
+#elif defined(_M_X64) || defined(__x86_64__)
     pushArg(CppImporterSemantics::s_TargetX64WindowsMsvc);
 #endif
     for(const MStringView arg : CppImporterSemantics::s_ClangWindowsArgs)
         pushArg(arg);
 #elif defined(FOUNDATION_PLATFORM_LINUX)
-#if defined(FOUNDATION_ARCH_ARM64) || defined(__aarch64__)
+#if defined(__aarch64__)
     pushArg(CppImporterSemantics::s_TargetArm64LinuxGnu);
-#elif defined(FOUNDATION_ARCH_X86_64) || defined(__x86_64__)
+#elif defined(__x86_64__)
     pushArg(CppImporterSemantics::s_TargetX64LinuxGnu);
 #endif
 #endif

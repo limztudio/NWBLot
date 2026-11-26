@@ -10,7 +10,7 @@
 
 
 #define NWB_REFLECTION_SPATIAL_GROUP_SIZE 8u
-#define NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES 32u
+#define NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES 28u
 #define NWB_REFLECTION_SPATIAL_MAX_RADIUS 3u
 
 #define NWB_REFLECTION_SPATIAL_UINT_FIELDS(FIELD) \
@@ -20,8 +20,7 @@
     FIELD(destinationRadianceUavSlot) \
     FIELD(deferredResourcesSlot) \
     FIELD(opaqueSpecularSlot) \
-    FIELD(viewSlot) \
-    FIELD(radius)
+    FIELD(viewSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

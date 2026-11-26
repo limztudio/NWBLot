@@ -4,17 +4,17 @@
 
 #include <tests/common/floating_point_control.adhd>
 #include <tests/common/floating_point_environment_guard.adhd>
+#include <tests/common/platform_features.adhd>
 #include <utilities/cli/tool_cli.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_UsesSsePairs")]
-extern const b8 s_BenchmarkUsesSsePairs;
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::ConsumeChecksum")]
 extern void ConsumeBenchmarkChecksum(in u64 value);
 
+const b8 s_BenchmarkUsesSsePairs = s_HasSse2InstructionSet && !s_HasAvxInstructionSet;
 const usize s_DataCount = 64u;
 const u64 s_InitialSeed = 0x8923409102431291ull;
 

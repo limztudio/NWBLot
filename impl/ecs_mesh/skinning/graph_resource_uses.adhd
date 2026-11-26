@@ -306,13 +306,6 @@ b8 BuildMeshSkinningGraphResourceUsesInto(in Span<MeshSkinningGraphDispatchPlan>
     return true;
 }
 
-Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(in Span<MeshSkinningGraphDispatchPlan> plans){
-    MeshSkinningGraphResourceUseScratch scratch;
-    if(!BuildMeshSkinningGraphResourceUsesInto(plans, scratch))
-        return MakeUnexpected(Failure());
-    return scratch.uses;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

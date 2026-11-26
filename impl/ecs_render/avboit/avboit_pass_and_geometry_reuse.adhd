@@ -107,7 +107,6 @@ b8 CanMatchAvboitReusableGeometry(in b8 captured, in b8 producerValid, in b8 eli
 void DispatchAvboitCompute(
     in AvboitFrameTargets targets,
     in u32 groupCountX,
-    in b8 hdr10OutputActive,
     mut CommandList commandList,
     mut ComputePipeline pipeline,
     mut GpuDescriptorHeap heap
@@ -119,7 +118,7 @@ void DispatchAvboitCompute(
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, pipeline);
 
-    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
+    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets);
     commandList.setPushConstants(pushConstants);
     commandList.dispatch(groupCountX, 1u, 1u);
 }
@@ -217,7 +216,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(mut CommandList commandList, 
 
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
 
-    DispatchAvboitCompute(targets, s_AvboitDepthWarpDispatchGroupCountX, this.m_graphics.isHDR10OutputActive(), commandList, this.m_avboitState.m_depthWarpPipeline.deref(), heap);
+    DispatchAvboitCompute(targets, s_AvboitDepthWarpDispatchGroupCountX, commandList, this.m_avboitState.m_depthWarpPipeline.deref(), heap);
 }
 
 void RendererAvboitSystem::dispatchAvboitIntegration(mut CommandList commandList, mut AvboitFrameTargets targets){
@@ -233,7 +232,7 @@ void RendererAvboitSystem::dispatchAvboitIntegration(mut CommandList commandList
 
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
 
-    DispatchAvboitCompute(targets, groupCountX, this.m_graphics.isHDR10OutputActive(), commandList, this.m_avboitState.m_integratePipeline.deref(), heap);
+    DispatchAvboitCompute(targets, groupCountX, commandList, this.m_avboitState.m_integratePipeline.deref(), heap);
 }
 
 void RendererAvboitSystem::renderAvboitMaterialPass(

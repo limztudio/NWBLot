@@ -28,7 +28,6 @@ enum<u8> EpochMutation{
     CompositionRoundTrip
 }
 
-[ordered]
 class UiPopupInputTests{
     public HeapStorage storage = HeapStorage(s_EcsUiPopupInput);
     public Context m_context;

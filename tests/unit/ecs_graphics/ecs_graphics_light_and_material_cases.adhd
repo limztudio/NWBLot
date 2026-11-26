@@ -80,7 +80,6 @@ class ResolvedMeshRef{
     public b8 valid()const{ return this.ref.has_value() && this.ref.value().valid(); }
 }
 
-[ordered]
 class MeshResolutionContext{
     public EcsTestWorld testWorld;
     public mut MeshSystem meshSystem;
@@ -151,7 +150,6 @@ class SkinningValidationContext{
     }
 }
 
-[ordered]
 class FrameGraphPacketStatsTestContext{
     public HeapStorage testArena;
     public FrameGraphNodeDescs nodes;
@@ -177,7 +175,6 @@ class FrameGraphPacketStatsTestContext{
     }
 }
 
-[ordered]
 class ResetRuntimeStatisticsContext{
     public HeapStorage testArena;
     public GpuTaskGraph graph;
@@ -244,7 +241,6 @@ class MaterialContentTestStorage{
     public MaterialContentTestStorage(){}
 }
 
-[ordered]
 class MaterialTypedByteRangeTestContext{
     public ScratchStorage scratchArena = ScratchStorage(s_LightCaseScratch);
     public TestValueSlot<MaterialContentTestStorage> storage;

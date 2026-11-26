@@ -26,7 +26,6 @@ class PowerObservation{
 
 static_assert(align_of<Expected<PowerObservation>>() >= align_of<PowerObservation>());
 
-[ordered]
 class PowerEnvironmentGuard{
     private i32 m_originalError = ReadPowerError();
     private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
@@ -43,7 +42,6 @@ class PowerEnvironmentGuard{
     }
 }
 
-[ordered]
 class MxcsrEnvironmentGuard{
     private u32 m_originalControl = ReadMxcsr();
     private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();

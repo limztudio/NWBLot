@@ -86,7 +86,6 @@ class ListLoanCallbackSource : IListDataSource{
 }
 
 
-[ordered]
 class UiListLoanTests : WidgetFixture{
     public ListState m_state;
     public ListLoanCallbackSource m_source;

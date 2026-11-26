@@ -145,6 +145,17 @@ void LayoutOptimizer::SortAndPackFields(const b8 keepFieldOrder, const b8 packSe
             orderedFields[j] = key;
         }
     }
+    else{
+        for(usize i = 1u; i < orderedFields.size(); ++i){
+            FieldDecl* key = orderedFields[i];
+            usize j = i;
+            while(j > 0u && orderedFields[j - 1u]->originalIndex > key->originalIndex){
+                orderedFields[j] = orderedFields[j - 1u];
+                --j;
+            }
+            orderedFields[j] = key;
+        }
+    }
 
     usize currentOffset = headerPointerCount * 8u;
     usize maxAlign = packSerialize ? 1u : (headerPointerCount > 0u ? 8u : 1u);
@@ -393,7 +404,8 @@ void LayoutOptimizer::finalizeClassFieldLayouts(const ClassDecl& decl, const b8 
     }
     const usize baseBytes = decl.concreteBase ? decl.concreteBase->totalSize : (hasVtablePointer || decl.isExtensible ? 8u : 0u);
     const usize headerPointerCount = (baseBytes + 7u) / 8u + (hasMotherArenaPointer ? 1u : 0u);
-    SortAndPackFields(decl.isSerialize || decl.recordAlignment || decl.preserveFieldOrder, packSerialize, decl.concreteBase ? Max(decl.recordAlignment, decl.concreteBase->totalAlign) : decl.recordAlignment, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
+    const b8 keepFieldOrder = TypeLayoutAnalyzer(m_symbols).requiresDeclarationFieldOrder(decl, Span<const FieldDecl* const>(orderedFields.data(), orderedFields.size()));
+    SortAndPackFields(keepFieldOrder, packSerialize, decl.concreteBase ? Max(decl.recordAlignment, decl.concreteBase->totalAlign) : decl.recordAlignment, headerPointerCount, orderedFields, outTotalSize, outTotalAlign);
 }
 
 

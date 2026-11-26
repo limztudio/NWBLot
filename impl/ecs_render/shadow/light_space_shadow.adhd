@@ -108,7 +108,6 @@ class FrozenLightSpaceShadowSnapshot{
 
 type FrozenLightSpaceShadowHandle = Shared<FrozenLightSpaceShadowSnapshot>;
 
-[ordered]
 class LightSpaceShadowState : NoCopy{
     public SharedPool m_frozenPool = SharedPool();
     public LightSpaceShadowSnapshot m_snapshot;

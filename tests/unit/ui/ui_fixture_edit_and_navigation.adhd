@@ -32,7 +32,7 @@ class CaretShaper : ITextShaper{
     }
 }
 
-[ordered, extensible]
+[extensible]
 class EditCaretFixture{
     public CaretShaper m_shaper;
     public TextLayoutBuilder m_builder;
@@ -99,7 +99,7 @@ class HorizontalNavigationFixture : RouterTestFixture{
     public void bindEditor(in usize hostIndex){ BindHorizontalNavigationEditor(this, hostIndex); }
 }
 
-[ordered, extensible]
+[extensible]
 class MultilineViewFixture{
     public EditModel m_model = EditModel(EditLimits(), EditTextMode::Multiline);
     public FixtureShaper m_shaper;

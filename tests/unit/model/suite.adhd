@@ -22,7 +22,6 @@ const StringView s_ModelPath = "tests/model_runtime/model";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class EmptyAssetSource : IAssetBinarySource{
     public mut usize readCount;
 
@@ -37,7 +36,6 @@ class EmptyAssetSource : IAssetBinarySource{
     }
 }
 
-[ordered]
 class RuntimeContext{
     public EcsTestWorld testWorld;
     public AssetRegistry registry = AssetRegistry(this.testWorld.arena);

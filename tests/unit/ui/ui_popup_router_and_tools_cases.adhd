@@ -92,7 +92,6 @@ class UiPopupToolsLoanTests : PopupToolsCaseFixture{
 }
 
 
-[ordered]
 class RevisionArmingComboSource : IListDataSource{
     public TestObserved<u64> textCalls;
     public TestObserved<b8> armed;

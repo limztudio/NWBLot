@@ -80,7 +80,6 @@ class AreaResolution{
     public usize caret = 0u;
 }
 
-[ordered]
 class TextAreaHost : IEditBoxHost{
     public PaintVector<AreaPublication> publications;
     public PaintVector<AreaResolution> resolutions;
@@ -235,7 +234,7 @@ class TextAreaHost : IEditBoxHost{
     }
 }
 
-[ordered, extensible]
+[extensible]
 class TextAreaFixture : WidgetFixture{
     public EditModel m_model = EditModel(EditLimits(), EditTextMode::Multiline);
     public TextAreaState m_state;

@@ -38,7 +38,6 @@ class OwnedPipe{
     }
 }
 
-[ordered]
 class ClipboardPipeContext{
     private HeapStorage m_storage = HeapStorage();
     private OwnedPipe m_pipe;
@@ -74,7 +73,6 @@ class ClipboardPipeContext{
 }
 
 
-[ordered]
 class X11ClipboardFixture{
     public HeapStorage storage = HeapStorage();
     public Array<DisplayConnection, 2u> displays;

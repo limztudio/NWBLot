@@ -52,7 +52,6 @@ class InitializerProbe : Initializerable{
     }
 }
 
-[ordered]
 class InitializerProbes{
     private InitializerProbe m_first;
     private InitializerProbe m_second;

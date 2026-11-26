@@ -89,7 +89,6 @@ extern TextInputRect WaylandTextInputRectForPixels(in TextInputRect pixels, in i
 [cpp_header("<core/os/linux/x11/text_input_preedit.h>"), cpp_name("::NWB::Core::X11PreeditBuffer::s_MaxBytes")]
 extern const usize s_MaxOsX11PreeditBytes;
 
-[ordered]
 class PreeditTestContext{
     private HeapStorage m_storage = HeapStorage();
     private TestValueSlot<X11PreeditBuffer> m_slot;

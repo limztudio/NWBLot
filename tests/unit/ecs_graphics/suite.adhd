@@ -81,7 +81,6 @@ const usize s_SuiteCsgRangeMembershipOffset = s_ShaderCsgRayContextBytes + offse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class CoincidentSelectionContext{
     public HeapStorage arena = HeapStorage(s_EcsCaseTestsCoincidentOpticalVolumesSelection);
     public ScratchStorage scratch = ScratchStorage(s_EcsCaseTestsCoincidentOpticalVolumesScratch);
@@ -93,7 +92,6 @@ class CoincidentSelectionContext{
     public void selectSingle(in CoincidentOpticalVolumeCandidate candidate){ this.selection.select(SpanOf<CoincidentOpticalVolumeCandidate>(candidate)); }
 }
 
-[ordered]
 class ComputeOutputContext{
     public HeapStorage testArena;
     public GpuTaskGraph graph;
@@ -106,7 +104,6 @@ class ComputeOutputContext{
     }
 }
 
-[ordered]
 class AvboitValidatorContext{
     public HeapStorage testArena;
     public GpuCompiledGraph graph;
@@ -126,7 +123,6 @@ class FrameCacheRuntimeProvider : IRuntimeMeshProvider{
     public void markLiveRuntimeMeshes(mut RuntimeMeshRequestSet requests)override{}
 }
 
-[ordered]
 class CsgShadowSnapshotContext{
     public EcsTestWorld testWorld;
     public ScratchStorage scratch = ScratchStorage(s_EcsCaseTestsCsgShadowScratch);
@@ -1723,7 +1719,7 @@ void VerifyCsgShadowSnapshot_FrameCacheTracksCutterTransformSyncAndGenericReceiv
 void VerifyCoincidentOpticalVolumes_ExcludesOnlyEnabledCsgReceivers(){
     CoincidentSelectionContext selContext = CoincidentSelectionContext();
     EcsTestWorld tw;
-    mut MeshSystem meshSystem = tw.world.addSystem<MeshSystem>(tw.world);
+    tw.world.addSystem<MeshSystem>(tw.world);
     const Name matName = Name("tests/coincident/refractive_mat");
     const Name meshName = Name("tests/coincident/cube_mesh");
     SuiteCoincidentMaterialLookup matLookup(matName);

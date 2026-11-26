@@ -32,14 +32,12 @@ class DelayedClipboard : QueuedClipboardService{
     public b8 finishRequest(in ClipboardRequestToken token, in ClipboardStatus status){ return this.finishRequest(token, status, ""); }
 }
 
-[ordered]
 class FakeClipboardRig{
     public HeapStorage arena;
     public FakeClipboard service;
     public FakeClipboardRig(){ this.service = FakeClipboard(this.arena, true); }
 }
 
-[ordered]
 class DelayedClipboardRig{
     public HeapStorage arena;
     public DelayedClipboard service;

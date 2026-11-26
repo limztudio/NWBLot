@@ -63,7 +63,6 @@ extern void ExitImmediately(in i32 code);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class GuardedBytes : NoCopy{
     public ByteAddress mapping = ByteAddress();
     public ByteAddress data = ByteAddress();

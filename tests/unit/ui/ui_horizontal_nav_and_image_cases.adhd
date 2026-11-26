@@ -97,7 +97,6 @@ class UiImageBuilderTests : WidgetFixture{
     }
 }
 
-[ordered]
 class ImageLoaderTests{
     public HeapStorage storage = HeapStorage(s_UiCaseTestsUiImageLoader);
     public CapturingLogger m_logger;
@@ -162,7 +161,6 @@ class UiImageSourceTextureDescription{
 
 }
 
-[ordered]
 class UiImageSourceTests{
     public CapturingLogger m_logger;
     public LoggerRegistrationGuard m_loggerGuard;

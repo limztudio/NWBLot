@@ -60,7 +60,6 @@ const usize s_ShadowInstanceGpuDataBytes = size_of<InstanceGpuData>();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class SoftShadowDispatchContext{
     public HeapStorage arena = HeapStorage(s_EcsCaseTestsSoftShadowResolveDispatchBuilder);
     public TestValueSlot<RendererRayTracingState> stateStorage;
@@ -68,7 +67,6 @@ class SoftShadowDispatchContext{
     public SoftShadowDispatchContext(){ this.state = this.stateStorage.constructIn(this.arena); }
 }
 
-[ordered]
 class TaskTimingFeedbackContext{
     public HeapStorage testArena;
     public TimingRecorder timingSink;
@@ -105,7 +103,6 @@ class TaskTimingFeedbackContext{
     }
 }
 
-[ordered]
 class ShadowPacketPlan{
     public HeapStorage testArena;
     public GpuTaskGraph graph;
@@ -185,7 +182,6 @@ class ShadowPacketPlan{
     }
 }
 
-[ordered]
 class SurfelFieldRecord{
     public f32x3u position;
     public f32 radiance;

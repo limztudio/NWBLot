@@ -116,7 +116,6 @@ type TexturePayloadFormatEnum = TexturePayloadFormat;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class BuildInputSelection{
     private HeapStorage m_storage;
     private CpuTaskScheduler m_scheduler(1u);
@@ -156,7 +155,6 @@ class BuildInputSelection{
     public b8 select(){ return SelectBuildInputs(this.m_options, this.m_catalog); }
 }
 
-[ordered]
 class ScratchPattern{
     private mut GraphicsScratchArena m_owner;
     private usize m_count;
@@ -192,7 +190,6 @@ class ScratchPattern{
     }
 }
 
-[ordered]
 class PathFixture{
     public HeapStorage storage(s_AssetCaseTestsAssetPathInputs);
     public GraphicsTestPath assetRoot(this.storage, "tests/asset_path/assets");
@@ -218,7 +215,6 @@ class GatherBytesMerge{
     }
 }
 
-[ordered]
 class GatherInputs{
     public ScratchStorage m_scratchArena(s_AssetCaseTestsAssetsGraphicsGatherInputs);
     private HeapStorage m_storage;

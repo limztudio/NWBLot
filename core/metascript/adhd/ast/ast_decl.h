@@ -243,7 +243,6 @@ struct ClassDecl{
     usize recordAlignment = 0u;
     const ClassDecl* concreteBase = nullptr;
     b8 isExtensible = false;
-    b8 preserveFieldOrder = false;
     b8 isSerialize = false;
     b8 isMoveOnly = false;
     b8 isReflect = false;

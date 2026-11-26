@@ -52,7 +52,6 @@ extern b8 VerifyUiTextEditSessionOom(mut ITextInputService textInput);
 [cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::VerifyUiEditClipboardControllerOom")]
 extern b8 VerifyUiEditClipboardControllerOom(mut IClipboardService clipboard);
 
-[ordered]
 class PaintSlotFixture{
     public EcsTestWorld ecs;
     public FakeClipboard clipboard;

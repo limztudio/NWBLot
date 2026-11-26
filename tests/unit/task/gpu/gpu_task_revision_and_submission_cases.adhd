@@ -30,7 +30,6 @@ class GpuSubmissionHookObserver{
     }
 }
 
-[ordered]
 class GpuSubmissionBindingFixture{
     public TestArena testArena;
     public GpuTaskGraph graph;
@@ -105,7 +104,6 @@ class GpuSubmissionBindingFixture{
     }
 }
 
-[ordered]
 class GpuSubmissionUseIndexScope{
     public ScratchStorage scratchArena;
     public GpuSubmissionUseIndex index;

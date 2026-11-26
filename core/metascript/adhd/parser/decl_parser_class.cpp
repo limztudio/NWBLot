@@ -97,7 +97,15 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
             matchedAttr = true;
         }
         if(!matchedAttr){
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'ordered', 'layout(alignment)', 'friend(...)', 'move_only', 'serialize', 'reflect', 'arena', 'modular', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
+            MStringView prohibitedErr;
+#define NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE(attrName, errorMessage) \
+            if(attr.name == attrName) prohibitedErr = errorMessage;
+#include "../export_keywords.h"
+#undef NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE
+            if(!prohibitedErr.empty())
+                m_cursor.error(attr.line, attr.column, prohibitedErr);
+            else
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'layout(alignment)', 'friend(...)', 'move_only', 'serialize', 'reflect', 'arena', 'modular', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
             return nullptr;
         }
     }

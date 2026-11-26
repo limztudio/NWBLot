@@ -59,7 +59,6 @@ class CrashDiagnosticObserver{
     }
 }
 
-[ordered]
 class CrashArchiveUpload{
     public HeapStorage m_arena = HeapStorage(s_ArchiveFixtureArena);
     public ScratchStorage m_scratch = ScratchStorage(s_ArchiveOperationScratch);

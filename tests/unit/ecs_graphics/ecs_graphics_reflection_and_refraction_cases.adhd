@@ -35,7 +35,6 @@ type PruneMeshAssetRef = AssetRef<Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class StatisticsTestControl<TState>{
     public HeapStorage arena;
     public SharedPool versions;
@@ -73,7 +72,6 @@ class ReflectionHistoryLeaseTask{
 class ReflectionStatsDestructorLeaseTask{ public ReflectionStatisticsReservation reservation;
     public ReflectionStatsDestructorLeaseTask(in ReflectionStatisticsControlHandle control, in ReflectionStatistics metadata){ this.reservation = StatisticsReservation<ReflectionStatistics, ReflectionStatisticsOutcome>(control, metadata); } }
 
-[ordered]
 class RayTracingGraphTestContext<StateT>{
     public StatisticsTestControl<StateT> inner;
     public GpuTaskGraph graph;
@@ -89,7 +87,6 @@ class RayTracingGraphTestContext<StateT>{
     }
 }
 
-[ordered]
 class PruneContext{
     public EcsTestWorld testWorld;
     public mut MeshSystem meshSystem;
@@ -114,7 +111,6 @@ class PruneContext{
     }
 }
 
-[ordered]
 class RuntimeMeshPruningContext{
     public ScratchStorage scratch;
     public RuntimeMeshRequestSet requests;

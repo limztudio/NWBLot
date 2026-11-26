@@ -1560,6 +1560,61 @@ void VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrde
     EXPECT_NE(cpp.find("CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler)"), usize.max);
 }
 
+void VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[ordered]\r\nclass BadOrdered {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_ordered.adhd",
+        "'ordered' attribute is prohibited in adhd; member reordering is decided automatically by the adhd compiler"
+    );
+
+    const StringView pureArenaFieldsSource = "class PureContainerRecord {\r\n    public u8 small = 1u;\r\n    public String label = \"ok\";\r\n    public u32 medium = 2u;\r\n    public Vector<u32> items;\r\n    public u64 wide = 3u;\r\n}\r\n";
+    CompileResult pureResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(pureArenaFieldsSource, "impl/pure_container_record.adhd", arena.arena, pureResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(pureResult, 0u), 5u);
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 0u), "label");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 1u), "items");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 2u), "wide");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 3u), "medium");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 4u), "small");
+
+    const StringView customDtorSource = "class WithDtor {\r\n    public u8 first = 0u;\r\n    public u64 second = 0u;\r\n    public ~WithDtor(){}\r\n}\r\n";
+    CompileResult dtorResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(customDtorSource, "impl/with_dtor.adhd", arena.arena, dtorResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(dtorResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(dtorResult, 0u, 0u), "first");
+    EXPECT_EQ(UnitClassOrderedFieldName(dtorResult, 0u, 1u), "second");
+
+    const StringView sideEffectInitSource = "u32 NextSeed(){ return 7u; }\r\nclass WithCallInit {\r\n    public u8 first = 0u;\r\n    public u64 second = cast<u64>(NextSeed());\r\n}\r\n";
+    CompileResult callInitResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(sideEffectInitSource, "impl/with_call_init.adhd", arena.arena, callInitResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(callInitResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(callInitResult, 0u, 0u), "first");
+    EXPECT_EQ(UnitClassOrderedFieldName(callInitResult, 0u, 1u), "second");
+
+    const StringView siblingBorrowCtorSource = "class SiblingRefCtor {\r\n    private u8 m_pad = 0u;\r\n    private CompactString m_buf;\r\n    private mut CompactString m_ref;\r\n    private u64 m_wide = 0u;\r\n    public SiblingRefCtor(){ this.m_ref = this.m_buf; }\r\n}\r\n";
+    CompileResult siblingResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(siblingBorrowCtorSource, "impl/sibling_ref_ctor.adhd", arena.arena, siblingResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(siblingResult, 0u), 4u);
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 0u), "m_pad");
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 1u), "m_buf");
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 2u), "m_ref");
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 3u), "m_wide");
+    const StringView siblingHeader = GeneratedHeaderView(siblingResult);
+    const StringView siblingSource = GeneratedSourceView(siblingResult);
+    EXPECT_TRUE(siblingHeader.find("m_ref(::MakeNotNull(::AddressOf(") != usize.max || siblingSource.find("m_ref(::MakeNotNull(::AddressOf(") != usize.max);
+
+    const StringView noCopyMemberSource = "class WithNoCopy {\r\n    public u8 flag = 0u;\r\n    public UniquePtr<u32> owner;\r\n    public u64 id = 0u;\r\n}\r\n";
+    CompileResult noCopyResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(noCopyMemberSource, "impl/with_no_copy.adhd", arena.arena, noCopyResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(noCopyResult, 0u), 3u);
+    EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 0u), "flag");
+    EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 1u), "owner");
+    EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 2u), "id");
+}
+
 NWB_ADHD_GTEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes, VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes)
 
 NWB_ADHD_GTEST(AdhdPreprocessor, BorrowedExpansionPreservesAliasingAndFailures, VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures)
@@ -1639,6 +1694,8 @@ NWB_ADHD_GTEST(AdhdCompiler, CompilesExternHeaderAndDeclEdgeCases, VerifyAdhdCom
 NWB_ADHD_GTEST(AdhdCompiler, CompilesModularClassEdgeCases, VerifyAdhdCompiler_CompilesModularClassEdgeCases)
 
 NWB_ADHD_GTEST(AdhdCompiler, ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder, VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder)
+
+NWB_ADHD_GTEST(AdhdCompiler, ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder, VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

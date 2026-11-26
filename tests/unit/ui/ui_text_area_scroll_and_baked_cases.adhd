@@ -76,7 +76,6 @@ class UiTextAreaViewTests : MultilineViewFixture{
 }
 
 
-[ordered]
 class TextBakedTests{
     public CapturingLogger m_logger;
     public LoggerRegistrationGuard m_loggerGuard;

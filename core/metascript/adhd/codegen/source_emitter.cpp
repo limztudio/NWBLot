@@ -750,8 +750,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         const Expr* uniqueAssign = (assignIt != ctorAssignMap.end() && assignIt->second.firstIsTopLevel && assignIt->second.totalMatches == 1u) ? assignIt->second.firstFound : nullptr;
         const b8 inLeadingPrefix = (uniqueAssign != nullptr) && assignIt->second.firstInLeadingPrefix;
         if(!rhs){
-            if(m_activeOwnerClass && m_activeOwnerClass->preserveFieldOrder)
-                readyFields.push_back(field->name);
+            readyFields.push_back(field->name);
             continue;
         }
         if(field->defaultExpr || field->hasCtorInit)
@@ -801,8 +800,7 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         }
         else
             continue;
-        if(m_activeOwnerClass && m_activeOwnerClass->preserveFieldOrder)
-            readyFields.push_back(field->name);
+        readyFields.push_back(field->name);
     }
     if(!skipped->empty())
         m_skippedCtorAssignExprs = skipped;

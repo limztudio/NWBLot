@@ -54,7 +54,6 @@ class FilterView : IListDataSource{
     public void armEnabledMutation(mut EditModel model){ this.enabledMutation.value() = Optional<mut EditModel>(model); }
 }
 
-[ordered]
 class SearchSource : ISearchableListDataSource{
     public ComboSource full;
     public FilterView view;
@@ -149,7 +148,7 @@ class SearchEditHost : IEditBoxHost{
     public void armPublishMutation(mut EditModel model){ this.publishMutation = Optional<mut EditModel>(model); }
 }
 
-[ordered, extensible]
+[extensible]
 class SearchFixture : ComboFixture{
     public SearchSource m_searchSource;
     public SearchComboState m_search;

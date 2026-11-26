@@ -58,7 +58,6 @@ class FontSource{
     }
 }
 
-[ordered]
 class FontFace : NoCopy{
     private AssetRef<Font> m_identity = AssetRef<Font>();
     private u64 m_faceIdentity = AllocateServiceIdentity();

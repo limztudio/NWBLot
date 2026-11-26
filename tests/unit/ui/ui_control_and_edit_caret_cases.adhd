@@ -53,7 +53,6 @@ class UiControlInputTests : RouterTestFixture{
     }
 }
 
-[ordered]
 class EditBoxLayoutTests{
     public EditModel m_model;
     public FixtureShaper m_shaper;

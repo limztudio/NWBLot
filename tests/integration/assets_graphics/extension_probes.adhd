@@ -24,7 +24,6 @@ class ExtensionMember{
     public ~ExtensionMember(){ ++this.m_state.memberDestructions; }
 }
 
-[ordered]
 class AlignedExtension{
     private Alignment128 m_alignment;
     private ExtensionMember m_member;

@@ -151,7 +151,6 @@ class FakeAccessibility : TrackedAccessibilityService{
     }
 }
 
-[ordered]
 class UiEditBoxHostTests{
     public HeapStorage storage(Name(s_EcsUiEditBoxHost));
     public Context m_context;
@@ -239,7 +238,6 @@ class RecordingActions : IEditActionSink{
     public void clear(){ this.records.clear(); }
 }
 
-[ordered]
 class UiEditActionHostTests{
     public UiEditBoxHostTests core;
     public RecordingActions m_actions;

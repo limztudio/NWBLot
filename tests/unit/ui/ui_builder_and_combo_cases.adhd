@@ -41,7 +41,6 @@ class UiBuilderSkinPaletteTests : WidgetFixture{
 }
 
 
-[ordered]
 class UiBuilderTests : ContextTestFixture{
     public WidgetRoot m_root;
     public Font m_font = Font(Name("tests/ui/fonts/latin"));

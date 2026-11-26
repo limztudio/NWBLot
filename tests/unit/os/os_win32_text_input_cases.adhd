@@ -16,7 +16,6 @@
 const isize s_Win32ShowUiFullFlags = s_Win32ShowUiCompositionWindowFlag | s_Win32ShowUiCandidateWindowFlag | (s_Win32ShowUiCandidateWindowFlag << 2u) | (1u << 20u);
 const isize s_Win32ShowUiReplayFlags = s_Win32ShowUiCompositionWindowFlag | s_Win32ShowUiCandidateWindowFlag | (1u << 20u);
 
-[ordered]
 class Win32TextInputFixture{
     public CapturingLogger m_logger;
     private LoggerRegistrationGuard m_loggerGuard;

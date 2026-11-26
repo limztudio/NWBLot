@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class GpuHazardImportIndexRig{
     public HeapStorage storage;
     public HeapStorageVector<GpuGraphResourceNode> resources;
@@ -23,7 +22,6 @@ class GpuHazardImportIndexRig{
     }
 }
 
-[ordered]
 class GpuHazardOwnerImportContext{
     public HeapStorage inputStorage;
     public HeapStorage graphStorage;

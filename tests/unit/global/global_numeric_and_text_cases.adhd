@@ -22,7 +22,7 @@ const u32 s_FutexIncrementsPerThread = 8192u;
 
 type Latin1VoidResult = Expected<void, Latin1TextError>;
 
-[ordered]
+[layout(1)]
 class DecimalStorage{
     public NarrowChar first = cast<NarrowChar>(97u);
     public DecimalDigits buffer;

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class FrameExecuteStateLifecycleSet : NoCopy{
     public Vector<BufferHandle> meshAccelerationStateBuffers;
     public Vector<BufferHandle> shadowPrepareLiveStateBuffers;

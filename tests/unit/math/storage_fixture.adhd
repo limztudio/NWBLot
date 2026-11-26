@@ -16,7 +16,7 @@ type AlignedPairRecord = DoubleStorageRecord<f64x2>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
+[layout(32)]
 class DoubleStorageRecord<T>{
     public T value;
     public Array<u64, 4u> gap = Array<u64, 4u>();
@@ -102,7 +102,7 @@ class DoubleTransformStreamFixture{
     }
 }
 
-[ordered]
+[layout(32)]
 class ExpectedVectorStorage<T>{
     public u64 prefix = 0u;
     public Array<Expected<T>, 2u> values = Array<Expected<T>, 2u>();

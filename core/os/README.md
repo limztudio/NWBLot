@@ -31,7 +31,7 @@ Wayland additionally needs the existing `wayland-client`, `xkbcommon`, `wayland-
 
 ## Accessibility service
 
-`Frame` owns `IAccessibilityService`, which clients borrow on the native event thread. `publishTree` copies node records and their shared text storage, along with focus, version, and scale. It rejects more than 4,096 nodes or 512 KiB of text, invalid node IDs, roles, live modes, text ranges, geometry, or nonpositive/nonfinite scales. `announce` requires nonempty bounded text and a polite or assertive live mode. Actions are polled on the owner thread from a queue capped at 64 entries.
+`Frame` owns `IAccessibilityService`, which clients borrow on the native event thread. `publishTree` validates node records and their shared text storage, along with focus, version, and scale, and forwards them to the platform backend (for example, `Win32AccessibilityService` stages and swaps snapshots for UI Automation). `updateFocus` updates the active focus ID (updating the Win32 focused node state and UI Automation focus event) without republishing the full tree. `publishTree` rejects more than 4,096 nodes or 512 KiB of text, invalid node IDs, roles, live modes, text ranges, geometry, or nonpositive/nonfinite scales. `announce` requires nonempty bounded text and a polite or assertive live mode. Actions are polled on the owner thread from a queue capped at 64 entries.
 
 Capabilities report whether the backend offers a native tree, announcements, and actions. Win32 reports these according to UI Automation availability. The fallback used by Linux Frame backends reports them unsupported; successful tracked publication alone does not establish a native accessibility bridge.
 

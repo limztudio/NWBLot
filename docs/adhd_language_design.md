@@ -10,8 +10,8 @@
 - **File Extension**: `.adhd`
 - **Compilation Pipeline**: `.adhd` source -> `core/metascript/adhd` compiler (`nwb_adhd_compiler`) -> generated `.adhd.h` / `.adhd.cpp` C++ source and optional `--emit-cpp-externs` / `--depfile` outputs.
 - **Core Guarantees**:
-  1. **Automatic arena propagation**: Root arena owners (`[arena]`, `[arena, asset(...)]`, `[arena, subsystem(...)]`, `[arena, component(...)]`, `[arena, system(...)]`) supply persistent storage. Ordinary arena-backed classes borrow their owner's arena automatically, and local temporary allocations borrow a stack-scoped `ScratchArena`. Explicit `*Arena` types are prohibited in `.adhd`.
-  2. **Compile-time layout & serialization**: Non-`[serialize]` classes automatically reorder fields to minimize alignment padding. `[layout(alignment)]` fixes power-of-two ABI alignment while keeping field order; `[serialize]` preserves authored order and generates binary codecs, `.nwb` metadata parsing, and `AssetRef<T>` dependency extraction.
+  1. **Automatic arena propagation**: Root arena owners (`[arena]`, `[asset(...)]`, `[subsystem(...)]`, `[component(...)]`, `[system(...)]`) supply persistent storage. Ordinary arena-backed classes borrow their owner's arena automatically, and local temporary allocations borrow a stack-scoped `ScratchArena`. Explicit `*Arena` types are prohibited in `.adhd`.
+  2. **Compile-time layout & serialization**: Independent fields in ordinary classes automatically reorder by alignment and size to minimize padding, while order-dependent classes preserve declaration order automatically. `[align(alignment)]` fixes power-of-two ABI alignment while keeping field order; `[serialize]` preserves authored order and generates binary codecs, `.nwb` metadata parsing, and `AssetRef<T>` dependency extraction.
   3. **Explicit mutability, borrowing & lifetime checks**: Mandatory member access specifiers (`public`, `private`, `protected`), parameter modes (`in`, `mut`, `in borrow`, `in cpp_ref`, `mut forward`, `mut copy`), mandatory `this.` qualification, and compile-time lifetime checks for borrowed views and references.
   4. **Built-in parallel multithreading**: First-class `parallel_for` loops and `parallel` task DAG blocks lowered directly to `Core::CpuTaskScheduler` and `Core::CpuTaskScope`.
   5. **Typed C++ SDK interop**: Built-in `global/` and `core/` `extern` preludes, optional libclang C++ header import, explicit C++ unwind/operator/alias interop attributes, and separate `.h`/`.cpp` C++ boundary files bound via typed `extern` declarations (`native` blocks are retired and prohibited).
@@ -33,7 +33,7 @@
   - Unifies C++ `class` and `struct` under `class`.
   - Ordinary `class` declarations are emitted `final` in C++ and cannot inherit from another `class` (composition over inheritance), permitting devirtualized calls and member layout reordering.
   - **Opt-in concrete inheritance (`[extensible]`)**: A non-template `[extensible] class` may serve as a single public authored concrete base for derived classes (`class Derived : Base`). `[extensible]` classes are noncopyable and nonmovable, construct the base before derived fields (forwarding the caller's arena when needed), require a default constructor on the base, support virtual destruction through the base, allow derived access to `public` and `protected` base members, and allow overriding inherited `interface` methods. Mark an intermediate derived class `[extensible]` to permit further derivation.
-  - **Implementing `interface`s & `NoCopy`**: A `class` may implement one or more `interface`s and opt into noncopyable semantics via the built-in `NoCopy` base (`class Widget : IWidget, NoCopy`). `[arena]`, `[asset(...)]`, `[subsystem(...)]`, and `[system(...)]` classes inherit noncopyable framework bases automatically.
+  - **Implementing `interface`s, `NoCopy` & `MoveOnly`**: A `class` may implement one or more `interface`s, opt into noncopyable/nonmovable semantics via `NoCopy` (`class Widget : IWidget, NoCopy`), or opt into move-only ownership via `MoveOnly` (`class Handle : MoveOnly`). `[arena]`, `[asset(...)]`, `[subsystem(...)]`, and `[system(...)]` classes inherit noncopyable framework bases automatically.
   - **External polymorphic C++ bases (`[cpp_base(...)]`)**: A class may derive from a direct external `[cpp_flags(polymorphic_base)]` `extern class` or `interface` and forward constructor parameters via `[cpp_base(ExternalBase, first, second)]` on an inline constructor.
   - **Mandatory `override` (No `virtual` Keyword)**: `interface` methods are abstract contracts without `virtual`. Every overriding method in an implementing or derived class must end with `override` (`public void execute()override;`, `public u32 id()const override;`). Omitting `override` on an overridden method, or marking a non-overriding method `override`, is a compile-time error.
 - **`interface` (Pure Polymorphic Contract — No Heap Boxing)**:
@@ -104,13 +104,13 @@
     }
     ```
 - **Class Layout Modes**:
-  - **Default `class`**: Automatically reorders fields by descending alignment and size (`32B -> 16B -> 8B -> 4B -> 2B -> 1B`) to minimize padding. Because emitted C++ member order may differ from authored order, do not construct non-`[serialize]` classes with C++ positional aggregate initialization (`Foo{ a, b }`).
-  - **`[ordered]`**: Preserves declaration order so fields construct in authored order and destruct in reverse order when a later field borrows an earlier sibling or depends on its lifetime. In the constructor's leading assignment prefix, a field assignment may borrow an earlier initialized sibling.
-  - **`[layout(alignment)]`**: Fixes a plain value record with a power-of-two byte alignment, authored field order, natural member alignment, and tail padding (for C or shader ABI contracts). Combinable with `[serialize]`.
-  - **`[serialize]`**: Preserves authored field order, emits `#pragma pack(push, 1)` when fields do not require over-aligned types, and generates binary serialization, `.nwb` metadata parsing, and `AssetRef<T>` dependency extraction. Cannot be combined with `[arena]`.
+  - **Default `class`**: Automatically reorders independent fields by descending alignment and size (`32B -> 16B -> 8B -> 4B -> 2B -> 1B`) to minimize padding. Because emitted C++ member order may differ from authored order, do not construct non-`[serialize]` classes with C++ positional aggregate initialization (`Foo{ a, b }`).
+  - **Automatic Declaration-Order Preservation**: `[ordered]` is prohibited; the compiler automatically preserves declaration order (constructing in authored order and destructing in reverse order) whenever a class defines a destructor or an out-of-line constructor, is `[extensible]`/polymorphic/role-attributed, has side-effecting field initializers or user-constructed/non-trivial/`NoCopy` members, or references `this` or a sibling field in a field initializer or constructor. Declare an owner before its borrowers; in the leading field assignments of the constructor, a field constructor can borrow an earlier initialized sibling.
+  - **`[align(alignment)]`**: Replaces the prohibited `[layout(alignment)]` attribute. Fixes a value record with a power-of-two byte alignment, authored field order, natural member alignment, and tail padding (for C or shader ABI contracts). Combinable with `[serialize]`.
+  - **`[serialize]`**: Preserves authored field order, emits `#pragma pack(push, 1)` when not combined with `[align(...)]` and when fields do not require over-aligned built-in types, and generates binary serialization, `.nwb` metadata parsing, and `AssetRef<T>` dependency extraction. Cannot be combined with `[arena]`.
   - **No Bitfields**: C-style bitfields (`u8 a : 3;`) are prohibited; use `flag<SizeType>`.
 - **Ownership & Peer Access**:
-  - **`[move_only]` & `MoveInto<T>(destination, source)`**: Marks an ordinary value class as noncopyable and movable (fields must support moves). Moving or move-assigning arena-backed values keeps the destination's arena, transferring container storage directly when arenas match. Call `MoveInto<T>(destination, source)` with two `mut` lvalues of type `T` to transfer ownership explicitly after validation. A `[move_only]` class with direct `NoCopy` base can move-construct when its fields allow it.
+  - **`MoveOnly` & `MoveInto<T>(destination, source)`**: `[move_only]` is prohibited; inherit an ordinary value class from the built-in `MoveOnly` base (`<global/generic.h>`) when it transfers ownership and must prohibit copies. Its fields must support moves, and `MoveOnly` cannot be combined with `NoCopy`, `[arena]`, `[serialize]`, `[align(...)]`, or role attributes. Moving or move-assigning arena-backed values keeps the destination's arena, transferring container storage directly when arenas match. Call `MoveInto<T>(destination, source)` with two `mut` lvalues of type `T` to transfer ownership explicitly after validation.
   - **`[owner_result]`**: Marks an instance method on a mother-arena class whose return value is independently allocated from the receiver's mother arena rather than caller scratch. A local initialized directly from such a call on `this` or an owned field retains that owner arena for its scope; assignment into an existing variable keeps the destination arena.
   - **`[friend(PeerA, PeerB)]`**: Grants one-way access to `private` and `protected` members to named non-template peer classes in the same namespace (even if defined in separate `.adhd` sources).
 - **Constructors, Destructors & Initialization**:
@@ -186,8 +186,9 @@
   - Capture-flow analysis lowers stateless callables to `InplaceFunction<0, Ret(Args...)>` (`8` bytes, implicitly convertible to `Ret(*)(Args...) noexcept`) and capturing callables to `InplaceFunction<64, Ret(Args...)>`.
   - `MetascriptDocument.visitVariable`, `MetascriptValue.visitField`, and `forEachMapEntry` accept lambdas, `Func<...>`, unambiguous non-template free functions, or local aliases whose return type does not need a caller arena.
   - **Last-Use Moves & Compiler-Managed Inlining**: The compiler emits `Move(...)` automatically on eligible last-use values and decides automatically whether generated callables are emitted inline in `.adhd.h` or out-of-line in `.adhd.cpp`.
-- **Split Methods & `[modular]` Classes**:
-  - Out-of-line implementations use `ClassName::methodName` in the declaring file (after the `class`) or in another `.adhd` file when the owning class allows out-of-file definitions: `[arena, asset(...)]`, `[arena, system(...)]`, or non-template `[modular]` classes (`[modular]` requires templated or arena-polymorphic methods to be defined in the declaring class file).
+- **Out-of-Line Methods (No `[modular]`)**:
+  - `[modular]` is prohibited; out-of-line methods on non-template classes are decided automatically by the compiler from bodyless method declarations.
+  - Out-of-line implementations use `ClassName::methodName` in the declaring file (after the `class`) or in another `.adhd` file that `#include`s it (templated classes/methods define out-of-line implementations in the declaring file).
   - Cross-file `.adhd` dependencies use `#include <...>` / `#include "..."`.
 
 ---
@@ -248,11 +249,11 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 
 1. **No Explicit `*Arena` Types**:
    - Using `ArenaBase`, `AssetArena`, `CookArena`, `GlobalArena`, `GraphicsArena`, `MetaArena`, `PersistentArena`, `ScratchArena`, or `TelemetryArena` as an authored type or expression is a compile-time error. C++ binding attributes may name these types inside their C++ spelling strings.
-2. **Root Owners (`[arena]`, `[arena, asset(...)]`, `[arena, subsystem(...)]`, `[arena, component(...)]`, `[arena, system(...)]`)**:
-   - Asset, subsystem, component, and system classes must pair their role attribute with `arena`.
-   - Standalone `[arena]` and `[arena, component("...")]` classes own a `s_ClassArena` (`GlobalArena`).
-   - `[arena, asset("...")]` classes derive from `TypedAsset<T>` (or `TypedAsset<T, BaseAssetInterface>`), and `[arena, subsystem("...")]` classes derive from `TypedAsset<T, ISubsystem>` (`parentRefs()`, `editParentRefs()`, `subsystems`); both allocate from `AssetArena`. Candidate asset locals inside their methods bind to `*this->__adhd_arena` so `this = candidate;` moves cleanly while preserving `IAsset` state.
-   - `[arena, system("...")]` classes derive from `Core::ECS::ISystem` and forward `__adhd_mother_arena`.
+2. **Root Owners (`[arena]`, `[asset(...)]`, `[subsystem(...)]`, `[component(...)]`, `[system(...)]`)**:
+   - Role attributes (`asset`, `subsystem`, `component`, `system`) automatically imply arena ownership; writing explicit `[arena]` alongside them is prohibited.
+   - Standalone `[arena]` and `[component("...")]` classes own a `s_ClassArena` (`GlobalArena`).
+   - `[asset("...")]` classes derive from `TypedAsset<T>` (or `TypedAsset<T, BaseAssetInterface>`), and `[subsystem("...")]` classes derive from `TypedAsset<T, ISubsystem>` (`parentRefs()`, `editParentRefs()`, `subsystems`); both allocate from `AssetArena`. Candidate asset locals inside their methods bind to `*this->__adhd_arena` so `this = candidate;` moves cleanly while preserving `IAsset` state.
+   - `[system("...")]` classes derive from `Core::ECS::ISystem` and forward `__adhd_mother_arena`.
 3. **Mother-Arena Borrowing & `[owner_result]`**:
    - Ordinary non-root classes holding arena-backed fields receive a hidden `::NotNull<::ArenaBase*> __adhd_arena` (`uses_leading_arena_t`) and borrow their parent owner's or local caller's arena automatically.
    - Methods marked `[owner_result]` allocate their returned arena-backed snapshot from the receiver's mother arena rather than the caller's scratch arena.
@@ -283,13 +284,13 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 
 ## 9. Attributes, Asset Registration & Cooking Roles
 
-- **Single-Bracket Rule**: Multiple attributes on a declaration must be comma-separated inside one `[...]` (`[arena, asset("mesh")]`); stacked `[...][...]` blocks are prohibited.
+- **Single-Bracket Rule**: Multiple attributes on a declaration must be comma-separated inside one `[...]` (`[align(16), serialize]`, `[arena, friend(Peer)]`); stacked `[...][...]` blocks are prohibited.
 - **Attributes by Declaration Kind**:
-  - `class`: `[arena]`, `[modular]`, `[extensible]`, `[ordered]`, `[layout(alignment)]`, `[serialize]`, `[reflect]`, `[move_only]`, `[friend(PeerA, ...)]`, `[cpp_type_alias(Name, Type)]`, `[asset("type_name")]`, `[subsystem("type_name")]`, `[component("type_name")]`, `[system("type_name")]`
-  - `interface`: `[reflect]`, `[asset("type_name")]`
-  - `enum` / `flag`: `[reflect]`
-  - Member field: `[reflect]`, `[transient]`
-  - Method / constructor / destructor: `[reflect]`, `[owner_result]`, `[cpp_unwind]`, `[cpp_rvalue_overload]`, `[cpp_explicit_bool]`, `[cpp_take_assignment]`, `[cpp_base(Base, param0, ...)]`
+  - `class`: `[arena]`, `[extensible]`, `[align(alignment)]`, `[serialize]`, `[reflect]` (prohibited on `[serialize]`, `[asset("...")]`, and `[component("...")]` classes where reflection is automatic), `[friend(PeerA, ...)]`, `[cpp_type_alias(Name, Type)]`, `[asset("type_name")]`, `[subsystem("type_name")]`, `[component("type_name")]`, `[system("type_name")]` (`[modular]`, `[ordered]`, `[layout(...)]`, and `[move_only]` are prohibited; `[arena]` cannot be combined with role attributes)
+  - `interface`: `[asset("type_name")]` (`[reflect]` is prohibited on `interface` and `interface` methods; reflection is automatic)
+  - `enum` / `flag`: `[reflect]` is prohibited (`enum`/`flag` reflection is automatic)
+  - Member field: `[reflect]` (non-`public` fields only; `public` fields reflect automatically and cannot combine `[reflect]` with `[transient]`), `[transient]`
+  - Method / constructor: `[reflect]` (non-`public` regular methods only; prohibited on `public` methods, constructors, destructors, and `interface` methods), `[owner_result]`, `[cpp_unwind]`, `[cpp_rvalue_overload]`, `[cpp_explicit_bool]`, `[cpp_take_assignment]`, `[cpp_base(Base, param0, ...)]` (on constructors)
   - Free function: `[cpp_unwind]`, `[asset_writer]`, `[cook_entry(...)]`, `[cook_sidecar(s_Ext)]`, `[gather_merge]`, `[cook_registrar]`, `[cook_document]`, `[volume_prepare]`, `[cook_setup]`
   - Diagnostics & scheduling: `[essential]` on `assert`/`info`/`warning`/`error`; `[core(...)]`, `[priority(...)]` on `parallel` / `parallel_for`
   - `extern`: `[cpp_name("...")]`, `[cpp_header("<...>")]`, `[cpp_flags(...)]` on `extern` declarations

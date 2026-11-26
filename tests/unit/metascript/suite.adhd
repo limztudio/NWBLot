@@ -421,24 +421,24 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "void BadTelemetryArena(mut TelemetryArena a) {}\r\n", "impl/bad_telemetry_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
     ExpectCompileFails(arena, "usize BadScratchStatic() {\r\n    return ScratchArena::s_DefaultInitialChunkBytes;\r\n}\r\n", "impl/bad_scratch_static.adhd");
     ExpectCompileFails(arena, "[serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
-    ExpectCompileFailsWithMessage(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadRedundantArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_redundant_arena_asset.adhd", "arena ownership is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadRedundantArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_redundant_arena_asset.adhd", "'arena' attribute is prohibited on 'asset', 'system', 'subsystem', and 'component' classes; arena ownership is decided automatically by the adhd compiler");
     ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
     ExpectCompileFails(arena, "[serialize, system(\"bad_sys\")]\r\nclass BadSerializeSystem { public u32 v = 0u; }\r\n", "impl/bad_serialize_system.adhd");
-    ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_sys\")]\r\nclass BadRedundantArenaSystem { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_system.adhd", "arena ownership is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[arena, subsystem(\"bad_sub\")]\r\nclass BadRedundantArenaSubsystem { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_subsystem.adhd", "arena ownership is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[arena, component(\"bad_comp\")]\r\nclass BadRedundantArenaComponent { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_component.adhd", "arena ownership is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_sys\")]\r\nclass BadRedundantArenaSystem { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_system.adhd", "'arena' attribute is prohibited on 'asset', 'system', 'subsystem', and 'component' classes; arena ownership is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[arena, subsystem(\"bad_sub\")]\r\nclass BadRedundantArenaSubsystem { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_subsystem.adhd", "'arena' attribute is prohibited on 'asset', 'system', 'subsystem', and 'component' classes; arena ownership is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[arena, component(\"bad_comp\")]\r\nclass BadRedundantArenaComponent { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_component.adhd", "'arena' attribute is prohibited on 'asset', 'system', 'subsystem', and 'component' classes; arena ownership is decided automatically by the adhd compiler");
     ExpectCompileFails(arena, "[system(\"bad_sys\")]\r\nclass BadTemplateSystem<T> { public T v; }\r\n", "impl/bad_template_system.adhd");
     ExpectCompileFails(arena, "[component(\"comp\"), system(\"bad_sys\")]\r\nclass BadComponentSystem { public u32 v = 0u; }\r\n", "impl/bad_component_system.adhd");
-    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nenum<u8> BadEnum { A = 0 }\r\n", "impl/bad_reflect_enum.adhd", "enum and flag reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nflag<u8> BadFlag { A }\r\n", "impl/bad_reflect_flag.adhd", "enum and flag reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[reflect]\r\ninterface IBad { void step(); }\r\n", "impl/bad_reflect_iface.adhd", "interface reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "interface IBadMethod { [reflect] void step(); }\r\n", "impl/bad_reflect_iface_method.adhd", "interface reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[serialize, reflect]\r\nclass BadSerRef { public u32 x = 0u; }\r\n", "impl/bad_ser_reflect.adhd", "reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[reflect, asset(\"bad_ref_asset\")]\r\nclass BadRefAsset { public u32 x = 0u; }\r\n", "impl/bad_asset_reflect.adhd", "reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "[reflect, component(\"bad_ref_comp\")]\r\nclass BadRefComp { public u32 x = 0u; }\r\n", "impl/bad_comp_reflect.adhd", "reflection is decided automatically");
-    ExpectCompileFailsWithMessage(arena, "class BadPubRefField { [reflect] public u32 x = 0u; }\r\n", "impl/bad_pub_ref_field.adhd", "public fields in reflected classes are reflected automatically");
-    ExpectCompileFailsWithMessage(arena, "class BadPubRefMethod { [reflect] public void step() {} }\r\n", "impl/bad_pub_ref_method.adhd", "public methods in reflected classes are reflected automatically");
-    ExpectCompileFailsWithMessage(arena, "class BadTransRefField { [transient, reflect] private u32 x = 0u; }\r\n", "impl/bad_trans_ref_field.adhd", "'reflect' and 'transient' attributes cannot be combined");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nenum<u8> BadEnum { A = 0 }\r\n", "impl/bad_reflect_enum.adhd", "'reflect' attribute is prohibited on 'enum' and 'flag' in adhd; enum and flag reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nflag<u8> BadFlag { A }\r\n", "impl/bad_reflect_flag.adhd", "'reflect' attribute is prohibited on 'enum' and 'flag' in adhd; enum and flag reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\ninterface IBad { void step(); }\r\n", "impl/bad_reflect_iface.adhd", "'reflect' attribute is prohibited on 'interface' in adhd; interface reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "interface IBadMethod { [reflect] void step(); }\r\n", "impl/bad_reflect_iface_method.adhd", "'reflect' attribute is prohibited on 'interface' methods; interface reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[serialize, reflect]\r\nclass BadSerRef { public u32 x = 0u; }\r\n", "impl/bad_ser_reflect.adhd", "'reflect' attribute is prohibited on 'serialize', 'asset', and 'component' classes; reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[reflect, asset(\"bad_ref_asset\")]\r\nclass BadRefAsset { public u32 x = 0u; }\r\n", "impl/bad_asset_reflect.adhd", "'reflect' attribute is prohibited on 'serialize', 'asset', and 'component' classes; reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[reflect, component(\"bad_ref_comp\")]\r\nclass BadRefComp { public u32 x = 0u; }\r\n", "impl/bad_comp_reflect.adhd", "'reflect' attribute is prohibited on 'serialize', 'asset', and 'component' classes; reflection is decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "class BadPubRefField { [reflect] public u32 x = 0u; }\r\n", "impl/bad_pub_ref_field.adhd", "'reflect' attribute is prohibited on 'public' fields; public fields in reflected classes are reflected automatically");
+    ExpectCompileFailsWithMessage(arena, "class BadPubRefMethod { [reflect] public void step() {} }\r\n", "impl/bad_pub_ref_method.adhd", "'reflect' attribute is prohibited on 'public' methods; public methods in reflected classes are reflected automatically");
+    ExpectCompileFailsWithMessage(arena, "class BadTransRefField { [transient, reflect] private u32 x = 0u; }\r\n", "impl/bad_trans_ref_field.adhd", "'reflect' and 'transient' attributes cannot be combined on the same field");
 
     CompileResult assetRes = CompileResult(arena.arena);
     ASSERT_TRUE(Compile("[asset(\"sample_blob\")]\r\nclass SampleBlob {\r\n    private Vector<u8> m_bytes;\r\n    public in Vector<u8> bytes()const { return this.m_bytes; }\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"SampleBlob::loadBinary\") && !this.virtualPath().empty() && !binary.empty(); }\r\n}\r\n", "impl/assets_sample/asset.adhd", arena.arena, assetRes));
@@ -1208,7 +1208,7 @@ void VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases(){
 
 void VerifyAdhdCompiler_CompilesModularClassEdgeCases(){
     AdhdTestArena arena = AdhdTestArena();
-    ExpectCompileFailsWithMessage(arena, "[modular]\r\nclass BadModular {\r\n    public void step();\r\n}\r\n", "impl/bad_modular.adhd", "'modular' attribute is prohibited");
+    ExpectCompileFailsWithMessage(arena, "[modular]\r\nclass BadModular {\r\n    public void step();\r\n}\r\n", "impl/bad_modular.adhd", "'modular' attribute is prohibited in adhd; out-of-line class methods are decided automatically by the adhd compiler");
     ExpectCompileFails(arena, "class BadTmpl<T> {\r\n    public T item;\r\n    public void act(in T val);\r\n}\r\n", "impl/bad_tmpl_bodyless.adhd");
     ExpectCompileFails(arena, "[subsystem(\"bad\")]\r\nclass BadSub {\r\n}\r\n", "impl/bad_sub.adhd");
     ExpectCompileFails(arena, "class BadMethodTmpl {\r\n    public void act<T>(in T val);\r\n}\r\n", "impl/bad_method_tmpl.adhd");

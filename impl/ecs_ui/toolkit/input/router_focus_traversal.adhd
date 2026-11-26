@@ -41,7 +41,7 @@ b8 TryMoveRouterFocus(
             else
                 candidate += 1u;
         }
-        const HitTarget target = targets[candidate];
+        in HitTarget target = targets[candidate];
         if(target.focusable && IsRouterTargetInteractive(targets, lookup, popups, target)){
             AssignRouterFocus(target, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
             return true;
@@ -79,7 +79,7 @@ b8 TryMoveRouterFocusForTraversal(
     const PopupToken token = top.scope.token;
     if(reverse){
         for(usize index = current; index > 0u; --index){
-            const HitTarget target = targets[index - 1u];
+            in HitTarget target = targets[index - 1u];
             if(target.popup != token || !target.focusable || !IsRouterTargetInteractive(targets, lookup, popups, target))
                 continue;
             AssignRouterFocus(target, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
@@ -91,7 +91,7 @@ b8 TryMoveRouterFocusForTraversal(
         if(current != targets.size())
             startIndex = current + 1u;
         for(usize index = startIndex; index < targets.size(); ++index){
-            const HitTarget target = targets[index];
+            in HitTarget target = targets[index];
             if(target.popup != token || !target.focusable || !IsRouterTargetInteractive(targets, lookup, popups, target))
                 continue;
             AssignRouterFocus(target, commandSources, inOutFocus, inOutFocusDeclaration, inOutFocusControl);
@@ -101,7 +101,7 @@ b8 TryMoveRouterFocusForTraversal(
     const PopupToken parent = top.scope.parent;
     usize anchor = targets.size();
     for(usize index = 0u; index < targets.size(); ++index){
-        const HitTarget target = targets[index];
+        in HitTarget target = targets[index];
         if(target.id == top.scope.focusAnchor && target.declarationGeneration == top.scope.focusAnchorDeclarationGeneration && target.popup == parent){
             anchor = index;
             break;
@@ -123,7 +123,7 @@ b8 TryMoveRouterFocusForTraversal(
             else
                 index = (anchor + offset) % targets.size();
         }
-        const HitTarget target = targets[index];
+        in HitTarget target = targets[index];
         if(target.popup != parent || !target.enabled || !target.focusable || target.owner.valid() || !HasVisibleUiRectIntersection(target.rectangle, target.clip))
             continue;
         nextFocus = target.id;

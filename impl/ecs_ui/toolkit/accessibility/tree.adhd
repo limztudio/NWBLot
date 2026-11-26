@@ -19,6 +19,35 @@ StringView SliceAccessibleText(in String storage, in u32 offset, in u32 length){
     return view.substr(start, count);
 }
 
+b8 AccessibleNodesContentEqual(in AccessibilityNodeData lhs, in AccessibilityNodeData rhs){
+    const u32 dynamicBits = s_AccessibilityStateFocused | s_AccessibilityStateHovered | s_AccessibilityStatePressed;
+    return
+        lhs.id == rhs.id
+        && lhs.parentId == rhs.parentId
+        && lhs.role == rhs.role
+        && lhs.liveMode == rhs.liveMode
+        && (lhs.stateBits & ~dynamicBits) == (rhs.stateBits & ~dynamicBits)
+        && lhs.actionBits == rhs.actionBits
+        && lhs.x == rhs.x
+        && lhs.y == rhs.y
+        && lhs.width == rhs.width
+        && lhs.height == rhs.height
+        && lhs.nameOffset == rhs.nameOffset
+        && lhs.nameLength == rhs.nameLength
+        && lhs.descriptionOffset == rhs.descriptionOffset
+        && lhs.descriptionLength == rhs.descriptionLength
+        && lhs.valueOffset == rhs.valueOffset
+        && lhs.valueLength == rhs.valueLength
+        && lhs.numericValue == rhs.numericValue
+        && lhs.numericMin == rhs.numericMin
+        && lhs.numericMax == rhs.numericMax
+        && lhs.numericStep == rhs.numericStep
+        && lhs.positionInSet == rhs.positionInSet
+        && lhs.setSize == rhs.setSize
+        && lhs.level == rhs.level
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,6 +65,7 @@ class AccessibleTree : NoCopy{
     private Vector<AccessibleAnnouncement> m_announcements;
     private String m_announcementText;
     private u64 m_generation = 0u;
+    private u64 m_contentRevision = 0u;
     private WidgetId m_focusedId;
     private WidgetId m_hoveredId;
     private WidgetId m_pressedId;
@@ -56,6 +86,7 @@ class AccessibleTree : NoCopy{
         this.m_announcements.clear();
         this.m_announcementText.clear();
         this.m_generation = 0u;
+        this.m_contentRevision = 0u;
         this.m_focusedId = WidgetId();
         this.m_hoveredId = WidgetId();
         this.m_pressedId = WidgetId();
@@ -71,19 +102,21 @@ class AccessibleTree : NoCopy{
             return false;
         if(this.m_stagedNodes.size() >= s_AccessibilityMaxNodes)
             return false;
-        if(this.m_stagedLookup.find(desc.id.value) != this.m_stagedLookup.end())
-            return false;
         const usize textNeeded = desc.name.size() + desc.description.size() + desc.valueText.size();
         if(textNeeded > s_AccessibilityMaxTextBytes || this.m_stagedText.size() > s_AccessibilityMaxTextBytes - textNeeded)
             return false;
+        const usize index = this.m_stagedNodes.size();
+        if(!this.m_stagedLookup.try_emplace(desc.id.value, index).second)
+            return false;
 
+        const u32 dynamicBits = s_AccessibilityStateFocused | s_AccessibilityStateHovered | s_AccessibilityStatePressed;
         AccessibilityNodeData node;
         node.id = desc.id.value;
         if(desc.parentId.valid() && desc.parentId != desc.id)
             node.parentId = desc.parentId.value;
         node.role = desc.role;
         node.liveMode = desc.liveMode;
-        node.stateBits = desc.stateBits;
+        node.stateBits = desc.stateBits & ~dynamicBits;
         node.actionBits = desc.actionBits;
         node.x = desc.bounds.x;
         node.y = desc.bounds.y;
@@ -113,9 +146,7 @@ class AccessibleTree : NoCopy{
             this.m_stagedText.append(desc.valueText);
         }
 
-        const usize index = this.m_stagedNodes.size();
         this.m_stagedNodes.push_back(node);
-        this.m_stagedLookup.try_emplace(node.id, index);
         return true;
     }
 
@@ -137,34 +168,69 @@ class AccessibleTree : NoCopy{
         return true;
     }
 
+    private b8 matchesPreviousCommittedContent()const{
+        if(this.m_nodes.size() != this.m_stagedNodes.size())
+            return false;
+        if(StringView(this.m_text) != StringView(this.m_stagedText))
+            return false;
+        for(usize index = 0u; index < this.m_nodes.size(); ++index){
+            if(!AccessibleNodesContentEqual(this.m_nodes[index], this.m_stagedNodes[index]))
+                return false;
+        }
+        return true;
+    }
+
+    private void setNodeStateBit(in WidgetId id, in u32 bit, in b8 enabled){
+        if(!id.valid())
+            return;
+        const auto found = this.m_lookup.find(id.value);
+        if(found == this.m_lookup.end())
+            return;
+        const usize idx = found.value();
+        if(idx >= this.m_nodes.size())
+            return;
+        if(enabled)
+            this.m_nodes[idx].stateBits |= bit;
+        else
+            this.m_nodes[idx].stateBits &= ~bit;
+    }
+
     public void commit(in u64 generation, in WidgetId focusedId, in WidgetId hoveredId, in WidgetId pressedId){
         this.m_nodes.swap(this.m_stagedNodes);
         this.m_text.swap(this.m_stagedText);
         this.m_lookup.swap(this.m_stagedLookup);
         this.m_announcements.swap(this.m_stagedAnnouncements);
         this.m_announcementText.swap(this.m_stagedAnnouncementText);
+        if(this.m_contentRevision == 0u || !this.matchesPreviousCommittedContent())
+            ++this.m_contentRevision;
         this.beginFrame();
         this.m_generation = generation;
+        this.m_focusedId = WidgetId();
+        this.m_hoveredId = WidgetId();
+        this.m_pressedId = WidgetId();
         this.updateInteractionState(focusedId, hoveredId, pressedId);
     }
 
     public void updateInteractionState(in WidgetId focusedId, in WidgetId hoveredId, in WidgetId pressedId){
-        this.m_focusedId = focusedId;
-        this.m_hoveredId = hoveredId;
-        this.m_pressedId = pressedId;
-        const u32 dynamicBits = s_AccessibilityStateFocused | s_AccessibilityStateHovered | s_AccessibilityStatePressed;
-        for(mut AccessibilityNodeData node : this.m_nodes){
-            node.stateBits &= ~dynamicBits;
-            if(focusedId.valid() && node.id == focusedId.value)
-                node.stateBits |= s_AccessibilityStateFocused;
-            if(hoveredId.valid() && node.id == hoveredId.value)
-                node.stateBits |= s_AccessibilityStateHovered;
-            if(pressedId.valid() && node.id == pressedId.value)
-                node.stateBits |= s_AccessibilityStatePressed;
+        if(this.m_focusedId != focusedId){
+            this.setNodeStateBit(this.m_focusedId, s_AccessibilityStateFocused, false);
+            this.m_focusedId = focusedId;
+            this.setNodeStateBit(this.m_focusedId, s_AccessibilityStateFocused, true);
+        }
+        if(this.m_hoveredId != hoveredId){
+            this.setNodeStateBit(this.m_hoveredId, s_AccessibilityStateHovered, false);
+            this.m_hoveredId = hoveredId;
+            this.setNodeStateBit(this.m_hoveredId, s_AccessibilityStateHovered, true);
+        }
+        if(this.m_pressedId != pressedId){
+            this.setNodeStateBit(this.m_pressedId, s_AccessibilityStatePressed, false);
+            this.m_pressedId = pressedId;
+            this.setNodeStateBit(this.m_pressedId, s_AccessibilityStatePressed, true);
         }
     }
 
     public u64 generation()const{ return this.m_generation; }
+    public u64 contentRevision()const{ return this.m_contentRevision; }
     public WidgetId focusedId()const{ return this.m_focusedId; }
     public WidgetId hoveredId()const{ return this.m_hoveredId; }
     public WidgetId pressedId()const{ return this.m_pressedId; }

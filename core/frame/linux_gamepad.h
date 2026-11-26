@@ -44,7 +44,6 @@ private:
     struct SlotState{
         Array<f32, static_cast<usize>(GamepadAxis::kCount)> axes{};
         u32 buttons = 0u;
-        f32 reconnectCooldown = 0.0f;
         i32 fd = -1;
         i32 hatX = 0;
         i32 hatY = 0;
@@ -59,6 +58,11 @@ private:
 
 private:
     Array<SlotState, s_MaxGamepadCount> m_slots{};
+    i32 m_inotifyFd = -1;
+    i32 m_inotifyWatch = -1;
+    f32 m_fallbackScanCooldown = 2.0f;
+    u32 m_fallbackScanSlot = 0u;
+    b8 m_topologyDirty = true;
 };
 
 

@@ -140,24 +140,27 @@ b8 Builder::tooltip(in StringView stableKey, in StringView anchorKey, in StringV
     frame.revision = state.revision();
     frame.anchorIndex = cast<u32>(anchorIndex.value());
     frame.layer = this.m_context.popupLayer() + 1u;
-    Insets wrapPadding = frame.style.padding;
-    if(this.m_skin.has_value()){
-        const auto background = this.region(frame.style.background, frame.style.fallback);
-        if(background.has_value())
-            wrapPadding = MaxUiPadding(frame.style.padding, background.value().padding);
+    if(state.visible()){
+        Insets wrapPadding = frame.style.padding;
+        if(this.m_skin.has_value()){
+            const auto background = this.region(frame.style.background, frame.style.fallback);
+            if(background.has_value())
+                wrapPadding = MaxUiPadding(frame.style.padding, background.value().padding);
+        }
+        const f32 padX = wrapPadding.left + wrapPadding.right;
+        ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
+        if(options.maximumWidth < s_TextMaxCoordinateF32 * 0.5f && options.maximumWidth > padX){
+            request.wrapMode = TextWrapMode::Word;
+            request.maxWidth = options.maximumWidth - padX;
+        }
+        const auto measured = this.m_text.layoutAndMeasureShared(request, this.m_paint.displayMetrics());
+        if(!measured.has_value()){
+            this.m_context.fail();
+            return false;
+        }
+        frame.text = measured.value().layout;
+        frame.textBounds = measured.value().bounds;
     }
-    const f32 padX = wrapPadding.left + wrapPadding.right;
-    ShapeRequest request = this.textShapeRequest(text, this.m_style.fontSize);
-    if(options.maximumWidth < s_TextMaxCoordinateF32 * 0.5f && options.maximumWidth > padX){
-        request.wrapMode = TextWrapMode::Word;
-        request.maxWidth = options.maximumWidth - padX;
-    }
-    auto layout = this.m_text.layoutShared(request);
-    if(!layout.has_value()){
-        this.m_context.fail();
-        return false;
-    }
-    frame.text = layout.value();
     anchor.annotated = true;
     mut Vector<BuilderTooltipFrame> tooltips = this.m_scope.value().m_tooltips;
     tooltips.emplace_back();
@@ -203,15 +206,12 @@ b8 Builder::paintTooltips(){
         const Insets padding = MaxUiPadding(frame.style.padding, background.value().padding);
         if(!frame.text.valid())
             return false;
-        const auto textBounds = this.m_text.measure(frame.text.deref(), this.m_paint.displayMetrics());
-        if(!textBounds.has_value())
-            return false;
-        const Point measured = Point(textBounds.value().width, textBounds.value().height);
+        const Point measured = Point(frame.textBounds.width, frame.textBounds.height);
         const PopupOptions options = BuildTooltipPopupOptions(box.value().rectangle, measured, padding, background.value(), frame.options);
         const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
         if(!placement.has_value())
             return false;
-        if(!painter.paintTooltipOverlay(this.m_paint, this.m_text, frame.layer, background.value().name, placement.value().bounds, padding, frame.text.deref(), textBounds.value(), frame.style.text) || frame.state.value().revision() != frame.revision)
+        if(!painter.paintTooltipOverlay(this.m_paint, this.m_text, frame.layer, background.value().name, placement.value().bounds, padding, frame.text.deref(), frame.textBounds, frame.style.text) || frame.state.value().revision() != frame.revision)
             return false;
         AccessibleNodeDesc a11yDesc;
         a11yDesc.id = frame.widget.id;
@@ -319,20 +319,14 @@ EditBoxResult Builder::textArea(in StringView stableKey, mut EditModel model, mu
     if(!options.placeholder.empty()){
         ShapeRequest placeholderRequest = this.textShapeRequest(options.placeholder, this.m_style.fontSize);
         placeholderRequest.tabStopSpaces = options.tabStopSpaces;
-        const auto placeholderLayout = this.m_text.layoutShared(placeholderRequest);
-        if(!placeholderLayout.has_value()){
+        const auto measuredPlaceholder = this.m_text.layoutAndMeasureShared(placeholderRequest, this.m_paint.displayMetrics());
+        if(!measuredPlaceholder.has_value()){
             result.valid = false;
             this.m_context.fail();
             return result;
         }
-        const auto placeholderBounds = this.m_text.measure(placeholderLayout.value().deref(), this.m_paint.displayMetrics());
-        if(!placeholderBounds.has_value()){
-            result.valid = false;
-            this.m_context.fail();
-            return result;
-        }
-        editFrame.placeholder = placeholderLayout.value();
-        editFrame.placeholderBounds = placeholderBounds.value();
+        editFrame.placeholder = measuredPlaceholder.value().layout;
+        editFrame.placeholderBounds = measuredPlaceholder.value().bounds;
     }
     TextWrapMode prepareWrapMode = TextWrapMode::None;
     f32 prepareWrapWidth = 0.0f;

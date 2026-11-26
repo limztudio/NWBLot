@@ -284,6 +284,12 @@ b8 MeshSkinningSystem::submitFrameSkinningGraph(){
     this.resetFrameTaskGraph();
     this.m_frameCachedPoseJoints.clear();
     this.m_frameCachedPoses.clear();
+    this.m_frameSceneNameIndexBuilt = false;
+    const u64 curNameVer = this.m_world.componentMutationVersion<SceneEntityNameComponent>();
+    if(curNameVer != this.m_lastSceneNamePoolVersion){
+        this.m_unresolvedSkeletonQueries.clear();
+        this.m_lastSceneNamePoolVersion = curNameVer;
+    }
     mut GpuTaskGraph graph = this.m_frameTaskGraph;
     mut Vector<MeshSkinningGraphDispatchPlan> dispatchPlans = this.m_frameDispatchPlans;
     dispatchPlans.clear();

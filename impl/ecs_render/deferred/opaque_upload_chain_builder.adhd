@@ -71,17 +71,6 @@ class OpaqueUploadChainBuilder : NoCopy{
             }
             if(!DeclareOpaqueMaterialUploads(this.m_graph, instanceData, inputs.materialTypedBytes, inputs.materialInstances, inputs.materialTyped, dependency))
                 return MakeUnexpected(Failure());
-            if(!AppendInstanceTransformPatch(
-                inputs.instanceTransformPatchContributor,
-                instanceData,
-                inputs.materialInstances,
-                inputs.frameBindings,
-                Name("render.graphics_prefix.opaque.physics_patch"),
-                true,
-                this.m_graph,
-                dependency
-            ))
-                return MakeUnexpected(Failure());
             result.materialDrawBuffersUploaded = true;
         }
 
@@ -101,6 +90,17 @@ class OpaqueUploadChainBuilder : NoCopy{
                 return MakeUnexpected(Failure());
             result.csgFrameBuffersUploaded = true;
         }
+        if(inputs.hasOpaqueDrawItems && !AppendInstanceTransformPatch(
+            inputs.instanceTransformPatchContributor,
+            instanceData,
+            inputs.materialInstances,
+            inputs.frameBindings,
+            Name("render.graphics_prefix.opaque.physics_patch"),
+            true,
+            this.m_graph,
+            dependency
+        ))
+            return MakeUnexpected(Failure());
         result.csgUploadTask = dependency;
         return result;
     }

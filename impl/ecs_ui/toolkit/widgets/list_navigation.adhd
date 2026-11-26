@@ -22,6 +22,8 @@ class ListState : NoCopy{
     public ScrollPlacement m_placement;
     public ScrollViewportPlacement m_scrollbars;
     public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_reconciledInputGeneration = 0u;
+    public u64 m_reconciledRowCount = 0u;
     public u64 m_selected = 0u;
     public u64 m_cursor = 0u;
     public u64 m_anchor = 0u;

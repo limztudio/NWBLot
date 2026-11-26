@@ -532,20 +532,14 @@ EditBoxResult Builder::declareEditBox(
     editFrame.editStyle = this.m_editStyle;
     editFrame.editOptions = cleanOptions;
     if(!placeholderText.empty()){
-        const auto placeholderLayout = this.m_text.layoutShared(this.textShapeRequest(placeholderText, this.m_style.fontSize));
-        if(!placeholderLayout.has_value()){
+        const auto measuredPlaceholder = this.m_text.layoutAndMeasureShared(this.textShapeRequest(placeholderText, this.m_style.fontSize), this.m_paint.displayMetrics());
+        if(!measuredPlaceholder.has_value()){
             this.m_context.fail();
             result.valid = false;
             return result;
         }
-        const auto placeholderBounds = this.m_text.measure(placeholderLayout.value().deref(), this.m_paint.displayMetrics());
-        if(!placeholderBounds.has_value()){
-            this.m_context.fail();
-            result.valid = false;
-            return result;
-        }
-        editFrame.placeholder = placeholderLayout.value();
-        editFrame.placeholderBounds = placeholderBounds.value();
+        editFrame.placeholder = measuredPlaceholder.value().layout;
+        editFrame.placeholderBounds = measuredPlaceholder.value().bounds;
     }
     if(!this.prepareEditBox(result, model, state, item, editFrame)){
         result.valid = false;

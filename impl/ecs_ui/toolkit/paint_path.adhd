@@ -252,6 +252,17 @@ class PaintHoleBridgeTarget{
     public f32 minY = 0.0f;
 }
 
+class PaintTriangulationScratch{
+    public Vector<PaintPolyContour> contours;
+    public Vector<Point> orientedPoints;
+    public Vector<u32> contourOutBase;
+    public Vector<PaintHoleBridgeTarget> holes;
+    public Vector<PaintTriRingNode> ringNodes;
+    public Vector<usize> reflexNodes;
+    public Vector<u8> isReflex;
+    public Vector<u32> reflexPos;
+}
+
 void PushFlatPathUniquePoint(in Point pt, in usize subpathBegin, mut Vector<Point> outPoints){
     if(outPoints.size() > subpathBegin){
         in Point prev = outPoints[outPoints.size() - 1u];
@@ -740,13 +751,124 @@ usize BridgeHoleIntoRing(
     return 2u;
 }
 
+b8 IsSimpleConvexCWRing(in Span<Point> verts, in usize begin, in usize count){
+    if(count < 3u)
+        return false;
+    usize firstNonZero = usize.max;
+    i32 firstSign = 0;
+    for(usize i = 0u; i < count; ++i){
+        usize prev = count - 1u;
+        if(i > 0u)
+            prev = i - 1u;
+        usize next = i + 1u;
+        if(next == count)
+            next = 0u;
+        in Point p = verts[begin + prev];
+        in Point v = verts[begin + i];
+        in Point n = verts[begin + next];
+        if(Cross2D(Point(v.x - p.x, v.y - p.y), Point(n.x - p.x, n.y - p.y)) < -s_PaintPathEarCrossEpsilon)
+            return false;
+        const f32 dy = n.y - v.y;
+        if(firstNonZero == usize.max && dy != 0.0f){
+            firstNonZero = i;
+            if(dy > 0.0f)
+                firstSign = 1;
+            else
+                firstSign = -1;
+        }
+    }
+    if(firstNonZero == usize.max)
+        return false;
+    i32 prevSign = firstSign;
+    u32 flipNegToPos = 0u;
+    for(usize step = 1u; step <= count; ++step){
+        const usize idx = (firstNonZero + step) % count;
+        usize next = idx + 1u;
+        if(next == count)
+            next = 0u;
+        const f32 dy = verts[begin + next].y - verts[begin + idx].y;
+        if(dy == 0.0f)
+            continue;
+        i32 sign = 1;
+        if(dy < 0.0f)
+            sign = -1;
+        if(prevSign < 0 && sign > 0){
+            ++flipNegToPos;
+            if(flipNegToPos > 1u)
+                return false;
+        }
+        prevSign = sign;
+    }
+    return true;
+}
+
+void RemoveRingNodeFromReflex(
+    in usize nodeIdx,
+    mut Vector<usize> reflexNodes,
+    mut Vector<u8> isReflex,
+    mut Vector<u32> reflexPos
+){
+    if(isReflex[nodeIdx] == 0u)
+        return;
+    const usize pos = cast<usize>(reflexPos[nodeIdx]);
+    const usize lastIdx = reflexNodes.size() - 1u;
+    if(pos != lastIdx){
+        const usize movedNode = reflexNodes[lastIdx];
+        reflexNodes[pos] = movedNode;
+        reflexPos[movedNode] = cast<u32>(pos);
+    }
+    reflexNodes.pop_back();
+    isReflex[nodeIdx] = 0u;
+    reflexPos[nodeIdx] = u32.max;
+}
+
+void SyncRingNodeReflex(
+    in Vector<PaintTriRingNode> nodes,
+    in usize nodeIdx,
+    mut Vector<usize> reflexNodes,
+    mut Vector<u8> isReflex,
+    mut Vector<u32> reflexPos
+){
+    if(!nodes[nodeIdx].active){
+        RemoveRingNodeFromReflex(nodeIdx, reflexNodes, isReflex, reflexPos);
+        return;
+    }
+    const usize pNode = nodes[nodeIdx].prev;
+    const usize nNode = nodes[nodeIdx].next;
+    in Point p = nodes[pNode].pt;
+    in Point v = nodes[nodeIdx].pt;
+    in Point n = nodes[nNode].pt;
+    const f32 cross = Cross2D(Point(v.x - p.x, v.y - p.y), Point(n.x - p.x, n.y - p.y));
+    if(cross <= s_PaintPathEarCrossEpsilon){
+        if(isReflex[nodeIdx] == 0u){
+            isReflex[nodeIdx] = 1u;
+            reflexPos[nodeIdx] = cast<u32>(reflexNodes.size());
+            reflexNodes.push_back(nodeIdx);
+        }
+    }
+    else
+        RemoveRingNodeFromReflex(nodeIdx, reflexNodes, isReflex, reflexPos);
+}
+
 void EarClipRingIntoIndices(
     mut Vector<PaintTriRingNode> nodes,
     in usize startCount,
+    mut Vector<usize> reflexNodes,
+    mut Vector<u8> isReflex,
+    mut Vector<u32> reflexPos,
     mut Vector<u32> outTriIndices
 ){
     if(startCount < 3u || nodes.empty())
         return;
+    reflexNodes.clear();
+    isReflex.clear();
+    isReflex.resize(nodes.size(), 0u);
+    reflexPos.clear();
+    reflexPos.resize(nodes.size(), u32.max);
+    for(usize nodeIdx = 0u; nodeIdx < nodes.size(); ++nodeIdx)
+        SyncRingNodeReflex(nodes, nodeIdx, reflexNodes, isReflex, reflexPos);
+    outTriIndices.reserve(outTriIndices.size() + (startCount - 2u) * 3u);
+
     usize remaining = startCount;
     usize cursor = 0u;
     while(cursor < nodes.size() && !nodes[cursor].active)
@@ -781,6 +903,10 @@ void EarClipRingIntoIndices(
             nodes[nNode].prev = pPrev;
             nodes[vNode].active = false;
             nodes[pNode].active = false;
+            RemoveRingNodeFromReflex(vNode, reflexNodes, isReflex, reflexPos);
+            RemoveRingNodeFromReflex(pNode, reflexNodes, isReflex, reflexPos);
+            SyncRingNodeReflex(nodes, pPrev, reflexNodes, isReflex, reflexPos);
+            SyncRingNodeReflex(nodes, nNode, reflexNodes, isReflex, reflexPos);
             remaining -= 2u;
             cursor = nNode;
             failTries = 0u;
@@ -796,15 +922,20 @@ void EarClipRingIntoIndices(
         b8 isEar = false;
         if(cross > threshold){
             isEar = true;
-            if(cross > s_PaintPathEarCrossEpsilon){
-                usize qNode = nodes[nNode].next;
-                while(qNode != pNode){
+            if(cross > s_PaintPathEarCrossEpsilon && !reflexNodes.empty()){
+                const f32 triMinX = UiSimdMin(p.x, UiSimdMin(v.x, n.x)) - 1.0e-4f;
+                const f32 triMaxX = UiSimdMax(p.x, UiSimdMax(v.x, n.x)) + 1.0e-4f;
+                const f32 triMinY = UiSimdMin(p.y, UiSimdMin(v.y, n.y)) - 1.0e-4f;
+                const f32 triMaxY = UiSimdMax(p.y, UiSimdMax(v.y, n.y)) + 1.0e-4f;
+                for(in usize qNode : reflexNodes){
                     if(
                         nodes[qNode].vertIndex != nodes[pNode].vertIndex
                         && nodes[qNode].vertIndex != nodes[vNode].vertIndex
                         && nodes[qNode].vertIndex != nodes[nNode].vertIndex
                     ){
                         in Point q = nodes[qNode].pt;
+                        if(q.x < triMinX || q.x > triMaxX || q.y < triMinY || q.y > triMaxY)
+                            continue;
                         const f32 qpx = q.x - p.x;
                         const f32 qpy = q.y - p.y;
                         const f32 qvx = q.x - v.x;
@@ -822,7 +953,6 @@ void EarClipRingIntoIndices(
                             }
                         }
                     }
-                    qNode = nodes[qNode].next;
                 }
             }
         }
@@ -836,6 +966,9 @@ void EarClipRingIntoIndices(
             nodes[pNode].next = nNode;
             nodes[nNode].prev = pNode;
             nodes[vNode].active = false;
+            RemoveRingNodeFromReflex(vNode, reflexNodes, isReflex, reflexPos);
+            SyncRingNodeReflex(nodes, pNode, reflexNodes, isReflex, reflexPos);
+            SyncRingNodeReflex(nodes, nNode, reflexNodes, isReflex, reflexPos);
             --remaining;
             cursor = nNode;
             failTries = 0u;
@@ -858,6 +991,7 @@ void TriangulatePaintPolygons(
     in Span<Point> flatPoints,
     in Span<PaintPathSubpath> subpaths,
     in PaintFillRule fillRule,
+    mut PaintTriangulationScratch scratch,
     mut Vector<Point> outVerts,
     mut Vector<u32> outTriIndices,
     mut Vector<PaintPathSubpath> outFringeContours
@@ -866,8 +1000,8 @@ void TriangulatePaintPolygons(
     outTriIndices.clear();
     outFringeContours.clear();
 
-    Vector<PaintPolyContour> contours;
-    Vector<Point> orientedPoints;
+    scratch.contours.clear();
+    scratch.orientedPoints.clear();
     for(in PaintPathSubpath sub : subpaths){
         const usize count = sub.pointEnd - sub.pointBegin;
         if(count < 3u)
@@ -878,120 +1012,173 @@ void TriangulatePaintPolygons(
             continue;
 
         PaintPolyContour contour;
-        contour.vertBegin = orientedPoints.size();
+        contour.vertBegin = sub.pointBegin;
         contour.vertCount = count;
         contour.signedArea2 = area2;
         contour.absArea2 = absArea2;
-        f32 minX = flatPoints[sub.pointBegin].x;
-        f32 minY = flatPoints[sub.pointBegin].y;
-        f32 maxX = minX;
-        f32 maxY = minY;
-        for(usize i = 0u; i < count; ++i){
-            in Point pt = flatPoints[sub.pointBegin + i];
-            orientedPoints.push_back(pt);
-            minX = UiSimdMin(minX, pt.x);
-            minY = UiSimdMin(minY, pt.y);
-            maxX = UiSimdMax(maxX, pt.x);
-            maxY = UiSimdMax(maxY, pt.y);
-        }
-        contour.minX = minX;
-        contour.minY = minY;
-        contour.maxX = maxX;
-        contour.maxY = maxY;
-        contour.hasProbe = ComputeContourInteriorProbe(Span<Point>(orientedPoints), contour.vertBegin, count, contour.probe);
-        if(!contour.hasProbe)
-            contour.probe = orientedPoints[contour.vertBegin];
-        contours.push_back(contour);
+        scratch.contours.push_back(contour);
     }
 
-    const usize contourCount = contours.size();
+    const usize contourCount = scratch.contours.size();
     if(contourCount == 0u)
         return;
 
+    if(contourCount == 1u){
+        in PaintPolyContour single = scratch.contours[0u];
+        const usize count = single.vertCount;
+        outVerts.reserve(count);
+        if(single.signedArea2 < 0.0f){
+            for(usize k = count; k > 0u; --k)
+                outVerts.push_back(flatPoints[single.vertBegin + (k - 1u)]);
+        }
+        else{
+            for(usize k = 0u; k < count; ++k)
+                outVerts.push_back(flatPoints[single.vertBegin + k]);
+        }
+        PaintPathSubpath fringeSub;
+        fringeSub.pointBegin = 0u;
+        fringeSub.pointEnd = count;
+        fringeSub.closed = true;
+        outFringeContours.push_back(fringeSub);
+
+        if(IsSimpleConvexCWRing(Span<Point>(outVerts), 0u, count)){
+            outTriIndices.reserve((count - 2u) * 3u);
+            in Point origin = outVerts[0u];
+            for(usize k = 1u; k + 1u < count; ++k){
+                in Point a = outVerts[k];
+                in Point b = outVerts[k + 1u];
+                const f32 cross = Cross2D(Point(a.x - origin.x, a.y - origin.y), Point(b.x - origin.x, b.y - origin.y));
+                if(cross > s_PaintPathEarCrossEpsilon){
+                    outTriIndices.push_back(0u);
+                    outTriIndices.push_back(cast<u32>(k));
+                    outTriIndices.push_back(cast<u32>(k + 1u));
+                }
+            }
+            return;
+        }
+
+        scratch.ringNodes.clear();
+        scratch.ringNodes.reserve(count);
+        for(usize k = 0u; k < count; ++k){
+            PaintTriRingNode node;
+            node.pt = outVerts[k];
+            node.vertIndex = cast<u32>(k);
+            if(k == 0u)
+                node.prev = count - 1u;
+            else
+                node.prev = k - 1u;
+            if(k + 1u == count)
+                node.next = 0u;
+            else
+                node.next = k + 1u;
+            scratch.ringNodes.push_back(node);
+        }
+        EarClipRingIntoIndices(scratch.ringNodes, count, scratch.reflexNodes, scratch.isReflex, scratch.reflexPos, outTriIndices);
+        return;
+    }
+
+    for(usize idx = 0u; idx < contourCount; ++idx){
+        const usize srcBegin = scratch.contours[idx].vertBegin;
+        const usize count = scratch.contours[idx].vertCount;
+        const usize dstBegin = scratch.orientedPoints.size();
+        scratch.contours[idx].vertBegin = dstBegin;
+        VectorSingle minXY(flatPoints[srcBegin].x, flatPoints[srcBegin].y, 0.0f, 0.0f);
+        VectorSingle maxXY = minXY;
+        for(usize i = 0u; i < count; ++i){
+            in Point pt = flatPoints[srcBegin + i];
+            scratch.orientedPoints.push_back(pt);
+            const VectorSingle p(pt.x, pt.y, 0.0f, 0.0f);
+            minXY = Min(minXY, p);
+            maxXY = Max(maxXY, p);
+        }
+        scratch.contours[idx].minX = minXY.x;
+        scratch.contours[idx].minY = minXY.y;
+        scratch.contours[idx].maxX = maxXY.x;
+        scratch.contours[idx].maxY = maxXY.y;
+        scratch.contours[idx].hasProbe = ComputeContourInteriorProbe(Span<Point>(scratch.orientedPoints), dstBegin, count, scratch.contours[idx].probe);
+        if(!scratch.contours[idx].hasProbe)
+            scratch.contours[idx].probe = scratch.orientedPoints[dstBegin];
+    }
+
+    for(usize a = 1u; a < contourCount; ++a){
+        const PaintPolyContour key = scratch.contours[a];
+        usize b = a;
+        while(b > 0u && scratch.contours[b - 1u].absArea2 < key.absArea2){
+            scratch.contours[b] = scratch.contours[b - 1u];
+            --b;
+        }
+        scratch.contours[b] = key;
+    }
+
     for(usize i = 0u; i < contourCount; ++i){
-        in Point probe = contours[i].probe;
+        in Point probe = scratch.contours[i].probe;
         u32 depth = 0u;
         i32 winding = 0;
-        for(usize j = 0u; j < contourCount; ++j){
-            if(i == j || contours[j].absArea2 <= contours[i].absArea2)
+        f32 bestShellArea2 = s_UiMaxFloat;
+        usize bestShell = usize.max;
+        for(usize j = 0u; j < i; ++j){
+            if(scratch.contours[j].absArea2 <= scratch.contours[i].absArea2)
                 continue;
             if(
-                probe.x < contours[j].minX || probe.x > contours[j].maxX
-                || probe.y < contours[j].minY || probe.y > contours[j].maxY
+                probe.x < scratch.contours[j].minX || probe.x > scratch.contours[j].maxX
+                || probe.y < scratch.contours[j].minY || probe.y > scratch.contours[j].maxY
             )
                 continue;
-            if(ComputePointContourWinding(probe, Span<Point>(orientedPoints), contours[j].vertBegin, contours[j].vertCount) != 0){
+            if(ComputePointContourWinding(probe, Span<Point>(scratch.orientedPoints), scratch.contours[j].vertBegin, scratch.contours[j].vertCount) != 0){
                 ++depth;
-                if(contours[j].signedArea2 > 0.0f)
+                if(scratch.contours[j].signedArea2 > 0.0f)
                     ++winding;
                 else
                     --winding;
+                if(scratch.contours[j].isShell && scratch.contours[j].absArea2 < bestShellArea2){
+                    bestShellArea2 = scratch.contours[j].absArea2;
+                    bestShell = j;
+                }
             }
         }
-        contours[i].depth = depth;
-        contours[i].winding = winding;
+        scratch.contours[i].depth = depth;
+        scratch.contours[i].winding = winding;
         if(fillRule == PaintFillRule::EvenOdd){
             if((depth & 1u) == 0u)
-                contours[i].isShell = true;
+                scratch.contours[i].isShell = true;
             else
-                contours[i].isHole = true;
+                scratch.contours[i].isHole = true;
         }
         else{
             i32 selfSign = 1;
-            if(contours[i].signedArea2 < 0.0f)
+            if(scratch.contours[i].signedArea2 < 0.0f)
                 selfSign = -1;
             if(winding == 0)
-                contours[i].isShell = true;
+                scratch.contours[i].isShell = true;
             else if(winding + selfSign == 0)
-                contours[i].isHole = true;
+                scratch.contours[i].isHole = true;
+        }
+        if(scratch.contours[i].isHole && bestShell != usize.max){
+            if(fillRule != PaintFillRule::EvenOdd || scratch.contours[bestShell].depth + 1u == depth)
+                scratch.contours[i].parentContour = bestShell;
         }
     }
 
     for(usize i = 0u; i < contourCount; ++i){
-        if(!contours[i].isHole)
-            continue;
-        in Point probe = contours[i].probe;
-        f32 bestArea2 = s_UiMaxFloat;
-        usize bestShell = usize.max;
-        for(usize j = 0u; j < contourCount; ++j){
-            if(!contours[j].isShell)
-                continue;
-            if(fillRule == PaintFillRule::EvenOdd && contours[j].depth + 1u != contours[i].depth)
-                continue;
-            if(contours[j].absArea2 <= contours[i].absArea2 || contours[j].absArea2 >= bestArea2)
-                continue;
-            if(
-                probe.x < contours[j].minX || probe.x > contours[j].maxX
-                || probe.y < contours[j].minY || probe.y > contours[j].maxY
-            )
-                continue;
-            if(ComputePointContourWinding(probe, Span<Point>(orientedPoints), contours[j].vertBegin, contours[j].vertCount) != 0){
-                bestArea2 = contours[j].absArea2;
-                bestShell = j;
-            }
+        if(scratch.contours[i].isShell && scratch.contours[i].signedArea2 < 0.0f){
+            ReverseRingSlice(scratch.orientedPoints, scratch.contours[i].vertBegin, scratch.contours[i].vertCount);
+            scratch.contours[i].signedArea2 = -scratch.contours[i].signedArea2;
         }
-        contours[i].parentContour = bestShell;
-    }
-
-    for(usize i = 0u; i < contourCount; ++i){
-        if(contours[i].isShell && contours[i].signedArea2 < 0.0f){
-            ReverseRingSlice(orientedPoints, contours[i].vertBegin, contours[i].vertCount);
-            contours[i].signedArea2 = -contours[i].signedArea2;
-        }
-        else if(contours[i].isHole && contours[i].signedArea2 > 0.0f){
-            ReverseRingSlice(orientedPoints, contours[i].vertBegin, contours[i].vertCount);
-            contours[i].signedArea2 = -contours[i].signedArea2;
+        else if(scratch.contours[i].isHole && scratch.contours[i].signedArea2 > 0.0f){
+            ReverseRingSlice(scratch.orientedPoints, scratch.contours[i].vertBegin, scratch.contours[i].vertCount);
+            scratch.contours[i].signedArea2 = -scratch.contours[i].signedArea2;
         }
     }
 
-    Vector<u32> contourOutBase(contourCount, 0u);
+    scratch.contourOutBase.clear();
+    scratch.contourOutBase.resize(contourCount, 0u);
     for(usize i = 0u; i < contourCount; ++i){
-        if(!contours[i].isShell && (!contours[i].isHole || contours[i].parentContour == usize.max))
+        if(!scratch.contours[i].isShell && (!scratch.contours[i].isHole || scratch.contours[i].parentContour == usize.max))
             continue;
         const usize outBegin = outVerts.size();
-        contourOutBase[i] = cast<u32>(outBegin);
-        for(usize k = 0u; k < contours[i].vertCount; ++k)
-            outVerts.push_back(orientedPoints[contours[i].vertBegin + k]);
+        scratch.contourOutBase[i] = cast<u32>(outBegin);
+        for(usize k = 0u; k < scratch.contours[i].vertCount; ++k)
+            outVerts.push_back(scratch.orientedPoints[scratch.contours[i].vertBegin + k]);
         PaintPathSubpath fringeSub;
         fringeSub.pointBegin = outBegin;
         fringeSub.pointEnd = outVerts.size();
@@ -999,44 +1186,42 @@ void TriangulatePaintPolygons(
         outFringeContours.push_back(fringeSub);
     }
 
-    Vector<PaintHoleBridgeTarget> holes;
-    Vector<PaintTriRingNode> ringNodes;
     for(usize shellIdx = 0u; shellIdx < contourCount; ++shellIdx){
-        if(!contours[shellIdx].isShell)
+        if(!scratch.contours[shellIdx].isShell)
             continue;
-        holes.clear();
+        scratch.holes.clear();
         for(usize hIdx = 0u; hIdx < contourCount; ++hIdx){
-            if(!contours[hIdx].isHole || contours[hIdx].parentContour != shellIdx)
+            if(!scratch.contours[hIdx].isHole || scratch.contours[hIdx].parentContour != shellIdx)
                 continue;
             PaintHoleBridgeTarget target;
             target.contourIndex = hIdx;
-            target.maxX = orientedPoints[contours[hIdx].vertBegin].x;
-            target.minY = orientedPoints[contours[hIdx].vertBegin].y;
+            target.maxX = scratch.orientedPoints[scratch.contours[hIdx].vertBegin].x;
+            target.minY = scratch.orientedPoints[scratch.contours[hIdx].vertBegin].y;
             target.holeMaxVert = 0u;
-            for(usize k = 1u; k < contours[hIdx].vertCount; ++k){
-                in Point pt = orientedPoints[contours[hIdx].vertBegin + k];
+            for(usize k = 1u; k < scratch.contours[hIdx].vertCount; ++k){
+                in Point pt = scratch.orientedPoints[scratch.contours[hIdx].vertBegin + k];
                 if(pt.x > target.maxX || (pt.x == target.maxX && pt.y < target.minY)){
                     target.maxX = pt.x;
                     target.minY = pt.y;
                     target.holeMaxVert = k;
                 }
             }
-            holes.push_back(target);
+            scratch.holes.push_back(target);
         }
 
-        for(usize a = 1u; a < holes.size(); ++a){
-            const PaintHoleBridgeTarget key = holes[a];
+        for(usize a = 1u; a < scratch.holes.size(); ++a){
+            const PaintHoleBridgeTarget key = scratch.holes[a];
             usize b = a;
-            while(b > 0u && (holes[b - 1u].maxX < key.maxX || (holes[b - 1u].maxX == key.maxX && holes[b - 1u].minY > key.minY))){
-                holes[b] = holes[b - 1u];
+            while(b > 0u && (scratch.holes[b - 1u].maxX < key.maxX || (scratch.holes[b - 1u].maxX == key.maxX && scratch.holes[b - 1u].minY > key.minY))){
+                scratch.holes[b] = scratch.holes[b - 1u];
                 --b;
             }
-            holes[b] = key;
+            scratch.holes[b] = key;
         }
 
-        ringNodes.clear();
-        const usize shellCount = contours[shellIdx].vertCount;
-        const u32 shellBase = contourOutBase[shellIdx];
+        scratch.ringNodes.clear();
+        const usize shellCount = scratch.contours[shellIdx].vertCount;
+        const u32 shellBase = scratch.contourOutBase[shellIdx];
         for(usize k = 0u; k < shellCount; ++k){
             PaintTriRingNode node;
             node.pt = outVerts[cast<usize>(shellBase) + k];
@@ -1049,15 +1234,15 @@ void TriangulatePaintPolygons(
                 node.next = 0u;
             else
                 node.next = k + 1u;
-            ringNodes.push_back(node);
+            scratch.ringNodes.push_back(node);
         }
         usize totalRingVerts = shellCount;
 
-        for(in PaintHoleBridgeTarget holeTarget : holes){
+        for(in PaintHoleBridgeTarget holeTarget : scratch.holes){
             const usize hIdx = holeTarget.contourIndex;
-            const usize hCount = contours[hIdx].vertCount;
-            const u32 hBase = contourOutBase[hIdx];
-            const usize hNodeBase = ringNodes.size();
+            const usize hCount = scratch.contours[hIdx].vertCount;
+            const u32 hBase = scratch.contourOutBase[hIdx];
+            const usize hNodeBase = scratch.ringNodes.size();
             for(usize k = 0u; k < hCount; ++k){
                 PaintTriRingNode node;
                 node.pt = outVerts[cast<usize>(hBase) + k];
@@ -1070,12 +1255,12 @@ void TriangulatePaintPolygons(
                     node.next = hNodeBase;
                 else
                     node.next = hNodeBase + k + 1u;
-                ringNodes.push_back(node);
+                scratch.ringNodes.push_back(node);
             }
-            totalRingVerts += hCount + BridgeHoleIntoRing(hNodeBase, holeTarget.holeMaxVert, ringNodes);
+            totalRingVerts += hCount + BridgeHoleIntoRing(hNodeBase, holeTarget.holeMaxVert, scratch.ringNodes);
         }
 
-        EarClipRingIntoIndices(ringNodes, totalRingVerts, outTriIndices);
+        EarClipRingIntoIndices(scratch.ringNodes, totalRingVerts, scratch.reflexNodes, scratch.isReflex, scratch.reflexPos, outTriIndices);
     }
 }
 

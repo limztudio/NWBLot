@@ -38,15 +38,9 @@ static b8 ValidTextRange(const u32 offset, const u32 length, const usize textByt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TrackedAccessibilityService::TrackedAccessibilityService(Alloc::GlobalArena& arena)
-    : m_arena(arena)
-    , m_nodes(m_arena)
-    , m_textStorage(m_arena)
-    , m_actions(m_arena)
-    , m_ownerThread(QueryCurrentThreadId())
-{
-    m_actions.reserve(s_AccessibilityMaxActions);
-}
+TrackedAccessibilityService::TrackedAccessibilityService([[maybe_unused]] Alloc::GlobalArena& arena)
+    : m_ownerThread(QueryCurrentThreadId())
+{}
 
 TrackedAccessibilityService::~TrackedAccessibilityService()noexcept{
     FOUNDATION_ASSERT(isOwnerThread());
@@ -87,27 +81,21 @@ b8 TrackedAccessibilityService::publishTree(
             return false;
     }
 
-    m_nodes.resize(nodes.size());
-    for(usize i = 0u; i < nodes.size(); ++i)
-        m_nodes[i] = nodes[i];
-    if(textStorage.empty())
-        m_textStorage.clear();
-    else
-        m_textStorage.assign(textStorage.data(), textStorage.size());
-
     m_publishedVersion = version;
     m_publishedFocusedId = focusedId;
+    m_publishedNodeCount = nodes.size();
     m_scaleX = scaleX;
     m_scaleY = scaleY;
 
-    onTreePublished(
-        Span<const AccessibilityNodeData>(m_nodes.data(), m_nodes.size()),
-        AStringView(m_textStorage.data(), m_textStorage.size()),
-        focusedId,
-        version,
-        scaleX,
-        scaleY
-    );
+    onTreePublished(nodes, textStorage, focusedId, version, scaleX, scaleY);
+    return true;
+}
+
+b8 TrackedAccessibilityService::updateFocus(const u64 focusedId){
+    if(!isOwnerThread())
+        return false;
+    m_publishedFocusedId = focusedId;
+    onFocusUpdated(focusedId);
     return true;
 }
 
@@ -127,13 +115,17 @@ b8 TrackedAccessibilityService::announce(const AStringView text, const Accessibi
 b8 TrackedAccessibilityService::pollAction(AccessibilityActionEvent& outEvent)noexcept{
     if(!isOwnerThread())
         return false;
-    const FutexGuard lock = AcquireFutex(m_actionMutex);
-    if(m_actions.empty())
+    if(m_pendingActionCount.load(MemoryOrder::acquire) == 0u)
         return false;
-    outEvent = m_actions.front();
-    for(usize i = 1u; i < m_actions.size(); ++i)
-        m_actions[i - 1u] = m_actions[i];
-    m_actions.pop_back();
+    const FutexGuard lock = AcquireFutex(m_actionMutex);
+    if(m_actionCount == 0u){
+        m_pendingActionCount.store(0u, MemoryOrder::release);
+        return false;
+    }
+    outEvent = m_actions[m_actionHead];
+    m_actionHead = (m_actionHead + 1u) % s_AccessibilityMaxActions;
+    --m_actionCount;
+    m_pendingActionCount.store(m_actionCount, MemoryOrder::release);
     return true;
 }
 
@@ -141,9 +133,12 @@ b8 TrackedAccessibilityService::enqueueAction(const AccessibilityActionEvent& ev
     if(event.targetId == 0u || static_cast<u8>(event.kind) > static_cast<u8>(AccessibilityActionKind::ContextMenu))
         return false;
     const FutexGuard lock = AcquireFutex(m_actionMutex);
-    if(m_actions.size() >= s_AccessibilityMaxActions)
+    if(m_actionCount >= s_AccessibilityMaxActions)
         return false;
-    m_actions.push_back(event);
+    const usize tailIdx = (m_actionHead + m_actionCount) % s_AccessibilityMaxActions;
+    m_actions[tailIdx] = event;
+    ++m_actionCount;
+    m_pendingActionCount.store(m_actionCount, MemoryOrder::release);
     return true;
 }
 
@@ -155,6 +150,8 @@ void TrackedAccessibilityService::onTreePublished(
     [[maybe_unused]] f32 scaleX,
     [[maybe_unused]] f32 scaleY
 ){}
+
+void TrackedAccessibilityService::onFocusUpdated([[maybe_unused]] u64 focusedId){}
 
 void TrackedAccessibilityService::onAnnouncement(
     [[maybe_unused]] AStringView text,

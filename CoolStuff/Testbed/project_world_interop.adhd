@@ -217,16 +217,19 @@ void ClearTestbedPhysicsPreStepCallback(mut NotNullUniquePtr<World> worldHandle)
 class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
     private in PhysicsDebugScreenProjector m_projector;
     private mut Vector<PaintLineSegment> m_outLines;
+    private mut Vector<f32x4> m_viewPts;
     private u32 m_maxLines;
 
     public TestbedProjectedDebugLineSink(
         in borrow PhysicsDebugScreenProjector projector,
         in u32 maxLines,
-        mut Vector<PaintLineSegment> outLines
+        mut Vector<PaintLineSegment> outLines,
+        mut Vector<f32x4> viewPts
     ){
         this.m_projector = projector;
         this.m_maxLines = maxLines;
         this.m_outLines = outLines;
+        this.m_viewPts = viewPts;
     }
 
     public void clear()override{
@@ -379,16 +382,16 @@ class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
             }
             return;
         }
-        Vector<f32x4> viewPts;
-        viewPts.reserve(points.size());
+        this.m_viewPts.clear();
+        this.m_viewPts.reserve(points.size());
         for(usize pi = 0u; pi < points.size(); ++pi)
-            viewPts.push_back(f32x4(this.m_projector.projectPointToView(VectorSingle(points[pi])), 0.0f));
+            this.m_viewPts.push_back(f32x4(this.m_projector.projectPointToView(VectorSingle(points[pi])), 0.0f));
         for(usize ei = 0u; ei + 1u < edgePairs.size(); ei += 2u){
             const u32 i0 = edgePairs[ei];
             const u32 i1 = edgePairs[ei + 1u];
             if(cast<usize>(i0) >= points.size() || cast<usize>(i1) >= points.size())
                 continue;
-            if(!this.emitViewSegment(VectorSingle(viewPts[i0]), VectorSingle(viewPts[i1]), lineColor, budget))
+            if(!this.emitViewSegment(VectorSingle(this.m_viewPts[i0]), VectorSingle(this.m_viewPts[i1]), lineColor, budget))
                 return;
         }
     }
@@ -1438,7 +1441,6 @@ void UpdateTestbedPointerDragTarget(
             world.getComponent<TransformComponent>(inOutGrab.entity).position = f32x4(newPos, 0.0f);
         if(world.hasComponent<ArticulationComponent>(inOutGrab.entity))
             world.getComponent<ArticulationComponent>(inOutGrab.entity).articulation.computeForwardKinematics();
-        SyncWorldModelRuntimes(worldHandle);
         inOutGrab.grabWorldPoint = f32x4(newPos, 0.0f);
         inOutGrab.targetWorldPoint = f32x4(newPos, 0.0f);
         return;
@@ -3534,7 +3536,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     PhysicsDebugDrawStats stats;
     const f32 lineThickness = ResolvePhysicsDebugLineThickness(options);
     if(drawPhysicsWorldDebug){
-        TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines);
+        TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines, debugScratch.indexedEdgeViewPts);
         stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
     }
     else{
@@ -3585,12 +3587,12 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
         context.paint.drawLineBatch(Span<PaintLineSegment>(screenLines.data(), screenLines.size()), lineThickness);
 
     if(drawPhysicsWorldDebug && options.drawLabels){
-        Vector<PhysicsDebugLabel> worldLabels;
-        Vector<PhysicsDebugScreenLabel> projectedLabels;
-        BuildEcsPhysicsDebugLabels(world, physicsSystem.value(), options, projector, worldLabels);
-        ProjectPhysicsDebugLabels(projector, Span<PhysicsDebugLabel>(worldLabels.data(), worldLabels.size()), projectedLabels);
-        for(usize li = 0u; li < projectedLabels.size(); ++li){
-            in PhysicsDebugScreenLabel sl = projectedLabels[li];
+        debugScratch.worldLabels.clear();
+        debugScratch.projectedLabels.clear();
+        BuildEcsPhysicsDebugLabels(world, physicsSystem.value(), options, projector, debugScratch.worldLabels);
+        ProjectPhysicsDebugLabels(projector, Span<PhysicsDebugLabel>(debugScratch.worldLabels.data(), debugScratch.worldLabels.size()), debugScratch.projectedLabels);
+        for(usize li = 0u; li < debugScratch.projectedLabels.size(); ++li){
+            in PhysicsDebugScreenLabel sl = debugScratch.projectedLabels[li];
             ShapeRequest req;
             req.text = sl.text.view();
             req.fontSize = 11.5f;

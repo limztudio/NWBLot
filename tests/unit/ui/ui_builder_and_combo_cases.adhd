@@ -231,7 +231,7 @@ class UiComboBuilderLabelLookupSource : ComboSource{
 
     public Expected<u64> indexOf(in u64 key)const override{
         auto found = this.baseIndexOf(key);
-        if(found.has_value() && this.lookupCalls.value() >= 4u)
+        if(found.has_value() && this.lookupCalls.value() >= 3u)
             found.value() = (found.value() + 1u) % this.count;
         return found;
     }

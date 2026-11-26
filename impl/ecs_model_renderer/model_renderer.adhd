@@ -9,27 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Optional<RendererComponent> TryGetOwnerRendererComponent(in World world, in EntityID owner){
-    if(world.hasComponent<RendererComponent>(owner))
-        return world.getComponent<RendererComponent>(owner);
-    return Optional<RendererComponent>();
-}
-
-void CopyOwnerMaterialInstanceIfPresent(in World world, in EntityID owner, mut MaterialInstanceComponent outMaterialInstance){
-    if(world.hasComponent<MaterialInstanceComponent>(owner))
-        CopyModelObjectMaterialInstance(world.getComponent<MaterialInstanceComponent>(owner), outMaterialInstance);
-}
-
 void ApplyModelObjectRenderer(in EntityID owner, in AssetRef<Material> material, mut World world, mut Entity entity){
-    const Optional<RendererComponent> ownerRenderer = TryGetOwnerRendererComponent(world, owner);
-    RendererComponent fallbackRenderer = RendererComponent();
-    if(ownerRenderer.has_value())
-        fallbackRenderer = ownerRenderer.value();
-    const Expected<RendererComponent> resolvedRenderer = TryResolveModelObjectRendererComponent(
-        material,
-        ownerRenderer.has_value(),
-        fallbackRenderer
-    );
+    const Optional<mut RendererComponent> ownerRendererOpt = world.borrowComponent<RendererComponent>(owner);
+    const RendererComponent defaultOwnerRenderer = RendererComponent();
+    Expected<RendererComponent> resolvedRenderer = MakeUnexpected(Failure());
+    if(ownerRendererOpt.has_value())
+        resolvedRenderer = TryResolveModelObjectRendererComponent(material, true, ownerRendererOpt.value());
+    else
+        resolvedRenderer = TryResolveModelObjectRendererComponent(material, false, defaultOwnerRenderer);
     if(!resolvedRenderer.has_value())
         return;
 
@@ -38,58 +25,90 @@ void ApplyModelObjectRenderer(in EntityID owner, in AssetRef<Material> material,
 
     if(world.hasComponent<MaterialInstanceComponent>(owner)){
         mut MaterialInstanceComponent materialInstance = entity.addComponent<MaterialInstanceComponent>();
-        CopyOwnerMaterialInstanceIfPresent(world, owner, materialInstance);
+        const Optional<mut MaterialInstanceComponent> freshOwnerMatOpt = world.borrowComponent<MaterialInstanceComponent>(owner);
+        if(freshOwnerMatOpt.has_value())
+            CopyModelObjectMaterialInstance(freshOwnerMatOpt.value(), materialInstance);
     }
 }
 
 void SyncModelObjectRenderers(mut World world){
+    if(world.view<ModelObjectComponent>().candidateCount() == 0u)
+        return;
+
     mut World worldMut = world;
-    world.view<ModelObjectComponent>().each(lambda[mut worldMut](in EntityID entity, in ModelObjectComponent object) -> void{
-        if(object.kind == ModelObjectKind::Skeleton)
+    const RendererComponent defaultOwnerRenderer = RendererComponent();
+    EntityID lastOwner = s_InvalidEntityId;
+    b8 lastOwnerAlive = false;
+    Optional<mut RendererComponent> lastOwnerRenderer;
+    Optional<mut MaterialInstanceComponent> lastOwnerMat;
+
+    world.view<ModelObjectComponent>().each(lambda[mut worldMut, in defaultOwnerRenderer, mut lastOwner, mut lastOwnerAlive, mut lastOwnerRenderer, mut lastOwnerMat](in EntityID entity, in ModelObjectComponent object) -> void{
+        if(object.kind == ModelObjectKind::Skeleton || !object.owner.valid())
             return;
-        if(!object.owner.valid() || !worldMut.alive(object.owner))
+        if(object.owner != lastOwner){
+            lastOwner = object.owner;
+            lastOwnerAlive = worldMut.alive(object.owner);
+            if(lastOwnerAlive){
+                lastOwnerRenderer = worldMut.borrowComponent<RendererComponent>(object.owner);
+                lastOwnerMat = worldMut.borrowComponent<MaterialInstanceComponent>(object.owner);
+            }
+            else{
+                lastOwnerRenderer = Optional<mut RendererComponent>();
+                lastOwnerMat = Optional<mut MaterialInstanceComponent>();
+            }
+        }
+        if(!lastOwnerAlive)
             return;
 
-        const Optional<RendererComponent> ownerRenderer = TryGetOwnerRendererComponent(worldMut, object.owner);
-        RendererComponent fallbackRenderer = RendererComponent();
-        if(ownerRenderer.has_value())
-            fallbackRenderer = ownerRenderer.value();
-        const Expected<RendererComponent> resolvedRenderer = TryResolveModelObjectRendererComponent(
-            AssetRef<Material>(object.defaultMaterial),
-            ownerRenderer.has_value(),
-            fallbackRenderer
-        );
+        Expected<RendererComponent> resolvedRenderer = MakeUnexpected(Failure());
+        if(lastOwnerRenderer.has_value())
+            resolvedRenderer = TryResolveModelObjectRendererComponent(AssetRef<Material>(object.defaultMaterial), true, lastOwnerRenderer.value());
+        else
+            resolvedRenderer = TryResolveModelObjectRendererComponent(AssetRef<Material>(object.defaultMaterial), false, defaultOwnerRenderer);
         if(!resolvedRenderer.has_value()){
-            if(worldMut.hasComponent<RendererComponent>(entity))
+            b8 invalidated = false;
+            if(worldMut.hasComponent<RendererComponent>(entity)){
                 worldMut.removeComponent<RendererComponent>(entity);
-            if(worldMut.hasComponent<MaterialInstanceComponent>(entity))
+                invalidated = true;
+            }
+            if(worldMut.hasComponent<MaterialInstanceComponent>(entity)){
                 worldMut.removeComponent<MaterialInstanceComponent>(entity);
+                invalidated = true;
+            }
+            if(invalidated)
+                lastOwner = s_InvalidEntityId;
             return;
         }
 
-        if(worldMut.hasComponent<RendererComponent>(entity)){
-            mut RendererComponent childRenderer = worldMut.getComponent<RendererComponent>(entity);
-            if(!ModelObjectRendererComponentsEqual(childRenderer, resolvedRenderer.value()))
-                childRenderer = resolvedRenderer.value();
+        const Optional<mut RendererComponent> childRendererOpt = worldMut.borrowComponent<RendererComponent>(entity);
+        if(childRendererOpt.has_value()){
+            if(!ModelObjectRendererComponentsEqual(childRendererOpt.value(), resolvedRenderer.value()))
+                childRendererOpt.value() = resolvedRenderer.value();
         }
         else{
             worldMut.entity(entity).addComponent<RendererComponent>() = resolvedRenderer.value();
+            lastOwner = s_InvalidEntityId;
         }
 
-        if(worldMut.hasComponent<MaterialInstanceComponent>(object.owner)){
-            if(!worldMut.hasComponent<MaterialInstanceComponent>(entity)){
+        if(lastOwnerMat.has_value()){
+            const Optional<mut MaterialInstanceComponent> childMatOpt = worldMut.borrowComponent<MaterialInstanceComponent>(entity);
+            if(!childMatOpt.has_value()){
                 mut MaterialInstanceComponent childMat = worldMut.entity(entity).addComponent<MaterialInstanceComponent>();
-                CopyModelObjectMaterialInstance(worldMut.getComponent<MaterialInstanceComponent>(object.owner), childMat);
+                const Optional<mut MaterialInstanceComponent> freshOwnerMatOpt = worldMut.borrowComponent<MaterialInstanceComponent>(object.owner);
+                if(freshOwnerMatOpt.has_value())
+                    CopyModelObjectMaterialInstance(freshOwnerMatOpt.value(), childMat);
+                lastOwner = s_InvalidEntityId;
             }
             else{
-                const MaterialInstanceComponent ownerMat = worldMut.getComponent<MaterialInstanceComponent>(object.owner);
-                mut MaterialInstanceComponent childMat = worldMut.getComponent<MaterialInstanceComponent>(entity);
+                in MaterialInstanceComponent ownerMat = lastOwnerMat.value();
+                mut MaterialInstanceComponent childMat = childMatOpt.value();
                 if(!ModelObjectMaterialInstancesEqual(ownerMat, childMat))
                     CopyModelObjectMaterialInstance(ownerMat, childMat);
             }
         }
         else if(worldMut.hasComponent<MaterialInstanceComponent>(entity)){
             worldMut.removeComponent<MaterialInstanceComponent>(entity);
+            lastOwner = s_InvalidEntityId;
         }
     });
 }

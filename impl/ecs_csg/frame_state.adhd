@@ -222,11 +222,60 @@ static_assert(is_trivially_copyable<CsgFrameBuildDesc>(), "CsgFrameBuildDesc mus
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 IsFastAnalyticCsgCutterTransform(in TransformComponent transform){
+    const VectorSingle scale(transform.scale);
+    const VectorSingle rotation(transform.rotation);
+    const VectorSingle position(transform.position);
+    if(!IsFinite(scale.xyz) || !IsFinite(rotation) || !IsFinite(position.xyz))
+        return false;
+    const f32 rotLenSq = LengthSq(rotation);
+    if(!IsFinite(VectorSingle(rotLenSq)) || Abs(VectorSingle(rotLenSq - 1.0f)).x > 1.0e-4f)
+        return false;
+    const f32 detScale = scale.x * scale.y * scale.z;
+    if(!IsFinite(VectorSingle(detScale)) || Abs(VectorSingle(detScale)).x <= 1.0e-12f)
+        return false;
+    const VectorSingle invScale = VectorSingle(1.0f) / VectorSetW(scale, 1.0f);
+    return IsFinite(invScale);
+}
+
 b8 TryComputeCsgCutterMatricesFromTransform(
     in TransformComponent transform,
     mut MatrixSingle outWorldToShape,
     mut MatrixSingle outShapeToWorld
 ){
+    if(IsFastAnalyticCsgCutterTransform(transform)){
+        const VectorSingle scale(transform.scale);
+        const VectorSingle rotation(transform.rotation);
+        const VectorSingle t = VectorSetW(VectorSingle(transform.position), 0.0f);
+        const MatrixSingle rot = MatrixRotationQuaternion(rotation);
+        const MatrixSingle shapeToWorld(
+            VectorSetW(rot[0u] * scale, t.x),
+            VectorSetW(rot[1u] * scale, t.y),
+            VectorSetW(rot[2u] * scale, t.z),
+            VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
+        );
+        const MatrixSingle rotT = Transpose(rot);
+        const VectorSingle invScale = VectorSingle(1.0f) / VectorSetW(scale, 1.0f);
+        const VectorSingle row0 = VectorSetW(rotT[0u] * VectorSingle(invScale.x), 0.0f);
+        const VectorSingle row1 = VectorSetW(rotT[1u] * VectorSingle(invScale.y), 0.0f);
+        const VectorSingle row2 = VectorSetW(rotT[2u] * VectorSingle(invScale.z), 0.0f);
+        const MatrixSingle worldToShape(
+            VectorSetW(row0, -Dot(row0, t)),
+            VectorSetW(row1, -Dot(row1, t)),
+            VectorSetW(row2, -Dot(row2, t)),
+            VectorSingle(0.0f, 0.0f, 0.0f, 1.0f)
+        );
+        if(
+            IsFinite(shapeToWorld[0u]) && IsFinite(shapeToWorld[1u]) && IsFinite(shapeToWorld[2u])
+            && IsFinite(worldToShape[0u]) && IsFinite(worldToShape[1u]) && IsFinite(worldToShape[2u])
+        ){
+            outShapeToWorld = shapeToWorld;
+            outWorldToShape = worldToShape;
+            return true;
+        }
+        return false;
+    }
+
     const MatrixSingle shapeToWorld = LoadTransformMatrix(transform);
     if(!IsFinite(shapeToWorld[0u]) || !IsFinite(shapeToWorld[1u]) || !IsFinite(shapeToWorld[2u]) || !IsFinite(shapeToWorld[3u]))
         return false;

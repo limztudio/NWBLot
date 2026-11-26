@@ -1211,6 +1211,9 @@ class PhysicsDebugDrawScratch{
     public Vector<f32x4> cachedBodyPos;
     public Vector<f32x4> cachedBodyRot;
     public Vector<u32> cachedBodyStamp;
+    public Vector<PhysicsDebugLabel> worldLabels;
+    public Vector<PhysicsDebugScreenLabel> projectedLabels;
+    public Vector<f32x4> indexedEdgeViewPts;
     public u32 bodyPoseStamp = 0u;
 
     public void beginBodyPosePass(in usize bodyCount){

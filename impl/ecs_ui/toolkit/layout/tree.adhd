@@ -15,6 +15,7 @@ class LayoutTree : NoCopy{
     private Vector<Rect> m_inheritedClips;
     private Vector<LayoutBox> m_boxes;
     private Vector<LayoutBox> m_stagedBoxes;
+    private LayoutScratch m_scratch;
     private u32 m_maxNodes;
     private b8 m_buildFailed = false;
 
@@ -57,6 +58,7 @@ class LayoutTree : NoCopy{
             Span<LayoutTreeNode>(this.m_nodes),
             this.m_buildFailed,
             viewport,
+            this.m_scratch,
             this.m_inheritedClips,
             this.m_stagedBoxes,
             this.m_boxes

@@ -122,6 +122,7 @@ b8 TryComputeFlowChildEffectiveMeasured(
     in u32 child,
     in b8 parentIsRow,
     in f64 parentCrossExtent,
+    mut LayoutScratch scratch,
     mut f64 outMain,
     mut f64 outCross
 ){
@@ -166,10 +167,7 @@ b8 TryComputeFlowChildEffectiveMeasured(
         f64 extX = 0.0;
         f64 extY = 0.0;
         if(childDesc.direction == LayoutDirection::Grid){
-            Vector<LayoutGridCellPlacement> placements;
-            Vector<f64> colWidths;
-            Vector<f64> rowHeights;
-            if(!MeasureLayoutGridTracksF64(nodes, boxes, child, true, innerW, false, 0.0, placements, colWidths, rowHeights, extX, extY))
+            if(!MeasureLayoutGridTracksF64(nodes, boxes, child, true, innerW, false, 0.0, scratch, extX, extY))
                 return false;
         }
         else{
@@ -199,6 +197,7 @@ b8 TryArrangeFlexLineChildren(
     in Span<u32> lineChildren,
     in Span<f64> measuredMain,
     in Span<f64> measuredCross,
+    mut LayoutScratch scratch,
     mut Vector<LayoutBox> boxes,
     mut Vector<Rect> inheritedClips,
     mut f64 outUsedMain,
@@ -209,18 +208,28 @@ b8 TryArrangeFlexLineChildren(
     const u32 count = cast<u32>(lineChildren.size());
     if(count == 0u)
         return true;
-    Vector<f64> itemMain;
-    Vector<f64> minMains;
-    Vector<f64> maxMains;
-    Vector<f64> mainWeights;
-    Vector<f64> marginMains;
-    Vector<b8> frozenMain;
+    mut Vector<f64> itemMain = scratch.flexItemMain;
+    mut Vector<f64> minMains = scratch.flexMinMains;
+    mut Vector<f64> maxMains = scratch.flexMaxMains;
+    mut Vector<f64> mainWeights = scratch.flexMainWeights;
+    mut Vector<f64> marginMains = scratch.flexMarginMains;
+    mut Vector<b8> frozenMain = scratch.flexFrozenMain;
+    itemMain.clear();
+    minMains.clear();
+    maxMains.clear();
+    mainWeights.clear();
+    marginMains.clear();
+    frozenMain.clear();
     itemMain.resize(cast<usize>(count), 0.0);
     minMains.resize(cast<usize>(count), 0.0);
     maxMains.resize(cast<usize>(count), 0.0);
     mainWeights.resize(cast<usize>(count), 0.0);
     marginMains.resize(cast<usize>(count), 0.0);
     frozenMain.resize(cast<usize>(count), false);
+    f64 fixedSum = 0.0;
+    f64 totalMargin = 0.0;
+    f64 activeWeight = 0.0;
+    u32 activeStretchCount = 0u;
     for(u32 i = 0u; i < count; ++i){
         const u32 child = lineChildren[cast<usize>(i)];
         in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
@@ -246,10 +255,13 @@ b8 TryArrangeFlexLineChildren(
         maxMains[cast<usize>(i)] = cast<f64>(maxM);
         mainWeights[cast<usize>(i)] = cast<f64>(mainSpec.value);
         marginMains[cast<usize>(i)] = marginM;
+        totalMargin += marginM;
         const LayoutAlign align = ResolveEffectiveLayoutAlign(parentDesc.alignItems, childDesc.alignSelf);
         const b8 stretchCross = (crossSpec.policy == LayoutSizePolicy::Stretch) || (align == LayoutAlign::Stretch && crossSpec.policy == LayoutSizePolicy::Content);
         if(mainSpec.policy == LayoutSizePolicy::Stretch){
             frozenMain[cast<usize>(i)] = false;
+            activeWeight += mainWeights[cast<usize>(i)];
+            ++activeStretchCount;
         }
         else{
             frozenMain[cast<usize>(i)] = true;
@@ -267,43 +279,39 @@ b8 TryArrangeFlexLineChildren(
             else{
                 itemMain[cast<usize>(i)] = ClampLayoutAxisF64(measuredMain[cast<usize>(i)], minM, maxM);
             }
+            fixedSum += itemMain[cast<usize>(i)];
         }
     }
     const f64 gap = cast<f64>(parentDesc.gap);
     const f64 spacing = gap * cast<f64>(count - 1u);
-    for(u32 pass = 0u; pass < count; ++pass){
-        f64 fixedSum = 0.0;
-        f64 totalMargin = 0.0;
-        f64 activeWeight = 0.0;
-        for(u32 i = 0u; i < count; ++i){
-            totalMargin += marginMains[cast<usize>(i)];
-            if(frozenMain[cast<usize>(i)])
-                fixedSum += itemMain[cast<usize>(i)];
-            else
-                activeWeight += mainWeights[cast<usize>(i)];
-        }
-        if(activeWeight <= 0.0)
-            break;
-        const f64 remaining = UiSimdMaxF64(0.0, (lineMainExtent - spacing) - (fixedSum + totalMargin));
-        const f64 invActiveWeight = 1.0 / activeWeight;
-        b8 newlyFrozen = false;
-        for(u32 i = 0u; i < count; ++i){
-            if(frozenMain[cast<usize>(i)])
-                continue;
-            const f64 share = remaining * (mainWeights[cast<usize>(i)] * invActiveWeight);
-            const f64 clamped = ClampLayoutAxisF64(share, cast<f32>(minMains[cast<usize>(i)]), cast<f32>(maxMains[cast<usize>(i)]));
-            if(clamped != share){
-                itemMain[cast<usize>(i)] = clamped;
-                frozenMain[cast<usize>(i)] = true;
-                newlyFrozen = true;
-            }
-        }
-        if(!newlyFrozen){
+    if(activeStretchCount > 0u && activeWeight > 0.0){
+        for(u32 pass = 0u; pass < count; ++pass){
+            if(activeStretchCount == 0u || activeWeight <= 0.0)
+                break;
+            const f64 remaining = UiSimdMaxF64(0.0, (lineMainExtent - spacing) - (fixedSum + totalMargin));
+            const f64 invActiveWeight = 1.0 / activeWeight;
+            b8 newlyFrozen = false;
             for(u32 i = 0u; i < count; ++i){
-                if(!frozenMain[cast<usize>(i)])
-                    itemMain[cast<usize>(i)] = remaining * (mainWeights[cast<usize>(i)] * invActiveWeight);
+                if(frozenMain[cast<usize>(i)])
+                    continue;
+                const f64 share = remaining * (mainWeights[cast<usize>(i)] * invActiveWeight);
+                const f64 clamped = ClampLayoutAxisF64(share, cast<f32>(minMains[cast<usize>(i)]), cast<f32>(maxMains[cast<usize>(i)]));
+                if(clamped != share){
+                    itemMain[cast<usize>(i)] = clamped;
+                    frozenMain[cast<usize>(i)] = true;
+                    fixedSum += clamped;
+                    activeWeight -= mainWeights[cast<usize>(i)];
+                    --activeStretchCount;
+                    newlyFrozen = true;
+                }
             }
-            break;
+            if(!newlyFrozen){
+                for(u32 i = 0u; i < count; ++i){
+                    if(!frozenMain[cast<usize>(i)])
+                        itemMain[cast<usize>(i)] = remaining * (mainWeights[cast<usize>(i)] * invActiveWeight);
+                }
+                break;
+            }
         }
     }
     f64 totalOuterMain = spacing;
@@ -462,6 +470,7 @@ b8 TryArrangeGridContainer(
     in VectorDouble contentOrigin,
     in VectorDouble contentExtent,
     in Rect inheritedClip,
+    mut LayoutScratch scratch,
     mut Vector<LayoutBox> boxes,
     mut Vector<Rect> inheritedClips
 ){
@@ -469,9 +478,11 @@ b8 TryArrangeGridContainer(
     u32 passLimit = 1u;
     if(description.scrollable)
         passLimit = s_ScrollbarReservationPassLimit;
-    Vector<LayoutGridCellPlacement> placements;
-    Vector<f64> colWidths;
-    Vector<f64> rowHeights;
+    u32 rowCount = 0u;
+    if(!BuildLayoutGridPlacements(nodes, index, scratch.gridColOccupiedUntil, scratch.gridPlacements, rowCount))
+        return false;
+    if(scratch.gridPlacements.empty())
+        return true;
     f64 gridExtentX = 0.0;
     f64 gridExtentY = 0.0;
     Rect activeChildClip = childClip;
@@ -479,7 +490,7 @@ b8 TryArrangeGridContainer(
         const Rect parentContent = boxes[cast<usize>(index)].content;
         const b8 hasAvailW = (description.width.policy != LayoutSizePolicy::Content) || parentContent.width > 0.0f;
         const b8 hasAvailH = (description.height.policy != LayoutSizePolicy::Content) || parentContent.height > 0.0f;
-        if(!MeasureLayoutGridTracksF64(
+        if(!ResolveLayoutGridTracksFromPlacementsF64(
             nodes,
             Span<LayoutBox>(boxes),
             index,
@@ -487,9 +498,13 @@ b8 TryArrangeGridContainer(
             cast<f64>(parentContent.width),
             hasAvailH,
             cast<f64>(parentContent.height),
-            placements,
-            colWidths,
-            rowHeights,
+            Span<LayoutGridCellPlacement>(scratch.gridPlacements),
+            rowCount,
+            scratch.gridColWeights,
+            scratch.gridRowWeights,
+            scratch.gridTrackFrozen,
+            scratch.gridColWidths,
+            scratch.gridRowHeights,
             gridExtentX,
             gridExtentY
         ))
@@ -506,8 +521,8 @@ b8 TryArrangeGridContainer(
         if(!TryUpdateScrollContainerBox(description, contentOrigin, contentExtent, inheritedClip, nextContentSize, boxes[cast<usize>(index)], activeChildClip))
             return false;
     }
-    if(placements.empty())
-        return true;
+    in Vector<f64> colWidths = scratch.gridColWidths;
+    in Vector<f64> rowHeights = scratch.gridRowHeights;
     const u32 usedCols = cast<u32>(colWidths.size());
     const u32 usedRows = cast<u32>(rowHeights.size());
     const f64 colGap = cast<f64>(description.gap);
@@ -521,8 +536,10 @@ b8 TryArrangeGridContainer(
     f64 leadX = 0.0;
     f64 extraGapX = 0.0;
     ComputeJustifyOffsetsF64(description.justifyContent, freeX, usedCols, leadX, extraGapX);
-    Vector<f64> colX;
-    Vector<f64> rowY;
+    mut Vector<f64> colX = scratch.gridColX;
+    mut Vector<f64> rowY = scratch.gridRowY;
+    colX.clear();
+    rowY.clear();
     colX.resize(cast<usize>(usedCols), 0.0);
     rowY.resize(cast<usize>(usedRows), 0.0);
     f64 xCur = cast<f64>(scrolled.x) + leadX;
@@ -535,7 +552,7 @@ b8 TryArrangeGridContainer(
         rowY[cast<usize>(r)] = yCur;
         yCur += rowHeights[cast<usize>(r)] + rowGap;
     }
-    for(in auto p : placements){
+    for(in auto p : scratch.gridPlacements){
         in LayoutNodeDesc childDesc = nodes[cast<usize>(p.child)].description;
         const Point childMeasured = boxes[cast<usize>(p.child)].measuredSize;
         const usize lastCol = cast<usize>(p.col + p.colSpan - 1u);
@@ -579,7 +596,13 @@ b8 TryArrangeGridContainer(
     return true;
 }
 
-b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vector<LayoutBox> boxes, mut Vector<Rect> inheritedClips){
+b8 ArrangeLayoutTreeNodeAt(
+    in Span<LayoutTreeNode> nodes,
+    in u32 index,
+    mut LayoutScratch scratch,
+    mut Vector<LayoutBox> boxes,
+    mut Vector<Rect> inheritedClips
+){
     if(!IsValidUiRect(boxes[cast<usize>(index)].rectangle))
         return false;
     in LayoutTreeNode node = nodes[cast<usize>(index)];
@@ -601,23 +624,26 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
     const b8 row = description.direction == LayoutDirection::Row;
     const b8 column = description.direction == LayoutDirection::Column;
     if(description.direction == LayoutDirection::Grid){
-        if(!TryArrangeGridContainer(nodes, index, childClip, contentOrigin, contentExtent, inheritedClip, boxes, inheritedClips))
+        if(!TryArrangeGridContainer(nodes, index, childClip, contentOrigin, contentExtent, inheritedClip, scratch, boxes, inheritedClips))
             return false;
     }
     else if(row || column){
-        Vector<u32> flowChildren;
-        Vector<f64> measuredMain;
-        Vector<f64> measuredCross;
+        mut Vector<u32> flowChildren = scratch.flowChildren;
+        mut Vector<f64> measuredMain = scratch.flowMeasuredMain;
+        mut Vector<f64> measuredCross = scratch.flowMeasuredCross;
+        flowChildren.clear();
+        measuredMain.clear();
+        measuredCross.clear();
+        f64 crossLimit = cast<f64>(boxes[cast<usize>(index)].content.width);
+        if(row)
+            crossLimit = cast<f64>(boxes[cast<usize>(index)].content.height);
         for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
             in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
             if(childDesc.positionMode == LayoutPositionMode::Absolute)
                 continue;
             f64 effMain = 0.0;
             f64 effCross = 0.0;
-            f64 crossLimit = cast<f64>(boxes[cast<usize>(index)].content.width);
-            if(row)
-                crossLimit = cast<f64>(boxes[cast<usize>(index)].content.height);
-            if(!TryComputeFlowChildEffectiveMeasured(nodes, Span<LayoutBox>(boxes), child, row, crossLimit, effMain, effCross))
+            if(!TryComputeFlowChildEffectiveMeasured(nodes, Span<LayoutBox>(boxes), child, row, crossLimit, scratch, effMain, effCross))
                 return false;
             flowChildren.push_back(child);
             measuredMain.push_back(effMain);
@@ -654,6 +680,7 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
                     Span<u32>(flowChildren),
                     Span<f64>(measuredMain),
                     Span<f64>(measuredCross),
+                    scratch,
                     boxes,
                     inheritedClips,
                     unusedMain,
@@ -667,6 +694,9 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
                     passLimit = s_ScrollbarReservationPassLimit;
                 const f64 mainGap = cast<f64>(description.gap);
                 const f64 crossGap = ResolveLayoutCrossGapF64(description);
+                mut Vector<u32> lineStarts = scratch.wrapLineStarts;
+                mut Vector<u32> lineEnds = scratch.wrapLineEnds;
+                mut Vector<f64> lineCrossHeights = scratch.wrapLineCrossHeights;
                 for(u32 pass = 0u; pass < passLimit; ++pass){
                     Rect scrolled = boxes[cast<usize>(index)].content;
                     if(description.scrollable){
@@ -683,9 +713,9 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
                         lineCrossStart = cast<f64>(scrolled.y);
                         lineCrossTotal = cast<f64>(scrolled.height);
                     }
-                    Vector<u32> lineStarts;
-                    Vector<u32> lineEnds;
-                    Vector<f64> lineCrossHeights;
+                    lineStarts.clear();
+                    lineEnds.clear();
+                    lineCrossHeights.clear();
                     u32 curStart = 0u;
                     f64 curMain = 0.0;
                     f64 curCross = 0.0;
@@ -724,20 +754,10 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
                     f64 crossCursor = lineCrossStart;
                     f64 maxUsedMain = 0.0;
                     f64 totalUsedCross = 0.0;
-                    Vector<u32> sliceIds;
-                    Vector<f64> sliceMain;
-                    Vector<f64> sliceCross;
                     for(u32 li = 0u; li < lineCount; ++li){
                         const u32 ls = lineStarts[cast<usize>(li)];
                         const u32 le = lineEnds[cast<usize>(li)];
-                        sliceIds.clear();
-                        sliceMain.clear();
-                        sliceCross.clear();
-                        for(u32 k = ls; k < le; ++k){
-                            sliceIds.push_back(flowChildren[cast<usize>(k)]);
-                            sliceMain.push_back(measuredMain[cast<usize>(k)]);
-                            sliceCross.push_back(measuredCross[cast<usize>(k)]);
-                        }
+                        const usize sliceCount = cast<usize>(le - ls);
                         f64 lineCrossExt = lineCrossHeights[cast<usize>(li)];
                         f64 usedMain = 0.0;
                         f64 usedCross = 0.0;
@@ -750,9 +770,10 @@ b8 ArrangeLayoutTreeNodeAt(in Span<LayoutTreeNode> nodes, in u32 index, mut Vect
                             lineMainLimit,
                             crossCursor,
                             lineCrossExt,
-                            Span<u32>(sliceIds),
-                            Span<f64>(sliceMain),
-                            Span<f64>(sliceCross),
+                            Span<u32>(flowChildren.data() + cast<usize>(ls), sliceCount),
+                            Span<f64>(measuredMain.data() + cast<usize>(ls), sliceCount),
+                            Span<f64>(measuredCross.data() + cast<usize>(ls), sliceCount),
+                            scratch,
                             boxes,
                             inheritedClips,
                             usedMain,
@@ -853,6 +874,7 @@ b8 ArrangeLayoutTree(
     in Span<LayoutTreeNode> nodes,
     in b8 buildFailed,
     in Rect viewport,
+    mut LayoutScratch scratch,
     mut Vector<Rect> inheritedClips,
     mut Vector<LayoutBox> stagedBoxes,
     mut Vector<LayoutBox> boxes
@@ -863,7 +885,7 @@ b8 ArrangeLayoutTree(
     stagedBoxes.resize(nodes.size());
     inheritedClips.clear();
     inheritedClips.resize(nodes.size());
-    if(!MeasureLayoutTreeNodes(nodes, stagedBoxes))
+    if(!MeasureLayoutTreeNodes(nodes, scratch, stagedBoxes))
         return false;
     in LayoutNodeDesc root = nodes[0u].description;
     const Point measured = stagedBoxes[0u].measuredSize;
@@ -887,7 +909,7 @@ b8 ArrangeLayoutTree(
     stagedBoxes[0u].rectangle = Rect(cast<f32>(rootX), cast<f32>(rootY), cast<f32>(rootSize.x), cast<f32>(rootSize.y));
     inheritedClips[0u] = viewport;
     for(u32 index = 0u; cast<usize>(index) < nodes.size(); ++index){
-        if(!ArrangeLayoutTreeNodeAt(nodes, index, stagedBoxes, inheritedClips))
+        if(!ArrangeLayoutTreeNodeAt(nodes, index, scratch, stagedBoxes, inheritedClips))
             return false;
     }
     boxes.swap(stagedBoxes);

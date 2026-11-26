@@ -23,56 +23,28 @@ const Color s_DragPreviewFallbackBg = Color(0.14f, 0.17f, 0.22f, 0.94f);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void AppendRichTextWordRun(
-    in StringView chunk,
+void EmitMeasuredRichTextRun(
+    in CachedMeasuredText measured,
     in RichTextSpan sp,
     in f32 fontSize,
+    in f32 lineHeightMultiplier,
     in HyperlinkStyle linkStyle,
     in WidgetStyle widgetStyle,
     in b8 enabled,
-    in b8 wrap,
-    in f32 maxLineW,
-    in DisplayMetrics display,
-    in ShapeRequest baseReq,
-    mut TextService svc,
-    mut u32 inOutLineIndex,
+    in u32 lineIndex,
     mut f32 inOutCursorX,
-    mut Vector<RichTextRun> outRuns,
-    mut b8 outFailed
+    mut Vector<RichTextRun> outRuns
 ){
-    if(chunk.empty()){
-        return;
-    }
-    ShapeRequest req = baseReq;
-    req.text = chunk;
-    if(sp.hasFont)
-        req.font = sp.font;
-    req.fontSize = fontSize;
-    req.letterSpacing = sp.letterSpacing;
-    req.wordSpacing = sp.wordSpacing;
-    req.features = sp.features;
-    req.featureCount = sp.featureCount;
-    req.wrapMode = TextWrapMode::None;
-    req.maxWidth = 0.0f;
-    const auto measured = svc.layoutAndMeasureShared(req, display);
-    if(!measured.has_value()){
-        outFailed = true;
-        return;
-    }
-    in Rect tb = measured.value().bounds;
+    in Rect tb = measured.bounds;
     const f32 advW = UiSimdMax(0.0f, tb.width);
-    const f32 advH = UiSimdMax(fontSize * req.lineHeightMultiplier, tb.height);
-    if(wrap && maxLineW > 0.0f && inOutCursorX > 0.0f && inOutCursorX + advW > maxLineW){
-        ++inOutLineIndex;
-        inOutCursorX = 0.0f;
-    }
+    const f32 advH = UiSimdMax(fontSize * lineHeightMultiplier, tb.height);
     RichTextRun run;
-    run.lineIndex = inOutLineIndex;
+    run.lineIndex = lineIndex;
     run.x = inOutCursorX;
     run.y = 0.0f;
     run.width = advW;
     run.height = advH;
-    run.layout = measured.value().layout;
+    run.layout = measured.layout;
     run.textBounds = tb;
     if(!enabled)
         run.color = linkStyle.disabledColor;
@@ -87,8 +59,151 @@ void AppendRichTextWordRun(
     run.underline = sp.underline || (sp.linkKey != 0u && !linkStyle.underlineOnHoverOnly);
     run.strikethrough = sp.strikethrough;
     run.linkKey = sp.linkKey;
-    outRuns.push_back(run);
+    AppendOwned<RichTextRun>(outRuns, run);
     inOutCursorX += advW;
+}
+
+[cpp_unwind]
+void AppendRichTextHardLine(
+    in StringView lineText,
+    in RichTextSpan sp,
+    in f32 fontSize,
+    in HyperlinkStyle linkStyle,
+    in WidgetStyle widgetStyle,
+    in b8 enabled,
+    in b8 wrap,
+    in f32 maxLineW,
+    in DisplayMetrics display,
+    in ShapeRequest baseReq,
+    mut TextService svc,
+    mut u32 inOutLineIndex,
+    mut f32 inOutCursorX,
+    mut Vector<usize> wordStartsScratch,
+    mut Vector<usize> wordEndsScratch,
+    mut Vector<f32> wordWidthsScratch,
+    mut Vector<RichTextRun> outRuns,
+    mut b8 outFailed
+){
+    if(lineText.empty())
+        return;
+    ShapeRequest req = baseReq;
+    req.text = lineText;
+    if(sp.hasFont)
+        req.font = sp.font;
+    req.fontSize = fontSize;
+    req.letterSpacing = sp.letterSpacing;
+    req.wordSpacing = sp.wordSpacing;
+    req.features = sp.features;
+    req.featureCount = sp.featureCount;
+    req.wrapMode = TextWrapMode::None;
+    req.maxWidth = 0.0f;
+    const auto measured = svc.layoutAndMeasureShared(req, display);
+    if(!measured.has_value()){
+        outFailed = true;
+        return;
+    }
+    in CachedMeasuredText fullMeasured = measured.value();
+    const f32 fullAdvW = UiSimdMax(0.0f, fullMeasured.bounds.width);
+    if(!wrap || !(maxLineW > 0.0f) || inOutCursorX + fullAdvW <= maxLineW){
+        EmitMeasuredRichTextRun(fullMeasured, sp, fontSize, req.lineHeightMultiplier, linkStyle, widgetStyle, enabled, inOutLineIndex, inOutCursorX, outRuns);
+        return;
+    }
+
+    wordStartsScratch.clear();
+    wordEndsScratch.clear();
+    usize segStart = 0u;
+    const usize lineLen = lineText.size();
+    while(segStart < lineLen){
+        usize segEnd = segStart;
+        while(segEnd < lineLen && lineText[segEnd] == ' ')
+            ++segEnd;
+        while(segEnd < lineLen && lineText[segEnd] != ' ')
+            ++segEnd;
+        wordStartsScratch.push_back(segStart);
+        wordEndsScratch.push_back(segEnd);
+        segStart = segEnd;
+    }
+
+    const usize wordCount = wordStartsScratch.size();
+    if(wordCount <= 1u){
+        if(inOutCursorX > 0.0f){
+            ++inOutLineIndex;
+            inOutCursorX = 0.0f;
+        }
+        EmitMeasuredRichTextRun(fullMeasured, sp, fontSize, req.lineHeightMultiplier, linkStyle, widgetStyle, enabled, inOutLineIndex, inOutCursorX, outRuns);
+        return;
+    }
+
+    wordWidthsScratch.clear();
+    wordWidthsScratch.resize(wordCount, 0.0f);
+    in TextLayout fullLayout = fullMeasured.layout.deref();
+    in Vector<TextCluster> clusters = fullLayout.clusters();
+    if(!fullLayout.hasBidiRuns() && fullLayout.direction() == TextDirection::LeftToRight){
+        usize wIdx = 0u;
+        for(in TextCluster cluster : clusters){
+            const usize cb = cast<usize>(cluster.byteBegin);
+            while(wIdx + 1u < wordCount && cb >= wordEndsScratch[wIdx])
+                ++wIdx;
+            wordWidthsScratch[wIdx] += Abs(VectorSingle(cluster.trailingX - cluster.leadingX)).x;
+        }
+    }
+    else{
+        for(in TextCluster cluster : clusters){
+            const usize cb = cast<usize>(cluster.byteBegin);
+            usize lo = 0u;
+            usize hi = wordCount - 1u;
+            while(lo < hi){
+                const usize mid = lo + (hi - lo) / 2u;
+                if(wordEndsScratch[mid] <= cb)
+                    lo = mid + 1u;
+                else
+                    hi = mid;
+            }
+            wordWidthsScratch[lo] += Abs(VectorSingle(cluster.trailingX - cluster.leadingX)).x;
+        }
+    }
+
+    if(inOutCursorX > 0.0f && inOutCursorX + wordWidthsScratch[0u] > maxLineW){
+        ++inOutLineIndex;
+        inOutCursorX = 0.0f;
+    }
+    if(inOutCursorX + fullAdvW <= maxLineW){
+        EmitMeasuredRichTextRun(fullMeasured, sp, fontSize, req.lineHeightMultiplier, linkStyle, widgetStyle, enabled, inOutLineIndex, inOutCursorX, outRuns);
+        return;
+    }
+
+    usize w = 0u;
+    while(w < wordCount && !outFailed){
+        const usize sliceBegin = wordStartsScratch[w];
+        usize sliceEnd = wordEndsScratch[w];
+        f32 sliceEstW = wordWidthsScratch[w];
+        ++w;
+        while(w < wordCount){
+            const f32 nextW = wordWidthsScratch[w];
+            if(inOutCursorX + sliceEstW + nextW > maxLineW)
+                break;
+            sliceEstW += nextW;
+            sliceEnd = wordEndsScratch[w];
+            ++w;
+        }
+        if(sliceBegin == 0u && sliceEnd == lineLen){
+            EmitMeasuredRichTextRun(fullMeasured, sp, fontSize, req.lineHeightMultiplier, linkStyle, widgetStyle, enabled, inOutLineIndex, inOutCursorX, outRuns);
+        }
+        else{
+            ShapeRequest sliceReq = req;
+            sliceReq.text = lineText.substr(sliceBegin, sliceEnd - sliceBegin);
+            const auto sliceMeasured = svc.layoutAndMeasureShared(sliceReq, display);
+            if(!sliceMeasured.has_value()){
+                outFailed = true;
+                return;
+            }
+            EmitMeasuredRichTextRun(sliceMeasured.value(), sp, fontSize, req.lineHeightMultiplier, linkStyle, widgetStyle, enabled, inOutLineIndex, inOutCursorX, outRuns);
+        }
+        if(w < wordCount){
+            ++inOutLineIndex;
+            inOutCursorX = 0.0f;
+        }
+    }
 }
 
 DragDropResult Builder::dragSource(in StringView stableKey, in StringView anchorKey, in DragDropPayload payload, mut DragDropState state, in DragDropOptions options){
@@ -535,31 +650,14 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
             usize lineEnd = pos;
             while(lineEnd < len && sp.text[lineEnd] != '\n')
                 ++lineEnd;
-            if(!options.wrap || !(maxLineW > 0.0f)){
-                AppendRichTextWordRun(
-                    sp.text.substr(pos, lineEnd - pos),
-                    sp, spSize,
-                    frame.linkStyle, frame.widgetStyle, options.enabled, false, 0.0f, display, templateReq,
-                    this.m_text, lineIdx, cursorX, frame.runs, buildFailed
-                );
-                pos = lineEnd;
-                continue;
-            }
-            usize segStart = pos;
-            while(segStart < lineEnd && !buildFailed){
-                usize segEnd = segStart;
-                while(segEnd < lineEnd && sp.text[segEnd] == ' ')
-                    ++segEnd;
-                while(segEnd < lineEnd && sp.text[segEnd] != ' ')
-                    ++segEnd;
-                AppendRichTextWordRun(
-                    sp.text.substr(segStart, segEnd - segStart),
-                    sp, spSize,
-                    frame.linkStyle, frame.widgetStyle, options.enabled, true, maxLineW, display, templateReq,
-                    this.m_text, lineIdx, cursorX, frame.runs, buildFailed
-                );
-                segStart = segEnd;
-            }
+            AppendRichTextHardLine(
+                sp.text.substr(pos, lineEnd - pos),
+                sp, spSize,
+                frame.linkStyle, frame.widgetStyle, options.enabled, options.wrap, maxLineW, display, templateReq,
+                this.m_text, lineIdx, cursorX,
+                this.m_richTextWordStartsScratch, this.m_richTextWordEndsScratch, this.m_richTextWordWidthsScratch,
+                frame.runs, buildFailed
+            );
             pos = lineEnd;
         }
     }
@@ -569,26 +667,25 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
     }
 
     const usize numLines = cast<usize>(lineIdx) + 1u;
-    Vector<f32> lineWidths;
-    Vector<f32> lineHeights;
-    lineWidths.resize(numLines, 0.0f);
-    lineHeights.resize(numLines, frame.widgetStyle.fontSize);
+    frame.lineWidths.resize(numLines, 0.0f);
+    this.m_richTextLineHeightsScratch.clear();
+    this.m_richTextLineHeightsScratch.resize(numLines, frame.widgetStyle.fontSize);
     for(in RichTextRun run : frame.runs){
         const usize li = cast<usize>(run.lineIndex);
         if(li < numLines){
-            lineWidths[li] = UiSimdMax(lineWidths[li], run.x + run.width);
-            lineHeights[li] = UiSimdMax(lineHeights[li], run.height);
+            frame.lineWidths[li] = UiSimdMax(frame.lineWidths[li], run.x + run.width);
+            this.m_richTextLineHeightsScratch[li] = UiSimdMax(this.m_richTextLineHeightsScratch[li], run.height);
         }
     }
 
     f32 totalW = 0.0f;
     f32 totalH = 0.0f;
-    Vector<f32> lineY;
-    lineY.resize(numLines, 0.0f);
+    this.m_richTextLineYScratch.clear();
+    this.m_richTextLineYScratch.resize(numLines, 0.0f);
     for(usize li = 0u; li < numLines; ++li){
-        totalW = UiSimdMax(totalW, lineWidths[li]);
-        lineY[li] = totalH;
-        totalH += lineHeights[li];
+        totalW = UiSimdMax(totalW, frame.lineWidths[li]);
+        this.m_richTextLineYScratch[li] = totalH;
+        totalH += this.m_richTextLineHeightsScratch[li];
         if(li + 1u < numLines)
             totalH += options.lineSpacing;
     }
@@ -596,7 +693,7 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
     for(mut RichTextRun run : frame.runs){
         const usize li = cast<usize>(run.lineIndex);
         if(li < numLines)
-            run.y = lineY[li] + UiSimdMax(0.0f, lineHeights[li] - run.height);
+            run.y = this.m_richTextLineYScratch[li] + UiSimdMax(0.0f, this.m_richTextLineHeightsScratch[li] - run.height);
     }
 
     auto item = this.makeItem();
@@ -606,7 +703,7 @@ RichTextResult Builder::richText(in StringView stableKey, in Span<RichTextSpan> 
     const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, Point(totalW, totalH), options.layout);
     if(!this.addItemNode(description, item))
         return RichTextResult();
-    this.m_scope.value().m_richTexts.push_back(frame);
+    AppendOwned<BuilderRichTextFrame>(this.m_scope.value().m_richTexts, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     result.valid = true;
     return result;
@@ -636,21 +733,13 @@ b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
         s_AccessibilityActionNone
     );
 
-    u32 maxLine = 0u;
-    for(in RichTextRun run : frame.runs)
-        maxLine = UiSimdMax(maxLine, run.lineIndex);
-    const usize lineCount = cast<usize>(maxLine) + 1u;
-    Vector<f32> lineWidths;
-    lineWidths.resize(lineCount, 0.0f);
-    for(in RichTextRun run : frame.runs){
-        const usize li = cast<usize>(run.lineIndex);
-        if(li < lineCount)
-            lineWidths[li] = UiSimdMax(lineWidths[li], run.x + run.width);
-    }
+    const usize lineCount = frame.lineWidths.size();
 
     this.m_paint.pushClip(clip);
     const Rect boxClip = IntersectUiRectsBounds(box.rectangle, clip);
     this.m_paint.pushClip(boxClip);
+    const f32 boxClipRight = boxClip.x + boxClip.width;
+    const f32 boxClipBottom = boxClip.y + boxClip.height;
     b8 paintOk = true;
     for(usize ri = 0u; ri < frame.runs.size(); ++ri){
         in RichTextRun run = frame.runs[ri];
@@ -658,11 +747,14 @@ b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
         const usize li = cast<usize>(run.lineIndex);
         if(li < lineCount){
             if(frame.options.alignment == TextAlignment::Center)
-                alignOffsetX = UiSimdMax(0.0f, (box.rectangle.width - lineWidths[li]) * s_RectCenterFraction);
+                alignOffsetX = UiSimdMax(0.0f, (box.rectangle.width - frame.lineWidths[li]) * s_RectCenterFraction);
             else if(frame.options.alignment == TextAlignment::Trailing)
-                alignOffsetX = UiSimdMax(0.0f, box.rectangle.width - lineWidths[li]);
+                alignOffsetX = UiSimdMax(0.0f, box.rectangle.width - frame.lineWidths[li]);
         }
         const Rect runRect(box.rectangle.x + alignOffsetX + run.x, box.rectangle.y + run.y, run.width, run.height);
+        const b8 visibleInClip = runRect.x + runRect.width > boxClip.x && runRect.x < boxClipRight && runRect.y + runRect.height > boxClip.y && runRect.y < boxClipBottom;
+        if(!visibleInClip && run.linkKey == 0u)
+            continue;
         Color drawCol = run.color;
         b8 isLinkHover = false;
         b8 isLinkPressed = false;
@@ -706,6 +798,8 @@ b8 Builder::paintRichText(in BuilderItem item, in LayoutBox box){
                 }
             }
         }
+        if(!visibleInClip)
+            continue;
         if(run.hasBackground && run.width > 0.0f && run.height > 0.0f)
             this.m_paint.fillRect(runRect, run.backgroundColor);
         if(run.layout.valid()){
@@ -765,15 +859,21 @@ PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in
     frame.maxY = maxY;
     frame.series.reserve(series.size());
 
+    usize totalSamples = 0u;
+    for(in PlotSeries src : series)
+        totalSamples += src.values.size();
+    frame.flatValues.reserve(totalSamples);
+
     in DisplayMetrics display = this.m_paint.displayMetrics();
     for(in PlotSeries src : series){
         PlotSeriesCopy copy;
+        copy.valueBegin = frame.flatValues.size();
+        copy.valueCount = src.values.size();
         copy.color = src.color;
         copy.lineThickness = src.lineThickness;
         copy.kind = src.kind;
-        copy.values.reserve(src.values.size());
         for(usize vi = 0u; vi < src.values.size(); ++vi)
-            copy.values.push_back(src.values[vi]);
+            frame.flatValues.push_back(src.values[vi]);
         if(src.values.size() > frame.maxSamples)
             frame.maxSamples = src.values.size();
         if(options.showLegend && !src.label.empty()){
@@ -786,7 +886,7 @@ PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in
             copy.label = measuredLbl.value().layout;
             copy.labelBounds = measuredLbl.value().bounds;
         }
-        frame.series.push_back(copy);
+        AppendOwned<PlotSeriesCopy>(frame.series, copy);
     }
 
     in InputRouter inputRef = this.m_context.input();
@@ -801,8 +901,8 @@ PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in
                 if(frame.maxSamples > 1u)
                     sampleIdx = cast<usize>(UiSimdMin(cast<f32>(frame.maxSamples - 1u), VectorFloor(VectorSingle(relX * cast<f32>(frame.maxSamples - 1u) + 0.5f)).x));
                 result.hoveredSampleIndex = sampleIdx;
-                if(!frame.series.empty() && sampleIdx < frame.series[0u].values.size())
-                    result.hoveredValue = frame.series[0u].values[sampleIdx];
+                if(!frame.series.empty() && sampleIdx < frame.series[0u].valueCount)
+                    result.hoveredValue = frame.flatValues[frame.series[0u].valueBegin + sampleIdx];
                 frame.hovered = true;
                 frame.hoveredSampleIndex = result.hoveredSampleIndex;
                 frame.hoveredValue = result.hoveredValue;
@@ -817,7 +917,7 @@ PlotResult Builder::plot(in StringView stableKey, in Span<PlotSeries> series, in
     const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, Point(240.0f, s_PlotDefaultHeight), options.layout);
     if(!this.addItemNode(description, item))
         return PlotResult();
-    this.m_scope.value().m_plots.push_back(frame);
+    AppendOwned<BuilderPlotFrame>(this.m_scope.value().m_plots, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
 
     result.valid = true;
@@ -869,7 +969,9 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
         }
 
         const f32 rangeY = UiSimdMax(1.0e-6f, frame.maxY - frame.minY);
-        const f32 zeroY = UiSimdClamp(inner.y + ((frame.maxY - 0.0f) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+        const f32 invRangeY = inner.height / rangeY;
+        const f32 innerBottom = inner.y + inner.height;
+        const f32 zeroY = UiSimdClamp(inner.y + (frame.maxY - 0.0f) * invRangeY, inner.y, innerBottom);
         if(frame.options.showZeroLine && frame.minY <= 0.0f && frame.maxY >= 0.0f)
             this.m_paint.drawLine(Point(inner.x, zeroY), Point(inner.x + inner.width, zeroY), s_PlotDefaultAxisThickness, style.axisColor);
 
@@ -879,10 +981,10 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                 ++barSeriesCount;
         }
 
-        Vector<Point> pts;
+        mut Vector<Point> pts = this.m_plotPointsScratch;
         u32 barSeriesIdx = 0u;
         for(in PlotSeriesCopy s : frame.series){
-            const usize n = s.values.size();
+            const usize n = s.valueCount;
             if(n == 0u)
                 continue;
             if(s.kind == PlotKind::Bar){
@@ -891,10 +993,10 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
                 const f32 singleW = UiSimdMax(s_PlotMinBarWidth, usableW / cast<f32>(UiSimdMax(1u, barSeriesCount)));
                 const f32 groupOffset = (slotW - singleW * cast<f32>(barSeriesCount)) * 0.5f + cast<f32>(barSeriesIdx) * singleW;
                 for(usize i = 0u; i < n; ++i){
-                    const f32 v = s.values[i];
+                    const f32 v = frame.flatValues[s.valueBegin + i];
                     if(!IsFinite(VectorSingle(v)))
                         continue;
-                    const f32 valY = UiSimdClamp(inner.y + ((frame.maxY - v) / rangeY) * inner.height, inner.y, inner.y + inner.height);
+                    const f32 valY = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
                     const f32 topY = UiSimdMin(valY, zeroY);
                     const f32 botY = UiSimdMax(valY, zeroY);
                     const f32 bh = UiSimdMax(1.0f, botY - topY);
@@ -906,16 +1008,181 @@ b8 Builder::paintPlot(in BuilderItem item, in LayoutBox box){
             }
 
             pts.clear();
-            pts.reserve(n);
-            for(usize i = 0u; i < n; ++i){
-                const f32 v = s.values[i];
-                if(!IsFinite(VectorSingle(v)))
-                    continue;
-                f32 px = inner.x + inner.width * 0.5f;
-                if(n > 1u)
-                    px = inner.x + (cast<f32>(i) / cast<f32>(n - 1u)) * inner.width;
-                const f32 py = UiSimdClamp(inner.y + ((frame.maxY - v) / rangeY) * inner.height, inner.y, inner.y + inner.height);
-                pts.push_back(Point(px, py));
+            if(n == 1u){
+                const f32 v = frame.flatValues[s.valueBegin];
+                if(IsFinite(VectorSingle(v))){
+                    const f32 px = inner.x + inner.width * 0.5f;
+                    const f32 py = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                    pts.push_back(Point(px, py));
+                }
+            }
+            else if(n > 2u && cast<f32>(n) > inner.width * 2.0f){
+                const f32 xStep = inner.width / cast<f32>(n - 1u);
+                const usize bucketCount = cast<usize>(UiSimdMax(2.0f, VectorFloor(VectorSingle(inner.width)).x));
+                pts.reserve(bucketCount * 2u);
+                for(usize bi = 0u; bi < bucketCount; ++bi){
+                    const usize iBegin = (bi * n) / bucketCount;
+                    const usize iEnd = ((bi + 1u) * n) / bucketCount;
+                    if(iBegin >= iEnd)
+                        continue;
+                    b8 hasFinite = false;
+                    f32 minV = 0.0f;
+                    f32 maxV = 0.0f;
+                    usize minIdx = iBegin;
+                    usize maxIdx = iBegin;
+                    usize i = iBegin;
+                    while(i + 4u <= iEnd){
+                        const VectorSingle v4(
+                            frame.flatValues[s.valueBegin + i],
+                            frame.flatValues[s.valueBegin + i + 1u],
+                            frame.flatValues[s.valueBegin + i + 2u],
+                            frame.flatValues[s.valueBegin + i + 3u]
+                        );
+                        if(IsFinite(v4)){
+                            const f32 lo4 = UiSimdMin(UiSimdMin(v4.x, v4.y), UiSimdMin(v4.z, v4.w));
+                            const f32 hi4 = UiSimdMax(UiSimdMax(v4.x, v4.y), UiSimdMax(v4.z, v4.w));
+                            if(!hasFinite || lo4 < minV || hi4 > maxV){
+                                for(usize k = 0u; k < 4u; ++k){
+                                    const usize si = i + k;
+                                    const f32 v = frame.flatValues[s.valueBegin + si];
+                                    if(!hasFinite){
+                                        hasFinite = true;
+                                        minV = v;
+                                        maxV = v;
+                                        minIdx = si;
+                                        maxIdx = si;
+                                    }
+                                    else{
+                                        if(v < minV){
+                                            minV = v;
+                                            minIdx = si;
+                                        }
+                                        if(v > maxV){
+                                            maxV = v;
+                                            maxIdx = si;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else{
+                            for(usize k = 0u; k < 4u; ++k){
+                                const usize si = i + k;
+                                const f32 v = frame.flatValues[s.valueBegin + si];
+                                if(!IsFinite(VectorSingle(v)))
+                                    continue;
+                                if(!hasFinite){
+                                    hasFinite = true;
+                                    minV = v;
+                                    maxV = v;
+                                    minIdx = si;
+                                    maxIdx = si;
+                                }
+                                else{
+                                    if(v < minV){
+                                        minV = v;
+                                        minIdx = si;
+                                    }
+                                    if(v > maxV){
+                                        maxV = v;
+                                        maxIdx = si;
+                                    }
+                                }
+                            }
+                        }
+                        i += 4u;
+                    }
+                    while(i < iEnd){
+                        const f32 v = frame.flatValues[s.valueBegin + i];
+                        if(IsFinite(VectorSingle(v))){
+                            if(!hasFinite){
+                                hasFinite = true;
+                                minV = v;
+                                maxV = v;
+                                minIdx = i;
+                                maxIdx = i;
+                            }
+                            else{
+                                if(v < minV){
+                                    minV = v;
+                                    minIdx = i;
+                                }
+                                if(v > maxV){
+                                    maxV = v;
+                                    maxIdx = i;
+                                }
+                            }
+                        }
+                        ++i;
+                    }
+                    if(!hasFinite)
+                        continue;
+                    const f32 pxMin = inner.x + cast<f32>(minIdx) * xStep;
+                    const f32 pyMin = UiSimdClamp(inner.y + (frame.maxY - minV) * invRangeY, inner.y, innerBottom);
+                    if(minIdx == maxIdx){
+                        pts.push_back(Point(pxMin, pyMin));
+                        continue;
+                    }
+                    const f32 pxMax = inner.x + cast<f32>(maxIdx) * xStep;
+                    const f32 pyMax = UiSimdClamp(inner.y + (frame.maxY - maxV) * invRangeY, inner.y, innerBottom);
+                    if(minIdx < maxIdx){
+                        pts.push_back(Point(pxMin, pyMin));
+                        pts.push_back(Point(pxMax, pyMax));
+                    }
+                    else{
+                        pts.push_back(Point(pxMax, pyMax));
+                        pts.push_back(Point(pxMin, pyMin));
+                    }
+                }
+            }
+            else{
+                pts.reserve(n);
+                const f32 xStep = inner.width / cast<f32>(n - 1u);
+                const VectorSingle innerXVec(inner.x);
+                const VectorSingle innerYVec(inner.y);
+                const VectorSingle innerBottomVec(innerBottom);
+                const VectorSingle maxYVec(frame.maxY);
+                const VectorSingle invRangeYVec(invRangeY);
+                const VectorSingle xStepVec(xStep);
+                usize i = 0u;
+                while(i + 4u <= n){
+                    const VectorSingle v4(
+                        frame.flatValues[s.valueBegin + i],
+                        frame.flatValues[s.valueBegin + i + 1u],
+                        frame.flatValues[s.valueBegin + i + 2u],
+                        frame.flatValues[s.valueBegin + i + 3u]
+                    );
+                    if(IsFinite(v4)){
+                        const VectorSingle idx4 = VectorSingle(cast<f32>(i), cast<f32>(i + 1u), cast<f32>(i + 2u), cast<f32>(i + 3u));
+                        const VectorSingle px4 = innerXVec + idx4 * xStepVec;
+                        const VectorSingle py4 = Max(innerYVec, Min(innerBottomVec, innerYVec + (maxYVec - v4) * invRangeYVec));
+                        pts.push_back(Point(px4.x, py4.x));
+                        pts.push_back(Point(px4.y, py4.y));
+                        pts.push_back(Point(px4.z, py4.z));
+                        pts.push_back(Point(px4.w, py4.w));
+                    }
+                    else{
+                        for(usize k = 0u; k < 4u; ++k){
+                            const usize si = i + k;
+                            const f32 v = frame.flatValues[s.valueBegin + si];
+                            if(!IsFinite(VectorSingle(v)))
+                                continue;
+                            const f32 px = inner.x + cast<f32>(si) * xStep;
+                            const f32 py = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                            pts.push_back(Point(px, py));
+                        }
+                    }
+                    i += 4u;
+                }
+                while(i < n){
+                    const f32 v = frame.flatValues[s.valueBegin + i];
+                    if(IsFinite(VectorSingle(v))){
+                        const f32 px = inner.x + cast<f32>(i) * xStep;
+                        const f32 py = UiSimdClamp(inner.y + (frame.maxY - v) * invRangeY, inner.y, innerBottom);
+                        pts.push_back(Point(px, py));
+                    }
+                    ++i;
+                }
             }
             if(s.kind == PlotKind::Area && pts.size() >= 2u){
                 const Color fillCol(s.color.r, s.color.g, s.color.b, s.color.a * style.areaFillAlpha);

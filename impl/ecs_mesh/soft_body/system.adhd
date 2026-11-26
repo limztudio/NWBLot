@@ -94,7 +94,7 @@ class SoftBodyRuntimeMeshEntry{
     public EntityID entity = s_InvalidEntityId;
     public SoftBodyRuntimeMeshCpuState cpu;
     public SoftBodyRuntimeMeshGpuBuffers gpu;
-    public u64 lastDeformHash = 0u;
+    public u64 lastDeformSignature = 0u;
     public b8 pendingTopologyUpload = false;
     public b8 pendingDeformUpload = false;
 }
@@ -103,9 +103,10 @@ class SoftBodyRuntimeMeshEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 ComputeSoftBodyDeformHash(in SoftBody sb, in TransformComponent xf){
+u64 ComputeSoftBodyDeformSignature(in SoftBody sb, in TransformComponent xf){
     usize h = HashValue(sb.particles.size());
     h = HashCombineValue(h, sb.topologyVersion);
+    h = HashCombineValue(h, sb.deformVersion);
     u32 bakedFlag = 0u;
     if(sb.isWorldSpaceBaked())
         bakedFlag = 1u;
@@ -120,12 +121,6 @@ u64 ComputeSoftBodyDeformHash(in SoftBody sb, in TransformComponent xf){
     h = HashCombineValue(h, BitCast<u32>(xf.scale.x));
     h = HashCombineValue(h, BitCast<u32>(xf.scale.y));
     h = HashCombineValue(h, BitCast<u32>(xf.scale.z));
-    for(usize i = 0u; i < sb.particles.size(); ++i){
-        in f32x4 p = sb.particles[i].position;
-        h = HashCombineValue(h, BitCast<u32>(p.x));
-        h = HashCombineValue(h, BitCast<u32>(p.y));
-        h = HashCombineValue(h, BitCast<u32>(p.z));
-    }
     return cast<u64>(h);
 }
 
@@ -437,7 +432,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
 
     public b8 prepareResources(in FramebufferPtr framebuffer)override{
         this.syncEntities();
-        return this.uploadPendingBatches(true, false);
+        return this.uploadPendingBatches(true, true);
     }
 
     public void render(in FramebufferPtr framebuffer)override{
@@ -523,7 +518,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             mut SoftBodyRuntimeMeshEntry entry = this.m_entries[entity];
             entry.entity = entity;
 
-            const u64 deformHash = ComputeSoftBodyDeformHash(sbComp.softBody, xf);
+            const u64 deformSignature = ComputeSoftBodyDeformSignature(sbComp.softBody, xf);
             if(entry.cpu.needsTopologyRebuild(sbComp.softBody, sourceMeshName)){
                 b8 rebuilt = false;
                 if(sourceMeshName != s_NameNone){
@@ -553,15 +548,15 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                     continue;
                 }
 
-                entry.lastDeformHash = deformHash;
+                entry.lastDeformSignature = deformSignature;
                 entry.pendingTopologyUpload = true;
                 entry.pendingDeformUpload = false;
                 continue;
             }
 
-            if(deformHash != entry.lastDeformHash || !entry.gpu.valid()){
+            if(deformSignature != entry.lastDeformSignature || !entry.gpu.valid()){
                 if(entry.cpu.updateDeformation(sbComp.softBody, xf)){
-                    entry.lastDeformHash = deformHash;
+                    entry.lastDeformSignature = deformSignature;
                     if(!entry.gpu.valid() || entry.gpu.uploadedEditRevision != entry.cpu.editRevision){
                         const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
                         if(CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){

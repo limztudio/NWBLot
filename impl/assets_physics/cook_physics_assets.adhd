@@ -891,8 +891,18 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
         }
     }
 
-    Expected<HeightfieldShape> built = MakeHeightfieldShape(cols, rows, Span<f32>(heights.data(), heights.size()), scale, origin);
-    if(!built.has_value()){
+    f32 minY = 0.0f;
+    f32 maxY = 0.0f;
+    if(
+        cols < 2u
+        || rows < 2u
+        || heights.size() != cast<usize>(cols) * cast<usize>(rows)
+        || !IsFinite(VectorSingle(scale.x, scale.y, scale.z, 0.0f))
+        || scale.x <= 0.0f
+        || scale.z <= 0.0f
+        || !IsValidPositionVec3(origin)
+        || !ValidateAndComputeHeightfieldRange(Span<f32>(heights.data(), heights.size()), origin.y, scale.y, minY, maxY)
+    ){
         error("{} '{}': failed to construct heightfield", s_HeightfieldDiagnosticPrefix, PathToString(file));
         return MakeUnexpected(Failure());
     }
@@ -915,13 +925,17 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
         }
     }
 
-    entry.heightfield = built.value();
+    entry.heightfield.cols = cols;
+    entry.heightfield.rows = rows;
+    entry.heightfield.scaleMinMaxY = f32x4(scale.x, scale.y, scale.z, minY);
+    entry.heightfield.originMaxY = f32x4(origin.x, origin.y, origin.z, maxY);
     entry.heightfield.thickness = thickness;
     entry.heightfield.flipDiagonal = flipDiagonal;
-    entry.heightfield.materials = materials;
-    entry.heightfield.cellMaterialIndices = cellMaterialIndices;
-    entry.heightfield.cellHoles = cellHoles;
-    entry.heightfield.buildHierarchy();
+    TransferVector<f32>(entry.heightfield.heights, heights);
+    TransferVector<SurfaceMaterial>(entry.heightfield.materials, materials);
+    TransferVector<u16>(entry.heightfield.cellMaterialIndices, cellMaterialIndices);
+    TransferVector<u8>(entry.heightfield.cellHoles, cellHoles);
+    entry.heightfield.hierarchy.clear();
 
     if(entry.virtualPath == s_NameNone || !PhysicsAssetBinaryCodec().validateHeightfield(entry.heightfield, entry.virtualPath))
         return MakeUnexpected(Failure());
@@ -1010,7 +1024,14 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Path root, in Str
 
 Expected<HeightfieldAsset> BuildHeightfieldAsset(in HeightfieldCookEntry entry){
     HeightfieldAsset asset(entry.virtualPath);
-    asset.setHeightfield(entry.heightfield);
+    if(entry.heightfield.hierarchy.empty()){
+        HeightfieldShape hf = entry.heightfield;
+        hf.buildHierarchy();
+        asset.setHeightfield(hf);
+    }
+    else{
+        asset.setHeightfield(entry.heightfield);
+    }
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;

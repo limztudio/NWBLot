@@ -532,6 +532,18 @@ class SoftBodyRuntimeMeshCpuState{
         if(this.solidTriangleWords.size() != ExpectedMeshletSolidTriangleWordCount(cast<u32>(this.meshletPrimitiveIndices.size())))
             return false;
 
+        const Expected<Vector<AttribGpu>> builtAttributes = BuildMeshletTriangleAttributes(
+            Span<MeshletDesc>(this.meshlets),
+            Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
+            Span<u8>(this.meshletAttributeRefDeltas),
+            Span<u8>(this.meshletPrimitiveIndices),
+            Span<f16x4u>(this.normals),
+            Span<f32x2u>(this.uv0)
+        );
+        if(!builtAttributes.has_value() || builtAttributes.value().size() != this.triangleIndices.size())
+            return false;
+        this.triangleAttributes = builtAttributes.value();
+
         this.cachedTopologyVersion = sb.topologyVersion;
         this.cachedParticleCount = particleCount;
         this.cachedTriangleCount = sb.surfaceTriangles.size();
@@ -637,45 +649,28 @@ class SoftBodyRuntimeMeshCpuState{
         for(usize m = 0u; m < meshletCount; ++m){
             MeshletDesc boundsDesc = this.meshlets[m];
             boundsDesc.positionRefOffset = this.meshletPositionRefElementOffsets[m];
-            this.meshletBounds[m] = BuildMeshletBounds(
+            VectorSingle minM(0.0f);
+            VectorSingle maxM(0.0f);
+            this.meshletBounds[m] = BuildMeshletBoundsWithAabb(
                 Span<f32x3u>(this.positions),
                 Span<MeshletPositionStreamRef>(this.meshletPositionStreamRefs),
                 Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
                 Span<u8>(this.meshletPrimitiveIndices),
-                boundsDesc
+                boundsDesc,
+                minM,
+                maxM
             );
-
-            const u32 posCount = MeshletPositionCount(boundsDesc);
-            VectorSingle minM(f32.max, f32.max, f32.max, 0.0f);
-            VectorSingle maxM(-f32.max, -f32.max, -f32.max, 0.0f);
-            for(u32 lp = 0u; lp < posCount; ++lp){
-                const MeshletPositionStreamRef ref = this.meshletPositionStreamRefs[cast<usize>(boundsDesc.positionRefOffset + lp)];
-                const f32x3u p3 = this.positions[cast<usize>(ref.position)];
-                const VectorSingle pVec(p3.x, p3.y, p3.z, 0.0f);
-                minM = Min(minM, pVec);
-                maxM = Max(maxM, pVec);
-            }
-            if(posCount == 0u){
-                minM = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
-                maxM = minM;
-            }
             this.meshletLocalBounds[m] = MakeSoftBodyRuntimeLocalBounds(minM, maxM);
             globalMin = Min(globalMin, minM);
             globalMax = Max(globalMax, maxM);
         }
         this.localBounds = MakeSoftBodyRuntimeLocalBounds(globalMin, globalMax);
 
-        const Expected<Vector<AttribGpu>> builtAttributes = BuildMeshletTriangleAttributes(
-            Span<MeshletDesc>(this.meshlets),
-            Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
-            Span<u8>(this.meshletAttributeRefDeltas),
-            Span<u8>(this.meshletPrimitiveIndices),
-            Span<f16x4u>(this.normals),
-            Span<f32x2u>(this.uv0)
-        );
-        if(!builtAttributes.has_value())
+        const usize cornerCount = this.triangleIndices.size();
+        if(this.triangleAttributes.size() != cornerCount)
             return false;
-        this.triangleAttributes = builtAttributes.value();
+        for(usize ci = 0u; ci < cornerCount; ++ci)
+            this.triangleAttributes[ci].normal = this.normals[cast<usize>(this.triangleIndices[ci])];
 
         ++this.contentRevision;
         if(this.contentRevision == 0u)

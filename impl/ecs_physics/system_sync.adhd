@@ -4,6 +4,7 @@
 
 #include <impl/assets_mesh/asset.adhd>
 #include <impl/assets_mesh/meshlet_triangle_indices.adhd>
+#include <impl/assets_skeleton/joint_types.adhd>
 #include <impl/ecs_physics/components.adhd>
 #include <impl/physics/gpu/gpu_dispatcher.adhd>
 #include <impl/ecs_mesh/components.adhd>
@@ -444,6 +445,12 @@ class EcsPhysicsSyncScratch{
     public HashMap<u64, EntityID> destroyedShapeOwners;
     public HashMap<u64, EntityID> destroyedJointOwners;
     public Vector<FluidImmersionRecord> ecsFluidImmersionState;
+    public FluidReconcileScratch ecsFluidReconcileScratch;
+    public Vector<u32> staleFluidIdsScratch;
+    public Vector<u32> skeletonMappedJointsScratch;
+    public Vector<Transform3D> skeletonMappedWorldXfsScratch;
+    public Vector<SkeletonJointMatrix> skeletonModelJointsScratch;
+    public Vector<u8> skeletonMappedMaskScratch;
     public Vector<FluidCandidateSample> ecsFluidSamplesScratch;
     public Vector<FluidSplashEvent> ecsFluidSplashScratch;
     public HashMap<u32, EntityID> activeFluidEntitiesById;

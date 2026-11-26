@@ -54,6 +54,9 @@ u32 PackPaintGradientRecord(
         invLenSq = 1.0f / UiSimdMax(lenSq, 1.0e-12f);
     }
 
+    const u32 offsetGroups = (count + 3u) >> 2u;
+    outWords.reserve(outWords.size() + 12u + cast<usize>(offsetGroups) * 4u + cast<usize>(count) * 4u);
+
     outWords.push_back(cast<u32>(gradient.kind));
     outWords.push_back(cast<u32>(gradient.spread));
     outWords.push_back(count);
@@ -75,22 +78,23 @@ u32 PackPaintGradientRecord(
     outWords.push_back(bit_cast<u32>(invLenSq));
     outWords.push_back(0u);
 
-    for(u32 i = 0u; i < count; ++i){
-        in PaintGradientStop stop = sorted[cast<usize>(i)];
-        const Color premul = PremultiplyPaintColor(stop.color);
-        f32 invDelta = 0.0f;
-        if(i + 1u < count){
-            const f32 delta = sorted[cast<usize>(i + 1u)].offset - stop.offset;
-            invDelta = 1.0f / UiSimdMax(delta, 1.0e-6f);
+    const u32 sentinelOffsetWord = bit_cast<u32>(2.0f);
+    for(u32 g = 0u; g < offsetGroups; ++g){
+        const u32 baseIdx = g * 4u;
+        for(u32 lane = 0u; lane < 4u; ++lane){
+            const u32 idx = baseIdx + lane;
+            if(idx < count)
+                outWords.push_back(bit_cast<u32>(sorted[cast<usize>(idx)].offset));
+            else
+                outWords.push_back(sentinelOffsetWord);
         }
+    }
+    for(u32 i = 0u; i < count; ++i){
+        const Color premul = PremultiplyPaintColor(sorted[cast<usize>(i)].color);
         outWords.push_back(bit_cast<u32>(premul.r));
         outWords.push_back(bit_cast<u32>(premul.g));
         outWords.push_back(bit_cast<u32>(premul.b));
         outWords.push_back(bit_cast<u32>(premul.a));
-        outWords.push_back(bit_cast<u32>(stop.offset));
-        outWords.push_back(bit_cast<u32>(invDelta));
-        outWords.push_back(0u);
-        outWords.push_back(0u);
     }
     return byteOffset;
 }
@@ -109,6 +113,9 @@ u32 PackPaintDropShadowRecord(
     f32 insetFloat = 0.0f;
     if(inset)
         insetFloat = 1.0f;
+    f32 invSqrt2Sigma = 0.0f;
+    if(sigma > 1.0e-3f)
+        invSqrt2Sigma = 1.0f / (sigma * 1.41421356237f);
 
     outWords.push_back(bit_cast<u32>(center.x));
     outWords.push_back(bit_cast<u32>(center.y));
@@ -117,7 +124,7 @@ u32 PackPaintDropShadowRecord(
     outWords.push_back(bit_cast<u32>(cornerRadius));
     outWords.push_back(bit_cast<u32>(sigma));
     outWords.push_back(bit_cast<u32>(insetFloat));
-    outWords.push_back(0u);
+    outWords.push_back(bit_cast<u32>(invSqrt2Sigma));
     return byteOffset;
 }
 
@@ -155,8 +162,8 @@ u32 PackPaintAnalyticClipRecord(
 }
 
 u32 PackPaintBlurRecord(
-    in f32 dirX,
-    in f32 dirY,
+    in f32 texelStepX,
+    in f32 texelStepY,
     in f32 sigma,
     in Rect uvBounds,
     mut Vector<u32> outWords
@@ -165,16 +172,138 @@ u32 PackPaintBlurRecord(
         outWords.push_back(0u);
     const u32 byteOffset = cast<u32>(outWords.size() * 4u);
 
-    outWords.push_back(bit_cast<u32>(dirX));
-    outWords.push_back(bit_cast<u32>(dirY));
-    outWords.push_back(bit_cast<u32>(sigma));
-    outWords.push_back(0u);
+    const f32 clampedSigma = UiSimdMax(sigma, 0.25f);
+    const f32 invTwoSigmaSq = 0.5f / (clampedSigma * clampedSigma);
+    const VectorSingle negInvTwoSigmaSqVec(-invTwoSigmaSq);
+    const u32 radius = cast<u32>(UiSimdClamp(Ceil(VectorSingle(2.5f * clampedSigma)).x, 1.0f, 24.0f));
+    Array<f32, 25u> weights;
+    weights[0u] = 1.0f;
+    f32 weightSum = 1.0f;
+    for(u32 tap = 1u; tap <= radius; tap += 4u){
+        const f32 f0 = cast<f32>(tap);
+        const VectorSingle tVec(f0, f0 + 1.0f, f0 + 2.0f, f0 + 3.0f);
+        const VectorSingle wVec = VectorExp((tVec * tVec) * negInvTwoSigmaSqVec);
+        weights[cast<usize>(tap)] = wVec.x;
+        weightSum += 2.0f * wVec.x;
+        if(tap + 1u <= radius){
+            weights[cast<usize>(tap + 1u)] = wVec.y;
+            weightSum += 2.0f * wVec.y;
+        }
+        if(tap + 2u <= radius){
+            weights[cast<usize>(tap + 2u)] = wVec.z;
+            weightSum += 2.0f * wVec.z;
+        }
+        if(tap + 3u <= radius){
+            weights[cast<usize>(tap + 3u)] = wVec.w;
+            weightSum += 2.0f * wVec.w;
+        }
+    }
+
+    const f32 invWeightSum = 1.0f / weightSum;
+    const f32 centerWeight = invWeightSum;
+    Array<f32, 12u> pairOffsets;
+    Array<f32, 12u> pairWeights;
+    u32 pairCount = 0u;
+    for(u32 k = 1u; k <= radius; k += 2u){
+        const f32 wa = weights[cast<usize>(k)] * invWeightSum;
+        if(k + 1u <= radius){
+            const f32 wb = weights[cast<usize>(k + 1u)] * invWeightSum;
+            const f32 wp = wa + wb;
+            f32 op = cast<f32>(k);
+            if(wp > 1.0e-12f)
+                op = (cast<f32>(k) * wa + cast<f32>(k + 1u) * wb) / wp;
+            pairOffsets[cast<usize>(pairCount)] = op;
+            pairWeights[cast<usize>(pairCount)] = wp;
+        }
+        else{
+            pairOffsets[cast<usize>(pairCount)] = cast<f32>(k);
+            pairWeights[cast<usize>(pairCount)] = wa;
+        }
+        ++pairCount;
+    }
+
+    const u32 pairGroups = (pairCount + 1u) >> 1u;
+    outWords.reserve(outWords.size() + 8u + cast<usize>(pairGroups) * 4u);
+
+    outWords.push_back(bit_cast<u32>(texelStepX));
+    outWords.push_back(bit_cast<u32>(texelStepY));
+    outWords.push_back(bit_cast<u32>(centerWeight));
+    outWords.push_back(pairCount);
 
     outWords.push_back(bit_cast<u32>(uvBounds.x));
     outWords.push_back(bit_cast<u32>(uvBounds.y));
     outWords.push_back(bit_cast<u32>(uvBounds.x + uvBounds.width));
     outWords.push_back(bit_cast<u32>(uvBounds.y + uvBounds.height));
+
+    const u32 zeroWord = bit_cast<u32>(0.0f);
+    for(u32 p = 0u; p < pairCount; p += 2u){
+        outWords.push_back(bit_cast<u32>(pairOffsets[cast<usize>(p)]));
+        outWords.push_back(bit_cast<u32>(pairWeights[cast<usize>(p)]));
+        if(p + 1u < pairCount){
+            outWords.push_back(bit_cast<u32>(pairOffsets[cast<usize>(p + 1u)]));
+            outWords.push_back(bit_cast<u32>(pairWeights[cast<usize>(p + 1u)]));
+        }
+        else{
+            outWords.push_back(zeroWord);
+            outWords.push_back(zeroWord);
+        }
+    }
     return byteOffset;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+b8 IntersectsPaintClipRect(in PaintClipEntry clipEntry, in Rect rectangle){
+    if(!(rectangle.width > 0.0f) || !(rectangle.height > 0.0f) || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f))
+        return false;
+    const VectorSingle rectOrigin(rectangle.x, rectangle.y, 0.0f, 0.0f);
+    const VectorSingle rectEnd = rectOrigin + VectorSingle(rectangle.width, rectangle.height, 0.0f, 0.0f);
+    if(!IsFinite(rectEnd.xy))
+        return false;
+    const VectorSingle clipOrigin(clipEntry.rect.x, clipEntry.rect.y, 0.0f, 0.0f);
+    const VectorSingle clipEnd(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f);
+    if(!IsFinite(clipEnd.xy))
+        return false;
+    const VectorSingle visSize = Min(rectEnd, clipEnd) - Max(rectOrigin, clipOrigin);
+    return visSize.x > 0.0f && visSize.y > 0.0f && IsFinite(visSize.xy);
+}
+
+b8 IntersectsPaintClipQuad(in PaintClipEntry clipEntry, in Point p00, in Point p10, in Point p11, in Point p01){
+    if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
+        return false;
+    const VectorSingle qV0(p00.x, p00.y, p10.x, p10.y);
+    const VectorSingle qV1(p11.x, p11.y, p01.x, p01.y);
+    if(!IsFinite(qV0) || !IsFinite(qV1))
+        return false;
+    const VectorSingle qPairMin = Min(qV0, qV1);
+    const VectorSingle qPairMax = Max(qV0, qV1);
+    const f32 minX = UiSimdMin(qPairMin.x, qPairMin.z);
+    const f32 maxX = UiSimdMax(qPairMax.x, qPairMax.z);
+    const f32 minY = UiSimdMin(qPairMin.y, qPairMin.w);
+    const f32 maxY = UiSimdMax(qPairMax.y, qPairMax.w);
+    return maxX > clipEntry.rect.x && maxY > clipEntry.rect.y && minX < clipEntry.right && minY < clipEntry.bottom;
+}
+
+b8 IntersectsPaintClipPoints(in PaintClipEntry clipEntry, in Span<Point> pts, in f32 pad){
+    if(pts.empty() || !(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
+        return false;
+    VectorSingle minXY(s_UiMaxFloat, s_UiMaxFloat, 0.0f, 0.0f);
+    VectorSingle maxXY(-s_UiMaxFloat, -s_UiMaxFloat, 0.0f, 0.0f);
+    for(in Point pt : pts){
+        const VectorSingle p(pt.x, pt.y, 0.0f, 0.0f);
+        if(!IsFinite(p.xy))
+            return false;
+        minXY = Min(minXY, p);
+        maxXY = Max(maxXY, p);
+    }
+    return
+        maxXY.x + pad > clipEntry.rect.x
+        && minXY.x - pad < clipEntry.right
+        && maxXY.y + pad > clipEntry.rect.y
+        && minXY.y - pad < clipEntry.bottom
+    ;
 }
 
 
@@ -412,31 +541,30 @@ void EmitPaintTriangulatedMesh(
     if(!(clipEntry.rect.width > 0.0f) || !(clipEntry.rect.height > 0.0f) || !IsFinite(VectorSingle(clipEntry.right, clipEntry.bottom, 0.0f, 0.0f).xy))
         return;
 
-    f32 minX = s_UiMaxFloat;
-    f32 minY = s_UiMaxFloat;
-    f32 maxX = -s_UiMaxFloat;
-    f32 maxY = -s_UiMaxFloat;
+    VectorSingle minXY(s_UiMaxFloat, s_UiMaxFloat, 0.0f, 0.0f);
+    VectorSingle maxXY(-s_UiMaxFloat, -s_UiMaxFloat, 0.0f, 0.0f);
     for(in Point pt : triVerts){
-        if(!IsFinite(VectorSingle(pt.x, pt.y, 0.0f, 0.0f).xy))
+        const VectorSingle p(pt.x, pt.y, 0.0f, 0.0f);
+        if(!IsFinite(p.xy))
             return;
-        minX = UiSimdMin(minX, pt.x);
-        minY = UiSimdMin(minY, pt.y);
-        maxX = UiSimdMax(maxX, pt.x);
-        maxY = UiSimdMax(maxY, pt.y);
+        minXY = Min(minXY, p);
+        maxXY = Max(maxXY, p);
     }
     const f32 halfAa = 0.5f * aaWidth;
     if(
-        maxX + halfAa <= clipEntry.rect.x
-        || minX - halfAa >= clipEntry.right
-        || maxY + halfAa <= clipEntry.rect.y
-        || minY - halfAa >= clipEntry.bottom
+        maxXY.x + halfAa <= clipEntry.rect.x
+        || minXY.x - halfAa >= clipEntry.right
+        || maxXY.y + halfAa <= clipEntry.rect.y
+        || minXY.y - halfAa >= clipEntry.bottom
     )
         return;
 
     usize fringeEdgeCount = 0u;
-    for(in PaintPathSubpath sub : fringeContours){
-        if(sub.closed && sub.pointEnd - sub.pointBegin >= 3u)
-            fringeEdgeCount += sub.pointEnd - sub.pointBegin;
+    if(aaWidth > 0.0f){
+        for(in PaintPathSubpath sub : fringeContours){
+            if(sub.closed && sub.pointEnd - sub.pointBegin >= 3u)
+                fringeEdgeCount += sub.pointEnd - sub.pointBegin;
+        }
     }
 
     const usize addedVerts = triVerts.size() + fringeEdgeCount * 2u;
@@ -448,6 +576,8 @@ void EmitPaintTriangulatedMesh(
         assert(false);
         return;
     }
+    vertices.reserve(vertices.size() + addedVerts);
+    indices.reserve(indices.size() + addedIndices);
 
     const Color premultiplied = PremultiplyPaintColor(color);
     const Color transparent(0.0f, 0.0f, 0.0f, 0.0f);

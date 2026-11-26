@@ -339,10 +339,13 @@ class GraphicsComponentBinaryCodec{
         SkeletonComponentHeaderBinary header;
         header.jointCount = cast<u32>(component.joints.size());
         header.skinningMode = component.skinningMode;
-        outBinary.reserve(outBinary.size() + totalBytes);
+        const usize startSize = outBinary.size();
+        outBinary.reserve(startSize + totalBytes);
         AppendPOD(outBinary, header);
-        for(in SkeletonJointMatrix joint : component.joints)
-            AppendPOD(outBinary, joint);
+        if(!AppendBinaryVectorPayload(outBinary, component.joints).has_value()){
+            outBinary.resize(startSize);
+            return false;
+        }
         return true;
     }
 
@@ -379,14 +382,15 @@ class GraphicsComponentBinaryCodec{
             error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: joint count exceeds capacity");
             return MakeUnexpected(Failure());
         }
-        outComponent.joints.reserve(jointCount);
-        for(usize i = 0u; i < jointCount; ++i){
-            const Expected<SkeletonJointMatrix> jointResult = ReadPOD<SkeletonJointMatrix>(payload, cursor);
-            if(!jointResult.has_value() || !IsFiniteSkeletonJointMatrix(MatrixSingle(jointResult.value()))){
+        if(!ReadBinaryVectorPayload(payload, jointCount, cursor, outComponent.joints).has_value()){
+            error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: joint payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        for(in SkeletonJointMatrix joint : outComponent.joints){
+            if(!IsFiniteSkeletonJointMatrix(MatrixSingle(joint))){
                 error("SkeletonJointPaletteComponentAsset::loadComponentPayload failed: invalid joint matrix");
                 return MakeUnexpected(Failure());
             }
-            outComponent.joints.push_back(jointResult.value());
         }
         return outComponent;
     }
@@ -425,12 +429,16 @@ class GraphicsComponentBinaryCodec{
         SkeletonComponentHeaderBinary header;
         header.jointCount = cast<u32>(component.localJoints.size());
         header.skinningMode = component.skinningMode;
-        outBinary.reserve(outBinary.size() + totalBytes);
+        const usize startSize = outBinary.size();
+        outBinary.reserve(startSize + totalBytes);
         AppendPOD(outBinary, header);
-        for(in u32 parentJoint : component.parentJoints)
-            AppendPOD(outBinary, parentJoint);
-        for(in SkeletonJointMatrix joint : component.localJoints)
-            AppendPOD(outBinary, joint);
+        if(
+            !AppendBinaryVectorPayload(outBinary, component.parentJoints).has_value()
+            || !AppendBinaryVectorPayload(outBinary, component.localJoints).has_value()
+        ){
+            outBinary.resize(startSize);
+            return false;
+        }
         return true;
     }
 
@@ -467,23 +475,19 @@ class GraphicsComponentBinaryCodec{
             error("SkeletonPoseComponentAsset::loadComponentPayload failed: joint count exceeds capacity");
             return MakeUnexpected(Failure());
         }
-        outComponent.parentJoints.reserve(jointCount);
-        outComponent.localJoints.reserve(jointCount);
-        for(usize i = 0u; i < jointCount; ++i){
-            const Expected<u32> parentResult = ReadPOD<u32>(payload, cursor);
-            if(!parentResult.has_value()){
-                error("SkeletonPoseComponentAsset::loadComponentPayload failed: malformed parent joint index");
-                return MakeUnexpected(Failure());
-            }
-            outComponent.parentJoints.push_back(parentResult.value());
+        if(!ReadBinaryVectorPayload(payload, jointCount, cursor, outComponent.parentJoints).has_value()){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: malformed parent joint index");
+            return MakeUnexpected(Failure());
         }
-        for(usize i = 0u; i < jointCount; ++i){
-            const Expected<SkeletonJointMatrix> jointResult = ReadPOD<SkeletonJointMatrix>(payload, cursor);
-            if(!jointResult.has_value() || !IsFiniteSkeletonJointMatrix(MatrixSingle(jointResult.value()))){
+        if(!ReadBinaryVectorPayload(payload, jointCount, cursor, outComponent.localJoints).has_value()){
+            error("SkeletonPoseComponentAsset::loadComponentPayload failed: joint pose payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
+        for(in SkeletonJointMatrix joint : outComponent.localJoints){
+            if(!IsFiniteSkeletonJointMatrix(MatrixSingle(joint))){
                 error("SkeletonPoseComponentAsset::loadComponentPayload failed: invalid local joint matrix");
                 return MakeUnexpected(Failure());
             }
-            outComponent.localJoints.push_back(jointResult.value());
         }
         if(jointCount > 0u && !ValidSkeletonPoseTopology(outComponent)){
             error("SkeletonPoseComponentAsset::loadComponentPayload failed: invalid parent joint topology");
@@ -690,10 +694,10 @@ class GraphicsComponentBinaryCodec{
             error("CsgCutterComponentAsset::loadComponentPayload failed: parameter byte count exceeds capacity");
             return MakeUnexpected(Failure());
         }
-        outComponent.parameterBytes.reserve(parameterByteCount);
-        const Span<u8> paramSpan = payload.subspan(cursor, parameterByteCount);
-        for(in u8 byteValue : paramSpan)
-            outComponent.parameterBytes.push_back(byteValue);
+        if(!ReadBinaryVectorPayload(payload, parameterByteCount, cursor, outComponent.parameterBytes).has_value()){
+            error("CsgCutterComponentAsset::loadComponentPayload failed: parameter payload size mismatch");
+            return MakeUnexpected(Failure());
+        }
         return outComponent;
     }
 }

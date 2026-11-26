@@ -385,7 +385,105 @@ class HeightfieldShape{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<HeightfieldShape> MakeHeightfieldShape(
+b8 ValidateAndComputeHeightfieldRange(
+    in Span<f32> heights,
+    in f32 originY,
+    in f32 scaleY,
+    mut f32 outMinY,
+    mut f32 outMaxY
+){
+    if(!IsFinite(VectorSingle(originY, scaleY, 0.0f, 0.0f)))
+        return false;
+    const usize count = heights.size();
+    const VectorSingle vScaleY = VectorReplicate(scaleY);
+    const VectorSingle vOriginY = VectorReplicate(originY);
+    const VectorSingle vHuge = VectorReplicate(s_HugeCoordinate);
+    const VectorSingle vMaxF32 = VectorReplicate(s_MaxF32);
+    const VectorSingle vNegMaxF32 = VectorReplicate(-s_MaxF32);
+    VectorSingle vMinY = vMaxF32;
+    VectorSingle vMaxY = vNegMaxF32;
+    b8 anyFinite = false;
+
+    usize i = 0u;
+    while((count - i) >= 4u){
+        const VectorSingle h = VectorSet(heights[i], heights[i + 1u], heights[i + 2u], heights[i + 3u]);
+        const VectorSingle isInf = VectorIsInfinite(h);
+        const VectorSingle isNan = VectorIsNaN(h);
+        const VectorSingle y = VectorMultiplyAdd(h, vScaleY, vOriginY);
+        const VectorSingle outOfRange = VectorGreater(VectorAbs(y), vHuge);
+        if((VectorMoveMask(VectorOrInt(isInf, outOfRange)) & s_XYZW) != 0u)
+            return false;
+
+        const u32 nanMask = VectorMoveMask(isNan) & s_XYZW;
+        if(nanMask == 0u){
+            vMinY = VectorMin(vMinY, y);
+            vMaxY = VectorMax(vMaxY, y);
+            anyFinite = true;
+        }
+        else if(nanMask != s_XYZW){
+            const VectorSingle safeMin = VectorSelect(y, vMaxF32, isNan);
+            const VectorSingle safeMax = VectorSelect(y, vNegMaxF32, isNan);
+            vMinY = VectorMin(vMinY, safeMin);
+            vMaxY = VectorMax(vMaxY, safeMax);
+            anyFinite = true;
+        }
+        i += 4u;
+    }
+
+    f32 loY = SimdMin(SimdMin(VectorGetX(vMinY), VectorGetY(vMinY)), SimdMin(VectorGetZ(vMinY), VectorGetW(vMinY)));
+    f32 hiY = SimdMax(SimdMax(VectorGetX(vMaxY), VectorGetY(vMaxY)), SimdMax(VectorGetZ(vMaxY), VectorGetW(vMaxY)));
+
+    while(i < count){
+        const f32 h = heights[i];
+        if(!IsFinite(VectorSingle(h))){
+            if(h == h)
+                return false;
+            ++i;
+            continue;
+        }
+        const f32 y = originY + h * scaleY;
+        if(Abs(VectorSingle(y)).x > s_HugeCoordinate)
+            return false;
+        if(!anyFinite){
+            loY = y;
+            hiY = y;
+            anyFinite = true;
+        }
+        else{
+            loY = SimdMin(loY, y);
+            hiY = SimdMax(hiY, y);
+        }
+        ++i;
+    }
+
+    if(!anyFinite){
+        loY = originY;
+        hiY = originY;
+    }
+    outMinY = loY;
+    outMaxY = hiY;
+    return true;
+}
+
+b8 ValidateHeightfieldParameters(
+    in u32 cols,
+    in u32 rows,
+    in Span<f32> heights,
+    in VectorSingle scale,
+    in VectorSingle origin
+){
+    if(cols < 2u || rows < 2u || heights.size() != cast<usize>(cols) * cast<usize>(rows))
+        return false;
+    if(!IsFinite(VectorSingle(scale.x, scale.y, scale.z, 0.0f)) || scale.x <= 0.0f || scale.z <= 0.0f)
+        return false;
+    if(!IsValidPositionVec3(origin))
+        return false;
+    f32 minY = 0.0f;
+    f32 maxY = 0.0f;
+    return ValidateAndComputeHeightfieldRange(heights, origin.y, scale.y, minY, maxY);
+}
+
+Expected<HeightfieldShape> MakeHeightfieldShapeWithoutHierarchy(
     in u32 cols,
     in u32 rows,
     in Span<f32> heights,
@@ -399,21 +497,32 @@ Expected<HeightfieldShape> MakeHeightfieldShape(
     if(!IsValidPositionVec3(origin))
         return MakeUnexpected(Failure());
 
+    f32 minY = 0.0f;
+    f32 maxY = 0.0f;
+    if(!ValidateAndComputeHeightfieldRange(heights, origin.y, scale.y, minY, maxY))
+        return MakeUnexpected(Failure());
+
     HeightfieldShape hf;
     hf.cols = cols;
     hf.rows = rows;
-    hf.scaleMinMaxY = f32x4(scale.x, scale.y, scale.z, 0.0f);
-    hf.originMaxY = f32x4(origin.x, origin.y, origin.z, 0.0f);
-    hf.heights.reserve(heights.size());
-    for(usize i = 0u; i < heights.size(); ++i){
-        const f32 h = heights[i];
-        if(IsFinite(VectorSingle(h)) && Abs(VectorSingle(origin.y + h * scale.y)).x > s_HugeCoordinate)
-            return MakeUnexpected(Failure());
-        hf.heights.push_back(h);
-    }
-    hf.updateHeightRange();
-    hf.buildHierarchy();
+    hf.scaleMinMaxY = f32x4(scale.x, scale.y, scale.z, minY);
+    hf.originMaxY = f32x4(origin.x, origin.y, origin.z, maxY);
+    AssignTriviallyCopyableVector(hf.heights, heights);
     return hf;
+}
+
+Expected<HeightfieldShape> MakeHeightfieldShape(
+    in u32 cols,
+    in u32 rows,
+    in Span<f32> heights,
+    in VectorSingle scale,
+    in VectorSingle origin
+){
+    Expected<HeightfieldShape> built = MakeHeightfieldShapeWithoutHierarchy(cols, rows, heights, scale, origin);
+    if(!built.has_value())
+        return built;
+    built.value().buildHierarchy();
+    return built;
 }
 
 void ExtractHeightfieldCellTriangle(

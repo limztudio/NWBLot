@@ -60,6 +60,8 @@ b8 ModelObjectMaterialInstanceParametersEqual(in MaterialInstanceParameter lhs, 
 b8 ModelObjectMaterialInstancesEqual(in MaterialInstanceComponent lhs, in MaterialInstanceComponent rhs){
     if(lhs.materialInterface != rhs.materialInterface || lhs.revision != rhs.revision || lhs.overrides.size() != rhs.overrides.size())
         return false;
+    if(lhs.revision != 0u)
+        return true;
     for(usize i = 0u; i < lhs.overrides.size(); ++i){
         if(!ModelObjectMaterialInstanceParametersEqual(lhs.overrides[i], rhs.overrides[i]))
             return false;

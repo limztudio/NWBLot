@@ -3,6 +3,7 @@
 
 
 #include "style.adhd"
+#include <impl/ecs_ui/toolkit/text/layout.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,13 +149,16 @@ void AppendHexByte(in u8 value, mut String outHex){
 b8 FormatColorHex(in Color color, in b8 includeAlpha, mut String outHex){
     if(!IsValidPaintColor(color))
         return false;
+    const VectorSingle clamped = Max(VectorSingle(0.0f), Min(VectorSingle(1.0f), VectorSingle(color.r, color.g, color.b, color.a)));
+    const VectorSingle bytesF = Max(VectorSingle(0.0f), Min(VectorSingle(255.0f), VectorFloor(clamped * VectorSingle(255.0f) + VectorSingle(0.5f))));
     outHex.clear();
+    outHex.reserve(9u);
     outHex.push_back('#');
-    AppendHexByte(ColorChannelToByte(color.r), outHex);
-    AppendHexByte(ColorChannelToByte(color.g), outHex);
-    AppendHexByte(ColorChannelToByte(color.b), outHex);
+    AppendHexByte(cast<u8>(bytesF.x), outHex);
+    AppendHexByte(cast<u8>(bytesF.y), outHex);
+    AppendHexByte(cast<u8>(bytesF.z), outHex);
     if(includeAlpha)
-        AppendHexByte(ColorChannelToByte(color.a), outHex);
+        AppendHexByte(cast<u8>(bytesF.w), outHex);
     return true;
 }
 
@@ -240,6 +244,22 @@ class ColorPickerState : NoCopy{
     public Rect m_svRect;
     public Rect m_hueRect;
     public Rect m_alphaRect;
+    public SharedTextLayout m_cachedHexLayout;
+    public Rect m_cachedHexBounds;
+    public FontDescriptor m_cachedHexFont;
+    public String m_cachedHexLanguage;
+    public u64 m_cachedHexRevision = 0u;
+    public u64 m_cachedHexTextIdentity = 0u;
+    public u64 m_cachedHexTextGeneration = 0u;
+    public u64 m_cachedHexAtlasIdentity = 0u;
+    public usize m_cachedHexAtlasGlyphCount = 0u;
+    public u32 m_cachedHexFontSizeBits = 0u;
+    public u32 m_cachedHexScaleXBits = 0u;
+    public u32 m_cachedHexScaleYBits = 0u;
+    public u32 m_cachedHexScriptTag = 0u;
+    public TextDirection m_cachedHexDirection = TextDirection::LeftToRight;
+    public TextBidiMode m_cachedHexBidiMode = TextBidiMode::None;
+    public b8 m_cachedHexShowAlpha = false;
     public b8 m_dragging = false;
 
     public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
@@ -259,12 +279,8 @@ class ColorPickerState : NoCopy{
         if(nextHsv.s <= 1.0e-5f)
             nextHsv.h = this.m_hsv.h;
         this.m_hsv = nextHsv;
-        this.m_color = Color(
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.r)),
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.g)),
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.b)),
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.a))
-        );
+        const VectorSingle clamped = Max(VectorSingle(0.0f), Min(VectorSingle(1.0f), VectorSingle(color.r, color.g, color.b, color.a)));
+        this.m_color = Color(clamped.x, clamped.y, clamped.z, clamped.w);
         AdvanceNonWrappingRevision(this.m_revision);
         this.m_inputGeneration = AllocateServiceIdentity();
         return true;
@@ -287,12 +303,8 @@ class ColorPickerState : NoCopy{
     public b8 setOriginalColor(in Color color){
         if(!IsValidPaintColor(color))
             return false;
-        this.m_originalColor = Color(
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.r)),
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.g)),
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.b)),
-            UiSimdMax(0.0f, UiSimdMin(1.0f, color.a))
-        );
+        const VectorSingle clamped = Max(VectorSingle(0.0f), Min(VectorSingle(1.0f), VectorSingle(color.r, color.g, color.b, color.a)));
+        this.m_originalColor = Color(clamped.x, clamped.y, clamped.z, clamped.w);
         AdvanceNonWrappingRevision(this.m_revision);
         return true;
     }

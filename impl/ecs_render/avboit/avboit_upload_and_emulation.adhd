@@ -314,57 +314,57 @@ Expected<b8> DeclareAvboitMaterialUploads(
             warning("RendererSystem: could not declare AVBOIT material instance upload");
             return MakeUnexpected(Failure());
         }
-        if(!AppendInstanceTransformPatch(
-            inputs.instanceTransformPatchContributor,
-            instanceData,
-            inputs.resources.materialInstances,
-            inputs.frameBindings,
-            ResolveAvboitPhysicsTransformPatchPrefix(phase),
-            true,
-            graph,
-            inOutUploadTask
-        )){
-            warning("RendererSystem: could not declare AVBOIT physics transform patch");
-            return MakeUnexpected(Failure());
-        }
         if(!AppendImmutableBufferUpload(graph, materialTypedBlob, inputs.resources.materialTyped, identities.typedIdentity, identities.typedLabel, inOutUploadTask)){
             warning("RendererSystem: could not declare AVBOIT material typed upload");
             return MakeUnexpected(Failure());
         }
     }
 
-    if(!uploadCsgStreams)
-        return false;
+    if(uploadCsgStreams){
+        const auto clipContextSlotData = csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);
+        if(!clipContextSlotData.has_value()){
+            warning("RendererSystem: could not snapshot AVBOIT CSG context data");
+            return MakeUnexpected(Failure());
+        }
+        const auto receiverRangesBlobResult = graph.copyUploadElements<CsgReceiverRangeGpuData>(csgFrameData.receiverRanges);
+        const auto cuttersBlobResult = graph.copyUploadElements<CsgCutterGpuData>(csgFrameData.cutters);
+        const auto clipContextSlotsBlobResult = graph.copyUploadValue(clipContextSlotData.value());
+        if(!receiverRangesBlobResult.has_value() || !cuttersBlobResult.has_value() || !clipContextSlotsBlobResult.has_value()){
+            warning("RendererSystem: could not retain immutable AVBOIT CSG upload data");
+            return MakeUnexpected(Failure());
+        }
+        const GpuUploadBlobId receiverRangesBlob = receiverRangesBlobResult.value();
+        const GpuUploadBlobId cuttersBlob = cuttersBlobResult.value();
+        const GpuUploadBlobId clipContextSlotsBlob = clipContextSlotsBlobResult.value();
 
-    const auto clipContextSlotData = csgSystem.prepareCsgClipContextSlotData(inputs.targets, csgFrameData, inputs.csgResources, inputs.frameBindings);
-    if(!clipContextSlotData.has_value()){
-        warning("RendererSystem: could not snapshot AVBOIT CSG context data");
-        return MakeUnexpected(Failure());
+        if(!AppendImmutableBufferUpload(graph, receiverRangesBlob, inputs.resources.csgReceiverRanges, identities.receiverIdentity, identities.receiverLabel, inOutUploadTask)){
+            warning("RendererSystem: could not declare AVBOIT CSG receiver-range upload");
+            return MakeUnexpected(Failure());
+        }
+        if(!AppendImmutableBufferUpload(graph, cuttersBlob, inputs.resources.csgCutters, identities.cutterIdentity, identities.cutterLabel, inOutUploadTask)){
+            warning("RendererSystem: could not declare AVBOIT CSG cutter upload");
+            return MakeUnexpected(Failure());
+        }
+        if(!AppendImmutableBufferUpload(graph, clipContextSlotsBlob, inputs.resources.csgClipContextSlots, identities.clipIdentity, identities.clipLabel, inOutUploadTask)){
+            warning("RendererSystem: could not declare AVBOIT CSG clip-context upload");
+            return MakeUnexpected(Failure());
+        }
     }
-    const auto receiverRangesBlobResult = graph.copyUploadElements<CsgReceiverRangeGpuData>(csgFrameData.receiverRanges);
-    const auto cuttersBlobResult = graph.copyUploadElements<CsgCutterGpuData>(csgFrameData.cutters);
-    const auto clipContextSlotsBlobResult = graph.copyUploadValue(clipContextSlotData.value());
-    if(!receiverRangesBlobResult.has_value() || !cuttersBlobResult.has_value() || !clipContextSlotsBlobResult.has_value()){
-        warning("RendererSystem: could not retain immutable AVBOIT CSG upload data");
-        return MakeUnexpected(Failure());
-    }
-    const GpuUploadBlobId receiverRangesBlob = receiverRangesBlobResult.value();
-    const GpuUploadBlobId cuttersBlob = cuttersBlobResult.value();
-    const GpuUploadBlobId clipContextSlotsBlob = clipContextSlotsBlobResult.value();
 
-    if(!AppendImmutableBufferUpload(graph, receiverRangesBlob, inputs.resources.csgReceiverRanges, identities.receiverIdentity, identities.receiverLabel, inOutUploadTask)){
-        warning("RendererSystem: could not declare AVBOIT CSG receiver-range upload");
+    if(uploadMaterialStreams && !AppendInstanceTransformPatch(
+        inputs.instanceTransformPatchContributor,
+        instanceData,
+        inputs.resources.materialInstances,
+        inputs.frameBindings,
+        ResolveAvboitPhysicsTransformPatchPrefix(phase),
+        true,
+        graph,
+        inOutUploadTask
+    )){
+        warning("RendererSystem: could not declare AVBOIT physics transform patch");
         return MakeUnexpected(Failure());
     }
-    if(!AppendImmutableBufferUpload(graph, cuttersBlob, inputs.resources.csgCutters, identities.cutterIdentity, identities.cutterLabel, inOutUploadTask)){
-        warning("RendererSystem: could not declare AVBOIT CSG cutter upload");
-        return MakeUnexpected(Failure());
-    }
-    if(!AppendImmutableBufferUpload(graph, clipContextSlotsBlob, inputs.resources.csgClipContextSlots, identities.clipIdentity, identities.clipLabel, inOutUploadTask)){
-        warning("RendererSystem: could not declare AVBOIT CSG clip-context upload");
-        return MakeUnexpected(Failure());
-    }
-    return true;
+    return uploadCsgStreams;
 }
 
 

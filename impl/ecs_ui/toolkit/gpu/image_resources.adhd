@@ -374,7 +374,8 @@ b8 ValidGpuDrawCommandBindingsAndEffects(
         const u32 stopCount = words[cast<usize>(command.effectOffset >> 2u) + 2u];
         if(stopCount == 0u || stopCount > s_ShaderUiMaxGradientStops)
             return false;
-        const usize totalBytes = headerBytes + cast<usize>(stopCount) * cast<usize>(s_ShaderUiGradientStopBytes);
+        const usize offsetGroupBytes = cast<usize>((stopCount + 3u) >> 2u) * cast<usize>(s_ShaderUiGradientOffsetGroupBytes);
+        const usize totalBytes = headerBytes + offsetGroupBytes + cast<usize>(stopCount) * cast<usize>(s_ShaderUiGradientColorBytes);
         return totalBytes <= effectBytes - byteOff;
     }
     if(command.material == PaintMaterial::DropShadow){
@@ -390,6 +391,20 @@ b8 ValidGpuDrawCommandBindingsAndEffects(
         return cast<usize>(command.effectOffset) < layers.size();
     }
     return false;
+}
+
+b8 ValidGpuBlurRecord(in u32 byteOffset, in usize effectBytes, in Span<u32> words){
+    if(byteOffset == u32.max || (byteOffset & 15u) != 0u)
+        return false;
+    const usize byteOff = cast<usize>(byteOffset);
+    const usize headerBytes = cast<usize>(s_ShaderUiBlurHeaderBytes);
+    if(byteOff > effectBytes || headerBytes > effectBytes - byteOff)
+        return false;
+    const u32 pairCount = words[cast<usize>(byteOffset >> 2u) + 3u];
+    if(pairCount == 0u || pairCount > s_ShaderUiMaxBlurTapPairs)
+        return false;
+    const usize totalBytes = headerBytes + cast<usize>((pairCount + 1u) >> 1u) * cast<usize>(s_ShaderUiBlurPairGroupBytes);
+    return totalBytes <= effectBytes - byteOff;
 }
 
 b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
@@ -440,10 +455,9 @@ b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
         if(!ValidGpuClipMaskChain(layer.clipMaskOffset, effectBytes, Span<u32>(words)))
             return false;
         if(layer.blurRadius > 0.0f){
-            const usize blurBytes = cast<usize>(s_ShaderUiBlurRecordBytes);
-            if(layer.blurHorizontalOffset == u32.max || (layer.blurHorizontalOffset & 15u) != 0u || cast<usize>(layer.blurHorizontalOffset) > effectBytes || blurBytes > effectBytes - cast<usize>(layer.blurHorizontalOffset))
+            if(!ValidGpuBlurRecord(layer.blurHorizontalOffset, effectBytes, Span<u32>(words)))
                 return false;
-            if(layer.blurVerticalOffset == u32.max || (layer.blurVerticalOffset & 15u) != 0u || cast<usize>(layer.blurVerticalOffset) > effectBytes || blurBytes > effectBytes - cast<usize>(layer.blurVerticalOffset))
+            if(!ValidGpuBlurRecord(layer.blurVerticalOffset, effectBytes, Span<u32>(words)))
                 return false;
             if(cast<usize>(s_PaintQuadIndexCount) > snapshot.indices().size() || cast<usize>(layer.blurFirstIndex) > snapshot.indices().size() - cast<usize>(s_PaintQuadIndexCount))
                 return false;

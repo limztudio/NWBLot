@@ -51,6 +51,31 @@ void UpdateCsgFrameReceiverCacheSignature(
     builder.updateCsgFrameStateReceiverSignature(entity, receiver, hasRenderer, visible, material, hasMesh, mesh, runtime, hasTransform, position, rotation, scale, inOutHash, inOutCacheable);
 }
 
+void UpdateCsgFrameCutterCacheSignature(
+    mut World world,
+    in EntityID entity,
+    in CsgCutterComponent cutter,
+    in CsgSnapshotIdentityBuilder builder,
+    mut u64 inOutHash
+){
+    if(cutter.syncFromTransform){
+        const Optional<mut TransformComponent> borrowedTransform = world.borrowComponent<TransformComponent>(entity);
+        if(borrowedTransform.has_value()){
+            in TransformComponent xf = borrowedTransform.value();
+            if(IsFastAnalyticCsgCutterTransform(xf)){
+                builder.updateCsgFrameStateCutterTransformSignature(entity, cutter, VectorSingle(xf.position), VectorSingle(xf.rotation), VectorSingle(xf.scale), inOutHash);
+                return;
+            }
+            MatrixSingle worldToShape = MatrixSingle(cutter.worldToShape);
+            MatrixSingle shapeToWorld = MatrixSingle(cutter.shapeToWorld);
+            TryComputeCsgCutterMatricesFromTransform(xf, worldToShape, shapeToWorld);
+            builder.updateCsgFrameStateCutterSignature(entity, cutter, worldToShape, shapeToWorld, inOutHash);
+            return;
+        }
+    }
+    builder.updateCsgFrameStateCutterSignature(entity, cutter, MatrixSingle(cutter.worldToShape), MatrixSingle(cutter.shapeToWorld), inOutHash);
+}
+
 Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World world, in CsgShapeRegistry registry, in MeshSystem meshSystem){
     if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
         return MakeUnexpected(Failure());
@@ -59,14 +84,8 @@ Expected<CsgFrameStateCacheSignature> BuildCsgFrameCacheSignature(mut World worl
     signature.shapeRegistryRevision = registry.revision();
     u64 hash = s_Fnv64OffsetBasis;
     CsgSnapshotIdentityBuilder builder;
-    for(in auto row : world.view<CsgCutterComponent>()){
-        const EntityID entity = Get<0>(row);
-        const CsgCutterComponent cutter = Get<1>(row);
-        MatrixSingle worldToShape = MatrixIdentity();
-        MatrixSingle shapeToWorld = MatrixIdentity();
-        ResolveCsgCutterWorldTransforms(world, entity, cutter, worldToShape, shapeToWorld);
-        builder.updateCsgFrameStateCutterSignature(entity, cutter, worldToShape, shapeToWorld, hash);
-    }
+    for(in auto row : world.view<CsgCutterComponent>())
+        UpdateCsgFrameCutterCacheSignature(world, Get<0>(row), Get<1>(row), builder, hash);
 
     b8 cacheable = true;
     for(in auto row : world.view<StaticCsgMeshComponent>())

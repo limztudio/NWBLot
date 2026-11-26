@@ -85,6 +85,8 @@ private:
     TextInputRect m_caret;
     usize m_anchorByte = 0u;
     usize m_caretByte = 0u;
+    usize m_eventHead = 0u;
+    usize m_eventCount = 0u;
     usize m_queuedTextBytes = 0u;
     u64 m_surroundingRevision = 0u;
     u64 m_nextGeneration = 1u;

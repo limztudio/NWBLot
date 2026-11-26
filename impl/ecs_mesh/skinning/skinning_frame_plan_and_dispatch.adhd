@@ -37,6 +37,29 @@ EntityID ResolveSkinningSkeletonEntity(in EntityID fallbackEntity, in SkinnedMes
     return fallbackEntity;
 }
 
+EntityID ResolveFrameSkinningSkeletonEntity(mut MeshSkinningSystem system, in EntityID fallbackEntity, in SkinnedMeshBindingComponent binding){
+    if(binding.skeletonEntity.valid())
+        return binding.skeletonEntity;
+    if(binding.skeletonEntityName == s_NameNone)
+        return fallbackEntity;
+    const SceneEntityNameQueryKey queryKey(fallbackEntity, binding.skeletonEntityName);
+    if(system.m_unresolvedSkeletonQueries.find(queryKey) != system.m_unresolvedSkeletonQueries.end())
+        return fallbackEntity;
+    if(!system.m_frameSceneNameIndexBuilt){
+        system.m_frameSceneNameIndex.build(system.m_world);
+        system.m_frameSceneNameIndexBuilt = true;
+    }
+    const EntityID resolved = system.m_frameSceneNameIndex.find(system.m_world, fallbackEntity, binding.skeletonEntityName);
+    if(resolved.valid()){
+        const Optional<mut SkinnedMeshBindingComponent> borrowed = system.m_world.borrowComponent<SkinnedMeshBindingComponent>(fallbackEntity);
+        if(borrowed.has_value())
+            borrowed.value().skeletonEntity = resolved;
+        return resolved;
+    }
+    system.m_unresolvedSkeletonQueries.insert(queryKey);
+    return fallbackEntity;
+}
+
 b8 ShouldRepackSkinnedMeshNormals(in b8 hasActiveSkin, in b8 copiesRestStreams, in b8 hasAttributeBuffer){
     return (hasActiveSkin || copiesRestStreams) && hasAttributeBuffer;
 }
@@ -186,7 +209,7 @@ b8 MeshSkinningFramePlanBuilder::declare(in EntityID entity, in SkinnedMeshBindi
         return true;
     mut MeshSkinningRuntimeInstance instance = entry.value();
     assert(instance.valid());
-    const EntityID skeletonEntity = ResolveSkinningSkeletonEntity(entity, binding, this.m_system.m_world);
+    const EntityID skeletonEntity = ResolveFrameSkinningSkeletonEntity(this.m_system, entity, binding);
     const auto jointPalette = FindSkinningComponent<SkeletonJointPaletteComponent>(this.m_system.m_world, skeletonEntity);
     const auto skeletonPose = FindSkinningComponent<SkeletonPoseComponent>(this.m_system.m_world, skeletonEntity);
     mut RuntimeSkinPayloadScratch payload = this.m_system.m_framePayloadScratch;

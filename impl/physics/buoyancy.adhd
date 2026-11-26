@@ -1392,6 +1392,11 @@ void AppendWokenFluidImmersionSamples(
     }
 }
 
+class FluidReconcileScratch{
+    public HashMap<u64, usize> recordLookup;
+    public Vector<u8> seenPrev;
+}
+
 void ReconcileFluidImmersionRecords(
     in FluidVolume fluid,
     in VectorSingle surfNorm,
@@ -1399,12 +1404,23 @@ void ReconcileFluidImmersionRecords(
     in f32 splashThreshold,
     in Span<FluidCandidateSample> samples,
     mut Vector<FluidImmersionRecord> immersionState,
-    mut Vector<FluidSplashEvent> outEvents
+    mut Vector<FluidSplashEvent> outEvents,
+    mut FluidReconcileScratch reconcileScratch
 ){
     const usize prevCount = immersionState.size();
-    Vector<u8> seenPrev;
-    seenPrev.resize(prevCount, 0u);
+    reconcileScratch.seenPrev.assign(prevCount, 0u);
     const f32 safeSplashThr = SimdMax(0.0f, splashThreshold);
+    const b8 useLookupMap = (prevCount > 8u || samples.size() > 8u);
+    if(useLookupMap){
+        reconcileScratch.recordLookup.clear();
+        for(usize ri = 0u; ri < prevCount; ++ri){
+            in FluidImmersionRecord rec = immersionState[ri];
+            if(rec.fluidIndex == fluidIndex){
+                const u64 recKey = (cast<u64>(rec.bodyId.index) << 32u) | cast<u64>(rec.bodyId.generation);
+                reconcileScratch.recordLookup.try_emplace(recKey, ri);
+            }
+        }
+    }
 
     for(usize si = 0u; si < samples.size(); ++si){
         in FluidCandidateSample sample = samples[si];
@@ -1412,15 +1428,23 @@ void ReconcileFluidImmersionRecords(
             continue;
         const VectorSingle evNormal = ComputeFluidSplashNormal(fluid, surfNorm, VectorSingle(sample.cob));
         usize matchIdx = prevCount;
-        for(usize ri = 0u; ri < prevCount; ++ri){
-            in FluidImmersionRecord rec = immersionState[ri];
-            if(rec.fluidIndex == fluidIndex && rec.bodyId.index == sample.bodyId.index && rec.bodyId.generation == sample.bodyId.generation){
-                matchIdx = ri;
-                break;
+        if(useLookupMap){
+            const u64 sampleKey = (cast<u64>(sample.bodyId.index) << 32u) | cast<u64>(sample.bodyId.generation);
+            const auto foundIt = reconcileScratch.recordLookup.find(sampleKey);
+            if(foundIt != reconcileScratch.recordLookup.end())
+                matchIdx = foundIt.value();
+        }
+        else{
+            for(usize ri = 0u; ri < prevCount; ++ri){
+                in FluidImmersionRecord rec = immersionState[ri];
+                if(rec.fluidIndex == fluidIndex && rec.bodyId.index == sample.bodyId.index && rec.bodyId.generation == sample.bodyId.generation){
+                    matchIdx = ri;
+                    break;
+                }
             }
         }
         if(matchIdx < prevCount){
-            seenPrev[matchIdx] = 1u;
+            reconcileScratch.seenPrev[matchIdx] = 1u;
             mut FluidImmersionRecord rec = immersionState[matchIdx];
             const f32 prevFrac = rec.submergedFraction;
             if(prevFrac < 0.25f && sample.submergedFraction >= 0.45f && sample.impactSpeed >= safeSplashThr){
@@ -1465,7 +1489,7 @@ void ReconcileFluidImmersionRecords(
 
     usize writeIdx = 0u;
     for(usize ri = 0u; ri < immersionState.size(); ++ri){
-        if(ri < prevCount && immersionState[ri].fluidIndex == fluidIndex && seenPrev[ri] == 0u){
+        if(ri < prevCount && immersionState[ri].fluidIndex == fluidIndex && reconcileScratch.seenPrev[ri] == 0u){
             in FluidImmersionRecord exRec = immersionState[ri];
             FluidSplashEvent exitEv;
             exitEv.type = FluidSplashEventType::ExitedFluid;
@@ -1554,14 +1578,15 @@ void StepFluidVolumeWithEvents(
     in f32 splashThreshold,
     mut Vector<FluidCandidateSample> scratchSamples,
     mut Vector<FluidImmersionRecord> immersionState,
-    mut Vector<FluidSplashEvent> outEvents
+    mut Vector<FluidSplashEvent> outEvents,
+    mut FluidReconcileScratch reconcileScratch
 ){
     if(dt <= 0.0f)
         return;
     const VectorSingle surfNorm = fluid.normalizedSurfaceNormal();
     if(!fluid.enabled){
         scratchSamples.clear();
-        ReconcileFluidImmersionRecords(fluid, surfNorm, fluidIndex, splashThreshold, Span<FluidCandidateSample>(), immersionState, outEvents);
+        ReconcileFluidImmersionRecords(fluid, surfNorm, fluidIndex, splashThreshold, Span<FluidCandidateSample>(), immersionState, outEvents, reconcileScratch);
         return;
     }
 
@@ -1584,7 +1609,8 @@ void StepFluidVolumeWithEvents(
         splashThreshold,
         Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()),
         immersionState,
-        outEvents
+        outEvents,
+        reconcileScratch
     );
 }
 
@@ -1598,12 +1624,13 @@ void StepFluidVolumeWithEventsWithScheduler(
     mut CpuTaskScheduler cpuScheduler,
     mut Vector<FluidCandidateSample> scratchSamples,
     mut Vector<FluidImmersionRecord> immersionState,
-    mut Vector<FluidSplashEvent> outEvents
+    mut Vector<FluidSplashEvent> outEvents,
+    mut FluidReconcileScratch reconcileScratch
 ){
     if(dt <= 0.0f)
         return;
     if(!cpuScheduler.isParallelEnabled() || !fluid.enabled){
-        StepFluidVolumeWithEvents(world, fluid, fluidIndex, timeSec, dt, splashThreshold, scratchSamples, immersionState, outEvents);
+        StepFluidVolumeWithEvents(world, fluid, fluidIndex, timeSec, dt, splashThreshold, scratchSamples, immersionState, outEvents, reconcileScratch);
         return;
     }
 
@@ -1628,7 +1655,8 @@ void StepFluidVolumeWithEventsWithScheduler(
             splashThreshold,
             Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()),
             immersionState,
-            outEvents
+            outEvents,
+            reconcileScratch
         );
         return;
     }
@@ -1677,7 +1705,8 @@ void StepFluidVolumeWithEventsWithScheduler(
         splashThreshold,
         Span<FluidCandidateSample>(scratchSamples.data(), scratchSamples.size()),
         immersionState,
-        outEvents
+        outEvents,
+        reconcileScratch
     );
 }
 
@@ -1877,9 +1906,12 @@ class PhysicsEnvironment{
     public f32 splashImpulseThreshold = 1.5f;
     private Vector<FluidImmersionRecord> m_immersionState;
     private Vector<FluidCandidateSample> m_scratchSamples;
+    private FluidReconcileScratch m_reconcileScratch;
 
     public void resetTracking(){
         this.m_immersionState.clear();
+        this.m_reconcileScratch.recordLookup.clear();
+        this.m_reconcileScratch.seenPrev.clear();
         this.stepSplashEvents.clear();
     }
 
@@ -1932,7 +1964,8 @@ class PhysicsEnvironment{
                 this.splashImpulseThreshold,
                 this.m_scratchSamples,
                 this.m_immersionState,
-                this.stepSplashEvents
+                this.stepSplashEvents,
+                this.m_reconcileScratch
             );
         }
         this.pruneRemovedFluidImmersions();
@@ -1960,7 +1993,8 @@ class PhysicsEnvironment{
                 cpuScheduler,
                 this.m_scratchSamples,
                 this.m_immersionState,
-                this.stepSplashEvents
+                this.stepSplashEvents,
+                this.m_reconcileScratch
             );
         }
         this.pruneRemovedFluidImmersions();

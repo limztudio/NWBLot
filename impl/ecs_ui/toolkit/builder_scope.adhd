@@ -251,6 +251,8 @@ class BuilderCustomListRow{
 class BuilderListFrame{
     public Vector<BuilderListRow> rows;
     public Vector<BuilderCustomListRow> customRows;
+    public HashSet<u64> customRowKeys;
+    public HashSet<u64> customRowIndices;
     public Optional<in IListDataSource> source;
     public Optional<in IListRowHeightProvider> rowHeights;
     public Optional<mut ListState> state;
@@ -268,6 +270,7 @@ class BuilderListFrame{
     public b8 revealCursor = false;
     public b8 focusOnCommit = false;
     public b8 isCustomRows = false;
+    public b8 placementComputed = false;
     public ControlToken token;
     public Insets padding;
     public u64 rowCount = 0u;
@@ -314,6 +317,7 @@ class BuilderTooltipFrame{
     public TooltipStyle style;
     public TooltipOptions options;
     public SharedTextLayout text;
+    public Rect textBounds;
     public u64 revision = 0u;
     public u32 anchorIndex = 0u;
     public u32 layer = 1u;
@@ -445,10 +449,12 @@ class BuilderRichTextFrame{
     public WidgetStyle widgetStyle;
     public RichTextOptions options;
     public Vector<RichTextRun> runs;
+    public Vector<f32> lineWidths;
 }
 
 class PlotSeriesCopy{
-    public Vector<f32> values;
+    public usize valueBegin = 0u;
+    public usize valueCount = 0u;
     public Color color;
     public f32 lineThickness = 2.0f;
     public PlotKind kind = PlotKind::Line;
@@ -462,6 +468,7 @@ class BuilderPlotFrame{
     public WidgetStyle widgetStyle;
     public PlotOptions options;
     public Vector<PlotSeriesCopy> series;
+    public Vector<f32> flatValues;
     public f32 minY = 0.0f;
     public f32 maxY = 1.0f;
     public usize maxSamples = 0u;
@@ -495,6 +502,7 @@ class BuilderDockSpaceFrame{
     public u32 layer = 1u;
     public Rect arrangedBounds;
     public Vector<DockPanelTitleEntry> panelTitles;
+    public HashMap<u64, usize> panelTitleIndex;
 }
 
 

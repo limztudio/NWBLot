@@ -600,11 +600,9 @@ b8 Builder::beginVirtualListRow(in u64 index){
         this.m_context.fail();
         return false;
     }
-    for(in auto existing : frame.customRows){
-        if(existing.key == key || existing.index == index){
-            this.m_context.fail();
-            return false;
-        }
+    if(frame.customRowKeys.find(key) != frame.customRowKeys.end() || frame.customRowIndices.find(index) != frame.customRowIndices.end()){
+        this.m_context.fail();
+        return false;
     }
     f64 rowTop = cast<f64>(index) * cast<f64>(frame.rowHeight);
     f32 rowHeight = frame.rowHeight;
@@ -643,11 +641,11 @@ b8 Builder::beginVirtualListRow(in u64 index){
         rowDesc.width = LayoutSize(LayoutSizePolicy::Content, 0.0f);
         rowDesc.minWidth = frame.placement.viewport.width;
     }
-    String scopeKey;
-    scopeKey.assign("row.");
-    AppendUnsignedU64Text(scopeKey, key);
+    this.m_rowScopeKeyScratch.clear();
+    this.m_rowScopeKeyScratch.append("row.");
+    AppendUnsignedU64Text(this.m_rowScopeKeyScratch, key);
     const auto admittedNode = this.m_scope.value().m_layout.addNode(this.m_scope.value().m_stack.back(), rowDesc);
-    if(!admittedNode.has_value() || !this.m_context.pushScope(StringView(scopeKey))){
+    if(!admittedNode.has_value() || !this.m_context.pushScope(StringView(this.m_rowScopeKeyScratch))){
         this.m_context.fail();
         return false;
     }
@@ -657,6 +655,8 @@ b8 Builder::beginVirtualListRow(in u64 index){
     rowEntry.enabled = rowEnabled;
     const u32 customRowIndex = cast<u32>(frame.customRows.size());
     frame.customRows.push_back(rowEntry);
+    frame.customRowKeys.insert(key);
+    frame.customRowIndices.insert(index);
     auto rowItem = this.makeItem();
     rowItem.styleIndex = this.currentItemStyleIndex();
     rowItem.selectableStyleIndex = this.currentSelectableStyleIndex();
@@ -977,6 +977,7 @@ b8 Builder::paintVirtualListBegin(in BuilderItem item, in LayoutBox box){
         return false;
     frame.placement = placed.value().placement;
     frame.scrollbars = placed.value().scrollbars;
+    frame.placementComputed = true;
     const auto background = this.region(frame.style.background, frame.style.backgroundFallback);
     if(!background.has_value())
         return false;
@@ -1102,28 +1103,12 @@ b8 Builder::paintVirtualListEnd(in BuilderItem item, in LayoutBox box){
     mut BuilderListFrame frame = this.m_scope.value().m_lists[item.list];
     if(!this.listMatches(frame))
         return false;
+    if(!frame.placementComputed)
+        return false;
     const Rect clip = this.visibleClip(box.clip);
     mut ListState state = frame.state.value();
-    const Span<f64> rowOffsets(state.m_rowOffsets);
-    const auto placed = CalculateListScrollPlacement(
-        box.rectangle,
-        clip,
-        frame.padding,
-        frame.style.scrollbarWidth,
-        frame.style.minimumThumb,
-        frame.rowCount,
-        frame.rowHeight,
-        rowOffsets,
-        frame.contentWidth,
-        frame.scrollOffsetX,
-        frame.scrollOffset,
-        frame.options.horizontalScrollbar,
-        frame.options.verticalScrollbar
-    );
-    if(!placed.has_value())
-        return false;
-    in ScrollPlacement placement = placed.value().placement;
-    in ScrollViewportPlacement scrollbars = placed.value().scrollbars;
+    in ScrollPlacement placement = frame.placement;
+    in ScrollViewportPlacement scrollbars = frame.scrollbars;
     if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
         return false;
     state.m_scrollRowHeight = frame.rowHeight;

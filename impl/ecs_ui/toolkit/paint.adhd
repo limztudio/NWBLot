@@ -97,6 +97,7 @@ class PaintBuilder : NoCopy{
     private Vector<Point> m_triVerts;
     private Vector<u32> m_triIndices;
     private Vector<PaintPathSubpath> m_triFringe;
+    private PaintTriangulationScratch m_triScratch;
     private Vector<DrawCommand> m_effectLayerScratch;
     private usize m_overlayDepth = 0u;
     private usize m_transformBase = 0u;
@@ -1444,7 +1445,7 @@ class PaintBuilder : NoCopy{
         if(this.m_hasActiveTransform)
             xf = this.m_transforms[this.m_transformDepth - 1u].xf;
         FlattenPaintPath(path, this.m_hasActiveTransform, xf, this.currentTransformScale(), this.m_pathFlatPoints, this.m_pathSubpaths);
-        TriangulatePaintPolygons(Span<Point>(this.m_pathFlatPoints), Span<PaintPathSubpath>(this.m_pathSubpaths), fillRule, this.m_triVerts, this.m_triIndices, this.m_triFringe);
+        TriangulatePaintPolygons(Span<Point>(this.m_pathFlatPoints), Span<PaintPathSubpath>(this.m_pathSubpaths), fillRule, this.m_triScratch, this.m_triVerts, this.m_triIndices, this.m_triFringe);
         EmitPaintTriangulatedMesh(
             this.m_recording, this.m_clips.back(),
             Span<Point>(this.m_triVerts), Span<u32>(this.m_triIndices), Span<PaintPathSubpath>(this.m_triFringe),
@@ -1480,14 +1481,15 @@ class PaintBuilder : NoCopy{
             xf = this.m_transforms[this.m_transformDepth - 1u].xf;
         const f32 scale = this.currentTransformScale();
         FlattenPaintPath(path, this.m_hasActiveTransform, xf, scale, this.m_pathFlatPoints, this.m_pathSubpaths);
-        TriangulatePaintPolygons(Span<Point>(this.m_pathFlatPoints), Span<PaintPathSubpath>(this.m_pathSubpaths), fillRule, this.m_triVerts, this.m_triIndices, this.m_triFringe);
-        if(this.m_triIndices.empty())
+        TriangulatePaintPolygons(Span<Point>(this.m_pathFlatPoints), Span<PaintPathSubpath>(this.m_pathSubpaths), fillRule, this.m_triScratch, this.m_triVerts, this.m_triIndices, this.m_triFringe);
+        const f32 aaWidth = this.activeAaWidth();
+        if(this.m_triIndices.empty() || !IntersectsPaintClipPoints(this.m_clips.back(), Span<Point>(this.m_triVerts), 0.5f * aaWidth))
             return true;
         const u32 effectOffset = PackPaintGradientRecord(gradient, this.m_hasActiveTransform, xf, scale, this.m_snapshot.m_effectWords);
         EmitPaintTriangulatedMesh(
             this.m_recording, this.m_clips.back(),
             Span<Point>(this.m_triVerts), Span<u32>(this.m_triIndices), Span<PaintPathSubpath>(this.m_triFringe),
-            Color(1.0f, 1.0f, 1.0f, this.m_currentOpacity), PaintMaterial::Gradient, effectOffset, this.activeAaWidth(), this.m_layer,
+            Color(1.0f, 1.0f, 1.0f, this.m_currentOpacity), PaintMaterial::Gradient, effectOffset, aaWidth, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
         return true;
@@ -1496,6 +1498,9 @@ class PaintBuilder : NoCopy{
     private void emitPolyScratchGradientFan(in PaintGradient gradient){
         const usize count = this.m_polyScratch.size();
         if(count < 3u)
+            return;
+        const f32 aaWidth = this.activeAaWidth();
+        if(!IntersectsPaintClipPoints(this.m_clips.back(), Span<Point>(this.m_polyScratch), 0.5f * aaWidth))
             return;
         PaintTransform2D xf = PaintTransformIdentity();
         if(this.m_hasActiveTransform)
@@ -1517,7 +1522,7 @@ class PaintBuilder : NoCopy{
         EmitPaintTriangulatedMesh(
             this.m_recording, this.m_clips.back(),
             Span<Point>(this.m_polyScratch), Span<u32>(this.m_triIndices), Span<PaintPathSubpath>(this.m_triFringe),
-            Color(1.0f, 1.0f, 1.0f, this.m_currentOpacity), PaintMaterial::Gradient, effectOffset, this.activeAaWidth(), this.m_layer,
+            Color(1.0f, 1.0f, 1.0f, this.m_currentOpacity), PaintMaterial::Gradient, effectOffset, aaWidth, this.m_layer,
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
@@ -1535,9 +1540,11 @@ class PaintBuilder : NoCopy{
         if(this.m_hasActiveTransform){
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             in PaintTransform2D xf = entry.xf;
-            const u32 effectOffset = PackPaintGradientRecord(gradient, true, xf, this.currentTransformScale(), this.m_snapshot.m_effectWords);
             if(entry.axisAlignedPositive){
                 const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                if(!IntersectsPaintClipRect(this.m_clips.back(), scaledRect))
+                    return true;
+                const u32 effectOffset = PackPaintGradientRecord(gradient, true, xf, this.currentTransformScale(), this.m_snapshot.m_effectWords);
                 EmitPaintEffectQuad(
                     this.m_recording, this.m_clips.back(), scaledRect, zeroUv, color, PaintMaterial::Gradient, this.m_layer, effectOffset,
                     this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -1550,12 +1557,17 @@ class PaintBuilder : NoCopy{
             const Point p10(p00.x + ex.x, p00.y + ex.y);
             const Point p01(p00.x + ey.x, p00.y + ey.y);
             const Point p11(p10.x + ey.x, p10.y + ey.y);
+            if(!IntersectsPaintClipQuad(this.m_clips.back(), p00, p10, p11, p01))
+                return true;
+            const u32 effectOffset = PackPaintGradientRecord(gradient, true, xf, this.currentTransformScale(), this.m_snapshot.m_effectWords);
             EmitPaintTransformedEffectQuad(
                 this.m_recording, this.m_clips.back(), p00, p10, p11, p01, color, PaintMaterial::Gradient, this.m_layer, effectOffset,
                 this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
             );
             return true;
         }
+        if(!IntersectsPaintClipRect(this.m_clips.back(), rectangle))
+            return true;
         const u32 effectOffset = PackPaintGradientRecord(gradient, false, PaintTransformIdentity(), 1.0f, this.m_snapshot.m_effectWords);
         EmitPaintEffectQuad(
             this.m_recording, this.m_clips.back(), rectangle, zeroUv, color, PaintMaterial::Gradient, this.m_layer, effectOffset,
@@ -1604,7 +1616,6 @@ class PaintBuilder : NoCopy{
 
         const Rect zeroUv(0.0f, 0.0f, 0.0f, 0.0f);
         if(style.inset){
-            this.pushRoundedClip(rectangle, cornerRadius);
             const f32 boxW = UiSimdMax(0.0f, rectangle.width - 2.0f * style.spread);
             const f32 boxH = UiSimdMax(0.0f, rectangle.height - 2.0f * style.spread);
             Point halfSize(0.5f * boxW, 0.5f * boxH);
@@ -1615,20 +1626,17 @@ class PaintBuilder : NoCopy{
                 in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
                 in PaintTransform2D xf = entry.xf;
                 const f32 scale = this.currentTransformScale();
-                boxCenter = ApplyPaintTransform(xf, boxCenter);
-                if(entry.axisAlignedPositive){
-                    halfSize.x *= xf.m00;
-                    halfSize.y *= xf.m11;
-                }
-                else{
-                    halfSize.x *= scale;
-                    halfSize.y *= scale;
-                }
-                clampedRadius *= scale;
-                sigma *= scale;
-                const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, true, this.m_snapshot.m_effectWords);
                 if(entry.axisAlignedPositive){
                     const Rect scaledRect(rectangle.x * xf.m00 + xf.tx, rectangle.y * xf.m11 + xf.ty, rectangle.width * xf.m00, rectangle.height * xf.m11);
+                    if(!IntersectsPaintClipRect(this.m_clips.back(), scaledRect))
+                        return true;
+                    this.pushRoundedClip(rectangle, cornerRadius);
+                    boxCenter = ApplyPaintTransform(xf, boxCenter);
+                    halfSize.x *= xf.m00;
+                    halfSize.y *= xf.m11;
+                    clampedRadius *= scale;
+                    sigma *= scale;
+                    const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, true, this.m_snapshot.m_effectWords);
                     EmitPaintEffectQuad(
                         this.m_recording, this.m_clips.back(), scaledRect, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
                         this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -1638,14 +1646,29 @@ class PaintBuilder : NoCopy{
                     const Point p00 = ApplyPaintTransform(xf, Point(rectangle.x, rectangle.y));
                     const Point ex(xf.m00 * rectangle.width, xf.m10 * rectangle.width);
                     const Point ey(xf.m01 * rectangle.height, xf.m11 * rectangle.height);
+                    const Point p10(p00.x + ex.x, p00.y + ex.y);
+                    const Point p11(p10.x + ey.x, p10.y + ey.y);
+                    const Point p01(p00.x + ey.x, p00.y + ey.y);
+                    if(!IntersectsPaintClipQuad(this.m_clips.back(), p00, p10, p11, p01))
+                        return true;
+                    this.pushRoundedClip(rectangle, cornerRadius);
+                    boxCenter = ApplyPaintTransform(xf, boxCenter);
+                    halfSize.x *= scale;
+                    halfSize.y *= scale;
+                    clampedRadius *= scale;
+                    sigma *= scale;
+                    const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, true, this.m_snapshot.m_effectWords);
                     EmitPaintTransformedEffectQuad(
-                        this.m_recording, this.m_clips.back(), p00, Point(p00.x + ex.x, p00.y + ex.y), Point(p00.x + ex.x + ey.x, p00.y + ex.y + ey.y), Point(p00.x + ey.x, p00.y + ey.y),
+                        this.m_recording, this.m_clips.back(), p00, p10, p11, p01,
                         modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
                         this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
                     );
                 }
             }
             else{
+                if(!IntersectsPaintClipRect(this.m_clips.back(), rectangle))
+                    return true;
+                this.pushRoundedClip(rectangle, cornerRadius);
                 const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, true, this.m_snapshot.m_effectWords);
                 EmitPaintEffectQuad(
                     this.m_recording, this.m_clips.back(), rectangle, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
@@ -1672,20 +1695,16 @@ class PaintBuilder : NoCopy{
             in PaintTransformStackEntry entry = this.m_transforms[this.m_transformDepth - 1u];
             in PaintTransform2D xf = entry.xf;
             const f32 scale = this.currentTransformScale();
-            boxCenter = ApplyPaintTransform(xf, boxCenter);
-            if(entry.axisAlignedPositive){
-                halfSize.x *= xf.m00;
-                halfSize.y *= xf.m11;
-            }
-            else{
-                halfSize.x *= scale;
-                halfSize.y *= scale;
-            }
-            clampedRadius *= scale;
-            sigma *= scale;
-            const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, false, this.m_snapshot.m_effectWords);
             if(entry.axisAlignedPositive){
                 const Rect scaledDrawRect(drawRect.x * xf.m00 + xf.tx, drawRect.y * xf.m11 + xf.ty, drawRect.width * xf.m00, drawRect.height * xf.m11);
+                if(!IntersectsPaintClipRect(this.m_clips.back(), scaledDrawRect))
+                    return true;
+                boxCenter = ApplyPaintTransform(xf, boxCenter);
+                halfSize.x *= xf.m00;
+                halfSize.y *= xf.m11;
+                clampedRadius *= scale;
+                sigma *= scale;
+                const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, false, this.m_snapshot.m_effectWords);
                 EmitPaintEffectQuad(
                     this.m_recording, this.m_clips.back(), scaledDrawRect, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
                     this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
@@ -1695,14 +1714,27 @@ class PaintBuilder : NoCopy{
                 const Point p00 = ApplyPaintTransform(xf, Point(drawRect.x, drawRect.y));
                 const Point ex(xf.m00 * drawRect.width, xf.m10 * drawRect.width);
                 const Point ey(xf.m01 * drawRect.height, xf.m11 * drawRect.height);
+                const Point p10(p00.x + ex.x, p00.y + ex.y);
+                const Point p11(p10.x + ey.x, p10.y + ey.y);
+                const Point p01(p00.x + ey.x, p00.y + ey.y);
+                if(!IntersectsPaintClipQuad(this.m_clips.back(), p00, p10, p11, p01))
+                    return true;
+                boxCenter = ApplyPaintTransform(xf, boxCenter);
+                halfSize.x *= scale;
+                halfSize.y *= scale;
+                clampedRadius *= scale;
+                sigma *= scale;
+                const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, false, this.m_snapshot.m_effectWords);
                 EmitPaintTransformedEffectQuad(
-                    this.m_recording, this.m_clips.back(), p00, Point(p00.x + ex.x, p00.y + ex.y), Point(p00.x + ex.x + ey.x, p00.y + ex.y + ey.y), Point(p00.x + ey.x, p00.y + ey.y),
+                    this.m_recording, this.m_clips.back(), p00, p10, p11, p01,
                     modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
                     this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
                 );
             }
         }
         else{
+            if(!IntersectsPaintClipRect(this.m_clips.back(), drawRect))
+                return true;
             const u32 effectOffset = PackPaintDropShadowRecord(boxCenter, halfSize, clampedRadius, sigma, false, this.m_snapshot.m_effectWords);
             EmitPaintEffectQuad(
                 this.m_recording, this.m_clips.back(), drawRect, zeroUv, modulated, PaintMaterial::DropShadow, this.m_layer, effectOffset,
@@ -1846,8 +1878,10 @@ class PaintBuilder : NoCopy{
             }
             const Rect expUv(expBounds.x / logicalW, expBounds.y / logicalH, expBounds.width / logicalW, expBounds.height / logicalH);
             const f32 sigma = 0.5f * this.m_activeEffectLayer.blurRadius;
-            this.m_activeEffectLayer.blurHorizontalOffset = PackPaintBlurRecord(1.0f, 0.0f, sigma, expUv, this.m_snapshot.m_effectWords);
-            this.m_activeEffectLayer.blurVerticalOffset = PackPaintBlurRecord(0.0f, 1.0f, sigma, expUv, this.m_snapshot.m_effectWords);
+            const f32 physW = UiSimdMax(1.0f, logicalW * this.m_snapshot.m_displayMetrics.pixelScaleX);
+            const f32 physH = UiSimdMax(1.0f, logicalH * this.m_snapshot.m_displayMetrics.pixelScaleY);
+            this.m_activeEffectLayer.blurHorizontalOffset = PackPaintBlurRecord(1.0f / physW, 0.0f, sigma, expUv, this.m_snapshot.m_effectWords);
+            this.m_activeEffectLayer.blurVerticalOffset = PackPaintBlurRecord(0.0f, 1.0f / physH, sigma, expUv, this.m_snapshot.m_effectWords);
 
             const u32 vBase = cast<u32>(this.m_snapshot.m_vertices.size());
             const u32 blurFirstIndex = cast<u32>(this.m_snapshot.m_indices.size());

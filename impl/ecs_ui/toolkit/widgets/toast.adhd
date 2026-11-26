@@ -50,10 +50,12 @@ class ToastItem{
     public u64 id = 0u;
     public String title;
     public String message;
+    public String accessibleText;
     public ToastSeverity severity = ToastSeverity::Info;
     public f32 durationSeconds = s_ToastDefaultDuration;
     public f32 elapsedSeconds = 0.0f;
     public b8 dismissible = true;
+    public b8 announced = false;
 }
 
 class ToastStyle{
@@ -97,6 +99,7 @@ class ToastState : NoCopy{
     public Vector<ToastItem> m_items;
     public Vector<Rect> m_visibleRects;
     public Vector<u64> m_visibleIds;
+    public Vector<Rect> m_closeRectsScratch;
 
     public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
     public u64 revision()const{ return this.m_revision; }
@@ -115,11 +118,18 @@ class ToastState : NoCopy{
         ++this.m_nextId;
         item.title.assign(title);
         item.message.assign(message);
+        if(!title.empty())
+            item.accessibleText.append(title);
+        if(!message.empty()){
+            if(!item.accessibleText.empty())
+                item.accessibleText.append(": ");
+            item.accessibleText.append(message);
+        }
         item.severity = severity;
         item.durationSeconds = durationSeconds;
         item.elapsedSeconds = 0.0f;
         item.dismissible = true;
-        this.m_items.push_back(item);
+        AppendOwned<ToastItem>(this.m_items, item);
         AdvanceNonWrappingRevision(this.m_revision);
         return item.id;
     }
@@ -229,7 +239,7 @@ void AdvanceToastTimers(
     usize writeIdx = 0u;
     b8 removedAny = false;
     for(usize idx = 0u; idx < state.m_items.size(); ++idx){
-        ToastItem item = state.m_items[idx];
+        mut ToastItem item = state.m_items[idx];
         const b8 visibleSlot = idx < activeLimit;
         b8 expired = false;
         if(visibleSlot && item.durationSeconds > 0.0f){
@@ -246,7 +256,8 @@ void AdvanceToastTimers(
             removedAny = true;
             continue;
         }
-        state.m_items[writeIdx] = item;
+        if(writeIdx != idx)
+            state.m_items[writeIdx] = item;
         ++writeIdx;
     }
     if(removedAny){

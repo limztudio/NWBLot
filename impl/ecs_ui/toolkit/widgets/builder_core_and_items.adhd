@@ -958,18 +958,13 @@ b8 Builder::progress(in StringView stableKey, in f64 fraction, in ProgressOption
     }
     frame.metrics = progressMetrics.value();
     if(!labelText.empty()){
-        const auto labelLayout = this.m_text.layoutShared(this.textShapeRequest(labelText, this.m_style.fontSize));
-        if(!labelLayout.has_value()){
+        const auto measuredLabel = this.m_text.layoutAndMeasureShared(this.textShapeRequest(labelText, this.m_style.fontSize), this.m_paint.displayMetrics());
+        if(!measuredLabel.has_value()){
             this.m_context.fail();
             return false;
         }
-        const auto labelBounds = this.m_text.measure(labelLayout.value().deref(), this.m_paint.displayMetrics());
-        if(!labelBounds.has_value()){
-            this.m_context.fail();
-            return false;
-        }
-        frame.label = labelLayout.value();
-        frame.labelBounds = labelBounds.value();
+        frame.label = measuredLabel.value().layout;
+        frame.labelBounds = measuredLabel.value().bounds;
         const VectorDouble labelPadding(
             cast<f64>(frame.metrics.padding.left) + cast<f64>(frame.metrics.padding.right),
             cast<f64>(frame.metrics.padding.top) + cast<f64>(frame.metrics.padding.bottom),
@@ -1329,6 +1324,29 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
     return true;
 }
 
+[cpp_unwind]
+b8 TryMeasureEllipsisCandidate(
+    mut TextService textService,
+    in DisplayMetrics display,
+    in StringView utf8,
+    in usize prefixBytes,
+    in ShapeRequest ellipsisReq,
+    mut String candidate,
+    mut CachedMeasuredText outMeasured
+){
+    candidate.clear();
+    candidate.reserve(prefixBytes + 3u);
+    candidate.append(utf8.substr(0u, prefixBytes));
+    candidate.append("...");
+    ShapeRequest req = ellipsisReq;
+    req.text = StringView(candidate);
+    const auto measured = textService.layoutAndMeasureShared(req, display);
+    if(!measured.has_value())
+        return false;
+    outMeasured = measured.value();
+    return true;
+}
+
 Expected<CachedMeasuredText> Builder::resolveEllipsisLabel(in TextLayout layout, in f32 maxWidth){
     in DisplayMetrics display = this.m_paint.displayMetrics();
     const ShapeRequest ellipsisReq = this.textShapeRequest("...", layout.fontSize());
@@ -1340,41 +1358,115 @@ Expected<CachedMeasuredText> Builder::resolveEllipsisLabel(in TextLayout layout,
 
     const StringView utf8 = layout.utf8();
     in Vector<TextCluster> clusters = layout.clusters();
-    Vector<usize> cuts;
-    cuts.reserve(clusters.size() + 1u);
-    cuts.push_back(0u);
+    this.m_ellipsisCutsScratch.clear();
+    this.m_ellipsisCutsScratch.reserve(clusters.size() + 1u);
+    this.m_ellipsisCutsScratch.push_back(0u);
+    const b8 useAdvanceEstimate = !layout.hasBidiRuns();
+    if(useAdvanceEstimate){
+        this.m_ellipsisCutWidthsScratch.clear();
+        this.m_ellipsisCutWidthsScratch.reserve(clusters.size() + 1u);
+        this.m_ellipsisCutWidthsScratch.push_back(0.0f);
+    }
+
+    f32 runningAdvance = 0.0f;
     if(layout.direction() == TextDirection::LeftToRight){
         for(usize i = 0u; i < clusters.size(); ++i){
-            const usize endByte = cast<usize>(clusters[i].byteEnd);
-            if(endByte > cuts.back() && endByte < utf8.size())
-                cuts.push_back(endByte);
+            in TextCluster cluster = clusters[i];
+            if(useAdvanceEstimate)
+                runningAdvance += Abs(VectorSingle(cluster.trailingX - cluster.leadingX)).x;
+            const usize endByte = cast<usize>(cluster.byteEnd);
+            if(endByte > this.m_ellipsisCutsScratch.back() && endByte < utf8.size()){
+                this.m_ellipsisCutsScratch.push_back(endByte);
+                if(useAdvanceEstimate)
+                    this.m_ellipsisCutWidthsScratch.push_back(runningAdvance);
+            }
+            else if(useAdvanceEstimate && endByte == this.m_ellipsisCutsScratch.back() && this.m_ellipsisCutsScratch.size() > 1u)
+                this.m_ellipsisCutWidthsScratch.back() = runningAdvance;
         }
     }
     else{
         for(usize i = clusters.size(); i > 0u; --i){
-            const usize endByte = cast<usize>(clusters[i - 1u].byteEnd);
-            if(endByte > cuts.back() && endByte < utf8.size())
-                cuts.push_back(endByte);
+            in TextCluster cluster = clusters[i - 1u];
+            if(useAdvanceEstimate)
+                runningAdvance += Abs(VectorSingle(cluster.trailingX - cluster.leadingX)).x;
+            const usize endByte = cast<usize>(cluster.byteEnd);
+            if(endByte > this.m_ellipsisCutsScratch.back() && endByte < utf8.size()){
+                this.m_ellipsisCutsScratch.push_back(endByte);
+                if(useAdvanceEstimate)
+                    this.m_ellipsisCutWidthsScratch.push_back(runningAdvance);
+            }
+            else if(useAdvanceEstimate && endByte == this.m_ellipsisCutsScratch.back() && this.m_ellipsisCutsScratch.size() > 1u)
+                this.m_ellipsisCutWidthsScratch.back() = runningAdvance;
         }
     }
 
     CachedMeasuredText best = ellipsisMeasured.value();
+    const usize cutCount = this.m_ellipsisCutsScratch.size();
+    if(cutCount <= 1u)
+        return best;
+
     usize low = 1u;
-    usize high = cuts.size();
-    String candidate;
+    usize high = cutCount;
+    if(useAdvanceEstimate){
+        const f32 ellipsisWidth = ellipsisMeasured.value().bounds.width;
+        usize estLow = 1u;
+        usize estHigh = cutCount;
+        usize guess = 0u;
+        while(estLow < estHigh){
+            const usize mid = estLow + (estHigh - estLow) / 2u;
+            if(this.m_ellipsisCutWidthsScratch[mid] + ellipsisWidth <= maxWidth){
+                guess = mid;
+                estLow = mid + 1u;
+            }
+            else
+                estHigh = mid;
+        }
+
+        if(guess == 0u){
+            CachedMeasuredText probe = best;
+            if(!TryMeasureEllipsisCandidate(this.m_text, display, utf8, this.m_ellipsisCutsScratch[1u], ellipsisReq, this.m_ellipsisCandidateScratch, probe))
+                return MakeUnexpected(Failure());
+            if(probe.bounds.width > maxWidth)
+                return best;
+            best = probe;
+            low = 2u;
+        }
+        else{
+            CachedMeasuredText guessMeasured = best;
+            if(!TryMeasureEllipsisCandidate(this.m_text, display, utf8, this.m_ellipsisCutsScratch[guess], ellipsisReq, this.m_ellipsisCandidateScratch, guessMeasured))
+                return MakeUnexpected(Failure());
+            if(guessMeasured.bounds.width <= maxWidth){
+                best = guessMeasured;
+                if(guess + 1u == cutCount)
+                    return best;
+                CachedMeasuredText nextMeasured = best;
+                if(!TryMeasureEllipsisCandidate(this.m_text, display, utf8, this.m_ellipsisCutsScratch[guess + 1u], ellipsisReq, this.m_ellipsisCandidateScratch, nextMeasured))
+                    return MakeUnexpected(Failure());
+                if(nextMeasured.bounds.width > maxWidth)
+                    return best;
+                best = nextMeasured;
+                low = guess + 2u;
+            }
+            else{
+                if(guess == 1u)
+                    return best;
+                CachedMeasuredText prevMeasured = best;
+                if(!TryMeasureEllipsisCandidate(this.m_text, display, utf8, this.m_ellipsisCutsScratch[guess - 1u], ellipsisReq, this.m_ellipsisCandidateScratch, prevMeasured))
+                    return MakeUnexpected(Failure());
+                if(prevMeasured.bounds.width <= maxWidth)
+                    return prevMeasured;
+                high = guess - 1u;
+            }
+        }
+    }
+
     while(low < high){
         const usize mid = low + (high - low) / 2u;
-        const usize prefixBytes = cuts[mid];
-        candidate.clear();
-        candidate.reserve(prefixBytes + 3u);
-        candidate.append(utf8.substr(0u, prefixBytes));
-        candidate.append("...");
-        const ShapeRequest req = this.textShapeRequest(StringView(candidate), layout.fontSize());
-        const auto measured = this.m_text.layoutAndMeasureShared(req, display);
-        if(!measured.has_value())
+        CachedMeasuredText measured = best;
+        if(!TryMeasureEllipsisCandidate(this.m_text, display, utf8, this.m_ellipsisCutsScratch[mid], ellipsisReq, this.m_ellipsisCandidateScratch, measured))
             return MakeUnexpected(Failure());
-        if(measured.value().bounds.width <= maxWidth){
-            best = measured.value();
+        if(measured.bounds.width <= maxWidth){
+            best = measured;
             low = mid + 1u;
         }
         else

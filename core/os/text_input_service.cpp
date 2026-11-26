@@ -165,9 +165,9 @@ TextInputPollResult::Enum QueuedTextInputService::poll(const TextInputSessionTok
         return TextInputPollResult::WrongThread;
     if(!token.valid() || (token != m_activeToken && token != m_cancelledToken))
         return TextInputPollResult::InvalidSession;
-    if(m_events.empty())
+    if(m_eventCount == 0u)
         return TextInputPollResult::Pending;
-    const TextInputEvent& next = m_events.front();
+    TextInputEvent& next = m_events[m_eventHead];
     event.preeditClauses.reserve(next.preeditClauses.size());
     event.text.assign(next.text.data(), next.text.size());
     event.preeditClauses.assign(next.preeditClauses.begin(), next.preeditClauses.end());
@@ -184,7 +184,10 @@ TextInputPollResult::Enum QueuedTextInputService::poll(const TextInputSessionTok
     event.deletionBasis = next.deletionBasis;
     m_queuedTextBytes -= next.text.size();
     const b8 cancelled = next.kind == TextInputEventKind::Cancelled;
-    m_events.erase(m_events.begin());
+    next.text.clear();
+    next.preeditClauses.clear();
+    --m_eventCount;
+    m_eventHead = m_eventCount == 0u ? 0u : (m_eventHead + 1u) % s_TextInputMaxEvents;
     if(cancelled)
         m_cancelledToken = {};
     return TextInputPollResult::Event;

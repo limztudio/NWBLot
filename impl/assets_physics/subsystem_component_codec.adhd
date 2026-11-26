@@ -514,7 +514,6 @@ class SoftBodyPairConstraintBinary{
     public f32 restLength = 0.0f;
     public f32 compliance = 0.0f;
     public f32 lambda = 0.0f;
-    public u32 reserved0 = 0u;
 }
 
 [serialize]
@@ -548,7 +547,6 @@ class SoftBodyDihedralBendingBinary{
     public f32 restAngle = 0.0f;
     public f32 compliance = 1.0e-3f;
     public f32 lambda = 0.0f;
-    public u32 reserved0 = 0u;
 }
 
 [serialize]
@@ -1001,9 +999,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         AppendPOD(outBinary, v.skeletonEntityName.hash());
         const u32 wheelJointIndexCount = cast<u32>(v.wheelJointIndices.size());
         AppendPOD(outBinary, wheelJointIndexCount);
-        for(usize ji = 0u; ji < v.wheelJointIndices.size(); ++ji)
-            AppendPOD(outBinary, v.wheelJointIndices[ji]);
-        return true;
+        return AppendBinaryVectorPayload(outBinary, v.wheelJointIndices).has_value();
     }
 
     public b8 serializeVehicle(in VehicleComponent v, mut Vector<u8> outPayload)const{
@@ -1150,13 +1146,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             error("VehicleComponentAsset::loadComponentPayload failed: trailing wheel joint bytes");
             return MakeUnexpected(Failure());
         }
-        v.wheelJointIndices.resize(wheelJointCount);
-        for(u32 ji = 0u; ji < wheelJointCount; ++ji){
-            const Expected<u32> jRes = ReadPOD<u32>(payload, cursor);
-            if(!jRes.has_value())
-                return MakeUnexpected(Failure());
-            v.wheelJointIndices[ji] = jRes.value();
-        }
+        if(!ReadBinaryVectorPayload(payload, wheelJointCount, cursor, v.wheelJointIndices).has_value())
+            return MakeUnexpected(Failure());
         v.dirty = true;
         v.initialized = false;
         if(!this.validVehicleData(v)){
@@ -1596,9 +1587,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         AppendPOD(outBinary, r.skeletonEntityName.hash());
         const u32 boneJointIndexCount = cast<u32>(r.boneJointIndices.size());
         AppendPOD(outBinary, boneJointIndexCount);
-        for(usize ji = 0u; ji < r.boneJointIndices.size(); ++ji)
-            AppendPOD(outBinary, r.boneJointIndices[ji]);
-        return true;
+        return AppendBinaryVectorPayload(outBinary, r.boneJointIndices).has_value();
     }
 
     public b8 serializeRagdoll(in RagdollComponent r, mut Vector<u8> outPayload)const{
@@ -1809,13 +1798,8 @@ class SubsystemPhysicsComponentBinaryCodec{
         const u32 boneJointCount = bjCountRes.value();
         if(cast<u64>(boneJointCount) * cast<u64>(size_of<u32>()) > cast<u64>(payload.size() - cursor))
             return MakeUnexpected(Failure());
-        r.boneJointIndices.resize(boneJointCount);
-        for(u32 ji = 0u; ji < boneJointCount; ++ji){
-            const Expected<u32> jRes = ReadPOD<u32>(payload, cursor);
-            if(!jRes.has_value())
-                return MakeUnexpected(Failure());
-            r.boneJointIndices[ji] = jRes.value();
-        }
+        if(!ReadBinaryVectorPayload(payload, boneJointCount, cursor, r.boneJointIndices).has_value())
+            return MakeUnexpected(Failure());
         if(cursor != payload.size()){
             error("RagdollComponentAsset::loadComponentPayload failed: trailing payload bytes");
             return MakeUnexpected(Failure());
@@ -2328,9 +2312,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         AppendPOD(outBinary, linkNameCount);
         AppendPOD(outBinary, linkJointCount);
         this.appendNameHashList(a.linkEntityNames, outBinary);
-        for(usize ji = 0u; ji < a.linkJointIndices.size(); ++ji)
-            AppendPOD(outBinary, a.linkJointIndices[ji]);
-        return true;
+        return AppendBinaryVectorPayload(outBinary, a.linkJointIndices).has_value();
     }
 
     public b8 serializeArticulation(in ArticulationComponent a, mut Vector<u8> outPayload)const{
@@ -2508,13 +2490,8 @@ class SubsystemPhysicsComponentBinaryCodec{
         }
         if(!this.readNameHashList(payload, linkNameCount, cursor, a.linkEntityNames))
             return MakeUnexpected(Failure());
-        a.linkJointIndices.resize(linkJointCount);
-        for(u32 ji = 0u; ji < linkJointCount; ++ji){
-            const Expected<u32> jRes = ReadPOD<u32>(payload, cursor);
-            if(!jRes.has_value())
-                return MakeUnexpected(Failure());
-            a.linkJointIndices[ji] = jRes.value();
-        }
+        if(!ReadBinaryVectorPayload(payload, linkJointCount, cursor, a.linkJointIndices).has_value())
+            return MakeUnexpected(Failure());
         a.dirty = true;
         a.initialized = false;
         if(!this.validArticulationData(a)){
@@ -2662,10 +2639,28 @@ class SubsystemPhysicsComponentBinaryCodec{
         static_assert(
             size_of<SoftBodyComponentBinary>() == 208u
             && offset_of<SoftBodyComponentBinary>(reserved2) == 200u
+            && size_of<SoftBodyPairConstraintBinary>() == size_of<SoftBodyDistanceConstraint>()
+            && offset_of<SoftBodyPairConstraintBinary>(p0) == offset_of<SoftBodyDistanceConstraint>(p0)
+            && offset_of<SoftBodyPairConstraintBinary>(p1) == offset_of<SoftBodyDistanceConstraint>(p1)
+            && offset_of<SoftBodyPairConstraintBinary>(restLength) == offset_of<SoftBodyDistanceConstraint>(restLength)
+            && offset_of<SoftBodyPairConstraintBinary>(compliance) == offset_of<SoftBodyDistanceConstraint>(compliance)
+            && offset_of<SoftBodyPairConstraintBinary>(lambda) == offset_of<SoftBodyDistanceConstraint>(lambda)
+            && size_of<SoftBodyPairConstraintBinary>() == size_of<SoftBodyBendingConstraint>()
+            && offset_of<SoftBodyPairConstraintBinary>(p0) == offset_of<SoftBodyBendingConstraint>(p0)
+            && offset_of<SoftBodyPairConstraintBinary>(p1) == offset_of<SoftBodyBendingConstraint>(p1)
+            && offset_of<SoftBodyPairConstraintBinary>(restLength) == offset_of<SoftBodyBendingConstraint>(restLength)
+            && offset_of<SoftBodyPairConstraintBinary>(compliance) == offset_of<SoftBodyBendingConstraint>(compliance)
+            && offset_of<SoftBodyPairConstraintBinary>(lambda) == offset_of<SoftBodyBendingConstraint>(lambda)
             && size_of<SoftBodyVolumeConstraintBinary>() == 112u
             && offset_of<SoftBodyVolumeConstraintBinary>(reserved1) == 104u
-            && size_of<SoftBodyDihedralBendingBinary>() == 32u
-            && offset_of<SoftBodyDihedralBendingBinary>(reserved0) == 28u
+            && size_of<SoftBodyDihedralBendingBinary>() == size_of<SoftBodyDihedralBendingConstraint>()
+            && offset_of<SoftBodyDihedralBendingBinary>(p0) == offset_of<SoftBodyDihedralBendingConstraint>(p0)
+            && offset_of<SoftBodyDihedralBendingBinary>(p1) == offset_of<SoftBodyDihedralBendingConstraint>(p1)
+            && offset_of<SoftBodyDihedralBendingBinary>(p2) == offset_of<SoftBodyDihedralBendingConstraint>(p2)
+            && offset_of<SoftBodyDihedralBendingBinary>(p3) == offset_of<SoftBodyDihedralBendingConstraint>(p3)
+            && offset_of<SoftBodyDihedralBendingBinary>(restAngle) == offset_of<SoftBodyDihedralBendingConstraint>(restAngle)
+            && offset_of<SoftBodyDihedralBendingBinary>(compliance) == offset_of<SoftBodyDihedralBendingConstraint>(compliance)
+            && offset_of<SoftBodyDihedralBendingBinary>(lambda) == offset_of<SoftBodyDihedralBendingConstraint>(lambda)
             && size_of<SoftBodyGoalBinary>() == 32u
             && offset_of<SoftBodyGoalBinary>(reserved0) == 28u
             && size_of<SoftBodyTriangleBinary>() == size_of<SoftBodyTriangle>()
@@ -2756,38 +2751,12 @@ class SubsystemPhysicsComponentBinaryCodec{
                 pb.isFixed = 1u;
             AppendPOD(outBinary, pb);
         }
-        for(usize di = 0u; di < s.distanceConstraints.size(); ++di){
-            in SoftBodyDistanceConstraint d = s.distanceConstraints[di];
-            SoftBodyPairConstraintBinary db;
-            db.p0 = d.p0;
-            db.p1 = d.p1;
-            db.restLength = d.restLength;
-            db.compliance = d.compliance;
-            db.lambda = d.lambda;
-            AppendPOD(outBinary, db);
-        }
-        for(usize bi = 0u; bi < s.bendingConstraints.size(); ++bi){
-            in SoftBodyBendingConstraint b = s.bendingConstraints[bi];
-            SoftBodyPairConstraintBinary bb;
-            bb.p0 = b.p0;
-            bb.p1 = b.p1;
-            bb.restLength = b.restLength;
-            bb.compliance = b.compliance;
-            bb.lambda = b.lambda;
-            AppendPOD(outBinary, bb);
-        }
-        for(usize dbi = 0u; dbi < s.dihedralBendingConstraints.size(); ++dbi){
-            in SoftBodyDihedralBendingConstraint db = s.dihedralBendingConstraints[dbi];
-            SoftBodyDihedralBendingBinary dbb;
-            dbb.p0 = db.p0;
-            dbb.p1 = db.p1;
-            dbb.p2 = db.p2;
-            dbb.p3 = db.p3;
-            dbb.restAngle = db.restAngle;
-            dbb.compliance = db.compliance;
-            dbb.lambda = db.lambda;
-            AppendPOD(outBinary, dbb);
-        }
+        if(
+            !AppendBinaryVectorPayload(outBinary, s.distanceConstraints).has_value()
+            || !AppendBinaryVectorPayload(outBinary, s.bendingConstraints).has_value()
+            || !AppendBinaryVectorPayload(outBinary, s.dihedralBendingConstraints).has_value()
+        )
+            return false;
         for(usize vi = 0u; vi < s.volumeConstraints.size(); ++vi){
             in SoftBodyVolumeConstraint v = s.volumeConstraints[vi];
             SoftBodyVolumeConstraintBinary vb;
@@ -2934,44 +2903,12 @@ class SubsystemPhysicsComponentBinaryCodec{
             p.invMass = pb.invMass;
             p.isFixed = pb.isFixed != 0u;
         }
-        s.distanceConstraints.resize(hdr.distCount);
-        for(u32 di = 0u; di < hdr.distCount; ++di){
-            const Expected<SoftBodyPairConstraintBinary> dbRes = ReadPOD<SoftBodyPairConstraintBinary>(payload, cursor);
-            if(!dbRes.has_value() || dbRes.value().reserved0 != 0u)
-                return MakeUnexpected(Failure());
-            mut SoftBodyDistanceConstraint d = s.distanceConstraints[di];
-            d.p0 = dbRes.value().p0;
-            d.p1 = dbRes.value().p1;
-            d.restLength = dbRes.value().restLength;
-            d.compliance = dbRes.value().compliance;
-            d.lambda = dbRes.value().lambda;
-        }
-        s.bendingConstraints.resize(hdr.bendCount);
-        for(u32 bi = 0u; bi < hdr.bendCount; ++bi){
-            const Expected<SoftBodyPairConstraintBinary> bbRes = ReadPOD<SoftBodyPairConstraintBinary>(payload, cursor);
-            if(!bbRes.has_value() || bbRes.value().reserved0 != 0u)
-                return MakeUnexpected(Failure());
-            mut SoftBodyBendingConstraint b = s.bendingConstraints[bi];
-            b.p0 = bbRes.value().p0;
-            b.p1 = bbRes.value().p1;
-            b.restLength = bbRes.value().restLength;
-            b.compliance = bbRes.value().compliance;
-            b.lambda = bbRes.value().lambda;
-        }
-        s.dihedralBendingConstraints.resize(hdr.dihedralCount);
-        for(u32 dbi = 0u; dbi < hdr.dihedralCount; ++dbi){
-            const Expected<SoftBodyDihedralBendingBinary> dbbRes = ReadPOD<SoftBodyDihedralBendingBinary>(payload, cursor);
-            if(!dbbRes.has_value() || dbbRes.value().reserved0 != 0u)
-                return MakeUnexpected(Failure());
-            mut SoftBodyDihedralBendingConstraint db = s.dihedralBendingConstraints[dbi];
-            db.p0 = dbbRes.value().p0;
-            db.p1 = dbbRes.value().p1;
-            db.p2 = dbbRes.value().p2;
-            db.p3 = dbbRes.value().p3;
-            db.restAngle = dbbRes.value().restAngle;
-            db.compliance = dbbRes.value().compliance;
-            db.lambda = dbbRes.value().lambda;
-        }
+        if(
+            !ReadBinaryVectorPayload(payload, hdr.distCount, cursor, s.distanceConstraints).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.bendCount, cursor, s.bendingConstraints).has_value()
+            || !ReadBinaryVectorPayload(payload, hdr.dihedralCount, cursor, s.dihedralBendingConstraints).has_value()
+        )
+            return MakeUnexpected(Failure());
         s.volumeConstraints.resize(hdr.volCount);
         for(u32 vi = 0u; vi < hdr.volCount; ++vi){
             const Expected<SoftBodyVolumeConstraintBinary> vbRes = ReadPOD<SoftBodyVolumeConstraintBinary>(payload, cursor);

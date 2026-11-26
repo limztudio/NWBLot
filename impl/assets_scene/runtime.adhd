@@ -516,7 +516,38 @@ b8 ActiveSceneSubsystems::instantiateEntities(mut World world, mut InstantiatedS
         if(entity.name != s_NameNone)
             outInstantiated.namedEntities.insert_or_assign(entity.name, createdId);
     }
-    ResolveSceneParentNames(world);
+    Vector<EntityID> crossScenePending;
+    for(in EntityID createdId : outInstantiated.entities){
+        const Optional<mut SceneParentComponent> spOpt = world.borrowComponent<SceneParentComponent>(createdId);
+        if(!spOpt.has_value())
+            continue;
+        mut SceneParentComponent sp = spOpt.value();
+        if(sp.parentEntityName != s_NameNone){
+            const auto found = outInstantiated.namedEntities.find(sp.parentEntityName);
+            if(found != outInstantiated.namedEntities.end() && found.value() != createdId){
+                sp.parent = found.value();
+                continue;
+            }
+            sp.parent = s_InvalidEntityId;
+            crossScenePending.push_back(createdId);
+        }
+        else if(sp.parent.valid() && (!world.alive(sp.parent) || sp.parent == createdId)){
+            sp.parent = s_InvalidEntityId;
+        }
+    }
+    if(!crossScenePending.empty()){
+        SceneEntityNameIndex nameIndex;
+        nameIndex.build(world);
+        for(in EntityID createdId : crossScenePending){
+            const Optional<mut SceneParentComponent> spOpt = world.borrowComponent<SceneParentComponent>(createdId);
+            if(!spOpt.has_value())
+                continue;
+            mut SceneParentComponent sp = spOpt.value();
+            const EntityID resolved = nameIndex.find(world, createdId, sp.parentEntityName);
+            if(resolved.valid() && resolved != createdId)
+                sp.parent = resolved;
+        }
+    }
     return true;
 }
 

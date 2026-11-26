@@ -26,6 +26,7 @@
 
 #include <global/compile.h>
 #include <global/diagnostics.h>
+#include <global/scope_exit.h>
 #include <global/timer.h>
 
 
@@ -45,6 +46,7 @@ namespace __hidden_frame_win32{
 
 
 static constexpr WPARAM s_SysCommandTypeMask = 0xFFF0u;
+static constexpr WPARAM s_DbtDevNodesChanged = 0x0007u;
 
 
 namespace Win32MessagePumpResult{
@@ -114,6 +116,7 @@ namespace FrameDetail{
 
 
 static Frame* s_Frame = nullptr;
+static Win32GamepadPoller* s_GamepadPoller = nullptr;
 
 static constexpr TStringView s_ClassName = FOUNDATION_TEXT("NWB_FRAME");
 static constexpr i32 s_PaintFailureExitCode = 1;
@@ -220,6 +223,11 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 if(const Optional<isize> a11yResult = DispatchWin32AccessibilityMessage(*accessibilityService, uMsg, wParam, lParam))
                     return static_cast<LRESULT>(*a11yResult);
             }
+        }
+
+        if(uMsg == WM_DEVICECHANGE && wParam == __hidden_frame_win32::s_DbtDevNodesChanged){
+            if(s_GamepadPoller)
+                s_GamepadPoller->notifyDeviceChange();
         }
 
         if(uMsg == WM_SYSCOMMAND && (wParam & __hidden_frame_win32::s_SysCommandTypeMask) == SC_MINIMIZE && frame->graphics().shouldRenderUnfocused())
@@ -396,6 +404,8 @@ b8 Frame::mainLoop(){
         return true;
 
     FrameDetail::Win32GamepadPoller gamepadPoller;
+    FrameDetail::s_GamepadPoller = &gamepadPoller;
+    ScopeExit clearGamepadPoller([]()noexcept{ FrameDetail::s_GamepadPoller = nullptr; });
     Timer lateTime(TimerNow());
     for(;;){
         b8 checkedRenderUnfocused = false;

@@ -26,9 +26,9 @@ b8 AppendInstanceTransformPatch(
         return false;
 
     Vector<u32> instanceEntityIds;
-    instanceEntityIds.resize(instances.size(), 0xffffffffu);
+    instanceEntityIds.reserve(instances.size());
     for(usize i = 0u; i < instances.size(); ++i)
-        instanceEntityIds[i] = instances[i].scale.w;
+        instanceEntityIds.push_back(instances[i].scale.w);
 
     GpuTaskGraphInstanceTransformPatchRequest request;
     request.instanceBufferResource = materialInstances;

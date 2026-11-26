@@ -88,9 +88,7 @@ class ListLayoutPreparer{
         }
         if(!this.m_scope.listMatches(this.m_context, frame) || state.m_inputGeneration != inputGeneration)
             return false;
-        state.m_rowOffsets.resize(offsets.size());
-        for(usize idx = 0u; idx < offsets.size(); ++idx)
-            state.m_rowOffsets[idx] = offsets[idx];
+        TransferVector<f64>(state.m_rowOffsets, offsets);
         state.m_measureKey = frame.measureKey;
         state.m_rowHeight = frame.rowHeight;
         state.m_scrollRowHeight = frame.rowHeight;

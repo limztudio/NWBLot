@@ -69,6 +69,10 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     private UiPoint m_pointer;
     private u64 m_frameGeneration = 0u;
     private u64 m_lastPublishedA11yGeneration = 0u;
+    private u64 m_lastPublishedA11yRevision = 0u;
+    private u64 m_lastAnnouncedA11yGeneration = 0u;
+    private f32 m_lastPublishedA11yScaleX = 0.0f;
+    private f32 m_lastPublishedA11yScaleY = 0.0f;
     private WidgetId m_lastPublishedA11yFocus;
     private UiFrameDelta m_frameDelta;
     private u32 m_pressedButtons = 0u;
@@ -186,8 +190,11 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
     [cpp_unwind]
     private void synchronizeInput();
     private void synchronizeCursor();
+    private void synchronizeCursorForRouter(in PointerCursor routerCursor);
     [cpp_unwind]
     private void synchronizeAccessibility();
+    [cpp_unwind]
+    private void synchronizeGamepadOutputs(in b8 consumed, in WidgetId prevFocus, in WidgetId prevHover, in WidgetId prevCapture);
     [cpp_unwind]
     private void pollAccessibilityActions();
     [cpp_unwind]
@@ -549,20 +556,41 @@ void UiLayerSystem::gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected
 }
 
 [cpp_unwind]
+void UiLayerSystem::synchronizeGamepadOutputs(in b8 consumed, in WidgetId prevFocus, in WidgetId prevHover, in WidgetId prevCapture){
+    if(
+        consumed
+        || this.m_context.input().focus() != prevFocus
+        || this.m_context.input().hover() != prevHover
+        || this.m_context.input().capture() != prevCapture
+    ){
+        this.synchronizeCursor();
+        this.synchronizeAccessibility();
+    }
+}
+
+[cpp_unwind]
 b8 UiLayerSystem::gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action){
     this.synchronizeNativeInput();
+    const WidgetId prevFocus = this.m_context.input().focus();
+    const WidgetId prevHover = this.m_context.input().hover();
+    const WidgetId prevCapture = this.m_context.input().capture();
     const b8 consumed = this.m_gamepad.onButton(gamepadIndex, button, action, this.m_context.input());
-    this.synchronizeCursor();
-    this.synchronizeAccessibility();
+    this.synchronizeGamepadOutputs(consumed, prevFocus, prevHover, prevCapture);
     return consumed;
 }
 
 [cpp_unwind]
 b8 UiLayerSystem::gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value){
+    GamepadStickDirection prevDir = GamepadStickDirection::None;
+    GamepadStickDirection nextDir = GamepadStickDirection::None;
+    if(!this.m_gamepad.stageAxis(gamepadIndex, axis, value, prevDir, nextDir))
+        return false;
     this.synchronizeNativeInput();
-    const b8 consumed = this.m_gamepad.onAxis(gamepadIndex, axis, value, this.m_context.input());
-    this.synchronizeCursor();
-    this.synchronizeAccessibility();
+    const WidgetId prevFocus = this.m_context.input().focus();
+    const WidgetId prevHover = this.m_context.input().hover();
+    const WidgetId prevCapture = this.m_context.input().capture();
+    const b8 consumed = this.m_gamepad.commitAxisTransition(gamepadIndex, prevDir, nextDir, this.m_context.input());
+    this.synchronizeGamepadOutputs(consumed, prevFocus, prevHover, prevCapture);
     return consumed;
 }
 
@@ -635,7 +663,7 @@ b8 UiLayerSystem::routeInputCore(in WidgetId previousCapture, in Expected<InputE
         this.m_editHost.input(normalized.value(), previousCapture, false);
     LogUiInputRoutingOverflows(result.activationOverflow, result.gestureOverflow);
     outConsumed = result.pointerConsumed;
-    this.synchronizeCursor();
+    this.synchronizeCursorForRouter(result.cursor);
     this.synchronizeAccessibility();
     return true;
 }
@@ -913,14 +941,21 @@ void UiLayerSystem::commitAcceptedFrameIfReady(){
     }
 }
 
-void UiLayerSystem::synchronizeCursor(){
-    const CursorShape desired = MapPointerCursorToCoreCursor(this.m_context.resolveCursor());
+void UiLayerSystem::synchronizeCursorForRouter(in PointerCursor routerCursor){
+    PointerCursor resolved = this.m_context.frameCursor();
+    if(resolved == PointerCursor::Default)
+        resolved = routerCursor;
+    const CursorShape desired = MapPointerCursorToCoreCursor(resolved);
     if(!this.m_cursorApplied || desired != this.m_lastAppliedCursor){
         if(this.m_cursor.setCursor(desired)){
             this.m_lastAppliedCursor = desired;
             this.m_cursorApplied = true;
         }
     }
+}
+
+void UiLayerSystem::synchronizeCursor(){
+    this.synchronizeCursorForRouter(this.m_context.input().resolvedCursor());
 }
 
 void UiLayerSystem::synchronizeAccessibility(){
@@ -938,21 +973,38 @@ void UiLayerSystem::synchronizeAccessibility(){
         pressed = input.capture();
     if(focused != tree.focusedId() || hovered != tree.hoveredId() || pressed != tree.pressedId())
         tree.updateInteractionState(focused, hovered, pressed);
-    if(gen == this.m_lastPublishedA11yGeneration && focused == this.m_lastPublishedA11yFocus)
-        return;
-    if(!this.m_accessibility.publishTree(
-        Span<AccessibilityNodeData>(tree.nodes()),
-        tree.textStorage(),
-        focused.value,
-        gen,
-        this.m_display.pixelScaleX,
-        this.m_display.pixelScaleY
-    ))
-        return;
-    const b8 generationAdvanced = gen != this.m_lastPublishedA11yGeneration;
-    this.m_lastPublishedA11yGeneration = gen;
-    this.m_lastPublishedA11yFocus = focused;
-    if(generationAdvanced){
+
+    const u64 contentRev = tree.contentRevision();
+    const b8 treeDirty =
+        contentRev != this.m_lastPublishedA11yRevision
+        || this.m_display.pixelScaleX != this.m_lastPublishedA11yScaleX
+        || this.m_display.pixelScaleY != this.m_lastPublishedA11yScaleY
+    ;
+    b8 publishedOk = true;
+    if(treeDirty){
+        publishedOk = this.m_accessibility.publishTree(
+            Span<AccessibilityNodeData>(tree.nodes()),
+            tree.textStorage(),
+            focused.value,
+            gen,
+            this.m_display.pixelScaleX,
+            this.m_display.pixelScaleY
+        );
+        if(publishedOk){
+            this.m_lastPublishedA11yRevision = contentRev;
+            this.m_lastPublishedA11yGeneration = gen;
+            this.m_lastPublishedA11yFocus = focused;
+            this.m_lastPublishedA11yScaleX = this.m_display.pixelScaleX;
+            this.m_lastPublishedA11yScaleY = this.m_display.pixelScaleY;
+        }
+    }
+    else if(focused != this.m_lastPublishedA11yFocus){
+        if(this.m_accessibility.updateFocus(focused.value))
+            this.m_lastPublishedA11yFocus = focused;
+    }
+
+    if(publishedOk && gen != this.m_lastAnnouncedA11yGeneration){
+        this.m_lastAnnouncedA11yGeneration = gen;
         const usize count = tree.announcementCount();
         for(usize index = 0u; index < count; ++index){
             in AccessibleAnnouncement entry = tree.announcementAt(index);

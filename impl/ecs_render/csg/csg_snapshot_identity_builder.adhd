@@ -61,8 +61,29 @@ class CsgSnapshotIdentityBuilder{
         inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.syncFromTransform);
         inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.receiverGroup.hash());
         inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.shapeType.hash());
+        inOutContentHash = UpdateFnv64Byte(inOutContentHash, 0u);
         inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, worldToShape);
         inOutContentHash = this.updateFnv64Matrix34Bits(inOutContentHash, shapeToWorld);
+        inOutContentHash = this.updateFnv64ByteSpan(inOutContentHash, cutter.parameterBytes);
+    }
+
+    public void updateCsgFrameStateCutterTransformSignature(
+        in EntityID entity,
+        in CsgCutterComponent cutter,
+        in VectorSingle position,
+        in VectorSingle rotation,
+        in VectorSingle scale,
+        mut u64 inOutContentHash
+    )const{
+        inOutContentHash = UpdateFnv64U32(inOutContentHash, entity.id);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.active);
+        inOutContentHash = this.updateFnv64BoolValue(inOutContentHash, cutter.syncFromTransform);
+        inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.receiverGroup.hash());
+        inOutContentHash = UpdateFnv64NameHash(inOutContentHash, cutter.shapeType.hash());
+        inOutContentHash = UpdateFnv64Byte(inOutContentHash, 1u);
+        inOutContentHash = this.updateFnv64Vector4Bits(inOutContentHash, position);
+        inOutContentHash = this.updateFnv64Vector4Bits(inOutContentHash, rotation);
+        inOutContentHash = this.updateFnv64Vector4Bits(inOutContentHash, scale);
         inOutContentHash = this.updateFnv64ByteSpan(inOutContentHash, cutter.parameterBytes);
     }
 

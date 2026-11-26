@@ -41,6 +41,8 @@ class TextShaper : ITextShaper{
     private Vector<RawShapedGlyph> m_primary;
     private Vector<RawShapedGlyph> m_fallback;
     private Vector<TextFontSpan> m_spans;
+    private Vector<ShapedGlyph> m_tabTempGlyphs;
+    private Vector<TabShapedSegment> m_tabSegments;
 
     public void setDefaultFamily(in Name family){ this.m_defaultFamily = family; }
     public Name defaultFamily()const{ return this.m_defaultFamily; }
@@ -117,15 +119,14 @@ class TextShaper : ITextShaper{
                 TextFontSpan span = MakeInitialTextClusterSpan(primaryIndex, begin, end, this.m_primary[begin]);
                 if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_primary), begin, end)){
                     span.fontIndex = this.m_fonts.size();
+                    const StringView clusterUtf8 = request.text.substr(cast<usize>(span.byteBegin), cast<usize>(span.byteEnd - span.byteBegin));
                     for(usize fontIndex = 0u; fontIndex < this.m_fonts.size(); ++fontIndex){
                         if(fontIndex == primaryIndex)
                             continue;
-                        if(!this.m_fonts[fontIndex].deref().shape(request, span.byteBegin, span.byteEnd, this.m_fallback))
-                            return TextLayoutStatus::FontFailure;
-                        if(ClusterHasMissingGlyph(Span<RawShapedGlyph>(this.m_fallback), 0u, this.m_fallback.size()))
-                            continue;
-                        span.fontIndex = fontIndex;
-                        break;
+                        if(this.m_fonts[fontIndex].deref().supportsClusterUtf8(clusterUtf8)){
+                            span.fontIndex = fontIndex;
+                            break;
+                        }
                     }
                     if(span.fontIndex == this.m_fonts.size())
                         span.fontIndex = primaryIndex;
@@ -213,9 +214,11 @@ class TextShaper : ITextShaper{
                 spaceAdvance = this.m_fallback[0u].advance.x;
         }
         const f64 tabStopWidth = cast<f64>(spaceAdvance) * cast<f64>(request.tabStopSpaces);
-        Vector<ShapedGlyph> tempGlyphs;
-        tempGlyphs.reserve(request.text.size());
-        Vector<TabShapedSegment> segments;
+        this.m_tabTempGlyphs.clear();
+        this.m_tabTempGlyphs.reserve(request.text.size());
+        this.m_tabSegments.clear();
+        mut Vector<ShapedGlyph> tempGlyphs = this.m_tabTempGlyphs;
+        mut Vector<TabShapedSegment> segments = this.m_tabSegments;
         f64 penX = 0.0;
         u32 pos = 0u;
         const u32 len = cast<u32>(request.text.size());

@@ -225,6 +225,17 @@ b8 ReconcileListState(mut ListState state, in IListDataSource source){
         return false;
     const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
     const u64 count = source.rowCount();
+    if(
+        !replacement
+        && state.m_sourceGeneration == generation
+        && state.m_sourceRevision == revision
+        && state.m_reconciledInputGeneration == inputGeneration
+        && state.m_reconciledRowCount == count
+    ){
+        if(!MatchesListSource(source, generation, revision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        return true;
+    }
     u64 selected = 0u;
     u64 cursor = 0u;
     u64 anchor = 0u;
@@ -313,6 +324,8 @@ b8 ReconcileListState(mut ListState state, in IListDataSource source){
         state.m_sourceGeneration,
         state.m_sourceRevision
     );
+    state.m_reconciledInputGeneration = inputGeneration;
+    state.m_reconciledRowCount = count;
     return true;
 }
 

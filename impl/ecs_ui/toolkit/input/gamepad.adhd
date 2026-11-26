@@ -294,8 +294,15 @@ class GamepadNavigationAdapter{
         return router.process().commandConsumed;
     }
 
-    [cpp_unwind]
-    public b8 onAxis(in u32 gamepadIndex, in i32 axis, in f32 value, mut InputRouter router){
+    public b8 stageAxis(
+        in u32 gamepadIndex,
+        in i32 axis,
+        in f32 value,
+        mut GamepadStickDirection outPrevDir,
+        mut GamepadStickDirection outNextDir
+    ){
+        outPrevDir = GamepadStickDirection::None;
+        outNextDir = GamepadStickDirection::None;
         if(gamepadIndex >= s_MaxGamepadCount || axis < 0 || axis >= cast<i32>(GamepadAxis::kCount) || !IsFinite(VectorSingle(value)))
             return false;
 
@@ -336,7 +343,19 @@ class GamepadNavigationAdapter{
         if(mag >= threshold)
             nextDir = ClassifyLeftStickDirection(vec.x, vec.y);
 
-        if(nextDir == previous)
+        outPrevDir = previous;
+        outNextDir = nextDir;
+        return nextDir != previous;
+    }
+
+    [cpp_unwind]
+    public b8 commitAxisTransition(
+        in u32 gamepadIndex,
+        in GamepadStickDirection previous,
+        in GamepadStickDirection nextDir,
+        mut InputRouter router
+    ){
+        if(gamepadIndex >= s_MaxGamepadCount || nextDir == previous)
             return false;
 
         const u64 deviceId = this.deviceIdForPad(gamepadIndex);
@@ -365,6 +384,15 @@ class GamepadNavigationAdapter{
         if(!queuedAny)
             return false;
         return router.process().commandConsumed;
+    }
+
+    [cpp_unwind]
+    public b8 onAxis(in u32 gamepadIndex, in i32 axis, in f32 value, mut InputRouter router){
+        GamepadStickDirection previous = GamepadStickDirection::None;
+        GamepadStickDirection nextDir = GamepadStickDirection::None;
+        if(!this.stageAxis(gamepadIndex, axis, value, previous, nextDir))
+            return false;
+        return this.commitAxisTransition(gamepadIndex, previous, nextDir, router);
     }
 
     [cpp_unwind]

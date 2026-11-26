@@ -15,6 +15,203 @@ type SharedTextLayout = Shared<TextLayout>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+interface ITextRunShaperSink : NoCopy{
+    [cpp_unwind]
+    TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun);
+}
+
+class InterfaceTextRunShaperSink : ITextRunShaperSink{
+    private mut ITextShaper m_shaper;
+
+    public InterfaceTextRunShaperSink(mut ITextShaper shaper){
+        this.m_shaper = shaper;
+    }
+
+    [cpp_unwind]
+    public TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun)override{
+        Expected<ShapedRun, TextLayoutStatus> shaped = this.m_shaper.shape(request);
+        if(!shaped.has_value())
+            return shaped.error();
+        outRun.metrics = shaped.value().metrics;
+        TransferVector<ShapedGlyph>(outRun.glyphs, shaped.value().glyphs);
+        return TextLayoutStatus::Success;
+    }
+}
+
+class DirectTextRunShaperSink : ITextRunShaperSink{
+    private mut TextShaper m_shaper;
+
+    public DirectTextRunShaperSink(mut TextShaper shaper){
+        this.m_shaper = shaper;
+    }
+
+    [cpp_unwind]
+    public TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun)override{
+        return this.m_shaper.shapeInto(request, outRun);
+    }
+}
+
+class BidiWrapCluster{
+    public u32 byteBegin = 0u;
+    public u32 byteEnd = 0u;
+    public f32 advance = 0.0f;
+}
+
+usize FindMatchingLogicalRunIndex(in Vector<BidiVisualRun> logicalRuns, in BidiVisualRun vrun){
+    usize lo = 0u;
+    usize hi = logicalRuns.size();
+    while(lo < hi){
+        const usize mid = lo + (hi - lo) / 2u;
+        if(logicalRuns[mid].byteBegin < vrun.byteBegin)
+            lo = mid + 1u;
+        else
+            hi = mid;
+    }
+    if(lo < logicalRuns.size()){
+        in BidiVisualRun lrun = logicalRuns[lo];
+        if(lrun.byteBegin == vrun.byteBegin && lrun.byteEnd == vrun.byteEnd && lrun.direction == vrun.direction)
+            return lo;
+    }
+    return usize.max;
+}
+
+void ResolveNextWrappedBidiSegment(
+    in StringView fullText,
+    in usize segBegin,
+    in usize lineEnd,
+    in usize hardBreakEnd,
+    in ShapeRequest request,
+    in Span<BidiWrapCluster> wrapClusters,
+    mut usize inOutClusterCursor,
+    mut usize outVisualEnd,
+    mut usize outBreakEnd,
+    mut usize outNextSegBegin
+){
+    outVisualEnd = lineEnd;
+    outBreakEnd = hardBreakEnd;
+    outNextSegBegin = lineEnd;
+    if(inOutClusterCursor >= wrapClusters.size() || segBegin >= lineEnd)
+        return;
+
+    f32 accumWidth = 0.0f;
+    usize firstClusterEnd = 0u;
+    usize firstClusterNext = inOutClusterCursor;
+    usize fitEnd = 0u;
+    usize fitNext = inOutClusterCursor;
+    usize wordEnd = 0u;
+    usize wordNext = inOutClusterCursor;
+    b8 overflowed = false;
+    usize cur = inOutClusterCursor;
+    while(cur < wrapClusters.size()){
+        in BidiWrapCluster wc = wrapClusters[cur];
+        const usize absEnd = cast<usize>(wc.byteEnd);
+        const usize relEnd = absEnd - segBegin;
+        if(firstClusterEnd == 0u){
+            firstClusterEnd = relEnd;
+            firstClusterNext = cur + 1u;
+        }
+        accumWidth += wc.advance;
+        if(accumWidth <= request.maxWidth){
+            fitEnd = relEnd;
+            fitNext = cur + 1u;
+            if(request.wrapMode == TextWrapMode::Word){
+                const u8 lastB = cast<u8>(fullText[absEnd - 1u]);
+                if(lastB == cast<u8>(' ') || lastB == cast<u8>('\t') || lastB == cast<u8>('-')){
+                    wordEnd = relEnd;
+                    wordNext = cur + 1u;
+                }
+            }
+        }
+        else{
+            overflowed = true;
+            break;
+        }
+        ++cur;
+    }
+
+    if(!overflowed){
+        inOutClusterCursor = wrapClusters.size();
+        return;
+    }
+
+    if(firstClusterEnd == 0u){
+        firstClusterEnd = lineEnd - segBegin;
+        firstClusterNext = wrapClusters.size();
+    }
+    usize chosenEnd = firstClusterEnd;
+    usize chosenNext = firstClusterNext;
+    if(request.wrapMode == TextWrapMode::Word && wordEnd > 0u){
+        chosenEnd = wordEnd;
+        chosenNext = wordNext;
+    }
+    else if(fitEnd > 0u){
+        chosenEnd = fitEnd;
+        chosenNext = fitNext;
+    }
+
+    usize visualEnd = segBegin + chosenEnd;
+    usize nextBegin = visualEnd;
+    usize nextCursor = chosenNext;
+    if(request.wrapMode == TextWrapMode::Word && !request.preserveWrapSpaces){
+        while(visualEnd > segBegin && fullText[visualEnd - 1u] == ' ')
+            --visualEnd;
+        while(nextBegin < lineEnd && fullText[nextBegin] == ' ')
+            ++nextBegin;
+        while(nextCursor < wrapClusters.size() && cast<usize>(wrapClusters[nextCursor].byteBegin) < nextBegin)
+            ++nextCursor;
+    }
+
+    inOutClusterCursor = nextCursor;
+    outVisualEnd = visualEnd;
+    outNextSegBegin = nextBegin;
+    if(nextBegin >= lineEnd){
+        outNextSegBegin = lineEnd;
+        outBreakEnd = hardBreakEnd;
+    }
+    else
+        outBreakEnd = nextBegin;
+}
+
+void AppendLogicalRunWrapClusters(in BidiVisualRun lrun, in Vector<ShapedGlyph> rGlyphs, mut Vector<BidiWrapCluster> wrapClusters){
+    const usize gCount = rGlyphs.size();
+    if(gCount == 0u)
+        return;
+    if(lrun.direction == TextDirection::LeftToRight){
+        usize cur = 0u;
+        while(cur < gCount){
+            const usize cFirst = cur;
+            usize cLast = cur + 1u;
+            while(cLast < gCount && rGlyphs[cLast].byteBegin == rGlyphs[cFirst].byteBegin)
+                ++cLast;
+            BidiWrapCluster wc;
+            wc.byteBegin = lrun.byteBegin + rGlyphs[cFirst].byteBegin;
+            wc.byteEnd = lrun.byteBegin + rGlyphs[cFirst].byteEnd;
+            wc.advance = SumShapedGlyphRangeWidth<SharedFontFace>(Span<ShapedGlyph>(rGlyphs), cFirst, cLast);
+            wrapClusters.push_back(wc);
+            cur = cLast;
+        }
+    }
+    else{
+        usize cur = gCount;
+        while(cur > 0u){
+            const usize cLast = cur;
+            usize cFirst = cLast - 1u;
+            while(cFirst > 0u && rGlyphs[cFirst - 1u].byteBegin == rGlyphs[cLast - 1u].byteBegin)
+                --cFirst;
+            BidiWrapCluster wc;
+            wc.byteBegin = lrun.byteBegin + rGlyphs[cFirst].byteBegin;
+            wc.byteEnd = lrun.byteBegin + rGlyphs[cFirst].byteEnd;
+            wc.advance = SumShapedGlyphRangeWidth<SharedFontFace>(Span<ShapedGlyph>(rGlyphs), cFirst, cLast);
+            wrapClusters.push_back(wc);
+            cur = cFirst;
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [move_only, friend(TextLayoutFaultFixture)]
 class TextLayout{
     private String m_text;
@@ -45,178 +242,380 @@ class TextLayout{
     }
 
     [cpp_unwind]
-    private TextLayoutStatus shapeBidiInto(in ShapeRequest request, mut ITextShaper shaper){
+    private TextLayoutStatus placeBidiVisualSegment(
+        in ShapeRequest request,
+        in BidiParagraph bidiPara,
+        in usize segBegin,
+        in usize visualEnd,
+        in usize segBreakEnd,
+        in Vector<BidiVisualRun> logicalRuns,
+        in Vector<ShapedRun> logicalShaped,
+        mut ITextRunShaperSink shaper,
+        mut BidiScratch bidiScratch,
+        mut b8 inOutHasEmptyMetrics,
+        mut FontMetrics inOutEmptyMetrics,
+        mut ShapedRun scratchEmptyRun,
+        mut Vector<BidiVisualRun> visualRuns,
+        mut Vector<ShapedRun> splitShaped,
+        mut Vector<i32> runSourceIdx,
+        mut Vector<ShapedBidiLineRun<SharedFontFace>> lineRuns,
+        mut VectorDouble inOutInkBounds,
+        mut b8 inOutHasInk
+    ){
+        if(segBegin >= visualEnd){
+            if(!inOutHasEmptyMetrics){
+                ShapeRequest emptyReq = MakeTextLineShapeRequest(request, segBegin, segBegin);
+                emptyReq.direction = bidiPara.baseDirection;
+                emptyReq.bidiMode = TextBidiMode::None;
+                const TextLayoutStatus emptyShapeStatus = shaper.shapeInto(emptyReq, scratchEmptyRun);
+                if(emptyShapeStatus != TextLayoutStatus::Success)
+                    return emptyShapeStatus;
+                if(!ValidateShapedRun(scratchEmptyRun.metrics, Span<ShapedGlyph>(scratchEmptyRun.glyphs), "", bidiPara.baseDirection))
+                    return TextLayoutStatus::FontFailure;
+                inOutEmptyMetrics = scratchEmptyRun.metrics;
+                inOutHasEmptyMetrics = true;
+            }
+            return PlaceValidatedShapedLineInto<SharedFontFace>(
+                segBegin, visualEnd, segBreakEnd, segBegin,
+                inOutEmptyMetrics, Span<ShapedGlyph>(), bidiPara.baseDirection,
+                request.lineHeightMultiplier, request.lineHeightOverride,
+                this.m_glyphs, this.m_clusters, this.m_lines, this.m_measure, inOutInkBounds, inOutHasInk
+            );
+        }
+
+        ResolveBidiVisualRuns(bidiPara, cast<u32>(segBegin), cast<u32>(visualEnd), bidiScratch, visualRuns);
+        usize splitCount = 0u;
+        runSourceIdx.clear();
+        runSourceIdx.resize(visualRuns.size(), 0);
+        for(usize vi = 0u; vi < visualRuns.size(); ++vi){
+            in BidiVisualRun vrun = visualRuns[vi];
+            const usize matchLi = FindMatchingLogicalRunIndex(logicalRuns, vrun);
+            if(matchLi != usize.max){
+                runSourceIdx[vi] = cast<i32>(matchLi);
+            }
+            else{
+                if(splitShaped.size() <= splitCount)
+                    splitShaped.resize(splitCount + 1u);
+                const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, vrun.byteBegin, vrun.byteEnd, vrun.direction);
+                const TextLayoutStatus runStatus = shaper.shapeInto(runReq, splitShaped[splitCount]);
+                if(runStatus != TextLayoutStatus::Success)
+                    return runStatus;
+                runSourceIdx[vi] = -cast<i32>(splitCount + 1u);
+                ++splitCount;
+            }
+        }
+        lineRuns.clear();
+        lineRuns.reserve(visualRuns.size());
+        for(usize vi = 0u; vi < visualRuns.size(); ++vi){
+            in BidiVisualRun vrun = visualRuns[vi];
+            const i32 src = runSourceIdx[vi];
+            ShapedBidiLineRun<SharedFontFace> lineRun;
+            if(src >= 0){
+                in ShapedRun sr = logicalShaped[cast<usize>(src)];
+                lineRun.metrics = sr.metrics;
+                lineRun.glyphs = Span<ShapedGlyph>(sr.glyphs);
+            }
+            else{
+                in ShapedRun sr = splitShaped[cast<usize>(-(src + 1))];
+                lineRun.metrics = sr.metrics;
+                lineRun.glyphs = Span<ShapedGlyph>(sr.glyphs);
+            }
+            lineRun.runText = request.text.substr(cast<usize>(vrun.byteBegin), cast<usize>(vrun.byteEnd - vrun.byteBegin));
+            lineRun.runByteOffset = vrun.byteBegin;
+            lineRun.direction = vrun.direction;
+            lineRuns.push_back(lineRun);
+        }
+        return PlaceShapedBidiLineInto<SharedFontFace>(
+            segBegin, visualEnd, segBreakEnd, Span<ShapedBidiLineRun<SharedFontFace>>(lineRuns),
+            request.lineHeightMultiplier, request.lineHeightOverride,
+            this.m_glyphs, this.m_clusters, this.m_lines, this.m_measure, inOutInkBounds, inOutHasInk
+        );
+    }
+
+    [cpp_unwind]
+    private TextLayoutStatus shapeBidiInto(in ShapeRequest request, mut ITextRunShaperSink shaper){
+        BidiScratch bidiScratch;
         BidiParagraph bidiPara;
-        if(!ResolveBidiParagraph(request.text, request.bidiMode, bidiPara))
+        if(!ResolveBidiParagraph(request.text, request.bidiMode, bidiScratch, bidiPara))
             return TextLayoutStatus::InvalidUtf8;
         this.m_direction = bidiPara.baseDirection;
         this.m_hasBidiRuns = true;
         b8 hasInk = false;
         VectorDouble inkBounds = VectorDoubleZero();
+        b8 hasEmptyMetrics = false;
+        FontMetrics emptyMetrics = FontMetrics();
+        ShapedRun scratchEmptyRun;
         usize byteBegin = 0u;
         Vector<BidiVisualRun> logicalRuns;
         Vector<BidiVisualRun> visualRuns;
-        Vector<ShapedRun> shapedStorage;
+        Vector<ShapedRun> logicalShaped;
+        Vector<ShapedRun> splitShaped;
+        Vector<i32> runSourceIdx;
+        Vector<BidiWrapCluster> wrapClusters;
         Vector<ShapedBidiLineRun<SharedFontFace>> lineRuns;
         while(true){
             usize byteEnd = byteBegin;
             usize breakEnd = byteBegin;
             ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
-            usize segBegin = byteBegin;
-            while(true){
-                usize visualEnd = byteEnd;
-                usize segBreakEnd = breakEnd;
-                usize nextSegBegin = byteEnd;
-                if(segBegin < byteEnd && request.wrapMode != TextWrapMode::None && request.maxWidth > 0.0f){
-                    ResolveBidiLogicalRuns(bidiPara, cast<u32>(segBegin), cast<u32>(byteEnd), logicalRuns);
-                    f32 accumW = 0.0f;
-                    usize firstClusterEnd = 0u;
-                    usize fitEnd = 0u;
-                    usize wordEnd = 0u;
-                    b8 overflowed = false;
-                    for(in BidiVisualRun lrun : logicalRuns){
-                        ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, lrun.byteBegin, lrun.byteEnd, lrun.direction);
-                        const Expected<ShapedRun, TextLayoutStatus> runRes = shaper.shape(runReq);
-                        if(!runRes.has_value())
-                            return runRes.error();
-                        in Vector<ShapedGlyph> rGlyphs = runRes.value().glyphs;
-                        if(rGlyphs.empty())
-                            continue;
-                        const usize gCount = rGlyphs.size();
-                        if(lrun.direction == TextDirection::LeftToRight){
-                            usize cur = 0u;
-                            while(cur < gCount){
-                                const usize cFirst = cur;
-                                usize cLast = cur + 1u;
-                                while(cLast < gCount && rGlyphs[cLast].byteBegin == rGlyphs[cFirst].byteBegin)
-                                    ++cLast;
-                                const usize absEnd = cast<usize>(lrun.byteBegin + rGlyphs[cFirst].byteEnd);
-                                const usize relEnd = absEnd - segBegin;
-                                if(firstClusterEnd == 0u)
-                                    firstClusterEnd = relEnd;
-                                accumW += SumShapedGlyphRangeWidth<SharedFontFace>(Span<ShapedGlyph>(rGlyphs), cFirst, cLast);
-                                if(accumW <= request.maxWidth){
-                                    fitEnd = relEnd;
-                                    if(request.wrapMode == TextWrapMode::Word){
-                                        const u8 lastB = cast<u8>(request.text[absEnd - 1u]);
-                                        if(lastB == cast<u8>(' ') || lastB == cast<u8>('\t') || lastB == cast<u8>('-'))
-                                            wordEnd = relEnd;
-                                    }
-                                }
-                                else{
-                                    overflowed = true;
-                                    break;
-                                }
-                                cur = cLast;
-                            }
-                        }
-                        else{
-                            usize cur = gCount;
-                            while(cur > 0u){
-                                const usize cLast = cur;
-                                usize cFirst = cLast - 1u;
-                                while(cFirst > 0u && rGlyphs[cFirst - 1u].byteBegin == rGlyphs[cLast - 1u].byteBegin)
-                                    --cFirst;
-                                const usize absEnd = cast<usize>(lrun.byteBegin + rGlyphs[cFirst].byteEnd);
-                                const usize relEnd = absEnd - segBegin;
-                                if(firstClusterEnd == 0u)
-                                    firstClusterEnd = relEnd;
-                                accumW += SumShapedGlyphRangeWidth<SharedFontFace>(Span<ShapedGlyph>(rGlyphs), cFirst, cLast);
-                                if(accumW <= request.maxWidth){
-                                    fitEnd = relEnd;
-                                    if(request.wrapMode == TextWrapMode::Word){
-                                        const u8 lastB = cast<u8>(request.text[absEnd - 1u]);
-                                        if(lastB == cast<u8>(' ') || lastB == cast<u8>('\t') || lastB == cast<u8>('-'))
-                                            wordEnd = relEnd;
-                                    }
-                                }
-                                else{
-                                    overflowed = true;
-                                    break;
-                                }
-                                cur = cFirst;
-                            }
-                        }
-                        if(overflowed)
-                            break;
-                    }
-                    if(overflowed){
-                        if(firstClusterEnd == 0u)
-                            firstClusterEnd = byteEnd - segBegin;
-                        usize chosenEnd = firstClusterEnd;
-                        if(request.wrapMode == TextWrapMode::Word && wordEnd > 0u)
-                            chosenEnd = wordEnd;
-                        else if(fitEnd > 0u)
-                            chosenEnd = fitEnd;
-                        visualEnd = segBegin + chosenEnd;
-                        usize nextBegin = visualEnd;
-                        if(request.wrapMode == TextWrapMode::Word && !request.preserveWrapSpaces){
-                            while(visualEnd > segBegin && request.text[visualEnd - 1u] == ' ')
-                                --visualEnd;
-                            while(nextBegin < byteEnd && request.text[nextBegin] == ' ')
-                                ++nextBegin;
-                        }
-                        nextSegBegin = nextBegin;
-                        if(nextBegin >= byteEnd){
-                            nextSegBegin = byteEnd;
-                            segBreakEnd = breakEnd;
-                        }
-                        else
-                            segBreakEnd = nextBegin;
-                    }
+            const b8 needsWrap = byteBegin < byteEnd && request.wrapMode != TextWrapMode::None && request.maxWidth > 0.0f;
+            if(!needsWrap){
+                logicalRuns.clear();
+                const TextLayoutStatus lineStatus = this.placeBidiVisualSegment(
+                    request, bidiPara, byteBegin, byteEnd, breakEnd,
+                    logicalRuns, logicalShaped, shaper, bidiScratch,
+                    hasEmptyMetrics, emptyMetrics, scratchEmptyRun, visualRuns, splitShaped, runSourceIdx, lineRuns,
+                    inkBounds, hasInk
+                );
+                if(lineStatus != TextLayoutStatus::Success)
+                    return lineStatus;
+            }
+            else if(!TextSliceContainsTab(request.text, byteBegin, byteEnd)){
+                ResolveBidiLogicalRuns(bidiPara, cast<u32>(byteBegin), cast<u32>(byteEnd), logicalRuns);
+                if(logicalShaped.size() < logicalRuns.size())
+                    logicalShaped.resize(logicalRuns.size());
+                wrapClusters.clear();
+                for(usize li = 0u; li < logicalRuns.size(); ++li){
+                    in BidiVisualRun lrun = logicalRuns[li];
+                    const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, lrun.byteBegin, lrun.byteEnd, lrun.direction);
+                    const TextLayoutStatus runStatus = shaper.shapeInto(runReq, logicalShaped[li]);
+                    if(runStatus != TextLayoutStatus::Success)
+                        return runStatus;
+                    AppendLogicalRunWrapClusters(lrun, logicalShaped[li].glyphs, wrapClusters);
                 }
-
-                if(segBegin >= visualEnd){
-                    ShapeRequest emptyReq = MakeTextLineShapeRequest(request, segBegin, segBegin);
-                    emptyReq.direction = bidiPara.baseDirection;
-                    emptyReq.bidiMode = TextBidiMode::None;
-                    const Expected<ShapedRun, TextLayoutStatus> emptyShaped = shaper.shape(emptyReq);
-                    if(!emptyShaped.has_value())
-                        return emptyShaped.error();
-                    in ShapedRun emptyRun = emptyShaped.value();
-                    const TextLayoutStatus emptyStatus = PlaceShapedLineInto<SharedFontFace>(
-                        segBegin, visualEnd, segBreakEnd, emptyRun.metrics, Span<ShapedGlyph>(emptyRun.glyphs),
-                        "", bidiPara.baseDirection, request.lineHeightMultiplier, request.lineHeightOverride,
-                        this.m_glyphs, this.m_clusters, this.m_lines, this.m_measure, inkBounds, hasInk
+                usize segBegin = byteBegin;
+                usize clusterCursor = 0u;
+                while(true){
+                    usize visualEnd = byteEnd;
+                    usize segBreakEnd = breakEnd;
+                    usize nextSegBegin = byteEnd;
+                    ResolveNextWrappedBidiSegment(
+                        request.text, segBegin, byteEnd, breakEnd, request,
+                        Span<BidiWrapCluster>(wrapClusters), clusterCursor,
+                        visualEnd, segBreakEnd, nextSegBegin
                     );
-                    if(emptyStatus != TextLayoutStatus::Success)
-                        return emptyStatus;
-                }
-                else{
-                    ResolveBidiVisualRuns(bidiPara, cast<u32>(segBegin), cast<u32>(visualEnd), visualRuns);
-                    shapedStorage.clear();
-                    lineRuns.clear();
-                    shapedStorage.reserve(visualRuns.size());
-                    lineRuns.reserve(visualRuns.size());
-                    for(in BidiVisualRun vrun : visualRuns){
-                        const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, vrun.byteBegin, vrun.byteEnd, vrun.direction);
-                        const Expected<ShapedRun, TextLayoutStatus> shapedRun = shaper.shape(runReq);
-                        if(!shapedRun.has_value())
-                            return shapedRun.error();
-                        shapedStorage.push_back(shapedRun.value());
-                    }
-                    for(usize vi = 0u; vi < visualRuns.size(); ++vi){
-                        in BidiVisualRun vrun = visualRuns[vi];
-                        in ShapedRun sr = shapedStorage[vi];
-                        ShapedBidiLineRun<SharedFontFace> lineRun;
-                        lineRun.metrics = sr.metrics;
-                        lineRun.glyphs = Span<ShapedGlyph>(sr.glyphs);
-                        lineRun.runText = request.text.substr(cast<usize>(vrun.byteBegin), cast<usize>(vrun.byteEnd - vrun.byteBegin));
-                        lineRun.runByteOffset = vrun.byteBegin;
-                        lineRun.direction = vrun.direction;
-                        lineRuns.push_back(lineRun);
-                    }
-                    const TextLayoutStatus bidiStatus = PlaceShapedBidiLineInto<SharedFontFace>(
-                        segBegin, visualEnd, segBreakEnd, Span<ShapedBidiLineRun<SharedFontFace>>(lineRuns),
-                        request.lineHeightMultiplier, request.lineHeightOverride,
-                        this.m_glyphs, this.m_clusters, this.m_lines, this.m_measure, inkBounds, hasInk
+                    const TextLayoutStatus bidiStatus = this.placeBidiVisualSegment(
+                        request, bidiPara, segBegin, visualEnd, segBreakEnd,
+                        logicalRuns, logicalShaped, shaper, bidiScratch,
+                        hasEmptyMetrics, emptyMetrics, scratchEmptyRun, visualRuns, splitShaped, runSourceIdx, lineRuns,
+                        inkBounds, hasInk
                     );
                     if(bidiStatus != TextLayoutStatus::Success)
                         return bidiStatus;
+                    if(nextSegBegin >= byteEnd)
+                        break;
+                    segBegin = nextSegBegin;
                 }
-                if(nextSegBegin >= byteEnd)
-                    break;
-                segBegin = nextSegBegin;
+            }
+            else{
+                usize segBegin = byteBegin;
+                while(true){
+                    ResolveBidiLogicalRuns(bidiPara, cast<u32>(segBegin), cast<u32>(byteEnd), logicalRuns);
+                    if(logicalShaped.size() < logicalRuns.size())
+                        logicalShaped.resize(logicalRuns.size());
+                    wrapClusters.clear();
+                    for(usize li = 0u; li < logicalRuns.size(); ++li){
+                        in BidiVisualRun lrun = logicalRuns[li];
+                        const ShapeRequest runReq = MakeTextBidiRunShapeRequest(request, lrun.byteBegin, lrun.byteEnd, lrun.direction);
+                        const TextLayoutStatus runStatus = shaper.shapeInto(runReq, logicalShaped[li]);
+                        if(runStatus != TextLayoutStatus::Success)
+                            return runStatus;
+                        AppendLogicalRunWrapClusters(lrun, logicalShaped[li].glyphs, wrapClusters);
+                    }
+                    usize visualEnd = byteEnd;
+                    usize segBreakEnd = breakEnd;
+                    usize nextSegBegin = byteEnd;
+                    usize tabClusterCursor = 0u;
+                    ResolveNextWrappedBidiSegment(
+                        request.text, segBegin, byteEnd, breakEnd, request,
+                        Span<BidiWrapCluster>(wrapClusters), tabClusterCursor,
+                        visualEnd, segBreakEnd, nextSegBegin
+                    );
+                    const TextLayoutStatus bidiStatus = this.placeBidiVisualSegment(
+                        request, bidiPara, segBegin, visualEnd, segBreakEnd,
+                        logicalRuns, logicalShaped, shaper, bidiScratch,
+                        hasEmptyMetrics, emptyMetrics, scratchEmptyRun, visualRuns, splitShaped, runSourceIdx, lineRuns,
+                        inkBounds, hasInk
+                    );
+                    if(bidiStatus != TextLayoutStatus::Success)
+                        return bidiStatus;
+                    if(nextSegBegin >= byteEnd)
+                        break;
+                    segBegin = nextSegBegin;
+                }
+            }
+            if(breakEnd == byteEnd)
+                break;
+            byteBegin = breakEnd;
+        }
+        this.m_inkBounds = StoreTextLayoutInkBounds(inkBounds);
+        ApplyTextLayoutAlignment<SharedFontFace>(request.alignment, this.m_measure, this.m_lines, this.m_glyphs, this.m_clusters, this.m_inkBounds);
+        return TextLayoutStatus::Success;
+    }
+
+    [cpp_unwind]
+    private TextLayoutStatus shapeHardLinesNonBidi(in ShapeRequest request, mut ITextRunShaperSink shaper){
+        b8 hasInk = false;
+        VectorDouble inkBounds = VectorDoubleZero();
+        usize byteBegin = 0u;
+        ShapedRun fullRun;
+        ShapedRun segRun;
+        while(true){
+            usize byteEnd = byteBegin;
+            usize breakEnd = byteBegin;
+            ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
+            const b8 needsWrap = byteBegin < byteEnd && request.wrapMode != TextWrapMode::None && request.maxWidth > 0.0f;
+            if(!needsWrap){
+                const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, byteBegin, byteEnd);
+                const TextLayoutStatus shapeStatus = shaper.shapeInto(lineRequest, fullRun);
+                if(shapeStatus != TextLayoutStatus::Success)
+                    return shapeStatus;
+                const TextLayoutStatus lineStatus = PlaceShapedLineInto<SharedFontFace>(
+                    byteBegin, byteEnd, breakEnd, fullRun.metrics, Span<ShapedGlyph>(fullRun.glyphs),
+                    lineRequest.text, request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
+                    this.m_glyphs, this.m_clusters, this.m_lines,
+                    this.m_measure, inkBounds, hasInk
+                );
+                if(lineStatus != TextLayoutStatus::Success)
+                    return lineStatus;
+            }
+            else if(TextSliceContainsTab(request.text, byteBegin, byteEnd)){
+                usize segBegin = byteBegin;
+                while(true){
+                    const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, segBegin, byteEnd);
+                    const TextLayoutStatus shapeStatus = shaper.shapeInto(lineRequest, fullRun);
+                    if(shapeStatus != TextLayoutStatus::Success)
+                        return shapeStatus;
+                    usize visualEnd = byteEnd;
+                    usize segBreakEnd = breakEnd;
+                    usize nextSegBegin = byteEnd;
+                    if(TryResolveNextWrappedTextSegment<SharedFontFace>(request.text, segBegin, byteEnd, breakEnd, request, Span<ShapedGlyph>(fullRun.glyphs), visualEnd, segBreakEnd, nextSegBegin)){
+                        const ShapeRequest segRequest = MakeTextLineShapeRequest(request, segBegin, visualEnd);
+                        const TextLayoutStatus segShapeStatus = shaper.shapeInto(segRequest, segRun);
+                        if(segShapeStatus != TextLayoutStatus::Success)
+                            return segShapeStatus;
+                        const TextLayoutStatus segStatus = PlaceShapedLineInto<SharedFontFace>(
+                            segBegin, visualEnd, segBreakEnd, segRun.metrics, Span<ShapedGlyph>(segRun.glyphs),
+                            segRequest.text, request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
+                            this.m_glyphs, this.m_clusters, this.m_lines,
+                            this.m_measure, inkBounds, hasInk
+                        );
+                        if(segStatus != TextLayoutStatus::Success)
+                            return segStatus;
+                    }
+                    else{
+                        const TextLayoutStatus lineStatus = PlaceShapedLineInto<SharedFontFace>(
+                            segBegin, visualEnd, segBreakEnd, fullRun.metrics, Span<ShapedGlyph>(fullRun.glyphs),
+                            lineRequest.text.substr(0u, visualEnd - segBegin), request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
+                            this.m_glyphs, this.m_clusters, this.m_lines,
+                            this.m_measure, inkBounds, hasInk
+                        );
+                        if(lineStatus != TextLayoutStatus::Success)
+                            return lineStatus;
+                    }
+                    if(nextSegBegin >= byteEnd)
+                        break;
+                    segBegin = nextSegBegin;
+                }
+            }
+            else{
+                const ShapeRequest fullLineRequest = MakeTextLineShapeRequest(request, byteBegin, byteEnd);
+                const TextLayoutStatus shapeStatus = shaper.shapeInto(fullLineRequest, fullRun);
+                if(shapeStatus != TextLayoutStatus::Success)
+                    return shapeStatus;
+                if(!ValidateShapedRun(fullRun.metrics, Span<ShapedGlyph>(fullRun.glyphs), fullLineRequest.text, request.direction))
+                    return TextLayoutStatus::FontFailure;
+                if(request.direction == TextDirection::LeftToRight && request.letterSpacing == 0.0f){
+                    usize segBegin = byteBegin;
+                    usize glyphCursor = 0u;
+                    while(true){
+                        usize lineGlyphBegin = glyphCursor;
+                        usize lineGlyphEnd = fullRun.glyphs.size();
+                        usize visualEnd = byteEnd;
+                        usize segBreakEnd = breakEnd;
+                        usize nextSegBegin = byteEnd;
+                        ResolveNextWrappedSliceLtr<SharedFontFace>(
+                            request.text,
+                            byteBegin,
+                            segBegin,
+                            byteEnd,
+                            breakEnd,
+                            request,
+                            Span<ShapedGlyph>(fullRun.glyphs),
+                            glyphCursor,
+                            lineGlyphBegin,
+                            lineGlyphEnd,
+                            visualEnd,
+                            segBreakEnd,
+                            nextSegBegin
+                        );
+                        const Span<ShapedGlyph> lineSpan(fullRun.glyphs.data() + lineGlyphBegin, lineGlyphEnd - lineGlyphBegin);
+                        const TextLayoutStatus lineStatus = PlaceValidatedShapedLineInto<SharedFontFace>(
+                            segBegin, visualEnd, segBreakEnd, byteBegin,
+                            fullRun.metrics, lineSpan, request.direction,
+                            request.lineHeightMultiplier, request.lineHeightOverride,
+                            this.m_glyphs, this.m_clusters, this.m_lines,
+                            this.m_measure, inkBounds, hasInk
+                        );
+                        if(lineStatus != TextLayoutStatus::Success)
+                            return lineStatus;
+                        if(nextSegBegin >= byteEnd)
+                            break;
+                        segBegin = nextSegBegin;
+                    }
+                }
+                else if(SumShapedGlyphRangeWidth<SharedFontFace>(Span<ShapedGlyph>(fullRun.glyphs), 0u, fullRun.glyphs.size()) <= request.maxWidth){
+                    const TextLayoutStatus lineStatus = PlaceValidatedShapedLineInto<SharedFontFace>(
+                        byteBegin, byteEnd, breakEnd, byteBegin,
+                        fullRun.metrics, Span<ShapedGlyph>(fullRun.glyphs), request.direction,
+                        request.lineHeightMultiplier, request.lineHeightOverride,
+                        this.m_glyphs, this.m_clusters, this.m_lines,
+                        this.m_measure, inkBounds, hasInk
+                    );
+                    if(lineStatus != TextLayoutStatus::Success)
+                        return lineStatus;
+                }
+                else{
+                    usize segBegin = byteBegin;
+                    usize glyphCursor = 0u;
+                    if(request.direction != TextDirection::LeftToRight)
+                        glyphCursor = fullRun.glyphs.size();
+                    while(true){
+                        usize visualEnd = byteEnd;
+                        usize segBreakEnd = breakEnd;
+                        usize nextSegBegin = byteEnd;
+                        if(request.direction == TextDirection::LeftToRight){
+                            usize lineGlyphBegin = glyphCursor;
+                            usize lineGlyphEnd = fullRun.glyphs.size();
+                            ResolveNextWrappedSliceLtr<SharedFontFace>(
+                                request.text, byteBegin, segBegin, byteEnd, breakEnd, request,
+                                Span<ShapedGlyph>(fullRun.glyphs), glyphCursor, lineGlyphBegin, lineGlyphEnd,
+                                visualEnd, segBreakEnd, nextSegBegin
+                            );
+                        }
+                        else{
+                            ResolveNextWrappedRangeRtl<SharedFontFace>(
+                                request.text, byteBegin, segBegin, byteEnd, breakEnd, request,
+                                Span<ShapedGlyph>(fullRun.glyphs), glyphCursor,
+                                visualEnd, segBreakEnd, nextSegBegin
+                            );
+                        }
+                        const ShapeRequest segRequest = MakeTextLineShapeRequest(request, segBegin, visualEnd);
+                        const TextLayoutStatus segShapeStatus = shaper.shapeInto(segRequest, segRun);
+                        if(segShapeStatus != TextLayoutStatus::Success)
+                            return segShapeStatus;
+                        const TextLayoutStatus segStatus = PlaceShapedLineInto<SharedFontFace>(
+                            segBegin, visualEnd, segBreakEnd, segRun.metrics, Span<ShapedGlyph>(segRun.glyphs),
+                            segRequest.text, request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
+                            this.m_glyphs, this.m_clusters, this.m_lines,
+                            this.m_measure, inkBounds, hasInk
+                        );
+                        if(segStatus != TextLayoutStatus::Success)
+                            return segStatus;
+                        if(nextSegBegin >= byteEnd)
+                            break;
+                        segBegin = nextSegBegin;
+                    }
+                }
             }
             if(breakEnd == byteEnd)
                 break;
@@ -244,61 +643,10 @@ class TextLayout{
         this.m_glyphs.reserve(request.text.size());
         this.m_clusters.reserve(request.text.size());
         this.m_lines.reserve(1u);
+        InterfaceTextRunShaperSink sink(shaper);
         if(request.bidiMode != TextBidiMode::None)
-            return this.shapeBidiInto(request, shaper);
-        b8 hasInk = false;
-        VectorDouble inkBounds = VectorDoubleZero();
-        usize byteBegin = 0u;
-        while(true){
-            usize byteEnd = byteBegin;
-            usize breakEnd = byteBegin;
-            ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
-            usize segBegin = byteBegin;
-            while(true){
-                const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, segBegin, byteEnd);
-                const Expected<ShapedRun, TextLayoutStatus> shapedRun = shaper.shape(lineRequest);
-                if(!shapedRun.has_value())
-                    return shapedRun.error();
-                usize visualEnd = byteEnd;
-                usize segBreakEnd = breakEnd;
-                usize nextSegBegin = byteEnd;
-                if(TryResolveNextWrappedTextSegment<SharedFontFace>(request.text, segBegin, byteEnd, breakEnd, request, Span<ShapedGlyph>(shapedRun.value().glyphs), visualEnd, segBreakEnd, nextSegBegin)){
-                    const ShapeRequest segRequest = MakeTextLineShapeRequest(request, segBegin, visualEnd);
-                    const Expected<ShapedRun, TextLayoutStatus> wrappedRun = shaper.shape(segRequest);
-                    if(!wrappedRun.has_value())
-                        return wrappedRun.error();
-                    in ShapedRun run = wrappedRun.value();
-                    const TextLayoutStatus segStatus = PlaceShapedLineInto<SharedFontFace>(
-                        segBegin, visualEnd, segBreakEnd, run.metrics, Span<ShapedGlyph>(run.glyphs),
-                        segRequest.text, request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
-                        this.m_glyphs, this.m_clusters, this.m_lines,
-                        this.m_measure, inkBounds, hasInk
-                    );
-                    if(segStatus != TextLayoutStatus::Success)
-                        return segStatus;
-                }
-                else{
-                    in ShapedRun run = shapedRun.value();
-                    const TextLayoutStatus lineStatus = PlaceShapedLineInto<SharedFontFace>(
-                        segBegin, visualEnd, segBreakEnd, run.metrics, Span<ShapedGlyph>(run.glyphs),
-                        lineRequest.text.substr(0u, visualEnd - segBegin), request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
-                        this.m_glyphs, this.m_clusters, this.m_lines,
-                        this.m_measure, inkBounds, hasInk
-                    );
-                    if(lineStatus != TextLayoutStatus::Success)
-                        return lineStatus;
-                }
-                if(nextSegBegin >= byteEnd)
-                    break;
-                segBegin = nextSegBegin;
-            }
-            if(breakEnd == byteEnd)
-                break;
-            byteBegin = breakEnd;
-        }
-        this.m_inkBounds = StoreTextLayoutInkBounds(inkBounds);
-        ApplyTextLayoutAlignment<SharedFontFace>(request.alignment, this.m_measure, this.m_lines, this.m_glyphs, this.m_clusters, this.m_inkBounds);
-        return TextLayoutStatus::Success;
+            return this.shapeBidiInto(request, sink);
+        return this.shapeHardLinesNonBidi(request, sink);
     }
 
     [cpp_unwind]
@@ -318,60 +666,10 @@ class TextLayout{
         this.m_glyphs.reserve(request.text.size());
         this.m_clusters.reserve(request.text.size());
         this.m_lines.reserve(1u);
+        DirectTextRunShaperSink sink(shaper);
         if(request.bidiMode != TextBidiMode::None)
-            return this.shapeBidiInto(request, shaper);
-        b8 hasInk = false;
-        VectorDouble inkBounds = VectorDoubleZero();
-        usize byteBegin = 0u;
-        ShapedRun run;
-        while(true){
-            usize byteEnd = byteBegin;
-            usize breakEnd = byteBegin;
-            ResolveNextTextLineRange(request.text, byteBegin, byteEnd, breakEnd);
-            usize segBegin = byteBegin;
-            while(true){
-                const ShapeRequest lineRequest = MakeTextLineShapeRequest(request, segBegin, byteEnd);
-                const TextLayoutStatus shapeStatus = shaper.shapeInto(lineRequest, run);
-                if(shapeStatus != TextLayoutStatus::Success)
-                    return shapeStatus;
-                usize visualEnd = byteEnd;
-                usize segBreakEnd = breakEnd;
-                usize nextSegBegin = byteEnd;
-                if(TryResolveNextWrappedTextSegment<SharedFontFace>(request.text, segBegin, byteEnd, breakEnd, request, Span<ShapedGlyph>(run.glyphs), visualEnd, segBreakEnd, nextSegBegin)){
-                    const ShapeRequest segRequest = MakeTextLineShapeRequest(request, segBegin, visualEnd);
-                    const TextLayoutStatus segShapeStatus = shaper.shapeInto(segRequest, run);
-                    if(segShapeStatus != TextLayoutStatus::Success)
-                        return segShapeStatus;
-                    const TextLayoutStatus segStatus = PlaceShapedLineInto<SharedFontFace>(
-                        segBegin, visualEnd, segBreakEnd, run.metrics, Span<ShapedGlyph>(run.glyphs),
-                        segRequest.text, request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
-                        this.m_glyphs, this.m_clusters, this.m_lines,
-                        this.m_measure, inkBounds, hasInk
-                    );
-                    if(segStatus != TextLayoutStatus::Success)
-                        return segStatus;
-                }
-                else{
-                    const TextLayoutStatus lineStatus = PlaceShapedLineInto<SharedFontFace>(
-                        segBegin, visualEnd, segBreakEnd, run.metrics, Span<ShapedGlyph>(run.glyphs),
-                        lineRequest.text.substr(0u, visualEnd - segBegin), request.direction, request.lineHeightMultiplier, request.lineHeightOverride,
-                        this.m_glyphs, this.m_clusters, this.m_lines,
-                        this.m_measure, inkBounds, hasInk
-                    );
-                    if(lineStatus != TextLayoutStatus::Success)
-                        return lineStatus;
-                }
-                if(nextSegBegin >= byteEnd)
-                    break;
-                segBegin = nextSegBegin;
-            }
-            if(breakEnd == byteEnd)
-                break;
-            byteBegin = breakEnd;
-        }
-        this.m_inkBounds = StoreTextLayoutInkBounds(inkBounds);
-        ApplyTextLayoutAlignment<SharedFontFace>(request.alignment, this.m_measure, this.m_lines, this.m_glyphs, this.m_clusters, this.m_inkBounds);
-        return TextLayoutStatus::Success;
+            return this.shapeBidiInto(request, sink);
+        return this.shapeHardLinesNonBidi(request, sink);
     }
 
     [cpp_unwind, owner_result]

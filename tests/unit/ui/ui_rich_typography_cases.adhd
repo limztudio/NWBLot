@@ -245,8 +245,9 @@ void VerifyRichTypography_Uax9BidiEngineAndLayout(mut RichTypographyTests self){
     AppendCodePointUtf8(0x05D0u, hebWithNum);
     AppendCodePointUtf8(0x05D1u, hebWithNum);
     hebWithNum.append(" 123 ");
+    BidiScratch bidiScratch;
     BidiParagraph rtlNumPara;
-    ASSERT_TRUE(ResolveBidiParagraph(StringView(hebWithNum), TextBidiMode::Auto, rtlNumPara));
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(hebWithNum), TextBidiMode::Auto, bidiScratch, rtlNumPara));
     EXPECT_EQ(rtlNumPara.baseLevel, 1u);
     EXPECT_EQ(rtlNumPara.baseDirection, TextDirection::RightToLeft);
     EXPECT_EQ(rtlNumPara.chars[0u].level, 1u);
@@ -256,7 +257,7 @@ void VerifyRichTypography_Uax9BidiEngineAndLayout(mut RichTypographyTests self){
     EXPECT_EQ(rtlNumPara.chars[5u].level, 2u);
 
     Vector<BidiVisualRun> visRuns;
-    ResolveBidiVisualRuns(rtlNumPara, 0u, cast<u32>(hebWithNum.size()), visRuns);
+    ResolveBidiVisualRuns(rtlNumPara, 0u, cast<u32>(hebWithNum.size()), bidiScratch, visRuns);
     ASSERT_GE(visRuns.size(), 3u);
     EXPECT_EQ(visRuns[0u].direction, TextDirection::RightToLeft);
     EXPECT_EQ(visRuns[0u].level, 1u);
@@ -272,7 +273,7 @@ void VerifyRichTypography_Uax9BidiEngineAndLayout(mut RichTypographyTests self){
     AppendCodePointUtf8(0x2069u, ltrIsolated);
     ltrIsolated.append(" Z");
     BidiParagraph isoPara;
-    ASSERT_TRUE(ResolveBidiParagraph(StringView(ltrIsolated), TextBidiMode::Auto, isoPara));
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(ltrIsolated), TextBidiMode::Auto, bidiScratch, isoPara));
     EXPECT_EQ(isoPara.baseLevel, 0u);
     EXPECT_EQ(isoPara.chars[3u].level, 1u);
     EXPECT_EQ(isoPara.chars[4u].level, 1u);
@@ -287,10 +288,21 @@ void VerifyRichTypography_Uax9BidiEngineAndLayout(mut RichTypographyTests self){
     fsiStr.append(")");
     AppendCodePointUtf8(0x2069u, fsiStr);
     BidiParagraph fsiPara;
-    ASSERT_TRUE(ResolveBidiParagraph(StringView(fsiStr), TextBidiMode::Auto, fsiPara));
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(fsiStr), TextBidiMode::Auto, bidiScratch, fsiPara));
     EXPECT_EQ(fsiPara.baseLevel, 1u);
     EXPECT_EQ(fsiPara.chars[3u].level, 2u);
     EXPECT_EQ(fsiPara.chars[5u].level, 2u);
+
+    String nestedBracketEt;
+    nestedBracketEt.append("$123 ");
+    AppendCodePointUtf8(0x05D0u, nestedBracketEt);
+    nestedBracketEt.append(" (");
+    AppendCodePointUtf8(0x05D1u, nestedBracketEt);
+    nestedBracketEt.append("[c])");
+    BidiParagraph bracketEtPara;
+    ASSERT_TRUE(ResolveBidiParagraph(StringView(nestedBracketEt), TextBidiMode::ForceRightToLeft, bidiScratch, bracketEtPara));
+    EXPECT_EQ(bracketEtPara.chars[0u].resolvedClass, BidiClass::EN);
+    EXPECT_EQ(bracketEtPara.chars[1u].resolvedClass, BidiClass::EN);
 
     String rloText;
     rloText.append("Hi ");

@@ -12,6 +12,7 @@
 #include <global/simd/vector.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <cwchar>
 #include <new>
 
@@ -41,10 +42,28 @@ using UiaDisconnectProviderFn = HRESULT (WINAPI*)(IRawElementProviderSimple*);
 
 static constexpr wchar s_NotificationActivityId[] = L"NWB.UI.Announcement";
 inline constexpr Name s_SharedStateArenaName("core/os/win32_uia_state");
+static constexpr u32 s_InvalidUiaNodeIdx = ~0u;
+static constexpr usize s_UiaStackTextBytes = 256u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct UiaNodeLinks{
+    u32 parentIdx = s_InvalidUiaNodeIdx;
+    u32 firstChildIdx = s_InvalidUiaNodeIdx;
+    u32 lastChildIdx = s_InvalidUiaNodeIdx;
+    u32 prevSiblingIdx = s_InvalidUiaNodeIdx;
+    u32 nextSiblingIdx = s_InvalidUiaNodeIdx;
+};
+
+namespace NodeTextField{
+    enum Enum : u8{
+        Name,
+        Description,
+        Value,
+    };
+};
 
 struct SharedUiaState final : NoCopy{
     Alloc::GlobalArena arena;
@@ -55,6 +74,14 @@ struct SharedUiaState final : NoCopy{
     UiaHostProviderFromHwndFn hostProviderFromHwnd = nullptr;
     Vector<AccessibilityNodeData, Alloc::GlobalArena> nodes;
     AString<Alloc::GlobalArena> textStorage;
+    HashMap<u64, u32, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> nodeIndexById;
+    Vector<UiaNodeLinks, Alloc::GlobalArena> links;
+    Vector<AccessibilityNodeData, Alloc::GlobalArena> stagingNodes;
+    AString<Alloc::GlobalArena> stagingTextStorage;
+    HashMap<u64, u32, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> stagingNodeIndexById;
+    Vector<UiaNodeLinks, Alloc::GlobalArena> stagingLinks;
+    u32 rootFirstChildIdx = s_InvalidUiaNodeIdx;
+    u32 rootLastChildIdx = s_InvalidUiaNodeIdx;
     u64 focusedId = 0u;
     f32 scaleX = 1.0f;
     f32 scaleY = 1.0f;
@@ -66,6 +93,12 @@ public:
         : arena(s_SharedStateArenaName)
         , nodes(arena)
         , textStorage(arena)
+        , nodeIndexById(0u, Hasher<u64>(), EqualTo<u64>(), arena)
+        , links(arena)
+        , stagingNodes(arena)
+        , stagingTextStorage(arena)
+        , stagingNodeIndexById(0u, Hasher<u64>(), EqualTo<u64>(), arena)
+        , stagingLinks(arena)
     {}
 
     void addRef()noexcept{
@@ -80,6 +113,12 @@ public:
 static BSTR AllocBstrFromUtf8(const AStringView text)noexcept{
     if(text.empty())
         return SysAllocStringLen(L"", 0u);
+    if(text.size() <= s_UiaStackTextBytes){
+        wchar stackWide[s_UiaStackTextBytes];
+        const i32 written = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<i32>(text.size()), stackWide, static_cast<i32>(s_UiaStackTextBytes));
+        if(written > 0)
+            return SysAllocStringLen(stackWide, static_cast<UINT>(written));
+    }
     const i32 wideLength = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<i32>(text.size()), nullptr, 0);
     if(wideLength <= 0)
         return nullptr;
@@ -104,12 +143,76 @@ static AStringView SliceNodeText(const SharedUiaState& state, const u32 offset, 
     return AStringView(state.textStorage.data() + start, count);
 }
 
-static const AccessibilityNodeData* FindNodeInSnapshot(const SharedUiaState& state, const u64 nodeId)noexcept{
-    for(const AccessibilityNodeData& node : state.nodes){
-        if(node.id == nodeId)
-            return &node;
+static const AccessibilityNodeData* FindNodeInSnapshot(const SharedUiaState& state, const u64 nodeId, u32* const outIndex = nullptr)noexcept{
+    const auto found = state.nodeIndexById.find(nodeId);
+    if(found == state.nodeIndexById.end())
+        return nullptr;
+    const u32 idx = found.value();
+    if(idx >= state.nodes.size())
+        return nullptr;
+    if(outIndex)
+        *outIndex = idx;
+    return &state.nodes[idx];
+}
+
+static HRESULT ReadNodeTextAsBstr(SharedUiaState& state, const u64 nodeId, const NodeTextField::Enum field, BSTR* const outBstr)noexcept{
+    *outBstr = nullptr;
+    char stackUtf8[s_UiaStackTextBytes];
+    usize utf8Len = 0u;
+    b8 hasOverflow = false;
+    AString<Alloc::GlobalArena> overflowUtf8(state.arena);
+    {
+        const FutexGuard lock = AcquireFutex(state.mutex);
+        if(!state.alive)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        const AccessibilityNodeData* const node = FindNodeInSnapshot(state, nodeId);
+        if(!node)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        if(field == NodeTextField::Value && (node->stateBits & AccessibilityStateBits::Password) != 0u){
+            utf8Len = 0u;
+        }
+        else{
+            const u32 offset = field == NodeTextField::Value ? node->valueOffset : (field == NodeTextField::Description ? node->descriptionOffset : node->nameOffset);
+            const u32 length = field == NodeTextField::Value ? node->valueLength : (field == NodeTextField::Description ? node->descriptionLength : node->nameLength);
+            const AStringView view = SliceNodeText(state, offset, length);
+            utf8Len = view.size();
+            if(utf8Len > 0u){
+                if(utf8Len <= s_UiaStackTextBytes)
+                    std::memcpy(stackUtf8, view.data(), utf8Len);
+                else{
+                    overflowUtf8.assign(view.data(), view.size());
+                    hasOverflow = true;
+                }
+            }
+        }
     }
-    return nullptr;
+    if(utf8Len == 0u){
+        if(field == NodeTextField::Value){
+            *outBstr = SysAllocStringLen(L"", 0u);
+            return *outBstr ? S_OK : E_OUTOFMEMORY;
+        }
+        return S_OK;
+    }
+    const AStringView copied = hasOverflow ? AStringView(overflowUtf8.data(), overflowUtf8.size()) : AStringView(stackUtf8, utf8Len);
+    *outBstr = AllocBstrFromUtf8(copied);
+    return *outBstr ? S_OK : E_OUTOFMEMORY;
+}
+
+static UiaRect ComputeScreenUiaRect(const HWND hwnd, const f32 scaleX, const f32 scaleY, const f32 x, const f32 y, const f32 w, const f32 h)noexcept{
+    UiaRect result = {};
+    if(!hwnd || !IsWindow(hwnd))
+        return result;
+    POINT origin = { 0, 0 };
+    if(!ClientToScreen(hwnd, &origin))
+        return result;
+    const SIMDVectorSingle dims = VectorSet(x, y, Max(w, 0.0f), Max(h, 0.0f));
+    const SIMDVectorSingle scales = VectorSet(scaleX, scaleY, scaleX, scaleY);
+    const SIMDVectorSingle scaled = VectorMultiply(dims, scales);
+    result.left = static_cast<double>(origin.x) + static_cast<double>(VectorGetX(scaled));
+    result.top = static_cast<double>(origin.y) + static_cast<double>(VectorGetY(scaled));
+    result.width = static_cast<double>(VectorGetZ(scaled));
+    result.height = static_cast<double>(VectorGetW(scaled));
+    return result;
 }
 
 static long MapUiaControlType(const AccessibilityRole::Enum role)noexcept{
@@ -170,23 +273,6 @@ static enum LiveSetting MapUiaLiveSetting(const AccessibilityLiveMode::Enum mode
     default:
         return Off;
     }
-}
-
-static UiaRect ComputeScreenUiaRect(const SharedUiaState& state, const f32 x, const f32 y, const f32 w, const f32 h)noexcept{
-    UiaRect result = {};
-    if(!state.hwnd || !IsWindow(state.hwnd))
-        return result;
-    const SIMDVectorSingle coords = VectorSet(x, y, x + Max(w, 0.0f), y + Max(h, 0.0f));
-    const SIMDVectorSingle scaled = VectorMultiply(coords, VectorSet(state.scaleX, state.scaleY, state.scaleX, state.scaleY));
-    POINT topLeft = { static_cast<LONG>(VectorGetX(scaled)), static_cast<LONG>(VectorGetY(scaled)) };
-    POINT bottomRight = { static_cast<LONG>(VectorGetZ(scaled)), static_cast<LONG>(VectorGetW(scaled)) };
-    ClientToScreen(state.hwnd, &topLeft);
-    ClientToScreen(state.hwnd, &bottomRight);
-    result.left = static_cast<double>(topLeft.x);
-    result.top = static_cast<double>(topLeft.y);
-    result.width = static_cast<double>(Max<LONG>(bottomRight.x - topLeft.x, 0L));
-    result.height = static_cast<double>(Max<LONG>(bottomRight.y - topLeft.y, 0L));
-    return result;
 }
 
 class Win32UiaRootProvider;
@@ -263,6 +349,18 @@ public:
         if(!pRetVal)
             return E_POINTER;
         VariantInit(pRetVal);
+        if(propertyId == UIA_NamePropertyId || propertyId == UIA_HelpTextPropertyId){
+            BSTR textBstr = nullptr;
+            const NodeTextField::Enum field = propertyId == UIA_NamePropertyId ? NodeTextField::Name : NodeTextField::Description;
+            const HRESULT hr = ReadNodeTextAsBstr(*m_shared, m_nodeId, field, &textBstr);
+            if(FAILED(hr))
+                return hr;
+            if(textBstr){
+                pRetVal->vt = VT_BSTR;
+                pRetVal->bstrVal = textBstr;
+            }
+            return S_OK;
+        }
         const FutexGuard lock = AcquireFutex(m_shared->mutex);
         if(!m_shared->alive)
             return UIA_E_ELEMENTNOTAVAILABLE;
@@ -275,30 +373,6 @@ public:
             pRetVal->vt = VT_I4;
             pRetVal->lVal = MapUiaControlType(node->role);
             return S_OK;
-        case UIA_NamePropertyId: {
-            const AStringView name = SliceNodeText(*m_shared, node->nameOffset, node->nameLength);
-            if(!name.empty()){
-                pRetVal->vt = VT_BSTR;
-                pRetVal->bstrVal = AllocBstrFromUtf8(name);
-                if(!pRetVal->bstrVal){
-                    pRetVal->vt = VT_EMPTY;
-                    return E_OUTOFMEMORY;
-                }
-            }
-            return S_OK;
-        }
-        case UIA_HelpTextPropertyId: {
-            const AStringView desc = SliceNodeText(*m_shared, node->descriptionOffset, node->descriptionLength);
-            if(!desc.empty()){
-                pRetVal->vt = VT_BSTR;
-                pRetVal->bstrVal = AllocBstrFromUtf8(desc);
-                if(!pRetVal->bstrVal){
-                    pRetVal->vt = VT_EMPTY;
-                    return E_OUTOFMEMORY;
-                }
-            }
-            return S_OK;
-        }
         case UIA_IsEnabledPropertyId:
             pRetVal->vt = VT_BOOL;
             pRetVal->boolVal = (node->stateBits & AccessibilityStateBits::Enabled) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
@@ -387,13 +461,29 @@ public:
         if(!pRetVal)
             return E_POINTER;
         *pRetVal = {};
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = ComputeScreenUiaRect(*m_shared, node->x, node->y, node->width, node->height);
+        HWND hwnd = nullptr;
+        f32 scaleX = 1.0f;
+        f32 scaleY = 1.0f;
+        f32 x = 0.0f;
+        f32 y = 0.0f;
+        f32 w = 0.0f;
+        f32 h = 0.0f;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
+            if(!node)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            hwnd = m_shared->hwnd;
+            scaleX = m_shared->scaleX;
+            scaleY = m_shared->scaleY;
+            x = node->x;
+            y = node->y;
+            w = node->width;
+            h = node->height;
+        }
+        *pRetVal = ComputeScreenUiaRect(hwnd, scaleX, scaleY, x, y, w, h);
         return S_OK;
     }
 
@@ -460,14 +550,18 @@ public:
         if(!pRetVal)
             return E_POINTER;
         *pRetVal = nullptr;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node || node->parentId == 0u)
-            return S_OK;
+        u64 parentId = 0u;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
+            if(!node || node->parentId == 0u)
+                return S_OK;
+            parentId = node->parentId;
+        }
         IRawElementProviderFragment* parentFrag = nullptr;
-        const HRESULT hr = MakeNodeFragment(m_shared, node->parentId, &parentFrag);
+        const HRESULT hr = MakeNodeFragment(m_shared, parentId, &parentFrag);
         if(FAILED(hr) || !parentFrag)
             return hr;
         *pRetVal = static_cast<Win32UiaNodeProvider*>(parentFrag);
@@ -696,20 +790,7 @@ public:
     HRESULT STDMETHODCALLTYPE get_Value(BSTR* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        *pRetVal = nullptr;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        if((node->stateBits & AccessibilityStateBits::Password) != 0u){
-            *pRetVal = SysAllocStringLen(L"", 0u);
-            return *pRetVal ? S_OK : E_OUTOFMEMORY;
-        }
-        const AStringView valueText = SliceNodeText(*m_shared, node->valueOffset, node->valueLength);
-        *pRetVal = AllocBstrFromUtf8(valueText);
-        return *pRetVal ? S_OK : E_OUTOFMEMORY;
+        return ReadNodeTextAsBstr(*m_shared, m_nodeId, NodeTextField::Value, pRetVal);
     }
 
     HRESULT STDMETHODCALLTYPE get_IsReadOnly(BOOL* pRetVal)override{
@@ -810,10 +891,16 @@ public:
         if(!pRetVal)
             return E_POINTER;
         *pRetVal = nullptr;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive || !m_shared->hwnd || !m_shared->hostProviderFromHwnd)
-            return S_OK;
-        return m_shared->hostProviderFromHwnd(m_shared->hwnd, pRetVal);
+        HWND hwnd = nullptr;
+        __hidden_win32_accessibility::UiaHostProviderFromHwndFn hostProviderFromHwnd = nullptr;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive || !m_shared->hwnd || !m_shared->hostProviderFromHwnd)
+                return S_OK;
+            hwnd = m_shared->hwnd;
+            hostProviderFromHwnd = m_shared->hostProviderFromHwnd;
+        }
+        return hostProviderFromHwnd(hwnd, pRetVal);
     }
 
     HRESULT STDMETHODCALLTYPE Navigate(enum NavigateDirection direction, IRawElementProviderFragment** pRetVal)override{
@@ -822,22 +909,17 @@ public:
         *pRetVal = nullptr;
         if(direction != NavigateDirection_FirstChild && direction != NavigateDirection_LastChild)
             return S_OK;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        if(direction == NavigateDirection_FirstChild){
-            for(const AccessibilityNodeData& node : m_shared->nodes){
-                if(node.parentId == 0u || !FindNodeInSnapshot(*m_shared, node.parentId))
-                    return MakeNodeFragment(m_shared, node.id, pRetVal);
-            }
+        u64 targetId = 0u;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            const u32 childIdx = direction == NavigateDirection_FirstChild ? m_shared->rootFirstChildIdx : m_shared->rootLastChildIdx;
+            if(childIdx != s_InvalidUiaNodeIdx && childIdx < m_shared->nodes.size())
+                targetId = m_shared->nodes[childIdx].id;
         }
-        else{
-            for(usize i = m_shared->nodes.size(); i > 0u; --i){
-                const AccessibilityNodeData& node = m_shared->nodes[i - 1u];
-                if(node.parentId == 0u || !FindNodeInSnapshot(*m_shared, node.parentId))
-                    return MakeNodeFragment(m_shared, node.id, pRetVal);
-            }
-        }
+        if(targetId != 0u)
+            return MakeNodeFragment(m_shared, targetId, pRetVal);
         return S_OK;
     }
 
@@ -852,19 +934,22 @@ public:
         if(!pRetVal)
             return E_POINTER;
         *pRetVal = {};
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive || !m_shared->hwnd || !IsWindow(m_shared->hwnd))
+        HWND hwnd = nullptr;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive || !m_shared->hwnd)
+                return S_OK;
+            hwnd = m_shared->hwnd;
+        }
+        if(!IsWindow(hwnd))
             return S_OK;
         RECT client = {};
-        if(GetClientRect(m_shared->hwnd, &client)){
-            POINT topLeft = { client.left, client.top };
-            POINT bottomRight = { client.right, client.bottom };
-            ClientToScreen(m_shared->hwnd, &topLeft);
-            ClientToScreen(m_shared->hwnd, &bottomRight);
-            pRetVal->left = static_cast<double>(topLeft.x);
-            pRetVal->top = static_cast<double>(topLeft.y);
-            pRetVal->width = static_cast<double>(Max<LONG>(bottomRight.x - topLeft.x, 0L));
-            pRetVal->height = static_cast<double>(Max<LONG>(bottomRight.y - topLeft.y, 0L));
+        POINT origin = { 0, 0 };
+        if(GetClientRect(hwnd, &client) && ClientToScreen(hwnd, &origin)){
+            pRetVal->left = static_cast<double>(origin.x + client.left);
+            pRetVal->top = static_cast<double>(origin.y + client.top);
+            pRetVal->width = static_cast<double>(Max<LONG>(client.right - client.left, 0L));
+            pRetVal->height = static_cast<double>(Max<LONG>(client.bottom - client.top, 0L));
         }
         return S_OK;
     }
@@ -892,21 +977,41 @@ public:
         if(!pRetVal)
             return E_POINTER;
         *pRetVal = nullptr;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive || !m_shared->hwnd || !IsWindow(m_shared->hwnd))
+        HWND hwnd = nullptr;
+        f32 scaleX = 1.0f;
+        f32 scaleY = 1.0f;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive || !m_shared->hwnd)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            hwnd = m_shared->hwnd;
+            scaleX = m_shared->scaleX;
+            scaleY = m_shared->scaleY;
+        }
+        if(!IsWindow(hwnd))
             return UIA_E_ELEMENTNOTAVAILABLE;
         POINT clientPt = { static_cast<LONG>(x), static_cast<LONG>(y) };
-        if(!ScreenToClient(m_shared->hwnd, &clientPt))
+        if(!ScreenToClient(hwnd, &clientPt))
             return S_OK;
-        const f32 logicalX = static_cast<f32>(clientPt.x) / Max(m_shared->scaleX, 0.01f);
-        const f32 logicalY = static_cast<f32>(clientPt.y) / Max(m_shared->scaleY, 0.01f);
-        for(usize i = m_shared->nodes.size(); i > 0u; --i){
-            const AccessibilityNodeData& node = m_shared->nodes[i - 1u];
-            if((node.stateBits & AccessibilityStateBits::Offscreen) != 0u)
-                continue;
-            if(logicalX >= node.x && logicalY >= node.y && logicalX < node.x + node.width && logicalY < node.y + node.height)
-                return MakeNodeFragment(m_shared, node.id, pRetVal);
+        const f32 logicalX = static_cast<f32>(clientPt.x) / Max(scaleX, 0.01f);
+        const f32 logicalY = static_cast<f32>(clientPt.y) / Max(scaleY, 0.01f);
+        u64 targetId = 0u;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            for(usize i = m_shared->nodes.size(); i > 0u; --i){
+                const AccessibilityNodeData& node = m_shared->nodes[i - 1u];
+                if((node.stateBits & AccessibilityStateBits::Offscreen) != 0u)
+                    continue;
+                if(logicalX >= node.x && logicalY >= node.y && logicalX < node.x + node.width && logicalY < node.y + node.height){
+                    targetId = node.id;
+                    break;
+                }
+            }
         }
+        if(targetId != 0u)
+            return MakeNodeFragment(m_shared, targetId, pRetVal);
         return S_OK;
     }
 
@@ -914,11 +1019,16 @@ public:
         if(!pRetVal)
             return E_POINTER;
         *pRetVal = nullptr;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        if(m_shared->focusedId != 0u && FindNodeInSnapshot(*m_shared, m_shared->focusedId))
-            return MakeNodeFragment(m_shared, m_shared->focusedId, pRetVal);
+        u64 targetId = 0u;
+        {
+            const FutexGuard lock = AcquireFutex(m_shared->mutex);
+            if(!m_shared->alive)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            if(m_shared->focusedId != 0u && FindNodeInSnapshot(*m_shared, m_shared->focusedId))
+                targetId = m_shared->focusedId;
+        }
+        if(targetId != 0u)
+            return MakeNodeFragment(m_shared, targetId, pRetVal);
         return S_OK;
     }
 
@@ -1003,79 +1113,52 @@ HRESULT STDMETHODCALLTYPE Win32UiaNodeProvider::Navigate(const enum NavigateDire
     if(!pRetVal)
         return E_POINTER;
     *pRetVal = nullptr;
-    const FutexGuard lock = AcquireFutex(m_shared->mutex);
-    if(!m_shared->alive)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-    const AccessibilityNodeData* const self = FindNodeInSnapshot(*m_shared, m_nodeId);
-    if(!self)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-
-    const auto logicalParentId = [&](const AccessibilityNodeData& entry)noexcept -> u64{
-        if(entry.parentId == 0u || !FindNodeInSnapshot(*m_shared, entry.parentId))
-            return 0u;
-        return entry.parentId;
-    };
-
-    const u64 selfParent = logicalParentId(*self);
-    switch(direction){
-    case NavigateDirection_Parent:
-        if(selfParent == 0u){
-            if(!m_shared->owner)
+    u64 targetId = 0u;
+    {
+        const FutexGuard lock = AcquireFutex(m_shared->mutex);
+        if(!m_shared->alive)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        u32 selfIdx = s_InvalidUiaNodeIdx;
+        if(!FindNodeInSnapshot(*m_shared, m_nodeId, &selfIdx) || selfIdx >= m_shared->links.size())
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        const UiaNodeLinks& selfLinks = m_shared->links[selfIdx];
+        u32 targetIdx = s_InvalidUiaNodeIdx;
+        switch(direction){
+        case NavigateDirection_Parent:
+            if(selfLinks.parentIdx == s_InvalidUiaNodeIdx){
+                if(!m_shared->owner)
+                    return S_OK;
+                IRawElementProviderSimple* const root = m_shared->owner->rootProvider();
+                if(!root)
+                    return S_OK;
+                Win32UiaRootProvider* const rootProv = static_cast<Win32UiaRootProvider*>(root);
+                *pRetVal = static_cast<IRawElementProviderFragment*>(rootProv);
+                (*pRetVal)->AddRef();
                 return S_OK;
-            IRawElementProviderSimple* const root = m_shared->owner->rootProvider();
-            if(!root)
-                return S_OK;
-            Win32UiaRootProvider* const rootProv = static_cast<Win32UiaRootProvider*>(root);
-            *pRetVal = static_cast<IRawElementProviderFragment*>(rootProv);
-            (*pRetVal)->AddRef();
+            }
+            targetIdx = selfLinks.parentIdx;
+            break;
+        case NavigateDirection_FirstChild:
+            targetIdx = selfLinks.firstChildIdx;
+            break;
+        case NavigateDirection_LastChild:
+            targetIdx = selfLinks.lastChildIdx;
+            break;
+        case NavigateDirection_NextSibling:
+            targetIdx = selfLinks.nextSiblingIdx;
+            break;
+        case NavigateDirection_PreviousSibling:
+            targetIdx = selfLinks.prevSiblingIdx;
+            break;
+        default:
             return S_OK;
         }
-        return MakeNodeFragment(m_shared, selfParent, pRetVal);
-
-    case NavigateDirection_FirstChild:
-        for(const AccessibilityNodeData& candidate : m_shared->nodes){
-            if(candidate.id != m_nodeId && logicalParentId(candidate) == m_nodeId)
-                return MakeNodeFragment(m_shared, candidate.id, pRetVal);
-        }
-        return S_OK;
-
-    case NavigateDirection_LastChild:
-        for(usize i = m_shared->nodes.size(); i > 0u; --i){
-            const AccessibilityNodeData& candidate = m_shared->nodes[i - 1u];
-            if(candidate.id != m_nodeId && logicalParentId(candidate) == m_nodeId)
-                return MakeNodeFragment(m_shared, candidate.id, pRetVal);
-        }
-        return S_OK;
-
-    case NavigateDirection_NextSibling: {
-        b8 seenSelf = false;
-        for(const AccessibilityNodeData& candidate : m_shared->nodes){
-            if(candidate.id == m_nodeId){
-                seenSelf = true;
-                continue;
-            }
-            if(seenSelf && logicalParentId(candidate) == selfParent)
-                return MakeNodeFragment(m_shared, candidate.id, pRetVal);
-        }
-        return S_OK;
+        if(targetIdx != s_InvalidUiaNodeIdx && targetIdx < m_shared->nodes.size())
+            targetId = m_shared->nodes[targetIdx].id;
     }
-
-    case NavigateDirection_PreviousSibling: {
-        u64 prevId = 0u;
-        for(const AccessibilityNodeData& candidate : m_shared->nodes){
-            if(candidate.id == m_nodeId)
-                break;
-            if(logicalParentId(candidate) == selfParent)
-                prevId = candidate.id;
-        }
-        if(prevId != 0u)
-            return MakeNodeFragment(m_shared, prevId, pRetVal);
-        return S_OK;
-    }
-
-    default:
-        return S_OK;
-    }
+    if(targetId != 0u)
+        return MakeNodeFragment(m_shared, targetId, pRetVal);
+    return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Win32UiaNodeProvider::get_FragmentRoot(IRawElementProviderFragmentRoot** const pRetVal){
@@ -1147,6 +1230,8 @@ Win32AccessibilityService::Win32AccessibilityService(Alloc::GlobalArena& arena, 
         m_rootProvider = new (std::nothrow) __hidden_win32_accessibility::Win32UiaRootProvider(m_shared);
     }
 
+    m_notificationActivityBstr = reinterpret_cast<wchar*>(SysAllocString(__hidden_win32_accessibility::s_NotificationActivityId));
+
     HMODULE lib = LoadLibraryW(L"uiautomationcore.dll");
     if(lib){
         m_uiaLibrary = static_cast<void*>(lib);
@@ -1168,8 +1253,16 @@ Win32AccessibilityService::~Win32AccessibilityService()noexcept{
         const FutexGuard lock = AcquireFutex(m_shared->mutex);
         m_shared->alive = false;
         m_shared->owner = nullptr;
+        m_shared->rootFirstChildIdx = __hidden_win32_accessibility::s_InvalidUiaNodeIdx;
+        m_shared->rootLastChildIdx = __hidden_win32_accessibility::s_InvalidUiaNodeIdx;
         m_shared->nodes.clear();
         m_shared->textStorage.clear();
+        m_shared->nodeIndexById.clear();
+        m_shared->links.clear();
+        m_shared->stagingNodes.clear();
+        m_shared->stagingTextStorage.clear();
+        m_shared->stagingNodeIndexById.clear();
+        m_shared->stagingLinks.clear();
     }
     if(m_rootProvider){
         if(m_disconnectProviderProc){
@@ -1182,6 +1275,10 @@ Win32AccessibilityService::~Win32AccessibilityService()noexcept{
     if(m_shared){
         m_shared->release();
         m_shared = nullptr;
+    }
+    if(m_notificationActivityBstr){
+        SysFreeString(reinterpret_cast<BSTR>(m_notificationActivityBstr));
+        m_notificationActivityBstr = nullptr;
     }
     if(m_uiaLibrary){
         FreeLibrary(static_cast<HMODULE>(m_uiaLibrary));
@@ -1217,6 +1314,18 @@ Optional<isize> Win32AccessibilityService::handleObjectMessage(const usize wPara
     return Optional<isize>(static_cast<isize>(result));
 }
 
+void Win32AccessibilityService::raiseFocusChangedEvent(const u64 previousFocus, const u64 focusedId)noexcept{
+    if(previousFocus != focusedId && focusedId != 0u && m_raiseAutomationEventProc){
+        IRawElementProviderFragment* focusedFragment = nullptr;
+        if(SUCCEEDED(__hidden_win32_accessibility::MakeNodeFragment(m_shared, focusedId, &focusedFragment)) && focusedFragment){
+            const auto raiseEvent = reinterpret_cast<__hidden_win32_accessibility::UiaRaiseAutomationEventFn>(m_raiseAutomationEventProc);
+            IRawElementProviderSimple* const simple = static_cast<__hidden_win32_accessibility::Win32UiaNodeProvider*>(focusedFragment);
+            raiseEvent(simple, UIA_AutomationFocusChangedEventId);
+            focusedFragment->Release();
+        }
+    }
+}
+
 void Win32AccessibilityService::onTreePublished(
     const Span<const AccessibilityNodeData> nodes,
     const AStringView textStorage,
@@ -1228,18 +1337,60 @@ void Win32AccessibilityService::onTreePublished(
     if(!m_shared)
         return;
 
+    m_shared->stagingNodes.resize(nodes.size());
+    if(!nodes.empty())
+        std::memcpy(m_shared->stagingNodes.data(), nodes.data(), nodes.size() * sizeof(AccessibilityNodeData));
+    if(textStorage.empty())
+        m_shared->stagingTextStorage.clear();
+    else
+        m_shared->stagingTextStorage.assign(textStorage.data(), textStorage.size());
+    m_shared->stagingNodeIndexById.clear();
+    if(!nodes.empty())
+        m_shared->stagingNodeIndexById.reserve(nodes.size());
+    m_shared->stagingLinks.assign(nodes.size(), __hidden_win32_accessibility::UiaNodeLinks{});
+    for(usize i = 0u; i < nodes.size(); ++i)
+        m_shared->stagingNodeIndexById.try_emplace(nodes[i].id, static_cast<u32>(i));
+    u32 stagedRootFirst = __hidden_win32_accessibility::s_InvalidUiaNodeIdx;
+    u32 stagedRootLast = __hidden_win32_accessibility::s_InvalidUiaNodeIdx;
+    for(usize i = 0u; i < nodes.size(); ++i){
+        const u32 idx = static_cast<u32>(i);
+        const u64 parentId = nodes[i].parentId;
+        u32 parentIdx = __hidden_win32_accessibility::s_InvalidUiaNodeIdx;
+        if(parentId != 0u && parentId != nodes[i].id){
+            const auto foundParent = m_shared->stagingNodeIndexById.find(parentId);
+            if(foundParent != m_shared->stagingNodeIndexById.end())
+                parentIdx = foundParent.value();
+        }
+        m_shared->stagingLinks[i].parentIdx = parentIdx;
+        if(parentIdx == __hidden_win32_accessibility::s_InvalidUiaNodeIdx){
+            m_shared->stagingLinks[i].prevSiblingIdx = stagedRootLast;
+            if(stagedRootLast == __hidden_win32_accessibility::s_InvalidUiaNodeIdx)
+                stagedRootFirst = idx;
+            else
+                m_shared->stagingLinks[stagedRootLast].nextSiblingIdx = idx;
+            stagedRootLast = idx;
+        }
+        else{
+            __hidden_win32_accessibility::UiaNodeLinks& pLinks = m_shared->stagingLinks[parentIdx];
+            m_shared->stagingLinks[i].prevSiblingIdx = pLinks.lastChildIdx;
+            if(pLinks.lastChildIdx == __hidden_win32_accessibility::s_InvalidUiaNodeIdx)
+                pLinks.firstChildIdx = idx;
+            else
+                m_shared->stagingLinks[pLinks.lastChildIdx].nextSiblingIdx = idx;
+            pLinks.lastChildIdx = idx;
+        }
+    }
+
     const u64 previousFocus = m_lastFocusId;
     const usize previousNodeCount = m_lastNodeCount;
     {
         const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        m_shared->nodes.clear();
-        m_shared->nodes.reserve(nodes.size());
-        for(const AccessibilityNodeData& node : nodes)
-            m_shared->nodes.push_back(node);
-        if(textStorage.empty())
-            m_shared->textStorage.clear();
-        else
-            m_shared->textStorage.assign(textStorage.data(), textStorage.size());
+        m_shared->nodes.swap(m_shared->stagingNodes);
+        m_shared->textStorage.swap(m_shared->stagingTextStorage);
+        m_shared->nodeIndexById.swap(m_shared->stagingNodeIndexById);
+        m_shared->links.swap(m_shared->stagingLinks);
+        m_shared->rootFirstChildIdx = stagedRootFirst;
+        m_shared->rootLastChildIdx = stagedRootLast;
         m_shared->focusedId = focusedId;
         m_shared->scaleX = scaleX;
         m_shared->scaleY = scaleY;
@@ -1257,36 +1408,52 @@ void Win32AccessibilityService::onTreePublished(
         const auto raiseStructure = reinterpret_cast<__hidden_win32_accessibility::UiaRaiseStructureChangedEventFn>(m_raiseStructureChangedEventProc);
         raiseStructure(m_rootProvider, StructureChangeType_ChildrenInvalidated, nullptr, 0);
     }
-    if(previousFocus != focusedId && focusedId != 0u && m_raiseAutomationEventProc){
-        IRawElementProviderFragment* focusedFragment = nullptr;
-        if(SUCCEEDED(__hidden_win32_accessibility::MakeNodeFragment(m_shared, focusedId, &focusedFragment)) && focusedFragment){
-            const auto raiseEvent = reinterpret_cast<__hidden_win32_accessibility::UiaRaiseAutomationEventFn>(m_raiseAutomationEventProc);
-            IRawElementProviderSimple* const simple = static_cast<__hidden_win32_accessibility::Win32UiaNodeProvider*>(focusedFragment);
-            raiseEvent(simple, UIA_AutomationFocusChangedEventId);
-            focusedFragment->Release();
+    raiseFocusChangedEvent(previousFocus, focusedId);
+}
+
+void Win32AccessibilityService::onFocusUpdated(const u64 focusedId){
+    if(!m_shared)
+        return;
+    const u64 previousFocus = m_lastFocusId;
+    {
+        const FutexGuard lock = AcquireFutex(m_shared->mutex);
+        if(m_shared->focusedId != 0u){
+            const auto prevIt = m_shared->nodeIndexById.find(m_shared->focusedId);
+            if(prevIt != m_shared->nodeIndexById.end() && prevIt.value() < m_shared->nodes.size())
+                m_shared->nodes[prevIt.value()].stateBits &= ~AccessibilityStateBits::Focused;
         }
+        if(focusedId != 0u){
+            const auto nextIt = m_shared->nodeIndexById.find(focusedId);
+            if(nextIt != m_shared->nodeIndexById.end() && nextIt.value() < m_shared->nodes.size())
+                m_shared->nodes[nextIt.value()].stateBits |= AccessibilityStateBits::Focused;
+        }
+        m_shared->focusedId = focusedId;
     }
+    m_lastFocusId = focusedId;
+
+    if(!m_uiaAvailable || !m_rootProvider || !m_clientsAreListeningProc)
+        return;
+    const auto clientsListening = reinterpret_cast<__hidden_win32_accessibility::UiaClientsAreListeningFn>(m_clientsAreListeningProc);
+    if(!clientsListening())
+        return;
+    raiseFocusChangedEvent(previousFocus, focusedId);
 }
 
 void Win32AccessibilityService::onAnnouncement(const AStringView text, const AccessibilityLiveMode::Enum politeness){
-    if(!m_uiaAvailable || !m_rootProvider || !m_clientsAreListeningProc || !m_raiseNotificationEventProc)
+    if(!m_uiaAvailable || !m_rootProvider || !m_clientsAreListeningProc || !m_raiseNotificationEventProc || !m_notificationActivityBstr)
         return;
     const auto clientsListening = reinterpret_cast<__hidden_win32_accessibility::UiaClientsAreListeningFn>(m_clientsAreListeningProc);
     if(!clientsListening())
         return;
     BSTR display = __hidden_win32_accessibility::AllocBstrFromUtf8(text);
-    BSTR activityId = SysAllocString(__hidden_win32_accessibility::s_NotificationActivityId);
-    if(display && activityId){
+    if(display){
         const auto raiseNotification = reinterpret_cast<__hidden_win32_accessibility::UiaRaiseNotificationEventFn>(m_raiseNotificationEventProc);
         const enum NotificationProcessing processing = politeness == AccessibilityLiveMode::Assertive
             ? NotificationProcessing_ImportantMostRecent
             : NotificationProcessing_All;
-        raiseNotification(m_rootProvider, NotificationKind_Other, processing, display, activityId);
-    }
-    if(display)
+        raiseNotification(m_rootProvider, NotificationKind_Other, processing, display, reinterpret_cast<BSTR>(m_notificationActivityBstr));
         SysFreeString(display);
-    if(activityId)
-        SysFreeString(activityId);
+    }
 }
 
 Optional<isize> DispatchWin32AccessibilityMessage(IAccessibilityService& service, const u32 message, const usize wParam, const isize lParam)noexcept{

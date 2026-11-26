@@ -22,7 +22,7 @@ type SkinnedMeshObjectVector = Vector<ModelSkinnedMeshObject>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("model")]
+[asset("model")]
 class Model{
     private SkeletonObjectVector m_skeletonObjects;
     private StaticMeshObjectVector m_staticMeshObjects;

@@ -32,7 +32,7 @@ class ShaderEntryPointRange{
     }
 }
 
-[arena, asset("vertex_shader")]
+[asset("vertex_shader")]
 class VertexShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -48,7 +48,7 @@ class VertexShader : IShader{
     }
 }
 
-[arena, asset("hull_shader")]
+[asset("hull_shader")]
 class HullShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -64,7 +64,7 @@ class HullShader : IShader{
     }
 }
 
-[arena, asset("domain_shader")]
+[asset("domain_shader")]
 class DomainShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -80,7 +80,7 @@ class DomainShader : IShader{
     }
 }
 
-[arena, asset("geometry_shader")]
+[asset("geometry_shader")]
 class GeometryShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -96,7 +96,7 @@ class GeometryShader : IShader{
     }
 }
 
-[arena, asset("pixel_shader")]
+[asset("pixel_shader")]
 class PixelShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -112,7 +112,7 @@ class PixelShader : IShader{
     }
 }
 
-[arena, asset("compute_shader")]
+[asset("compute_shader")]
 class ComputeShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -128,7 +128,7 @@ class ComputeShader : IShader{
     }
 }
 
-[arena, asset("amplification_shader")]
+[asset("amplification_shader")]
 class AmplificationShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -144,7 +144,7 @@ class AmplificationShader : IShader{
     }
 }
 
-[arena, asset("mesh_shader")]
+[asset("mesh_shader")]
 class MeshShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -160,7 +160,7 @@ class MeshShader : IShader{
     }
 }
 
-[arena, asset("ray_generation_shader")]
+[asset("ray_generation_shader")]
 class RayGenerationShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -176,7 +176,7 @@ class RayGenerationShader : IShader{
     }
 }
 
-[arena, asset("any_hit_shader")]
+[asset("any_hit_shader")]
 class AnyHitShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -192,7 +192,7 @@ class AnyHitShader : IShader{
     }
 }
 
-[arena, asset("closest_hit_shader")]
+[asset("closest_hit_shader")]
 class ClosestHitShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -208,7 +208,7 @@ class ClosestHitShader : IShader{
     }
 }
 
-[arena, asset("miss_shader")]
+[asset("miss_shader")]
 class MissShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -224,7 +224,7 @@ class MissShader : IShader{
     }
 }
 
-[arena, asset("intersection_shader")]
+[asset("intersection_shader")]
 class IntersectionShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;
@@ -240,7 +240,7 @@ class IntersectionShader : IShader{
     }
 }
 
-[arena, asset("callable_shader")]
+[asset("callable_shader")]
 class CallableShader : IShader{
     private ShaderEntryPointRange m_entryPoint;
     private Vector<u8> m_bytecode;

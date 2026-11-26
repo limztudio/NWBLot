@@ -71,7 +71,6 @@ class FrameGraphReflectionResolveResult{
     public ReflectionCompositeInputs reflectionCompositeInputs;
 }
 
-[modular]
 class FrameGraphReflectionResolve : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut GraphicsRuntime m_graphics;

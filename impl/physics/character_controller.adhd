@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> CharacterGroundState{
     OnGround = 0u,
     OnSteepGround = 1u,
@@ -16,7 +15,6 @@ enum<u8> CharacterGroundState{
     InAir = 3u
 }
 
-[reflect]
 enum<u8> CharacterShapeType{
     Capsule = 0u,
     Box = 1u,
@@ -25,7 +23,6 @@ enum<u8> CharacterShapeType{
     kCount
 }
 
-[reflect]
 enum<u8> CharacterControllerEventType{
     Landed = 0u,
     LeftGround = 1u,

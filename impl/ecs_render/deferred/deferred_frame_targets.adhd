@@ -209,7 +209,6 @@ class DeferredLaggedLightingHistoryResources{
     }
 }
 
-[modular]
 class DeferredFrameTargets{
     public u32 width = 0u;
     public u32 height = 0u;

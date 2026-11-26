@@ -33,6 +33,10 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     m_cursor.advance();
 
     b8 seenExternFlags = false;
+    b8 seenExplicitArena = false;
+    SourceSpan explicitArenaSpan{};
+    b8 seenExplicitReflect = false;
+    SourceSpan explicitReflectSpan{};
     for(const ParsedAttribute& attr : attributes){
         b8 matchedAttr = false;
         if(!tryParseExternAttribute(attr, decl->cppExportName, decl->requiredHeader, isExtern, matchedAttr))
@@ -42,15 +46,19 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
 #define NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE(attrName, declField) \
         if(!matchedAttr && attr.name == attrName && attr.arguments.empty()){ \
             decl->declField = true; \
+            if(attr.name == "arena"){ seenExplicitArena = true; explicitArenaSpan = { attr.line, attr.column }; } \
+            if(attr.name == "reflect"){ seenExplicitReflect = true; explicitReflectSpan = { attr.line, attr.column }; } \
             matchedAttr = true; \
         }
-#define NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE(attrName, declField, impliesReflect, argErrorMessage) \
+#define NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE(attrName, declField, impliesArena, impliesReflect, argErrorMessage) \
         if(!matchedAttr && attr.name == attrName){ \
             if(attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::StringLiteral){ \
                 m_cursor.error(attr.line, attr.column, argErrorMessage); \
                 return nullptr; \
             } \
             decl->declField = attr.arguments[0].text; \
+            if constexpr(impliesArena) \
+                decl->isArenaOwner = true; \
             if constexpr(impliesReflect) \
                 decl->isReflect = true; \
             matchedAttr = true; \
@@ -105,7 +113,17 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
             if(!prohibitedErr.empty())
                 m_cursor.error(attr.line, attr.column, prohibitedErr);
             else
-                m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'modular', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
+            return nullptr;
+        }
+    }
+    if(!isExtern){
+        if(seenExplicitArena && (!decl->assetTypeName.empty() || !decl->systemTypeName.empty() || !decl->subsystemTypeName.empty() || !decl->componentTypeName.empty())){
+            m_cursor.error(explicitArenaSpan.line, explicitArenaSpan.column, "'arena' attribute is prohibited on 'asset', 'system', 'subsystem', and 'component' classes; arena ownership is decided automatically by the adhd compiler");
+            return nullptr;
+        }
+        if(seenExplicitReflect && (decl->isSerialize || !decl->assetTypeName.empty() || !decl->componentTypeName.empty())){
+            m_cursor.error(explicitReflectSpan.line, explicitReflectSpan.column, "'reflect' attribute is prohibited on 'serialize', 'asset', and 'component' classes; reflection is decided automatically by the adhd compiler");
             return nullptr;
         }
     }
@@ -284,8 +302,13 @@ b8 DeclParser::parseClassMethodOrOperatorTail(
 
     if(!applyCallableAttributes(attributes, *method))
         return false;
-    if(method->isReflect)
+    if(method->isReflect){
+        if(access == AccessSpecifier::Public){
+            m_cursor.error(span.line, span.column, "'reflect' attribute is prohibited on 'public' methods; public methods in reflected classes are reflected automatically");
+            return false;
+        }
         classDecl.isReflect = true;
+    }
     if(!parseMethodParamsAndValidateArity(*method, span))
         return false;
 
@@ -500,6 +523,14 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             m_cursor.error(attr.line, attr.column, "unsupported attribute on field; expected 'transient' or 'reflect'");
             return false;
         }
+    }
+    if(field->isReflect && field->access == AccessSpecifier::Public){
+        m_cursor.error(span.line, span.column, "'reflect' attribute is prohibited on 'public' fields; public fields in reflected classes are reflected automatically");
+        return false;
+    }
+    if(field->isReflect && field->isTransient){
+        m_cursor.error(span.line, span.column, "'reflect' and 'transient' attributes cannot be combined on the same field");
+        return false;
     }
 
     if(m_cursor.match(TokenType::Equal)){

@@ -27,7 +27,7 @@ type LoadedComponentVector = Vector<UniquePtr<IComponent>>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("entity")]
+[asset("entity")]
 class EntityAsset{
     private Name m_name = s_NameNone;
     private ComponentRefVector m_components;
@@ -52,7 +52,7 @@ class EntityAsset{
     }
 }
 
-[arena, asset("project")]
+[asset("project")]
 class ProjectAsset{
     private SceneRef m_startScene;
 
@@ -68,7 +68,7 @@ class ProjectAsset{
     }
 }
 
-[arena, asset("scene")]
+[asset("scene")]
 class SceneAsset{
     private SubsystemRefVector m_subsystems;
     private EntityRefVector m_entities;
@@ -111,7 +111,6 @@ class LoadedSceneContents : MoveOnly{
     public usize namedEntityCount = 0u;
 }
 
-[modular]
 class InstantiatedSceneEntities{
     public Vector<EntityID> entities;
     public Vector<Name> names;
@@ -125,7 +124,6 @@ class InstantiatedSceneEntities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class ActiveSceneSubsystems : MoveOnly{
     private LoadedSceneContents m_contents;
 

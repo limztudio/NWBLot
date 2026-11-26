@@ -11,7 +11,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class RefractionStatisticsReadbackGraphTask : MoveOnly{
     public BufferHandle source;
     public BufferHandle destination;
@@ -58,7 +57,6 @@ class RefractionClassifyTilesGraphTask{
     }
 }
 
-[modular]
 class RefractionResolveGraphTask{
     private mut RendererRayTracingSystem m_raytracingSystem;
     private in DeferredFrameTargets m_targets;
@@ -147,7 +145,6 @@ class FrameGraphRefractionResolveInputs{
     }
 }
 
-[modular]
 class FrameGraphRefractionResolve : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut GraphicsRuntime m_graphics;

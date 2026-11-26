@@ -107,27 +107,23 @@ const usize s_LightSpaceFixedResourceUseCount = 5u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> SoftwareShadowBackend{
     Automatic,
     SoftwareTrace,
     LightSpace
 }
 
-[reflect]
 enum<u8> SoftwareShadowCoverage{
     Reference,
     FittedVolume
 }
 
-[reflect]
 enum<u8> SoftwareShadowBlockerSearch{
     ReferenceGrid9,
     CompactCross5,
     Center1
 }
 
-[reflect]
 enum<u8> SoftwareShadowCaptureCadence{
     EveryFrame,
     ReuseOneFrame,

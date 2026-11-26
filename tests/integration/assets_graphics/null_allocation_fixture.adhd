@@ -33,7 +33,7 @@ class ConstructorMarker{
     }
 }
 
-[arena, asset("tests/metadata_registry/null_allocation")]
+[asset("tests/metadata_registry/null_allocation")]
 class NullAllocatedAsset : NullAllocation{
     private ConstructorMarker m_marker;
     public b8 loadBinary(in Span<u8> bytes){

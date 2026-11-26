@@ -83,7 +83,7 @@ class EcsJointBreakEvent{
     public EntityID entityB = s_InvalidEntityId;
 }
 
-[arena, component("character_controller")]
+[component("character_controller")]
 class CharacterControllerComponent{
     public CharacterControllerDef def;
     public CharacterController controller;
@@ -94,7 +94,7 @@ class CharacterControllerComponent{
     public b8 dirty = true;
 }
 
-[arena, component("vehicle")]
+[component("vehicle")]
 class VehicleComponent{
     public VehicleEngineDef engine;
     public Vector<VehicleWheelDef> wheels;
@@ -113,7 +113,7 @@ class VehicleComponent{
     public b8 dirty = true;
 }
 
-[arena, component("ragdoll")]
+[component("ragdoll")]
 class RagdollComponent{
     public Vector<RagdollBoneDef> bones;
     public RagdollInstance instance;
@@ -138,21 +138,21 @@ class RagdollComponent{
     public b8 dirty = true;
 }
 
-[arena, component("fluid_volume")]
+[component("fluid_volume")]
 class FluidVolumeComponent{
     public FluidVolume volume;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
 }
 
-[arena, component("force_field")]
+[component("force_field")]
 class ForceFieldComponent{
     public ForceField field;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
 }
 
-[arena, component("articulation")]
+[component("articulation")]
 class ArticulationComponent{
     public Vector<ArticulationLinkDef> links;
     public Vector<Name> proxyEntityNames;
@@ -185,7 +185,7 @@ class ArticulationComponent{
     public b8 dirty = true;
 }
 
-[arena, component("soft_body")]
+[component("soft_body")]
 class SoftBodyComponent{
     public SoftBody softBody;
     public Vector<Name> attachmentBodyEntityNames;
@@ -194,7 +194,7 @@ class SoftBodyComponent{
     public b8 dirty = false;
 }
 
-[arena, component("gpu_render_transform_export")]
+[component("gpu_render_transform_export")]
 class GpuRenderTransformExportComponent{
     public b8 enabled = true;
     public u32 instanceIndex = 0u;

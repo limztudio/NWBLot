@@ -105,6 +105,11 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         ("[layout(8)] class Item{}", "prohibited"),
         ("[ordered] class Item{}", "prohibited"),
         ("[move_only] class Item{}", "prohibited"),
+        ("[modular] class Item{}", "prohibited"),
+        ('[arena, asset("a")] class Item{}', "prohibited"),
+        ("[reflect] enum<u8> E{ A = 0 }", "prohibited"),
+        ("[reflect] interface I{ void f(); }", "prohibited"),
+        ("[serialize, reflect] class Item{ public u32 v = 0u; }", "prohibited"),
         ("namespace_wrapper NWB;", "reserved"),
         ("namespace_wrapper A; namespace_wrapper B;", "one namespace_wrapper"),
         ("class Item{ private i32 hidden; } static_assert(offset_of<Item>(hidden) == 0u);", "accessible instance field"),
@@ -386,7 +391,7 @@ def check_asset_cook_roles(compiler: pathlib.Path, root: pathlib.Path) -> None:
         if (result.returncode == 0) != success or expected not in actual:
             raise AssertionError(f"unexpected asset role result: {actual}")
 
-    asset = '[arena, asset("sample")] class Sample{ public b8 loadBinary(in Span<u8> bytes); }\n'
+    asset = '[asset("sample")] class Sample{ public b8 loadBinary(in Span<u8> bytes); }\n'
     document = "[cook_document] AssetMetadataParseResult Parse(mut AssetDocumentMetadataParseContext context){ return AssetMetadataParseResult::Unsupported; }"
     prepare = "[volume_prepare] b8 Prepare(mut CookVolumePrepareContext context){ return true; }"
     setup = "[cook_setup] void Setup(){}"
@@ -403,7 +408,7 @@ def check_asset_cook_roles(compiler: pathlib.Path, root: pathlib.Path) -> None:
     entry = 'class Entry{ public Name path = s_NameNone; }\nconst StringView s_Label = "Sample meta";\n'
     reader = "Expected<Entry> Read(in Name path, in Path file, in MetascriptValue value){ Entry entry; return entry; }\n"
     builder = '[cook_entry("sample", s_Label, Read, document_and_value, quiet)] Expected<Sample> Build(in Entry entry){ Sample result(entry.path); return result; }\n'
-    subsystem = '[arena, subsystem("group")] class Group{ public AssetRef<Sample> owner; }\n'
+    subsystem = '[subsystem("group")] class Group{ public AssetRef<Sample> owner; }\n'
     registration = "register_asset Group using TypedAssetRegistration<IAsset, Group, Entry>; "
     check(asset + subsystem + registration, "Group, Entry> s_GroupAssetRegistrar", True)
     check(asset + subsystem + "register_asset Group using u32;", "requires a codec registrar", False)

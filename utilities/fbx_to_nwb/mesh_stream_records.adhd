@@ -35,14 +35,12 @@ const StringView s_WriteNwbModelContext = "Failed to write NWB model";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> NormalMode{
     Imported,
     Smooth,
     Regenerate
 }
 
-[reflect]
 enum<u8> SourceTangentMode{
     Imported,
     GeneratedUv,

@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class RendererReflectionPipelines : NoCopy{
     public RendererReflectionPipelines(mut GraphicsRuntime graphics, mut RendererShaderSystem shaders){
         this.m_graphics = graphics;

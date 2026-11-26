@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class GraphicsPrefixTimingResolver : NoCopy{
     private in RendererFramePipeline m_pipeline;
 
@@ -50,7 +49,6 @@ class SurfelCausticsMergeValidationResult{
     public b8 laggedLightingHistoryFollowsPresentation = false;
 }
 
-[modular]
 class OpaqueEmulationMergeValidator : NoCopy{
     private in RendererFramePipeline m_pipeline;
 
@@ -71,7 +69,6 @@ class OpaqueEmulationMergeValidator : NoCopy{
     )const;
 }
 
-[modular]
 class SurfelCausticsMergeValidator : NoCopy{
     private in RendererFramePipeline m_pipeline;
 

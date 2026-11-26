@@ -47,7 +47,6 @@ class RendererAvboitTaskGraphTimingTickets{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class RendererAvboitSystem : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private mut RendererAvboitState m_avboitState;

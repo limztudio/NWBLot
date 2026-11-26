@@ -34,7 +34,6 @@ const StringView s_SkinNumericListValueKind = "numeric";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> MetadataF32ValueFailure{
     NotNumeric,
     NonFinite,
@@ -42,7 +41,6 @@ enum<u8> MetadataF32ValueFailure{
     WrongComponentCount
 }
 
-[reflect]
 enum<u8> MetadataU32ValueFailure{
     NotNumeric,
     NonIntegerOrNegative,
@@ -50,14 +48,12 @@ enum<u8> MetadataU32ValueFailure{
     WrongComponentCount
 }
 
-[reflect]
 enum<u8> SkinInfluenceWeightFailure{
     NegativeWeight,
     ZeroTotalWeight,
     InvalidNormalized
 }
 
-[reflect]
 enum<u8> SourceIndexStreamFailure{
     None,
     EmptyOrNotMultipleOfThree,

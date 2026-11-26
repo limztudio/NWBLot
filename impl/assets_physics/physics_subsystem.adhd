@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, subsystem("physics_subsystem")]
+[subsystem("physics_subsystem")]
 class PhysicsSubsystem{
     public AssetRef<ComputeShader> broadphaseAabbCs;
     public AssetRef<ComputeShader> narrowphaseCs;

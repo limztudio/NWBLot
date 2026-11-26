@@ -50,7 +50,6 @@ class PendingSkinningInstance : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class MeshSkinningRuntimeCache : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private in AssetManager m_assets;

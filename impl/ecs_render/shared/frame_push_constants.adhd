@@ -76,7 +76,6 @@ enum<u8> RendererTaskTimingFeedbackCollectionAction{
     kCount = 3u
 }
 
-[reflect]
 enum<u8> SharedComputeEmulationPhase{
     Generate = 0u,
     Raster = 1u

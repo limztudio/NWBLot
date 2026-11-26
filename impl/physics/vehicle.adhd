@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> VehicleDifferentialMode{
     Open = 0u,
     LimitedSlip = 1u,
@@ -128,7 +127,6 @@ class VehicleInput{
     public i32 requestedGear = 1;
 }
 
-[reflect]
 enum<u8> VehicleTelemetryEventType{
     WheelGrounded = 0u,
     WheelAirborne = 1u,

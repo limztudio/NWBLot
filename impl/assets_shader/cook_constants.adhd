@@ -107,7 +107,6 @@ const StringView s_MeshComputeImplicitDefineText = "NWB_MESH_SHADER_EMULATION_CO
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> ShaderOptimizationLevel{
     None,
     Default,
@@ -116,7 +115,6 @@ enum<u8> ShaderOptimizationLevel{
     kCount
 }
 
-[reflect]
 enum<u8> IncludeKind{
     Relative,
     Standard,
@@ -130,7 +128,6 @@ enum<u8> ShaderDefineNameStatus{
     Invalid
 }
 
-[reflect]
 enum<u8> VariantSignatureSegmentError{
     None,
     EmptySegment,

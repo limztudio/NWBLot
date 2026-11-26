@@ -36,7 +36,7 @@ class ShadowVisibilityGraphContext{
     }
 }
 
-[modular, friend(RendererFramePipeline, DeferredFrameTopologyValidator, FrameExecuteTimingState, FrameExecuteStateLifecycleSet, ShadowVisibilityMergeValidator)]
+[friend(RendererFramePipeline, DeferredFrameTopologyValidator, FrameExecuteTimingState, FrameExecuteStateLifecycleSet, ShadowVisibilityMergeValidator)]
 class ShadowVisibilityGraphCoordinator : NoCopy{
     private GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     private GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;

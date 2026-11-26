@@ -248,7 +248,6 @@ class MeshSkinningFrameResourceImports : NoCopy{
     }
 }
 
-[modular]
 class MeshSkinningFramePlanBuilder : NoCopy{
     private mut MeshSkinningSystem m_system;
     private mut GpuTaskGraph m_graph;

@@ -16,7 +16,6 @@ const usize s_MinimumShadowMaterialTypedByteCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class ShadowMaterialContextPreparer : NoCopy{
     private mut RendererRayTracingSystem m_system;
 

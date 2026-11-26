@@ -102,7 +102,6 @@ class AvboitGeometryPreparationResult{
     public b8 sampledTexturesCollected = false;
 }
 
-[modular]
 class AvboitGeneratedGeometryReuse : NoCopy{
     private Vector<MaterialPassDrawItem> m_draws;
     private Vector<InstanceGpuData> m_instances;

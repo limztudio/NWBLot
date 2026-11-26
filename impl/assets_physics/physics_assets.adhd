@@ -95,7 +95,7 @@ class CollisionLayerMatrix{
     }
 }
 
-[arena, asset("physics_material")]
+[asset("physics_material")]
 class PhysicsMaterialAsset{
     public SurfaceMaterial material;
 
@@ -111,7 +111,7 @@ class PhysicsMaterialAsset{
     }
 }
 
-[arena, asset("collision_layer_matrix")]
+[asset("collision_layer_matrix")]
 class CollisionLayerMatrixAsset{
     public CollisionLayerMatrix matrix;
 
@@ -139,7 +139,7 @@ class CollisionLayerMatrixAsset{
     }
 }
 
-[arena, asset("convex_hull")]
+[asset("convex_hull")]
 class ConvexHullAsset{
     public HullShape hull;
 
@@ -155,7 +155,7 @@ class ConvexHullAsset{
     }
 }
 
-[arena, asset("collision_mesh")]
+[asset("collision_mesh")]
 class CollisionMeshAsset{
     public MeshShape mesh;
 
@@ -171,7 +171,7 @@ class CollisionMeshAsset{
     }
 }
 
-[arena, asset("heightfield")]
+[asset("heightfield")]
 class HeightfieldAsset{
     public HeightfieldShape heightfield;
 
@@ -187,7 +187,7 @@ class HeightfieldAsset{
     }
 }
 
-[arena, asset("compound_hull")]
+[asset("compound_hull")]
 class CompoundHullAsset{
     public Vector<HullShape> hulls;
 

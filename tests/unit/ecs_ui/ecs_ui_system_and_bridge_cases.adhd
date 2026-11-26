@@ -75,7 +75,7 @@ class PaintSlotFixture{
     }
 }
 
-[arena, system("ui_unwind_probe")]
+[system("ui_unwind_probe")]
 class UiUnwindProbeSystem{
     public b8 failUpdate;
     public u32 updates = 0u;
@@ -100,7 +100,7 @@ class UiUnwindProbeSystem{
     }
 }
 
-[arena, system("ui_unwind_dependent")]
+[system("ui_unwind_dependent")]
 class UiUnwindDependentSystem{
     public u32 updates = 0u;
 

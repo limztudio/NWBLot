@@ -14,7 +14,6 @@
 
 const StringView s_GpuRendererContext = "GpuRenderer";
 
-[modular]
 class GpuRendererState : NoCopy{
     public mut GraphicsRuntime m_graphics;
     public mut AssetManager m_assets;

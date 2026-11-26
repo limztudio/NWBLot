@@ -18,10 +18,10 @@ NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("info",    Info,    "NWB_LOGGER_INFO(",    "NWB_
 NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("warning", Warning, "NWB_LOGGER_WARNING(", "NWB_LOGGER_CRITICAL_WARNING(",  "NWB_LOGGER_WARNING(",     "NWB_LOGGER_CRITICAL_WARNING(")
 NWB_ADHD_EXPORT_DIAGNOSTIC_KIND("error",   Error,   "NWB_LOGGER_ERROR(",   "NWB_LOGGER_FATAL(",             "NWB_LOGGER_ERROR(",       "NWB_LOGGER_FATAL(")
 
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("asset",     assetTypeName,     true,  "'[asset(\"...\")]' requires a single string literal argument")
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("system",    systemTypeName,    false, "'[system(\"...\")]' requires a single string literal argument")
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("subsystem", subsystemTypeName, false, "'[subsystem(\"...\")]' requires a single string literal argument")
-NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("component", componentTypeName, true,  "'[component(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("asset",     assetTypeName,     true, true,  "'[asset(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("system",    systemTypeName,    true, false, "'[system(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("subsystem", subsystemTypeName, true, false, "'[subsystem(\"...\")]' requires a single string literal argument")
+NWB_ADHD_EXPORT_CLASS_STRING_ATTRIBUTE("component", componentTypeName, true, true,  "'[component(\"...\")]' requires a single string literal argument")
 
 NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE("asset", assetTypeName)
 

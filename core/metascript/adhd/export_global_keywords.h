@@ -73,14 +73,10 @@ NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("extensible", isExtensible)
 NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE("ordered", "'ordered' attribute is prohibited in adhd; member reordering is decided automatically by the adhd compiler")
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("reflect",   isReflect)
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("arena",     isArenaOwner)
-NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("modular",   isModular)
+NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE("modular", "'modular' attribute is prohibited in adhd; out-of-line class methods are decided automatically by the adhd compiler")
 
 NWB_ADHD_EXPORT_FIELD_ATTRIBUTE("transient", isTransient, false)
 NWB_ADHD_EXPORT_FIELD_ATTRIBUTE("reflect",   isReflect,   true)
-
-NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE("reflect")
-
-NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE("reflect")
 
 NWB_ADHD_EXPORT_DIAGNOSTIC_ATTRIBUTE("essential", isEssential)
 

@@ -32,7 +32,6 @@ class FrameGraphTransparentCsgTaskInputs{
 }
 
 
-[modular]
 class FrameGraphTransparentCsgTasks : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererAvboitSystem m_avboitSystem;

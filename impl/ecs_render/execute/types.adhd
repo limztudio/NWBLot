@@ -23,7 +23,6 @@ const usize s_SurfelGiComputeScratchBufferCapacity = 6u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> DeferredGraphicsPrefixTimingSlot{
     MeshViewSetup,
     SceneShadingSetup,
@@ -36,7 +35,6 @@ enum<u8> DeferredGraphicsPrefixTimingSlot{
     kCount
 }
 
-[reflect]
 enum<u8> LaggedLightingReport{
     Unreported,
     NoDedicatedAsyncCompute,

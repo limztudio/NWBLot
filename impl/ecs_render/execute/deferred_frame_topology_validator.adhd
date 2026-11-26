@@ -19,7 +19,6 @@ class DeferredFrameTopologyResult{
     public Optional<GpuPhysicalQueueInfo> laggedLightingHistoryQueue;
 }
 
-[modular]
 class DeferredFrameTopologyValidator : NoCopy{
     private in RendererFramePipeline m_pipeline;
 

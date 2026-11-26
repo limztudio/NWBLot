@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular, friend(ShadowMaterialContextPreparer, RefractionRenderer)]
+[friend(ShadowMaterialContextPreparer, RefractionRenderer)]
 class RendererRayTracingSystem : NoCopy{
     private mut World m_world;
     private mut GraphicsRuntime m_graphics;

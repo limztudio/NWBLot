@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, subsystem("ui_subsystem")]
+[subsystem("ui_subsystem")]
 class UiSubsystem{
     public Vector<AssetRef<FontAtlas>> basicFonts;
     public AssetRef<UiSkin> basicSkin;

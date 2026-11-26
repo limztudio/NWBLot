@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, subsystem("transparent_subsystem")]
+[subsystem("transparent_subsystem")]
 class TransparentSubsystem{
     public AssetRef<ComputeShader> avboitDepthWarpCs;
     public AssetRef<ComputeShader> avboitIntegrateCs;

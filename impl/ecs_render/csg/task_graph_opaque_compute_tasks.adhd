@@ -14,7 +14,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class OpaqueCsgReceiverComputeEmulationGraphTaskPayload{
     public mut RendererMaterialSystem materialSystem;
     public in DeferredFrameTargets targets;
@@ -52,7 +51,6 @@ class OpaqueCsgReceiverComputeEmulationGraphTaskPayload{
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
 }
 
-[modular]
 class OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     public mut GraphicsRuntime graphics;
     public mut Optional<GpuTimingMeasure> opaqueCsgTiming;

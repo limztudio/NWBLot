@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class PreparedSceneSwBvhTraversal : NoCopy{
     private Vector<PreparedSceneSwBvhMesh> m_preparedSceneSwBvhMeshes;
     private u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;

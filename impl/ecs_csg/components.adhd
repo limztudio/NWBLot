@@ -9,7 +9,7 @@ type SkinnedCsgMeshComponent = CsgMeshReceiverComponent<1u>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, component("csg_receiver")]
+[component("csg_receiver")]
 class CsgReceiverComponent{
     public Name receiverGroup = s_NameNone;
     public b8 enabled = true;
@@ -19,7 +19,7 @@ class CsgReceiverComponent{
     public CsgReceiverComponent asReceiver()const{ return this; }
 }
 
-[arena, component("csg_mesh_receiver")]
+[component("csg_mesh_receiver")]
 class CsgMeshReceiverComponent<const u8 Kind>{
     public CsgReceiverComponent asReceiver()const{
         CsgReceiverComponent out;
@@ -36,7 +36,7 @@ class CsgMeshReceiverComponent<const u8 Kind>{
     public b8 affectTransparentPass = true;
 }
 
-[arena, component("csg_cutter")]
+[component("csg_cutter")]
 class CsgCutterComponent{
     public Name receiverGroup = s_NameNone;
     public Name shapeType = s_NameNone;

@@ -34,7 +34,6 @@ class FrameGraphSoftwareBvhBuildStateResult{
 }
 
 
-[modular]
 class FrameGraphSoftwareBvhBuildStateImporter : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererMeshSystem m_meshSystem;
@@ -60,7 +59,6 @@ class FrameGraphTraceGeometryResult{
 }
 
 
-[modular]
 class FrameGraphTraceGeometryImporter : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;

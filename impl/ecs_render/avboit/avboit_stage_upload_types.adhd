@@ -43,7 +43,6 @@ class FrameGraphAvboitStageInputs{
     }
 }
 
-[modular]
 class FrameGraphAvboitPassUploadChain : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererMaterialSystem m_materialSystem;

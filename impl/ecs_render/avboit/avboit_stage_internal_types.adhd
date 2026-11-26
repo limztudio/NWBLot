@@ -49,7 +49,6 @@ class FrameGraphAvboitStageTiming{
     }
 }
 
-[modular]
 class FrameGraphAvboitStage : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut GraphicsRuntime m_graphics;

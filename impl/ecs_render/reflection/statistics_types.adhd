@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> ReflectionTraceMode{
     Disabled,
     ScreenSpace,
@@ -16,7 +15,6 @@ enum<u8> ReflectionTraceMode{
     Hybrid
 }
 
-[reflect]
 enum<u8> ReflectionDebugView{
     None,
     TraceSource,

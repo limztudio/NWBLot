@@ -666,10 +666,6 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         reportError(errors, classDecl.span, "'[arena]' class cannot be marked '[serialize]' (binary-serialized structs cannot own an arena)");
         ok = false;
     }
-    if(classDecl.isModular && !classDecl.templateParams.empty()){
-        reportError(errors, classDecl.span, "'[modular]' class cannot be a template");
-        ok = false;
-    }
     if(!classDecl.isExtern && hasMoveOnlyBase){
         if(classDecl.isArenaOwner || classDecl.isSerialize || classDecl.recordAlignment || !classDecl.assetTypeName.empty()
             || !classDecl.systemTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.componentTypeName.empty()){
@@ -686,10 +682,6 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     if(!classDecl.assetTypeName.empty()){
-        if(!classDecl.isArenaOwner){
-            reportError(errors, classDecl.span, "'[asset(\"...\")]' class must be marked '[arena, asset(\"...\")]'");
-            ok = false;
-        }
         if(classDecl.isSerialize){
             reportError(errors, classDecl.span, "'[asset(\"...\")]' class cannot be marked '[serialize]' (assets implement 'TypedAsset<T>' with 'loadBinary')");
             ok = false;
@@ -701,10 +693,6 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     if(!classDecl.systemTypeName.empty()){
-        if(!classDecl.isArenaOwner){
-            reportError(errors, classDecl.span, "'[system(\"...\")]' class must be marked '[arena, system(\"...\")]'");
-            ok = false;
-        }
         if(classDecl.isSerialize){
             reportError(errors, classDecl.span, "'[system(\"...\")]' class cannot be marked '[serialize]' (systems implement 'ISystem')");
             ok = false;
@@ -720,11 +708,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     if(!classDecl.subsystemTypeName.empty()){
-        if(!classDecl.isArenaOwner){
-            reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class must be marked '[arena, subsystem(\"...\")]'");
-            ok = false;
-        }
-        if(classDecl.isSerialize || classDecl.isModular || !classDecl.assetTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
+        if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.templateParams.empty() || !classDecl.implementedInterfaces.empty() || !classDecl.methods.empty()){
             reportError(errors, classDecl.span, "'[subsystem(\"...\")]' class may only declare 'public' AssetRef<T> or Vector<AssetRef<T>> fields");
             ok = false;
         }
@@ -750,10 +734,6 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     if(!classDecl.componentTypeName.empty()){
-        if(!classDecl.isArenaOwner){
-            reportError(errors, classDecl.span, "'[component(\"...\")]' class must be marked '[arena, component(\"...\")]'");
-            ok = false;
-        }
         if(classDecl.isSerialize || !classDecl.assetTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.systemTypeName.empty()){
             reportError(errors, classDecl.span, "'[component(\"...\")]' cannot be combined with '[serialize]', '[asset(\"...\")]', '[subsystem(\"...\")]', or '[system(\"...\")]'");
             ok = false;
@@ -1068,15 +1048,9 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         if(!checkCallableSignature(&classDecl, *m, errors))
             ok = false;
         if(!m->hasBody){
-            if(!classDecl.isImported && !classDecl.isExtern && !m->isExtern && classDecl.assetTypeName.empty() && classDecl.systemTypeName.empty()){
-                if(classDecl.isModular){
-                    if(!m->templateParams.empty() || m->hasSynthesizedArenaParams){
-                        reportError(errors, m->span, "templated or arena-polymorphic method in '[modular]' class must define its body in the declaring class file");
-                        ok = false;
-                    }
-                }
-                else{
-                    reportError(errors, m->span, "declared class method has no implementation body");
+            if(!classDecl.isImported && !classDecl.isExtern && !m->isExtern){
+                if(!classDecl.templateParams.empty() || !m->templateParams.empty() || m->hasSynthesizedArenaParams){
+                    reportError(errors, m->span, "templated or arena-polymorphic class method must define its body in the declaring class file");
                     ok = false;
                 }
             }

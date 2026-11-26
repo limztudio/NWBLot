@@ -51,7 +51,6 @@ class TransparentPassPrepareDesc{
     }
 }
 
-[modular]
 class RendererMaterialSystem : IPreparedMaterialLookup, MoveOnly{
     private mut World m_world;
     private mut GraphicsRuntime m_graphics;

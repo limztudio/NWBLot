@@ -145,7 +145,6 @@ class LightSpaceShadowState : NoCopy{
     public b8 m_csgRequired = false;
 }
 
-[modular]
 class LightSpaceShadowRecorder{
     public b8 views(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
     public b8 cull(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;

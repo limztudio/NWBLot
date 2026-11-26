@@ -29,11 +29,29 @@ ctest --preset linux-clang-dbg -R '^nwb_os_x11_clipboard_isolated$' --output-on-
 
 Wayland additionally needs the existing `wayland-client`, `xkbcommon`, `wayland-scanner`, and `wayland-protocols` dependencies. The normal Linux preset discovers them; pass `-D NWB_ENABLE_WAYLAND=OFF` to the launcher build command for the X11-only build. Primary-selection XML is discovered separately from xdg-shell; its absence keeps the core Wayland clipboard enabled and reports primary selection unsupported.
 
+## Accessibility service
+
+`Frame` owns `IAccessibilityService`, which clients borrow on the native event thread. `publishTree` copies node records and their shared text storage, along with focus, version, and scale. It rejects more than 4,096 nodes or 512 KiB of text, invalid node IDs, roles, live modes, text ranges, geometry, or nonpositive/nonfinite scales. `announce` requires nonempty bounded text and a polite or assertive live mode. Actions are polled on the owner thread from a queue capped at 64 entries.
+
+Capabilities report whether the backend offers a native tree, announcements, and actions. Win32 reports these according to UI Automation availability. The fallback used by Linux Frame backends reports them unsupported; successful tracked publication alone does not establish a native accessibility bridge.
+
+## Cursor service
+
+`Frame` owns `ICursorService`; clients borrow it on the native event thread. `setCursor` rejects invalid shapes and calls from another thread. It records a shape after the backend accepts it, and repeated requests for an already applied shape succeed without repeating the native operation. Check `capabilities()` for the backend and its shape and hide support rather than interpreting a successful request as proof of native support.
+
+Win32 uses system cursors for the client area and handles `WM_SETCURSOR`. X11 creates cursor-font shapes and a blank cursor for hiding, reporting hide support when the blank cursor was created. Wayland reports shape selection unsupported and hide supported: hiding takes effect when a pointer and enter serial are available, including on a later pointer-enter event. The unsupported fallback reports no native cursor capabilities.
+
 ## Text-input sessions
 
 `Frame` owns `ITextInputService` beside the clipboard service. Clients borrow the service on the native event thread and retain only `TextInputSessionToken { service, generation }`. A service admits one active session. `begin` copies a UTF-8 surrounding snapshot, byte-indexed selection, and native-client-pixel caret rectangle. `updateSurrounding` copies replacement snapshots, preserves `InputMethod` versus `Other` change provenance for native feedback, and increments a service revision; `surroundingRevision(token)` lets an adapter fence a delayed native deletion against the exact model snapshot it published. `updateCaret` moves native composition/candidate placement. Capabilities report direct commits, preedit, surrounding support, and native deletion separately.
 
 `poll` delivers owned `Commit`, `Preedit`, `DeleteSurrounding`, or `Cancelled` events without invoking UI callbacks. All text excludes embedded NUL and uses strict UTF-8. Preedit anchor/caret offsets index its own text in bytes; `caretVisible` preserves a native hidden-cursor request. Delete lengths count bytes around the caret or the outer selection edges according to the event's deletion basis and carry that snapshot revision. An explicit old revision is rejected rather than deleting different model text.
+
+Preedit events can also carry copied, styled clauses (`Raw`, `Converted`, `Target`, or `Selected`). Clause ranges are nonempty, ordered and non-overlapping UTF-8 byte ranges within the preedit text, with endpoints on scalar boundaries. Invalid ranges or styles fail admission.
+
+X11 maps reverse or highlighted XIM feedback to `Target`, primary/secondary/tertiary feedback to `Converted`, and other feedback to `Raw`. Feedback-only updates can change the styles without replacing the preedit text; adjacent scalar styles are grouped into byte ranges.
+
+Win32 reads IME composition attributes and clause boundaries, converts UTF-16 positions to UTF-8 byte ranges, and maps target and converted attributes to the corresponding styles. When native clause boundaries are unavailable or invalid, it groups attribute runs instead.
 
 Services start unfocused. Frame forwards native keyboard focus before ordinary input focus dispatch, including Win32 `WM_SETFOCUS`/`WM_KILLFOCUS` when activation does not change. Losing focus invalidates the active token, discards its queued work, stops native composition, and leaves one terminal cancellation for that token. Polling it once, ending it, or beginning another session invalidates it permanently. Service identities and generation checks reject foreign or stale native replies. End/cancellation invalidate authority before calling native cleanup, including reentrant cancellation messages.
 

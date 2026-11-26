@@ -275,8 +275,9 @@ stable executable/dependency, packed-volume, logserver, and optional name-symbol
 identities before and after each trial. Mutable pipeline caches are recorded
 separately. A frozen source directory should contain the ordinary repository
 paths below its `source/` directory so fixture identity admission can resolve
-those paths unambiguously. Historical arms use the matched pair
-`tests/smoke/refraction_project.cpp` and `tests/smoke/avboit_timing_render_pass.cpp`.
+those paths unambiguously. Historical arms used the matched C++ pair
+`tests/smoke/refraction_project.cpp` and `tests/smoke/avboit_timing_render_pass.cpp`
+before migration to `refraction_scenes_and_runtime.adhd` and `avboit_timing_render_pass.adhd`.
 
 For a scheduling-only comparison, retain a frozen unmerged tiled arm as the
 baseline, freeze a separately built tiled candidate with the proposed scheduling
@@ -570,11 +571,20 @@ checks prevent a priority test from passing with indistinguishable materials.
 `duplicate_comparisons.json` records successful comparisons, while `gallery.html`
 and raw BMP/PNG captures are written before image comparison so a failed oracle
 can be inspected. The corresponding CTest is
-`nwb_refraction_duplicate_capture_smoke`; CPU-only oracle tests are registered as
-`nwb_refraction_duplicate_analysis_unit`. Additional registered capture CTests in
-`refraction_smoke.cmake` are `nwb_refraction_density_capture_smoke`,
+`nwb_refraction_duplicate_capture_smoke`; CPU-only oracle and analysis tests are
+registered in `tests/integration/CMakeLists.txt` as
+`nwb_refraction_capture_analysis_unit`, `nwb_refraction_lifecycle_analysis_unit`,
+`nwb_refraction_density_benchmark_analysis_unit`,
+`nwb_refraction_query_profile_analysis_unit`,
+`nwb_refraction_density_capture_analysis_unit`,
+`nwb_refraction_query_diagnostics_analysis_unit`,
+`nwb_refraction_identity_analysis_unit`, `nwb_refraction_gallery_analysis_unit`,
+and `nwb_refraction_duplicate_analysis_unit`. Additional registered capture
+CTests in `refraction_smoke.cmake` are `nwb_refraction_density_capture_smoke`,
 `nwb_refraction_query_diagnostics_smoke`, `nwb_refraction_gallery_capture_smoke`,
-`nwb_csg_refraction_capture_smoke`, and `nwb_refraction_identity_capture_smoke`.
+`nwb_csg_refraction_capture_smoke`, and `nwb_refraction_identity_capture_smoke`
+(`refraction_identity_smoke.py`, checking refractor identity distinction,
+CSG crossing-capacity failure isolation, and near-air measured thickness).
 
 The caustic-sphere fixture also explicitly enables camera refraction while keeping
 its original glass material, light, receiver, and photon caustics. Launch it with:

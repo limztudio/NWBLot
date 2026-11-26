@@ -15,7 +15,7 @@ ctest --preset windows-clang-arm64-dbg -R '^nwb_ui_layer_' --output-on-failure
 
 All standalone tests hold the shared `nwb_display` lock. Their CTest commands request GPU validation in `dbg` and `opt`,
 and explicitly disable the request in `fin`. The Python wrappers default validation on for manual captures; pass
-`--no-gpu-validation` with a `fin` executable, which rejects the native `--gpudbg` option.
+`--no-gpu-validation` with a `fin` executable, which rejects the native `--gpudbg` option. `InitUiLayerSmokeSystem` (`smoke_world.adhd`) also binds `context.cursor` and `context.accessibility` into `UiLayerSystem` and runs startup sanity calls on `dispatchPointerInput` (synthetic touch device 77), `cancelPointerDevice(77)`, and `dispatchInputEvent` (`KeyUp` `F12` on device 77); no standalone smoke workflow currently drives gamepad, cursor-shape, accessibility UIA, or multi-pass effect-layer captures.
 
 ## Additional registered workflows
 

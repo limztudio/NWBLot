@@ -38,31 +38,31 @@ frame only when a slot is free. If all slots remain in flight, preparation succe
 with no declared layer and keeps the pending snapshot. No frame waits for GPU idle.
 
 `prepareTaskGraphOutputLayer(acquired)` captures the exact acquired frame.
-`declareTaskGraphOutputLayer(graph)` declares graph-owned geometry uploads,
-a transparent target clear, and `ui.raster` for a painted frame. The raster produces
+`declareTaskGraphOutputLayer(graph)` declares graph-owned geometry uploads (vertex/index buffers plus `ui.effect_upload` for `ui.effects` raw SRV `GpuEffectBufferVersion` when `!snapshot.effectWords().empty()`),
+a transparent target clear, and `ui.raster` for a painted frame. When `!snapshot.effectLayers().empty()`, it allocates `ui.scratch_a` and `ui.scratch_b` (`RGBA16_FLOAT`) scratch targets and splits rendering across indexed main raster passes (`ui.raster/<n>`), offscreen effect-layer captures (`ui.effect_clear/<n>`, `ui.effect_capture/<n>`), and two-pass separable Gaussian blur passes (`ui.effect_clear_b/<n>`, `ui.effect_blur_h/<n>`, `ui.effect_clear_a2/<n>`, `ui.effect_blur_v/<n>`) composited via `PaintMaterial::EffectLayerComposite`. The raster produces
 an explicit color resource version. It has no scene dependency, so the graph can
 schedule it alongside scene work. The final output consumer depends on `readyTask`,
 reads `colorVersion`, and samples `sampledImage` before output transfer encoding.
-An empty scene-UI snapshot declares no UI graph work or color resource; it returns
+An empty scene-UI snapshot (`vertices().empty()`, `indices().empty()`, `commands().empty()`, `effectWords().empty()`, and `effectLayers().empty()`) declares no UI graph work or color resource; it returns
 only `frameGeneration` so the accepted final consumer still retires that exact
 snapshot. A rejected graph leaves the generation pending for retry. Only accepted
 final consumption calls `acceptTaskGraphOutputLayer(frameGeneration, token)`.
 
-Each graph payload owns the frozen snapshot and concrete skin, target, geometry,
+Each graph payload owns the frozen snapshot and concrete skin, glyph-page, SDF-page (`R8`/`RG8`/`RGB8`/`RGBA8` with RGB8->RGBA8 fallback expansion), `GpuImageCache` texture-image, scratch-target, effect-buffer, target, geometry,
 pipeline, sampler, and descriptor versions it reads. Descriptor slots remain
 allocated through those owners; native heap binding records submitted descriptor
 use. There is no long-lived global pending-recording lease. Raster acceptance does
 not consume the CPU frame. The renderer saves the exact accepted vertex-upload,
-index-upload, clear, raster, and final-consumer tokens. Slot reuse requires final
+index-upload, `m_effectUpload`, clear, raster, `m_extraTokens` (for split/effect passes), and final-consumer tokens. Slot reuse requires final
 consumption and completion of all accepted work. A rejected graph retains its
 immutable source; rebuilding after an accepted prefix waits nonblockingly for those
 prefix tokens before reusing its resources. An incomplete prefix cannot expose an
 old acquired generation to a new final consumer.
 
 Coordinates use the snapshot's logical units and saved pixel scales. Vertex RGB is
-premultiplied linear Rec.709. The skin shader reads the atlas at base mip with a
+premultiplied linear Rec.709. The UI shaders (`impl/assets/graphics/ui/{vs,ps}.slang` with 52-byte `GpuPaintPushConstants`) support ten `PaintMaterial` modes (`Solid`, `Skin`, `Glyph`, `SdfGlyph`, `Image`, `ColorGlyph`, `Gradient` [linear/radial/conic, up to 16 stops, clamp/repeat/mirror], `DropShadow` [including inset], `Blur` [tap radius up to 24], and `EffectLayerComposite`), up to 8 nested per-draw analytic clip masks (`RoundedRect`, `Ellipse`), and six `PaintBlendMode` pipelines (`Normal`, `Additive`, `Multiply`, `Screen`, `Erase`, `Replace`). The skin shader reads the atlas at base mip with a
 linear clamp sampler. Texture RGB is already linear from offline preparation;
-sampled straight alpha is combined with premultiplied tint. The raster blends
+sampled straight alpha is combined with premultiplied tint (color glyphs use sampled RGB multiplied by input alpha without RGB tinting). Ordinary raster blends
 source-one over inverse-source-alpha and keeps the layer linear. The default skin
 and custom skins use the same path. The final compositor applies SDR attachment
 encoding or HDR10 encoding once. UI-only HDR uses the shared 203-nit paper-white helper.

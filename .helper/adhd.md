@@ -131,7 +131,7 @@ f32 ComputePaddedWidth(in ElementBox box){
 ## 3. Classes, Arena Ownership (`[arena]`), Layout Reordering, and `[serialize]`
 
 - **Explicit Access Specifiers on Every Member**:
-  - Every field, constructor, destructor, operator, and method inside a `class` must begin with `public`, `private`, or `protected` (C++-style `public:` section labels are prohibited).
+  - Every field, constructor, destructor, operator, and method inside an authored `class` must begin with `public`, `private`, or `protected` (C++-style `public:` section labels are prohibited). Members of an `extern class` default to `public` when no access specifier is written.
 - **Single-Source Member Initialization**:
   - Every `class` field must either declare an inline default value (`public f32 speed = 1.0f;`) or be initialized inside the class's constructor body (`this.speed = s;`)—never both.
   - C++ constructor initializer lists (`: speed(s)`) are prohibited; assign `this.field = ...;` inside the constructor `{ ... }` body.
@@ -189,8 +189,8 @@ f32 ComputePaddedWidth(in ElementBox box){
   - Member functions (`class` and `interface` methods) must start with a lowercase letter (`lowerCamelCase` or container `snake_case`).
   - Global/free functions (including built-in global functions) must start with an uppercase letter (`UpperCamelCase`).
 - **Mandatory `in` / `mut` Parameters & `Expected<T>` Return Shape**:
-  - Every parameter must specify `in` (read-only borrow, lowered via `CallTraits<T>::param_type`) or `mut` (mutable reference `T&`).
-  - Default parameter values are prohibited; write explicit overloads instead.
+  - Authored callable parameters must specify `in` (read-only borrow, lowered via `CallTraits<T>::param_type`) or `mut` (mutable reference `T&`). A typed `extern` parameter may omit its mode, which defaults to `in`.
+  - Authored callables prohibit default parameter values; write explicit overloads instead. Typed `extern` declarations can represent C++ defaults with placeholders such as `= {}`; parameters after the first default must also have defaults.
   - Fallible functions and interface/class methods that produce a value must return `Expected<T>` (or `Expected<T, E>`) instead of returning `b8` (or a status enum) with a `mut outResult` parameter. Reserve `mut` parameters for genuine in-out state mutations (`inOutCursor`, `inOutState`), reusable caller-owned buffers, or multi-output unpacking helpers where a dedicated result class is not warranted.
 - **Mandatory `this.` Qualification**:
   - Inside any class method, accessing a member field (`this.position`) or calling a member method (`this.reset()`) must be prefixed with `this.`.

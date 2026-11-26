@@ -70,13 +70,11 @@ const usize s_UiSkinRequiredRegionCount = 30u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> UiSkinDrawMode{
     Sprite = 0u,
     NineSlice
 }
 
-[reflect]
 enum<u8> UiSkinColorRole{
     TextNormal,
     TextDisabled,
@@ -133,7 +131,7 @@ class UiSkinRegion{
     public UiSkinDrawMode drawMode = UiSkinDrawMode::Sprite;
 }
 
-[serialize, reflect]
+[serialize]
 class UiSkinColor{
     public f32 r = 0.0f;
     public f32 g = 0.0f;
@@ -141,7 +139,7 @@ class UiSkinColor{
     public f32 a = 0.0f;
 }
 
-[serialize, reflect]
+[serialize]
 class UiSkinTypography{
     public f32 defaultFontSize = s_UiSkinDefaultFontSize;
 }

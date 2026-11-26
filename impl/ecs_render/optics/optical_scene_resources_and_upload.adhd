@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class OpticalUploadTask{
+class OpticalUploadTask : MoveOnly{
     private BufferHandle m_destination;
     private GpuUploadBlobId m_source;
     private RayTracingOpticalSceneUploadHandle m_upload;

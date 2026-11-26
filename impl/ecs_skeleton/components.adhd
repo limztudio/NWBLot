@@ -16,19 +16,18 @@ const f32 s_SkeletonRigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u32> SkeletonSkinningMode{
     LinearBlend = 0u,
     DualQuaternion = 1u
 }
 
-[arena, component("skeleton_joint_palette")]
+[component("skeleton_joint_palette")]
 class SkeletonJointPaletteComponent{
     public Vector<SkeletonJointMatrix> joints;
     public u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
 }
 
-[arena, component("skeleton_pose")]
+[component("skeleton_pose")]
 class SkeletonPoseComponent{
     public Vector<u32> parentJoints;
     public Vector<SkeletonJointMatrix> localJoints;

@@ -1,7 +1,7 @@
 # CPU text foundation
 
 `nwb_ui_text` owns font versions, shaping, multiline label layout, cluster hit testing,
-and grayscale coverage plus optional baked SDF atlas images. Its public dependencies
+and native grayscale or color glyph images plus optional baked SDF atlas images. Its public dependencies
 include `nwb_ui`, `nwb_assets_font_atlas`, `nwb_assets_font_freetype` (`impl/assets_font/freetype_sdk.{h,adhd}`),
 and `nwb::harfbuzz`, with local SDK adapters in `impl/ecs_ui/toolkit/text/freetype_sdk.{h,adhd}`
 and `harfbuzz_sdk.{h,adhd}`.
@@ -23,29 +23,28 @@ layouts compare both values so replacing fonts or moving a label between service
 invalidates its layout. Replacing a source asset or font list cannot change an existing
 layout's bytes, glyph IDs, metrics, or retained CPU versions.
 
+`TextService` also supports incremental `registerFont(FontSource)` (without clearing existing atlas pages), `setDefaultFamily(Name)` / `defaultFamily()`, `fontCount()`, and `resolveFace(FontDescriptor)`. `layoutShared(ShapeRequest)` caches layouts up to 512 bytes across up to 1,024 entries; `measure(TextLayout, DisplayMetrics)` and `measureTracked(...)` compute coverage-aware visual bounds at the active display scale.
+
 ## Shaping and supported scope
 
 `ShapeRequest` supplies UTF-8 text, logical font size, horizontal direction, an ISO 15924
-script tag, and an ASCII language tag. Defaults are 16 logical units, left-to-right,
+script tag, an ASCII language tag, and a `FontDescriptor` (`family`, `weight`, `slant`). Defaults are 16 logical units, left-to-right,
 `Latn`, and `en`. Korean runs should explicitly select `Hang` and `ko`. Requests describe
-one explicit script/direction policy; the service does not discover mixed paragraph
-scripts or implement Unicode paragraph bidi. LF and CRLF produce explicit lines.
-Tabs, bare CR, other control characters, and Unicode line/paragraph separators return
-`UnsupportedControl`. Text must be valid scalar UTF-8 without embedded NUL.
+an explicit script policy, optional `letterSpacing`, `wordSpacing`, `lineHeightMultiplier`, `lineHeightOverride`, `maxWidth`, `wrapMode`, `alignment`, `preserveWrapSpaces`, `tabStopSpaces` (`1..32`, default `4`), and up to 8 explicit `OpenTypeFeature` overrides. `TextBidiMode` defaults to `None`; `Auto` and forced
+base-direction modes resolve paragraph runs for layout via `bidi.adhd`. LF, CRLF, and HT (`\t`, expanded to tab stops measured from the primary font's space advance) are admitted; bare CR, other control characters, and Unicode line/paragraph separators return `UnsupportedControl`. Text must be valid scalar UTF-8 without embedded NUL.
 
-The concrete `TextShaper` uses HarfBuzz OpenType font functions and its default shaping
-features. It preserves monotone source-byte clusters and chooses a covering fallback
+The concrete `TextShaper` uses HarfBuzz OpenType font functions, default shaping features, and any caller-supplied `OpenTypeFeature` ranges. It preserves monotone source-byte clusters and chooses a covering fallback
 face for each missing primary cluster. Adjacent clusters assigned to the same fallback
 face are shaped together, preserving same-font ligatures and contextual shaping.
 The cluster is indivisible during fallback; combining marks are not independently
-assigned to another face. A cluster unavailable in every configured face returns
-`MissingGlyph` rather than silently substituting unrelated text.
+assigned to another face. When no configured face covers a cluster, `TextShaper` falls back to the primary face's `.notdef` glyph (`glyphId == 0`) with `TextLayoutStatus::Success`; `TextLayoutStatus::MissingGlyph` remains an explicit status value validated through test fixtures.
 
 Deterministic fixtures qualify the bundled Noto Latin and Korean faces, including
 Latin kerning, ligatures, combining marks, precomposed Hangul, and decomposed Jamo.
 Explicit right-to-left byte mapping is tested, but the bundled font set does not
 establish complete Arabic, Indic, emoji, or arbitrary-script support. Loading another
-font does not establish paragraph bidi, Unicode line breaking, or native IME support.
+font alone does not establish full Unicode bidirectional or line-breaking conformance,
+arbitrary-script coverage, or native IME support.
 
 ## Layout, measurement, and hit testing
 
@@ -53,8 +52,9 @@ font does not establish paragraph bidi, Unicode line breaking, or native IME sup
 `layout(request)` returns `Expected<TextLayout, TextLayoutStatus>` in `.adhd` (`Expected<TextLayout, TextLayoutStatus::Enum>` in generated C++). Check success
 before consuming or moving the new layout; a failure carries its layout status and
 does not modify an earlier caller-owned layout. The layout owns copied UTF-8 text, positioned glyphs, cluster records,
-and line records in the builder's arena. It has no automatic wrapping, alignment,
-editing model, selection, or undo state.
+and line records in the builder's arena. Requests may select word or character
+wrapping and leading, center, or trailing alignment. These layout options do not
+provide an editing model, selection, or undo state.
 
 All positions use logical units with a top-left origin. Glyph positions identify their
 baseline origin plus shaping offsets. `measure()` reports maximum line advance and
@@ -74,7 +74,7 @@ combining cluster, UTF-8 sequence, or CRLF separator are rejected.
 
 These APIs expose shaped cluster edges. They do not implement UAX #29 grapheme-based
 editing, intra-ligature caret positions, or complete visual selection/navigation.
-`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and hard-line pointer/vertical navigation; it does not provide RTL editing or paragraph bidi. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
+`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and pointer/vertical navigation; paragraph layout support alone does not establish complete visual RTL editing. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
 
 ## Glyph image selection and painting
 
@@ -126,8 +126,9 @@ text outside the viewport. Layout and native glyph preparation run on the owning
 thread. The layout also retains per-glyph shaping ink and separate copied
 native coverage bounds when HarfBuzz extents may describe a different image. Ordinary
 static TrueType outlines use conservative shaping bounds. Non-tricky CFF and fonts
-with bitmap/color extent tables use transformed unscaled FreeType outline control
-boxes, including native font/subfont matrices. These bounds do not replace shaping
+with bitmap extent tables use transformed unscaled FreeType outline control
+boxes when outline bounds are available, including native font/subfont matrices. Color
+faces retain conservative candidates when reliable outline bounds are unavailable. These bounds do not replace shaping
 ink, advance measurement or selection geometry. Tricky faces and unavailable bounds
 remain conservative candidates when the glyph retains a valid native face. A glyph
 with neither explicit coverage bounds nor a valid native face is invalid; painting
@@ -150,15 +151,21 @@ visible views; the cache does not evict entries within an atlas identity.
 
 ## Native coverage fallback
 
-`TextService::paint()` reads the builder's saved display metrics. It rasterizes at
-`ceil(fontSize * max(pixelScaleX, pixelScaleY))`, with hinting disabled, while layout
-measurement stays in logical units. Raster bitmap bounds are converted back using
+`TextService::paint()` reads the builder's saved display metrics. Without an active
+transform, it rasterizes at `ceil(fontSize * max(pixelScaleX, pixelScaleY))`, with
+hinting disabled. An active transform adjusts the raster scale within supported
+pixel-size bounds and uses transformed bounds for visibility; a singular transform
+emits no glyphs. Layout measurement stays in logical units. Raster bitmap bounds are converted back using
 the actual raster scale, then their top-left edges are snapped to the physical pixel
 grid before drawing. Shaping positions, caret geometry, and baked SDF quads remain
 fractional. Shaped ink bounds and raster pixel bounds can differ by the bitmap's
 integer fringe.
 
 Glyph coverage is linear R8 with one mip and a transparent one-pixel packing border.
+Color bitmaps use separate four-channel pages with the same border. FreeType's
+premultiplied BGRA pixels are converted to straight RGBA before packing. For a
+non-scalable color face, the rasterizer chooses an available bitmap strike and
+adjusts glyph bounds for its scale. Color faces bypass baked SDF selection.
 The cache key includes the exact CPU font version, glyph ID, and physical pixel size.
 Each page belongs to one font revision and may contain several pixel sizes. Pixels and
 coordinates are append-only within an atlas identity. A dirty page publishes a copied
@@ -170,10 +177,12 @@ submission completion.
 The service admits every glyph and page binding before emitting any label quads.
 Capacity or raster failure leaves existing builder geometry and page bindings intact,
 although successful cache preparation may remain available for a retry. Limits are
-eight configured faces, 1 MiB per text request, 4096 cached glyph entries, and sixteen
-512 x 512 atlas pages. Exceeding a limit returns failure. Input tint is linear straight
+32 configured faces (`s_TextMaxFontSources`), 1 MiB per text request, 4096 cached glyph entries, and sixteen
+512 x 512 atlas pages (note that `impl/ecs_ui/layer_types.adhd` checks `s_TextMaxFontSources` while its diagnostic string still mentions eight fonts). Exceeding a limit returns failure. Input tint is linear straight
 RGBA; the paint builder premultiplies vertices, and the glyph shader multiplies their
 premultiplied color and alpha by sampled coverage.
+Color glyphs use their sampled RGB and multiply their sampled alpha by the input
+alpha before producing premultiplied output; input RGB does not tint them.
 
 This example assumes the matching font/skin assets and typed identities are already
 loaded:

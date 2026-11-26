@@ -213,7 +213,17 @@ Registered reflection capture CTests in `tests/smoke/reflection_smoke.cmake` are
 - `nwb_reflection_feedback_diagnostics_off_capture_smoke` (`reflection_smoke.py --suite feedback-diagnostics-off`)
 
 `nwb_caustic_optical_capture_smoke` (`caustic_optical_smoke.py`) is registered
-alongside the caustic smokes in `tests/smoke/CMakeLists.txt`.
+alongside the caustic smokes in `tests/smoke/CMakeLists.txt`. Helper scripts
+`reflection_cpu_timing_smoke.py` and `reflection_csg_context_smoke.py`
+exercise CPU/GPU diagnostic publications and live CSG context transitions
+respectively, and 13 `nwb_reflection_*` Python analysis/lifecycle unit CTests
+live in `tests/integration/CMakeLists.txt`.
+
+In the renderer (`impl/ecs_render/reflection/`), non-CSG scenes use the split
+`fastHardwarePipeline` and `buildOpticalArgsPipeline` compute pipelines
+(`reflection_pipelines.adhd`, `reflection_graph_tasks.adhd`) while CSG slice
+dispatches process `s_ReflectionTraceSliceRays = 8192u` (`NWB_REFLECTION_TRACE_SLICE_RAYS`)
+rays per slice.
 
 The interactive launcher scene is
 `reflection`, with `--reflection-case
@@ -432,9 +442,13 @@ speed. No complete secondary path tracer or reflected caustic-cache lookup is
 claimed.
 
 Run `python tests/integration/reflection_optical_smoke_tests.py` for the physical
-identities and negative image/counter cases, and
-`python tests/smoke/generate_reflection_optical_meshes.py --check` to verify the
-closed disconnected-box and TIR-prism assets without rewriting them. The optical
+identities and negative image/counter cases;
+`python tests/smoke/generate_reflection_optical_meshes.py --check` compares
+generated optical `.nwb` text byte-for-byte against `tests/smoke/assets/meshes/`
+(note: on `main`, `generate_refraction_gallery_meshes.py::serialize()` still
+emits a leading comment header that checked-in `.nwb` files omit, so `--check`
+reports `stale generated optical mesh` until the generator script omits that
+header). The optical
 capture command uses the same executable, working-directory and logserver
 arguments as the earlier suites, with `--suite optical`. Its CTest name is
 `nwb_reflection_optical_capture_smoke`. Interactive launch supports

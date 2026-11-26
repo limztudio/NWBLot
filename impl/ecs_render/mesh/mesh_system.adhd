@@ -18,7 +18,6 @@ type MeshBlasGraphStateVector = Vector<MeshBlasGraphState>;
 type MeshRayTracingResourceSnapshotVector = Vector<MeshRayTracingResourceSnapshot>;
 
 
-[modular]
 class RendererMeshSystem : NoCopy{
     private mut World m_world;
     private mut GraphicsRuntime m_graphics;

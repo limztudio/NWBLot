@@ -8,12 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, component("mesh")]
+[component("mesh")]
 class MeshComponent{
     public AssetRef<Mesh> mesh;
 }
 
-[arena, component("skinned_mesh_binding")]
+[component("skinned_mesh_binding")]
 class SkinnedMeshBindingComponent{
     public AssetRef<Skin> skin;
     [transient]

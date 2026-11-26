@@ -36,7 +36,7 @@ class SkinHeaderBinary{
     public u64 inverseBindMatrixCount = 0u;
 }
 
-[arena, subsystem("skinning_subsystem")]
+[subsystem("skinning_subsystem")]
 class SkinningSubsystem{
     public AssetRef<ComputeShader> localBoundsCs;
     public AssetRef<ComputeShader> meshletBoundsCs;

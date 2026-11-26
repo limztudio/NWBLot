@@ -175,7 +175,6 @@ class FakeTextInputService : QueuedTextInputService{
     }
 }
 
-[ordered]
 class SelectionTextInputContext{
     public HeapStorage storage = HeapStorage();
     public SelectionTextInput service;
@@ -185,7 +184,6 @@ class SelectionTextInputContext{
     }
 }
 
-[ordered]
 class FakeClipboardContext{
     public HeapStorage storage = HeapStorage();
     public FakeClipboardService service;
@@ -196,7 +194,6 @@ class FakeClipboardContext{
     }
 }
 
-[ordered]
 class DelayedClipboardContext{
     public HeapStorage storage = HeapStorage();
     public DelayedClipboardService service;
@@ -207,7 +204,6 @@ class DelayedClipboardContext{
     }
 }
 
-[ordered]
 class FakeTextInputContext{
     public HeapStorage storage = HeapStorage();
     public FakeTextInputService service;
@@ -225,7 +221,6 @@ class StandaloneTextInputEvent{ public TextInputEvent event = TextInputEvent(); 
 
 class StandaloneClipboardCompletion{ public ClipboardCompletion completion = ClipboardCompletion(); }
 
-[ordered]
 class ClipboardTextTestContext{
     private HeapStorage m_storage = HeapStorage();
     private TestValueSlot<ClipboardTextAccumulator> m_accSlot;
@@ -248,7 +243,6 @@ class EncodedCodePointBuffer{
     public StringView view(in usize length)const{ return EncodedBytesView(this.m_bytes, length); }
 }
 
-[ordered]
 class UnsupportedClipboardContext{
     private HeapStorage m_storage = HeapStorage();
     public OsClipboardServiceOwner service = OsClipboardServiceOwner();
@@ -270,7 +264,6 @@ class UnsupportedClipboardContext{
     public ClipboardPollResult poll(in ClipboardRequestToken token){ return this.service.deref().poll(token, this.completion); }
 }
 
-[ordered]
 class UnsupportedTextInputContext{
     private HeapStorage m_storage = HeapStorage();
     public OsTextServiceOwner service = OsTextServiceOwner();

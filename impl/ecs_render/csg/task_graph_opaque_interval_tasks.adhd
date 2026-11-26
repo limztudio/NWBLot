@@ -45,7 +45,6 @@ class OpaqueCsgIntervalRecordInputs{
     }
 }
 
-[modular]
 class OpaqueCsgComputeIntervalGraphTask{
     public OpaqueCsgIntervalRecordInputs inputs;
     public OpaqueCsgComputeIntervalPass pass;
@@ -66,7 +65,6 @@ class OpaqueCsgComputeIntervalGraphTask{
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
 }
 
-[modular]
 class OpaqueCsgIntervalSampleGraphTask{
     public OpaqueCsgIntervalRecordInputs inputs;
     public mut GraphicsRuntime graphics;

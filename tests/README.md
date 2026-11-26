@@ -1,9 +1,9 @@
 # Test layout
 
 - `common/` holds shared test-only entry points, fixtures, and helpers. It is not a CTest suite.
-- `unit/` holds deterministic subsystem and pure-Python helper tests that do not require a live runtime workflow.
-- `integration/` holds tests that cross asset, tool, crash, server, or filesystem/process boundaries.
-- `smoke/` holds runtime and hardware validation, including GPU-optional probes.
+- `unit/` holds deterministic C++ GTest subsystem targets (`nwb_global_tests`, `nwb_alloc_tests`, `nwb_math_tests`, `nwb_common_tests`, `nwb_common_initializer_tests`, `nwb_filesystem_tests`, `nwb_input_tests`, `nwb_telemetry_tests`, `nwb_frame_lifecycle_tests`, `nwb_os_tests`, `nwb_graphics_*`, `nwb_ecs_tests`, `nwb_ecs_scene_tests`, `nwb_ecs_graphics_tests`, `nwb_ecs_model_tests`, `nwb_ecs_csg_tests`, `nwb_ecs_ui_tests`, `nwb_ui_tests`, `nwb_physics_tests`, `nwb_mesh_tests`, `nwb_metascript_tests`, plus `nwb_physics_cook_tests` and `nwb_mesh_cook_tests` when `NWB_BUILD_PIPELINE` is enabled), alongside pure-Python unit helpers and `tests/unit/CMakeLists.txt` launcher/A-B/string-literal-obfuscation checks.
+- `integration/` holds tests that cross asset, tool, crash, server, or filesystem/process boundaries, plus deterministic Python analysis unit CTests registered in `tests/integration/CMakeLists.txt` (including `tests/unit/ui_skin_publication_tests.py`).
+- `smoke/` holds runtime and hardware validation, including GPU-optional probes, `tests/smoke/ui_layer/`, `reflection_smoke.cmake`, `refraction_smoke.cmake`, `texture_smoke.cmake`, `software_raytracing_smokes.cmake`, `csg_shadow_capture.cmake`, `nwb_physics_stress_smoke`, `nwb_testbed_window_capture_smoke`, and `rgd_decode/`.
 - `ab/` holds manually launched A/B measurement workflows. Each runnable workflow has a terminal `launch.py`; capture, timing, and result artifacts stay local under `.cozter/out/ab-results/`.
 - `performance/` holds standalone opt-in benchmark and SIMD qualification workloads built behind explicit CMake options.
 - `name_symbols/` holds symbol-table inspection and sidecar verification tests; `nwb_namesym` is defined in `name_symbols/CMakeLists.txt` when its prerequisites are available.

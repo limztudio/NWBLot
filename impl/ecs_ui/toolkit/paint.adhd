@@ -10,8 +10,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only, friend(PaintBuilder, GpuFrameData, DrawSnapshotFaultFixture)]
-class DrawSnapshot{
+[friend(PaintBuilder, GpuFrameData, DrawSnapshotFaultFixture)]
+class DrawSnapshot : MoveOnly{
     private u64 m_generation = 0u;
     private u64 m_ownerIdentity = 0u;
     private DisplayMetrics m_displayMetrics;

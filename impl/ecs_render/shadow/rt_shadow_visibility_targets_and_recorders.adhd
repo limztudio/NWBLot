@@ -94,7 +94,6 @@ class ShadowReprojectMergeHeapResources{
     }
 }
 
-[modular]
 class SoftShadowTemporalMergeRecorder : NoCopy{
     private in RendererRayTracingState m_state;
     private u32 m_slotRangeCount;

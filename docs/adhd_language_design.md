@@ -94,7 +94,7 @@
 ## 3. Member Access, Layout, Ownership, Constructors & Operators
 
 - **Mandatory Access Specifiers**:
-  - Every field, constructor, destructor, operator, and method inside a `class` must begin with `public`, `private`, or `protected` (C++ `public:` section labels are prohibited):
+  - Every field, constructor, destructor, operator, and method inside an authored `class` must begin with `public`, `private`, or `protected` (C++ `public:` section labels are prohibited). Members of an `extern class` default to `public` when no access specifier is written:
     ```cpp
     class TransformComponent : IComponent{
         public f32x4 position;
@@ -132,7 +132,7 @@
 ## 4. Parameters, `const`, Control Flow, Exceptions, Diagnostics & Split Methods
 
 - **Parameter Passing Modes**:
-  - Every typed parameter must declare its mode. Authored callables prohibit default parameter values (use overloads); typed `extern` declarations may represent C++ defaults with placeholders such as `= {}`, and parameters after the first default must also have defaults:
+  - Authored callable parameters must declare their mode. A typed `extern` parameter may omit its mode, which defaults to `in`. Authored callables prohibit default parameter values (use overloads); typed `extern` declarations may represent C++ defaults with placeholders such as `= {}`, and parameters after the first default must also have defaults:
     - `in T`: Read-only borrow (`CallTraits<T>::param_type`: value for small scalars/handles/SIMD vectors, `const T&` for larger types).
     - `mut T`: Mutable reference (`T&`); call sites must supply a mutable lvalue.
     - `in borrow T name`: Retained read-only reference; generated C++ always passes `const T&` even for small types. Inline constructors infer this automatically when assigning an `in` parameter or its subobject into a retained `in` field; out-of-line declarations and forwarding wrappers declare `in borrow` explicitly. Callers must pass a directly bindable lvalue with sufficient lifetime.
@@ -313,7 +313,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 - **Authoring Boundary**:
   - Raw C++ `native` blocks are retired and prohibited in `.adhd`. C++ code (such as third-party SDK adapters, C-ABI interop, OS window/entry bootstrap in `loader/` and `logger/`, the ADHD compiler `core/metascript/`, and `pipeline/adhd_compiler/`) lives in separate `.h`/`.cpp` files bound into `.adhd` via typed `extern` declarations (`loader/project_entry.adhd`, `logger/rgd/decode.adhd`, `utilities/*_sdk.adhd`, etc.).
 - **libclang C++ Header Importer (`core/metascript/adhd/clang/`)**:
-  - `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, and `--emit-cpp-externs` parse C++ headers using the vendored static libclang (`3rd_parties/llvm`), translate supported declarations into pointer-free `extern` `.adhd` AST nodes (respecting pointer-free, arena, and container mapping rules in `export_cpp_importer.h`), and optionally emit generated `.adhd` `extern` sources.
+  - `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, and `--emit-cpp-externs` parse C++ headers using the vendored static libclang (`3rd_parties/libclang`, with LLVM in `3rd_parties/llvm`), translate supported declarations into pointer-free `extern` `.adhd` AST nodes (respecting pointer-free, arena, and container mapping rules in `export_cpp_importer.h`), and optionally emit generated `.adhd` `extern` sources.
 
 ---
 
@@ -342,7 +342,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
 ## 12. Compiler Architecture, CLI & Build Integration
 
 1. **Shared Foundation & `.nwb` Evaluation (`core/metascript/`)**:
-   - `lexer.*`, `parser_cursor.*`, `preprocessor.*`, `preprocessor_includes.*`, `preprocessor_macro_expander.*`, `preprocessor_eval.cpp`, `preprocessor_semantics.h`, `attribute_parser.*`, `literal_decoder.*`, `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`, and their companion `.adhd` `extern` bindings.
+   - `global.*`, `arena_names.*`, `export_preprocessor.h`, `lexer.*`, `parser_cursor.*`, `preprocessor.*`, `preprocessor_includes.*`, `preprocessor_macro_expander.*`, `preprocessor_eval.cpp`, `preprocessor_semantics.h`, `attribute_parser.*`, `literal_decoder.*`, `value.*`, `operation_validator.*`, `expression_parser.*`, `statement_parser.*`, `parser.*`, and their companion `.adhd` `extern` bindings (plus `CMakeLists.txt` and `readme.md`).
 2. **`adhd` Compiler Library (`core/metascript/adhd/`)**:
    - **Entry & Centralized Tables**: `compiler.h` / `compiler.cpp`, `global.h`, `export_keywords.h`, `export_operators.h`, `export_contracts.h`, `export_types.h`, `export_functions.h` (each split into `export_global_*.h` + `export_core_*.h`), plus `export_global_prelude.adhd` and `export_core_prelude.adhd`.
    - **AST (`ast/`)**: `ast_common.*`, `ast_types.h`, `ast_expr.*`, `ast_stmt.*`, `ast_decl.h`, `builtin_type_semantics.h`, `contract_semantics.h`, `keyword_semantics.h`, `operator_semantics.h`.
@@ -352,7 +352,7 @@ Numeric limits use postfix constants `T.min` and `T.max` (e.g., `u32.max`, `f32.
    - **Code & Reflection Generation (`codegen/`)**: `codegen_symbols.h`, `cpp_type_emitter.*`, `header_preamble_emitter.*`, `header_emitter.*`, `header_emitter_decl.cpp`, `header_emitter_class.cpp`, `asset_class_header_emitter.*`, `asset_cook_role_emitter.*`, `binary_serialization_emitter.*`, `constructor_argument_emitter.*`, `builtin_call_emitter.*`, `reflection_emitter.*`, `reflection_emitter_nwb.cpp`, `nwb_reflection_emitter.h`, `parallel_statement_emitter.h`, `switch_statement_emitter.*`, `simd_*`, `source_emitter.*`, `source_emitter_*.cpp`.
 3. **Pipeline Compiler Tool (`pipeline/adhd_compiler/`)**:
    - `global.h`, `compile.h` / `compile.cpp`, `output_transaction.h` / `output_transaction.cpp` (atomic staged writes with backup rollback), and `module.cpp` (using bootstrap `pipeline/command_line.*` + `pipeline/main.cpp`).
-   - **CLI Options**: `--input`, `-o`/`--output`, `-I`/`--include-dir`, `-D`/`--define`, `--namespace`, `--namespace-map`, `--depfile`, `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, `--emit-cpp-externs`.
+   - **CLI Options**: positional `input` or `--input`, `--input-list` (file containing one input path per line), `-o`/`--output`, `-I`/`--include-dir`, `-D`/`--define`, `--namespace`, `--namespace-map`, `--depfile`, `--cpp-header`, `--cpp-include-dir`, `--cpp-define`, `--cpp-arg`, `--emit-cpp-externs`.
    - **`--depfile` Safety**: Rejects paths containing tabs or newlines, unsupported punctuation, leading `~`, trailing `:` or `\`, or `\` immediately before `#`, `:`, or `$`, keeping existing outputs untouched on error.
    - **Minimal Constant-Unit Preambles**: Files containing only literal `Name` constants or only literal/simple-arithmetic scalar, boolean, or `StringView` constants emit minimal global headers rather than full core preambles.
 4. **CMake Build Integration (`configuration/Targets.cmake`)**:

@@ -69,7 +69,6 @@ const usize s_OpticalRuntimeInputGpuBytes = size_of<RayTracingOpticalRuntimeInpu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class OpticalSceneContext{
     public HeapStorage arena = HeapStorage(s_EcsCaseTestsOpticalSceneUpload);
     public ScratchStorage scratch = ScratchStorage(s_EcsCaseTestsOpticalSceneGather);
@@ -88,7 +87,6 @@ class RecordingLayerContributor : IGpuTaskGraphOutputLayerContributor{
     public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{ ++this.acceptanceCount; }
 }
 
-[ordered]
 class OpaqueCsgClearContext{
     public HeapStorage testArena;
     public GpuTaskGraph graph;
@@ -110,7 +108,6 @@ class EcsGraphReadScope{
     }
 }
 
-[ordered]
 class SwBvhBuildContext{
     public HeapStorage testArena;
     public GpuTaskGraph graph;
@@ -123,7 +120,6 @@ class SwBvhBuildContext{
     }
 }
 
-[ordered]
 class RaySceneGraphReadsContext{
     public HeapStorage testArena;
     public GpuTaskGraph graph;

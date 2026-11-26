@@ -33,7 +33,7 @@ class ShadowPrepareGraphContext{
     }
 }
 
-[modular, friend(RendererFramePipeline, DeferredFrameTopologyValidator, FrameExecuteStateLifecycleSet, FrameExecuteTimingState, ShadowPreparePacketValidator)]
+[friend(RendererFramePipeline, DeferredFrameTopologyValidator, FrameExecuteStateLifecycleSet, FrameExecuteTimingState, ShadowPreparePacketValidator)]
 class ShadowPrepareGraphCoordinator : NoCopy{
     private GpuTaskId m_deferredBindlessSlotsUploadTask;
     private GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;

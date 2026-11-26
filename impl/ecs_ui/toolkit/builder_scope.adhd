@@ -56,7 +56,6 @@ enum<u8> BuilderScopeKind{
     DockPanel,
 }
 
-[move_only]
 class BuilderOperationEnd : NoCopy{
     private mut b8 m_active;
     public BuilderOperationEnd(mut b8 active){ this.m_active = active; }
@@ -128,8 +127,7 @@ class BuilderEditBoxFrame{
     public u32 editViewCache = u32.max;
 }
 
-[move_only]
-class CachedEditBoxView{
+class CachedEditBoxView : MoveOnly{
     public EditBoxView view;
     public TextAreaModelStamp modelStamp;
     public String language;
@@ -302,8 +300,7 @@ class BuilderComboFrame{
     public b8 queryChanged = false;
 }
 
-[move_only]
-class BuilderTooltipFrame{
+class BuilderTooltipFrame : MoveOnly{
     public WidgetState widget;
     public WidgetState anchor;
     public Optional<mut TooltipState> state;

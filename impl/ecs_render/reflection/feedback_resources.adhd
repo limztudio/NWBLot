@@ -21,7 +21,6 @@ class ReflectionFeedbackSnapshot{
     }
 }
 
-[modular]
 class RendererReflectionFeedback : NoCopy{
     private SharedPool m_versions = SharedPool();
     private mut GraphicsRuntime m_graphics;

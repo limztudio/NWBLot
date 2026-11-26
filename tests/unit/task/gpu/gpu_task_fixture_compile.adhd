@@ -45,7 +45,6 @@ type GpuTaskGraphAnalysisStatusEnum = GpuTaskGraphAnalysisStatus;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered]
 class TestArena{
     public HeapStorage arena;
     public TestArena(){ this.arena = HeapStorage(); }
@@ -55,14 +54,12 @@ class TestArena{
     public GpuTaskTimingHistorySnapshot makeTimingSnapshot(){ return this.arena.makeValue<GpuTaskTimingHistorySnapshot>(); }
 }
 
-[ordered]
 class TestScratchArena{
     public ScratchStorage scratchArena;
     public TestScratchArena(){ this.scratchArena = ScratchStorage(s_TaskGraphScratchArena); }
     public TestScratchArena(in Name scopeName){ this.scratchArena = ScratchStorage(scopeName); }
 }
 
-[ordered]
 class GpuTaskGraphReadViews{
     public GpuTaskGraphDeclarationReadView declarations;
     public GpuCompiledGraphReadView compiled;
@@ -73,7 +70,6 @@ class GpuTaskGraphReadViews{
     public b8 valid()const{ return this.declarations.valid() && this.compiled.valid() && this.compiled.validFor(this.declarations); }
 }
 
-[ordered]
 class SingleQueueCompile{
     public ScratchStorage scratchArena;
     public GpuPhysicalQueueInfo singleQueue;
@@ -100,7 +96,6 @@ class SingleQueueCompile{
     public b8 compile(in GpuTaskGraph graph){ return this.compile(graph, GpuTaskGraphCompileOptions()); }
 }
 
-[ordered]
 class TwoQueueCompile{
     public ScratchStorage scratchArena;
     public GpuPhysicalQueueInfo graphicsQueue;
@@ -134,7 +129,6 @@ class TwoQueueCompile{
     public b8 compile(in GpuTaskGraph graph){ return this.compile(graph, GpuTaskGraphCompileOptions()); }
 }
 
-[ordered]
 class ThreeQueueCompile{
     public ScratchStorage scratchArena;
     public GpuPhysicalQueueInfo graphicsQueue;

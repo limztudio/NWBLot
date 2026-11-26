@@ -34,8 +34,8 @@ class TextureBindingPolicy : IPaintBindingPolicy<ImageSource>{
     public b8 upgrade(in ImageSource a, in ImageSource b)const override{ return false; }
 }
 
-[move_only, friend(DrawSnapshotFaultFixture)]
-class PaintImageBindings{
+[friend(DrawSnapshotFaultFixture)]
+class PaintImageBindings : MoveOnly{
     private Vector<SharedGlyphPage> m_glyphPages;
     private Vector<SharedSdfAtlasPage> m_sdfPages;
     private Vector<SharedImageSource> m_textureImages;

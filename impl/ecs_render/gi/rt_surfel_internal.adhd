@@ -111,7 +111,6 @@ class SurfelGiResourcePlan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class SurfelGiLifecycleBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;
@@ -124,7 +123,6 @@ class SurfelGiLifecycleBuilder : NoCopy{
     public Expected<SurfelGiLifecycleResult> declare(in SurfelGiLifecycleInputs inputs);
 }
 
-[modular]
 class SurfelGiResourceBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;
@@ -137,7 +135,6 @@ class SurfelGiResourceBuilder : NoCopy{
     public b8 prepare(in SurfelGiResourceInputs inputs, mut SurfelGiResourcePlan result);
 }
 
-[modular]
 class SurfelGiCounterReadbackBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;
@@ -150,7 +147,6 @@ class SurfelGiCounterReadbackBuilder : NoCopy{
     public void declare(in RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources, in GpuTaskId surfelTask, in GpuTaskId timingEndTask, mut GpuTaskId outTask);
 }
 
-[modular]
 class SurfelGiTaskBuilder : NoCopy{
     private mut RendererRayTracingSystem m_system;
     private mut GpuTaskGraph m_graph;
@@ -217,7 +213,6 @@ class SurfelGiTaskBuilder : NoCopy{
     );
 }
 
-[modular]
 class SurfelGiPipelineSet : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;

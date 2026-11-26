@@ -46,7 +46,6 @@ class GraphicsPrefixGraphContext{
 }
 
 
-[modular]
 class GraphicsPrefixGraphCoordinator : NoCopy{
     [cpp_unwind]
     public Expected<u64> declareDeferredGraphicsPrefixTasks(

@@ -28,7 +28,7 @@ const StringView s_SuiteMoveCallSource =
 const StringView s_SuiteTemplateInstReorderSource =
     "class Pair<T, U> {\r\n    public T first = 0;\r\n    public U second = f32x4(0.0f, 0.0f, 0.0f, 1.0f);\r\n}\r\nclass Holder {\r\n    public Pair<u8, f32x4> packedPair = Pair<u8, f32x4>();\r\n}\r\n";
 const StringView s_SuiteUnimplementedMethodSource =
-    "class Incomplete {\r\n    public u32 x = 0;\r\n    public void missingBody(in u32 v);\r\n}\r\n";
+    "class Incomplete {\r\n    public u32 x = 0;\r\n    public void missingBody(in Vector<u32> v);\r\n}\r\n";
 const StringView s_SuiteMutLiteralCallSource =
     "void Increment(mut u32 target) {\r\n    target += 1;\r\n}\r\nvoid Caller(in u32 inputVal) {\r\n    Increment(inputVal);\r\n}\r\n";
 const StringView s_SuiteUnsafeParallelVectorSource =
@@ -114,7 +114,7 @@ const StringView s_SuiteHandleDerefRhiAndAssetExportsSource =
 const StringView s_SuiteCrossNamespaceImportSource =
     "#include \"foreign_bridge.adhd\"\r\n[reflect]\r\nclass LocalMirror {\r\n    public ForeignMode mode = ForeignMode::Beta;\r\n    public ForeignItem item;\r\n    public FixedVector<u32, kForeignCap> caps;\r\n    public HashMap<ForeignMode, ForeignItem> modeMap;\r\n    public ForeignMode sentinel = ForeignMode::kCount;\r\n    public AssetRef<ForeignAsset> asset;\r\n}\r\nu32 UseForeign(in u32 x) {\r\n    u32 kForeignConst = 100u;\r\n    ForeignMode m = ForeignMode::Alpha;\r\n    ForeignItem it = ForeignItem();\r\n    if(ForeignAsset::s_AssetTypeName.empty())\r\n        return kForeignConst;\r\n    return ForeignFn(x) + kForeignConst + kForeignOther + kSameBridgeConst;\r\n}\r\n";
 const StringView s_SuiteNestedTemplateAndDocumentVisitorSource =
-    "[arena, asset(\"mock_nested\")]\r\nclass MockNestedAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nb8 ExerciseNestedTemplatesAndVisitors(\r\n    mut AssetDocumentMetadataParseContext docCtx,\r\n    in Path nwbPath,\r\n    mut GpuDescriptorRetirementGuard guard,\r\n    in AssetManager assetMgr,\r\n    in Name vp\r\n) {\r\n    if(!docCtx.doc.parse(\"asset = { items = [1, 2], ref = \\\"mock/a\\\" };\")) {\r\n        for(in MetascriptParseError err : docCtx.doc.errors()) {\r\n            if(err.line > 0u)\r\n                return false;\r\n        }\r\n    }\r\n    if(!docCtx.doc.hasVariable(\"asset\"))\r\n        return false;\r\n    const b8 visited = docCtx.doc.visitVariable(\"asset\", lambda[in nwbPath](in MetascriptValue assetVal) -> b8 {\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\"))\r\n            return false;\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\", lambda[](in StringView key) -> b8 { return key == \"items\" || key == \"ref\"; }))\r\n            return false;\r\n        if(!assetVal.forEachMapEntry(lambda[](in StringView k, in MetascriptValue v) -> b8 { return !k.empty() && !v.isNull(); }))\r\n            return false;\r\n        assetVal.visitField(\"items\", lambda[](in MetascriptValue listVal) -> void {\r\n            for(in MetascriptValue item : listVal.listView()) {\r\n                if(!item.isNumeric())\r\n                    return;\r\n            }\r\n        });\r\n        Expected<AssetRef<MockNestedAsset>> refRes = ReadMetadataAssetRefField<MockNestedAsset>(nwbPath, assetVal, \"test\", \"ref\", false);\r\n        if(!refRes.hasValue())\r\n            return false;\r\n        AssetRef<MockNestedAsset> refVal = refRes.value();\r\n        refVal.reset();\r\n        return !refVal.valid();\r\n    });\r\n    guard.release();\r\n    Expected<UniquePtr<MockNestedAsset>> loaded = LoadTypedAssetSync<MockNestedAsset>(assetMgr, vp, \"test\");\r\n    return visited && loaded.hasValue() && loaded.value().valid();\r\n}\r\n";
+    "[asset(\"mock_nested\")]\r\nclass MockNestedAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nb8 ExerciseNestedTemplatesAndVisitors(\r\n    mut AssetDocumentMetadataParseContext docCtx,\r\n    in Path nwbPath,\r\n    mut GpuDescriptorRetirementGuard guard,\r\n    in AssetManager assetMgr,\r\n    in Name vp\r\n) {\r\n    if(!docCtx.doc.parse(\"asset = { items = [1, 2], ref = \\\"mock/a\\\" };\")) {\r\n        for(in MetascriptParseError err : docCtx.doc.errors()) {\r\n            if(err.line > 0u)\r\n                return false;\r\n        }\r\n    }\r\n    if(!docCtx.doc.hasVariable(\"asset\"))\r\n        return false;\r\n    const b8 visited = docCtx.doc.visitVariable(\"asset\", lambda[in nwbPath](in MetascriptValue assetVal) -> b8 {\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\"))\r\n            return false;\r\n        if(!ValidateMetadataAssetFields(nwbPath, assetVal, \"test\", lambda[](in StringView key) -> b8 { return key == \"items\" || key == \"ref\"; }))\r\n            return false;\r\n        if(!assetVal.forEachMapEntry(lambda[](in StringView k, in MetascriptValue v) -> b8 { return !k.empty() && !v.isNull(); }))\r\n            return false;\r\n        assetVal.visitField(\"items\", lambda[](in MetascriptValue listVal) -> void {\r\n            for(in MetascriptValue item : listVal.listView()) {\r\n                if(!item.isNumeric())\r\n                    return;\r\n            }\r\n        });\r\n        Expected<AssetRef<MockNestedAsset>> refRes = ReadMetadataAssetRefField<MockNestedAsset>(nwbPath, assetVal, \"test\", \"ref\", false);\r\n        if(!refRes.hasValue())\r\n            return false;\r\n        AssetRef<MockNestedAsset> refVal = refRes.value();\r\n        refVal.reset();\r\n        return !refVal.valid();\r\n    });\r\n    guard.release();\r\n    Expected<UniquePtr<MockNestedAsset>> loaded = LoadTypedAssetSync<MockNestedAsset>(assetMgr, vp, \"test\");\r\n    return visited && loaded.hasValue() && loaded.value().valid();\r\n}\r\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,13 +141,13 @@ class MockIncludeResolver : MetascriptIIncludeResolver{
         }
         if(includePath == "foreign_defs.adhd"){
             const StringView s_ForeignDefs =
-                "const u32 kForeignCap = 4;\r\nconst u32 kForeignConst = 7u;\r\nconst u32 kForeignOther = 11u;\r\nenum<u8> ForeignMode { Alpha = 1, Beta = 2, kCount }\r\n[serialize]\r\nclass ForeignItem {\r\n    public u32 tag = 1u;\r\n}\r\n[arena, asset(\"mock_foreign\")]\r\nclass ForeignAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nu32 ForeignFn(in u32 x) {\r\n    return x + kForeignOther;\r\n}\r\n";
+                "const u32 kForeignCap = 4;\r\nconst u32 kForeignConst = 7u;\r\nconst u32 kForeignOther = 11u;\r\nenum<u8> ForeignMode { Alpha = 1, Beta = 2, kCount }\r\n[serialize]\r\nclass ForeignItem {\r\n    public u32 tag = 1u;\r\n}\r\n[asset(\"mock_foreign\")]\r\nclass ForeignAsset {\r\n    public u32 dummy = 0u;\r\n}\r\nu32 ForeignFn(in u32 x) {\r\n    return x + kForeignOther;\r\n}\r\n";
             outContent = GlobalString(s_ForeignDefs, arena);
             return true;
         }
         if(includePath == "impl/modular_box.adhd"){
             const StringView s_ModularBoxHeader =
-                "class RefTarget {\r\n    public u32 value = 0u;\r\n}\r\n[modular]\r\nclass ModularBox : NoCopy {\r\n    private mut RefTarget m_target;\r\n    private Vector<u32> m_items;\r\n    public ModularBox(mut RefTarget target, in u32 seed);\r\n    public u32 read()const;\r\n    public void append(in u32 val);\r\n}\r\n";
+                "class RefTarget {\r\n    public u32 value = 0u;\r\n}\r\nclass ModularBox : NoCopy {\r\n    private mut RefTarget m_target;\r\n    private Vector<u32> m_items;\r\n    public ModularBox(mut RefTarget target, in u32 seed);\r\n    public u32 read()const;\r\n    public void append(in u32 val);\r\n}\r\n";
             outContent = GlobalString(s_ModularBoxHeader, arena);
             return true;
         }
@@ -336,26 +336,26 @@ void VerifyAdhdCompiler_ReordersTemplateInstantiationFieldsAndRejectsFreeOperato
 void VerifyAdhdCompiler_SystemUpdateUnwindRespectsSdkContract(){
     AdhdTestArena arena = AdhdTestArena();
     CompileResult result = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[arena, system(\"unwind_sys\")] class UnwindSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override { return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/unwind_system.adhd", arena.arena, result));
+    ASSERT_TRUE(Compile("[system(\"unwind_sys\")] class UnwindSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override { return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/unwind_system.adhd", arena.arena, result));
     const StringView header = GeneratedHeaderView(result);
     EXPECT_NE(header.find("update(::NWB::Core::ECS::World& world, const f32 delta) override"), usize.max);
     EXPECT_EQ(header.find("update(::NWB::Core::ECS::World& world, const f32 delta)noexcept override"), usize.max);
     {
         const ScopedTestTrace trace("bad_sys");
-        ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_sys\")] class BadSystem { [cpp_unwind] public void prepare(mut World world)override{} }", "impl/ecs_sample/bad_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+        ExpectCompileFailsWithMessage(arena, "[system(\"bad_sys\")] class BadSystem { [cpp_unwind] public void prepare(mut World world)override{} }", "impl/ecs_sample/bad_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
     }
     {
         const ScopedTestTrace trace("bad_implicit_sys");
-        ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_implicit_sys\")] class BadImplicitSystem { [cpp_unwind] public void prepare(mut World world){} }", "impl/ecs_sample/bad_implicit_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+        ExpectCompileFailsWithMessage(arena, "[system(\"bad_implicit_sys\")] class BadImplicitSystem { [cpp_unwind] public void prepare(mut World world){} }", "impl/ecs_sample/bad_implicit_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
     }
     {
         const ScopedTestTrace trace("bad_param_sys");
-        ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_param_sys\")] class BadParamSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in u32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/bad_unwind_param_system.adhd", "method marked 'override' does not match any method in an implemented interface");
+        ExpectCompileFailsWithMessage(arena, "[system(\"bad_param_sys\")] class BadParamSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in u32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/bad_unwind_param_system.adhd", "method marked 'override' does not match any method in an implemented interface");
     }
     {
         const ScopedTestTrace trace("overload_sys");
         CompileResult helperResult = CompileResult(arena.arena);
-        ASSERT_TRUE(Compile("[arena, system(\"overload_sys\")] class OverloadHelperSystem { [cpp_unwind] public void helper(in u32 count){} public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/overload_prepare_system.adhd", arena.arena, helperResult));
+        ASSERT_TRUE(Compile("[system(\"overload_sys\")] class OverloadHelperSystem { [cpp_unwind] public void helper(in u32 count){} public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/overload_prepare_system.adhd", arena.arena, helperResult));
     }
 }
 
@@ -397,13 +397,13 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "class Pass : IRenderPass{ [cpp_base(IRenderPass, value)] public Pass(in u32 value){} }", "impl/bad_cpp_base_input.adhd", "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
     ExpectCompileFailsWithMessage(arena, "class Pass : IRenderPass{ [cpp_base(IRenderPass, first, second)] public Pass(mut u32 first, in u32 second){} }", "impl/bad_cpp_base_second_input.adhd", "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
     ExpectCompileFailsWithMessage(arena, "interface IObserver{ void observe(); } class Owner : IObserver{ public void observe()override{} [cpp_unwind] public ~Owner(){} }", "impl/bad_unwind_dtor.adhd", "'[cpp_unwind]' cannot weaken an inherited destructor contract");
-    ExpectCompileFailsWithMessage(arena, "[arena, component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'[cpp_unwind]' cannot change a registered class construction or destruction contract");
+    ExpectCompileFailsWithMessage(arena, "[component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'[cpp_unwind]' cannot change a registered class construction or destruction contract");
     ExpectCompileFailsWithMessage(arena, "[friend(Writer)] class Vault{ private u32 key = 1u; } class Reader{ public u32 read(in Vault vault)const{ return vault.key; } }", "impl/bad_friend_access.adhd", "cannot access 'private' or 'protected' field outside of its declaring class");
     ExpectCompileFailsWithMessage(arena, "[friend(Box)] class Vault{} class Box<T>{}", "impl/bad_friend_template.adhd", "a friend must name a non-template peer class");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Secret{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
+    ExpectCompileFailsWithMessage(arena, "class Secret : MoveOnly{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
+    ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
+    ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
+    ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
     ExpectCompileFailsWithMessage(arena, "interface Receiver{ void record(); } class Task : Receiver{ [cpp_unwind] public void record()override{} }", "impl/bad_unwind_interface.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing interface contract");
     ExpectCompileFailsWithMessage(arena, "interface Base{ void record(); } interface Sub : Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_derived_interface.adhd", "'[cpp_unwind]' cannot weaken an inherited nonthrowing interface contract");
     ExpectCompileFailsWithMessage(arena, "void Call(); [cpp_unwind] void Call(){}", "impl/bad_unwind_decl.adhd", "free function declarations must agree on '[cpp_unwind]'");
@@ -420,16 +420,28 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "void BadPersistentArena(mut PersistentArena a) {}\r\n", "impl/bad_persistent_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
     ExpectCompileFailsWithMessage(arena, "void BadTelemetryArena(mut TelemetryArena a) {}\r\n", "impl/bad_telemetry_arena.adhd", "explicit '*Arena' types are prohibited in adhd; arenas are managed automatically by the adhd compiler");
     ExpectCompileFails(arena, "usize BadScratchStatic() {\r\n    return ScratchArena::s_DefaultInitialChunkBytes;\r\n}\r\n", "impl/bad_scratch_static.adhd");
-    ExpectCompileFails(arena, "[arena, serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
-    ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadNoArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_no_arena_asset.adhd");
-    ExpectCompileFails(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
-    ExpectCompileFails(arena, "[arena, serialize, system(\"bad_sys\")]\r\nclass BadSerializeSystem { public u32 v = 0u; }\r\n", "impl/bad_serialize_system.adhd");
-    ExpectCompileFails(arena, "[system(\"bad_sys\")]\r\nclass BadNoArenaSystem { public u32 v = 0u; }\r\n", "impl/bad_no_arena_system.adhd");
-    ExpectCompileFails(arena, "[arena, system(\"bad_sys\")]\r\nclass BadTemplateSystem<T> { public T v; }\r\n", "impl/bad_template_system.adhd");
-    ExpectCompileFails(arena, "[arena, component(\"comp\"), system(\"bad_sys\")]\r\nclass BadComponentSystem { public u32 v = 0u; }\r\n", "impl/bad_component_system.adhd");
+    ExpectCompileFails(arena, "[serialize, asset(\"bad_asset\")]\r\nclass BadSerializeAsset { public u32 v = 0u; }\r\n", "impl/bad_serialize_asset.adhd");
+    ExpectCompileFailsWithMessage(arena, "[arena, asset(\"bad_asset\")]\r\nclass BadRedundantArenaAsset { public Vector<u8> bytes; }\r\n", "impl/bad_redundant_arena_asset.adhd", "arena ownership is decided automatically");
+    ExpectCompileFails(arena, "[asset(\"bad_asset\")]\r\nclass BadTemplateAsset<T> { public T v; }\r\n", "impl/bad_template_asset.adhd");
+    ExpectCompileFails(arena, "[serialize, system(\"bad_sys\")]\r\nclass BadSerializeSystem { public u32 v = 0u; }\r\n", "impl/bad_serialize_system.adhd");
+    ExpectCompileFailsWithMessage(arena, "[arena, system(\"bad_sys\")]\r\nclass BadRedundantArenaSystem { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_system.adhd", "arena ownership is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[arena, subsystem(\"bad_sub\")]\r\nclass BadRedundantArenaSubsystem { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_subsystem.adhd", "arena ownership is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[arena, component(\"bad_comp\")]\r\nclass BadRedundantArenaComponent { public u32 v = 0u; }\r\n", "impl/bad_redundant_arena_component.adhd", "arena ownership is decided automatically");
+    ExpectCompileFails(arena, "[system(\"bad_sys\")]\r\nclass BadTemplateSystem<T> { public T v; }\r\n", "impl/bad_template_system.adhd");
+    ExpectCompileFails(arena, "[component(\"comp\"), system(\"bad_sys\")]\r\nclass BadComponentSystem { public u32 v = 0u; }\r\n", "impl/bad_component_system.adhd");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nenum<u8> BadEnum { A = 0 }\r\n", "impl/bad_reflect_enum.adhd", "enum and flag reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\nflag<u8> BadFlag { A }\r\n", "impl/bad_reflect_flag.adhd", "enum and flag reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[reflect]\r\ninterface IBad { void step(); }\r\n", "impl/bad_reflect_iface.adhd", "interface reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "interface IBadMethod { [reflect] void step(); }\r\n", "impl/bad_reflect_iface_method.adhd", "interface reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[serialize, reflect]\r\nclass BadSerRef { public u32 x = 0u; }\r\n", "impl/bad_ser_reflect.adhd", "reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[reflect, asset(\"bad_ref_asset\")]\r\nclass BadRefAsset { public u32 x = 0u; }\r\n", "impl/bad_asset_reflect.adhd", "reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "[reflect, component(\"bad_ref_comp\")]\r\nclass BadRefComp { public u32 x = 0u; }\r\n", "impl/bad_comp_reflect.adhd", "reflection is decided automatically");
+    ExpectCompileFailsWithMessage(arena, "class BadPubRefField { [reflect] public u32 x = 0u; }\r\n", "impl/bad_pub_ref_field.adhd", "public fields in reflected classes are reflected automatically");
+    ExpectCompileFailsWithMessage(arena, "class BadPubRefMethod { [reflect] public void step() {} }\r\n", "impl/bad_pub_ref_method.adhd", "public methods in reflected classes are reflected automatically");
+    ExpectCompileFailsWithMessage(arena, "class BadTransRefField { [transient, reflect] private u32 x = 0u; }\r\n", "impl/bad_trans_ref_field.adhd", "'reflect' and 'transient' attributes cannot be combined");
 
     CompileResult assetRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[arena, asset(\"sample_blob\")]\r\nclass SampleBlob {\r\n    private Vector<u8> m_bytes;\r\n    public in Vector<u8> bytes()const { return this.m_bytes; }\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"SampleBlob::loadBinary\") && !this.virtualPath().empty() && !binary.empty(); }\r\n}\r\n", "impl/assets_sample/asset.adhd", arena.arena, assetRes));
+    ASSERT_TRUE(Compile("[asset(\"sample_blob\")]\r\nclass SampleBlob {\r\n    private Vector<u8> m_bytes;\r\n    public in Vector<u8> bytes()const { return this.m_bytes; }\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"SampleBlob::loadBinary\") && !this.virtualPath().empty() && !binary.empty(); }\r\n}\r\n", "impl/assets_sample/asset.adhd", arena.arena, assetRes));
     const StringView assetHdr = GeneratedHeaderView(assetRes);
     const StringView assetCpp = GeneratedSourceView(assetRes);
     EXPECT_NE(assetHdr.find("#include <core/assets/module.h>"), usize.max);
@@ -440,7 +452,7 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     EXPECT_NE(assetCpp.find("__adhd_asset_codec_registrar_SampleBlob(&::NWB::Core::Assets::CreateAssetCodec<SampleBlobAssetCodec>);"), usize.max);
 
     CompileResult cookUnwindRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[arena, asset(\"unwind_blob\")]\r\nclass UnwindBlob {\r\n    private Vector<u8> m_bytes;\r\n    [cpp_unwind] public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"UnwindBlob::loadBinary\") && !binary.empty(); }\r\n}\r\nconst StringView s_UnwindBlobDiag = \"unwind blob\";\r\nclass UnwindEntry {\r\n    public Name virtualPath = s_NameNone;\r\n}\r\nExpected<UnwindEntry> ReadUnwindEntry(in Name path, in Path file, in MetascriptValue value) {\r\n    UnwindEntry entry;\r\n    entry.virtualPath = path;\r\n    return entry;\r\n}\r\n[cpp_unwind, asset_writer]\r\nb8 WriteUnwindBlob(in UnwindBlob asset, mut Vector<u8> outBinary) {\r\n    outBinary.reserve(4u);\r\n    return true;\r\n}\r\n[cpp_unwind, cook_entry(\"unwind_blob\", s_UnwindBlobDiag, ReadUnwindEntry, document_and_value, quiet)]\r\nExpected<UnwindBlob> BuildUnwindBlob(in UnwindEntry entry) {\r\n    UnwindBlob asset(entry.virtualPath);\r\n    return asset;\r\n}\r\n", "impl/assets_unwind/cook.adhd", arena.arena, cookUnwindRes));
+    ASSERT_TRUE(Compile("[asset(\"unwind_blob\")]\r\nclass UnwindBlob {\r\n    private Vector<u8> m_bytes;\r\n    [cpp_unwind] public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"UnwindBlob::loadBinary\") && !binary.empty(); }\r\n}\r\nconst StringView s_UnwindBlobDiag = \"unwind blob\";\r\nclass UnwindEntry {\r\n    public Name virtualPath = s_NameNone;\r\n}\r\nExpected<UnwindEntry> ReadUnwindEntry(in Name path, in Path file, in MetascriptValue value) {\r\n    UnwindEntry entry;\r\n    entry.virtualPath = path;\r\n    return entry;\r\n}\r\n[cpp_unwind, asset_writer]\r\nb8 WriteUnwindBlob(in UnwindBlob asset, mut Vector<u8> outBinary) {\r\n    outBinary.reserve(4u);\r\n    return true;\r\n}\r\n[cpp_unwind, cook_entry(\"unwind_blob\", s_UnwindBlobDiag, ReadUnwindEntry, document_and_value, quiet)]\r\nExpected<UnwindBlob> BuildUnwindBlob(in UnwindEntry entry) {\r\n    UnwindBlob asset(entry.virtualPath);\r\n    return asset;\r\n}\r\n", "impl/assets_unwind/cook.adhd", arena.arena, cookUnwindRes));
     const StringView cookUnwindHdr = GeneratedHeaderView(cookUnwindRes);
     const StringView cookUnwindCpp = GeneratedSourceView(cookUnwindRes);
     EXPECT_NE(cookUnwindHdr.find("b8 WriteUnwindBlob("), usize.max);
@@ -451,7 +463,7 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "[cpp_unwind, cook_setup] void BadUnwindSetup() {}\r\n", "impl/assets_unwind/bad_setup.adhd", "'[cpp_unwind]' requires an ordinary function or method without an imposed C++ contract");
 
     CompileResult systemRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[arena, component(\"pos\")]\r\nclass PosComp {\r\n    public i32 x = 0;\r\n}\r\n[arena, system(\"sample_sys\")]\r\nclass SampleSystem {\r\n    public u32 ticks = 0u;\r\n    public SampleSystem() {\r\n        this.writeAccess<PosComp>();\r\n    }\r\n    public void prepare(mut World world) {\r\n        ++this.ticks;\r\n    }\r\n    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta) {\r\n        return Expected<void, CpuTaskAdmissionError>();\r\n    }\r\n    public Name currentType()const {\r\n        return SampleSystem::SystemTypeName();\r\n    }\r\n}\r\n", "impl/ecs_sample/system.adhd", arena.arena, systemRes));
+    ASSERT_TRUE(Compile("[component(\"pos\")]\r\nclass PosComp {\r\n    public i32 x = 0;\r\n}\r\n[system(\"sample_sys\")]\r\nclass SampleSystem {\r\n    public u32 ticks = 0u;\r\n    public SampleSystem() {\r\n        this.writeAccess<PosComp>();\r\n    }\r\n    public void prepare(mut World world) {\r\n        ++this.ticks;\r\n    }\r\n    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta) {\r\n        return Expected<void, CpuTaskAdmissionError>();\r\n    }\r\n    public Name currentType()const {\r\n        return SampleSystem::SystemTypeName();\r\n    }\r\n}\r\n", "impl/ecs_sample/system.adhd", arena.arena, systemRes));
     const StringView sysHdr = GeneratedHeaderView(systemRes);
     const StringView sysCpp = GeneratedSourceView(systemRes);
     EXPECT_NE(sysHdr.find("#include <core/ecs/component.h>"), usize.max);
@@ -995,8 +1007,9 @@ void VerifyAdhdCompiler_EnforcesArenaAttributeConflictsAndPropagatesMotherArenaA
     EXPECT_NE(moveOnlySlice.find("MoveOnlyChild(MoveOnlyChild&&)noexcept = default;"), usize.max);
 
     ExpectCompileFails(arena, "[arena, serialize]\r\nclass BadArenaSer {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_arena_ser.adhd");
-    ExpectCompileFails(arena, "[arena, asset(\"tex\")]\r\nclass TexAsset {\r\n    public u32 w = 0u;\r\n}\r\n[subsystem(\"bad_sub\")]\r\nclass BadNoArenaSub {\r\n    public AssetRef<TexAsset> tex;\r\n}\r\n", "impl/sim/bad_no_arena_sub.adhd");
-    ExpectCompileFails(arena, "[component(\"bad_comp\")]\r\nclass BadNoArenaComp {\r\n    public String tag = \"bad\";\r\n}\r\n", "impl/sim/bad_no_arena_comp.adhd");
+    CompileResult autoRoleRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile("[asset(\"tex\")]\r\nclass TexAsset {\r\n    public u32 w = 0u;\r\n}\r\n[subsystem(\"auto_sub\")]\r\nclass AutoArenaSub {\r\n    public AssetRef<TexAsset> tex;\r\n}\r\n[component(\"auto_comp\")]\r\nclass AutoArenaComp {\r\n    public String tag = \"ok\";\r\n}\r\n", "impl/sim/auto_arena_roles.adhd", arena.arena, autoRoleRes));
+    EXPECT_NE(GeneratedHeaderView(autoRoleRes).find("s_ClassArena"), usize.max);
     ExpectCompileFails(arena, "[arena, component_asset(\"retired_comp\")]\r\nclass BadRetiredCompAsset {\r\n    public u32 x = 0u;\r\n}\r\n", "impl/sim/bad_retired_comp_asset.adhd");
 }
 
@@ -1195,10 +1208,11 @@ void VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases(){
 
 void VerifyAdhdCompiler_CompilesModularClassEdgeCases(){
     AdhdTestArena arena = AdhdTestArena();
-    ExpectCompileFails(arena, "class PlainMissing {\r\n    public void step();\r\n}\r\n", "impl/bad_plain_bodyless.adhd");
-    ExpectCompileFails(arena, "[modular]\r\nclass BadTmpl<T> {\r\n    public T item;\r\n}\r\n", "impl/bad_modular_tmpl.adhd");
-    ExpectCompileFails(arena, "[arena, modular, subsystem(\"bad\")]\r\nclass BadSub {\r\n}\r\n", "impl/bad_modular_sub.adhd");
-    ExpectCompileFails(arena, "[modular]\r\nclass BadMethodTmpl {\r\n    public void act<T>(in T val);\r\n}\r\n", "impl/bad_modular_method_tmpl.adhd");
+    ExpectCompileFailsWithMessage(arena, "[modular]\r\nclass BadModular {\r\n    public void step();\r\n}\r\n", "impl/bad_modular.adhd", "'modular' attribute is prohibited");
+    ExpectCompileFails(arena, "class BadTmpl<T> {\r\n    public T item;\r\n    public void act(in T val);\r\n}\r\n", "impl/bad_tmpl_bodyless.adhd");
+    ExpectCompileFails(arena, "[subsystem(\"bad\")]\r\nclass BadSub {\r\n}\r\n", "impl/bad_sub.adhd");
+    ExpectCompileFails(arena, "class BadMethodTmpl {\r\n    public void act<T>(in T val);\r\n}\r\n", "impl/bad_method_tmpl.adhd");
+    ExpectCompileFails(arena, "class BadArenaPoly {\r\n    public void act(in Vector<u32> val);\r\n}\r\n", "impl/bad_arena_poly_bodyless.adhd");
     RunModularClassEdgeCases();
 }
 
@@ -1215,7 +1229,7 @@ void RunModularClassEdgeCases(){
     AdhdTestArena arena;
     MockIncludeResolver resolver;
     const StringView kModularDeclSource =
-        "class RefTarget {\r\n    public u32 value = 0u;\r\n}\r\n[modular]\r\nclass ModularBox : NoCopy {\r\n    private mut RefTarget m_target;\r\n    private Vector<u32> m_items;\r\n    public ModularBox(mut RefTarget target, in u32 seed);\r\n    public u32 read()const;\r\n    public void append(in u32 val);\r\n}\r\n";
+        "class RefTarget {\r\n    public u32 value = 0u;\r\n}\r\nclass ModularBox : NoCopy {\r\n    private mut RefTarget m_target;\r\n    private Vector<u32> m_items;\r\n    public ModularBox(mut RefTarget target, in u32 seed);\r\n    public u32 read()const;\r\n    public void append(in u32 val);\r\n}\r\n";
     CompileResult declRes(arena.arena);
     ASSERT_TRUE(CompileWithResolver(kModularDeclSource, "impl/modular_box.adhd", resolver, arena.arena, declRes));
     EXPECT_NE(declRes.generatedHeader.find("m_items{(*this->__adhd_arena)};"), usize.max);
@@ -1560,6 +1574,162 @@ void VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrde
     EXPECT_NE(cpp.find("CpuTaskScope __adhd_task_scope(s_AdhdTaskScheduler)"), usize.max);
 }
 
+void VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[ordered]\r\nclass BadOrdered {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_ordered.adhd",
+        "'ordered' attribute is prohibited in adhd; member reordering is decided automatically by the adhd compiler"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[layout(8)]\r\nclass BadLayout {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_layout.adhd",
+        "'layout' attribute is prohibited in adhd; use '[align(alignment)]' instead"
+    );
+
+    const StringView alignedRecordSource = "[align(16)]\r\nclass AlignedRecord {\r\n    public u8 tag = 0u;\r\n    public u32 value = 0u;\r\n}\r\n";
+    CompileResult alignedRecordResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(alignedRecordSource, "impl/aligned_record.adhd", arena.arena, alignedRecordResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(alignedRecordResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(alignedRecordResult, 0u, 0u), "tag");
+    EXPECT_EQ(UnitClassOrderedFieldName(alignedRecordResult, 0u, 1u), "value");
+    EXPECT_NE(GeneratedHeaderView(alignedRecordResult).find("class alignas(16) AlignedRecord final{"), usize.max);
+
+    const StringView pureArenaFieldsSource = "class PureContainerRecord {\r\n    public u8 small = 1u;\r\n    public String label = \"ok\";\r\n    public u32 medium = 2u;\r\n    public Vector<u32> items;\r\n    public u64 wide = 3u;\r\n}\r\n";
+    CompileResult pureResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(pureArenaFieldsSource, "impl/pure_container_record.adhd", arena.arena, pureResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(pureResult, 0u), 5u);
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 0u), "label");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 1u), "items");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 2u), "wide");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 3u), "medium");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureResult, 0u, 4u), "small");
+
+    const StringView customDtorSource = "class WithDtor {\r\n    public u8 first = 0u;\r\n    public u64 second = 0u;\r\n    public ~WithDtor(){}\r\n}\r\n";
+    CompileResult dtorResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(customDtorSource, "impl/with_dtor.adhd", arena.arena, dtorResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(dtorResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(dtorResult, 0u, 0u), "first");
+    EXPECT_EQ(UnitClassOrderedFieldName(dtorResult, 0u, 1u), "second");
+
+    const StringView sideEffectInitSource = "u32 NextSeed(){ return 7u; }\r\nclass WithCallInit {\r\n    public u8 first = 0u;\r\n    public u64 second = cast<u64>(NextSeed());\r\n}\r\n";
+    CompileResult callInitResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(sideEffectInitSource, "impl/with_call_init.adhd", arena.arena, callInitResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(callInitResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(callInitResult, 0u, 0u), "first");
+    EXPECT_EQ(UnitClassOrderedFieldName(callInitResult, 0u, 1u), "second");
+
+    const StringView siblingBorrowCtorSource = "class SiblingRefCtor {\r\n    private u8 m_pad = 0u;\r\n    private CompactString m_buf;\r\n    private mut CompactString m_ref;\r\n    private u64 m_wide = 0u;\r\n    public SiblingRefCtor(){ this.m_ref = this.m_buf; }\r\n}\r\n";
+    CompileResult siblingResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(siblingBorrowCtorSource, "impl/sibling_ref_ctor.adhd", arena.arena, siblingResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(siblingResult, 0u), 4u);
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 0u), "m_pad");
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 1u), "m_buf");
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 2u), "m_ref");
+    EXPECT_EQ(UnitClassOrderedFieldName(siblingResult, 0u, 3u), "m_wide");
+    const StringView siblingHeader = GeneratedHeaderView(siblingResult);
+    const StringView siblingSource = GeneratedSourceView(siblingResult);
+    EXPECT_TRUE(siblingHeader.find("m_ref(::MakeNotNull(::AddressOf(") != usize.max || siblingSource.find("m_ref(::MakeNotNull(::AddressOf(") != usize.max);
+
+    const StringView noCopyMemberSource = "class WithNoCopy {\r\n    public u8 flag = 0u;\r\n    public UniquePtr<u32> owner;\r\n    public u64 id = 0u;\r\n}\r\n";
+    CompileResult noCopyResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(noCopyMemberSource, "impl/with_no_copy.adhd", arena.arena, noCopyResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(noCopyResult, 0u), 3u);
+    EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 0u), "flag");
+    EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 1u), "owner");
+    EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 2u), "id");
+
+    const StringView pureDefaultCtorSource = "class PureDefaultCtorBox {\r\n    public f32x4 v;\r\n    public u32 mask = u32.max;\r\n    public PureDefaultCtorBox(){ this.v = f32x4(0.0f, 0.0f, 0.0f, 1.0f); }\r\n}\r\nclass Holder {\r\n    public u8 small = 0u;\r\n    public PureDefaultCtorBox box;\r\n    public u64 wide = 0u;\r\n}\r\n";
+    CompileResult pureDefaultCtorResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(pureDefaultCtorSource, "impl/pure_default_ctor_holder.adhd", arena.arena, pureDefaultCtorResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(pureDefaultCtorResult, 1u), 3u);
+    EXPECT_EQ(UnitClassOrderedFieldName(pureDefaultCtorResult, 1u, 0u), "box");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureDefaultCtorResult, 1u, 1u), "wide");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureDefaultCtorResult, 1u, 2u), "small");
+
+    const StringView sideEffectDefaultCtorSource = "u32 NextSeed(){ return 7u; }\r\nclass SideEffectDefaultCtorBox {\r\n    public u32 id;\r\n    public SideEffectDefaultCtorBox(){ this.id = NextSeed(); }\r\n}\r\nclass Holder {\r\n    public u8 first = 0u;\r\n    public SideEffectDefaultCtorBox box;\r\n    public u64 second = 0u;\r\n}\r\n";
+    CompileResult sideEffectDefaultCtorResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(sideEffectDefaultCtorSource, "impl/side_effect_default_ctor_holder.adhd", arena.arena, sideEffectDefaultCtorResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(sideEffectDefaultCtorResult, 1u), 3u);
+    EXPECT_EQ(UnitClassOrderedFieldName(sideEffectDefaultCtorResult, 1u, 0u), "first");
+    EXPECT_EQ(UnitClassOrderedFieldName(sideEffectDefaultCtorResult, 1u, 1u), "box");
+    EXPECT_EQ(UnitClassOrderedFieldName(sideEffectDefaultCtorResult, 1u, 2u), "second");
+}
+
+void VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[move_only]\r\nclass BadAttr : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_move_only_attr.adhd",
+        "'move_only' attribute is prohibited in adhd; inherit from 'MoveOnly' instead"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "class BadBoth : NoCopy, MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_both_nocopy_moveonly.adhd",
+        "class cannot inherit from both 'NoCopy' and 'MoveOnly'"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "interface IBad : MoveOnly {\r\n    void ping();\r\n}\r\n",
+        "impl/test_bad_iface_moveonly.adhd",
+        "'MoveOnly' cannot be used as a base of an 'interface'; use 'NoCopy'"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[arena]\r\nclass BadArenaMoveOnly : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_arena_moveonly.adhd",
+        "'MoveOnly' requires an ordinary value class"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[serialize]\r\nclass BadSerializeMoveOnly : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_serialize_moveonly.adhd",
+        "'MoveOnly' requires an ordinary value class"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[extensible]\r\nclass BadExtensibleMoveOnly : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_extensible_moveonly.adhd",
+        "authored concrete bases require ordinary non-template classes"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[cpp_name(\"::MyNs::ExtMoveOnly\"), cpp_header(\"<my_ns/types.h>\")]\r\nextern class ExtMoveOnly : MoveOnly {\r\n    ExtMoveOnly();\r\n};\r\nvoid BadExtCopy(in ExtMoveOnly src) {\r\n    ExtMoveOnly copy = src;\r\n}\r\n",
+        "impl/test_bad_extern_moveonly_copy.adhd",
+        "cannot copy a non-copyable type"
+    );
+
+    const StringView plainMoveOnlySource = "class Payload : MoveOnly {\r\n    public u8 small = 1u;\r\n    public u64 wide = 2u;\r\n}\r\n";
+    CompileResult plainResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(plainMoveOnlySource, "impl/plain_move_only.adhd", arena.arena, plainResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(plainResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(plainResult, 0u, 0u), "wide");
+    EXPECT_EQ(UnitClassOrderedFieldName(plainResult, 0u, 1u), "small");
+    const StringView plainHdr = GeneratedHeaderView(plainResult);
+    EXPECT_NE(plainHdr.find("class Payload final : public ::MoveOnly{"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload(const Payload&) = delete;"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload(Payload&&)noexcept = default;"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload& operator=(const Payload&) = delete;"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload& operator=(Payload&&)noexcept = default;"), usize.max);
+
+    const StringView arenaMoveOnlySource = "class ArenaPayload : MoveOnly {\r\n    public String label = \"seed\";\r\n}\r\nvoid Transfer(mut ArenaPayload dst, mut ArenaPayload src) {\r\n    MoveInto<ArenaPayload>(dst, src);\r\n}\r\n";
+    CompileResult arenaResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(arenaMoveOnlySource, "impl/arena_move_only.adhd", arena.arena, arenaResult));
+    const StringView arenaHdr = GeneratedHeaderView(arenaResult);
+    EXPECT_NE(arenaHdr.find("class ArenaPayload final : public ::MoveOnly{"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload(const ArenaPayload&) = delete;"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload(ArenaPayload&&)noexcept = default;"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload(::ArenaBase& __adhd_mother_arena, ArenaPayload&& __adhd_rhs)"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload& operator=(const ArenaPayload&) = delete;"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload& operator=(ArenaPayload&& __adhd_rhs)"), usize.max);
+}
+
 NWB_ADHD_GTEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes, VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes)
 
 NWB_ADHD_GTEST(AdhdPreprocessor, BorrowedExpansionPreservesAliasingAndFailures, VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures)
@@ -1639,6 +1809,10 @@ NWB_ADHD_GTEST(AdhdCompiler, CompilesExternHeaderAndDeclEdgeCases, VerifyAdhdCom
 NWB_ADHD_GTEST(AdhdCompiler, CompilesModularClassEdgeCases, VerifyAdhdCompiler_CompilesModularClassEdgeCases)
 
 NWB_ADHD_GTEST(AdhdCompiler, ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder, VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder)
+
+NWB_ADHD_GTEST(AdhdCompiler, ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder, VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder)
+
+NWB_ADHD_GTEST(AdhdCompiler, ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass, VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

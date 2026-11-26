@@ -41,7 +41,6 @@ class CausticsGraphContext{
 }
 
 
-[modular]
 class CausticsGraphCoordinator : NoCopy{
     public GpuTaskId m_deferredSoftwareCausticsTask;
     public GpuTaskId m_deferredCausticIrradianceClearTask;

@@ -8,14 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> FluidVolumeShape{
     HalfSpacePlane = 0u,
     BoxAabb = 1u,
     Sphere = 2u
 }
 
-[reflect]
 enum<u8> ForceFieldType{
     GlobalGravity = 0u,
     PointGravity = 1u,

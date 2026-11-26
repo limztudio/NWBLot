@@ -123,7 +123,7 @@ class LightComponentPayloadBinary{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("transform_component")]
+[asset("transform_component")]
 class TransformComponentAsset : IComponent{
     public TransformComponent component;
 
@@ -137,7 +137,7 @@ class TransformComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("camera_component")]
+[asset("camera_component")]
 class CameraComponentAsset : IComponent{
     public CameraComponent component;
 
@@ -151,7 +151,7 @@ class CameraComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("light_component")]
+[asset("light_component")]
 class LightComponentAsset : IComponent{
     public LightComponent component;
 
@@ -165,7 +165,7 @@ class LightComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("active_camera_component")]
+[asset("active_camera_component")]
 class ActiveCameraComponentAsset : IComponent{
     public b8 loadBinary(in Span<u8> binary)override;
     public b8 loadComponentPayload(in Span<u8> payload)override;
@@ -177,7 +177,7 @@ class ActiveCameraComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("local_transform_component")]
+[asset("local_transform_component")]
 class LocalTransformComponentAsset : IComponent{
     public LocalTransformComponent component;
 
@@ -191,7 +191,7 @@ class LocalTransformComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("scene_parent_component")]
+[asset("scene_parent_component")]
 class SceneParentComponentAsset : IComponent{
     public SceneParentComponent component;
 

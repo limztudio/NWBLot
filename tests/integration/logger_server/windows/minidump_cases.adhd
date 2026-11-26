@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, ordered]
+[arena]
 class MinidumpBoundaryTests{
     private HeapStorage m_storage;
     private ScratchStorage m_scratch = ScratchStorage(s_LoggerCrashFixtureNameTestsMinidumpBoundaryScratch);

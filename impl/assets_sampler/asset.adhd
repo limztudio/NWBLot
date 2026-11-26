@@ -14,7 +14,7 @@ const StringView s_SamplerValidatePayloadContext = "Sampler::validatePayload";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("sampler")]
+[asset("sampler")]
 class Sampler{
     private SamplerDesc m_description;
 

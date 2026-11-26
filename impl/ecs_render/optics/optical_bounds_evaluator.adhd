@@ -27,7 +27,7 @@ const i32 s_OpticalBoundsMinMarginExponent = -120;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(16)]
+[align(16)]
 class OpticalWorldBounds{
     public f32x4 minimum = f32x4();
     public f32x4 maximum = f32x4();

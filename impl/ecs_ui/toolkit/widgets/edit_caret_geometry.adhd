@@ -13,8 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class EditCaretGeometry{
+class EditCaretGeometry : MoveOnly{
     private TextLayout m_layout;
     private EditBoundaryVector m_boundaries;
     private SharedPool m_stopPool = SharedPool();

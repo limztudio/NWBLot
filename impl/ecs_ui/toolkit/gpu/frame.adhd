@@ -10,8 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class GpuFrameData{
+class GpuFrameData : MoveOnly{
     public DrawSnapshot m_snapshot;
     public GpuVersion<GpuSkinVersion> m_skin;
     public Vector<GpuVersion<GpuGlyphVersion>> m_glyphPages;

@@ -39,7 +39,6 @@ class SurfelGiGraphContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class SurfelGiGraphCoordinator : NoCopy{
     public GpuTaskId m_deferredSurfelGiPreparationTask;
     public GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;

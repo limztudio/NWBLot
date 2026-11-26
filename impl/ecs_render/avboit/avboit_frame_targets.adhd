@@ -37,7 +37,6 @@ static_assert(offset_of<RendererAvboitPushConstants>(heapSlots) == size_of<u32>(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class AvboitFrameTargets{
     public u32 fullWidth = 0u;
     public u32 fullHeight = 0u;

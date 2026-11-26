@@ -356,6 +356,11 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
                 traits.isMoveAssignable = false;
                 continue;
             }
+            if(baseName == CppImporterSemantics::s_MoveOnlyBaseClass){
+                traits.isCopyConstructible = false;
+                traits.isCopyAssignable = false;
+                continue;
+            }
 
             if(acc == CX_CXXPublic && !::clang_Cursor_isNull(baseDecl) && ::clang_getCursorKind(baseDecl) != CXCursor_NoDeclFound){
                 inspectBaseAndSpecialMembers(baseDecl, traits, visitedTraitBases, true);

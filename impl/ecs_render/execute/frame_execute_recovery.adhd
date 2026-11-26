@@ -15,7 +15,6 @@ class FrameExecuteCpuSnapshot{
     public b8 deferredBindlessSlotsUploaded = false;
 }
 
-[modular]
 class FrameExecuteRecovery : NoCopy{
     private mut RendererFramePipeline m_renderer;
     private mut GpuTimingFrameTransaction m_frameTimingTransaction;

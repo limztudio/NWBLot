@@ -148,7 +148,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
 
     if(decl->ownerClassName.empty()){
         if(decl->isReflect){
-            m_cursor.error(span.line, span.column, "'reflect' attribute is only permitted on class or interface methods, not free functions");
+            m_cursor.error(span.line, span.column, "'reflect' attribute is only permitted on non-public class methods, not free functions");
             return nullptr;
         }
         if(m_cursor.check(TokenType::Identifier) && KeywordSemantics::IsMethodQualifierKeyword(m_cursor.current().text)){

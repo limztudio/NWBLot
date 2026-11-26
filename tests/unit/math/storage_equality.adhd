@@ -19,7 +19,6 @@ class ExactFloatingPointEnvironmentGuard{
     }
 }
 
-[ordered]
 class MxcsrEqualityEnvironmentGuard{
     private Expected<FloatingPointEnvironment> m_original = GetFloatingPointEnvironment();
     private u32 m_originalMxcsr = ReadMxcsr();

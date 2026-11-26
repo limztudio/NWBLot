@@ -213,6 +213,11 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
         matched->isOutOfLine = true;
         matched->body = ool->body;
         if(ool->isReflect){
+            if(matched->access == AccessSpecifier::Public){
+                ReportAdhdDiagnostic(m_arena, errors, ool->span, "'reflect' attribute is prohibited on 'public' methods; public methods in reflected classes are reflected automatically");
+                ok = false;
+                continue;
+            }
             matched->isReflect = true;
             cls->isReflect = true;
         }

@@ -32,7 +32,7 @@ class CaretShaper : ITextShaper{
     }
 }
 
-[ordered, extensible]
+[extensible]
 class EditCaretFixture{
     public CaretShaper m_shaper;
     public TextLayoutBuilder m_builder;
@@ -103,7 +103,7 @@ b8 ShapeEditBoxView(in EditModel model, mut EditBoxView view, mut TextLayoutBuil
     return layout.has_value() && view.adoptLayout(layout.value());
 }
 
-[ordered, extensible]
+[extensible]
 class MultilineViewFixture{
     public EditModel m_model = EditModel(EditLimits(), EditTextMode::Multiline);
     public FixtureShaper m_shaper;

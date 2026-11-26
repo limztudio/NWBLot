@@ -57,7 +57,6 @@ class AcceptingNavigationActions : IEditActionSink{
     public usize count(in EditAction action)const{ return CountEcsUiNavigationActions(this, action); }
 }
 
-[ordered]
 class UiEditNavigationHostTests{
     public UiEditBoxHostTests core;
     public EditModel m_navigationModel = EditModel(EditLimits(), EditTextMode::Multiline);

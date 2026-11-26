@@ -104,7 +104,8 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("RefCountPtr", "::RefCountPtr", SingleType, None, 8
 NWB_ADHD_EXPORT_GENERIC_TYPE("UniquePtr", "::UniquePtr", SingleType, None, 8u, 8u, false, true, false, false, false, false, false, false, false, false, None, false, false, true, false, false, "")
 NWB_ADHD_EXPORT_GENERIC_TYPE("NotNullUniquePtr", "::NotNullUniquePtr", SingleType, None, 8u, 8u, false, false, false, false, false, false, false, false, false, false, None, false, false, true, false, false, "")
 
-NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("NoCopy", "::NoCopy")
+NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("NoCopy",   "::NoCopy",   false)
+NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("MoveOnly", "::MoveOnly", true)
 
 NWB_ADHD_EXPORT_MOVE_ONLY_TYPE("PlanReservation")
 NWB_ADHD_EXPORT_MOVE_ONLY_TYPE("UniquePtr")

@@ -82,7 +82,6 @@ class HardwareCausticsStageResult{
     public HardwareCausticsStageResult(){}
 }
 
-[modular]
 class HardwareCausticsStageBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;

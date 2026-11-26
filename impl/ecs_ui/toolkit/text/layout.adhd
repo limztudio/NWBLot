@@ -212,8 +212,8 @@ void AppendLogicalRunWrapClusters(in BidiVisualRun lrun, in Vector<ShapedGlyph> 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only, friend(TextLayoutFaultFixture)]
-class TextLayout{
+[friend(TextLayoutFaultFixture)]
+class TextLayout : MoveOnly{
     private String m_text;
     private Vector<PlacedGlyph> m_glyphs;
     private Vector<TextCluster> m_clusters;

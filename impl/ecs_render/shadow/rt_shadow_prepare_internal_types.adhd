@@ -107,7 +107,6 @@ class ShadowPrepareResourcePlan{
     public GpuGraphResourceId sceneTlas;
 }
 
-[modular]
 class ShadowPrepareUploadChainBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut GraphicsRuntime m_graphics;
@@ -147,7 +146,6 @@ class ShadowPrepareUploadChainBuilder : NoCopy{
     private b8 declareSceneBvhUploads(in ShadowPrepareUploadInputs inputs, mut ShadowPrepareUploadChain chain);
 }
 
-[modular]
 class ShadowPrepareResourcePlanner : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;
@@ -163,7 +161,6 @@ class ShadowPrepareResourcePlanner : NoCopy{
     public b8 prepare(in ShadowPrepareResourceInputs inputs, mut ShadowPrepareResourcePlan result);
 }
 
-[modular]
 class ShadowSoftwareBvhBuildChain : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;
@@ -183,7 +180,6 @@ class ShadowSoftwareBvhBuildChain : NoCopy{
     );
 }
 
-[modular]
 class ShadowAccelerationFinalizeBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
 

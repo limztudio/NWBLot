@@ -36,8 +36,9 @@ Alpha always represents linear coverage.
 
 Accepted inputs are PNG, JPEG/JFIF, TGA, QOI, OpenEXR (`.exr`), and Radiance (`.hdr`).
 One texture cannot mix LDR and HDR RGB inputs. LDR RGB must be finite and in
-`[0, 1]`; HDR RGB must be finite and in `[0, 65216]`. Original alpha must be
-finite and in `[0, 1]`. Unsupported images and invalid values fail before
+`[0, 1]`; HDR RGB must be finite and in `[0, 65216]`. When source alpha is
+selected, it must be finite and in `[0, 1]`; an `--alpha` override replaces it
+before alpha validation. Unsupported images and invalid values fail before
 publication.
 
 The converter generates a complete mip chain in linear float space. Cube faces

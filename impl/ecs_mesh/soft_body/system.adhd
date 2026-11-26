@@ -282,7 +282,7 @@ RuntimeMeshDesc BuildSoftBodyRuntimeMeshDesc(in SoftBodyRuntimeMeshEntry entry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, system("soft_body_mesh")]
+[system("soft_body_mesh")]
 class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     private mut World m_world;
     private mut GraphicsRuntime m_graphics;

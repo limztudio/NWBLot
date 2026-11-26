@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, subsystem("csg_subsystem")]
+[subsystem("csg_subsystem")]
 class CsgSubsystem{
     public Vector<AssetRef<CsgShape>> basicShapes;
     public AssetRef<PixelShader> intervalCapFillPs;

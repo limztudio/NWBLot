@@ -42,7 +42,7 @@ Identifiers use ASCII letters, digits, and underscores, with a letter or undersc
 | --- | --- | --- |
 | `Null` | `example asset;` | Initial state of an uninitialized variable or a newly created field; there is no `null` literal. |
 | `Integer` | `42`, `-7` | Signed 64-bit integer. |
-| `Double` | `0.5`, `1e3`, `1.2E-3` | Double precision floating point; fractional notation requires digits on both sides of the dot. |
+| `Double` | `0.5`, `1e3`, `1.2E-3` | Double precision floating point; a trailing dot is allowed, as in `1.`. |
 | `String` | `"textures/example.png"` | Double quoted text with no raw newline. |
 | `Reference` | `albedo`, `asset.parameters` | Symbolic path rooted at an already declared variable. |
 | `List` | `[1, 2]`, `{1, 2}`, `[]`, `{}` | Ordered values; square and brace list forms are both accepted. |
@@ -190,7 +190,7 @@ MetaScript handles syntax and generic value operations. File access, UTF-8 BOM r
 | `preprocessor_macro_expander.h`, `preprocessor_macro_expander.cpp` | Macro expansion and defined-operand handling. |
 | `preprocessor_includes.h`, `preprocessor_includes.cpp` | Include resolution, deduplication, and source-range tracking. |
 | `attribute_parser.h`, `attribute_parser.cpp` | Single-bracket attribute list parser used by the ADHD compiler (`[name("arg"), flag]`); metadata struct attributes are parsed separately by `statement_parser.cpp`. |
-| `literal_decoder.h` | Integer and floating-point literal decoding shared across parsers and validators. |
+| `literal_decoder.h` | Integer and character literal decoding shared across parsers and validators. |
 | `parser.h`, `parser.cpp` | `Document`, parse entry points, and reader buffering. |
 | `parser_cursor.*` | Shared token cursor and diagnostics. |
 | `expression_parser.*`, `operation_validator.*` | Literal/reference expressions and operand validation. |

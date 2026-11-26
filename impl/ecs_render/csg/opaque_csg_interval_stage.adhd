@@ -44,7 +44,6 @@ class OpaqueCsgIntervalStageInputs{
     }
 }
 
-[modular]
 class OpaqueCsgIntervalStage : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererMaterialSystem m_materialSystem;

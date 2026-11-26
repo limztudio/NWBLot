@@ -33,7 +33,6 @@ extern Optional<in TestMetaDeclaration> FindTestDeclaration(in borrow Metascript
 [cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::FirstDeclaration")]
 extern Optional<in TestMetaDeclaration> FirstTestDeclaration(in borrow MetascriptDocument document);
 
-[ordered]
 class BunchFixture{
     public HeapStorage metadataArena(s_AssetCaseTestsAssetBunchMetadata);
     public HeapStorage outputArena(s_AssetCaseTestsAssetBunchOutput);

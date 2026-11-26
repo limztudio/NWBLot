@@ -33,8 +33,7 @@ const i32 s_FeOverflow = FE_OVERFLOW;
 const i32 s_FeDivByZero = FE_DIVBYZERO;
 const i32 s_FeInexact = FE_INEXACT;
 
-[move_only]
-class ScopedHeldFloatingPointEnvironment{
+class ScopedHeldFloatingPointEnvironment : NoCopy{
     private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
     private b8 m_active = true;
 

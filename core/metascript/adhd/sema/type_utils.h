@@ -464,6 +464,7 @@ struct BuiltinSpecialMethodInfo{
 [[nodiscard]] b8 IsReflectedLinearContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsReflectedMapContainerType(MStringView baseName)noexcept;
 [[nodiscard]] b8 IsNonCopyableBaseInterfaceName(MStringView name)noexcept;
+[[nodiscard]] b8 IsMoveOnlyBaseInterfaceName(MStringView name)noexcept;
 [[nodiscard]] MStringView FindNonCopyableBaseInterfaceCppName(MStringView name)noexcept;
 [[nodiscard]] b8 IsMoveOnlyTypeName(MStringView name)noexcept;
 [[nodiscard]] b8 HasBuiltinSimdRegisterField(MStringView typeName)noexcept;

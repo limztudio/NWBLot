@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, component("physics_parent")]
+[component("physics_parent")]
 class PhysicsParentComponent{
     [transient]
     public EntityID parent = s_InvalidEntityId;
@@ -31,7 +31,7 @@ class EcsShapeCastHit{
     public EntityID entity = s_InvalidEntityId;
 }
 
-[arena, component("rigid_body")]
+[component("rigid_body")]
 class RigidBodyComponent{
     public BodyType type = BodyType::Dynamic;
     public f32x4 linearVelocity(0.0f, 0.0f, 0.0f, 0.0f);
@@ -134,7 +134,7 @@ class ColliderShapeEntry{
     public b8 useMeshComponentFallback = false;
 }
 
-[arena, component("collider")]
+[component("collider")]
 class ColliderComponent{
     public ColliderShapeEntry primaryShape;
     public Name entityTag = s_NameNone;
@@ -162,7 +162,7 @@ class JointEntry{
     public Vector<f32x4> pathPoints;
 }
 
-[arena, component("joint")]
+[component("joint")]
 class JointComponent{
     public JointEntry primaryJoint;
     public Vector<JointEntry> extraJoints;
@@ -182,7 +182,7 @@ class JointComponent{
     public Vector<BodyId> boundExtraBodyIdBs;
 }
 
-[arena, component("physics_world_config")]
+[component("physics_world_config")]
 class PhysicsWorldConfigComponent{
     public f32x4 gravity(0.0f, -9.81f, 0.0f, 0.0f);
     public f32 restitutionThreshold = s_RestitutionThreshold;

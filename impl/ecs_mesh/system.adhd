@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, system("mesh")]
+[system("mesh")]
 class MeshSystem : IRuntimeMeshRegistry{
     private mut World m_world;
     private Vector<mut IRuntimeMeshProvider> m_runtimeMeshProviders;

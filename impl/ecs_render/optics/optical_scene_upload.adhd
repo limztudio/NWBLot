@@ -159,8 +159,7 @@ class RayTracingOpticalUploadState : NoCopy{
     }
 }
 
-[move_only]
-class RayTracingOpticalUploadReservation{
+class RayTracingOpticalUploadReservation : MoveOnly{
     private PlanReservation<RayTracingOpticalUploadControlHandle, RayTracingOpticalUploadPlan> m_lease;
 
     public RayTracingOpticalUploadReservation(in RayTracingOpticalUploadControlHandle control, in RayTracingOpticalUploadPlan plan){

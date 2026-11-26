@@ -74,7 +74,7 @@ void CollectSortedEntities<T>(mut World world, mut Vector<EntityID> outEntities)
     }
 }
 
-[arena, modular, system("physics")]
+[system("physics")]
 class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     private mut World m_world;
     private PhysicsWorld m_physicsWorld;

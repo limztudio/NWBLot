@@ -76,13 +76,13 @@ class ManifestTriggerFields{
     public u64 line = 0u;
 }
 
-[arena, ordered]
+[arena]
 class LoggerServerCrash{
     private CapturingLogger m_logger;
     private LoggerRegistrationGuard m_registration = LoggerRegistrationGuard(this.m_logger);
 }
 
-[arena, ordered]
+[arena]
 class LoggerProducerContracts{
     private CapturingLogger m_logger;
     private LoggerRegistrationGuard m_registration = LoggerRegistrationGuard(this.m_logger, LoggerBreakPolicy::ReportOnly);

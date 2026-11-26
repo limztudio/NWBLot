@@ -15,13 +15,11 @@ const usize s_HwTransparentScratchBufferCount = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> TransparentShadowSampling{
     ReferenceThree,
     TemporalOne
 }
 
-[reflect]
 enum<u8> ShadowReceiverResolution{
     Half = 2u,
     Quarter = 4u

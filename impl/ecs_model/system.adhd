@@ -49,7 +49,7 @@ class ModelObjectRendererHooks{
     }
 }
 
-[arena, system("model")]
+[system("model")]
 class ModelSystem{
     private mut World m_world;
     private mut AssetManager m_assetManager;

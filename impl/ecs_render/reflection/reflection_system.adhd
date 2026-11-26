@@ -29,7 +29,6 @@ class ReflectionCsgDispatchState{
 }
 type ReflectionCsgDispatchHandle = Shared<ReflectionCsgDispatchState>;
 
-[modular]
 class RendererReflectionSystem : NoCopy{
     private SharedPool m_versions = SharedPool();
     private mut GraphicsRuntime m_graphics;

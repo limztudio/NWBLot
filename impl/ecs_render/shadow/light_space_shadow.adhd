@@ -108,7 +108,6 @@ class FrozenLightSpaceShadowSnapshot{
 
 type FrozenLightSpaceShadowHandle = Shared<FrozenLightSpaceShadowSnapshot>;
 
-[ordered]
 class LightSpaceShadowState : NoCopy{
     public SharedPool m_frozenPool = SharedPool();
     public LightSpaceShadowSnapshot m_snapshot;
@@ -146,7 +145,6 @@ class LightSpaceShadowState : NoCopy{
     public b8 m_csgRequired = false;
 }
 
-[modular]
 class LightSpaceShadowRecorder{
     public b8 views(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;
     public b8 cull(in LightSpaceShadowSnapshot snapshot, mut CommandList commandList, mut GpuDescriptorHeap heap)const;

@@ -477,7 +477,7 @@ void PropagateSceneHierarchyTransformsWithScratch(mut World world, in b8 useUnre
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, system("scene_hierarchy")]
+[system("scene_hierarchy")]
 class SceneHierarchySystem{
     private SceneHierarchyScratch m_scratch;
 

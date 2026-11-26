@@ -13,7 +13,6 @@ class UiClipboardPublicationRecord{
     public ClipboardChannel channel = ClipboardChannel::Clipboard;
 }
 
-[modular]
 class UiClipboardPublications : NoCopy{
     private mut IClipboardService m_service;
     private ClipboardCompletion m_completion = ClipboardCompletion();

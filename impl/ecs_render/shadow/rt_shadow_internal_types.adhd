@@ -262,7 +262,6 @@ class ShadowVisibilityResourcePlan{
     public Vector<GpuTaskResourceUse> resourceUses;
 }
 
-[modular]
 class SoftShadowSplitResourceUseBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
 
@@ -274,7 +273,6 @@ class SoftShadowSplitResourceUseBuilder : NoCopy{
     public b8 build(in SoftShadowSplitResourceInputs inputs, mut SoftShadowSplitResourceUses uses);
 }
 
-[modular]
 class SoftShadowSplitTaskChainBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut GraphicsRuntime m_graphics;
@@ -311,7 +309,6 @@ class SoftShadowSplitTaskChainBuilder : NoCopy{
     );
 }
 
-[modular]
 class ShadowVisibilityResourcePlanner : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;

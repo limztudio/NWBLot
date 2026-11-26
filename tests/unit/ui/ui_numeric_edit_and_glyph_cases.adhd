@@ -52,7 +52,6 @@ class UiNumericFormatBuffer{
     }
 }
 
-[ordered]
 class UiNumericFormatGuardedOneByteBuffer{
     public u8 first = 'a';
     public Array<u8, 1u> buffer = Array<u8, 1u>('x');

@@ -3,7 +3,7 @@
 Transparent materials with a finite surface IOR above 1.0 participate in camera-visible
 refraction (`nwbRefractionIorEligible` in `impl/assets/graphics/refraction/ior.slangi`). `RendererSystem::setRefractionEnabled(false)` restores ordinary AVBOIT;
 `setRefractionHardwareTracingEnabled(false)` selects the screen-space route without
-changing device capability reporting. Both settings default to enabled.
+changing device capability reporting. Both settings default to enabled. `RendererSystem::setRefractionDiagnosticsEnabled(...)` and `tryGetLatestRefractionStatistics()` toggle and read completed per-frame refraction query diagnostics.
 
 The renderer retains one primary refractive instance per pixel. A depth-tested
 raster pass captures its normal, IOR, absorption tint, transparent-pass instance
@@ -71,11 +71,14 @@ that region only opaque background reuse or explicitly traced layers are used.
 These are deliberate quality limits, not additional bounces hidden behind an
 unbounded loop.
 
-Capture and resolve use full resolution for sharp glass. The new default-format
-targets use approximately 42 bytes per pixel (capture, resolved radiance, and the
-foreground accumulators), in addition to existing AVBOIT resources. A compute
-classifier ORs the current full-resolution capture depth into 8x8 tile activity,
-compacts active tile indices, and publishes indirect resolve arguments. Current
+Capture and resolve use full resolution for sharp glass. On default hardware formats
+(`RGBA16_FLOAT` foreground color, `R16_FLOAT` foreground extinction, `RGBA16_FLOAT`
+normal/IOR, `RGBA16_FLOAT` tint/coverage, `RG32_FLOAT` instance identity,
+`RGBA16_FLOAT` primary specular/roughness, `D32` refraction depth, and `RGBA16_FLOAT`
+resolved radiance), the eight capture/resolve targets total 54 bytes per pixel in
+addition to existing AVBOIT resources. A compute classifier ORs the current
+full-resolution capture depth into 8x8 tile activity, compacts active tile indices, and
+publishes indirect resolve arguments. Current
 capture depth gates the final optical composite: pixels outside captured glass
 use ordinary AVBOIT composition without reading resolved radiance. Empty tiles
 may retain prior contents; every current captured pixel is queued and rewritten

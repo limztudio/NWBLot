@@ -29,7 +29,7 @@ const StringView s_ChildPopupKey = "child";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered, extensible]
+[extensible]
 class WidgetFixture{
     public Font m_font = Font(Name("tests/ui/fonts/latin"));
     public TextService m_text;

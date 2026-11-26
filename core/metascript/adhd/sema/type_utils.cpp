@@ -52,11 +52,12 @@ inline constexpr BuiltinGenericTypeInfo s_BuiltinGenericTypes[] = {
 struct BuiltinNonCopyableBaseInterfaceInfo{
     MStringView ifaceName;
     MStringView cppExportName;
+    b8 allowsMove;
 };
 
 inline constexpr BuiltinNonCopyableBaseInterfaceInfo s_NonCopyableBaseInterfaces[] = {
-#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName, cppExportName) \
-    BuiltinNonCopyableBaseInterfaceInfo{ ifaceName, cppExportName },
+#define NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE(ifaceName, cppExportName, allowsMove) \
+    BuiltinNonCopyableBaseInterfaceInfo{ ifaceName, cppExportName, allowsMove },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE
 };
@@ -2876,6 +2877,11 @@ b8 IsReflectedMapContainerType(const MStringView baseName)noexcept{
 
 b8 IsNonCopyableBaseInterfaceName(const MStringView name)noexcept{
     return __hidden_adhd_type_utils::FindNonCopyableBaseInterface(name) != nullptr;
+}
+
+b8 IsMoveOnlyBaseInterfaceName(const MStringView name)noexcept{
+    const __hidden_adhd_type_utils::BuiltinNonCopyableBaseInterfaceInfo* entry = __hidden_adhd_type_utils::FindNonCopyableBaseInterface(name);
+    return entry != nullptr && entry->allowsMove;
 }
 
 MStringView FindNonCopyableBaseInterfaceCppName(const MStringView name)noexcept{

@@ -33,6 +33,18 @@ public:
     NoCopy& operator=(NoCopy&&) = delete;
 };
 
+class MoveOnly{
+public:
+    MoveOnly(const MoveOnly&) = delete;
+    MoveOnly(MoveOnly&&)noexcept = default;
+    MoveOnly()noexcept = default;
+
+
+public:
+    MoveOnly& operator=(const MoveOnly&) = delete;
+    MoveOnly& operator=(MoveOnly&&)noexcept = default;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

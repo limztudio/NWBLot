@@ -13,7 +13,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class OpaqueRegularComputeEmulationGraphTaskPayload{
     public mut RendererMaterialSystem materialSystem;
     public in DeferredFrameTargets targets;
@@ -49,7 +48,6 @@ class OpaqueRegularComputeEmulationGraphTaskPayload{
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
 }
 
-[modular]
 class OpaqueRegularSharedComputeEmulationGraphTask{
     public mut RendererMaterialSystem materialSystem;
     public in DeferredFrameTargets targets;

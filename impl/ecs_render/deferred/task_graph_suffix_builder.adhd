@@ -37,7 +37,6 @@ class DeferredGraphSuffixInputs{
     }
 }
 
-[modular]
 class DeferredGraphSuffixBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererDeferredSystem m_deferredSystem;

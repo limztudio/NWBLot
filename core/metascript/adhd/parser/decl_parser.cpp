@@ -547,13 +547,13 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         b8 matchedAttr = false;
         if(!tryParseExternAttribute(attr, extCppExportName, extRequiredHeader, isExtern, matchedAttr))
             return nullptr;
-#define NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE(attrName) \
-        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()) \
-            matchedAttr = true;
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_ENUM_FLAG_ATTRIBUTE
         if(!matchedAttr){
-            m_cursor.error(attr.line, attr.column, isFlag ? "unsupported attribute on 'flag'; only '[reflect]' is permitted" : "unsupported attribute on 'enum'; only '[reflect]' is permitted");
+            if(attr.name == "reflect")
+                m_cursor.error(attr.line, attr.column, "'reflect' attribute is prohibited on 'enum' and 'flag' in adhd; enum and flag reflection is decided automatically by the adhd compiler");
+            else if(isExtern)
+                m_cursor.error(attr.line, attr.column, isFlag ? "unsupported attribute on 'extern flag'; only '[cpp_name(\"...\")]' and '[cpp_header(\"...\")]' are permitted" : "unsupported attribute on 'extern enum'; only '[cpp_name(\"...\")]' and '[cpp_header(\"...\")]' are permitted");
+            else
+                m_cursor.error(attr.line, attr.column, isFlag ? "attributes are not permitted on 'flag'" : "attributes are not permitted on 'enum'");
             return nullptr;
         }
     }
@@ -681,9 +681,6 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         b8 matchedAttr = false;
         if(!tryParseExternAttribute(attr, decl->cppExportName, decl->requiredHeader, isExtern, matchedAttr))
             return nullptr;
-#define NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE(attrName) \
-        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()) \
-            matchedAttr = true;
 #define NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE(attrName, declField) \
         if(!matchedAttr && attr.name == attrName && attr.arguments.size() == 1u && attr.arguments[0].kind == TokenType::StringLiteral){ \
             decl->declField = attr.arguments[0].text; \
@@ -691,9 +688,11 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         }
 #include "../export_keywords.h"
 #undef NWB_ADHD_EXPORT_INTERFACE_STRING_ATTRIBUTE
-#undef NWB_ADHD_EXPORT_INTERFACE_FLAG_ATTRIBUTE
         if(!matchedAttr){
-            m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'reflect' or 'asset(\"...\")'");
+            if(attr.name == "reflect")
+                m_cursor.error(attr.line, attr.column, "'reflect' attribute is prohibited on 'interface' in adhd; interface reflection is decided automatically by the adhd compiler");
+            else
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on 'interface'; expected 'asset(\"...\")'");
             return nullptr;
         }
     }
@@ -751,6 +750,10 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         method->requiredHeader = decl->requiredHeader;
         if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;
+        if(method->isReflect){
+            m_cursor.error(methodSpan.line, methodSpan.column, "'reflect' attribute is prohibited on 'interface' methods; interface reflection is decided automatically by the adhd compiler");
+            return nullptr;
+        }
 
         if(!parseMethodOrOperatorName(method->name, method->isOperator, "expected interface method name"))
             return nullptr;

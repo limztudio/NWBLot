@@ -19,12 +19,12 @@ const Array<usize, 34u> s_Lengths = Array<usize, 34u>(
     65u, 127u, 128u, 129u, 255u, 256u, 257u, 511u, 512u, 513u, 4095u, 4096u, 4097u, 8191u, 8192u, 8193u
 );
 
-[layout(64)]
+[align(64)]
 class AlignedBytes<const usize Count>{
     public Array<u8, Count> bytes;
 }
 
-[layout(16)]
+[align(16)]
 class AlignedPacket{
     public Array<u64, 4u> raw = Array<u64, 4u>();
 }

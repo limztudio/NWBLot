@@ -51,7 +51,6 @@ class ShadowMaterialSampledTextureCollector : NoCopy{
     }
 }
 
-[modular]
 class PreparedShadowMaterialContext : NoCopy{
     private Vector<u8> m_instanceMaterialBytes;
     private Vector<u8> m_instanceBytes;

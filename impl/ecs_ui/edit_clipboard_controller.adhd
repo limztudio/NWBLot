@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class UiEditClipboardController : NoCopy{
     private mut IClipboardService m_service;
     private ClipboardCompletion m_completion = ClipboardCompletion();

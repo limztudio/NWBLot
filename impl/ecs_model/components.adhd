@@ -14,12 +14,12 @@ enum<u32> ModelObjectKind{
     SkinnedMesh
 }
 
-[arena, component("model")]
+[component("model")]
 class ModelComponent{
     public AssetRef<Model> model;
 }
 
-[arena, component("model_runtime")]
+[component("model_runtime")]
 class ModelRuntimeComponent{
     [transient]
     public Name model = s_NameNone;
@@ -27,7 +27,7 @@ class ModelRuntimeComponent{
     public u32 objectCount = 0u;
 }
 
-[arena, component("model_object")]
+[component("model_object")]
 class ModelObjectComponent{
     [transient]
     public Name model = s_NameNone;
@@ -43,13 +43,13 @@ class ModelObjectComponent{
     public ModelObjectKind kind = ModelObjectKind::StaticMesh;
 }
 
-[arena, component("model_skeleton")]
+[component("model_skeleton")]
 class ModelSkeletonComponent{
     [transient]
     public AssetRef<Skeleton> skeleton;
 }
 
-[arena, component("model_static_mesh_attachment")]
+[component("model_static_mesh_attachment")]
 class ModelStaticMeshAttachmentComponent{
     public b8 hasJointAttachment()const{
         return this.parentEntity.valid() && this.parentJointIndex != s_SkeletonInvalidJointIndex;

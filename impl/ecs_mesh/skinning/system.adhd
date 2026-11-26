@@ -31,7 +31,7 @@ class CachedSkinningSkeletonPoseEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, modular, system("mesh_skinning")]
+[system("mesh_skinning")]
 class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     private GpuTaskGraph m_frameTaskGraph;
     private GpuCompiledGraph m_frameCompiledGraph;

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("rigid_body_component")]
+[asset("rigid_body_component")]
 class RigidBodyComponentAsset : IComponent{
     public RigidBodyComponent component;
 
@@ -26,7 +26,7 @@ class RigidBodyComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("collider_component")]
+[asset("collider_component")]
 class ColliderComponentAsset : IComponent{
     public ColliderComponent component;
 
@@ -45,7 +45,7 @@ class ColliderComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("joint_component")]
+[asset("joint_component")]
 class JointComponentAsset : IComponent{
     public JointComponent component;
 
@@ -73,7 +73,7 @@ class JointComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("physics_parent_component")]
+[asset("physics_parent_component")]
 class PhysicsParentComponentAsset : IComponent{
     public PhysicsParentComponent component;
 
@@ -89,7 +89,7 @@ class PhysicsParentComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("physics_world_config_component")]
+[asset("physics_world_config_component")]
 class PhysicsWorldConfigComponentAsset : IComponent{
     public PhysicsWorldConfigComponent component;
 
@@ -105,7 +105,7 @@ class PhysicsWorldConfigComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("character_controller_component")]
+[asset("character_controller_component")]
 class CharacterControllerComponentAsset : IComponent{
     public CharacterControllerComponent component;
 
@@ -124,7 +124,7 @@ class CharacterControllerComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("vehicle_component")]
+[asset("vehicle_component")]
 class VehicleComponentAsset : IComponent{
     public VehicleComponent component;
 
@@ -143,7 +143,7 @@ class VehicleComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("ragdoll_component")]
+[asset("ragdoll_component")]
 class RagdollComponentAsset : IComponent{
     public RagdollComponent component;
 
@@ -163,7 +163,7 @@ class RagdollComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("fluid_volume_component")]
+[asset("fluid_volume_component")]
 class FluidVolumeComponentAsset : IComponent{
     public FluidVolumeComponent component;
 
@@ -178,7 +178,7 @@ class FluidVolumeComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("force_field_component")]
+[asset("force_field_component")]
 class ForceFieldComponentAsset : IComponent{
     public ForceFieldComponent component;
 
@@ -193,7 +193,7 @@ class ForceFieldComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("articulation_component")]
+[asset("articulation_component")]
 class ArticulationComponentAsset : IComponent{
     public ArticulationComponent component;
 
@@ -213,7 +213,7 @@ class ArticulationComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("soft_body_component")]
+[asset("soft_body_component")]
 class SoftBodyComponentAsset : IComponent{
     public SoftBodyComponent component;
 
@@ -228,7 +228,7 @@ class SoftBodyComponentAsset : IComponent{
     public b8 appendValidatedComponentPayload(mut Vector<u8> outBinary)const override;
 }
 
-[arena, asset("gpu_render_transform_export_component")]
+[asset("gpu_render_transform_export_component")]
 class GpuRenderTransformExportComponentAsset : IComponent{
     public GpuRenderTransformExportComponent component;
 

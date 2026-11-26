@@ -8,11 +8,10 @@
 #include "text_input.h"
 #include "text_input_preedit.h"
 #include "text_input_dispatch.h"
+#include "x11_lib.h"
 
 #include <core/os/text_input_service.h>
 #include <core/os/text_input_text.h>
-
-#include <X11/Xlib.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

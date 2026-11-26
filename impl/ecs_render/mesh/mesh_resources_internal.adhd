@@ -33,12 +33,10 @@ class MeshDescriptorTransaction : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class MeshSoftwareBvhBindings{
     public b8 ensure(mut GraphicsRuntime graphics, mut MeshResources mesh)const;
 }
 
-[modular]
 class MeshEmulationResources{
     public b8 prepare(mut GraphicsRuntime graphics, mut MeshResources mesh)const;
 }

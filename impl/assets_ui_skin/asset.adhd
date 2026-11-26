@@ -16,7 +16,7 @@ type RegionVector = Vector<UiSkinRegion>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("ui_skin")]
+[asset("ui_skin")]
 class UiSkin{
     private RegionVector m_regions;
     private Vector<u32> m_regionIndex;

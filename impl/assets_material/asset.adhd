@@ -18,7 +18,7 @@ type ResourceReferenceVector = Vector<MaterialResourceReference>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("material")]
+[asset("material")]
 class Material{
     private String m_shaderVariant;
     private Name m_materialInterface = s_NameNone;

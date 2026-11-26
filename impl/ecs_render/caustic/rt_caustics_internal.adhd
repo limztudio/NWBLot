@@ -137,7 +137,6 @@ class CausticsGeometryAndResolveResult{
     public GpuTaskId causticGeometryTask;
 }
 
-[modular]
 class CausticsResolveChainBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     private mut RendererRayTracingSystem m_raytracingSystem;
@@ -160,7 +159,6 @@ class CausticsResolveChainBuilder : NoCopy{
     public Expected<CausticsResolveChainResult> declareSoftware(in CausticsResolveChainInputs inputs);
 }
 
-[modular]
 class CausticPipelineSet : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private mut RendererShaderSystem m_shaderSystem;

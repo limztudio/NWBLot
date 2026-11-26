@@ -41,7 +41,7 @@ type UiGpuCommandRecordingMode = GpuCommandRecordingMode;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, ordered, system("ui_layer"), friend(UiLayerPaintGuard)]
+[system("ui_layer"), friend(UiLayerPaintGuard)]
 class UiLayerSystem : IRenderPass, IInputEventHandler{
     private mut World m_world;
     private mut GraphicsRuntime m_graphics;

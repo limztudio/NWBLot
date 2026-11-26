@@ -740,7 +740,7 @@ void VerifySceneSubsystemAssets_UnloadDestroyRollbackAndDuplicateEntityName(){
 
 void VerifySceneHierarchy_CycleScalePropagationDecomposeAndScopedNames(){
     EcsTestWorld tw;
-    mut SceneHierarchySystem sys = tw.world.addSystem<SceneHierarchySystem>();
+    tw.world.addSystem<SceneHierarchySystem>();
 
     Entity gp = tw.world.createEntity();
     {

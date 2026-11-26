@@ -8,21 +8,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> OpticalVolumeCoincidence{
     Independent,
     IdenticalMaterial,
     SharedGroup
 }
 
-[reflect]
 enum<u8> OpticalBoundaryMode{
     Unspecified,
     ClosedNested,
     ClosedPriority
 }
 
-[arena, component("renderer")]
+[component("renderer")]
 class RendererComponent{
     public AssetRef<Material> material;
     public b8 visible = true;
@@ -44,7 +42,7 @@ class MaterialInstanceParameter{
     public u32x4u value;
 }
 
-[arena, component("material_instance")]
+[component("material_instance")]
 class MaterialInstanceComponent{
     public MaterialInstanceComponent(){}
 

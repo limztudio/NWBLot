@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only, friend(Builder)]
-class SliderFrame : NoCopy{
+[friend(Builder)]
+class SliderFrame : MoveOnly{
     private mut SliderState m_state;
     private SliderOptions m_options;
     private SliderStyle m_style;

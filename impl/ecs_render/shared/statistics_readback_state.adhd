@@ -135,8 +135,7 @@ class StatisticsReadbackState<StatisticsT, OutcomeT : IStatisticsOutcome<Statist
     }
 }
 
-[move_only]
-class StatisticsReservation<StatisticsT, OutcomeT : IStatisticsOutcome<StatisticsT>>{
+class StatisticsReservation<StatisticsT, OutcomeT : IStatisticsOutcome<StatisticsT>> : MoveOnly{
     private PlanReservation<Shared<StatisticsReadbackState<StatisticsT, OutcomeT>>, StatisticsReservationKey> m_lease;
 
     public StatisticsReservation(in Shared<StatisticsReadbackState<StatisticsT, OutcomeT>> control, in StatisticsT metadata){

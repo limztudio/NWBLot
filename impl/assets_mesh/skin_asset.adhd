@@ -17,7 +17,7 @@ type InverseBindMatrixVector = Vector<SkeletonJointMatrix>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, asset("skin")]
+[asset("skin")]
 class Skin{
     private AssetRef<Mesh> m_mesh;
     private AssetRef<Skeleton> m_skeleton;

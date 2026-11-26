@@ -17,7 +17,6 @@ const Name s_RefractionResolveTargetName = "engine/avboit/refraction_resolve";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular]
 class RefractionTargetBuilder : NoCopy{
     private mut GraphicsRuntime m_graphics;
 

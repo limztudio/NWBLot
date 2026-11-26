@@ -46,7 +46,7 @@ const Array<Name, 2u> s_FrameTaskTimingFeedbackScopes = Array<Name, 2u>(s_Timing
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[ordered, modular, friend(DeferredFrameTopologyValidator, OpaqueEmulationMergeValidator, ShadowPrepareStateLifecycleContext, ShadowVisibilityStateLifecycleContext, SoftwareCausticsStateLifecycleContext,
+[friend(DeferredFrameTopologyValidator, OpaqueEmulationMergeValidator, ShadowPrepareStateLifecycleContext, ShadowVisibilityStateLifecycleContext, SoftwareCausticsStateLifecycleContext,
     SurfelGiStateLifecycleContext, HardwareCausticsStateLifecycleContext, DeferredLightingStateLifecycleContext, FrameExecutePresentTails, FrameExecuteRecovery, FrameExecuteStateLifecycleSet, FrameExecuteTimingState,
     ShadowPreparePacketValidator, SurfelCausticsMergeValidator, GraphicsPrefixTimingResolver, ShadowVisibilityMergeValidator)]
 class RendererFramePipeline : NoCopy{

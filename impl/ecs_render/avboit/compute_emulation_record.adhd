@@ -36,7 +36,6 @@ class AvboitComputeEmulationRecordTrait{
     }
 }
 
-[modular]
 class AvboitComputeEmulationTaskPayload{
     public mut GraphicsRuntime graphics;
     public mut RendererMaterialSystem materialSystem;
@@ -81,7 +80,6 @@ class AvboitComputeEmulationTaskPayload{
     }
 }
 
-[modular]
 class AvboitSharedComputeEmulationTaskPayload{
     public mut GraphicsRuntime graphics;
     public mut RendererMaterialSystem materialSystem;
@@ -126,7 +124,6 @@ class AvboitSharedComputeEmulationTaskPayload{
     }
 }
 
-[modular]
 class AvboitRasterPassTaskPayload{
     public mut RendererAvboitSystem avboitSystem;
     public mut DeferredFrameTargets targets;

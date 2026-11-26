@@ -418,7 +418,6 @@ class UiFilteredListSourceView : IListDataSource, NoCopy{
     public b8 enabled(in u64 index)const override{ return this.m_state.filteredEnabled(index); }
 }
 
-[ordered]
 class UiFilteredListSource<StateT : IUiFilteredListState> : ISearchableListDataSource, NoCopy{
     private StateT m_state = StateT();
     private UiFilteredListSourceView m_view = UiFilteredListSourceView(this.m_state);

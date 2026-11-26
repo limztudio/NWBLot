@@ -42,13 +42,12 @@ type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(32)]
+[align(32)]
 class OverAlignedComponent{
     public Array<u8, 32u> value;
 }
 
-[move_only]
-class MoveOnlyMessage{
+class MoveOnlyMessage : MoveOnly{
     public u32 value;
     public MoveOnlyMessage(in u32 initial){ this.value = initial; }
 }
@@ -63,7 +62,7 @@ class ThrowingConstructionComponent{
     }
 }
 
-[arena, system("counting")]
+[system("counting")]
 class CountingSystem{
     public u32 prepares = 0u;
     public u32 updates = 0u;
@@ -92,7 +91,7 @@ class CountingSystem{
     }
 }
 
-[arena, system("scheduled")]
+[system("scheduled")]
 class ScheduledSystem{
     private Func<void()> m_update;
     private CpuTaskOptions m_options;
@@ -137,7 +136,7 @@ class ScheduledSystem{
     }
 }
 
-[arena, system("rejecting_range")]
+[system("rejecting_range")]
 class RejectingRangeSystem{
     public u32 callbacks = 0u;
 
@@ -162,7 +161,7 @@ class RejectingRangeSystem{
     }
 }
 
-[arena, system("lifetime")]
+[system("lifetime")]
 class LifetimeSystem{
     private mut SystemLifetimeState m_state;
     private b8 m_isProvider;

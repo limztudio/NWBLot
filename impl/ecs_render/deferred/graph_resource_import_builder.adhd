@@ -44,7 +44,6 @@ class DeferredGraphResourceImportInputs{
     }
 }
 
-[modular]
 class DeferredGraphResourceImportBuilder : NoCopy{
     private mut GpuTaskGraph m_graph;
     public DeferredGraphResourceImportBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }

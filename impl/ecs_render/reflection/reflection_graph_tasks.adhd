@@ -97,8 +97,7 @@ class ReflectionParametersUploadTask{
     }
 }
 
-[move_only]
-class ReflectionDispatchTask{
+class ReflectionDispatchTask : MoveOnly{
     private mut GraphicsRuntime m_graphics;
     private mut RendererRayTracingSystem m_raytracingSystem;
     private ReflectionFrameSnapshot m_resources;

@@ -21,7 +21,6 @@ const Name s_SliderThumbFallbackRegionName = "scrollbar.thumb.normal";
 enum<u8> SliderOrientation{
     Horizontal = 0u,
     Vertical = 1u,
-    kCount
 }
 
 class SliderStyle{
@@ -163,12 +162,6 @@ b8 IsValidSliderOptions(in SliderOptions options){
         && options.height >= 0.0f;
 }
 
-void ApplySkinPaletteToSliderStyle(in UiSkinPalette palette, mut SliderStyle style){
-    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
-    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
-    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
-}
-
 b8 IsValidSliderMetrics(in SliderMetrics metrics){
     if(
         !IsValidUiPadding(metrics.padding)
@@ -181,9 +174,9 @@ b8 IsValidSliderMetrics(in SliderMetrics metrics){
     )
         return false;
     const VectorDouble paddingSize = VectorDouble(cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top), cast<f64>(metrics.padding.left), cast<f64>(metrics.padding.top)) + VectorDouble(cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom), cast<f64>(metrics.padding.right), cast<f64>(metrics.padding.bottom));
-    VectorDouble innerExtent(cast<f64>(metrics.thumbExtent.x), UiSimdMaxF64(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight)), 0.0, 0.0);
+    VectorDouble innerExtent(cast<f64>(metrics.thumbExtent.x), Max(cast<f64>(metrics.thumbExtent.y), cast<f64>(metrics.trackHeight)), 0.0, 0.0);
     if(metrics.orientation == SliderOrientation::Vertical)
-        innerExtent = VectorDouble(UiSimdMaxF64(cast<f64>(metrics.thumbExtent.x), cast<f64>(metrics.trackHeight)), cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
+        innerExtent = VectorDouble(Max(cast<f64>(metrics.thumbExtent.x), cast<f64>(metrics.trackHeight)), cast<f64>(metrics.thumbExtent.y), 0.0, 0.0);
     const VectorDouble size = paddingSize + VectorDouble(innerExtent.x, innerExtent.y, innerExtent.x, innerExtent.y);
     const f64 width = size.x;
     const f64 height = size.y;
@@ -210,13 +203,13 @@ Expected<SliderMetrics> MeasureSlider(in SliderOptions options, in SliderStyle s
     candidate.trackHeight = style.trackHeight;
     candidate.orientation = options.orientation;
     const VectorDouble paddingSize = VectorDouble(cast<f64>(style.padding.left), cast<f64>(style.padding.top), cast<f64>(style.padding.left), cast<f64>(style.padding.top)) + VectorDouble(cast<f64>(style.padding.right), cast<f64>(style.padding.bottom), cast<f64>(style.padding.right), cast<f64>(style.padding.bottom));
-    VectorDouble innerExtent(cast<f64>(style.thumbExtent.x), UiSimdMaxF64(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight)), 0.0, 0.0);
+    VectorDouble innerExtent(cast<f64>(style.thumbExtent.x), Max(cast<f64>(style.thumbExtent.y), cast<f64>(style.trackHeight)), 0.0, 0.0);
     if(options.orientation == SliderOrientation::Vertical)
-        innerExtent = VectorDouble(UiSimdMaxF64(cast<f64>(style.thumbExtent.x), cast<f64>(style.trackHeight)), cast<f64>(style.thumbExtent.y), 0.0, 0.0);
+        innerExtent = VectorDouble(Max(cast<f64>(style.thumbExtent.x), cast<f64>(style.trackHeight)), cast<f64>(style.thumbExtent.y), 0.0, 0.0);
     const VectorDouble size = paddingSize + VectorDouble(innerExtent.x, innerExtent.y, innerExtent.x, innerExtent.y);
     const f64 width = size.x;
     const f64 intrinsicH = size.y;
-    const f64 height = UiSimdMaxF64(intrinsicH, cast<f64>(options.height));
+    const f64 height = Max(intrinsicH, cast<f64>(options.height));
     if(!IsFinite(VectorDouble(width, height, 0.0, 0.0)) || width > s_UiMaxFloatF64 || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
     candidate.contentSize = Point(cast<f32>(width), cast<f32>(height));
@@ -240,14 +233,14 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
     const f64 y = insetRect.y;
     const f64 w = insetRect.z;
     const f64 h = insetRect.w;
-    const f64 thumbW = UiSimdMinF64(cast<f64>(metrics.thumbExtent.x), UiSimdMaxF64(0.0, w));
-    const f64 thumbH = UiSimdMinF64(cast<f64>(metrics.thumbExtent.y), UiSimdMaxF64(0.0, h));
+    const f64 thumbW = Min(cast<f64>(metrics.thumbExtent.x), Max(0.0, w));
+    const f64 thumbH = Min(cast<f64>(metrics.thumbExtent.y), Max(0.0, h));
     const Expected<Rect> travelBounds = TryMakeUiRect(x, y, w, h, UiRectPrecision::PreciseExtents);
     if(!travelBounds.has_value())
         return MakeUnexpected(Failure());
     candidate.travelBounds = travelBounds.value();
     if(metrics.orientation == SliderOrientation::Horizontal){
-        const f64 trackH = UiSimdMinF64(cast<f64>(metrics.trackHeight), h);
+        const f64 trackH = Min(cast<f64>(metrics.trackHeight), h);
         const f64 travelW = w - thumbW;
         const f64 centerStartX = x + thumbW * 0.5;
         f64 thumbX = x + travelW * normalized;
@@ -272,7 +265,7 @@ Expected<SliderPlacement> PlaceSlider(in Rect bounds, in Rect clip, in SliderMet
         candidate.thumb = thumb.value();
     }
     else{
-        const f64 trackW = UiSimdMinF64(cast<f64>(metrics.trackHeight), w);
+        const f64 trackW = Min(cast<f64>(metrics.trackHeight), w);
         const f64 travelH = h - thumbH;
         const f64 centerStartY = y + thumbH * 0.5;
         f64 thumbY = y + travelH * (1.0 - normalized);

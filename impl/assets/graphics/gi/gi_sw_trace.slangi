@@ -21,27 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define g_NwbGiSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
-#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
-
-#define g_NwbGiSwMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot)
-
-uint nwbMeshFrameMaterialTypedHeapSlot(){
-    return g_NwbGiSwMaterialContextSlots.sceneSlots.w;
-}
-uint nwbMeshFrameInstanceHeapSlot(){
-    return g_NwbGiSwMaterialContextSlots.materialSlots.x;
-}
-uint nwbMeshFrameViewHeapSlot(){
-    return 0u;
-}
-#include "../mesh/bindless_heap_mesh.slangi"
-
-#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
-
-#include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/surface_dispatch.slangi"
+#include "gi_trace_bindless.slangi"
 
 #if NWB_GI_CSG_ENABLED
 #define NWB_CSG_RAY_HARDWARE 0
@@ -69,16 +49,16 @@ NwbRayTriangleHit nwbGiSwTriangleHit(const NwbRtInstanceMaterial material, const
 }
 
 void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float minimum, inout NwbGiGeometryHit closest){
-    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if NWB_GI_CSG_ENABLED
     if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u){
-        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(g_NwbGiSwMaterialContextSlots.materialSlots.w, g_NwbGiSwMaterialContextSlots.sceneSlots.z, instanceIndex, worldOrigin, worldDirection, minimum, closest.distance);
+        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(g_NwbGiMaterialContextSlots.materialSlots.w, g_NwbGiMaterialContextSlots.sceneSlots.z, instanceIndex, worldOrigin, worldDirection, minimum, closest.distance);
         if(geometry.hit)
             closest = geometry;
         return;
     }
 #endif
-    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiMaterialContextSlots.sceneSlots.y)[instanceIndex];
     NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator;
     nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), minimum, closest.distance, iterator);
     bool hitInstance = false;
@@ -115,7 +95,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     NwbGiGeometryHit closest = nwbGiEmptyGeometryHit(tMax);
     NwbBvhRayIterator<NWB_GI_SW_SCENE_STACK_SIZE> iterator;
-    nwbBvhRayBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(g_NwbGiSwMaterialContextSlots.sceneSlots.x, origin, direction, tMin, tMax, iterator);
+    nwbBvhRayBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(g_NwbGiMaterialContextSlots.sceneSlots.x, origin, direction, tMin, tMax, iterator);
     uint instanceIndex;
     while(nwbBvhRayNextLeaf(iterator, instanceIndex)){
         nwbGiSwInstanceClosest(instanceIndex, origin, direction, tMin, closest);
@@ -131,19 +111,19 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 #endif
     float3x4 worldToObject = float3x4(0.0);
     if(closest.hit && closest.failure == 0u){
-        const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[closest.instance];
+        const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiMaterialContextSlots.sceneSlots.y)[closest.instance];
         worldToObject = float3x4(instance.worldToObjectRow0, instance.worldToObjectRow1, instance.worldToObjectRow2);
     }
-    return nwbGiReconstructHit(closest, g_NwbGiSwMaterialContextSlots.sceneSlots.z, worldToObject, origin, direction);
+    return nwbGiReconstructHit(closest, g_NwbGiMaterialContextSlots.sceneSlots.z, worldToObject, origin, direction);
 }
 
 bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float minimum, const float maximum){
-    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if NWB_GI_CSG_ENABLED
     if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
-        return nwbGiCsgOccluded(g_NwbGiSwMaterialContextSlots.materialSlots.w, g_NwbGiSwMaterialContextSlots.sceneSlots.z, instanceIndex, worldOrigin, worldDirection, minimum, maximum);
+        return nwbGiCsgOccluded(g_NwbGiMaterialContextSlots.materialSlots.w, g_NwbGiMaterialContextSlots.sceneSlots.z, instanceIndex, worldOrigin, worldDirection, minimum, maximum);
 #endif
-    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwBvhInstances(g_NwbGiMaterialContextSlots.sceneSlots.y)[instanceIndex];
     NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator;
     nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection), minimum, maximum, iterator);
     uint primitive;
@@ -160,7 +140,7 @@ bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin,
 
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
     NwbBvhRayIterator<NWB_GI_SW_SCENE_STACK_SIZE> iterator;
-    nwbBvhRayBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(g_NwbGiSwMaterialContextSlots.sceneSlots.x, origin, direction, tMin, tMax, iterator);
+    nwbBvhRayBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(g_NwbGiMaterialContextSlots.sceneSlots.x, origin, direction, tMin, tMax, iterator);
     uint instanceIndex;
     while(nwbBvhRayNextLeaf(iterator, instanceIndex)){
         if(nwbGiSwInstanceOccluded(instanceIndex, origin, direction, tMin, tMax))

@@ -16,7 +16,7 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from raster_ir_parity_probe import compare_frames, observe_scene  # noqa: E402
-from window_capture_image import read_bmp_24_rows  # noqa: E402
+from window_capture_image_codec import Bmp24Codec  # noqa: E402
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure  # noqa: E402
 from fixture_environment import SWITCH_OFF, SWITCH_ON, build_fixture_environment
 
@@ -113,7 +113,7 @@ def capture(args, scene, mode):
     log_path = args.output_directory / f"{scene}_{mode}.log"
     if not launch_capture(args, scene, mode, path, log_path):
         return None
-    frame = read_bmp_24_rows(path)
+    frame = Bmp24Codec.read_bmp_24_rows(path)
     if frame[:2] != (960, 540):
         raise SmokeFailure(f"{scene} {mode} framebuffer extent was {frame[:2]}, expected 960x540")
     log_text = log_path.read_text(encoding=LIT_UTF_8)
@@ -125,7 +125,7 @@ def capture_resize(args, mode):
     log_path = args.output_directory / f"paint_resize_{mode}.log"
     if not launch_capture(args, LIT_PAINT, mode, path, log_path, resize=True):
         return None
-    frame = read_bmp_24_rows(path)
+    frame = Bmp24Codec.read_bmp_24_rows(path)
     if frame[:2] != (800, 600):
         raise SmokeFailure(f"paint {mode} resized framebuffer extent was {frame[:2]}, expected 800x600")
     return frame, observe_scene(LIT_PAINT, frame, log_path.read_text(encoding=LIT_UTF_8))

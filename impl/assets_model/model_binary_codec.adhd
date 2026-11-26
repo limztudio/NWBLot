@@ -8,6 +8,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 ReadUnpackedModelObjects<BinaryT, ObjectT>(
+    in Span<u8> binary,
+    mut usize cursor,
+    in u64 rawCount,
+    in usize binaryStrideBytes,
+    in StringView label,
+    in Func<16u, ObjectT(in BinaryT)> unpackFn,
+    mut Vector<ObjectT> outObjects
+){
+    if(rawCount > cast<u64>(usize.max / binaryStrideBytes)){
+        error("Model::loadBinary failed: '{}' payload byte size overflows", label);
+        return false;
+    }
+    const usize count = cast<usize>(rawCount);
+    if(!CanReadBytes(binary, cursor, count * binaryStrideBytes) || !CanStoreValueCount(outObjects, count)){
+        error("Model::loadBinary failed: malformed '{}' payload", label);
+        return false;
+    }
+    outObjects.clear();
+    outObjects.reserve(count);
+    for(usize i = 0u; i < count; ++i){
+        const Expected<BinaryT> item = ReadPOD<BinaryT>(binary, cursor);
+        if(!item.has_value())
+            return false;
+        outObjects.push_back(unpackFn(item.value()));
+    }
+    return true;
+}
+
 class ModelBinaryCodec{
     private b8 isValidHeader(in ModelHeaderBinary header)const{
         return header.padding0 == 0u;
@@ -64,78 +93,51 @@ class ModelBinaryCodec{
         mut Vector<ModelSkinnedMeshObject> outSkinnedMeshObjects
     )const{
         usize cursor = 0u;
-        const Expected<ModelHeaderBinary> headerResult = ReadPOD<ModelHeaderBinary>(binary, cursor);
-        if(!headerResult.has_value()){
-            error("Model::loadBinary failed: malformed header");
+        const Expected<ModelHeaderBinary> headerResult = ReadMagicHeaderPayload<ModelHeaderBinary>(
+            binary,
+            s_ModelBinaryMagic,
+            "Model::loadBinary",
+            "model",
+            cursor
+        );
+        if(!headerResult.has_value())
             return false;
-        }
         const ModelHeaderBinary header = headerResult.value();
-        if(header.magic != s_ModelBinaryMagic){
-            error("Model::loadBinary failed: invalid model asset format; recook required");
-            return false;
-        }
         if(!this.validateHeader(header))
             return false;
 
-        if(header.skeletonObjectCount > cast<u64>(usize.max / s_ModelSkeletonObjectBinaryBytes)){
-            error("Model::loadBinary failed: 'skeleton objects' payload byte size overflows");
+        if(!ReadUnpackedModelObjects<ModelSkeletonObjectBinary, ModelSkeletonObject>(
+            binary,
+            cursor,
+            header.skeletonObjectCount,
+            s_ModelSkeletonObjectBinaryBytes,
+            "skeleton objects",
+            lambda[](in ModelSkeletonObjectBinary item) -> ModelSkeletonObject{ return UnpackModelSkeletonObjectBinary(item); },
+            outSkeletonObjects
+        ))
             return false;
-        }
-        const usize skeletonCount = cast<usize>(header.skeletonObjectCount);
-        if(!CanReadBytes(binary, cursor, skeletonCount * s_ModelSkeletonObjectBinaryBytes) || !CanStoreValueCount(outSkeletonObjects, skeletonCount)){
-            error("Model::loadBinary failed: malformed 'skeleton objects' payload");
+        if(!ReadUnpackedModelObjects<ModelStaticMeshObjectBinary, ModelStaticMeshObject>(
+            binary,
+            cursor,
+            header.staticMeshObjectCount,
+            s_ModelStaticMeshObjectBinaryBytes,
+            "static mesh objects",
+            lambda[](in ModelStaticMeshObjectBinary item) -> ModelStaticMeshObject{ return UnpackModelStaticMeshObjectBinary(item); },
+            outStaticMeshObjects
+        ))
             return false;
-        }
-        outSkeletonObjects.clear();
-        outSkeletonObjects.reserve(skeletonCount);
-        for(usize i = 0u; i < skeletonCount; ++i){
-            const Expected<ModelSkeletonObjectBinary> item = ReadPOD<ModelSkeletonObjectBinary>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outSkeletonObjects.push_back(UnpackModelSkeletonObjectBinary(item.value()));
-        }
+        if(!ReadUnpackedModelObjects<ModelSkinnedMeshObjectBinary, ModelSkinnedMeshObject>(
+            binary,
+            cursor,
+            header.skinnedMeshObjectCount,
+            s_ModelSkinnedMeshObjectBinaryBytes,
+            "skinned mesh objects",
+            lambda[](in ModelSkinnedMeshObjectBinary item) -> ModelSkinnedMeshObject{ return UnpackModelSkinnedMeshObjectBinary(item); },
+            outSkinnedMeshObjects
+        ))
+            return false;
 
-        if(header.staticMeshObjectCount > cast<u64>(usize.max / s_ModelStaticMeshObjectBinaryBytes)){
-            error("Model::loadBinary failed: 'static mesh objects' payload byte size overflows");
-            return false;
-        }
-        const usize staticMeshCount = cast<usize>(header.staticMeshObjectCount);
-        if(!CanReadBytes(binary, cursor, staticMeshCount * s_ModelStaticMeshObjectBinaryBytes) || !CanStoreValueCount(outStaticMeshObjects, staticMeshCount)){
-            error("Model::loadBinary failed: malformed 'static mesh objects' payload");
-            return false;
-        }
-        outStaticMeshObjects.clear();
-        outStaticMeshObjects.reserve(staticMeshCount);
-        for(usize i = 0u; i < staticMeshCount; ++i){
-            const Expected<ModelStaticMeshObjectBinary> item = ReadPOD<ModelStaticMeshObjectBinary>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outStaticMeshObjects.push_back(UnpackModelStaticMeshObjectBinary(item.value()));
-        }
-
-        if(header.skinnedMeshObjectCount > cast<u64>(usize.max / s_ModelSkinnedMeshObjectBinaryBytes)){
-            error("Model::loadBinary failed: 'skinned mesh objects' payload byte size overflows");
-            return false;
-        }
-        const usize skinnedMeshCount = cast<usize>(header.skinnedMeshObjectCount);
-        if(!CanReadBytes(binary, cursor, skinnedMeshCount * s_ModelSkinnedMeshObjectBinaryBytes) || !CanStoreValueCount(outSkinnedMeshObjects, skinnedMeshCount)){
-            error("Model::loadBinary failed: malformed 'skinned mesh objects' payload");
-            return false;
-        }
-        outSkinnedMeshObjects.clear();
-        outSkinnedMeshObjects.reserve(skinnedMeshCount);
-        for(usize i = 0u; i < skinnedMeshCount; ++i){
-            const Expected<ModelSkinnedMeshObjectBinary> item = ReadPOD<ModelSkinnedMeshObjectBinary>(binary, cursor);
-            if(!item.has_value())
-                return false;
-            outSkinnedMeshObjects.push_back(UnpackModelSkinnedMeshObjectBinary(item.value()));
-        }
-
-        if(cursor != binary.size()){
-            error("Model::loadBinary failed: trailing bytes detected");
-            return false;
-        }
-        return true;
+        return ReadCompletePayload(binary, cursor, "Model::loadBinary");
     }
 }
 

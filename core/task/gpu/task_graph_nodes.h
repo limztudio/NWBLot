@@ -158,14 +158,6 @@ struct GpuTaskNode{
         return DecodeLifecycleState(loadLifecycleWord(order));
     }
 
-    [[nodiscard]] b8 recordThunkInProgress(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
-        return DecodeRecordThunkInProgress(loadLifecycleWord(order));
-    }
-
-    [[nodiscard]] b8 recordThunkCompleted(const MemoryOrder order = MemoryOrder::acquire)const noexcept{
-        return DecodeRecordThunkCompleted(loadLifecycleWord(order));
-    }
-
     void setLifecycle(const TaskLifecycleState::Enum state, const b8 inProgress = false, const b8 completed = false)const noexcept{
         AtomicRef<u16>(lifecycleWord).store(MakeLifecycleWord(state, inProgress, completed), MemoryOrder::release);
     }

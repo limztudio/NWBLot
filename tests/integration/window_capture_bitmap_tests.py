@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import window_capture_image
+from window_capture_image_codec import Bmp24Codec
 import window_capture_smoke
 
 
@@ -15,7 +15,7 @@ class BmpReadbackTests(unittest.TestCase):
         rows = [[(1, 2, 3), (4, 5, 6)]]
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "invalid.bmp"
-            window_capture_image.write_bmp_24(path, 2, 1, rows)
+            Bmp24Codec.write_bmp_24(path, 2, 1, rows)
             data = bytearray(path.read_bytes())
 
             struct.pack_into(LIT_I, data, 2, len(data) + 1)

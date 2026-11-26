@@ -7,7 +7,17 @@ from types import SimpleNamespace
 from unittest import mock
 
 from gpu_timing_parse import ScopeSummary, parse_timing_file, summarize_scopes
-from hardware_shadow_report import HardwareShadowReport, RunResult, FRAME_SCOPE, OPAQUE_TRACE_SCOPE, TRANSPARENT_RESOLVE_SCOPE, TRANSPARENT_TRACE_SCOPE
+from hardware_shadow_report import (
+    HardwareShadowReport,
+    RunResult,
+    FRAME_SCOPE,
+    LIT_FAIL,
+    LIT_INCONCLUSIVE,
+    LIT_RENDER_SHADOW_VISIBILITY,
+    OPAQUE_TRACE_SCOPE,
+    TRANSPARENT_RESOLVE_SCOPE,
+    TRANSPARENT_TRACE_SCOPE,
+)
 from harness_test_support import make_abnormal_exit_terminator
 from name_symbols import debug_name_hash_token
 from window_capture_smoke import SmokeFailure
@@ -92,7 +102,7 @@ class HardwareShadowBoundaryChecks:
             timing = root / 'timing.txt'
             timing_symbols = harness.load_name_symbols(None)
             frame_token = debug_name_hash_token(FRAME_SCOPE)
-            visibility_token = debug_name_hash_token(harness.LIT_RENDER_SHADOW_VISIBILITY)
+            visibility_token = debug_name_hash_token(LIT_RENDER_SHADOW_VISIBILITY)
             opaque_token = debug_name_hash_token(OPAQUE_TRACE_SCOPE)
             transparent_trace_token = debug_name_hash_token(TRANSPARENT_TRACE_SCOPE)
             transparent_resolve_token = debug_name_hash_token(TRANSPARENT_RESOLVE_SCOPE)
@@ -118,16 +128,16 @@ class HardwareShadowBoundaryChecks:
             report = reporter.evaluate_runs(healthy, baseline)
             assert report[harness.LIT_VERDICT] == harness.LIT_PASS
             baseline.scopes = {**baseline_scopes, OPAQUE_TRACE_SCOPE: ScopeSummary(12, 10, 0.55, 0.55, 0.0, 0.6)}
-            assert reporter.evaluate_runs(healthy, baseline)[harness.LIT_VERDICT] == harness.LIT_INCONCLUSIVE
+            assert reporter.evaluate_runs(healthy, baseline)[harness.LIT_VERDICT] == LIT_INCONCLUSIVE
             baseline.runtime_forbidden_log_messages = ['VUID']
-            assert reporter.evaluate_runs(healthy, baseline)[harness.LIT_VERDICT] == harness.LIT_FAIL
+            assert reporter.evaluate_runs(healthy, baseline)[harness.LIT_VERDICT] == LIT_FAIL
             baseline.scopes = baseline_scopes
             baseline.runtime_forbidden_log_messages = []
             args.maximum_transparent_frame_regression_percent = 5.0
             threshold_report = reporter.evaluate_runs(healthy, baseline)
-            assert threshold_report[harness.LIT_VERDICT] == harness.LIT_FAIL
+            assert threshold_report[harness.LIT_VERDICT] == LIT_FAIL
             baseline_with_transparent_timing = RunResult(mode=harness.LIT_BASELINE, executable=harness.LIT_BASELINE, timing_file=str(timing), log_file=LIT_BASELINE_LOG, capture_file=LIT_BASELINE_BMP, scopes={**baseline_scopes, TRANSPARENT_TRACE_SCOPE: ScopeSummary(2, 2, 0.2, 0.2, 0.1, 0.3)}, missing_required_log_messages=[], runtime_forbidden_log_messages=[], semantic_forbidden_log_messages=[])
-            assert reporter.evaluate_runs(healthy, baseline_with_transparent_timing)[harness.LIT_VERDICT] == harness.LIT_FAIL
+            assert reporter.evaluate_runs(healthy, baseline_with_transparent_timing)[harness.LIT_VERDICT] == LIT_FAIL
             healthy_without_resolve = RunResult(mode=harness.LIT_HEALTHY, executable=harness.LIT_HEALTHY, timing_file=str(timing), log_file=LIT_HEALTHY_LOG, capture_file=LIT_HEALTHY_BMP, scopes={name: summary for name, summary in healthy_scopes.items() if name != TRANSPARENT_RESOLVE_SCOPE}, missing_required_log_messages=[], runtime_forbidden_log_messages=[], semantic_forbidden_log_messages=[])
             try:
                 reporter.evaluate_runs(healthy_without_resolve, baseline)

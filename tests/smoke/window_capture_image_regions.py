@@ -27,6 +27,13 @@ class ImageRegions:
         return start_x, start_y, end_x, end_y
 
     @staticmethod
+    def region_pixels(width, height, region):
+        left, top, right, bottom = region
+        for y in range(int(height * top), int(height * bottom)):
+            for x in range(int(width * left), int(width * right)):
+                yield x, y
+
+    @staticmethod
     def region_pixel_count(region):
         start_x, start_y, end_x, end_y = region
         return max(end_x - start_x, 0) * max(end_y - start_y, 0)

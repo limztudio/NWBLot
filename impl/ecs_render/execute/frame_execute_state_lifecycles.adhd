@@ -166,25 +166,21 @@ class FrameExecuteStateLifecycleSet : NoCopy{
         this.shadowPrepareStateLifecycle.stateCandidateRequired = stateCandidateRequired;
     }
 
-    private void bindCallbacks(in RendererFramePipeline renderer, in b8 hardwareShadowSupported){
-        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, this.shadowPrepareStateLifecycle);
-        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, this.shadowVisibilityStateLifecycle);
-        if(!hardwareShadowSupported)
-            this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, this.softwareCausticsStateLifecycle);
-        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, this.surfelGiStateLifecycle);
-        if(hardwareShadowSupported)
-            this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_causticsGraph.m_deferredHardwareCausticsTask, this.hardwareCausticsStateLifecycle);
-        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(renderer.m_deferredLightingTask, this.deferredLightingStateLifecycle);
-        assert(this.recordedCallbackCount <= this.recordedCallbacks.size());
+    private void bindTaskLifecycle<ContextT>(in GpuTaskId taskId, mut ContextT lifecycle){
+        this.recordedCallbacks[this.recordedCallbackCount++] = MakeGpuTaskRecordedCallback(taskId, lifecycle);
+        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(taskId, lifecycle);
+    }
 
-        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, this.shadowPrepareStateLifecycle);
-        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, this.shadowVisibilityStateLifecycle);
+    private void bindCallbacks(in RendererFramePipeline renderer, in b8 hardwareShadowSupported){
+        this.bindTaskLifecycle(renderer.m_shadowPrepareGraph.m_deferredShadowPrepareTask, this.shadowPrepareStateLifecycle);
+        this.bindTaskLifecycle(renderer.m_shadowVisibilityGraph.m_deferredShadowVisibilityTask, this.shadowVisibilityStateLifecycle);
         if(!hardwareShadowSupported)
-            this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, this.softwareCausticsStateLifecycle);
-        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, this.surfelGiStateLifecycle);
+            this.bindTaskLifecycle(renderer.m_causticsGraph.m_deferredSoftwareCausticsTask, this.softwareCausticsStateLifecycle);
+        this.bindTaskLifecycle(renderer.m_surfelGiGraph.m_deferredSurfelGiTask, this.surfelGiStateLifecycle);
         if(hardwareShadowSupported)
-            this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_causticsGraph.m_deferredHardwareCausticsTask, this.hardwareCausticsStateLifecycle);
-        this.acceptedCallbacks[this.acceptedCallbackCount++] = MakeGpuTaskAcceptedCallback(renderer.m_deferredLightingTask, this.deferredLightingStateLifecycle);
+            this.bindTaskLifecycle(renderer.m_causticsGraph.m_deferredHardwareCausticsTask, this.hardwareCausticsStateLifecycle);
+        this.bindTaskLifecycle(renderer.m_deferredLightingTask, this.deferredLightingStateLifecycle);
+        assert(this.recordedCallbackCount <= this.recordedCallbacks.size());
         assert(this.acceptedCallbackCount <= this.acceptedCallbacks.size());
     }
 }

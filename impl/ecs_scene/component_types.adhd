@@ -26,6 +26,7 @@ class LocalTransformComponent{
 
 [arena, component("scene_parent")]
 class SceneParentComponent{
+    [transient]
     public EntityID parent = s_InvalidEntityId;
     public Name parentEntityName = s_NameNone;
     public b8 inheritScale = true;
@@ -34,11 +35,13 @@ class SceneParentComponent{
 [arena, component("scene_entity_name")]
 class SceneEntityNameComponent{
     public Name name = s_NameNone;
+    [transient]
     public u32 scopeId = 0u;
 }
 
 [arena, component("active_camera")]
 class ActiveCameraComponent{
+    [transient]
     public EntityID camera = s_InvalidEntityId;
 }
 
@@ -175,30 +178,6 @@ void AssignDecomposedLocalTransformComponent(
     outTransform.position = f32x4(translation, 0.0f);
     outTransform.rotation = f32x4(rotation);
     outTransform.scale = f32x4(scale, 0.0f);
-}
-
-LocalTransformComponent MakePositionLocalTransformComponent(in VectorSingle position){
-    LocalTransformComponent transform;
-    transform.position = f32x4(position, 0.0f);
-    return transform;
-}
-
-LocalTransformComponent MakeEulerLocalTransformComponent(in f32 pitchRadians, in f32 yawRadians, in f32 rollRadians){
-    LocalTransformComponent transform;
-    transform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(pitchRadians, yawRadians, rollRadians, 0.0f)));
-    return transform;
-}
-
-LocalTransformComponent MakePositionEulerLocalTransformComponent(
-    in VectorSingle position,
-    in f32 pitchRadians,
-    in f32 yawRadians,
-    in f32 rollRadians
-){
-    LocalTransformComponent transform;
-    transform.position = f32x4(position, 0.0f);
-    transform.rotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(pitchRadians, yawRadians, rollRadians, 0.0f)));
-    return transform;
 }
 
 TransformComponent MakePositionTransformComponent(in VectorSingle position){

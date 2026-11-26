@@ -7,8 +7,6 @@ function(nwb_simd_benchmark_entry target benchmark_source benchmark_function arg
     if(NOT benchmark_source STREQUAL "memory_storage_probe")
         target_compile_options(${target} PRIVATE
             "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=strict>"
-            "$<$<CXX_COMPILER_ID:GNU>:-frounding-math;-ftrapping-math>"
-            "$<$<CXX_COMPILER_ID:MSVC>:/fp:strict>"
         )
     endif()
 endfunction()
@@ -45,7 +43,7 @@ target_link_libraries(nwb_simd_memory_storage_benchmark PRIVATE nwb_test_common_
 nwb_simd_benchmark_entry(nwb_simd_memory_storage_benchmark memory_storage_probe RunMemoryStorageProbeCli 4)
 set_source_files_properties(
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_simd_memory_storage_benchmark/tests/performance/simd_optimization/memory_storage_probe.adhd.cpp"
-    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=strict>;$<$<CXX_COMPILER_ID:GNU>:-frounding-math>;$<$<CXX_COMPILER_ID:MSVC>:/fp:strict>"
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=strict>"
 )
 
 nwb_declare_executable(nwb_simd_replicated_benchmark)
@@ -88,5 +86,5 @@ nwb_simd_benchmark_entry(nwb_simd_pow_qualification pow_qualification RunPowQual
 
 set_source_files_properties(
     "${CMAKE_BINARY_DIR}/adhd_gen/nwb_simd_pow_qualification/tests/performance/simd_optimization/pow_packed_single.adhd.cpp"
-    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=precise>;$<$<CXX_COMPILER_ID:GNU>:-fno-rounding-math>;$<$<CXX_COMPILER_ID:MSVC>:/fp:precise>"
+    PROPERTIES COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:Clang,AppleClang>:-ffp-model=precise>"
 )

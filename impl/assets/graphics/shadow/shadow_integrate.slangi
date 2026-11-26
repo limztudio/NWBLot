@@ -121,13 +121,17 @@ half nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3 
     return half(smoothstep(NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MIN, NWB_SHADOW_SMOOTH_NORMAL_SPREAD_MAX, spread));
 }
 
+void nwbShadowAccumulateChord(inout NwbShadowVisibilityAccumulator acc, const float chordLength, const float3 absorptionCoeff, const half interfaceTransmittance){
+    const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
+    acc.interfaceTransmittance *= lerp(half(1.0h), interfaceTransmittance, interfaceWeight);
+    acc.opticalDepth += half3(absorptionCoeff * chordLength);
+}
+
 void nwbShadowAccumulateInstance(inout NwbShadowVisibilityAccumulator acc, __constref NwbShadowInstanceOptics optics){
     const float pairedChord = nwbShadowInstanceChordLength(optics);
     const float endpoint = optics.tMin + pairedChord;
     const float chordLength = max(endpoint - optics.tMin, 0.0);
-    const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
-    acc.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmittance, interfaceWeight);
-    acc.opticalDepth += half3(float3(optics.absorptionCoeff) * chordLength);
+    nwbShadowAccumulateChord(acc, chordLength, float3(optics.absorptionCoeff), optics.interfaceTransmittance);
 }
 
 half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){

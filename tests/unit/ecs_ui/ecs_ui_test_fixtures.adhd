@@ -177,14 +177,14 @@ class UiEditBoxHostTests{
 
     public void setup(){ ASSERT_TRUE(this.m_textInput.setFocused(true)); }
     public b8 prepare(mut EditModel model){ return this.prepare(model, EditBoxOptions()); }
-    public b8 prepare(mut EditModel model, in EditBoxOptions options){ return this.prepare(model, options, MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f)); }
+    public b8 prepare(mut EditModel model, in EditBoxOptions options){ return this.prepare(model, options, Rect(10.0f, 20.0f, 180.0f, 30.0f)); }
     public b8 prepare(mut EditModel model, in EditBoxOptions options, in Rect bounds){ return PrepareEcsUiEditBoxFrame(this, model, options, bounds); }
     public b8 commit(){ return CommitEcsUiEditFrame(this); }
     public b8 frame(mut EditModel model){ return this.frame(model, EditBoxOptions()); }
     public b8 frame(mut EditModel model, in EditBoxOptions options){ return this.prepare(model, options) && this.commit(); }
 
     public Point atByte(in usize byte)const{
-        return MakeEcsUiPoint(cast<f32>(byte) * 10.0f + this.m_placement.textOrigin.x + 1.0f, this.m_placement.textOrigin.y + 5.0f);
+        return Point(cast<f32>(byte) * 10.0f + this.m_placement.textOrigin.x + 1.0f, this.m_placement.textOrigin.y + 5.0f);
     }
     public b8 dispatch(in InputEvent event){ return DispatchEcsUiEditEvent(this, event); }
     public b8 dispatchPointer(in PointerInput input){ return DispatchEcsUiEditPointer(this, input); }
@@ -247,7 +247,7 @@ class UiEditActionHostTests{
     public void setup(){ this.core.setup(); this.core.m_includeButton = true; }
     public b8 actionFrame(){ return this.actionFrame(EditBoxOptions()); }
     public b8 actionFrame(in EditBoxOptions options){
-        return PrepareEcsUiEditActionsFrame(this.core, this.core.m_model, options, MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), this.m_actions) && this.core.commit();
+        return PrepareEcsUiEditActionsFrame(this.core, this.core.m_model, options, Rect(10.0f, 20.0f, 180.0f, 30.0f), this.m_actions) && this.core.commit();
     }
     public b8 activateActions(){ return ActivateEcsUiEditActions(this); }
     public b8 commitNative(in StringView text){ return this.core.m_textInput.commit(text) == TextInputAdmission::Accepted; }
@@ -261,29 +261,6 @@ class UiEditActionHostTests{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Rect MakeEcsUiRect(in f32 x, in f32 y, in f32 width, in f32 height){
-    Rect rect = Rect();
-    rect.x = x;
-    rect.y = y;
-    rect.width = width;
-    rect.height = height;
-    return rect;
-}
-
-Point MakeEcsUiPoint(in f32 x, in f32 y){
-    Point point = Point();
-    point.x = x;
-    point.y = y;
-    return point;
-}
-
-InputSource MakeEcsUiInputSource(in u32 device, in u32 control){
-    InputSource source = InputSource();
-    source.device = device;
-    source.control = control;
-    return source;
-}
 
 b8 DeliverEcsUiFakeClipboard(mut FakeClipboard self, in ClipboardRequestToken token, in ClipboardStatus status, in StringView text){
     if(!self.finishRequest(token, status, text)){
@@ -370,8 +347,8 @@ b8 PublishEcsUiEditBox(mut UiEditBoxHostTests self, mut EditModel model, in Edit
     if(!PrepareEcsUiEditView(model, self.m_layoutBuilder, view)){
         return false;
     }
-    const Rect viewport = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
-    const auto placement = view.arrange(bounds, Insets(), viewport, previousScroll);
+    const Rect viewport = Rect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
+    const auto placement = view.arrange(bounds, Insets(), viewport, previousScroll, 1.0f, true);
     if(!placement){
         return false;
     }
@@ -401,8 +378,8 @@ b8 FinishEcsUiEditBoxPrepare(mut UiEditBoxHostTests self, mut EditModel model, i
         }
         self.m_otherWidget = declaredOther.value();
         HitTarget other = HitTarget();
-        other.rectangle = MakeEcsUiRect(230.0f, 20.0f, 100.0f, 30.0f);
-        other.clip = MakeEcsUiRect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
+        other.rectangle = Rect(230.0f, 20.0f, 100.0f, 30.0f);
+        other.clip = Rect(0.0f, 0.0f, s_EcsUiViewportWidth, s_EcsUiViewportHeight);
         other.focusable = true;
         other.activatable = true;
         if(!self.m_context.addTarget(self.m_otherWidget, other)){
@@ -432,25 +409,34 @@ b8 PrepareEcsUiEditActionsFrame(mut UiEditBoxHostTests self, mut EditModel model
     return FinishEcsUiEditBoxPrepare(self, model, options, bounds);
 }
 
-b8 CommitEcsUiEditFrame(mut UiEditBoxHostTests self){
-    if(!self.m_context.commitFrame(self.m_generation)){
+b8 CommitEcsUiHostFrame(mut Context context, mut UiEditBoxHost host, in u64 generation){
+    if(!context.commitFrame(generation))
         return false;
-    }
-    self.m_host.commitFrame(self.m_generation);
+    host.commitFrame(generation);
     return true;
 }
 
+Optional<InputRoutingResult> DispatchEcsUiHostEvent(mut Context context, mut UiEditBoxHost host, in InputEvent event, in b8 assertNormalized){
+    host.collectNative();
+    const WidgetId previousCapture = context.input().capture();
+    const auto normalized = context.input().queue(NativeInput(event));
+    if(assertNormalized)
+        EXPECT_TRUE(cast<b8>(normalized));
+    if(!normalized)
+        return Optional<InputRoutingResult>();
+    const b8 submit = host.prepareSubmit(normalized.value());
+    const InputRoutingResult result = context.input().process();
+    host.input(normalized.value(), previousCapture, submit);
+    return Optional<InputRoutingResult>(result);
+}
+
+b8 CommitEcsUiEditFrame(mut UiEditBoxHostTests self){
+    return CommitEcsUiHostFrame(self.m_context, self.m_host, self.m_generation);
+}
+
 b8 DispatchEcsUiEditEvent(mut UiEditBoxHostTests self, in InputEvent event){
-    self.m_host.collectNative();
-    const WidgetId previousCapture = self.m_context.input().capture();
-    const auto normalized = self.m_context.input().queue(NativeInput(event));
-    if(!normalized){
-        return false;
-    }
-    const b8 submit = self.m_host.prepareSubmit(normalized.value());
-    const InputRoutingResult result = self.m_context.input().process();
-    self.m_host.input(normalized.value(), previousCapture, submit);
-    return !result.activationOverflow && !result.gestureOverflow;
+    const auto result = DispatchEcsUiHostEvent(self.m_context, self.m_host, event, false);
+    return result.has_value() && !result.value().activationOverflow && !result.value().gestureOverflow;
 }
 
 b8 DispatchEcsUiEditPointer(mut UiEditBoxHostTests self, in PointerInput input){

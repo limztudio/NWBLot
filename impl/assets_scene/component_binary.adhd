@@ -230,6 +230,14 @@ TransformComponentPayloadBinary PackDecomposedTransformPayloadBinary(
     return binaryPayload;
 }
 
+ComponentT UnpackDecomposedTransformComponent<ComponentT>(in TransformComponentPayloadBinary binaryPayload){
+    ComponentT component = ComponentT();
+    component.position = binaryPayload.position;
+    component.rotation = binaryPayload.rotation;
+    component.scale = binaryPayload.scale;
+    return component;
+}
+
 TransformComponentPayloadBinary PackTransformComponentPayloadBinary(in TransformComponent component){
     return PackDecomposedTransformPayloadBinary(
         VectorSingle(component.position),
@@ -239,11 +247,7 @@ TransformComponentPayloadBinary PackTransformComponentPayloadBinary(in Transform
 }
 
 TransformComponent UnpackTransformComponentPayloadBinary(in TransformComponentPayloadBinary binaryPayload){
-    TransformComponent component;
-    component.position = binaryPayload.position;
-    component.rotation = binaryPayload.rotation;
-    component.scale = binaryPayload.scale;
-    return component;
+    return UnpackDecomposedTransformComponent<TransformComponent>(binaryPayload);
 }
 
 TransformComponentPayloadBinary PackLocalTransformComponentPayloadBinary(in LocalTransformComponent component){
@@ -255,11 +259,7 @@ TransformComponentPayloadBinary PackLocalTransformComponentPayloadBinary(in Loca
 }
 
 LocalTransformComponent UnpackLocalTransformComponentPayloadBinary(in TransformComponentPayloadBinary binaryPayload){
-    LocalTransformComponent component;
-    component.position = binaryPayload.position;
-    component.rotation = binaryPayload.rotation;
-    component.scale = binaryPayload.scale;
-    return component;
+    return UnpackDecomposedTransformComponent<LocalTransformComponent>(binaryPayload);
 }
 
 SceneParentComponentPayloadBinary PackSceneParentComponentPayloadBinary(in SceneParentComponent component){

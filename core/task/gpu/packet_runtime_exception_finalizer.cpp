@@ -80,25 +80,14 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExcepti
     if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
         return;
     GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(m_transaction, GpuGraphSubmissionTransaction::SubmissionOperationMode::ExceptionFinalizer, &artifactOperation);
-    if(!submissionOperation.valid()){
-        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
-            return;
-        TerminateInvariant();
-    }
-    if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
+    if(!GpuGraphSubmissionTransaction::AcquireExceptionClosingStep(submissionOperation.valid(), m_transaction, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
         return;
     GpuCompiledGraph::ReadView planAccess(m_compiledGraph);
-    if(!planAccess.valid()){
-        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
-            return;
-        TerminateInvariant();
-    }
+    if(!GpuGraphSubmissionTransaction::AcquireExceptionClosingStep(planAccess.valid(), m_transaction, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
+        return;
     GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(m_graph);
-    if(!planAccess.validFor(declarationAccess)){
-        if(m_transaction.submissionExceptionClosingResolved(m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
-            return;
-        TerminateInvariant();
-    }
+    if(!GpuGraphSubmissionTransaction::AcquireExceptionClosingStep(planAccess.validFor(declarationAccess), m_transaction, m_compiledGraph, m_recordingAttemptGeneration, m_submissionBinding))
+        return;
 
     const b8 artifactMatchesAttempt = m_recordedGraph.validForWithinArtifactOperation(m_graph, declarationAccess, m_compiledGraph, planAccess, artifactOperation);
     if(artifactMatchesAttempt){

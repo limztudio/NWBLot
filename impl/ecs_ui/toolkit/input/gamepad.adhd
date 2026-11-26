@@ -39,8 +39,6 @@ class GamepadSlotState{
     public f32 leftY = 0.0f;
     public f32 rightX = 0.0f;
     public f32 rightY = 0.0f;
-    public f32 leftTrigger = 0.0f;
-    public f32 rightTrigger = 0.0f;
     public u32 heldButtons = 0u;
     public GamepadStickDirection stickDirection = GamepadStickDirection::None;
     public GamepadStickDirection dpadDirection = GamepadStickDirection::None;
@@ -307,16 +305,10 @@ class GamepadNavigationAdapter{
             return false;
 
         this.m_slots[gamepadIndex].connected = true;
-        if(axis == cast<i32>(GamepadAxis::LeftTrigger)){
-            this.m_slots[gamepadIndex].leftTrigger = UiSimdClamp(value, 0.0f, 1.0f);
+        if(axis == cast<i32>(GamepadAxis::LeftTrigger) || axis == cast<i32>(GamepadAxis::RightTrigger))
             return false;
-        }
-        if(axis == cast<i32>(GamepadAxis::RightTrigger)){
-            this.m_slots[gamepadIndex].rightTrigger = UiSimdClamp(value, 0.0f, 1.0f);
-            return false;
-        }
 
-        const f32 clamped = UiSimdClamp(value, -1.0f, 1.0f);
+        const f32 clamped = Clamp(value, -1.0f, 1.0f);
         if(axis == cast<i32>(GamepadAxis::RightX)){
             this.m_slots[gamepadIndex].rightX = clamped;
             return false;
@@ -407,7 +399,7 @@ class GamepadNavigationAdapter{
             const u64 deviceId = this.deviceIdForPad(index);
 
             const GamepadStickDirection dpadDir = this.m_slots[index].dpadDirection;
-            const f32 repeatStep = UiSimdMax(this.m_config.repeatIntervalSeconds, 0.01f);
+            const f32 repeatStep = Max(this.m_config.repeatIntervalSeconds, 0.01f);
             if(dpadDir != GamepadStickDirection::None){
                 this.m_slots[index].dpadRepeatTimer -= deltaSeconds;
                 if(this.m_slots[index].dpadRepeatTimer <= 0.0f){
@@ -449,7 +441,7 @@ class GamepadNavigationAdapter{
             const VectorSingle rightSq = VectorMultiply(rightStick, rightStick);
             const f32 rMag = Sqrt(VectorSingle(rightSq.x + rightSq.y)).x;
             if(rMag > this.m_config.scrollDeadzone && this.m_config.scrollDeadzone < 0.999f){
-                const f32 rescaled = UiSimdClamp((rMag - this.m_config.scrollDeadzone) / (1.0f - this.m_config.scrollDeadzone), 0.0f, 1.0f);
+                const f32 rescaled = Clamp((rMag - this.m_config.scrollDeadzone) / (1.0f - this.m_config.scrollDeadzone), 0.0f, 1.0f);
                 const f32 scale = (rescaled * rescaled) / rMag * this.m_config.scrollSpeed * deltaSeconds;
                 const VectorSingle scrollVec = VectorMultiply(rightStick, VectorSingle(scale));
                 PointerInput scrollInput;

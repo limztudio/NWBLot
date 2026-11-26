@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from csg_gi_image_evidence import ARMS, EXPECTED_EXTENT, CsgGiImageEvidence
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
@@ -110,7 +110,7 @@ def capture_arm(args, arm):
     if result.returncode:
         raise SmokeFailure(f"CSG GI {arm} capture failed: {result.returncode}")
     evidence = validate_capture_evidence(output.with_suffix(LIT_LOG_SUFFIX).read_text(encoding=LIT_UTF_8), args.frames)
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     if frame[:2] != EXPECTED_EXTENT:
         raise SmokeFailure("CSG GI requires the actual 1280x900 framebuffer")
     return frame, evidence

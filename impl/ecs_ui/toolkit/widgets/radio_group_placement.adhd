@@ -109,9 +109,9 @@ Expected<RadioGroupPlacement> PlaceRadioGroup(in Rect bounds, in Rect clip, in R
     const u32 cols = Max(cast<u32>(1u), metrics.columns);
     const u32 colGapCount = cols - 1u;
     const f64 totalColGap = cast<f64>(colGapCount) * cast<f64>(metrics.columnGap);
-    const f64 cellW = UiSimdMaxF64(0.0, (contentW - totalColGap) / cast<f64>(cols));
-    const f64 indicatorExtentScalar = UiSimdMinF64(cast<f64>(metrics.indicatorExtent), cellW);
-    const f64 labelOffset = UiSimdMinF64(cellW, indicatorExtentScalar + cast<f64>(metrics.gap));
+    const f64 cellW = Max(0.0, (contentW - totalColGap) / cast<f64>(cols));
+    const f64 indicatorExtentScalar = Min(cast<f64>(metrics.indicatorExtent), cellW);
+    const f64 labelOffset = Min(cellW, indicatorExtentScalar + cast<f64>(metrics.gap));
     const f64 markInsetScalar = indicatorExtentScalar * cast<f64>(metrics.markInset);
     const f64 rowHeightScalar = cast<f64>(metrics.rowHeight);
     HashSet<u64> seenKeys;
@@ -281,16 +281,6 @@ void ResolveRadioGroupIndicatorNames(
         outFallback = style.checkedFallback;
     else
         outFallback = style.normal;
-}
-
-Color ResolveRadioGroupChoiceTint(in RadioGroupStyle style, in b8 enabled, in b8 pressed, in b8 hover){
-    if(!enabled)
-        return style.disabledTint;
-    if(pressed)
-        return style.pressedTint;
-    if(hover)
-        return style.hoverTint;
-    return Color();
 }
 
 void ResetRadioGroupStateFields(

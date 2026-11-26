@@ -19,12 +19,6 @@ Optional<Name> ExtractParentVirtualPath(in StringView virtualPathText){
     return Optional<Name>(parsed.value());
 }
 
-b8 MatchesExpectedDependencyAssetType(in Name actualType, in Name expectedType, in b8 registryMatches){
-    if(expectedType == s_NameNone || actualType == expectedType)
-        return true;
-    return registryMatches;
-}
-
 b8 ValidateDefaultDependencyEntryAsset(in Name virtualPath){
     if(virtualPath == s_NameNone){
         error("DependencyComputer: no default entry asset registered");

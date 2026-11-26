@@ -93,6 +93,90 @@ EditLimits MakeNumericDraftLimits(){
     return limits;
 }
 
+[cpp_unwind] Expected<void, ErrorCode> FormatNumericEditValueInto(in i64 value, mut CompactString outText){
+    return FormatI64Into(value, outText);
+}
+
+[cpp_unwind] Expected<void, ErrorCode> FormatNumericEditValueInto(in f64 value, mut CompactString outText){
+    return FormatF64Into(value, outText);
+}
+
+b8 ValidateNumericEditBounds(in IntegerBounds bounds){
+    return ValidateIntegerBounds(bounds);
+}
+
+b8 ValidateNumericEditBounds(in FloatBounds bounds){
+    return ValidateFloatBounds(bounds);
+}
+
+b8 HasNumericEditValueChanged(in i64 candidate, in i64 value){
+    return HasIntegerEditValueChanged(candidate, value);
+}
+
+b8 HasNumericEditValueChanged(in f64 candidate, in f64 value){
+    return HasFloatEditBitsChanged(candidate, value);
+}
+
+[cpp_unwind] Expected<b8, ErrorCode> CanonicalizeNumericEditDraft<ValueT>(in ValueT value, mut NumericEditDraft inOutDraft){
+    CompactString text;
+    const Expected<void, ErrorCode> formatted = FormatNumericEditValueInto(value, text);
+    if(!formatted.has_value())
+        return MakeUnexpected(formatted.error());
+    return inOutDraft.canonicalize(text.view());
+}
+
+[cpp_unwind] NumericEditResult CommitNumericEdit<ValueT, BoundsT>(
+    in BoundsT bounds,
+    in Expected<ValueT, NumericParseStatus> parsed,
+    in b8 canonical,
+    mut NumericEditDraft inOutDraft,
+    mut ValueT inOutValue
+){
+    if(!ValidateNumericEditBounds(bounds))
+        return NumericEditResult();
+    const b8 outside = parsed.has_value() && IsNumericValueOutOfRange(parsed.value(), bounds);
+    const b8 clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
+    const b8 accepted = parsed.has_value() && (!outside || clamped);
+    ValueT candidate = inOutValue;
+    if(accepted){
+        candidate = parsed.value();
+        if(clamped)
+            candidate = ClampNumericValueToBounds(candidate, bounds);
+    }
+    const b8 changed = HasNumericEditValueChanged(candidate, inOutValue);
+    Expected<b8, ErrorCode> canonicalized = false;
+    if(canonical || clamped)
+        canonicalized = CanonicalizeNumericEditDraft(candidate, inOutDraft);
+    const NumericEditResult result = inOutDraft.commit(canonical, accepted, clamped, changed, canonicalized);
+    if(result.committed)
+        inOutValue = candidate;
+    return result;
+}
+
+[cpp_unwind] NumericEditResult ApplyNumericEditModelAction<ValueT, BoundsT>(
+    in BoundsT bounds,
+    in Expected<ValueT, NumericParseStatus> parsed,
+    in EditAction action,
+    in b8 readOnly,
+    mut NumericEditDraft inOutDraft,
+    mut ValueT inOutValue
+){
+    NumericEditResult result;
+    if(action == EditAction::Submit){
+        if(readOnly)
+            result.valid = true;
+        else
+            result = CommitNumericEdit(bounds, parsed, false, inOutDraft, inOutValue);
+    }
+    else if(action == EditAction::Cancel)
+        result = inOutDraft.restore(CanonicalizeNumericEditDraft(inOutValue, inOutDraft), true);
+    else if(action == EditAction::Blur && !readOnly)
+        result = CommitNumericEdit(bounds, parsed, true, inOutDraft, inOutValue);
+    else if(action == EditAction::Abandon || action == EditAction::Blur)
+        result = inOutDraft.restore(CanonicalizeNumericEditDraft(inOutValue, inOutDraft), false);
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -26,9 +26,6 @@ type Value = MetascriptValue;
 const StringView s_MetaRuntimeItemsField = s_MetascriptValueItemsField;
 const usize s_MetaRuntimeInitialCount = s_MetascriptValueInitialCount;
 const Array<usize, 3u> s_ReallocationSourceIndices(0u, 3u, 7u);
-const Array<i32, 4u> s_FloatingPointRoundingModes = Array<i32, 4u>(FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO);
-const i32 s_FeAllExcept = FE_ALL_EXCEPT;
-const i32 s_FeInvalid = FE_INVALID;
 const StringView s_MetaRuntimeAssetVariable = "asset";
 const StringView s_MetaRuntimeNameField = "name";
 
@@ -68,15 +65,6 @@ class RejectedReader : ReaderWithSpan{
         if(this.m_oversized)
             return buffer.size() + 1u;
         return MakeUnexpected(Failure());
-    }
-}
-
-class ScopedHeldFloatingPointEnvironment : NoCopy{
-    private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
-    public b8 valid()const{ return this.m_original.has_value(); }
-    public ~ScopedHeldFloatingPointEnvironment(){
-        if(this.valid())
-            EXPECT_TRUE(SetFloatingPointEnvironment(this.m_original.value()).has_value());
     }
 }
 

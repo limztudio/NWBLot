@@ -28,16 +28,16 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(const GraphicsBackend::TextureClearQueueRequirement::Enum requirement)noexcept{
+[[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(const GraphicsBackend::TextureQueueRequirement::Enum requirement)noexcept{
     GpuTaskCommandRequirements commands;
     switch(requirement){
-    case GraphicsBackend::TextureClearQueueRequirement::Transfer:
+    case GraphicsBackend::TextureQueueRequirement::Transfer:
         commands.requiredCapabilities = GpuQueueCapability::Transfer;
         break;
-    case GraphicsBackend::TextureClearQueueRequirement::Graphics:
+    case GraphicsBackend::TextureQueueRequirement::Graphics:
         commands.requiredCapabilities = GpuQueueCapability::Graphics;
         break;
-    case GraphicsBackend::TextureClearQueueRequirement::ComputeOrGraphics:
+    case GraphicsBackend::TextureQueueRequirement::ComputeOrGraphics:
         commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
         break;
     default:
@@ -58,6 +58,14 @@ namespace __hidden_gpu_task_graph_builtin_clears{
     else if(hookCommands.alternativeCapabilities != commands.alternativeCapabilities)
         commands.additionalAlternativeCapabilities = hookCommands.alternativeCapabilities;
     return true;
+}
+
+template<typename RecordHooksT>
+[[nodiscard]] static Expected<GpuTaskCommandRequirements> BuildHookedTextureClearCommands(const GraphicsBackend::TextureQueueRequirement::Enum queueRequirement, const RecordHooksT& recordHooks)noexcept{
+    GpuTaskCommandRequirements commands = TextureClearCommandRequirements(queueRequirement);
+    if(!IncludeHookCommandRequirements(commands, recordHooks.commands))
+        return MakeUnexpected(Failure{});
+    return commands;
 }
 
 
@@ -245,24 +253,10 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, c
     if(!clearContract)
         return MakeUnexpected(Failure{});
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
-
-    using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureTask;
-    ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
-    if(!payloadObject)
+    const Expected<GpuTaskCommandRequirements> commands = __hidden_gpu_task_graph_builtin_clears::BuildHookedTextureClearCommands(clearContract->queueRequirement, clearDesc.recordHooks);
+    if(!commands)
         return MakeUnexpected(Failure{});
-    ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
-    payload->destinationResource = clearDesc.destination;
-    payload->destination = destinationResource.texture;
-    payload->clearDesc = clearDesc;
-    payload->clearDesc.subresources = resolvedSubresources;
-
-    const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
-    GpuTaskDesc resolvedDesc = desc;
-    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(clearContract->queueRequirement);
-    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
-        return MakeUnexpected(Failure{});
-    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(&resourceUse, 1u));
-    return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
+    return appendHookedTextureClearTask<__hidden_gpu_task_graph_builtin_clears::ClearTextureTask>(desc, clearDesc, destinationResource.texture, resolvedSubresources, *commands, mutation);
 }
 
 Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc& desc, const GpuClearTextureRectUIntTaskDesc& clearDesc){
@@ -288,26 +282,12 @@ Expected<GpuTaskId> GpuTaskGraph::addClearTextureRectUIntTask(const GpuTaskDesc&
     if(!(clearContract = GraphicsBackend::ResolveTextureClearContract(destinationResource.texture->getCreationDescription(), clearDesc.subresources, GraphicsBackend::TextureClearValueKind::UInt, false, false)))
         return MakeUnexpected(Failure{});
     const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
-
-    using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask;
-    ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
-    if(!payloadObject)
-        return MakeUnexpected(Failure{});
-    ProvisionalPayloadOwner<ClearTask::Payload> payload(m_arena, payloadObject);
-    payload->destinationResource = clearDesc.destination;
-    payload->destination = destinationResource.texture;
-    payload->clearDesc = clearDesc;
-    payload->clearDesc.subresources = resolvedSubresources;
-
-    const GpuTaskResourceUse resourceUse{ .resource = clearDesc.destination, .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, }, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write, };
-    GpuTaskDesc resolvedDesc = desc;
     const Box clearBox(clearDesc.rect, 0, Limit<i32>::s_Max);
-    const GraphicsBackend::TextureClearQueueRequirement::Enum queueRequirement = GraphicsBackend::TextureClearBoxQueueRequirement(destinationResource.texture->getCreationDescription(), resolvedSubresources, clearBox);
-    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(queueRequirement);
-    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(commands, clearDesc.recordHooks.commands))
+    const GraphicsBackend::TextureQueueRequirement::Enum queueRequirement = GraphicsBackend::TextureClearBoxQueueRequirement(destinationResource.texture->getCreationDescription(), resolvedSubresources, clearBox);
+    const Expected<GpuTaskCommandRequirements> commands = __hidden_gpu_task_graph_builtin_clears::BuildHookedTextureClearCommands(queueRequirement, clearDesc.recordHooks);
+    if(!commands)
         return MakeUnexpected(Failure{});
-    resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(&resourceUse, 1u));
-    return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
+    return appendHookedTextureClearTask<__hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask>(desc, clearDesc, destinationResource.texture, resolvedSubresources, *commands, mutation);
 }
 
 

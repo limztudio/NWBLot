@@ -21,31 +21,17 @@ namespace Tests::UiRootFailure{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ToggleRootArena final : public ArenaBase{
-public:
-    ToggleRootArena() : ArenaBase(Name("tests/ui/snapshot_allocation_failure")), m_backing(Name("tests/ui/snapshot_backing")){}
-    void rejectAllocations()noexcept{ m_reject = true; }
-    void* allocate(usize align, usize size)override{ return m_reject ? nullptr : m_backing.allocate(align, size); }
-    void* reallocate(void* memory, usize align, usize size)override{ return m_reject ? nullptr : m_backing.reallocate(memory, align, size); }
-    void deallocate(void* memory, usize align, usize size)noexcept override{ m_backing.deallocate(memory, align, size); }
-
-
-private:
-    Core::Alloc::GlobalArena m_backing;
-    b8 m_reject = false;
-};
-
 [[nodiscard]] inline b8 AllocationFailurePreservesEditSnapshot(){
     HeapStorage storage;
-    ToggleRootArena arena;
+    Tests::NthFailArena arena(Name("tests/ui/snapshot_allocation_failure"), Name("tests/ui/snapshot_backing"));
     AString<Core::Alloc::GlobalArena> display(storage.arena);
     display.assign("old");
-    Vector<Impl::Ui::EditCaretMapping, ToggleRootArena> mapping(arena);
+    Vector<Impl::Ui::EditCaretMapping, Tests::NthFailArena> mapping(arena);
     const Array<usize, 4u> boundaries{ 0u, 1u, 2u, 3u };
     Impl::Ui::EditCompositionView composition;
     Impl::Ui::EditBoxRange selection;
     Impl::Ui::EditBoxRange preedit;
-    Vector<Impl::Ui::EditPreeditClause, ToggleRootArena> preeditClauses(arena);
+    Vector<Impl::Ui::EditPreeditClause, Tests::NthFailArena> preeditClauses(arena);
     Impl::Ui::EditBoxRange replacement;
     usize caret = 7u;
     usize committedBytes = 8u;
@@ -63,8 +49,8 @@ private:
 
 [[nodiscard]] inline b8 DisplayAllocationFailurePreservesEditSnapshot(){
     HeapStorage storage;
-    ToggleRootArena arena;
-    AString<ToggleRootArena> display(arena);
+    Tests::NthFailArena arena(Name("tests/ui/snapshot_allocation_failure"), Name("tests/ui/snapshot_backing"));
+    AString<Tests::NthFailArena> display(arena);
     display.assign("old");
     display.reserve(64u);
     AString<Core::Alloc::GlobalArena> input(storage.arena);
@@ -91,8 +77,8 @@ private:
 }
 
 [[nodiscard]] inline b8 AllocationFailurePreservesRootState(){
-    ToggleRootArena arena;
-    Vector<Impl::Ui::WidgetId, ToggleRootArena> scopes(arena);
+    Tests::NthFailArena arena(Name("tests/ui/snapshot_allocation_failure"), Name("tests/ui/snapshot_backing"));
+    Vector<Impl::Ui::WidgetId, Tests::NthFailArena> scopes(arena);
     Impl::Ui::WidgetRoot requested;
     requested.value = 12u;
     requested.generation = 1u;

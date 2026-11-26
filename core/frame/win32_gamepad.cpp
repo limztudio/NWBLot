@@ -3,6 +3,7 @@
 
 
 #include "win32_gamepad.h"
+#include "gamepad_common.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,8 +17,6 @@
 
 #include <windows.h>
 #include <xinput.h>
-
-#include <global/simd/vector.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,10 +64,6 @@ static constexpr Array<ButtonMapping, 14u> s_ButtonMappings = {{
     { XINPUT_GAMEPAD_DPAD_LEFT, GamepadButton::DPadLeft },
 }};
 
-static constexpr f32 s_ReconnectScanIntervalSeconds = 2.0f;
-static constexpr f32 s_AxisChangeEpsilon = 1e-4f;
-static constexpr f32 s_NegThumbScale = 1.0f / 32768.0f;
-static constexpr f32 s_PosThumbScale = 1.0f / 32767.0f;
 static constexpr f32 s_TriggerScale = 1.0f / 255.0f;
 
 
@@ -89,26 +84,6 @@ static void EmitAxisMask(
         const f32 nextValue = laneValues[lane];
         cachedAxes[static_cast<usize>(axisIndex)] = nextValue;
         input.gamepadAxisUpdate(slotIndex, axisIndex, nextValue);
-    }
-}
-
-static void ZeroSlotInputs(InputDispatcher& input, const u32 slotIndex, u32& buttons, Array<f32, static_cast<usize>(GamepadAxis::kCount)>& axes){
-    for(const ButtonMapping& mapping : s_ButtonMappings){
-        const u32 bit = static_cast<u32>(1u) << static_cast<u32>(mapping.button);
-        if((buttons & bit) != 0u){
-            buttons &= ~bit;
-            input.gamepadButtonUpdate(slotIndex, mapping.button, InputAction::Release);
-        }
-    }
-    buttons = 0u;
-    for(usize axisIdx = 0u; axisIdx < axes.size(); ++axisIdx){
-        const f32 magnitude = VectorGetX(VectorAbs(VectorReplicate(axes[axisIdx])));
-        if(magnitude > s_AxisChangeEpsilon){
-            axes[axisIdx] = 0.0f;
-            input.gamepadAxisUpdate(slotIndex, static_cast<i32>(axisIdx), 0.0f);
-        }
-        else
-            axes[axisIdx] = 0.0f;
     }
 }
 
@@ -139,8 +114,6 @@ b8 Win32GamepadPoller::ensureLoaded()noexcept{
 
     HMODULE lib = LoadLibraryW(L"xinput1_4.dll");
     if(!lib)
-        lib = LoadLibraryW(L"xinput9_1_0.dll");
-    if(!lib)
         return false;
 
     void* const proc = reinterpret_cast<void*>(GetProcAddress(lib, "XInputGetState"));
@@ -165,23 +138,7 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
         return;
 
     const XInputGetStateFn getState = reinterpret_cast<XInputGetStateFn>(m_getStateProc);
-    const f32 safeDelta = delta > 0.0f ? delta : 0.0f;
-    const b8 scanAllDisconnected = m_topologyDirty;
-    b8 scanOneFallback = false;
-    if(scanAllDisconnected){
-        m_topologyDirty = false;
-        m_fallbackScanCooldown = s_ReconnectScanIntervalSeconds;
-    }
-    else{
-        m_fallbackScanCooldown = VectorGetX(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(m_fallbackScanCooldown), VectorReplicate(safeDelta))));
-        if(m_fallbackScanCooldown <= 0.0f){
-            scanOneFallback = true;
-            m_fallbackScanCooldown = s_ReconnectScanIntervalSeconds;
-        }
-    }
-    const u32 fallbackSlot = m_fallbackScanSlot;
-    if(scanOneFallback)
-        m_fallbackScanSlot = (m_fallbackScanSlot + 1u) % s_MaxGamepadCount;
+    const GamepadScanSchedule scanSchedule = AdvanceGamepadScanSchedule(delta, true, m_topologyDirty, m_fallbackScanCooldown, m_fallbackScanSlot);
 
     const SIMDVectorSingle epsVec = VectorReplicate(s_AxisChangeEpsilon);
 
@@ -189,7 +146,7 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
         SlotState& slot = m_slots[i];
         XINPUT_STATE state = {};
         if(!slot.connected){
-            if(!scanAllDisconnected && (!scanOneFallback || i != fallbackSlot))
+            if(!scanSchedule.scanAllDisconnected && (!scanSchedule.scanOneFallback || i != scanSchedule.fallbackSlot))
                 continue;
             if(getState(i, &state) != ERROR_SUCCESS)
                 continue;
@@ -201,7 +158,7 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
             input.gamepadConnectionUpdate(i, true);
         }
         else if(getState(i, &state) != ERROR_SUCCESS){
-            ZeroSlotInputs(input, i, slot.buttons, slot.axes);
+            ReleaseGamepadButtonsAndAxes(input, i, slot.buttons, slot.axes);
             slot.connected = false;
             slot.lastPacketNumber = 0u;
             slot.hasPacketNumber = false;
@@ -215,21 +172,8 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
         slot.hasPacketNumber = true;
 
         const XINPUT_GAMEPAD& gp = state.Gamepad;
-        for(const ButtonMapping& mapping : s_ButtonMappings){
-            const b8 isDown = (gp.wButtons & mapping.xinputMask) != 0u;
-            const u32 bit = static_cast<u32>(1u) << static_cast<u32>(mapping.button);
-            const b8 wasDown = (slot.buttons & bit) != 0u;
-            if(isDown != wasDown){
-                if(isDown){
-                    slot.buttons |= bit;
-                    input.gamepadButtonUpdate(i, mapping.button, InputAction::Press);
-                }
-                else{
-                    slot.buttons &= ~bit;
-                    input.gamepadButtonUpdate(i, mapping.button, InputAction::Release);
-                }
-            }
-        }
+        for(const ButtonMapping& mapping : s_ButtonMappings)
+            UpdateGamepadButtonState(input, i, mapping.button, (gp.wButtons & mapping.xinputMask) != 0u, slot.buttons);
 
         const SIMDVectorSingle rawSticks = VectorSet(
             static_cast<f32>(gp.sThumbLX),
@@ -259,12 +203,10 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
 }
 
 void Win32GamepadPoller::releaseAll(InputDispatcher& input){
-    using namespace __hidden_win32_gamepad;
-
     for(u32 i = 0u; i < s_MaxGamepadCount; ++i){
         SlotState& slot = m_slots[i];
         if(slot.connected){
-            ZeroSlotInputs(input, i, slot.buttons, slot.axes);
+            ReleaseGamepadButtonsAndAxes(input, i, slot.buttons, slot.axes);
             slot.hasPacketNumber = false;
         }
     }
@@ -290,3 +232,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

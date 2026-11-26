@@ -24,14 +24,6 @@ void InitializeBasisTranscoder(){
     }();
 }
 
-b8 TranscodeBasisAstcBlock(const Span<const u8> source, const usize offset, const Span<u8> destination, const usize outputOffset){
-    basist::uastc_block block;
-    if(offset > source.size() || sizeof(block) > source.size() - offset || outputOffset > destination.size() || sizeof(block) > destination.size() - outputOffset)
-        return false;
-    FOUNDATION_MEMCPY(&block, sizeof(block), source.data() + offset, sizeof(block));
-    return basist::transcode_uastc_to_astc(block, destination.data() + outputOffset);
-}
-
 b8 TranscodeBasisAstcSliceRange(const Span<const u8> source, const Span<u8> destination, const usize outputOffset, const usize blockBegin, const usize blockEnd){
     const usize sourceBytes = source.size();
     if((sourceBytes % sizeof(basist::uastc_block)) != 0u)
@@ -58,19 +50,6 @@ b8 TranscodeBasisAstcSliceRange(const Span<const u8> source, const Span<u8> dest
 
 b8 TranscodeBasisAstcSlice(const Span<const u8> source, const Span<u8> destination, const usize outputOffset){
     return TranscodeBasisAstcSliceRange(source, destination, outputOffset, 0u, source.size() / sizeof(basist::uastc_block));
-}
-
-b8 UnpackBasisRgbaBlock(const Span<const u8> source, const usize offset, Array<u8, 64u>& rgba){
-    basist::uastc_block block;
-    if(offset > source.size() || sizeof(block) > source.size() - offset)
-        return false;
-    FOUNDATION_MEMCPY(&block, sizeof(block), source.data() + offset, sizeof(block));
-    Array<basist::color32, 16u> colors;
-    if(!basist::unpack_uastc(block, colors.data(), false))
-        return false;
-    static_assert(sizeof(colors) == sizeof(rgba) && offsetof(basist::color32, r) == 0 && offsetof(basist::color32, g) == 1 && offsetof(basist::color32, b) == 2 && offsetof(basist::color32, a) == 3);
-    FOUNDATION_MEMCPY(rgba.data(), rgba.size(), colors.data(), rgba.size());
-    return true;
 }
 
 b8 UnpackBasisRgbaSliceRange(const u32 width, const u32 height, const u32 blockCountX, const u32 blockCountY, const Span<const u8> source, const b8 alphaOnly, const Span<u8> destination, const usize outputOffset, const u32 blockRowBegin, const u32 blockRowEnd){

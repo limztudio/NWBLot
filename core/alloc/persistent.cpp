@@ -26,7 +26,7 @@ namespace __hidden_persistent{
 
 
 constexpr usize s_BlockAlignment = alignof(MaxAlign);
-constexpr usize s_FreeBinCount = 64u;
+constexpr usize s_FreeBinCount = PersistentArena::s_FreeBinCount;
 constexpr usize s_SmallBinCount = 32u;
 constexpr usize s_SmallBinMaxSpan = s_SmallBinCount * s_BlockAlignment;
 constexpr usize s_LogBinBaseShift = static_cast<usize>(CountTrailingZeros(s_SmallBinMaxSpan));
@@ -606,11 +606,6 @@ Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usiz
     const auto p = MakeNotNull(__hidden_persistent::BlockData(selected).get() + selectedLayout.userOffset);
     __hidden_persistent::StoreBlockForAllocation(MakeNotNull(static_cast<void*>(p.get())), selected);
     return Allocation{ .pointer = MakeNotNull(static_cast<void*>(p.get())), .block = MakeNotNull(static_cast<void*>(&selected)) };
-}
-
-void PersistentArena::deallocateBlockLocked(NotNull<void*> blockPointer)noexcept{
-    auto& block = *static_cast<__hidden_persistent::Block*>(blockPointer.get());
-    __hidden_persistent::DeallocateBlockLockedImpl(m_freeBins, m_nonEmptyBinMask, block);
 }
 
 

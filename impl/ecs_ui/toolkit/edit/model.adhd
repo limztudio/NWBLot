@@ -333,10 +333,6 @@ class EditModel : NoCopy{
         );
     }
 
-    [cpp_unwind] public b8 updateComposition(in StringView value, in usize anchor, in usize caret){
-        return this.updateComposition(value, anchor, caret, Span<EditPreeditClause>());
-    }
-
     [cpp_unwind] public b8 updateComposition(in StringView value, in usize anchor, in usize caret, in Span<EditPreeditClause> clauses){
         usize prevEnd = 0u;
         for(in EditPreeditClause clause : clauses){

@@ -4,6 +4,7 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ui/ui_fixture_widget_base.adhd>
+#include <tests/unit/ui/ui_fixture_paint_and_text_visible.adhd>
 #include <tests/unit/ui/fixture_text_shaping.adhd>
 #include <tests/common/floating_point_environment_guard.adhd>
 #include <tests/common/capturing_logger.adhd>
@@ -97,7 +98,7 @@ class TextFontTests{
         const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, generation));
         return this.m_service.setFonts(sources);
     }
-    public void clearLatinFontBytes(){ this.m_latin.setFontBytes(Vector<u8>()); }
+    public void clearLatinFontBytes(){ this.m_latin.setFontBytes(Vector<u8>(), 0u); }
     public b8 setEmptyFonts(){ return this.m_service.setFonts(Span<FontSource>()); }
     public Expected<SharedFontFace> makeLatinFace(){ return this.makeLatinFace(1u); }
     public Expected<SharedFontFace> makeLatinFace(in u64 generation){ return MakeFontFace(this.pool, FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_latin, generation)); }
@@ -203,15 +204,15 @@ class TextLayoutTests{
 
 
 TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip, in Point scale){
-    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip, scale);
+    return CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(), size, physical, origin, clip, scale);
 }
 
 TextGlyphIntersection UiTextGlyphCandidateNoAtlas(in PlacedGlyph glyph, in f32 size, in f32 physical, in Point origin, in Rect clip){
-    return Candidate(glyph, SharedBakedFontAtlas(), size, physical, origin, clip);
+    return UiTextGlyphCandidateNoAtlas(glyph, size, physical, origin, clip, Point(1.0f, 1.0f));
 }
 
-Expected<Rect> UiTextGlyphAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
-    return AtlasRectangle(glyph, atlas.deref(), size, origin);
+Expected<Rect> UiTextGlyphCoverageRect(in PlacedGlyph glyph, in AtlasGlyph record, in f32 rasterScale, in Point topLeft, in Point pixelScale){
+    return TryResolveGlyphCoverageRectangle(glyph.position, record.pageIndex, record.pixels, record.bearingX, record.bearingY, rasterScale, topLeft, pixelScale);
 }
 
 GlyphCoverageBounds MakeUiTextFontLayoutCoverage(in Rect ink, in b8 known){
@@ -276,7 +277,7 @@ void VerifyTextFontTests_FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutU
     EXPECT_EQ(self.m_service.generation(), oldServiceGeneration + 1u);
     self.clearLatinFontBytes();
     self.beginPaint(1u);
-    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     ASSERT_FALSE(snapshot.glyphPages().empty());
     const u64 pageFontGeneration = GlyphPageBindingOf(snapshot.glyphPages()[0u]).fontGeneration;
@@ -292,12 +293,12 @@ void VerifyTextFontTests_FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutU
 void VerifyTextFontTests_AppendingGlyphKeepsEarlierCoverageBytesImmutable(mut TextFontTests self){
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextFontSampleGlyphText)));
     self.beginPaint(1u);
-    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot first = self.m_paint.freeze();
     ASSERT_EQ(first.glyphPages().size(), 1u);
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("B")));
     self.beginPaint(2u);
-    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot second = self.m_paint.freeze();
     ASSERT_EQ(second.glyphPages().size(), 1u);
     const SharedGlyphPage oldPage = first.glyphPages()[0u];
@@ -323,10 +324,10 @@ void VerifyTextFontTests_RasterDpiChangesPagesWithoutChangingLogicalMeasurement(
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest("Ag")));
     const Point measured = self.m_layout.measure();
     self.beginPaint(1u);
-    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot first = self.m_paint.freeze();
     self.beginPaint(2u, 1.5f);
-    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot second = self.m_paint.freeze();
     EXPECT_FLOAT_EQ(self.m_layout.measure().x, measured.x);
     EXPECT_FLOAT_EQ(self.m_layout.measure().y, measured.y);
@@ -341,7 +342,7 @@ void VerifyTextFontTests_OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads(m
     ASSERT_TRUE(self.applyLayout(request));
     self.beginPaint(1u);
     self.m_paint.fillRect(Rect(1.0f, 1.0f, 10.0f, 10.0f));
-    EXPECT_FALSE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    EXPECT_FALSE(self.m_service.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_TRUE(snapshot.glyphPages().empty());
@@ -547,10 +548,10 @@ void VerifyTextGlyphVisibilityTests_NativeCoverageOriginSnapsToWholePhysicalPixe
     record.pixels = Rect(0.0f, 0.0f, 5.0f, 7.0f);
     record.bearingX = -2;
     record.bearingY = 3;
-    auto rectangle = CoverageRectangle(glyph, record, 1.0f, Point(10.0f, 20.0f), Point(1.0f, 1.0f));
+    auto rectangle = UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(10.0f, 20.0f), Point(1.0f, 1.0f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(8.0f, 17.0f, 5.0f, 7.0f));
-    rectangle = CoverageRectangle(glyph, record, 1.0f, Point(10.5f, 20.5f), Point(1.0f, 1.0f));
+    rectangle = UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(10.5f, 20.5f), Point(1.0f, 1.0f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(9.0f, 18.0f, 5.0f, 7.0f));
 }
@@ -563,10 +564,10 @@ void VerifyTextGlyphVisibilityTests_NativeCoverageOriginSnapsUsingEachPhysicalPi
     record.pixels = Rect(0.0f, 0.0f, 6.0f, 9.0f);
     record.bearingX = -3;
     record.bearingY = 6;
-    auto rectangle = CoverageRectangle(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.5f, 1.5f));
+    auto rectangle = UiTextGlyphCoverageRect(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.5f, 1.5f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f));
-    rectangle = CoverageRectangle(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.0f, 1.5f));
+    rectangle = UiTextGlyphCoverageRect(glyph, record, 1.5f, Point(4.25f, 8.25f), Point(1.0f, 1.5f));
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(3.0f, 7.0f / 1.5f, 4.0f, 6.0f));
 }
@@ -582,12 +583,12 @@ void VerifyTextGlyphVisibilityTests_InvalidCoverageGeometryRejectsTheResult(){
     invalidScales[2u] = bit_cast<f32>(s_UiTextFontLayoutPosInfF32Bits);
     invalidScales[3u] = bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits);
     for(in f32 scale : invalidScales)
-        EXPECT_FALSE(CoverageRectangle(glyph, record, scale, Point()).has_value());
+        EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, scale, Point(), Point(1.0f, 1.0f)).has_value());
     record.pixels.width = -1.0f;
-    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point()).has_value());
+    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(), Point(1.0f, 1.0f)).has_value());
     record.pixels.width = 1.0f;
     glyph.position.x = bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits);
-    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point()).has_value());
+    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(), Point(1.0f, 1.0f)).has_value());
 }
 
 void VerifyTextGlyphVisibilityTests_InvalidPhysicalPixelScalesRejectNativeCoverage(){
@@ -604,7 +605,7 @@ void VerifyTextGlyphVisibilityTests_InvalidPhysicalPixelScalesRejectNativeCovera
     invalidScales[4u] = Point(1.0f, -1.0f);
     invalidScales[5u] = Point(1.0f, bit_cast<f32>(s_UiTextFontLayoutQuietNaNF32Bits));
     for(in Point pixelScale : invalidScales){
-        EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point(), pixelScale).has_value());
+        EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(), pixelScale).has_value());
         EXPECT_EQ(UiTextGlyphCandidateNoAtlas(glyph, 16.0f, 16.0f, Point(), Rect(0.0f, 0.0f, 10.0f, 10.0f), pixelScale), TextGlyphIntersection::Invalid);
     }
 }
@@ -615,9 +616,9 @@ void VerifyTextGlyphVisibilityTests_UnrepresentableCoverageGeometryRejectsTheRes
     AtlasGlyph record = AtlasGlyph();
     record.pageIndex = 0u;
     record.pixels = Rect(0.0f, 0.0f, 2.0f, 2.0f);
-    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0f, Point(f32.max, 0.0f)).has_value());
+    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0f, Point(f32.max, 0.0f), Point(1.0f, 1.0f)).has_value());
     glyph.position = Point();
-    EXPECT_FALSE(CoverageRectangle(glyph, record, 1.0e-39f, Point()).has_value());
+    EXPECT_FALSE(UiTextGlyphCoverageRect(glyph, record, 1.0e-39f, Point(), Point(1.0f, 1.0f)).has_value());
 }
 
 void VerifyTextGlyphVisibilityTests_MissingNativeFaceAndCoverageBoundsRejectsUnknownInk(){
@@ -671,7 +672,7 @@ void VerifyTextGlyphVisibilityTests_AnisotropicPhysicalScaleRetainsSnappedNative
     record.bearingX = -3;
     const Point pixelScale = Point(1.5f, 1.0f);
     const Rect clip = Rect(8.6f, 20.0f, 0.1f, 1.0f);
-    const auto rectangle = CoverageRectangle(glyph, record, 1.5f, Point(), pixelScale);
+    const auto rectangle = UiTextGlyphCoverageRect(glyph, record, 1.5f, Point(), pixelScale);
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect(8.0f, 20.0f, 2.0f, 2.0f));
     EXPECT_EQ(TryIntersectTextRects(rectangle.value(), clip), TextGlyphIntersection::Visible);
@@ -737,8 +738,8 @@ void VerifyTextGlyphVisibilityAtlasTests_SdfCandidateUsesExactPlanesRatherThanSh
     PlacedGlyph glyph = PlacedGlyph();
     glyph.position = Point(10.0f, 20.0f);
     glyph.ink = Rect(1000.0f, 1000.0f, 1.0f, 1.0f);
-    EXPECT_EQ(Candidate(glyph, self.m_atlas, 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(106.25f, 204.25f, 0.25f, 0.25f)), TextGlyphIntersection::Visible);
-    EXPECT_EQ(Candidate(glyph, self.m_atlas, 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(108.0f, 204.0f, 1.0f, 4.0f)), TextGlyphIntersection::Invisible);
+    EXPECT_EQ(CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(self.m_atlas.deref()), 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(106.25f, 204.25f, 0.25f, 0.25f), Point(1.0f, 1.0f)), TextGlyphIntersection::Visible);
+    EXPECT_EQ(CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(self.m_atlas.deref()), 32.0f, 32.0f, Point(100.0f, 200.0f), Rect(108.0f, 204.0f, 1.0f, 4.0f), Point(1.0f, 1.0f)), TextGlyphIntersection::Invisible);
 }
 
 void VerifyTextGlyphVisibilityAtlasTests_NondrawableAtlasGlyphHasNoCandidateImage(mut TextGlyphVisibilityAtlasTests self){
@@ -747,7 +748,7 @@ void VerifyTextGlyphVisibilityAtlasTests_NondrawableAtlasGlyphHasNoCandidateImag
     const auto rectangle = UiTextGlyphAtlasRect(glyph, self.m_atlas, 32.0f, Point());
     ASSERT_TRUE(rectangle.has_value());
     ExpectUiRect(rectangle.value(), Rect());
-    EXPECT_EQ(Candidate(glyph, self.m_atlas, 32.0f, 32.0f, Point(), Rect(0.0f, 0.0f, 100.0f, 100.0f)), TextGlyphIntersection::Invisible);
+    EXPECT_EQ(CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(self.m_atlas.deref()), 32.0f, 32.0f, Point(), Rect(0.0f, 0.0f, 100.0f, 100.0f), Point(1.0f, 1.0f)), TextGlyphIntersection::Invisible);
 }
 
 void VerifyTextGlyphVisibilityAtlasTests_RejectedAtlasRectanglesRejectTheResult(mut TextGlyphVisibilityAtlasTests self){

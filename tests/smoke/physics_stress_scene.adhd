@@ -160,12 +160,12 @@ b8 BuildPhysicsStressScene(mut PhysicsWorld world, in u32 targetDynamicBodies, i
             outDynamicBodies.push_back(linkRes.value());
 
             JointDef jd = JointDef();
-            jd.type = JointType::Spherical;
+            jd.settings.type = JointType::Spherical;
             jd.bodyIdA = prevBody;
             jd.bodyIdB = linkRes.value();
-            jd.localAnchorA = f32x4(0.0f, -0.275f, 0.0f, 0.0f);
-            jd.localAnchorB = f32x4(0.0f, 0.275f, 0.0f, 0.0f);
-            jd.collideConnected = false;
+            jd.settings.localAnchorA = f32x4(0.0f, -0.275f, 0.0f, 0.0f);
+            jd.settings.localAnchorB = f32x4(0.0f, 0.275f, 0.0f, 0.0f);
+            jd.settings.collideConnected = false;
             if(!world.createJoint(jd).has_value())
                 return false;
             prevBody = linkRes.value();

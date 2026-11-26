@@ -9,6 +9,7 @@
 
 
 #include <core/alloc/global.h>
+#include <tests/common/memory_sdk.h>
 #include <impl/assets_mesh/asset.adhd.h>
 #include <impl/assets_mesh/cook.adhd.h>
 #include <impl/assets_mesh/cook_solid_topology.adhd.h>
@@ -25,55 +26,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NoThrowCornerVisitor{
-    [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const noexcept;
-};
-
-struct ThrowingCornerVisitor{
-    [[nodiscard]] b8 operator()(const Impl::MeshletDesc&, usize, const Impl::MeshletLocalVertexRef&)const;
-};
-
-class NthFailMeshArena final : public ArenaBase{
-public:
-    NthFailMeshArena()
-        : ArenaBase(Name("tests/mesh/nth_fail"))
-        , m_backing(Name("tests/mesh/nth_fail_backing"))
-    {}
-
-    void arm(const usize failOnCall)noexcept{
-        m_armed = true;
-        m_remaining = failOnCall;
-    }
-
-    void* allocate(const usize alignment, const usize size)override{
-        if(m_armed){
-            if(m_remaining == 0u)
-                throw AllocationException{};
-            --m_remaining;
-        }
-        return m_backing.allocate(alignment, size);
-    }
-
-    void* reallocate(void* p, const usize alignment, const usize size)override{
-        if(m_armed){
-            if(m_remaining == 0u)
-                throw AllocationException{};
-            --m_remaining;
-        }
-        return m_backing.reallocate(p, alignment, size);
-    }
-
-    void deallocate(void* p, const usize alignment, const usize size)noexcept override{
-        m_backing.deallocate(p, alignment, size);
-    }
-
-
-private:
-    Core::Alloc::GlobalArena m_backing;
-    usize m_remaining = 0u;
-    b8 m_armed = false;
-};
-
 [[nodiscard]] inline b8 VerifyMeshCookAllocationUnwindPropagates()noexcept{
     const Array<Float3U, 4u> positions{
         Float3U{ 0.0f, 0.0f, 0.0f },
@@ -87,8 +39,8 @@ private:
 
     b8 solidThrew = false;
     {
-        NthFailMeshArena failArena;
-        failArena.arm(0u);
+        Tests::NthFailArena failArena(Name("tests/mesh/nth_fail"), Name("tests/mesh/nth_fail_backing"), true);
+        failArena.arm(1u);
         try{
             Vector<u32, ArenaBase> words(failArena);
             if(Impl::BuildSolidTriangleWordsInto(posSpan, idxSpan, words))
@@ -104,8 +56,8 @@ private:
 
     b8 indicesThrew = false;
     {
-        NthFailMeshArena failArena;
-        failArena.arm(0u);
+        Tests::NthFailArena failArena(Name("tests/mesh/nth_fail"), Name("tests/mesh/nth_fail_backing"), true);
+        failArena.arm(1u);
         try{
             const auto decoded = Impl::BuildMeshletTriangleIndices(
                 failArena,
@@ -128,7 +80,7 @@ private:
 
     b8 meshletsThrew = false;
     {
-        NthFailMeshArena failArena;
+        Tests::NthFailArena failArena(Name("tests/mesh/nth_fail"), Name("tests/mesh/nth_fail_backing"), true);
         ::Path<::ArenaBase> meshPath(failArena);
         Vector<Impl::MeshletDesc, ArenaBase> outMeshlets(failArena);
         Vector<Impl::MeshletBounds, ArenaBase> outBounds(failArena);
@@ -141,7 +93,7 @@ private:
             Impl::MeshVertexRef{ 1u, 1u, 1u, 1u, 1u },
             Impl::MeshVertexRef{ 2u, 2u, 2u, 2u, 2u },
         };
-        failArena.arm(0u);
+        failArena.arm(1u);
         try{
             if(Impl::BuildCookMeshlets(
                 meshPath,

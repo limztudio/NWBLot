@@ -62,7 +62,7 @@ class SoftwareBvhBuilder : NoCopy{
     [cpp_unwind]
     private b8 ensureBvhSortBuffers(in usize paddedCount);
     [cpp_unwind]
-    private b8 bvhBitonicSort(mut CommandList commandList, in u32 elementCount, in u32 paddedCount);
+    private b8 bvhBitonicSort(mut CommandList commandList, in u32 paddedCount);
     [cpp_unwind]
     private b8 ensureBvhBuildPipeline();
     [cpp_unwind]

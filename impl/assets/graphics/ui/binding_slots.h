@@ -38,7 +38,6 @@
 #define NWB_UI_MATERIAL_DROP_SHADOW 7u
 #define NWB_UI_MATERIAL_BLUR 8u
 #define NWB_UI_MATERIAL_EFFECT_LAYER_COMPOSITE 9u
-#define NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8 1u
 #define NWB_UI_PRESENTATION_SDR 0u
 #define NWB_UI_PRESENTATION_HDR10 1u
 
@@ -50,3 +49,4 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

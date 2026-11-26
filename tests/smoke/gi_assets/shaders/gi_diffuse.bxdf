@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const half NWB_SMOKE_GI_DIFFUSE_TONEMAP_KNEE = 0.65h;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -23,7 +20,7 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     }
 
     litColor += nwbBxdfCausticIrradiance(pixel) * surface.baseColor;
-    return nwbBxdfRequiresLinearOutput() ? max(litColor, half3(0.0h)) : litColor / (litColor + half3(NWB_SMOKE_GI_DIFFUSE_TONEMAP_KNEE));
+    return max(litColor, half3(0.0h));
 }
 
 

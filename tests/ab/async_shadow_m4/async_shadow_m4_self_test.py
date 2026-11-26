@@ -7,6 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from async_shadow_m4_lane import PhysicalQueueId
+from bitmap_image import BitmapImage
+from gpu_timing_parse import ScopeSummary
 from harness_test_support import make_abnormal_exit_terminator
 from async_shadow_m4_admission_checks import M4AdmissionChecks, LIT_ASYNC, LIT_SYNC
 from async_shadow_m4_windows_checks import M4WindowsCaptureChecks
@@ -63,13 +66,13 @@ def run_self_test(harness) -> int:
             struct.pack_into("<IiiHHI", bmp, 14, dib_size, 1, 1, 1, 24, 0)
             bmp[pixel_offset:] = bytes((3, 2, 1, 0))
             capture_path.write_bytes(bmp)
-            image = harness.BitmapImage(capture_path)
+            image = BitmapImage(capture_path)
             assert (image.width, image.height, image.rgb) == (1, 1, bytes((1, 2, 3)))
             for invalid_offset in (0, 14, pixel_offset - 1):
                 struct.pack_into(LIT_I, bmp, 10, invalid_offset)
                 capture_path.write_bytes(bmp)
                 try:
-                    harness.BitmapImage(capture_path)
+                    BitmapImage(capture_path)
                 except harness.SmokeFailure as error:
                     assert "overlaps its headers" in str(error)
                 else:
@@ -86,7 +89,7 @@ def run_self_test(harness) -> int:
         backend = mock.Mock()
         backend.wait_for_window.return_value = 17
         backend.capture_client_window.return_value = SimpleNamespace(appears_empty_or_white=False, has_pixel_variation=True,)
-        orchestration_lane = harness.LaneStatus(False, False, harness.PhysicalQueueId(0, 17), harness.PhysicalQueueId(1, 17), True, True, False)
+        orchestration_lane = harness.LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False)
         events = []
 
         terminate = make_abnormal_exit_terminator(app, events)
@@ -125,10 +128,10 @@ def run_self_test(harness) -> int:
         assert terminate_mock.mock_calls == [mock.call(app, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), mock.call(None, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17), mock.call(None, LIT_BENCHMARK_LOGSERVER), mock.call(app, LIT_SYNC_BENCHMARK, 17),
             mock.call(None, LIT_SYNC_BENCHMARK, 17), mock.call(None, LIT_BENCHMARK_LOGSERVER),]
 
-        stable_scope = harness.ScopeSummary(11, 11, 1.0, 1.0, 1.0, 1.0)
-        async_run = harness.RunResult(mode=LIT_ASYNC, executable="async.exe", timing_file="async.timing.txt", log_file=LIT_ASYNC_LOG, capture_file=None, lane=harness.LaneStatus(True, True, harness.PhysicalQueueId(0, 17), harness.PhysicalQueueId(1, 17), True, True, False), scopes={
+        stable_scope = ScopeSummary(11, 11, 1.0, 1.0, 1.0, 1.0)
+        async_run = harness.RunResult(mode=LIT_ASYNC, executable="async.exe", timing_file="async.timing.txt", log_file=LIT_ASYNC_LOG, capture_file=None, lane=harness.LaneStatus(True, True, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False), scopes={
                 LIT_RENDER_FRAME: stable_scope, LIT_RENDER_ASYNC_SHADOW: stable_scope, LIT_RENDER_ASYNC_FINAL: stable_scope, }, forbidden_log_messages=[],)
-        sync_run = harness.RunResult(mode=LIT_SYNC, executable="sync.exe", timing_file="sync.timing.txt", log_file=LIT_SYNC_LOG, capture_file=None, lane=harness.LaneStatus(False, False, harness.PhysicalQueueId(0, 17), harness.PhysicalQueueId(1, 17), True, True, False),
+        sync_run = harness.RunResult(mode=LIT_SYNC, executable="sync.exe", timing_file="sync.timing.txt", log_file=LIT_SYNC_LOG, capture_file=None, lane=harness.LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
             scopes={LIT_RENDER_FRAME: stable_scope}, forbidden_log_messages=[],)
         capture_args.skip_pixel_parity = True
         assert harness.AsyncShadowM4Report().evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_PASS
@@ -151,13 +154,13 @@ def run_self_test(harness) -> int:
         assert parity_report["pixel_diff"]["changed_fraction"] == 1.0
         capture_args.skip_pixel_parity = True
 
-        async_run.scopes = {**async_run.scopes, LIT_RENDER_ASYNC_SHADOW: harness.ScopeSummary(12, 10, 1.0, 1.0, 0.0, 1.0)}
+        async_run.scopes = {**async_run.scopes, LIT_RENDER_ASYNC_SHADOW: ScopeSummary(12, 10, 1.0, 1.0, 0.0, 1.0)}
         assert harness.AsyncShadowM4Report().evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_INCONCLUSIVE
         async_run.forbidden_log_messages = [LIT_UNRESOLVED_FRAME_RECOVERY_SUBMISSION]
         assert harness.AsyncShadowM4Report().evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_FAIL
         async_run.forbidden_log_messages = []
 
-        sync_run.scopes = {LIT_RENDER_FRAME: harness.ScopeSummary(11, 11, 10.0, 10.0, 10.0, 10.0)}
+        sync_run.scopes = {LIT_RENDER_FRAME: ScopeSummary(11, 11, 10.0, 10.0, 10.0, 10.0)}
         timing_path = root / "measurement-boundary.timing.txt"
         timing_symbols = harness.load_name_symbols(None)
         for newline in ("\n", "\r\n"):

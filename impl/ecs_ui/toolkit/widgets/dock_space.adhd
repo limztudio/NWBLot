@@ -104,8 +104,6 @@ class DockSpaceState : NoCopy{
     public Vector<DockNode> m_nodes;
     public u64 m_draggingPanelKey = 0u;
     public u32 m_draggingSourceNodeId = 0u;
-    public Point m_dragOrigin;
-    public Point m_dragPointer;
     public b8 m_dragActive = false;
     public u32 m_hoverTargetNodeId = 0u;
     public DockDropZone m_hoverDropZone = DockDropZone::None;
@@ -258,7 +256,7 @@ class DockSpaceState : NoCopy{
         mut DockNode node = this.m_nodes[idxOpt.value()];
         if(node.isLeaf())
             return false;
-        const f32 clamped = UiSimdClamp(ratio, 0.1f, 0.9f);
+        const f32 clamped = Clamp(ratio, 0.1f, 0.9f);
         if(clamped != node.splitRatio){
             node.splitRatio = clamped;
             AdvanceNonWrappingRevision(this.m_revision);
@@ -435,7 +433,7 @@ class DockSpaceState : NoCopy{
         newLeaf.parentId = resolvedTarget;
 
         this.m_nodes[targetIdx].splitDirection = splitDir;
-        this.m_nodes[targetIdx].splitRatio = UiSimdClamp(splitRatio, 0.1f, 0.9f);
+        this.m_nodes[targetIdx].splitRatio = Clamp(splitRatio, 0.1f, 0.9f);
         this.m_nodes[targetIdx].firstChildId = child1Id;
         this.m_nodes[targetIdx].secondChildId = child2Id;
         this.m_nodes[targetIdx].activePanelKey = 0u;
@@ -494,9 +492,9 @@ class DockSpaceState : NoCopy{
                 this.m_nodes[idx].contentRect = rect;
             }
             else{
-                const f32 tabH = UiSimdMin(style.tabBarHeight, rect.height);
+                const f32 tabH = Min(style.tabBarHeight, rect.height);
                 this.m_nodes[idx].tabBarRect = Rect(rect.x, rect.y, rect.width, tabH);
-                this.m_nodes[idx].contentRect = Rect(rect.x, rect.y + tabH, rect.width, UiSimdMax(0.0f, rect.height - tabH));
+                this.m_nodes[idx].contentRect = Rect(rect.x, rect.y + tabH, rect.width, Max(0.0f, rect.height - tabH));
             }
             return;
         }
@@ -509,19 +507,19 @@ class DockSpaceState : NoCopy{
         Rect r1;
         Rect r2;
         if(dir == DockSplitDirection::Horizontal){
-            const f32 avail = UiSimdMax(0.0f, rect.width - splitThickness);
-            const f32 minW = UiSimdMin(style.minPaneExtent, avail * 0.5f);
-            const f32 w1 = UiSimdClamp(avail * ratio, minW, UiSimdMax(minW, avail - minW));
-            const f32 w2 = UiSimdMax(0.0f, avail - w1);
+            const f32 avail = Max(0.0f, rect.width - splitThickness);
+            const f32 minW = Min(style.minPaneExtent, avail * 0.5f);
+            const f32 w1 = Clamp(avail * ratio, minW, Max(minW, avail - minW));
+            const f32 w2 = Max(0.0f, avail - w1);
             r1 = Rect(rect.x, rect.y, w1, rect.height);
             this.m_nodes[idx].splitterRect = Rect(rect.x + w1, rect.y, splitThickness, rect.height);
             r2 = Rect(rect.x + w1 + splitThickness, rect.y, w2, rect.height);
         }
         else{
-            const f32 avail = UiSimdMax(0.0f, rect.height - splitThickness);
-            const f32 minH = UiSimdMin(style.minPaneExtent, avail * 0.5f);
-            const f32 h1 = UiSimdClamp(avail * ratio, minH, UiSimdMax(minH, avail - minH));
-            const f32 h2 = UiSimdMax(0.0f, avail - h1);
+            const f32 avail = Max(0.0f, rect.height - splitThickness);
+            const f32 minH = Min(style.minPaneExtent, avail * 0.5f);
+            const f32 h1 = Clamp(avail * ratio, minH, Max(minH, avail - minH));
+            const f32 h2 = Max(0.0f, avail - h1);
             r1 = Rect(rect.x, rect.y, rect.width, h1);
             this.m_nodes[idx].splitterRect = Rect(rect.x, rect.y + h1, rect.width, splitThickness);
             r2 = Rect(rect.x, rect.y + h1 + splitThickness, rect.width, h2);

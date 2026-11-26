@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import re
 
+from probe_common import FrameProbeRecorder, NUMBER
 from window_capture_smoke import SmokeFailure
 from probe_reference import encoded_marker, linear_rgb_bytes
 
@@ -17,7 +18,6 @@ LIT_RECTANGLES = "rectangles"
 LIT_PASSED = "passed"
 LIT_TITLE = "title"
 
-NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiWindowSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
 STATE = re.compile(rf"UiWindowSmoke: state sequence=(\d+) bounds=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})" r" collapsed=([01]) locked=([01]) count=(\d+)")
 ACTION = re.compile(r"UiWindowSmoke: action=(increase|locked) count=(\d+) locked=([01]) actions=(\d+)")
@@ -58,19 +58,18 @@ def snapshot_from_logs(text):
 
 
 def observe_window(frame, snapshot, expected_bounds, count, collapsed, locked, *, extent=None, skin="default"):
-    width, height, rows = frame
+    width, height, _ = frame
     scale_x, scale_y = snapshot[LIT_SCALE]
-    probes = []
+    recorder = FrameProbeRecorder(frame, snapshot[LIT_SCALE], "window")
+    probes = recorder.probes
 
     def probe(name, logical_position, expected=None, *, colored=False, tolerance=TOLERANCE):
-        x = round(logical_position[0] * scale_x)
-        y = round(logical_position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"window probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        sample = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-        observed = tuple(sorted(pixel[channel] for pixel in sample)[4] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, expected)) if expected else None
-        probes.append({"name": name, "position": [x, y], "expected": list(expected) if expected else "skin color", "observed": list(observed), "error": error, LIT_PASSED: max(observed) > 12 if colored else error <= tolerance})
+        if expected is not None:
+            recorder.probe(name, logical_position, expected, tolerance)
+            return
+        x, y = recorder.pixel(logical_position)
+        observed = recorder.sample_rgb(x, y, radius=1)
+        probes.append({"name": name, "position": [x, y], "expected": "skin color", "observed": list(observed), "error": None, LIT_PASSED: max(observed) > 12 if colored else False})
 
     values = (*snapshot[LIT_BOUNDS], snapshot[LIT_COUNT], int(snapshot[LIT_COLLAPSED]), int(snapshot[LIT_LOCKED]), snapshot[LIT_SEQUENCE])
     logical_height = height / scale_y

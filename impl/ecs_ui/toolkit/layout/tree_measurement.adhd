@@ -172,7 +172,7 @@ b8 MeasureLayoutWrappedNodeF64(
             itemCross = outer.y;
         }
         if(lineItemCount > 0u && ((lineMain + mainGap) + itemMain) > mainLimit){
-            totalMain = UiSimdMaxF64(totalMain, lineMain);
+            totalMain = Max(totalMain, lineMain);
             totalCross += lineCross;
             ++lineCount;
             lineMain = itemMain;
@@ -183,12 +183,12 @@ b8 MeasureLayoutWrappedNodeF64(
             if(lineItemCount > 0u)
                 lineMain += mainGap;
             lineMain += itemMain;
-            lineCross = UiSimdMaxF64(lineCross, itemCross);
+            lineCross = Max(lineCross, itemCross);
             ++lineItemCount;
         }
     }
     if(lineItemCount > 0u){
-        totalMain = UiSimdMaxF64(totalMain, lineMain);
+        totalMain = Max(totalMain, lineMain);
         totalCross += lineCross;
         ++lineCount;
     }
@@ -230,7 +230,7 @@ void ResolveLayoutGridAxisTracksF64(
     if(totalWeight <= 0.0)
         return;
     const f64 totalGap = trackGap * cast<f64>(count - 1u);
-    f64 budget = UiSimdMaxF64(0.0, (availExtent - totalGap) - nonStretchSum);
+    f64 budget = Max(0.0, (availExtent - totalGap) - nonStretchSum);
     frozen.clear();
     frozen.resize(cast<usize>(count), false);
     for(u32 i = 0u; i < count; ++i){
@@ -249,7 +249,7 @@ void ResolveLayoutGridAxisTracksF64(
             const f64 floorVal = trackSizes[cast<usize>(i)];
             if(share < floorVal){
                 frozen[cast<usize>(i)] = true;
-                budget = UiSimdMaxF64(0.0, budget - floorVal);
+                budget = Max(0.0, budget - floorVal);
                 activeWeight -= stretchWeights[cast<usize>(i)];
                 newlyFrozen = true;
             }
@@ -311,23 +311,23 @@ b8 ResolveLayoutGridTracksFromPlacementsF64(
         if(placed.colSpan == 1u){
             const usize c = cast<usize>(placed.col);
             if(childDesc.width.policy == LayoutSizePolicy::Stretch){
-                colWeights[c] = UiSimdMaxF64(colWeights[c], cast<f64>(childDesc.width.value));
+                colWeights[c] = Max(colWeights[c], cast<f64>(childDesc.width.value));
                 const f64 minOuterX = cast<f64>(childDesc.minWidth) + cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
-                outColWidths[c] = UiSimdMaxF64(outColWidths[c], minOuterX);
+                outColWidths[c] = Max(outColWidths[c], minOuterX);
             }
             else{
-                outColWidths[c] = UiSimdMaxF64(outColWidths[c], outer.x);
+                outColWidths[c] = Max(outColWidths[c], outer.x);
             }
         }
         if(placed.rowSpan == 1u){
             const usize r = cast<usize>(placed.row);
             if(childDesc.height.policy == LayoutSizePolicy::Stretch){
-                rowWeights[r] = UiSimdMaxF64(rowWeights[r], cast<f64>(childDesc.height.value));
+                rowWeights[r] = Max(rowWeights[r], cast<f64>(childDesc.height.value));
                 const f64 minOuterY = cast<f64>(childDesc.minHeight) + cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
-                outRowHeights[r] = UiSimdMaxF64(outRowHeights[r], minOuterY);
+                outRowHeights[r] = Max(outRowHeights[r], minOuterY);
             }
             else{
-                outRowHeights[r] = UiSimdMaxF64(outRowHeights[r], outer.y);
+                outRowHeights[r] = Max(outRowHeights[r], outer.y);
             }
         }
     }
@@ -338,7 +338,7 @@ b8 ResolveLayoutGridTracksFromPlacementsF64(
             if(childDesc.width.policy == LayoutSizePolicy::Stretch){
                 for(u32 k = 0u; k < placed.colSpan; ++k){
                     const usize c = cast<usize>(placed.col + k);
-                    colWeights[c] = UiSimdMaxF64(colWeights[c], cast<f64>(childDesc.width.value) / cast<f64>(placed.colSpan));
+                    colWeights[c] = Max(colWeights[c], cast<f64>(childDesc.width.value) / cast<f64>(placed.colSpan));
                 }
             }
             else{
@@ -356,7 +356,7 @@ b8 ResolveLayoutGridTracksFromPlacementsF64(
             if(childDesc.height.policy == LayoutSizePolicy::Stretch){
                 for(u32 k = 0u; k < placed.rowSpan; ++k){
                     const usize r = cast<usize>(placed.row + k);
-                    rowWeights[r] = UiSimdMaxF64(rowWeights[r], cast<f64>(childDesc.height.value) / cast<f64>(placed.rowSpan));
+                    rowWeights[r] = Max(rowWeights[r], cast<f64>(childDesc.height.value) / cast<f64>(placed.rowSpan));
                 }
             }
             else{
@@ -433,16 +433,27 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
     f64 extentY = 0.0;
     if(node.firstChild != s_LayoutNoParent){
         u32 childCount = 0u;
-        if(description.direction == LayoutDirection::Row){
+        if(description.direction == LayoutDirection::Row || description.direction == LayoutDirection::Column){
+            const b8 isRow = description.direction == LayoutDirection::Row;
             f64 wrapLimit = 0.0;
             b8 useWrap = false;
             if(description.flexWrap){
-                if(description.width.policy == LayoutSizePolicy::Fixed){
-                    wrapLimit = UiSimdMaxF64(0.0, cast<f64>(description.width.value) - cast<f64>(description.padding.left) - cast<f64>(description.padding.right));
+                LayoutSize mainPolicy = description.height;
+                f32 mainMax = description.maxHeight;
+                f32 padStart = description.padding.top;
+                f32 padEnd = description.padding.bottom;
+                if(isRow){
+                    mainPolicy = description.width;
+                    mainMax = description.maxWidth;
+                    padStart = description.padding.left;
+                    padEnd = description.padding.right;
+                }
+                if(mainPolicy.policy == LayoutSizePolicy::Fixed){
+                    wrapLimit = Max(0.0, cast<f64>(mainPolicy.value) - cast<f64>(padStart) - cast<f64>(padEnd));
                     useWrap = true;
                 }
-                else if(description.maxWidth > 0.0f){
-                    wrapLimit = UiSimdMaxF64(0.0, cast<f64>(description.maxWidth) - cast<f64>(description.padding.left) - cast<f64>(description.padding.right));
+                else if(mainMax > 0.0f){
+                    wrapLimit = Max(0.0, cast<f64>(mainMax) - cast<f64>(padStart) - cast<f64>(padEnd));
                     useWrap = true;
                 }
             }
@@ -456,43 +467,23 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
                     if(childDesc.positionMode == LayoutPositionMode::Absolute)
                         continue;
                     const VectorDouble outer = ComputeFlowChildOuterSizeF64(childDesc, boxes[cast<usize>(child)].measuredSize);
-                    extentX += outer.x;
-                    extentY = UiSimdMaxF64(extentY, outer.y);
+                    if(isRow){
+                        extentX += outer.x;
+                        extentY = Max(extentY, outer.y);
+                    }
+                    else{
+                        extentX = Max(extentX, outer.x);
+                        extentY += outer.y;
+                    }
                     ++childCount;
                 }
-                if(childCount > 1u)
-                    extentX += cast<f64>(description.gap) * cast<f64>(childCount - 1u);
-            }
-        }
-        else if(description.direction == LayoutDirection::Column){
-            f64 wrapLimit = 0.0;
-            b8 useWrap = false;
-            if(description.flexWrap){
-                if(description.height.policy == LayoutSizePolicy::Fixed){
-                    wrapLimit = UiSimdMaxF64(0.0, cast<f64>(description.height.value) - cast<f64>(description.padding.top) - cast<f64>(description.padding.bottom));
-                    useWrap = true;
+                if(childCount > 1u){
+                    const f64 gapTotal = cast<f64>(description.gap) * cast<f64>(childCount - 1u);
+                    if(isRow)
+                        extentX += gapTotal;
+                    else
+                        extentY += gapTotal;
                 }
-                else if(description.maxHeight > 0.0f){
-                    wrapLimit = UiSimdMaxF64(0.0, cast<f64>(description.maxHeight) - cast<f64>(description.padding.top) - cast<f64>(description.padding.bottom));
-                    useWrap = true;
-                }
-            }
-            if(useWrap){
-                if(!MeasureLayoutWrappedNodeF64(nodes, boxes, index, wrapLimit, extentX, extentY))
-                    return MakeUnexpected(Failure());
-            }
-            else{
-                for(u32 child = node.firstChild; child != s_LayoutNoParent; child = nodes[cast<usize>(child)].nextSibling){
-                    in LayoutNodeDesc childDesc = nodes[cast<usize>(child)].description;
-                    if(childDesc.positionMode == LayoutPositionMode::Absolute)
-                        continue;
-                    const VectorDouble outer = ComputeFlowChildOuterSizeF64(childDesc, boxes[cast<usize>(child)].measuredSize);
-                    extentX = UiSimdMaxF64(extentX, outer.x);
-                    extentY += outer.y;
-                    ++childCount;
-                }
-                if(childCount > 1u)
-                    extentY += cast<f64>(description.gap) * cast<f64>(childCount - 1u);
             }
         }
         else if(description.direction == LayoutDirection::Grid){
@@ -500,21 +491,21 @@ Expected<Point> MeasureLayoutTreeNode(in Span<LayoutTreeNode> nodes, in Span<Lay
             f64 availW = 0.0;
             if(description.width.policy == LayoutSizePolicy::Fixed){
                 hasAvailW = true;
-                availW = UiSimdMaxF64(0.0, cast<f64>(description.width.value) - cast<f64>(description.padding.left) - cast<f64>(description.padding.right));
+                availW = Max(0.0, cast<f64>(description.width.value) - cast<f64>(description.padding.left) - cast<f64>(description.padding.right));
             }
             else if(description.maxWidth > 0.0f){
                 hasAvailW = true;
-                availW = UiSimdMaxF64(0.0, cast<f64>(description.maxWidth) - cast<f64>(description.padding.left) - cast<f64>(description.padding.right));
+                availW = Max(0.0, cast<f64>(description.maxWidth) - cast<f64>(description.padding.left) - cast<f64>(description.padding.right));
             }
             b8 hasAvailH = false;
             f64 availH = 0.0;
             if(description.height.policy == LayoutSizePolicy::Fixed){
                 hasAvailH = true;
-                availH = UiSimdMaxF64(0.0, cast<f64>(description.height.value) - cast<f64>(description.padding.top) - cast<f64>(description.padding.bottom));
+                availH = Max(0.0, cast<f64>(description.height.value) - cast<f64>(description.padding.top) - cast<f64>(description.padding.bottom));
             }
             else if(description.maxHeight > 0.0f){
                 hasAvailH = true;
-                availH = UiSimdMaxF64(0.0, cast<f64>(description.maxHeight) - cast<f64>(description.padding.top) - cast<f64>(description.padding.bottom));
+                availH = Max(0.0, cast<f64>(description.maxHeight) - cast<f64>(description.padding.top) - cast<f64>(description.padding.bottom));
             }
             if(!MeasureLayoutGridTracksF64(nodes, boxes, index, hasAvailW, availW, hasAvailH, availH, scratch, extentX, extentY))
                 return MakeUnexpected(Failure());

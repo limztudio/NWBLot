@@ -221,9 +221,7 @@ private:
 
 
 private:
-    static constexpr usize s_InlineImportIndexCount = 32u;
     static constexpr usize s_InitialPointerIndexBucketCount = 2u;
-    static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
     static constexpr usize s_PayloadPoolBlockBytes = 4096u;
     static constexpr usize s_PayloadPoolMaxPayloadBytes = 4096u;
     static constexpr usize s_PayloadPoolMaxAlign = 64u;
@@ -451,6 +449,73 @@ public:
 
 
 private:
+    template<typename ClearTask, typename ClearDescT>
+    [[nodiscard]] Expected<GpuTaskId> appendHookedTextureClearTask(
+        const GpuTaskDesc& desc,
+        const ClearDescT& clearDesc,
+        const TextureHandle& destinationTexture,
+        const TextureSubresourceSet& resolvedSubresources,
+        const GpuTaskCommandRequirements& commands,
+        const DeclarationMutationScope& mutation
+    ){
+        using ClearPayload = typename ClearTask::Payload;
+        ClearPayload* const payloadObject = NewArenaObject<ClearPayload>(m_arena);
+        if(!payloadObject)
+            return MakeUnexpected(Failure{});
+        ProvisionalPayloadOwner<ClearPayload> payload(m_arena, payloadObject);
+        payload->destinationResource = clearDesc.destination;
+        payload->destination = destinationTexture;
+        payload->clearDesc = clearDesc;
+        payload->clearDesc.subresources = resolvedSubresources;
+
+        const GpuTaskResourceUse resourceUse{
+            .resource = clearDesc.destination,
+            .range = GpuTaskResourceRange{ .textureSubresources = resolvedSubresources, },
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        };
+        GpuTaskDesc resolvedDesc = desc;
+        resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(&resourceUse, 1u));
+        return appendBuiltinTaskWithinMutation<ClearTask>(payload, resolvedDesc, mutation, commands);
+    }
+
+    template<typename UploadTask, typename PopulateFn>
+    [[nodiscard]] Expected<GpuTaskId> appendUploadTaskWithinMutation(
+        const GpuTaskDesc& desc,
+        const GpuGraphResourceId& destinationId,
+        const GpuTaskResourceRange& uploadRange,
+        const ResourceStates::Mask finalState,
+        const GpuTaskCommandRequirements& commands,
+        const DeclarationMutationScope& mutation,
+        PopulateFn&& populatePayload
+    ){
+        using UploadPayload = typename UploadTask::Payload;
+        UploadPayload* const payloadObject = NewArenaObject<UploadPayload>(m_arena);
+        if(!payloadObject)
+            return MakeUnexpected(Failure{});
+        ProvisionalPayloadOwner<UploadPayload> payload(m_arena, payloadObject);
+        populatePayload(*payloadObject);
+
+        const Array<GpuTaskResourceUse, 2> resourceUses = {{
+            GpuTaskResourceUse{
+                .resource = destinationId,
+                .range = uploadRange,
+                .requiredState = ResourceStates::CopyDest,
+                .access = GpuTaskResourceAccess::Write,
+            },
+            GpuTaskResourceUse{
+                .resource = destinationId,
+                .range = uploadRange,
+                .requiredState = finalState,
+                .access = GpuTaskResourceAccess::Write,
+            },
+        }};
+        const usize resourceUseCount = finalState == ResourceStates::CopyDest ? 1u : resourceUses.size();
+        GpuTaskDesc resolvedDesc = desc;
+        resolvedDesc.setResourceUses(Span<const GpuTaskResourceUse>(resourceUses.data(), resourceUseCount));
+        return appendBuiltinTaskWithinMutation<UploadTask>(payload, resolvedDesc, mutation, commands);
+    }
+
     template<typename TaskT, typename ConstructPayloadAt>
     [[nodiscard]] Expected<GpuTaskId> declareTaskWithPayload(const GpuTaskDesc& desc, ConstructPayloadAt&& constructAt){
         using Payload = typename TaskT::Payload;
@@ -689,6 +754,17 @@ private:
         const QueueSubmissionReceipt* receipts,
         GpuPacketSubmissionLease* const* leases
     )const noexcept;
+    [[nodiscard]] GpuCompiledPacketView validateSubmittingPacketLeaseWithinLock(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        GpuSubmissionPacketId packet,
+        const GpuPacketSubmissionLease* leasePtr,
+        TaskLifecycleState::Enum expectedState,
+        b8 requireNonEmptyTasks,
+        const char* leaseContext,
+        const char* taskContext
+    )const noexcept;
+    void markPacketAcceptedWithinLock(const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     void abortPacketSubmission(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const;
     [[nodiscard]] b8 abandonPacketSubmissionWithoutCallbacks(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, GpuPacketSubmissionLease& lease)const noexcept;
     [[nodiscard]] b8 discardUnacceptedPacket(const GpuCompiledGraph& compiledGraph, const GpuCompiledGraph::ReadView& planAccess, GpuSubmissionPacketId packet, u64 recordingAttemptGeneration, const GpuGraphSubmissionBinding& submissionBinding)const;
@@ -798,6 +874,15 @@ private:
     [[nodiscard]] Expected<GpuGraphPipelineId> appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
     [[nodiscard]] Expected<GpuExternalCompletionId> appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
+    [[nodiscard]] const GpuGraphResourceNode* validateUploadTaskInputsWithinMutation(
+        const GpuTaskDesc& desc,
+        const GpuUploadBlobId& sourceId,
+        const GpuGraphResourceId& destinationId,
+        ResourceStates::Mask finalState,
+        GpuGraphResourceType::Enum expectedType,
+        const DeclarationMutationScope& mutation,
+        const GpuUploadBlobNode*& outSource
+    )const noexcept;
 
 
     [[nodiscard]] MarkerLabelRange appendMarkerLabel(AStringView text);
@@ -810,6 +895,7 @@ private:
     [[nodiscard]] GlobalUniquePtr<CommandListResourceStateHandoff> acquireStateSnapshot();
     void recycleOrDestroyStateSnapshot(NotNull<CommandListResourceStateHandoff*> states)noexcept;
     void destroyReusableStateSnapshots()noexcept;
+    [[nodiscard]] b8 canDestroyTaskPayloadsWithinLock()const noexcept;
     [[nodiscard]] b8 retireTaskPayloads();
     [[nodiscard]] b8 destroyTaskPayloads();
     [[nodiscard]] b8 destroyTaskPayloadsWithoutCallbacks()noexcept;

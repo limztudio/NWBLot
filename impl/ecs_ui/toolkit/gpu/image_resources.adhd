@@ -258,58 +258,6 @@ b8 ValidGpuTextureImageVersion(in GpuTextureImageVersion version){
     );
 }
 
-b8 ValidateGpuGlyphPages(in DrawSnapshot snapshot){
-    if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
-        return false;
-    in Vector<SharedGlyphPage> pages = snapshot.glyphPages();
-    for(usize index = 0u; index < pages.size(); ++index){
-        if(!pages[index].valid() || !ValidGlyphPageBinding(pages[index].deref().binding(), pages[index].deref().pixels().size()))
-            return false;
-        for(usize previous = 0u; previous < index; ++previous){
-            if(SameGlyphPageKey(pages[index].deref().binding(), pages[previous].deref().binding()))
-                return false;
-        }
-    }
-    return ValidateDrawCommandGlyphBindings(snapshot.commands(), pages.size());
-}
-
-b8 ValidateGpuSdfPages(in DrawSnapshot snapshot){
-    if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
-        return false;
-    in Vector<SharedSdfAtlasPage> pages = snapshot.sdfPages();
-    for(usize index = 0u; index < pages.size(); ++index){
-        if(!pages[index].valid() || !ValidSdfAtlasPageBinding(pages[index].deref().binding(), pages[index].deref().pixels().size()))
-            return false;
-        for(usize previous = 0u; previous < index; ++previous){
-            if(SameSdfAtlasPageKey(pages[index].deref().binding(), pages[previous].deref().binding()))
-                return false;
-        }
-    }
-    for(in DrawCommand command : snapshot.commands()){
-        u32 channelCount = 0u;
-        if(command.sdfPageIndex < pages.size())
-            channelCount = pages[command.sdfPageIndex].deref().binding().channelCount;
-        if(!ValidDrawCommandSdfBinding(command, pages.size(), channelCount))
-            return false;
-    }
-    return true;
-}
-
-b8 ValidateGpuTextureImages(in DrawSnapshot snapshot){
-    if(!ValidSnapshotImageCounts(snapshot.glyphPages().size(), snapshot.sdfPages().size(), snapshot.textureImages().size()))
-        return false;
-    in Vector<SharedImageSource> images = snapshot.textureImages();
-    for(usize index = 0u; index < images.size(); ++index){
-        if(!images[index].valid() || !ValidUiTextureImageSource(images[index].deref()))
-            return false;
-        for(usize previous = 0u; previous < index; ++previous){
-            if(images[index].deref().generation() == images[previous].deref().generation())
-                return false;
-        }
-    }
-    return ValidateDrawCommandImageBindings(snapshot.commands(), images.size());
-}
-
 b8 ValidGpuClipMaskChain(in u32 headOffset, in usize effectBytes, in Span<u32> words){
     u32 cursor = headOffset;
     for(usize step = 0u; step < s_PaintMaxAnalyticClipDepth; ++step){
@@ -477,6 +425,59 @@ b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
 }
 
 [cpp_unwind]
+Expected<GpuGraphResourceId> TryDeclareGpuAtlasPage(
+    mut GpuTaskGraph graph,
+    mut GpuSampledTextureNameTable nameTable,
+    mut GpuRasterResourceUses uses,
+    in u32 slot,
+    in usize index,
+    in Name readyPrefix,
+    in Name texturePrefix,
+    in StringView readyMarkerLabel,
+    in StringView kindLabel,
+    in StringView textureMarkerLabel,
+    in StringView slotWord,
+    in QueueSubmissionToken readinessToken,
+    in TextureHandle textureRef,
+    in u64 atlasIdentity,
+    in u32 bindingIndex,
+    in u64 bindingGeneration
+){
+    Name readyIdentity;
+    Name textureIdentity;
+    if(!nameTable.resolvePair(slot, index, readyPrefix, texturePrefix, readyIdentity, textureIdentity))
+        return MakeUnexpected(Failure());
+    const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
+        GpuSampledTextureImportDesc(
+            readyMarkerLabel,
+            kindLabel,
+            readinessToken,
+            textureMarkerLabel,
+            textureRef,
+            index
+        ),
+        readyIdentity,
+        textureIdentity,
+        graph,
+        uses
+    );
+    if(!texture.has_value()){
+        if(texture.error() == GpuSampledTextureImportError::Texture)
+            error(
+                "GpuRenderer: {} {} texture import failed (atlas={}, {}={}, generation={})"
+                , kindLabel
+                , index
+                , atlasIdentity
+                , slotWord
+                , bindingIndex
+                , bindingGeneration
+            );
+        return MakeUnexpected(Failure());
+    }
+    return texture.value();
+}
+
+[cpp_unwind]
 Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(
     mut GpuTaskGraph graph,
     in DrawSnapshot snapshot,
@@ -491,35 +492,27 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(
     }
     for(usize index = 0u; index < versions.size(); ++index){
         in GpuVersion<GpuGlyphVersion> page = versions[index];
-        Name readyIdentity;
-        Name textureIdentity;
-        if(!nameTable.resolvePair(0u, index, s_GpuGlyphPageReadyPrefix, s_GpuGlyphPagePrefix, readyIdentity, textureIdentity))
-            return MakeUnexpected(Failure());
-        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
-            GpuSampledTextureImportDesc(
-                s_GpuGlyphPageReadyMarkerLabel,
-                "glyph page",
-                page.deref().m_readinessToken,
-                s_GpuGlyphPageMarkerLabel,
-                page.deref().m_texture,
-                index
-            ),
-            readyIdentity,
-            textureIdentity,
+        in auto binding = page.deref().m_page.deref().binding();
+        const auto texture = TryDeclareGpuAtlasPage(
             graph,
-            uses
+            nameTable,
+            uses,
+            0u,
+            index,
+            s_GpuGlyphPageReadyPrefix,
+            s_GpuGlyphPagePrefix,
+            s_GpuGlyphPageReadyMarkerLabel,
+            "glyph page",
+            s_GpuGlyphPageMarkerLabel,
+            "page",
+            page.deref().m_readinessToken,
+            page.deref().m_texture,
+            binding.atlasIdentity,
+            binding.index,
+            binding.generation
         );
-        if(!texture.has_value()){
-            if(texture.error() == GpuSampledTextureImportError::Texture)
-                error(
-                    "GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})"
-                    , index
-                    , page.deref().m_page.deref().binding().atlasIdentity
-                    , page.deref().m_page.deref().binding().index
-                    , page.deref().m_page.deref().binding().generation
-                );
+        if(!texture.has_value())
             return MakeUnexpected(Failure());
-        }
         resources.push_back(texture.value());
     }
     return resources;
@@ -540,35 +533,27 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(
     }
     for(usize index = 0u; index < versions.size(); ++index){
         in GpuVersion<GpuSdfAtlasVersion> page = versions[index];
-        Name readyIdentity;
-        Name textureIdentity;
-        if(!nameTable.resolvePair(1u, index, s_GpuSdfPageReadyPrefix, s_GpuSdfPagePrefix, readyIdentity, textureIdentity))
-            return MakeUnexpected(Failure());
-        const Expected<GpuGraphResourceId, GpuSampledTextureImportError> texture = ImportGpuSampledTextureWithNames(
-            GpuSampledTextureImportDesc(
-                s_GpuSdfPageReadyMarkerLabel,
-                "SDF page",
-                page.deref().m_readinessToken,
-                s_GpuSdfPageMarkerLabel,
-                page.deref().m_texture,
-                index
-            ),
-            readyIdentity,
-            textureIdentity,
+        in auto binding = page.deref().m_page.deref().binding();
+        const auto texture = TryDeclareGpuAtlasPage(
             graph,
-            uses
+            nameTable,
+            uses,
+            1u,
+            index,
+            s_GpuSdfPageReadyPrefix,
+            s_GpuSdfPagePrefix,
+            s_GpuSdfPageReadyMarkerLabel,
+            "SDF page",
+            s_GpuSdfPageMarkerLabel,
+            "group",
+            page.deref().m_readinessToken,
+            page.deref().m_texture,
+            binding.atlasIdentity,
+            binding.index,
+            binding.generation
         );
-        if(!texture.has_value()){
-            if(texture.error() == GpuSampledTextureImportError::Texture)
-                error(
-                    "GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})"
-                    , index
-                    , page.deref().m_page.deref().binding().atlasIdentity
-                    , page.deref().m_page.deref().binding().index
-                    , page.deref().m_page.deref().binding().generation
-                );
+        if(!texture.has_value())
             return MakeUnexpected(Failure());
-        }
         resources.push_back(texture.value());
     }
     return resources;

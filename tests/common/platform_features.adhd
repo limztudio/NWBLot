@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_Debug")]
+extern const b8 s_IsDebugBuild;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_Optimize")]
+extern const b8 s_IsOptimizeBuild;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_Final")]
+extern const b8 s_IsFinalBuild;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_Windows")]
+extern const b8 s_IsWindowsPlatform;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_Linux")]
+extern const b8 s_IsLinuxPlatform;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_DesktopLinux")]
+extern const b8 s_IsDesktopLinuxPlatform;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_HasSse2")]
+extern const b8 s_HasSse2InstructionSet;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_HasAvx")]
+extern const b8 s_HasAvxInstructionSet;
+
+[cpp_header("<tests/common/platform_features.h>"), cpp_name("::NWB::Tests::s_HasAvx2")]
+extern const b8 s_HasAvx2InstructionSet;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

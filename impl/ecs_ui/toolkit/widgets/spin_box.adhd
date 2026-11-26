@@ -128,7 +128,7 @@ Expected<i64> StepIntegerSpinBoxValue(in i64 current, in i64 deltaSteps, in i64 
 Expected<f64> StepFloatSpinBoxValue(in f64 current, in f64 deltaSteps, in f64 stepSize, in FloatBounds bounds, in b8 wrap){
     if(!ValidateFloatBounds(bounds) || !IsFinite(VectorDouble(current, deltaSteps, stepSize, 0.0)) || stepSize <= 0.0)
         return MakeUnexpected(Failure());
-    const f64 base = UiSimdMaxF64(bounds.minimum, UiSimdMinF64(bounds.maximum, current));
+    const f64 base = Max(bounds.minimum, Min(bounds.maximum, current));
     if(deltaSteps == 0.0)
         return base;
     const f64 delta = deltaSteps * stepSize;
@@ -146,11 +146,11 @@ Expected<f64> StepFloatSpinBoxValue(in f64 current, in f64 deltaSteps, in f64 st
         if(next > bounds.maximum || next < bounds.minimum){
             const f64 offset = (next - bounds.minimum) / span;
             const f64 wrapped = next - VectorDoubleFloor(VectorDouble(offset)).x * span;
-            next = UiSimdMaxF64(bounds.minimum, UiSimdMinF64(bounds.maximum, wrapped));
+            next = Max(bounds.minimum, Min(bounds.maximum, wrapped));
         }
         return next;
     }
-    return UiSimdMaxF64(bounds.minimum, UiSimdMinF64(bounds.maximum, next));
+    return Max(bounds.minimum, Min(bounds.maximum, next));
 }
 
 

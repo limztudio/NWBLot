@@ -281,6 +281,68 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> acquireImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};
 
+    const auto validateExclusiveOwnershipAcquire = [&](
+        const TStringView resourceName,
+        const ResourceQueueSharing::Mask declaredSharing,
+        const ResourceQueueSharing::Mask contractSharing,
+        const VkSharingMode vkSharingMode,
+        const GpuPhysicalQueueId ownerQueue,
+        const GpuPhysicalQueueId releaseDestinationQueue,
+        u32& outSourceQueueFamily,
+        u32& outDestinationQueueFamily,
+        b8& outNeedsAcquireBarrier
+    ) -> b8 {
+        outSourceQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        outDestinationQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        outNeedsAcquireBarrier = false;
+        if(declaredSharing != contractSharing){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff {} sharing contract does not match the resource description"), resourceName);
+            return false;
+        }
+
+        if(vkSharingMode == VK_SHARING_MODE_CONCURRENT){
+            if(ownerQueue.valid() || releaseDestinationQueue.valid()){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Concurrent {} state handoff unexpectedly carries exclusive ownership"), resourceName);
+                return false;
+            }
+            return true;
+        }
+
+        if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: {} state handoff has an invalid owner queue"), resourceName);
+            return false;
+        }
+        if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: {} state handoff has an invalid ownership destination"), resourceName);
+            return false;
+        }
+
+        const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
+        const u32 destinationQueueFamily = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.familyIndex : VK_QUEUE_FAMILY_IGNORED;
+        if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive {} handoff references an unavailable queue family"), resourceName);
+            return false;
+        }
+
+        if(!releaseDestinationQueue.valid()){
+            if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
+                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive {} handoff changes queue family without a release/acquire transfer"), resourceName);
+                return false;
+            }
+            return true;
+        }
+
+        const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
+        if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
+            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive {} handoff is not imported by its declared destination family"), resourceName);
+            return false;
+        }
+
+        outSourceQueueFamily = sourceQueueFamily;
+        outDestinationQueueFamily = destinationQueueFamily;
+        outNeedsAcquireBarrier = sourceQueueFamily != destinationQueueFamily;
+        return true;
+    };
     const auto appendTextureAcquire = [&](
         Texture& texture,
         const TextureSubresourceSet& subresources,
@@ -289,101 +351,23 @@ b8 CommandList::importResourceStateHandoff(Alloc::ScratchArena& scratchArena, co
         const GpuPhysicalQueueId ownerQueue,
         const GpuPhysicalQueueId releaseDestinationQueue
     ) -> b8 {
-        if(sharing != texture.m_creationDesc.queueSharing){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
+        u32 sourceQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        u32 destinationQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        b8 needsAcquireBarrier = false;
+        if(!validateExclusiveOwnershipAcquire(FOUNDATION_TEXT("texture"), sharing, texture.m_creationDesc.queueSharing, texture.m_imageInfo.sharingMode, ownerQueue, releaseDestinationQueue, sourceQueueFamily, destinationQueueFamily, needsAcquireBarrier))
             return false;
-        }
-
-        if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-            if(ownerQueue.valid() || releaseDestinationQueue.valid()){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Concurrent texture state handoff unexpectedly carries exclusive ownership"));
-                return false;
-            }
-            return true;
-        }
-
-        if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Texture state handoff has an invalid owner queue"));
-            return false;
-        }
-        if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Texture state handoff has an invalid ownership destination"));
-            return false;
-        }
-
-        const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
-        const u32 destinationQueueFamily = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.familyIndex : VK_QUEUE_FAMILY_IGNORED;
-        if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
-            return false;
-        }
-
-        if(!releaseDestinationQueue.valid()){
-            if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
-                return false;
-            }
-            return true;
-        }
-
-        const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
-        if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination family"));
-            return false;
-        }
-
-        if(sourceQueueFamily != destinationQueueFamily){
+        if(needsAcquireBarrier)
             acquireImageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureOwnershipAcquireBarrier(texture.m_image, texture.m_aspectMask, subresources, state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline));
-        }
         return true;
     };
     const auto appendBufferAcquire = [&](Buffer& buffer, const BufferRange range, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> b8 {
-        if(sharing != buffer.m_creationDesc.queueSharing){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
+        u32 sourceQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        u32 destinationQueueFamily = VK_QUEUE_FAMILY_IGNORED;
+        b8 needsAcquireBarrier = false;
+        if(!validateExclusiveOwnershipAcquire(FOUNDATION_TEXT("buffer"), sharing, buffer.m_creationDesc.queueSharing, buffer.m_bufferInfo.sharingMode, ownerQueue, releaseDestinationQueue, sourceQueueFamily, destinationQueueFamily, needsAcquireBarrier))
             return false;
-        }
-
-        if(buffer.m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
-            if(ownerQueue.valid() || releaseDestinationQueue.valid()){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Concurrent buffer state handoff unexpectedly carries exclusive ownership"));
-                return false;
-            }
-            return true;
-        }
-
-        if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Buffer state handoff has an invalid owner queue"));
-            return false;
-        }
-        if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Buffer state handoff has an invalid ownership destination"));
-            return false;
-        }
-
-        const u32 sourceQueueFamily = ownerQueue.valid() ? m_device.getQueueFamilyIndex(ownerQueue) : VK_QUEUE_FAMILY_IGNORED;
-        const u32 destinationQueueFamily = m_hasCachedPhysicalQueueInfo ? m_cachedPhysicalQueueInfo.familyIndex : VK_QUEUE_FAMILY_IGNORED;
-        if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
-            return false;
-        }
-
-        if(!releaseDestinationQueue.valid()){
-            if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
-                NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff changes queue family without a release/acquire transfer"));
-                return false;
-            }
-            return true;
-        }
-
-        const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
-        if(!ownerQueue.valid() || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED || releaseDestinationFamily != destinationQueueFamily){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination family"));
-            return false;
-        }
-
-        if(sourceQueueFamily != destinationQueueFamily){
+        if(needsAcquireBarrier)
             acquireBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipAcquireBarrier(buffer.m_buffer, state, sourceQueueFamily, destinationQueueFamily, m_context.extensions.khrRayTracingPipeline, range));
-        }
         return true;
     };
 

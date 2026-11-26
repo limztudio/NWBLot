@@ -19,7 +19,6 @@ class SliderCallbackSource : ComboSource{
     public TestObserved<b8> m_endAccepted;
     public Optional<mut SliderState> m_state;
     public Optional<mut Builder> m_builder;
-    public Optional<mut PopupState> m_popup;
     public TestObserved<UiFixtureSliderCallbackMutation> m_mutation = TestObserved<UiFixtureSliderCallbackMutation>(UiFixtureSliderCallbackMutation::None);
 
     public SliderCallbackSource(){ this.count = 1u; this.generation = 2501u; }
@@ -34,20 +33,15 @@ class SliderCallbackSource : ComboSource{
             ApplySliderCallbackStateMutation(mutation, this.m_state.value());
         else if(mutation == UiFixtureSliderCallbackMutation::ResetBuilder || mutation == UiFixtureSliderCallbackMutation::PanelBuilder)
             ApplySliderCallbackBuilderMutation(mutation, this, this.m_builder.value());
-        else if(mutation == UiFixtureSliderCallbackMutation::ClosePopup)
-            this.m_popup.value().close();
         return s_LaterCallbackText;
     }
-    public void armState(in UiFixtureSliderCallbackMutation mutation, mut SliderState state){ this.arm(mutation, Optional<mut SliderState>(state), Optional<mut Builder>(), Optional<mut PopupState>()); }
-    public void armBuilder(in UiFixtureSliderCallbackMutation mutation, mut Builder builder){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(builder), Optional<mut PopupState>()); }
-    public void armPopup(in UiFixtureSliderCallbackMutation mutation, mut PopupState popup){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(), Optional<mut PopupState>(popup)); }
+    public void armState(in UiFixtureSliderCallbackMutation mutation, mut SliderState state){ this.arm(mutation, Optional<mut SliderState>(state), Optional<mut Builder>()); }
+    public void armBuilder(in UiFixtureSliderCallbackMutation mutation, mut Builder builder){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(builder)); }
     public void clearCounters()const{ ClearSliderCallbackCounters(this); }
-    public void arm(in UiFixtureSliderCallbackMutation mutation){ this.arm(mutation, Optional<mut SliderState>(), Optional<mut Builder>(), Optional<mut PopupState>()); }
-    public void arm(in UiFixtureSliderCallbackMutation mutation, in Optional<mut SliderState> state, in Optional<mut Builder> builder, in Optional<mut PopupState> popup){
+    public void arm(in UiFixtureSliderCallbackMutation mutation, in Optional<mut SliderState> state, in Optional<mut Builder> builder){
         this.m_mutation.value() = mutation;
         this.m_state = state;
         this.m_builder = builder;
-        this.m_popup = popup;
         this.clearCounters();
     }
 }

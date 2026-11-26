@@ -65,22 +65,22 @@ u32 ResolveBvhMeshRefitGroups(in u32 primitiveCount){
     return DivideUp(primitiveCount, s_BvhBuildGroupSize);
 }
 
-u32 BuildBvhBitonicSortSteps(in u32 elementCount, in u32 paddedCount, in u32 keysHeapSlot, in u32 payloadHeapSlot, mut FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> outSteps){
+u32 BuildBvhBitonicSortSteps(in u32 paddedCount, in u32 keysHeapSlot, in u32 payloadHeapSlot, mut FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> outSteps){
     outSteps.clear();
     if(paddedCount < s_BvhSortGroupSize)
         return 0u;
 
     const u32 groupCount = paddedCount / s_BvhSortGroupSize;
-    outSteps.push_back(MakeBvhSortPushConstants(elementCount, 0u, 0u, s_BvhSortModeLocalTile, keysHeapSlot, payloadHeapSlot));
+    outSteps.push_back(MakeBvhSortPushConstants(0u, 0u, s_BvhSortModeLocalTile, keysHeapSlot, payloadHeapSlot));
 
     u32 sequenceSize = s_BvhSortGroupSize << 1u;
     while(sequenceSize <= paddedCount){
         u32 compareDistance = sequenceSize >> 1u;
         while(compareDistance >= s_BvhSortGroupSize){
-            outSteps.push_back(MakeBvhSortPushConstants(elementCount, compareDistance, sequenceSize, s_BvhSortModeGlobal, keysHeapSlot, payloadHeapSlot));
+            outSteps.push_back(MakeBvhSortPushConstants(compareDistance, sequenceSize, s_BvhSortModeGlobal, keysHeapSlot, payloadHeapSlot));
             compareDistance >>= 1u;
         }
-        outSteps.push_back(MakeBvhSortPushConstants(elementCount, 0u, sequenceSize, s_BvhSortModeGlobalTail, keysHeapSlot, payloadHeapSlot));
+        outSteps.push_back(MakeBvhSortPushConstants(0u, sequenceSize, s_BvhSortModeGlobalTail, keysHeapSlot, payloadHeapSlot));
         if(sequenceSize == paddedCount)
             break;
         sequenceSize <<= 1u;
@@ -243,7 +243,7 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(in usize paddedCount){
 }
 
 [cpp_unwind]
-b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 elementCount, in u32 paddedCount){
+b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 paddedCount){
     assert(this.m_state.m_bvhSortPipeline.valid());
     assert(this.m_state.m_bvhSortKeysBuffer.valid());
     assert(this.m_state.m_bvhSortPayloadBuffer.valid());
@@ -251,7 +251,7 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 elemen
     assert(IsDescriptorClass(this.m_state.m_bvhSortPayloadHeapHandle, GpuDescriptorClass::StorageBuffer));
 
     FixedVector<BvhSortPushConstants, s_MaxBvhBitonicSortSteps> sortSteps;
-    const u32 groupCount = BuildBvhBitonicSortSteps(elementCount, paddedCount, this.m_state.m_bvhSortKeysHeapHandle.slot(), this.m_state.m_bvhSortPayloadHeapHandle.slot(), sortSteps);
+    const u32 groupCount = BuildBvhBitonicSortSteps(paddedCount, this.m_state.m_bvhSortKeysHeapHandle.slot(), this.m_state.m_bvhSortPayloadHeapHandle.slot(), sortSteps);
     if(groupCount == 0u)
         return false;
 
@@ -529,7 +529,7 @@ b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
     {
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), s_TimingScopeSwBvhSort, this.m_graphics.getDevice(), commandList);
 
-        if(!this.bvhBitonicSort(commandList, primitiveCount, dispatchPlan.paddedCount))
+        if(!this.bvhBitonicSort(commandList, dispatchPlan.paddedCount))
             return false;
     }
     CommitBvhBuildBarrier(commandList, keysBuffer, payloadBuffer, meshNodeBuffer, meshParentBuffer, visitCounterBuffer);

@@ -212,8 +212,8 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
     const Expected<Rect> last = ResolveEditCaretRectOnLine(text, textLines, clusters, boundaries, lineIndex, end, direction);
     if(!last.has_value())
         return MakeUnexpected(Failure());
-    const f32 leftX = UiSimdMin(first.value().x, last.value().x);
-    const f32 rightX = UiSimdMax(first.value().x, last.value().x);
+    const f32 leftX = Min(first.value().x, last.value().x);
+    const f32 rightX = Max(first.value().x, last.value().x);
     f32 breakCap = 0.0f;
     if(selectedBreak)
         breakCap = breakWidth;

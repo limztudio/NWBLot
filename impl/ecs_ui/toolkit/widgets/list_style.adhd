@@ -173,14 +173,37 @@ class ListMeasureKey{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 IsValidScrollableSelectionOptions(
+    in LayoutSize width,
+    in LayoutSize height,
+    in ListSelectionMode selectionMode,
+    in ScrollbarPolicy horizontalScrollbar,
+    in ScrollbarPolicy verticalScrollbar,
+    in f32 wheelRows,
+    in f32 wheelColumns
+){
+    return IsValidLayoutSize(width)
+        && IsValidLayoutSize(height)
+        && selectionMode < ListSelectionMode::kCount
+        && horizontalScrollbar <= ScrollbarPolicy::Never
+        && verticalScrollbar <= ScrollbarPolicy::Never
+        && IsFinite(VectorSingle(wheelRows, wheelColumns, 0.0f, 0.0f))
+        && wheelRows > 0.0f
+        && wheelColumns > 0.0f;
+}
+
 b8 IsValidVirtualListDeclarationOptions(in ListOptions options){
-    return IsFinite(VectorSingle(options.wheelRows, options.wheelColumns, options.contentWidth, 0.0f))
-        && options.wheelRows > 0.0f
-        && options.wheelColumns > 0.0f
-        && options.contentWidth >= 0.0f
-        && options.selectionMode < ListSelectionMode::kCount
-        && options.horizontalScrollbar <= ScrollbarPolicy::Never
-        && options.verticalScrollbar <= ScrollbarPolicy::Never;
+    return IsValidScrollableSelectionOptions(
+            options.width,
+            options.height,
+            options.selectionMode,
+            options.horizontalScrollbar,
+            options.verticalScrollbar,
+            options.wheelRows,
+            options.wheelColumns
+        )
+        && IsFinite(VectorSingle(options.contentWidth))
+        && options.contentWidth >= 0.0f;
 }
 
 b8 IsValidListOptions(in ListOptions options){
@@ -194,7 +217,7 @@ b8 IsReverseListControlAction(in ControlActionKind kind){
 Expected<f64> TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 step, in f64 maximum){
     if(!IsFinite(VectorDouble(delta, step, maximum, 0.0)) || step <= 0.0 || maximum < 0.0)
         return MakeUnexpected(Failure());
-    f64 candidateValue = UiSimdMinF64(current, maximum);
+    f64 candidateValue = Min(current, maximum);
     if(delta > 0.0){
         const f64 distanceInSteps = candidateValue / step;
         if(delta >= distanceInSteps)
@@ -212,7 +235,7 @@ Expected<f64> TryComputeListWheelOffset(in f64 current, in f64 delta, in f64 ste
     }
     f64 candidate = 0.0;
     if(candidateValue > 0.0)
-        candidate = UiSimdMinF64(maximum, candidateValue);
+        candidate = Min(maximum, candidateValue);
     if(!IsFinite(VectorDouble(candidate)))
         return MakeUnexpected(Failure());
     return candidate;

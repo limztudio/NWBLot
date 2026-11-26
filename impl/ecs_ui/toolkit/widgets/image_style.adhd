@@ -19,7 +19,6 @@ enum<u8> ImageFitMode{
     Fill = 0u,
     Contain = 1u,
     Cover = 2u,
-    kCount
 }
 
 class ImageOptions{
@@ -73,8 +72,8 @@ Expected<ImageMetrics> MeasureImage(in ImageOptions options, in UiSkinRegion reg
         VectorDouble sliceExtents(0.0);
         if(!TryLoadUiSkinSliceExtents(region, sliceExtents))
             return MakeUnexpected(Failure());
-        const f64 pixelW = UiSimdMaxF64(cast<f64>(region.rectangle.width), sliceExtents.x);
-        const f64 pixelH = UiSimdMaxF64(cast<f64>(region.rectangle.height), sliceExtents.y);
+        const f64 pixelW = Max(cast<f64>(region.rectangle.width), sliceExtents.x);
+        const f64 pixelH = Max(cast<f64>(region.rectangle.height), sliceExtents.y);
         const f64 densityF64 = cast<f64>(density);
         VectorSingle minimum(0.0f);
         if(!TryLoadUiSkinMinimumSize(region, VectorDouble(pixelW, pixelH, 0.0, 0.0), VectorDouble(densityF64, densityF64, densityF64, densityF64), minimum))
@@ -128,7 +127,7 @@ Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip, in Point sourc
         const f64 srcH = cast<f64>(sourceSize.y);
         const f64 dstW = cast<f64>(bounds.width);
         const f64 dstH = cast<f64>(bounds.height);
-        const f64 scale = UiSimdMinF64(dstW / srcW, dstH / srcH);
+        const f64 scale = Min(dstW / srcW, dstH / srcH);
         const VectorDouble drawSize = VectorDouble(srcW, srcH, 0.0, 0.0) * VectorDouble(scale);
         const VectorDouble offset = (VectorDouble(dstW, dstH, 0.0, 0.0) - drawSize) * VectorDouble(0.5);
         const Expected<Rect> drawRect = TryMakeUiRect(cast<f64>(bounds.x) + offset.x, cast<f64>(bounds.y) + offset.y, drawSize.x, drawSize.y, UiRectPrecision::EmptyPaint);
@@ -143,8 +142,8 @@ Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip, in Point sourc
         const f64 frac = dstAspect / srcAspect;
         const f64 newW = cast<f64>(uvRect.width) * frac;
         const f64 newX = cast<f64>(uvRect.x) + (cast<f64>(uvRect.width) - newW) * 0.5;
-        const f32 u0 = UiSimdClamp(cast<f32>(newX), 0.0f, 1.0f);
-        const f32 uw = UiSimdMin(cast<f32>(newW), 1.0f - u0);
+        const f32 u0 = Clamp(cast<f32>(newX), 0.0f, 1.0f);
+        const f32 uw = Min(cast<f32>(newW), 1.0f - u0);
         if(uw > 0.0f)
             outPlacement.uvRect = Rect(u0, uvRect.y, uw, uvRect.height);
     }
@@ -152,16 +151,12 @@ Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip, in Point sourc
         const f64 frac = srcAspect / dstAspect;
         const f64 newH = cast<f64>(uvRect.height) * frac;
         const f64 newY = cast<f64>(uvRect.y) + (cast<f64>(uvRect.height) - newH) * 0.5;
-        const f32 v0 = UiSimdClamp(cast<f32>(newY), 0.0f, 1.0f);
-        const f32 vh = UiSimdMin(cast<f32>(newH), 1.0f - v0);
+        const f32 v0 = Clamp(cast<f32>(newY), 0.0f, 1.0f);
+        const f32 vh = Min(cast<f32>(newH), 1.0f - v0);
         if(vh > 0.0f)
             outPlacement.uvRect = Rect(uvRect.x, v0, uvRect.width, vh);
     }
     return outPlacement;
-}
-
-Expected<ImagePlacement> PlaceImage(in Rect bounds, in Rect clip){
-    return PlaceImage(bounds, clip, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
 }
 
 

@@ -37,8 +37,6 @@ const StringView s_OptionSeparatorText = ", ";
 const StringView s_OptionLastSeparatorText = ", or ";
 
 const i32 s_FbxToNwbEntryFailure = -1;
-const u32 s_MinParallelCoreCount = 1u;
-const u32 s_NoWorkerThreads = 0u;
 const i32 s_PromptSuccessThreshold = 0;
 
 const i32 s_FbxToNwbExitSuccess = 0;
@@ -91,7 +89,6 @@ const StringView s_SkinNameSuffix = "/skin";
 
 const StringView s_AssetVariableName = "asset";
 const StringView s_AssetBunchDisplayName = "asset bunch";
-const usize s_EscapedTextReserveFactor = 2u;
 const StringView s_EntrySuffixText = ",\n";
 const StringView s_FormatListCloseText = "];\n";
 const StringView s_ListCloseSectionText = "];\n\n";
@@ -169,12 +166,6 @@ Expected<usize> TryComputeMeshRefreshReplacementCapacity(in usize declarationCou
         return MakeUnexpected(Failure());
     }
     return declarationCount * s_MaxMeshReplacementCount;
-}
-
-u32 ComputeWorkerCount(in u32 coreCount){
-    if(coreCount > s_MinParallelCoreCount)
-        return coreCount - s_MinParallelCoreCount;
-    return s_NoWorkerThreads;
 }
 
 StringView OutputAssetTypeText(in OutputAssetType assetType){

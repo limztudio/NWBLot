@@ -9,16 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ReportStagedValidationFailure(in StagedFilePairPaths paths, in StagedFilePairResult result){
-    LogTexConvStagedValidationFailure(cast<u8>(result.failureStage), FailedStagedFilePairPath(paths, result), ErrorCodeMessage(result.error));
-}
-
 [cpp_unwind]
 b8 ValidateOutputPaths(in TexConvOutputPaths outputPaths, in b8 force){
     StagedFilePairPaths paths(outputPaths.data, outputPaths.metadata);
     const auto validation = ValidateStagedFilePairPaths(paths, force, false);
     if(!validation.succeeded()){
-        ReportStagedValidationFailure(paths, validation);
+        ReportStagedFilePairValidationFailure("tex_conv", paths, validation, "--force", "both output files");
         return false;
     }
     return true;
@@ -42,27 +38,6 @@ Expected<String> BuildMetadata(in PreparedTexture payload){
     );
 }
 
-void ReportTexConvPairEntry(in StagedFilePairResult result, in u32 index, in Path output, in Path temporary, in Path backup){
-    if(result.succeeded()){
-        if(result.backupCleanupErrors[index].value() != 0)
-            [essential] warning("tex_conv: published output pair but could not remove previous backup '{}': {}", backup, ErrorCodeMessage(result.backupCleanupErrors[index]));
-        return;
-    }
-    if(result.backedUp[index] && (result.removalErrors[index].value() != 0 || result.restorationErrors[index].value() != 0)){
-        error(
-            "tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})"
-            , output
-            , backup
-            , result.removalErrors[index].value()
-            , result.restorationErrors[index].value()
-        );
-    }
-    if(!result.backedUp[index] && result.removalErrors[index].value() != 0)
-        error("tex_conv: failed to remove newly published output '{}': {}", output, ErrorCodeMessage(result.removalErrors[index]));
-    if(result.temporaryErrors[index].value() != 0)
-        [essential] warning("tex_conv: failed to remove unpublished temporary '{}': {}", temporary, ErrorCodeMessage(result.temporaryErrors[index]));
-}
-
 [cpp_unwind]
 b8 WriteOutputs(in TexConvOutputPaths outputPaths, in PreparedTexture payload, in b8 force){
     if(payload.bytes.empty()){
@@ -76,22 +51,12 @@ b8 WriteOutputs(in TexConvOutputPaths outputPaths, in PreparedTexture payload, i
     }
     StagedFilePairPaths paths(outputPaths.data, outputPaths.metadata);
     const auto published = StageAndPublishFilePair(paths, payload.bytes, metadata.value(), force, false, false, s_PublicationDiagnosticTag);
+    ReportStagedFilePairEntries("tex_conv", paths, published);
     if(!published.succeeded()){
-        const auto message = ErrorCodeMessage(published.error);
-        if(published.failureStage == StagedFilePairFailureStage::StagePrimary)
-            error("tex_conv: failed to stage output data file '{}': {}", paths.primaryTemporary, message);
-        else if(published.failureStage == StagedFilePairFailureStage::StageSecondary)
-            error("tex_conv: failed to stage output metadata file '{}': {}", paths.secondaryTemporary, message);
-        else if(published.failureStage == StagedFilePairFailureStage::PreserveExistingOutput)
-            error("tex_conv: failed to preserve existing output '{}': {}", FailedStagedFilePairPath(paths, published), message);
-        else if(published.failureStage == StagedFilePairFailureStage::FinalizeOutput)
-            error("tex_conv: failed to finalize output '{}': {}", FailedStagedFilePairPath(paths, published), message);
-        else
-            ReportStagedValidationFailure(paths, published);
+        ReportStagedFilePairPublishFailure("tex_conv", paths, published, "output data file", "output metadata file", "--force", "both output files");
+        return false;
     }
-    ReportTexConvPairEntry(published, 0u, paths.primary, paths.primaryTemporary, paths.primaryBackup);
-    ReportTexConvPairEntry(published, 1u, paths.secondary, paths.secondaryTemporary, paths.secondaryBackup);
-    return published.succeeded();
+    return true;
 }
 
 

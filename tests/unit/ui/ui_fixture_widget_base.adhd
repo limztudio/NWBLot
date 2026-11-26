@@ -110,12 +110,7 @@ class WidgetFixture{
     public WidgetId id(in StringView child, in StringView parent)const{ return RequireUiWidgetId(RequireUiWidgetId(RequireUiRootId(this.m_root), parent), child); }
     public Optional<in HitTarget> target(in WidgetId widget)const{ return FindHitTarget(this.m_context.input().targets(), widget); }
     public b8 hasTarget(in WidgetId widget)const{ return this.target(widget).has_value(); }
-    public Expected<HitTarget> tryTarget(in WidgetId widget)const{
-        const auto found = this.target(widget);
-        if(found.has_value())
-            return found.value();
-        return MakeUnexpected(Failure());
-    }
+    public Expected<HitTarget> tryTarget(in WidgetId widget)const{ return TryFindHitTarget(this.m_context.input().targets(), widget); }
     public void setEditHost(mut IEditBoxHost host){ this.m_builder.setEditHost(host); }
     public void clearEditHost(){ this.m_builder.clearEditHost(); }
     public InputRoutingResult send(in InputEvent event){ return SendWidgetFixtureEvent(this, event); }

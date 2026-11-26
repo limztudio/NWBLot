@@ -46,7 +46,6 @@ const u32 s_MeshletRefEncodingUv0Shift = 8u;
 const u32 s_MeshletRefEncodingColorShift = 10u;
 const usize s_AttribGpuByteSize = 16u;
 
-[reflect]
 enum<u32> MeshletRefDeltaWidth{
     U8 = 0u,
     U16 = 1u,

@@ -201,8 +201,11 @@ b8 DecodeLdrTextureSlice(
     in usize offset,
     in usize count,
     mut Span<u8> output,
+    in u32 blockRowBegin,
+    in u32 blockRowEnd,
     in b8 allowStripParallel
 ){
+    const b8 fullSlice = blockRowBegin == 0u && blockRowEnd == mip.blockCountY;
     usize rgbaBytes = count;
     if(format != Format::ASTC_4x4_UNORM && format != Format::BC7_UNORM){
         const Expected<usize> expected = TryComputeRgba8FallbackMipBytes(mip.width, mip.height);
@@ -219,7 +222,14 @@ b8 DecodeLdrTextureSlice(
             sourceSize = source.value().bytes.size();
         if(!ValidateAstcSliceByteCount(source.has_value(), cast<u64>(sourceSize), count))
             return false;
-        if(!TranscodeBasisAstcSliceMaybeParallel(mip, source.value().bytes, output, offset, allowStripParallel)){
+        b8 transcoded = false;
+        if(fullSlice)
+            transcoded = TranscodeBasisAstcSliceMaybeParallel(mip, source.value().bytes, output, offset, allowStripParallel);
+        else{
+            const usize blocksX = cast<usize>(mip.blockCountX);
+            transcoded = TranscodeBasisAstcSliceRange(source.value().bytes, output, offset, cast<usize>(blockRowBegin) * blocksX, cast<usize>(blockRowEnd) * blocksX);
+        }
+        if(!transcoded){
             LogUastcTranscodeFailure("UASTC-to-ASTC transcoding failed");
             return false;
         }
@@ -233,7 +243,12 @@ b8 DecodeLdrTextureSlice(
         if(!ValidateBc7UastcTranscodeLayout(source.value(), count))
             return false;
         const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, cast<u32>(source.value().blockCount), mip.blockCountX);
-        if(!TranscodeBasisImageMaybeParallel(mip, BasisTranscodeFormat::Bc7, layout, source.value().bytes, output, offset, count, allowStripParallel)){
+        b8 transcoded = false;
+        if(fullSlice)
+            transcoded = TranscodeBasisImageMaybeParallel(mip, BasisTranscodeFormat::Bc7, layout, source.value().bytes, output, offset, count, allowStripParallel);
+        else
+            transcoded = TranscodeBasisImageRowRange(BasisTranscodeFormat::Bc7, layout, source.value().bytes, output, offset, count, blockRowBegin, blockRowEnd);
+        if(!transcoded){
             LogUastcTranscodeFailure("UASTC-to-BC7 transcoding failed");
             return false;
         }
@@ -242,7 +257,12 @@ b8 DecodeLdrTextureSlice(
     if(!ValidateRgba8SliceLayout(source.has_value(), rgbaBytes, count))
         return false;
     assert(source.value().bytes.size() == source.value().blockCount * s_TextureUastcBytesPerBlock);
-    if(!DecodeUastcTexels(mip, source.value().bytes, false, offset, output, allowStripParallel)){
+    b8 unpacked = false;
+    if(fullSlice)
+        unpacked = DecodeUastcTexels(mip, source.value().bytes, false, offset, output, allowStripParallel);
+    else
+        unpacked = UnpackBasisRgbaSliceRange(mip.width, mip.height, mip.blockCountX, mip.blockCountY, source.value().bytes, false, output, offset, blockRowBegin, blockRowEnd);
+    if(!unpacked){
         LogUastcTranscodeFailure("UASTC-to-RGBA8 decoding failed");
         return false;
     }
@@ -256,8 +276,11 @@ b8 MergeHdrAlpha(
     in usize offset,
     in usize count,
     mut Span<u8> output,
+    in u32 blockRowBegin,
+    in u32 blockRowEnd,
     in b8 allowStripParallel
 ){
+    const b8 fullSlice = blockRowBegin == 0u && blockRowEnd == mip.blockCountY;
     const Expected<usize> texels = ValidateHdrRgba16FloatAlphaMergeLayout(mip, count);
     if(!texels.has_value())
         return false;
@@ -266,10 +289,20 @@ b8 MergeHdrAlpha(
         const u16 half = BasisFloatToHalf(NormalizeTextureAlphaUnorm8(alpha));
         const u8 halfLo = cast<u8>(half);
         const u8 halfHi = cast<u8>(half >> 8u);
-        for(usize i = 0u; i < texels.value(); ++i){
-            const usize byteOffset = offset + i * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
-            output[byteOffset] = halfLo;
-            output[byteOffset + 1u] = halfHi;
+        usize texelBegin = 0u;
+        usize texelEnd = texels.value();
+        if(!fullSlice){
+            const u32 pixelRowBegin = blockRowBegin * 4u;
+            u32 pixelRowEnd = blockRowEnd * 4u;
+            if(pixelRowEnd > mip.height)
+                pixelRowEnd = mip.height;
+            texelBegin = cast<usize>(pixelRowBegin) * cast<usize>(mip.width);
+            texelEnd = cast<usize>(pixelRowEnd) * cast<usize>(mip.width);
+        }
+        for(usize i = texelBegin; i < texelEnd; ++i){
+            const usize alphaOffset = offset + i * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
+            output[alphaOffset] = halfLo;
+            output[alphaOffset + 1u] = halfHi;
         }
         return true;
     }
@@ -279,7 +312,12 @@ b8 MergeHdrAlpha(
     if(!alpha.has_value())
         return false;
     assert(alpha.value().size() == cast<u64>(mip.blockCountX) * mip.blockCountY * s_TextureUastcBytesPerBlock);
-    if(!DecodeUastcTexels(mip, alpha.value(), true, offset, output, allowStripParallel)){
+    b8 unpackedAlpha = false;
+    if(fullSlice)
+        unpackedAlpha = DecodeUastcTexels(mip, alpha.value(), true, offset, output, allowStripParallel);
+    else
+        unpackedAlpha = UnpackBasisRgbaSliceRange(mip.width, mip.height, mip.blockCountX, mip.blockCountY, alpha.value(), true, output, offset, blockRowBegin, blockRowEnd);
+    if(!unpackedAlpha){
         LogUastcTranscodeFailure("UASTC alpha decoding failed");
         return false;
     }
@@ -295,8 +333,11 @@ b8 DecodeHdrTextureSlice(
     in usize offset,
     in usize count,
     mut Span<u8> output,
+    in u32 blockRowBegin,
+    in u32 blockRowEnd,
     in b8 allowStripParallel
 ){
+    const b8 fullSlice = blockRowBegin == 0u && blockRowEnd == mip.blockCountY;
     const Expected<PrimaryUastcSlice> source = TryGetPrimaryUastcSlice(asset.payloadBytes(), asset.primaryPayloadByteCount(), mip, slice);
     if(!source.has_value())
         return false;
@@ -313,11 +354,16 @@ b8 DecodeHdrTextureSlice(
     if(!outputLayout.has_value())
         return false;
     const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, outputLayout.value().elementCount, outputLayout.value().rowBlocksOrPixels);
-    if(!TranscodeBasisImageMaybeParallel(mip, target, layout, source.value().bytes, output, offset, count, allowStripParallel)){
+    b8 transcoded = false;
+    if(fullSlice)
+        transcoded = TranscodeBasisImageMaybeParallel(mip, target, layout, source.value().bytes, output, offset, count, allowStripParallel);
+    else
+        transcoded = TranscodeBasisImageRowRange(target, layout, source.value().bytes, output, offset, count, blockRowBegin, blockRowEnd);
+    if(!transcoded){
         LogUastcTranscodeFailure("HDR UASTC transcoding failed");
         return false;
     }
-    return format != Format::RGBA16_FLOAT || MergeHdrAlpha(asset, mip, slice, offset, count, output, allowStripParallel);
+    return format != Format::RGBA16_FLOAT || MergeHdrAlpha(asset, mip, slice, offset, count, output, blockRowBegin, blockRowEnd, allowStripParallel);
 }
 
 [cpp_unwind]
@@ -331,11 +377,13 @@ b8 DecodeTextureMipSlice(
     in usize offset,
     in usize count,
     mut Span<u8> output,
+    in u32 blockRowBegin,
+    in u32 blockRowEnd,
     in b8 allowStripParallel
 ){
     if(isHdr)
-        return DecodeHdrTextureSlice(asset, mip, mipLevel, slice, format, offset, count, output, allowStripParallel);
-    return DecodeLdrTextureSlice(asset, mip, mipLevel, slice, format, offset, count, output, allowStripParallel);
+        return DecodeHdrTextureSlice(asset, mip, mipLevel, slice, format, offset, count, output, blockRowBegin, blockRowEnd, allowStripParallel);
+    return DecodeLdrTextureSlice(asset, mip, mipLevel, slice, format, offset, count, output, blockRowBegin, blockRowEnd, allowStripParallel);
 }
 
 [cpp_unwind]
@@ -354,20 +402,21 @@ b8 DecodeTextureMipSlices(
         Vector<u8> sliceOk;
         sliceOk.resize(cast<usize>(mip.sliceCount), 0u);
         parallel_for(usize sliceIndex = 0u; sliceIndex < cast<usize>(mip.sliceCount); ++sliceIndex){
-            if(DecodeTextureMipSlice(isHdr, asset, mip, mipLevel, cast<u32>(sliceIndex), format, sliceIndex * sliceByteCount, sliceByteCount, outputBytes, false))
+            if(DecodeTextureMipSlice(isHdr, asset, mip, mipLevel, cast<u32>(sliceIndex), format, sliceIndex * sliceByteCount, sliceByteCount, outputBytes, 0u, mip.blockCountY, false))
                 sliceOk[sliceIndex] = 1u;
         }
         return AllParallelFlagsSucceeded(sliceOk);
     }
     for(u32 slice = 0u; slice < mip.sliceCount; ++slice){
-        if(!DecodeTextureMipSlice(isHdr, asset, mip, mipLevel, slice, format, cast<usize>(slice) * sliceByteCount, sliceByteCount, outputBytes, allowStripParallel))
+        if(!DecodeTextureMipSlice(isHdr, asset, mip, mipLevel, slice, format, cast<usize>(slice) * sliceByteCount, sliceByteCount, outputBytes, 0u, mip.blockCountY, allowStripParallel))
             return false;
     }
     return true;
 }
 
 [cpp_unwind]
-Expected<TextureDecodedMipUpload> DecodeLdrTextureMip(
+Expected<TextureDecodedMipUpload> DecodeTextureMip(
+    in b8 isHdr,
     in Texture asset,
     in TextureMipLevel mip,
     in u32 mipLevel,
@@ -375,207 +424,37 @@ Expected<TextureDecodedMipUpload> DecodeLdrTextureMip(
     in b8 allowStripParallel
 ){
     InitializeBasisTranscoder();
-    if(!ValidateSupportedLdrTextureUploadFormat(format == Format::ASTC_4x4_UNORM || format == Format::BC7_UNORM || format == Format::RGBA8_UNORM))
-        return MakeUnexpected(Failure());
-    TextureDecodedMipUpload upload;
-    const Expected<TextureMipUploadLayout> layout = ValidateAndComputeLdrMipUploadLayout(mip, format == Format::RGBA8_UNORM);
+    Expected<TextureMipUploadLayout> layout = MakeUnexpected(Failure());
+    if(isHdr){
+        const b8 compressed = IsHdrCompressedFormat(format);
+        if(!ValidateSupportedHdrTextureUploadFormat(compressed || format == Format::RGBA16_FLOAT))
+            return MakeUnexpected(Failure());
+        layout = ValidateAndComputeHdrMipUploadLayout(mip, compressed);
+    }
+    else{
+        if(!ValidateSupportedLdrTextureUploadFormat(format == Format::ASTC_4x4_UNORM || format == Format::BC7_UNORM || format == Format::RGBA8_UNORM))
+            return MakeUnexpected(Failure());
+        layout = ValidateAndComputeLdrMipUploadLayout(mip, format == Format::RGBA8_UNORM);
+    }
     if(!layout.has_value())
         return MakeUnexpected(Failure());
+    TextureDecodedMipUpload upload;
     upload.rowPitch = layout.value().rowPitch;
     upload.sliceByteCount = layout.value().sliceByteCount;
     upload.bytes.resize(layout.value().totalByteCount);
-    if(!DecodeTextureMipSlices(false, asset, mip, mipLevel, format, upload.sliceByteCount, layout.value().totalByteCount, upload.bytes, allowStripParallel))
-        return MakeUnexpected(Failure());
-    return upload;
-}
-
-[cpp_unwind]
-Expected<TextureDecodedMipUpload> DecodeHdrTextureMip(
-    in Texture asset,
-    in TextureMipLevel mip,
-    in u32 mipLevel,
-    in Format format,
-    in b8 allowStripParallel
-){
-    InitializeBasisTranscoder();
-    const b8 compressed = IsHdrCompressedFormat(format);
-    if(!ValidateSupportedHdrTextureUploadFormat(compressed || format == Format::RGBA16_FLOAT))
-        return MakeUnexpected(Failure());
-    TextureDecodedMipUpload upload;
-    const Expected<TextureMipUploadLayout> layout = ValidateAndComputeHdrMipUploadLayout(mip, compressed);
-    if(!layout.has_value())
-        return MakeUnexpected(Failure());
-    upload.rowPitch = layout.value().rowPitch;
-    upload.sliceByteCount = layout.value().sliceByteCount;
-    upload.bytes.resize(layout.value().totalByteCount);
-    if(!DecodeTextureMipSlices(true, asset, mip, mipLevel, format, upload.sliceByteCount, layout.value().totalByteCount, upload.bytes, allowStripParallel))
+    if(!DecodeTextureMipSlices(isHdr, asset, mip, mipLevel, format, upload.sliceByteCount, layout.value().totalByteCount, upload.bytes, allowStripParallel))
         return MakeUnexpected(Failure());
     return upload;
 }
 
 [cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
-    return DecodeLdrTextureMip(asset, mip, mipLevel, format, mip.sliceCount == 1u);
+    return DecodeTextureMip(false, asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
 
 [cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
-    return DecodeHdrTextureMip(asset, mip, mipLevel, format, mip.sliceCount == 1u);
-}
-
-b8 DecodeLdrTextureSliceRowRange(
-    in Texture asset,
-    in TextureMipLevel mip,
-    in u32 mipLevel,
-    in u32 slice,
-    in Format format,
-    in usize offset,
-    in usize count,
-    mut Span<u8> output,
-    in u32 blockRowBegin,
-    in u32 blockRowEnd
-){
-    usize rgbaBytes = count;
-    if(format != Format::ASTC_4x4_UNORM && format != Format::BC7_UNORM){
-        const Expected<usize> expected = TryComputeRgba8FallbackMipBytes(mip.width, mip.height);
-        if(!expected.has_value())
-            return false;
-        rgbaBytes = expected.value();
-        if(rgbaBytes != count)
-            return ValidateRgba8SliceLayout(false, rgbaBytes, count);
-    }
-    const Expected<PrimaryUastcSlice> source = TryGetPrimaryUastcSlice(asset.payloadBytes(), asset.primaryPayloadByteCount(), mip, slice);
-    if(format == Format::ASTC_4x4_UNORM){
-        usize sourceSize = 0u;
-        if(source.has_value())
-            sourceSize = source.value().bytes.size();
-        if(!ValidateAstcSliceByteCount(source.has_value(), cast<u64>(sourceSize), count))
-            return false;
-        const usize blocksX = cast<usize>(mip.blockCountX);
-        if(!TranscodeBasisAstcSliceRange(source.value().bytes, output, offset, cast<usize>(blockRowBegin) * blocksX, cast<usize>(blockRowEnd) * blocksX)){
-            LogUastcTranscodeFailure("UASTC-to-ASTC transcoding failed");
-            return false;
-        }
-        return true;
-    }
-    if(format == Format::BC7_UNORM){
-        if(!source.has_value()){
-            LogUastcTranscodeFailure("BC7 UASTC slice size is invalid");
-            return false;
-        }
-        if(!ValidateBc7UastcTranscodeLayout(source.value(), count))
-            return false;
-        const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, cast<u32>(source.value().blockCount), mip.blockCountX);
-        if(!TranscodeBasisImageRowRange(BasisTranscodeFormat::Bc7, layout, source.value().bytes, output, offset, count, blockRowBegin, blockRowEnd)){
-            LogUastcTranscodeFailure("UASTC-to-BC7 transcoding failed");
-            return false;
-        }
-        return true;
-    }
-    if(!ValidateRgba8SliceLayout(source.has_value(), rgbaBytes, count))
-        return false;
-    assert(source.value().bytes.size() == source.value().blockCount * s_TextureUastcBytesPerBlock);
-    if(!UnpackBasisRgbaSliceRange(mip.width, mip.height, mip.blockCountX, mip.blockCountY, source.value().bytes, false, output, offset, blockRowBegin, blockRowEnd)){
-        LogUastcTranscodeFailure("UASTC-to-RGBA8 decoding failed");
-        return false;
-    }
-    return true;
-}
-
-b8 MergeHdrAlphaRowRange(
-    in Texture asset,
-    in TextureMipLevel mip,
-    in u32 slice,
-    in usize offset,
-    in usize count,
-    mut Span<u8> output,
-    in u32 blockRowBegin,
-    in u32 blockRowEnd
-){
-    if(!ValidateHdrRgba16FloatAlphaMergeLayout(mip, count).has_value())
-        return false;
-    if(asset.alphaMode() != TextureAlphaMode::SeparateUastcLdr4x4){
-        const u8 alpha = ResolveHdrUniformAlphaUnorm8(asset.alphaMode() == TextureAlphaMode::ConstantUnorm8, asset.alphaConstantUnorm8());
-        const u16 half = BasisFloatToHalf(NormalizeTextureAlphaUnorm8(alpha));
-        const u8 halfLo = cast<u8>(half);
-        const u8 halfHi = cast<u8>(half >> 8u);
-        const u32 pixelRowBegin = blockRowBegin * 4u;
-        u32 pixelRowEnd = blockRowEnd * 4u;
-        if(pixelRowEnd > mip.height)
-            pixelRowEnd = mip.height;
-        const usize texelBegin = cast<usize>(pixelRowBegin) * cast<usize>(mip.width);
-        const usize texelEnd = cast<usize>(pixelRowEnd) * cast<usize>(mip.width);
-        for(usize i = texelBegin; i < texelEnd; ++i){
-            const usize alphaOffset = offset + i * s_TextureRgba16FloatBytesPerTexel + s_TextureRgba16FloatAlphaByteOffset;
-            output[alphaOffset] = halfLo;
-            output[alphaOffset + 1u] = halfHi;
-        }
-        return true;
-    }
-    const Expected<Span<u8>> alpha = TryGetSeparateAlphaUastcSlice(
-        asset.payloadBytes(), asset.primaryPayloadByteCount(), !asset.alphaUastcBlocks().empty(), mip, slice
-    );
-    if(!alpha.has_value())
-        return false;
-    assert(alpha.value().size() == cast<u64>(mip.blockCountX) * mip.blockCountY * s_TextureUastcBytesPerBlock);
-    if(!UnpackBasisRgbaSliceRange(mip.width, mip.height, mip.blockCountX, mip.blockCountY, alpha.value(), true, output, offset, blockRowBegin, blockRowEnd)){
-        LogUastcTranscodeFailure("UASTC alpha decoding failed");
-        return false;
-    }
-    return true;
-}
-
-b8 DecodeHdrTextureSliceRowRange(
-    in Texture asset,
-    in TextureMipLevel mip,
-    in u32 mipLevel,
-    in u32 slice,
-    in Format format,
-    in usize offset,
-    in usize count,
-    mut Span<u8> output,
-    in u32 blockRowBegin,
-    in u32 blockRowEnd
-){
-    const Expected<PrimaryUastcSlice> source = TryGetPrimaryUastcSlice(asset.payloadBytes(), asset.primaryPayloadByteCount(), mip, slice);
-    if(!source.has_value())
-        return false;
-    BasisTranscodeFormat target = BasisTranscodeFormat::RgbaHalf;
-    if(format == Format::ASTC_4x4_FLOAT)
-        target = BasisTranscodeFormat::AstcHdr4x4;
-    else if(format == Format::BC6H_UFLOAT)
-        target = BasisTranscodeFormat::Bc6h;
-    else if(format != Format::RGBA16_FLOAT){
-        LogUastcTranscodeFailure("unsupported HDR UASTC upload format");
-        return false;
-    }
-    const Expected<HdrUastcOutputLayout> outputLayout = ValidateHdrUastcTranscodeLayout(mip, source.value(), target != BasisTranscodeFormat::RgbaHalf, count);
-    if(!outputLayout.has_value())
-        return false;
-    const BasisTranscodeLayout layout = MakeBasisTranscodeLayout(mip, mipLevel, outputLayout.value().elementCount, outputLayout.value().rowBlocksOrPixels);
-    if(!TranscodeBasisImageRowRange(target, layout, source.value().bytes, output, offset, count, blockRowBegin, blockRowEnd)){
-        LogUastcTranscodeFailure("HDR UASTC transcoding failed");
-        return false;
-    }
-    return format != Format::RGBA16_FLOAT || MergeHdrAlphaRowRange(asset, mip, slice, offset, count, output, blockRowBegin, blockRowEnd);
-}
-
-b8 DecodeTextureMipSliceRowRange(
-    in b8 isHdr,
-    in Texture asset,
-    in TextureMipLevel mip,
-    in u32 mipLevel,
-    in u32 slice,
-    in Format format,
-    in usize offset,
-    in usize count,
-    mut Span<u8> output,
-    in u32 blockRowBegin,
-    in u32 blockRowEnd
-){
-    if(isHdr)
-        return DecodeHdrTextureSliceRowRange(asset, mip, mipLevel, slice, format, offset, count, output, blockRowBegin, blockRowEnd);
-    return DecodeLdrTextureSliceRowRange(asset, mip, mipLevel, slice, format, offset, count, output, blockRowBegin, blockRowEnd);
+    return DecodeTextureMip(true, asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
 
 [cpp_unwind]
@@ -642,7 +521,7 @@ Expected<QueueSubmissionToken, TextureUploadFailure> TextureMipDecoder::decodeAn
             in TextureDecodeWorkItem item = workItems[0u];
             in TextureMipLevel mip = asset.mipLevels()[item.mipIndex];
             mut TextureDecodedMipUpload mipUpload = decodedMips[item.mipIndex];
-            if(!DecodeTextureMipSliceRowRange(isHdr, asset, mip, cast<u32>(item.mipIndex), item.slice, format, item.offset, item.count, mipUpload.bytes, item.blockRowBegin, item.blockRowEnd))
+            if(!DecodeTextureMipSlice(isHdr, asset, mip, cast<u32>(item.mipIndex), item.slice, format, item.offset, item.count, mipUpload.bytes, item.blockRowBegin, item.blockRowEnd, false))
                 return MakeUnexpected(TextureUploadFailure::Decode);
         }
         else if(!workItems.empty()){
@@ -653,7 +532,7 @@ Expected<QueueSubmissionToken, TextureUploadFailure> TextureMipDecoder::decodeAn
                 in TextureDecodeWorkItem item = workSpan[itemIndex];
                 in TextureMipLevel mip = asset.mipLevels()[item.mipIndex];
                 mut TextureDecodedMipUpload mipUpload = decodedMips[item.mipIndex];
-                if(DecodeTextureMipSliceRowRange(isHdr, asset, mip, cast<u32>(item.mipIndex), item.slice, format, item.offset, item.count, mipUpload.bytes, item.blockRowBegin, item.blockRowEnd))
+                if(DecodeTextureMipSlice(isHdr, asset, mip, cast<u32>(item.mipIndex), item.slice, format, item.offset, item.count, mipUpload.bytes, item.blockRowBegin, item.blockRowEnd, false))
                     workOk[itemIndex] = 1u;
             }
             if(!AllParallelFlagsSucceeded(workOk))

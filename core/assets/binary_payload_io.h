@@ -53,6 +53,40 @@ template<typename HeaderT, typename FailureContextT, typename AssetTypeT>
     return header;
 }
 
+template<typename HeaderT, typename FailureContextT, typename AssetTypeT>
+[[nodiscard]] Expected<HeaderT> ReadMagicVersionHeaderPayload(const Span<const u8> binary, const u32 expectedMagic, const u32 expectedVersion, const FailureContextT& failureContext, const AssetTypeT& assetType, usize& inOutCursor){
+    const auto header = ReadMagicHeaderPayload<HeaderT>(binary, expectedMagic, failureContext, assetType, inOutCursor);
+    if(!header)
+        return MakeUnexpected(Failure{});
+
+    if(header->version != expectedVersion){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: unsupported version {}"), ConvertString(failureContext), header->version);
+        return MakeUnexpected(Failure{});
+    }
+
+    return header;
+}
+
+template<typename PodT, typename FailureContextT>
+[[nodiscard]] Expected<PodT> ReadExactPodPayload(const Span<const u8> payload, const FailureContextT& failureContext){
+    usize cursor = 0u;
+    const auto binaryPayload = ::ReadPOD<PodT>(payload, cursor);
+    if(!binaryPayload.has_value() || cursor != payload.size()){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{} failed: invalid payload size"), ConvertString(failureContext));
+        return MakeUnexpected(Failure{});
+    }
+    return binaryPayload;
+}
+
+template<typename PodT, typename OutBinaryT>
+[[nodiscard]] inline b8 AppendFixedPodPayload(const PodT& pod, OutBinaryT& outBinary){
+    if(!::CanAppendBytes(outBinary, sizeof(PodT)))
+        return false;
+    outBinary.reserve(outBinary.size() + sizeof(PodT));
+    ::AppendPOD(outBinary, pod);
+    return true;
+}
+
 [[nodiscard]] b8 ReadCompletePayload(Span<const u8> binary, usize cursor, TStringView failureContext);
 
 template<typename FailureContextT>

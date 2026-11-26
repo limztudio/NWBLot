@@ -128,8 +128,8 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
         }
         const f64 forwardDist = (displayExtent - anchorOrigin - anchorExtent) - cast<f64>(options.gap);
         const f64 backwardDist = anchorOrigin - cast<f64>(options.gap);
-        const f64 forwardRoom = UiSimdClampF64(forwardDist, 0.0, displayExtent);
-        const f64 backwardRoom = UiSimdClampF64(backwardDist, 0.0, displayExtent);
+        const f64 forwardRoom = Clamp(forwardDist, 0.0, displayExtent);
+        const f64 backwardRoom = Clamp(backwardDist, 0.0, displayExtent);
         const b8 forward = side == PopupPlacementSide::Below || side == PopupPlacementSide::Right;
         f64 preferredRoom = backwardRoom;
         f64 oppositeRoom = forwardRoom;
@@ -167,8 +167,8 @@ Expected<PopupPlacement> PlacePopup(in PopupOptions options, in DisplayMetrics d
     const VectorDouble maximum = VectorDouble(cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight), cast<f64>(display.logicalWidth), cast<f64>(display.logicalHeight)) - VectorDouble(cast<f64>(width), cast<f64>(height), cast<f64>(width), cast<f64>(height));
     const f64 maxX = maximum.x;
     const f64 maxY = maximum.y;
-    const f32 x = cast<f32>(UiSimdClampF64(originX, 0.0, maxX));
-    const f32 y = cast<f32>(UiSimdClampF64(originY, 0.0, maxY));
+    const f32 x = cast<f32>(Clamp(originX, 0.0, maxX));
+    const f32 y = cast<f32>(Clamp(originY, 0.0, maxY));
     if(!IsFinite(VectorSingle(x + width, y + height, 0.0f, 0.0f)))
         return MakeUnexpected(Failure());
     outPlacement.bounds = Rect(x, y, width, height);

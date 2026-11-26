@@ -718,68 +718,29 @@ void VerifyGpuExtFrontier_RejectsUnpublishableExternalFinalStateContracts(){
     EXPECT_FALSE(compiledPlan.valid());
 }
 
-void VerifyGpuExtFrontier_KeepsSameStateExternalExportConcurrentReadersIndependent(){
-    TestArena testArena = TestArena();
-    GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    GpuTaskResourceRange range = GpuTaskResourceRange();
-    range.textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
-    const auto pairResult = AddExternalFinalReadPair(
-        graph,
-        GpuGraphResourceType::Texture,
-        range,
-        range,
-        ResourceStates::ShaderResource,
-        ResourceStates::ShaderResource,
-        ResourceQueueSharing::GraphicsAndAsyncCompute,
-        false,
-        false,
-        GpuPhysicalQueueId()
-    );
-    ASSERT_TRUE(pairResult.has_value());
-    const ExternalFinalReadPair pair = pairResult.value();
-    ASSERT_TRUE(pair.resource.valid());
-    ASSERT_TRUE(pair.earlierReader.valid());
-    ASSERT_TRUE(pair.finalizingReader.valid());
-
-    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
-    ASSERT_TRUE(twoQueueCompile.compile(graph));
-    const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
-
-    const GpuSubmissionPacketId earlierPacket = compiledPlan.packetForTask(pair.earlierReader);
-    const GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
-    ASSERT_TRUE(earlierPacket.valid());
-    ASSERT_TRUE(finalizingPacket.valid());
-    ASSERT_NE(earlierPacket, finalizingPacket);
-    const Optional<GpuSubmissionPacket> earlierPacketPlan = PacketPlan(compiledPlan.packet(earlierPacket));
-    const Optional<GpuSubmissionPacket> finalizingPacketPlan = PacketPlan(compiledPlan.packet(finalizingPacket));
-    ASSERT_TRUE(earlierPacketPlan.has_value());
-    ASSERT_TRUE(finalizingPacketPlan.has_value());
-    EXPECT_EQ(earlierPacketPlan.value().dependencyCount, 0u);
-    EXPECT_EQ(finalizingPacketPlan.value().dependencyCount, 0u);
-
-    const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
-    ASSERT_EQ(barriers.size(), 1u);
-    EXPECT_EQ(barriers[0u].before, ResourceStates::ShaderResource);
-    EXPECT_EQ(barriers[0u].after, ResourceStates::ShaderResource);
-}
-
-void VerifyGpuExtFrontier_KeepsDisjointExternalFinalTextureFragmentsIndependent(){
+void VerifyExternalFinalReadCase(
+    in u32 finalizingMipSlice,
+    in ResourceStates finalizingState,
+    in b8 allowSameQueueCoalescing,
+    in b8 expectSamePacket,
+    in b8 expectTransitionBarrier,
+    in b8 checkEarlierTaskPlan
+){
     TestArena testArena = TestArena();
     GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
     GpuTaskResourceRange earlierRange = GpuTaskResourceRange();
     earlierRange.textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
     GpuTaskResourceRange finalizingRange = GpuTaskResourceRange();
-    finalizingRange.textureSubresources = TextureSubresourceSet(1u, 1u, 0u, 1u);
+    finalizingRange.textureSubresources = TextureSubresourceSet(finalizingMipSlice, 1u, 0u, 1u);
     const auto pairResult = AddExternalFinalReadPair(
         graph,
         GpuGraphResourceType::Texture,
         earlierRange,
         finalizingRange,
         ResourceStates::ShaderResource,
-        ResourceStates::CopySource,
+        finalizingState,
         ResourceQueueSharing::GraphicsAndAsyncCompute,
-        false,
+        allowSameQueueCoalescing,
         false,
         GpuPhysicalQueueId()
     );
@@ -798,59 +759,46 @@ void VerifyGpuExtFrontier_KeepsDisjointExternalFinalTextureFragmentsIndependent(
     const GpuSubmissionPacketId finalizingPacket = compiledPlan.packetForTask(pair.finalizingReader);
     ASSERT_TRUE(earlierPacket.valid());
     ASSERT_TRUE(finalizingPacket.valid());
-    ASSERT_NE(earlierPacket, finalizingPacket);
+    if(expectSamePacket)
+        EXPECT_EQ(finalizingPacket, earlierPacket);
+    else{
+        ASSERT_NE(earlierPacket, finalizingPacket);
+        const Optional<GpuSubmissionPacket> finalizingPacketPlan = PacketPlan(compiledPlan.packet(finalizingPacket));
+        ASSERT_TRUE(finalizingPacketPlan.has_value());
+        EXPECT_EQ(finalizingPacketPlan.value().dependencyCount, 0u);
+    }
     const Optional<GpuSubmissionPacket> earlierPacketPlan = PacketPlan(compiledPlan.packet(earlierPacket));
-    const Optional<GpuSubmissionPacket> finalizingPacketPlan = PacketPlan(compiledPlan.packet(finalizingPacket));
     ASSERT_TRUE(earlierPacketPlan.has_value());
-    ASSERT_TRUE(finalizingPacketPlan.has_value());
     EXPECT_EQ(earlierPacketPlan.value().dependencyCount, 0u);
-    EXPECT_EQ(finalizingPacketPlan.value().dependencyCount, 0u);
 
-    const Optional<GpuCompiledTask> earlierTask = TaskPlan(compiledPlan.findTask(pair.earlierReader));
-    const Optional<GpuCompiledTask> finalizingTask = TaskPlan(compiledPlan.findTask(pair.finalizingReader));
-    ASSERT_TRUE(earlierTask.has_value());
-    ASSERT_TRUE(finalizingTask.has_value());
-    EXPECT_EQ(earlierTask.value().epilogueBarrierCount, 1u);
-    EXPECT_EQ(finalizingTask.value().epilogueBarrierCount, 1u);
+    if(expectTransitionBarrier){
+        const Span<GpuCompiledBarrier> barriers = EpilogueBarriers(compiledPlan.findTask(pair.finalizingReader));
+        ASSERT_EQ(barriers.size(), 1u);
+        EXPECT_EQ(barriers[0u].before, ResourceStates::ShaderResource);
+        EXPECT_EQ(barriers[0u].after, ResourceStates::ShaderResource);
+    }
+    else{
+        if(checkEarlierTaskPlan){
+            const Optional<GpuCompiledTask> earlierTask = TaskPlan(compiledPlan.findTask(pair.earlierReader));
+            ASSERT_TRUE(earlierTask.has_value());
+            EXPECT_EQ(earlierTask.value().epilogueBarrierCount, 1u);
+        }
+        const Optional<GpuCompiledTask> finalizingTask = TaskPlan(compiledPlan.findTask(pair.finalizingReader));
+        ASSERT_TRUE(finalizingTask.has_value());
+        EXPECT_EQ(finalizingTask.value().epilogueBarrierCount, 1u);
+    }
+}
+
+void VerifyGpuExtFrontier_KeepsSameStateExternalExportConcurrentReadersIndependent(){
+    VerifyExternalFinalReadCase(0u, ResourceStates::ShaderResource, false, false, true, false);
+}
+
+void VerifyGpuExtFrontier_KeepsDisjointExternalFinalTextureFragmentsIndependent(){
+    VerifyExternalFinalReadCase(1u, ResourceStates::CopySource, false, false, false, true);
 }
 
 void VerifyGpuExtFrontier_ElidesSamePacketExternalFinalTransitionSelfDependency(){
-    TestArena testArena = TestArena();
-    GpuTaskGraph graph = GpuTaskGraph(testArena.arena);
-    GpuTaskResourceRange range = GpuTaskResourceRange();
-    range.textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
-    const auto pairResult = AddExternalFinalReadPair(
-        graph,
-        GpuGraphResourceType::Texture,
-        range,
-        range,
-        ResourceStates::ShaderResource,
-        ResourceStates::CopySource,
-        ResourceQueueSharing::GraphicsAndAsyncCompute,
-        true,
-        false,
-        GpuPhysicalQueueId()
-    );
-    ASSERT_TRUE(pairResult.has_value());
-    const ExternalFinalReadPair pair = pairResult.value();
-    ASSERT_TRUE(pair.resource.valid());
-    ASSERT_TRUE(pair.earlierReader.valid());
-    ASSERT_TRUE(pair.finalizingReader.valid());
-
-    TwoQueueCompile twoQueueCompile = TwoQueueCompile(testArena);
-    ASSERT_TRUE(twoQueueCompile.compile(graph));
-    const GpuCompiledGraphReadView compiledPlan = GpuCompiledGraphReadView(twoQueueCompile.compiledGraph);
-    EXPECT_FALSE(HasEdge(twoQueueCompile.analysis, pair.earlierReader, pair.finalizingReader));
-
-    const GpuSubmissionPacketId packet = compiledPlan.packetForTask(pair.earlierReader);
-    ASSERT_TRUE(packet.valid());
-    EXPECT_EQ(compiledPlan.packetForTask(pair.finalizingReader), packet);
-    const Optional<GpuSubmissionPacket> packetPlan = PacketPlan(compiledPlan.packet(packet));
-    ASSERT_TRUE(packetPlan.has_value());
-    EXPECT_EQ(packetPlan.value().dependencyCount, 0u);
-    const Optional<GpuCompiledTask> finalizingTask = TaskPlan(compiledPlan.findTask(pair.finalizingReader));
-    ASSERT_TRUE(finalizingTask.has_value());
-    EXPECT_EQ(finalizingTask.value().epilogueBarrierCount, 1u);
+    VerifyExternalFinalReadCase(0u, ResourceStates::CopySource, true, true, false, false);
 }
 
 void VerifyGpuExtFrontier_OrdersExternalFinalTransitionsForWholeAllocationResources(){

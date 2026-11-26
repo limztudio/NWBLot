@@ -31,6 +31,48 @@ namespace __hidden_vulkan_descriptor_buffer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename HandleT, typename ResourceT>
+b8 GpuDescriptorHeap::commitDescriptorWriteLocked(
+    ResourceT* const resource,
+    const GpuDescriptorHandle handle,
+    const DescriptorWriteItem& writeItem,
+    const GpuDescriptorClass::Enum descriptorClass,
+    const b8 needsDynamicReadiness,
+    const b8 needsConcurrentAdmission,
+    const b8 alwaysPublishFastVersion,
+    HandleT& retained
+){
+    const b8 hadRetained = static_cast<b8>(retained != nullptr);
+    HandleT candidate(nullptr, typename HandleT::deleter_type(&m_context.objectArena));
+    if(!hadRetained){
+        candidate = HandleT(resource, typename HandleT::deleter_type(&m_context.objectArena));
+        if(needsDynamicReadiness)
+            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
+        if(needsConcurrentAdmission)
+            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
+    }
+    if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
+        return false;
+    if(!hadRetained){
+        retained = Move(candidate);
+        if(needsDynamicReadiness){
+            m_dynamicReadinessSlots.push_back(handle);
+            syncDynamicReadinessFlagLocked();
+        }
+        if(needsConcurrentAdmission){
+            m_concurrentAdmissionSlots.push_back(handle);
+            m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
+        }
+    }
+    if(alwaysPublishFastVersion || (!hadRetained && (needsDynamicReadiness || needsConcurrentAdmission)))
+        publishBindingFastVersionLocked();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
     ScopedLock lock(m_mutex);
 
@@ -106,29 +148,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         const ResourceQueueAdmissionSnapshot& admission = backingBuffer->getQueueAdmissionSnapshot();
         const b8 needsDynamicReadiness = accelStruct->m_desc.isVirtual || !backingBuffer->m_managed || backingBuffer->m_creationDesc.isVirtual;
         const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
-        RayTracingAccelStructHandle candidate(nullptr, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
-        if(!retained){
-            candidate = RayTracingAccelStructHandle(accelStruct, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena));
-            if(needsDynamicReadiness)
-                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
-            if(needsConcurrentAdmission)
-                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
-        }
-        if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
-            return false;
-        if(!retained){
-            retained = Move(candidate);
-            if(needsDynamicReadiness){
-                m_dynamicReadinessSlots.push_back(handle);
-                syncDynamicReadinessFlagLocked();
-            }
-            if(needsConcurrentAdmission){
-                m_concurrentAdmissionSlots.push_back(handle);
-                m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
-            }
-        }
-        publishBindingFastVersionLocked();
-        return true;
+        return commitDescriptorWriteLocked(accelStruct, handle, writeItem, descriptorClass, needsDynamicReadiness, needsConcurrentAdmission, true, retained);
     }
 
     if(descriptorClass == GpuDescriptorClass::Sampler){
@@ -146,14 +166,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
             NWB_LOGGER_ERROR(FOUNDATION_TEXT("Vulkan: GpuDescriptorHeap::write: live Sampler replacement requires a fresh handle."));
             return false;
         }
-        SamplerHandle candidate(nullptr, SamplerHandle::deleter_type(&m_context.objectArena));
-        if(!retained)
-            candidate = SamplerHandle(sampler, SamplerHandle::deleter_type(&m_context.objectArena));
-        if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
-            return false;
-        if(!retained)
-            retained = Move(candidate);
-        return true;
+        return commitDescriptorWriteLocked(sampler, handle, writeItem, descriptorClass, false, false, false, retained);
     }
 
     if(handle.slot() >= m_resourceDescriptorBuffers.size() || handle.slot() >= m_resourceDescriptorTextures.size()){
@@ -183,29 +196,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
         const ResourceQueueAdmissionSnapshot& admission = texture->getQueueAdmissionSnapshot();
         const b8 needsDynamicReadiness = !texture->m_managed || texture->m_creationDesc.isVirtual;
         const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
-        TextureHandle candidate(nullptr, TextureHandle::deleter_type(&m_context.objectArena));
-        if(!retained){
-            candidate = TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena));
-            if(needsDynamicReadiness)
-                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
-            if(needsConcurrentAdmission)
-                __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
-        }
-        if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
-            return false;
-        if(!retained){
-            retained = Move(candidate);
-            if(needsDynamicReadiness){
-                m_dynamicReadinessSlots.push_back(handle);
-                syncDynamicReadinessFlagLocked();
-            }
-            if(needsConcurrentAdmission){
-                m_concurrentAdmissionSlots.push_back(handle);
-                m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
-            }
-        }
-        publishBindingFastVersionLocked();
-        return true;
+        return commitDescriptorWriteLocked(texture, handle, writeItem, descriptorClass, needsDynamicReadiness, needsConcurrentAdmission, true, retained);
     }
 
     auto* const buffer = static_cast<Buffer*>(writeItem.resourceHandle);
@@ -250,31 +241,7 @@ b8 GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWr
     const ResourceQueueAdmissionSnapshot& admission = buffer->getQueueAdmissionSnapshot();
     const b8 needsDynamicReadiness = !buffer->m_managed || buffer->m_creationDesc.isVirtual;
     const b8 needsConcurrentAdmission = !admission.valid() || admission.usesConcurrentSharing;
-    BufferHandle candidate(nullptr, BufferHandle::deleter_type(&m_context.objectArena));
-    if(!retained){
-        candidate = BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena));
-        if(needsDynamicReadiness)
-            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_dynamicReadinessSlots);
-        if(needsConcurrentAdmission)
-            __hidden_vulkan_descriptor_buffer::EnsureDescriptorSlotCapacity(m_concurrentAdmissionSlots);
-    }
-
-    if(!DescriptorBufferWriter(*this).write(writeItem, descriptorClass))
-        return false;
-    if(!retained){
-        retained = Move(candidate);
-        if(needsDynamicReadiness){
-            m_dynamicReadinessSlots.push_back(handle);
-            syncDynamicReadinessFlagLocked();
-        }
-        if(needsConcurrentAdmission){
-            m_concurrentAdmissionSlots.push_back(handle);
-            m_verifiedConcurrentQueueMask.store(0u, MemoryOrder::release);
-        }
-        if(needsDynamicReadiness || needsConcurrentAdmission)
-            publishBindingFastVersionLocked();
-    }
-    return true;
+    return commitDescriptorWriteLocked(buffer, handle, writeItem, descriptorClass, needsDynamicReadiness, needsConcurrentAdmission, false, retained);
 }
 
 

@@ -26,7 +26,6 @@ enum<u8> LightType{
     kCount
 }
 
-[reflect]
 class SceneLight{
     public f32x4 position(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 direction(0.0f, 0.0f, -1.0f, 1.0f);

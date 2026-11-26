@@ -162,6 +162,22 @@ void ApplySkinPaletteToWidgetStyle(in UiSkinPalette palette, mut WidgetStyle sty
     style.disabledText = ResolveUiSkinColor(palette, UiSkinColorRole::TextDisabled);
 }
 
+void ApplySkinControlStateTints<TStyle>(in UiSkinPalette palette, mut TStyle style){
+    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
+    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
+    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
+}
+
+Color ResolveControlStateTint<TStyle>(in TStyle style, in b8 enabled, in b8 pressed, in b8 hover){
+    if(!enabled)
+        return style.disabledTint;
+    if(pressed)
+        return style.pressedTint;
+    if(hover)
+        return style.hoverTint;
+    return Color();
+}
+
 Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 density){
     VectorSingle minimum(0.0f);
     if(!TryLoadUiSkinMinimumSize(region, cast<f64>(density), minimum))
@@ -170,7 +186,7 @@ Expected<Point> TryResolveSkinRegionMinimumSize(in UiSkinRegion region, in f32 d
 }
 
 Point ResolveCenteredTextOrigin(in Rect bounds, in f32 xInset, in f32 lineHeight){
-    const f32 verticalOffset = UiSimdMax(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction;
+    const f32 verticalOffset = Max(bounds.height - lineHeight, 0.0f) * s_RectCenterFraction;
     const VectorSingle origin = VectorSingle(bounds.x, bounds.y, bounds.x, bounds.y) + VectorSingle(xInset, verticalOffset, xInset, verticalOffset);
     return Point(origin.x, origin.y);
 }
@@ -193,7 +209,7 @@ Name ResolveButtonPreferredName(in WidgetStyle style, in b8 enabled, in b8 press
 
 void ResolveButtonTextPlacement(in Rect bounds, in Insets padding, in Point measured, mut Rect outTextClip, mut Point outOrigin){
     outTextClip = InsetUiRectBounds(bounds, padding);
-    outOrigin = ResolveCenteredTextOrigin(outTextClip, UiSimdMax(0.0f, (outTextClip.width - measured.x) * s_RectCenterFraction), measured.y);
+    outOrigin = ResolveCenteredTextOrigin(outTextClip, Max(0.0f, (outTextClip.width - measured.x) * s_RectCenterFraction), measured.y);
 }
 
 Name ResolveCheckboxPreferredName(in WidgetStyle style, in b8 enabled, in b8 checked, in b8 hover){
@@ -216,7 +232,7 @@ void ResolveCheckboxPlacement(
     mut Rect outTextClip,
     mut Point outOrigin
 ){
-    const f32 squareOffsetY = UiSimdMax(0.0f, (bounds.height - checkboxExtent) * s_RectCenterFraction);
+    const f32 squareOffsetY = Max(0.0f, (bounds.height - checkboxExtent) * s_RectCenterFraction);
     outSquare = Rect(bounds.x, bounds.y + squareOffsetY, checkboxExtent, checkboxExtent);
     const f32 inset = checkboxExtent * s_CheckmarkInsetFraction;
     const f32 markExtent = checkboxExtent - (s_CheckmarkInsetSides * inset);
@@ -224,7 +240,7 @@ void ResolveCheckboxPlacement(
     outMark = Rect(markOrigin.x, markOrigin.y, markExtent, markExtent);
     const f32 textOffsetX = checkboxExtent + gap;
     outOrigin = ResolveCenteredTextOrigin(bounds, textOffsetX, measured.y);
-    const f32 clipWidth = UiSimdMax(0.0f, bounds.width - textOffsetX);
+    const f32 clipWidth = Max(0.0f, bounds.width - textOffsetX);
     outTextClip = Rect(outOrigin.x, bounds.y, clipWidth, bounds.height);
 }
 
@@ -243,7 +259,7 @@ void AccumulateEditRegionMinimumSize(in UiSkinRegion skinRegion, mut Point inOut
 
 Point ResolveEditIntrinsicSize(in Point minimum, in f32 visualHeight, in Insets padding){
     const f32 paddedHeight = (visualHeight + padding.top) + padding.bottom;
-    return Point(minimum.x, UiSimdMax(minimum.y, paddedHeight));
+    return Point(minimum.x, Max(minimum.y, paddedHeight));
 }
 
 Point ResolvePaddedIntrinsicSize(in Point textBounds, in Insets padding, in Point minimum){
@@ -256,7 +272,7 @@ Point ResolvePaddedIntrinsicSize(in Point textBounds, in Insets padding, in Poin
 }
 
 Point ResolveCheckboxIntrinsicSize(in Point textBounds, in f32 checkboxExtent, in f32 gap){
-    return Point(textBounds.x + checkboxExtent + gap, UiSimdMax(textBounds.y, checkboxExtent));
+    return Point(textBounds.x + checkboxExtent + gap, Max(textBounds.y, checkboxExtent));
 }
 
 void ResolveCollapsibleHeaderLayout(
@@ -270,11 +286,11 @@ void ResolveCollapsibleHeaderLayout(
     mut Point outOrigin
 ){
     const Rect inner = InsetUiRectBounds(bounds, padding);
-    const f32 extent = UiSimdMin(indicatorExtent, inner.height);
-    const f32 indicatorY = inner.y + UiSimdMax(0.0f, (inner.height - extent) * s_RectCenterFraction);
+    const f32 extent = Min(indicatorExtent, inner.height);
+    const f32 indicatorY = inner.y + Max(0.0f, (inner.height - extent) * s_RectCenterFraction);
     outIndicator = Rect(inner.x, indicatorY, extent, extent);
-    const f32 offsetX = UiSimdMin(inner.width, extent + gap);
-    outTextClip = Rect(inner.x + offsetX, inner.y, UiSimdMax(0.0f, inner.width - offsetX), inner.height);
+    const f32 offsetX = Min(inner.width, extent + gap);
+    outTextClip = Rect(inner.x + offsetX, inner.y, Max(0.0f, inner.width - offsetX), inner.height);
     outOrigin = ResolveCenteredTextOrigin(inner, offsetX, measured.y);
 }
 
@@ -283,7 +299,7 @@ LayoutNodeDesc ResolveSeparatorNodeDesc(in UiSkinRegion skinRegion, in Separator
     f32 minimum = skinRegion.minimumWidth;
     if(horizontal)
         minimum = skinRegion.minimumHeight;
-    f32 thickness = UiSimdMax(1.0f, minimum);
+    f32 thickness = Max(1.0f, minimum);
     if(options.thickness > 0.0f)
         thickness = options.thickness;
     LayoutNodeDesc description;

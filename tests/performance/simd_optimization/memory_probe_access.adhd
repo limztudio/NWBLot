@@ -14,11 +14,7 @@ extern class AlignedProbeBytes{
     ByteAddress data()const;
 };
 
-[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::s_HasAvx")]
-extern const b8 s_ProbeHasAvx;
 
-[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::s_Linux")]
-extern const b8 s_ProbeLinux;
 
 [cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::Address")]
 extern usize ProbeAddress(in ReadAddress ptr);

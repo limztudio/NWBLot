@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const half NWB_SMOKE_LAMBERT_TONEMAP_KNEE = 0.65h;
 static const half NWB_SMOKE_LAMBERT_RIM_EXPONENT = 3.0h;
 static const half NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_EXPONENT = 72.0h;
 static const half NWB_SMOKE_LAMBERT_PRIMARY_SPECULAR_WEIGHT = 0.85h;
@@ -37,10 +36,6 @@ static const half3 NWB_SMOKE_LAMBERT_BACKLIGHT_CUE_COLOR = half3(0.012h, 0.02h, 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-half3 nwbSmokeLambertTonemap(half3 color){
-    return color / (color + half3(NWB_SMOKE_LAMBERT_TONEMAP_KNEE));
-}
 
 half3 nwbSmokeLambertShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, half ndotv, float3 worldPosition){
     float3 lightVector;
@@ -85,7 +80,7 @@ half3 nwbSmokeLambertShadeSurface(NwbBxdfSurface surface, int2 pixel){
     }
 
     litColor += nwbBxdfCausticIrradiance(pixel) * surface.baseColor;
-    return nwbBxdfRequiresLinearOutput() ? max(litColor, half3(0.0h)) : nwbSmokeLambertTonemap(litColor);
+    return max(litColor, half3(0.0h));
 }
 
 

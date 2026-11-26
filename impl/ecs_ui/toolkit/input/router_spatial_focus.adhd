@@ -172,19 +172,19 @@ b8 TryMoveRouterSpatialFocus(
             if(primaryDelta <= 0.5f)
                 continue;
 
-            const f32 overlap = UiSimdMin(curPerpMax, candPerpMax) - UiSimdMax(curPerpMin, candPerpMin);
+            const f32 overlap = Min(curPerpMax, candPerpMax) - Max(curPerpMin, candPerpMin);
             const f32 perpAbs = Abs(VectorSingle(candPerpCenter - curPerpCenter)).x;
             u32 tier = 0u;
             f32 score = 0.0f;
             if(overlap > 0.0f){
                 tier = 0u;
-                score = UiSimdMax(0.0f, primaryEdgeGap) * 2.0f + primaryDelta + perpAbs * 0.25f;
+                score = Max(0.0f, primaryEdgeGap) * 2.0f + primaryDelta + perpAbs * 0.25f;
             }
             else{
                 if(perpAbs > primaryDelta * 2.5f + 32.0f)
                     continue;
                 tier = 1u;
-                score = primaryDelta + UiSimdMax(0.0f, -overlap) * 3.0f + perpAbs * 1.5f;
+                score = primaryDelta + Max(0.0f, -overlap) * 3.0f + perpAbs * 1.5f;
             }
 
             if(!hasBest

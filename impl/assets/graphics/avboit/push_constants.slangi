@@ -57,10 +57,6 @@ bool nwbAvboitRefractionEnabled(){
     return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] == NWB_AVBOIT_REFRACTION_ACCUMULATE;
 }
 
-bool nwbAvboitPresentationIsHdr10(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE] >= (NWB_AVBOIT_PRESENTATION_HDR10 * NWB_AVBOIT_PRESENTATION_HDR10_THRESHOLD);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

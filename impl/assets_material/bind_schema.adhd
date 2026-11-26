@@ -13,17 +13,21 @@ class MaterialBindAttribute{
     public Vector<String> arguments;
 }
 
+b8 HasMaterialBindAttribute(in Span<MaterialBindAttribute> attributes, in StringView attributeName){
+    for(in MaterialBindAttribute attribute : attributes){
+        if(attribute.name == attributeName)
+            return true;
+    }
+    return false;
+}
+
 class MaterialBindField{
     public String type = "";
     public String name = "";
     public Vector<MaterialBindAttribute> attributes;
 
     public b8 hasAttribute(in StringView attributeName)const{
-        for(in MaterialBindAttribute attribute : this.attributes){
-            if(attribute.name == attributeName)
-                return true;
-        }
-        return false;
+        return HasMaterialBindAttribute(Span<MaterialBindAttribute>(this.attributes), attributeName);
     }
 
     public StringView defaultArgument()const{
@@ -49,11 +53,7 @@ class MaterialBindStruct{
     }
 
     public b8 hasAttribute(in StringView attributeName)const{
-        for(in MaterialBindAttribute attribute : this.attributes){
-            if(attribute.name == attributeName)
-                return true;
-        }
-        return false;
+        return HasMaterialBindAttribute(Span<MaterialBindAttribute>(this.attributes), attributeName);
     }
 }
 

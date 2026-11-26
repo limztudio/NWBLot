@@ -98,7 +98,7 @@ enum<u8> RuntimeStorageDescriptorSlot{
     kCount
 }
 
-[serialize, reflect]
+[serialize]
 class MeshSkinningBindlessResourceSlots{
     public b8 operator==(in MeshSkinningBindlessResourceSlots rhs)const{
         return
@@ -147,7 +147,7 @@ class MeshSkinningBindlessResourceSlots{
     public u32 reserved1 = 0u;
 }
 
-[serialize, reflect]
+[serialize]
 class MeshSkinningPushConstants{
     public u32 meshletCount = 0u;
     public u32 skinCount = 0u;
@@ -156,7 +156,7 @@ class MeshSkinningPushConstants{
     public u32 bindlessResourceSlots = 0u;
 }
 
-[serialize, reflect]
+[serialize]
 class MeshletBoundsPushConstants{
     public u32 meshletCount = 0u;
     public u32 bindlessResourceSlots = 0u;

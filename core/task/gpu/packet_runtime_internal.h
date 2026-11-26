@@ -138,6 +138,30 @@ private:
 
 
 private:
+    template<typename Fn>
+    [[nodiscard]] static b8 WithExclusiveRecordingAccess(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        Fn&& fn,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuSubmissionPacketId* const outFailedPacket
+    ){
+        if(outFailedPacket)
+            *outFailedPacket = {};
+        GpuRecordedGraph::ArtifactOperation artifactOperation(outRecordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
+        if(!artifactOperation.valid())
+            return false;
+        GpuCompiledGraph::ReadView planAccess(compiledGraph);
+        if(!planAccess.valid())
+            return false;
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
+        if(!declarationAccess.valid())
+            return false;
+        return fn(declarationAccess, planAccess, artifactOperation);
+    }
+
+
+private:
     [[nodiscard]] b8 recordPreparedPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
@@ -168,6 +192,17 @@ private:
         GpuPacketRecordingAbort* deferredAbort = nullptr,
         const PreclaimedPacketRecording* preclaimed = nullptr,
         b8 allowStateSeedElision = false
+    )const;
+    [[nodiscard]] GpuRecordedGraph::PacketRecordingScratch* prepareOrValidateRecordingAttempt(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketRange& range,
+        const GpuTaskGraph::DeclarationReadView& declarationAccess,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+        Alloc::ScratchArena& scratchArena,
+        b8 alreadyPrepared,
+        GpuRecordedGraph& outRecordedGraph
     )const;
     [[nodiscard]] b8 prepareRecordingAttempt(
         const GpuTaskGraph& graph,

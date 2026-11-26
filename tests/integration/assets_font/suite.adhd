@@ -136,13 +136,6 @@ u32 ReadBigU32At(in Vector<u8> bytes, in usize offset){
         | cast<u32>(bytes[offset + 3u]);
 }
 
-void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
-    bytes[offset] = cast<u8>(value);
-    bytes[offset + 1u] = cast<u8>(value >> 8u);
-    bytes[offset + 2u] = cast<u8>(value >> 16u);
-    bytes[offset + 3u] = cast<u8>(value >> 24u);
-}
-
 usize FindTableRecord(in Vector<u8> bytes, in u32 tag){
     const u32 tableCount = (cast<u32>(bytes[s_SfntTableCountHighByte]) << 8u) | cast<u32>(bytes[s_SfntTableCountLowByte]);
     for(u32 index = 0u; index < tableCount; ++index){
@@ -165,7 +158,7 @@ Expected<Font> LoadLatin(){
         return MakeUnexpected(Failure());
     Font candidate(Name(s_FontCaseEngineUiFontsDefaultLatinFace));
     Vector<u8> source = sourceResult.value();
-    candidate.setFontBytes(source);
+    candidate.setFontBytes(source, 0u);
     if(!candidate.validatePayload())
         return MakeUnexpected(Failure());
     return candidate;
@@ -320,7 +313,7 @@ void VerifyAssetsFont_PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedBy
         ASSERT_TRUE(sourceResult.has_value());
         const Vector<u8> source = CopyFontFixtureBytes(sourceResult.value());
         Vector<u8> sourceCopy = CopyFontFixtureBytes(source);
-        font.setFontBytes(sourceCopy);
+        font.setFontBytes(sourceCopy, 0u);
         ASSERT_TRUE(font.validatePayload());
         Vector<u8> prepared;
         ASSERT_TRUE(ReadBinaryFile(bundledPath, prepared).has_value());

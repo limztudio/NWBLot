@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import math
-import platform
 import sys
 
 from combo_native import ComboNativeInput
@@ -43,9 +41,9 @@ class ComboRun(KeyedRun):
         self.expected = {"selected": 0, LIT_CURSOR: 0, "count": 100000, LIT_FOCUSED: 0, "reversed": 0, "removed": 0, "visible": 1, "commits": 0, "underlying": 0, "open": 0, "enabled": 1, "bottom": 0, "source_generation": 1}
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
-                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
-        (self.args.output_directory / "combo.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        self.write_smoke_report("combo.json", passed,
+            input_path="Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages" if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus",
+            runtime_limit="No live IME, native Wayland, physical pointer-grab, or native Linux qualification.")
 
     def execute(self):
         self.checkpoint("initial_closed_combo", extra=lambda s: s[LIT_RECTANGLES][LIT_TRIGGER][2] > 0.0)

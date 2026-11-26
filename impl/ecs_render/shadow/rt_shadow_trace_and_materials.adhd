@@ -191,12 +191,13 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     mut CommandList commandList,
     mut DeferredFrameTargets targets,
     in DeferredLightingGraphResources deferredLightingResources,
-    in b8 splitSoftTransparentFold,
-    in b8 graphOwnsOpaqueTemporalMergeEntryStates,
-    in b8 splitOpaqueSoftResolve,
-    in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan,
-    in Optional<in LightSpaceShadowSnapshot> lightSpace
+    in ShadowVisibilityRenderOptions options
 ){
+    const b8 splitSoftTransparentFold = options.splitSoftTransparentFold;
+    const b8 graphOwnsOpaqueTemporalMergeEntryStates = options.graphOwnsOpaqueTemporalMergeEntryStates;
+    const b8 splitOpaqueSoftResolve = options.splitOpaqueSoftResolve;
+    in Optional<in GraphOwnedAdaptiveShadowPlan> graphOwnedAdaptivePlan = options.graphOwnedAdaptivePlan;
+    in Optional<in LightSpaceShadowSnapshot> lightSpace = options.lightSpace;
     u32 producedFrameIndex = 0u;
     assert(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility.valid())
@@ -340,11 +341,13 @@ b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
         return false;
     const u32 groupSize = SelectShadowTraceGroupSize(hardwareShadowSupported, cast<u32>(s_ShadowRtGroupSize), cast<u32>(s_ShaderSwShadowGroupSize));
     const ShadowDispatchGrid2D softGrid = ResolveSoftShadowDispatchGrid(targets.width, targets.height, targets.shadowReceiverFactor, groupSize);
-    this.dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY,
-        false, true, false, false, true, false, false, graphOwnsOpaqueTemporalMergeEntryStates,
-        false, false, true, false, false, false, phase
-    );
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.dispatchOpaqueResolve = true;
+    denoiseOptions.graphOwnsOpaqueGeometryToResolveBoundary = true;
+    denoiseOptions.graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
+    denoiseOptions.graphOwnsOpaqueTraceToFirstWaveletBoundary = true;
+    denoiseOptions.opaquePhase = phase;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY, denoiseOptions);
     return true;
 }
 
@@ -353,7 +356,10 @@ b8 RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(mut CommandList c
         return false;
     const u32 groupSize = SelectShadowTraceGroupSize(hardwareShadowSupported, cast<u32>(s_ShadowRtGroupSize), cast<u32>(s_ShaderSwShadowGroupSize));
     const ShadowDispatchGrid2D softGrid = ResolveSoftShadowDispatchGrid(targets.width, targets.height, targets.shadowReceiverFactor, groupSize);
-    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY, false, false, false, false, true, false, false, false, false, true, false);
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.graphOwnsOpaqueGeometryToResolveBoundary = true;
+    denoiseOptions.dispatchOpaqueResolveTail = true;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGrid.groupsX, softGrid.groupsY, denoiseOptions);
     return true;
 }
 
@@ -366,7 +372,12 @@ Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
 ){
     if(!CanRenderSplitSoftOpaqueShadow(this.m_rayTracingState.softShadow.m_softShadowReady, this.m_rayTracingState.softShadow.m_softTransparentReady, this.m_rayTracingState.softShadow.m_softShadowSlotMask))
         return MakeUnexpected(Failure());
-    return this.renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, true, graphOwnsOpaqueTemporalMergeEntryStates, true, Optional<in GraphOwnedAdaptiveShadowPlan>(), lightSpace);
+    ShadowVisibilityRenderOptions renderOptions;
+    renderOptions.splitSoftTransparentFold = true;
+    renderOptions.graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
+    renderOptions.splitOpaqueSoftResolve = true;
+    renderOptions.lightSpace = lightSpace;
+    return this.renderGpuBvhShadowVisibility(commandList, targets, deferredLightingResources, renderOptions);
 }
 
 void RendererRayTracingSystem::enableSoftShadowResolveBarriers(mut CommandList commandList, mut DeferredFrameTargets targets){
@@ -396,11 +407,14 @@ void RendererRayTracingSystem::dispatchPrimarySoftShadowResolve(
         commandList.setTextureState(targets.shadowSoftHalfA.get(), s_ShadowVisibilitySubresources, ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
     }
-    this.dispatchSoftShadowDenoiseAndTransparentFold(
-        commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY,
-        true, !splitOpaqueSoftResolve, !splitSoftTransparentFold, !splitSoftTransparentFold,
-        false, false, false, graphOwnsOpaqueTemporalMergeEntryStates, false, !splitOpaqueSoftResolve, false
-    );
+    SoftShadowDenoiseDispatchOptions denoiseOptions;
+    denoiseOptions.dispatchOpaqueGeometry = true;
+    denoiseOptions.dispatchOpaqueResolve = !splitOpaqueSoftResolve;
+    denoiseOptions.dispatchTransparentTrace = !splitSoftTransparentFold;
+    denoiseOptions.dispatchTransparentResolve = !splitSoftTransparentFold;
+    denoiseOptions.graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates;
+    denoiseOptions.dispatchOpaqueResolveTail = !splitOpaqueSoftResolve;
+    this.dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, deferredLightingResources, frameIndex, softGroupsX, softGroupsY, denoiseOptions);
 }
 
 u32 RendererRayTracingSystem::transparentShadowSampleCount()const{

@@ -571,7 +571,7 @@ b8 Builder::paintRadioGroup(in BuilderItem item, in LayoutBox box){
         ))
             return false;
         if(item.enabled){
-            const HitTarget target = targets.makeRadioGroupChoiceHitTarget(row, visualFlags.enabled, frame.m_token);
+            const HitTarget target = targets.makeActivatablePartHitTarget(row.rectangle, row.clip, visualFlags.enabled, frame.m_token, row.key);
             if(!this.m_context.addPartTarget(item.state, part.value(), target))
                 return false;
         }

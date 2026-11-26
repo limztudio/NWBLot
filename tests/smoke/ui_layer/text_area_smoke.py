@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import math
-import platform
 import sys
 import time
 
@@ -13,15 +11,10 @@ from probe_common import center, text_hash
 from text_area_native import TextAreaNativeInput
 from text_area_probe import document_fields, observe_text_area, snapshot_from_logs
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
+from window_capture_image_codec import Bmp24Codec
+from window_capture_smoke import run_smoke_main, SmokeFailure, SmokeSkip, collect_log_delta, ensure_process_running
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_CLIPBOARD_READ_MAXIMUM_TIMEOUT_SECONDS = 2.0
 LIT_CLIPBOARD_READ_MINIMUM_TIMEOUT_SECONDS = 0.1
@@ -84,21 +77,12 @@ def scroll_matches(state, expected):
     return all(abs(actual - wanted) <= 0.05 for actual, wanted in zip(state[LIT_SCROLL], expected))
 
 
-class TextAreaRun:
+class TextAreaRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args, self.backend, self.handle, self.process = args, backend, handle, process
-        self.log_directory, self.log_baseline, self.log_pattern = log_directory, log_baseline, log_pattern
-        self.native = TextAreaNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot, self.failure_report = None, None
-        self.stages = []
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=TextAreaNativeInput(backend, handle))
         self.caret_phase_waits = 0
         self.expected = {**document_fields(INITIAL, 5, 5), "focus": 0, LIT_ENABLED: 1, LIT_READONLY: 0, "compact": 0, "long_document": 0, LIT_PREFERRED_VALID: 0, LIT_PREFERRED_BITS: 0, LIT_SUBMITS: 0,
             LIT_CANCELS: 0, LIT_OUTSIDE: 0, LIT_CLIPBOARD_SEEDS: 0, "clipboard_pending": 0, "coherent": 1}
-
-    def point(self, x, y):
-        sx, sy = self.snapshot["scale"]
-        return round(x * sx), round(y * sy)
 
     def controller(self, name):
         self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
@@ -155,7 +139,7 @@ class TextAreaRun:
                     refreshed = snapshot_from_logs(collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern))
                     if refreshed is not None and refreshed[LIT_SEQUENCE] >= snapshot[LIT_SEQUENCE]:
                         snapshot = refreshed
-                return observe_text_area(read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin, extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines, allow_offscreen_caret=allow_offscreen_caret)
+                return observe_text_area(Bmp24Codec.read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin, extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines, allow_offscreen_caret=allow_offscreen_caret)
 
             report = capture_frame()
             failed = [probe for probe in report["probes"] if not probe[LIT_PASSED]]
@@ -198,11 +182,11 @@ class TextAreaRun:
         raise SmokeFailure(f"TextArea OS clipboard gate failed: {self.failure_report}")
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "marker_count_per_gate": 57, "caret_phase_waits": self.caret_phase_waits,
-            "input_path": "Win32 maintained cursor, posted text/keys/buttons and positioned WM_MOUSEWHEEL/WM_MOUSEHWHEEL, modifier chords, CF_UNICODETEXT reads"
+        self.write_smoke_report("text_area.json", passed, include_failure=True, marker_count_per_gate=57, caret_phase_waits=self.caret_phase_waits,
+            input_path="Win32 maintained cursor, posted text/keys/buttons and positioned WM_MOUSEWHEEL/WM_MOUSEHWHEEL, modifier chords, CF_UNICODETEXT reads"
                 if self.native.windows else "X11 synthetic ASCII keys/buttons, positioned wheel buttons4/5/6/7, native focus, UTF8_STRING selection reads",
-            "ordered_batch_scope": "Text then Down then text has no displayed-state wait; native delivery may cross frames.", "runtime_limit": "No fake preedit injection, live IME, native Wayland, or physical keyboard/grab qualification."}
-        (self.args.output_directory / "text_area.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+            ordered_batch_scope="Text then Down then text has no displayed-state wait; native delivery may cross frames.",
+            runtime_limit="No fake preedit injection, live IME, native Wayland, or physical keyboard/grab qualification.")
 
     def manual_checkpoint(self, name, **changes):
         self.native.pointer(4, 4)
@@ -412,54 +396,8 @@ class TextAreaRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "TEXT_AREA", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = text_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the TextArea fixture appeared")
-            raise SmokeFailure("custom TextArea fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiTextAreaSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        text_run = TextAreaRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        text_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_TEXTAREA_FIXTURE, handle, graceful_exit_timeout=LIT_TEXTAREA_GRACEFUL_EXIT_TIMEOUT_SECONDS)
-                require_normal_process_exit(exit_code, tail, LIT_UI_TEXTAREA_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "text_area.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                try:
-                    if logserver is not None:
-                        CaptureProcessTermination.terminate_process(logserver, "UI TextArea logserver")
-                finally:
-                    try:
-                        if text_run is not None:
-                            text_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    text_run.write_report(True)
-    print(f"UI TextArea: {len(text_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="TEXT_AREA", display_marker="UiTextAreaSmoke: display", driver_type=TextAreaRun, log_name="text_area.log", label="UI TextArea",
+        window_label="TextArea", process_label="TextArea", raw_windows=True, restore_pointer=True, graceful_exit_timeout=LIT_TEXTAREA_GRACEFUL_EXIT_TIMEOUT_SECONDS)
 
 
 def main(argv):

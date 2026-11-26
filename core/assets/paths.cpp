@@ -211,13 +211,6 @@ Expected<::Path<Alloc::ScratchArena>> FindPairedSourcePath(const ::Path<Alloc::S
     return MakeNotNull(matchedSourcePath)->lexicallyNormal();
 }
 
-Expected<AssetString> ResolvePairedSourcePathFromMetadata(const Path& file, AssetArena& arena, Alloc::ScratchArena& scratch){
-    const auto source = FindPairedSourcePath(::Path<Alloc::ScratchArena>(scratch, file), scratch);
-    if(!source)
-        return MakeUnexpected(Failure{});
-    return PathToString(arena, *source);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

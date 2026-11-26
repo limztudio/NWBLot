@@ -1,14 +1,44 @@
 import importlib.util
 import json
 import subprocess
-import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+from repository_launcher_test_support import (
+    LIT_ARCH,
+    LIT_ARM64,
+    LIT_BUILD,
+    LIT_BUILD_DIR,
+    LIT_BUILD_ENVIRONMENT,
+    LIT_BUILTINS_PRINT,
+    LIT_CMAKE_COMMAND,
+    LIT_CMAKE_EXECUTABLE,
+    LIT_COLD_CUSTOM_BUILD,
+    LIT_CONFIG,
+    LIT_CONFIGURE_PRESET,
+    LIT_DOMAIN,
+    LIT_DRY_RUN,
+    LIT_ENSURE_FILE_API_QUERY,
+    LIT_FORBIDDEN_LAUNCH,
+    LIT_FULL,
+    LIT_HELP,
+    LIT_HOST_PLATFORM_NAME,
+    LIT_LAUNCH_PY,
+    LIT_MAIN,
+    LIT_OPT,
+    LIT_PLATFORM,
+    LIT_POPEN,
+    LIT_REPO_ROOT,
+    LIT_RESOLVE_EXECUTABLE_PATH,
+    LIT_RUN,
+    LIT_TESTBED,
+    LIT_UTF_8,
+    LIT_WINDOWS,
+    LIT_WINDOWS_CLANG_ARM64,
+    ROOT,
+    LauncherTestCase,
+)
 
 from launcher import constants as launcher
 from launcher.build import BuildController
@@ -20,52 +50,22 @@ from launcher.host import HostProbe
 from launcher.models import LaunchSettings
 
 
-LIT_RESOLVE_EXECUTABLE_PATH = "resolve_executable_path"
-LIT_CMAKE_COMMAND = "cmake_command"
-LIT_BUILD_ENVIRONMENT = "build_environment"
-LIT_ENSURE_FILE_API_QUERY = "ensure_file_api_query"
 LIT_RETURN_VALUE = "return_value"
 LIT_SIDE_EFFECT = "side_effect"
 LIT_CMAKE_FILE_API_METADATA_IS_REQUIRED = "CMake File API metadata is required"
 LIT_RELEASE = "release"
-LIT_WINDOWS = "windows"
-LIT_ARM64 = "arm64"
 LIT_CMAKE = "__cmake"
-LIT_CMAKE_EXECUTABLE = "cmake"
-LIT_BUILD = "build"
-LIT_FULL = "full"
-LIT_WINDOWS_CLANG_ARM64 = "windows-clang-arm64"
 LIT_DBG = "dbg"
-LIT_TESTBED = "testbed"
 LIT_NWB_ASSET_BUILDER = "nwb_asset_builder"
 LIT_CMAKECACHE_TXT = "CMakeCache.txt"
-LIT_UTF_8 = "utf-8"
-LIT_RUN = "run"
-LIT_POPEN = "Popen"
-LIT_HOST_PLATFORM_NAME = "host_platform_name"
 LIT_PIPELINE = "pipeline"
-LIT_LAUNCH_PY = "launch.py"
-LIT_DRY_RUN = "--dry-run"
-LIT_CONFIG = "--config"
 LIT_ASSET_ROOT = "--asset-root"
 LIT_OUTPUT_DIRECTORY = "--output-directory"
 LIT_RUNTIME_RESOURCES = "runtime resources"
-LIT_OPT = "opt"
-LIT_REPO_ROOT = "--repo-root"
 LIT_CUSTOM_ARTIFACTS = "custom artifacts"
 LIT_DEPENDENCY_COMPUTER_EXE = "dependency_computer.exe"
 LIT_ASSET_BUILDER_EXE = "asset_builder.exe"
 LIT_ASSET_GATHERER_EXE = "asset_gatherer.exe"
-LIT_BUILTINS_PRINT = "builtins.print"
-LIT_MAIN = "__main__"
-LIT_BUILD_DIR = "--build-dir"
-LIT_CONFIGURE_PRESET = "--configure-preset"
-LIT_ARCH = "--arch"
-LIT_PLATFORM = "--platform"
-LIT_DOMAIN = "--domain"
-LIT_COLD_CUSTOM_BUILD = "cold custom build"
-LIT_HELP = "--help"
-LIT_FORBIDDEN_LAUNCH = "A build operation entered a launch path"
 LIT_ENGINE = "engine"
 LIT_WINDOWS_CLANG_ENGINE_ARM64 = "windows-clang-engine-arm64"
 LIT_WINDOWS_CLANG_TESTBED_ARM64 = "windows-clang-testbed-arm64"
@@ -79,11 +79,9 @@ LIT_PREVIEW_EXECUTABLE = "preview-target"
 LIT_EXPLICIT_EXECUTABLE = "explicit-target.exe"
 
 
-class LauncherDryRunDomainTests(unittest.TestCase):
+class LauncherDryRunDomainTests(LauncherTestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = self.make_temp_root()
         self.custom = self.root / LIT_COLD_CUSTOM_BUILD
         self.arguments = [LIT_RUN, LIT_TESTBED, LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS, LIT_ARCH, LIT_ARM64, LIT_CONFIG, LIT_OPT, LIT_BUILD_DIR, str(self.custom), LIT_DRY_RUN,]
         output_patch = mock.patch(LIT_BUILTINS_PRINT)
@@ -91,9 +89,7 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         self.addCleanup(output_patch.stop)
         for owner, operation, options in ((CmakeSettings, LIT_CMAKE_COMMAND, {LIT_RETURN_VALUE: (LIT_CMAKE_EXECUTABLE,)}), (HostProbe, LIT_HOST_PLATFORM_NAME, {LIT_RETURN_VALUE: LIT_WINDOWS}), (HostProbe, "host_arch_name", {LIT_RETURN_VALUE: LIT_ARM64}),
             (CmakeFileApi, LIT_ENSURE_FILE_API_QUERY, {"wraps": CmakeFileApi.ensure_file_api_query}), (subprocess, LIT_RUN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}), (subprocess, LIT_POPEN, {LIT_SIDE_EFFECT: AssertionError(LIT_FORBIDDEN_LAUNCH)}),):
-            patcher = mock.patch.object(owner, operation, **options)
-            result = patcher.start()
-            self.addCleanup(patcher.stop)
+            result = self.patch(owner, operation, **options)
             if LIT_RETURN_VALUE not in options:
                 self.addCleanup(result.assert_not_called)
 
@@ -134,11 +130,9 @@ class LauncherDryRunDomainTests(unittest.TestCase):
                 self.assert_preview_uses_domain(expected_domain, arguments)
 
 
-class LauncherExecutableMetadataTests(unittest.TestCase):
+class LauncherExecutableMetadataTests(LauncherTestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = self.make_temp_root()
         self.settings = LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD, cmake=(LIT_CMAKE_EXECUTABLE,),)
         self.reply = self.settings.build_dir / launcher.FILE_API_DIR_CMAKE / launcher.FILE_API_DIR_API / launcher.FILE_API_DIR_V1 / launcher.FILE_API_DIR_REPLY
         self.reply.mkdir(parents=True)
@@ -187,16 +181,14 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
         self.assertEqual(self.actual, BuildController.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
 
 
-class PipelineLauncherTests(unittest.TestCase):
+class PipelineLauncherTests(LauncherTestCase):
     def setUp(self):
         specification = importlib.util.spec_from_file_location("nwb_test_pipeline_launcher", ROOT / LIT_PIPELINE / LIT_LAUNCH_PY)
         self.assertIsNotNone(specification)
         self.assertIsNotNone(specification.loader)
         self.pipeline = importlib.util.module_from_spec(specification)
         specification.loader.exec_module(self.pipeline)
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = self.make_temp_root()
         self.settings = LaunchSettings(root=self.root, platform_name=LIT_WINDOWS, arch=LIT_ARM64, domain=LIT_FULL, config=LIT_OPT, configure_preset=LIT_WINDOWS_CLANG_ARM64, build_dir=self.root / LIT_CMAKE / LIT_BUILD / LIT_WINDOWS_CLANG_ARM64,
             cmake=(LIT_CMAKE_EXECUTABLE,),)
         self.environment = {"NWB_TEST_ENVIRONMENT": LIT_PIPELINE}
@@ -219,12 +211,6 @@ class PipelineLauncherTests(unittest.TestCase):
         self.patch(HostProbe, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
         self.process = self.patch(subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
         self.stage = self.patch(self.pipeline, "run_stage")
-
-    def patch(self, owner, name, **kwargs):
-        patcher = mock.patch.object(owner, name, **kwargs)
-        result = patcher.start()
-        self.addCleanup(patcher.stop)
-        return result
 
     def prepare_pipeline_build(self):
         configure = self.patch(CmakeSettings, "maybe_configure")

@@ -3,7 +3,7 @@
 
 
 #ifndef NWB_REFLECTION_SPATIAL_RADIUS
-#define NWB_REFLECTION_SPATIAL_RADIUS 0
+#define NWB_REFLECTION_SPATIAL_RADIUS 1
 #endif
 
 
@@ -56,14 +56,10 @@ struct NwbReflectionSpatialView{
 #define g_NwbReflectionSpatialResources g_NwbHeapDeferredBindlessResources[g_NwbReflectionSpatial.deferredResourcesSlot]
 #define g_NwbReflectionSpatialView g_NwbHeapReflectionSpatialViews[g_NwbReflectionSpatial.viewSlot]
 
-#if NWB_REFLECTION_SPATIAL_RADIUS < 0 || NWB_REFLECTION_SPATIAL_RADIUS > NWB_REFLECTION_SPATIAL_MAX_RADIUS
+#if NWB_REFLECTION_SPATIAL_RADIUS < 1 || NWB_REFLECTION_SPATIAL_RADIUS > NWB_REFLECTION_SPATIAL_MAX_RADIUS
 #error Unsupported reflection spatial radius specialization.
 #endif
-#if NWB_REFLECTION_SPATIAL_RADIUS == 0
-#define NWB_REFLECTION_SPATIAL_CACHE_RADIUS NWB_REFLECTION_SPATIAL_MAX_RADIUS
-#else
 #define NWB_REFLECTION_SPATIAL_CACHE_RADIUS NWB_REFLECTION_SPATIAL_RADIUS
-#endif
 #define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
@@ -81,23 +77,17 @@ groupshared uint g_NwbReflectionSpatialTileEligible;
 void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex){
     const uint2 pixel = dispatchThreadId.xy;
     const bool insideImage = pixel.x < g_NwbReflectionSpatial.width && pixel.y < g_NwbReflectionSpatial.height;
-#if NWB_REFLECTION_SPATIAL_RADIUS == 0
-    const uint radius = min(g_NwbReflectionSpatial.radius, NWB_REFLECTION_SPATIAL_MAX_RADIUS);
-#else
     const uint radius = NWB_REFLECTION_SPATIAL_RADIUS;
-#endif
     half4 center = half4(0.0h);
     half4 specular = half4(0.0h);
     float depth = 1.0;
     if(insideImage){
         const int3 sourceTexel = int3(pixel, 0);
         center = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
-        if(radius != 0u){
-            specular = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
-            depth = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
-        }
+        specular = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
+        depth = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
     }
-    const bool filterEligible = insideImage && !(radius == 0u || center.a <= half(0.0h) || !isfinite(depth) || depth < 0.0 || depth >= 1.0 || !all(isfinite(float4(specular))) || specular.a <= half(0.0h) || !any(specular.rgb > half3(0.0h)));
+    const bool filterEligible = insideImage && !(center.a <= half(0.0h) || !isfinite(depth) || depth < 0.0 || depth >= 1.0 || !all(isfinite(float4(specular))) || specular.a <= half(0.0h) || !any(specular.rgb > half3(0.0h)));
     if(groupIndex == 0u)
         g_NwbReflectionSpatialTileEligible = 0u;
     GroupMemoryBarrierWithGroupSync();

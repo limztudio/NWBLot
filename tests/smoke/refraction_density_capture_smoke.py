@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from refraction_density_benchmark import Cell, DEFAULT_EXTENTS, DENSITIES, EXTENTS, ROUTES
 from refraction_density_evidence import RefractionDensityEvidence
 from refraction_density_image_evidence import RefractionDensityImageEvidence
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (SKIP_EXIT_CODE, SmokeFailure, SmokeSkip, STRICT_LOG_FAILURE_MESSAGES, application_capture_partial_path,
     build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
@@ -131,7 +131,7 @@ def capture_cell(args, cell):
     routes = re.findall(r"^AVBOIT refraction resolve: (hardware|screen-space)$", text.replace("\r\n", "\n"), re.MULTILINE)
     if routes != [route]:
         raise SmokeFailure("density capture requires one actual matching resolve route")
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     if frame[:2] != (cell.width, cell.height):
         raise SmokeFailure("captured density framebuffer dimensions differ from the requested cell")
     return frame, {"admission": admission, "image": str(output), "runtime_log": str(log_path), "actual_trace_route": route, "extent_evidence": extent_evidence}

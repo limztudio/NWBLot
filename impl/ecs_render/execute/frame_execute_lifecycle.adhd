@@ -55,11 +55,34 @@ class ShadowPrepareStateLifecycleContext{
     }
 }
 
+class PersistentStateSubsetBinding{
+    private mut GpuPersistentResourceStateCache m_state;
+    private GpuPersistentStateCandidate m_candidate;
+    private b8 m_merged;
+
+    public PersistentStateSubsetBinding(mut GpuPersistentResourceStateCache state, in b8 merged){
+        this.m_state = state;
+        this.m_candidate = GpuPersistentStateCandidate(state);
+        this.m_merged = merged;
+    }
+
+    [cpp_unwind]
+    public b8 record(in CommandListResourceStateHandoff finalState, in Span<TextureHandle> textures, in Span<BufferHandle> buffers){
+        if(this.m_merged)
+            return this.m_state.buildMergedResourceSubset(finalState, textures, buffers, this.m_candidate);
+        return this.m_state.buildFilteredResourceSubset(finalState, textures, buffers, this.m_candidate);
+    }
+
+    public b8 commit(){
+        return this.m_state.commit(this.m_candidate);
+    }
+}
+
 class ShadowVisibilityStateLifecycleContext{
     public mut RendererFramePipeline renderer;
     public mut DeferredFrameTargets targets;
-    private GpuPersistentStateCandidate m_returnStateCandidate;
-    private GpuPersistentStateCandidate m_scratchStateCandidate;
+    private PersistentStateSubsetBinding m_returnState;
+    private PersistentStateSubsetBinding m_scratchState;
     public Span<TextureHandle> returnTextures;
     public Span<TextureHandle> scratchTextures;
     public Span<BufferHandle> scratchBuffers;
@@ -71,8 +94,8 @@ class ShadowVisibilityStateLifecycleContext{
     public ShadowVisibilityStateLifecycleContext(mut RendererFramePipeline renderer, mut DeferredFrameTargets targets){
         this.renderer = renderer;
         this.targets = targets;
-        this.m_returnStateCandidate = GpuPersistentStateCandidate(renderer.m_shadowVisibilityReturnState);
-        this.m_scratchStateCandidate = GpuPersistentStateCandidate(renderer.m_shadowComputePersistentState);
+        this.m_returnState = PersistentStateSubsetBinding(renderer.m_shadowVisibilityReturnState, false);
+        this.m_scratchState = PersistentStateSubsetBinding(renderer.m_shadowComputePersistentState, true);
     }
 
     [cpp_unwind]
@@ -80,13 +103,8 @@ class ShadowVisibilityStateLifecycleContext{
         if(this.returnTextures.empty() || this.scratchTextures.empty() || this.scratchBuffers.empty() || !finalState.has_value())
             return false;
 
-        const b8 scratchStateReady = this.renderer.m_shadowComputePersistentState.buildMergedResourceSubset(
-            finalState.value(),
-            this.scratchTextures,
-            this.scratchBuffers,
-            this.m_scratchStateCandidate
-        );
-        const b8 returnStateReady = this.renderer.m_shadowVisibilityReturnState.buildFilteredResourceSubset(finalState.value(), this.returnTextures, Span<BufferHandle>(), this.m_returnStateCandidate);
+        const b8 scratchStateReady = this.m_scratchState.record(finalState.value(), this.scratchTextures, this.scratchBuffers);
+        const b8 returnStateReady = this.m_returnState.record(finalState.value(), this.returnTextures, Span<BufferHandle>());
         this.statePrepared = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
         return this.statePrepared;
     }
@@ -95,8 +113,8 @@ class ShadowVisibilityStateLifecycleContext{
         if(!this.statePrepared)
             return false;
 
-        const b8 returnStateReady = this.renderer.m_shadowVisibilityReturnState.commit(this.m_returnStateCandidate);
-        const b8 scratchStateReady = this.renderer.m_shadowComputePersistentState.commit(this.m_scratchStateCandidate);
+        const b8 returnStateReady = this.m_returnState.commit();
+        const b8 scratchStateReady = this.m_scratchState.commit();
         this.stateReady = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
         this.renderer.m_raytracingSystem.finalizeSoftShadowTemporalHistory(this.targets);
         if(ShouldAcceptLightSpaceShadowCaptureOnVisibility(this.stateReady, this.lightSpacePrepared.has_value()))
@@ -107,8 +125,8 @@ class ShadowVisibilityStateLifecycleContext{
 
 class SoftwareCausticsStateLifecycleContext{
     public mut RendererFramePipeline renderer;
-    private GpuPersistentStateCandidate m_returnStateCandidate;
-    private GpuPersistentStateCandidate m_scratchStateCandidate;
+    private PersistentStateSubsetBinding m_returnState;
+    private PersistentStateSubsetBinding m_scratchState;
     public Span<TextureHandle> irradianceTextures;
     public Span<TextureHandle> scratchTextures;
     public b8 statePrepared = false;
@@ -116,8 +134,8 @@ class SoftwareCausticsStateLifecycleContext{
 
     public SoftwareCausticsStateLifecycleContext(mut RendererFramePipeline renderer){
         this.renderer = renderer;
-        this.m_returnStateCandidate = GpuPersistentStateCandidate(renderer.m_causticIrradianceReturnState);
-        this.m_scratchStateCandidate = GpuPersistentStateCandidate(renderer.m_causticsComputePersistentState);
+        this.m_returnState = PersistentStateSubsetBinding(renderer.m_causticIrradianceReturnState, false);
+        this.m_scratchState = PersistentStateSubsetBinding(renderer.m_causticsComputePersistentState, false);
     }
 
     [cpp_unwind]
@@ -125,8 +143,8 @@ class SoftwareCausticsStateLifecycleContext{
         if(this.irradianceTextures.empty() || this.scratchTextures.empty() || !finalState.has_value())
             return false;
 
-        const b8 returnStateReady = this.renderer.m_causticIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.irradianceTextures, Span<BufferHandle>(), this.m_returnStateCandidate);
-        const b8 scratchStateReady = this.renderer.m_causticsComputePersistentState.buildFilteredResourceSubset(finalState.value(), this.scratchTextures, Span<BufferHandle>(), this.m_scratchStateCandidate);
+        const b8 returnStateReady = this.m_returnState.record(finalState.value(), this.irradianceTextures, Span<BufferHandle>());
+        const b8 scratchStateReady = this.m_scratchState.record(finalState.value(), this.scratchTextures, Span<BufferHandle>());
         this.statePrepared = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
         return this.statePrepared;
     }
@@ -134,8 +152,8 @@ class SoftwareCausticsStateLifecycleContext{
         if(!this.statePrepared)
             return false;
 
-        const b8 returnStateReady = this.renderer.m_causticIrradianceReturnState.commit(this.m_returnStateCandidate);
-        const b8 scratchStateReady = this.renderer.m_causticsComputePersistentState.commit(this.m_scratchStateCandidate);
+        const b8 returnStateReady = this.m_returnState.commit();
+        const b8 scratchStateReady = this.m_scratchState.commit();
         this.stateReady = AreDualPersistentStateSubsetsReady(returnStateReady, scratchStateReady);
         return this.stateReady;
     }
@@ -143,9 +161,9 @@ class SoftwareCausticsStateLifecycleContext{
 
 class SurfelGiStateLifecycleContext{
     public mut RendererFramePipeline renderer;
-    private GpuPersistentStateCandidate m_returnStateCandidate;
-    private GpuPersistentStateCandidate m_counterStateCandidate;
-    private GpuPersistentStateCandidate m_computeStateCandidate;
+    private PersistentStateSubsetBinding m_returnState;
+    private PersistentStateSubsetBinding m_counterState;
+    private PersistentStateSubsetBinding m_computeState;
     public Span<TextureHandle> returnTextures;
     public Span<BufferHandle> counterBuffers;
     public Span<TextureHandle> computeTextures;
@@ -155,9 +173,9 @@ class SurfelGiStateLifecycleContext{
 
     public SurfelGiStateLifecycleContext(mut RendererFramePipeline renderer){
         this.renderer = renderer;
-        this.m_returnStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelIrradianceReturnState);
-        this.m_counterStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelGiCounterPersistentState);
-        this.m_computeStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelGiComputePersistentState);
+        this.m_returnState = PersistentStateSubsetBinding(renderer.m_surfelIrradianceReturnState, false);
+        this.m_counterState = PersistentStateSubsetBinding(renderer.m_surfelGiCounterPersistentState, false);
+        this.m_computeState = PersistentStateSubsetBinding(renderer.m_surfelGiComputePersistentState, false);
     }
 
     [cpp_unwind]
@@ -165,14 +183,9 @@ class SurfelGiStateLifecycleContext{
         if(this.returnTextures.empty() || this.counterBuffers.empty() || this.computeTextures.empty() || this.computeBuffers.empty() || !finalState.has_value())
             return false;
 
-        const b8 returnStateReady = this.renderer.m_surfelIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.returnTextures, Span<BufferHandle>(), this.m_returnStateCandidate);
-        const b8 counterStateReady = this.renderer.m_surfelGiCounterPersistentState.buildFilteredResourceSubset(finalState.value(), Span<TextureHandle>(), this.counterBuffers, this.m_counterStateCandidate);
-        const b8 computeStateReady = this.renderer.m_surfelGiComputePersistentState.buildFilteredResourceSubset(
-            finalState.value(),
-            this.computeTextures,
-            this.computeBuffers,
-            this.m_computeStateCandidate
-        );
+        const b8 returnStateReady = this.m_returnState.record(finalState.value(), this.returnTextures, Span<BufferHandle>());
+        const b8 counterStateReady = this.m_counterState.record(finalState.value(), Span<TextureHandle>(), this.counterBuffers);
+        const b8 computeStateReady = this.m_computeState.record(finalState.value(), this.computeTextures, this.computeBuffers);
         this.statePrepared = AreTriplePersistentStateSubsetsReady(returnStateReady, counterStateReady, computeStateReady);
         return this.statePrepared;
     }
@@ -180,27 +193,26 @@ class SurfelGiStateLifecycleContext{
         if(!this.statePrepared)
             return false;
 
-        mut RendererFramePipeline renderer = this.renderer;
-        const b8 returnStateReady = renderer.m_surfelIrradianceReturnState.commit(this.m_returnStateCandidate);
-        const b8 counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(this.m_counterStateCandidate);
-        const b8 computeStateReady = renderer.m_surfelGiComputePersistentState.commit(this.m_computeStateCandidate);
+        const b8 returnStateReady = this.m_returnState.commit();
+        const b8 counterStateReady = this.m_counterState.commit();
+        const b8 computeStateReady = this.m_computeState.commit();
         this.stateReady = AreTriplePersistentStateSubsetsReady(returnStateReady, counterStateReady, computeStateReady);
         if(this.stateReady)
-            renderer.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
+            this.renderer.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
         return this.stateReady;
     }
 }
 
 class HardwareCausticsStateLifecycleContext{
     public mut RendererFramePipeline renderer;
-    private GpuPersistentStateCandidate m_accumulatorStateCandidate;
+    private PersistentStateSubsetBinding m_accumulatorState;
     public Span<TextureHandle> accumulatorTextures;
     public b8 statePrepared = false;
     public b8 stateReady = false;
 
     public HardwareCausticsStateLifecycleContext(mut RendererFramePipeline renderer){
         this.renderer = renderer;
-        this.m_accumulatorStateCandidate = GpuPersistentStateCandidate(renderer.m_hardwareCausticAccumulatorPersistentState);
+        this.m_accumulatorState = PersistentStateSubsetBinding(renderer.m_hardwareCausticAccumulatorPersistentState, false);
     }
 
     [cpp_unwind]
@@ -208,16 +220,14 @@ class HardwareCausticsStateLifecycleContext{
         if(this.accumulatorTextures.empty() || !finalState.has_value())
             return false;
 
-        const b8 accumulatorStateReady = this.renderer.m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset(finalState.value(), this.accumulatorTextures, Span<BufferHandle>(), this.m_accumulatorStateCandidate);
-        this.statePrepared = accumulatorStateReady;
+        this.statePrepared = this.m_accumulatorState.record(finalState.value(), this.accumulatorTextures, Span<BufferHandle>());
         return this.statePrepared;
     }
     public b8 accepted(in QueueSubmissionToken token){
         if(!this.statePrepared)
             return false;
 
-        const b8 accumulatorStateReady = this.renderer.m_hardwareCausticAccumulatorPersistentState.commit(this.m_accumulatorStateCandidate);
-        this.stateReady = accumulatorStateReady;
+        this.stateReady = this.m_accumulatorState.commit();
         return this.stateReady;
     }
 }
@@ -225,9 +235,9 @@ class HardwareCausticsStateLifecycleContext{
 class DeferredLightingStateLifecycleContext{
     public mut RendererFramePipeline renderer;
     public mut DeferredFrameTargets targets;
-    private GpuPersistentStateCandidate m_shadowReturnStateCandidate;
-    private GpuPersistentStateCandidate m_causticReturnStateCandidate;
-    private GpuPersistentStateCandidate m_surfelReturnStateCandidate;
+    private PersistentStateSubsetBinding m_shadowReturnState;
+    private PersistentStateSubsetBinding m_causticReturnState;
+    private PersistentStateSubsetBinding m_surfelReturnState;
     public Span<TextureHandle> shadowReturnTextures;
     public Span<TextureHandle> causticReturnTextures;
     public Span<TextureHandle> surfelReturnTextures;
@@ -238,9 +248,9 @@ class DeferredLightingStateLifecycleContext{
     public DeferredLightingStateLifecycleContext(mut RendererFramePipeline renderer, mut DeferredFrameTargets targets){
         this.renderer = renderer;
         this.targets = targets;
-        this.m_shadowReturnStateCandidate = GpuPersistentStateCandidate(renderer.m_shadowVisibilityReturnState);
-        this.m_causticReturnStateCandidate = GpuPersistentStateCandidate(renderer.m_causticIrradianceReturnState);
-        this.m_surfelReturnStateCandidate = GpuPersistentStateCandidate(renderer.m_surfelIrradianceReturnState);
+        this.m_shadowReturnState = PersistentStateSubsetBinding(renderer.m_shadowVisibilityReturnState, false);
+        this.m_causticReturnState = PersistentStateSubsetBinding(renderer.m_causticIrradianceReturnState, false);
+        this.m_surfelReturnState = PersistentStateSubsetBinding(renderer.m_surfelIrradianceReturnState, false);
     }
 
     [cpp_unwind]
@@ -252,9 +262,9 @@ class DeferredLightingStateLifecycleContext{
         b8 causticStateReady = true;
         b8 surfelStateReady = true;
         if(ShouldBuildDirectDeferredLightingReturnStates(this.usesLaggedHistory)){
-            shadowStateReady = this.renderer.m_shadowVisibilityReturnState.buildFilteredResourceSubset(finalState.value(), this.shadowReturnTextures, Span<BufferHandle>(), this.m_shadowReturnStateCandidate);
-            causticStateReady = this.renderer.m_causticIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.causticReturnTextures, Span<BufferHandle>(), this.m_causticReturnStateCandidate);
-            surfelStateReady = this.renderer.m_surfelIrradianceReturnState.buildFilteredResourceSubset(finalState.value(), this.surfelReturnTextures, Span<BufferHandle>(), this.m_surfelReturnStateCandidate);
+            shadowStateReady = this.m_shadowReturnState.record(finalState.value(), this.shadowReturnTextures, Span<BufferHandle>());
+            causticStateReady = this.m_causticReturnState.record(finalState.value(), this.causticReturnTextures, Span<BufferHandle>());
+            surfelStateReady = this.m_surfelReturnState.record(finalState.value(), this.surfelReturnTextures, Span<BufferHandle>());
         }
         this.statePrepared = AreTriplePersistentStateSubsetsReady(shadowStateReady, causticStateReady, surfelStateReady);
         return this.statePrepared;
@@ -271,9 +281,9 @@ class DeferredLightingStateLifecycleContext{
         b8 causticStateReady = true;
         b8 surfelStateReady = true;
         if(ShouldBuildDirectDeferredLightingReturnStates(this.usesLaggedHistory)){
-            shadowStateReady = renderer.m_shadowVisibilityReturnState.commit(this.m_shadowReturnStateCandidate);
-            causticStateReady = renderer.m_causticIrradianceReturnState.commit(this.m_causticReturnStateCandidate);
-            surfelStateReady = renderer.m_surfelIrradianceReturnState.commit(this.m_surfelReturnStateCandidate);
+            shadowStateReady = this.m_shadowReturnState.commit();
+            causticStateReady = this.m_causticReturnState.commit();
+            surfelStateReady = this.m_surfelReturnState.commit();
         }
         this.stateReady = AreTriplePersistentStateSubsetsReady(shadowStateReady, causticStateReady, surfelStateReady);
         if(!this.stateReady)

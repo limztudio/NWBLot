@@ -15,16 +15,7 @@
 #if !defined(NWB_LIGHT_SPACE_OCCLUDER) || (NWB_LIGHT_SPACE_OCCLUDER != 0 && NWB_LIGHT_SPACE_OCCLUDER != 1)
 #error "light-space fallback requires the opaque or transparent compile-time class"
 #endif
-#define NWB_SW_SHADOW_OCCLUDER NWB_LIGHT_SPACE_OCCLUDER
-#define g_NwbSwShadowPush g_NwbLightSpacePush
-#define g_NwbSwShadowMaterialContextSlots nwbHeapMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
-#define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
-#if NWB_LIGHT_SPACE_CSG_ENABLED
-#include "light_space_receiver.slangi"
-#endif
-#define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
-#include "../scene/buffer.slangi"
+#include "light_space_deferred.slangi"
 #define NWB_SW_SHADOW_SKIP_CSG NWB_LIGHT_SPACE_CSG_ENABLED
 #include "sw_shadow_ray.slangi"
 #if NWB_LIGHT_SPACE_CSG_ENABLED
@@ -47,21 +38,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 halfExtent = (fullExtent + g_NwbLightSpacePush.receiverFactor - 1u) / g_NwbLightSpacePush.receiverFactor;
     if(any(pixel >= halfExtent))
         return;
-#if NWB_LIGHT_SPACE_CSG_ENABLED
-    const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
-    const int3 texel = int3(receiverPixel, 0);
-    const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
-    float3 position = float3(0.0);
-    float3 positionError = float3(0.0);
-    const bool receiverValid = nwbLightSpaceReceiverPosition(receiverPixel, depth, position, positionError);
-    float3 normal = float3(0.0, 0.0, 1.0);
-    if(receiverValid)
-        normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
-#else
-    const int3 texel = int3(min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u), 0);
-    const float3 position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
-    const float3 normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
-#endif
+    bool unusedBackground;
+    float3 position;
+    float3 normal;
+    float3 positionError;
+    const bool receiverValid = nwbLightSpaceLoadReceiver<false>(pixel, fullExtent, unusedBackground, position, normal, positionError);
     const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint index = 0u; index < lightCount; ++index){
@@ -81,12 +62,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 #endif
         half3 result = half3(0.0h);
         for(uint sample = 0u; sample < sampleCount; ++sample){
-#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
-            const uint salt = NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT;
-#else
-            const uint salt = 0u;
-#endif
-            const float2 jitter = nwbShadowLowDiscrepancy2D(pixel, g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
+            const float2 jitter = nwbLightSpaceSampleJitter(pixel, sample);
 #if NWB_LIGHT_SPACE_CSG_ENABLED
             half3 visibility = half3(1.0h);
             float3 direction;

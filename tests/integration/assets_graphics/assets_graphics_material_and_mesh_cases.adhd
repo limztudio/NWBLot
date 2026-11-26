@@ -104,14 +104,12 @@ void VerifyAssetsGraphics_MaterialCookAdmissionRejectsMissingInputsAndCountOverf
     const usize maxU32 = cast<usize>(u32.max);
     EXPECT_TRUE(ValidateDeferredBxdfCount(maxU32));
     EXPECT_TRUE(ValidateMaterialSurfaceCount(maxU32));
-    u32 expectedErrors = 4u;
+    u32 expectedErrors = 3u;
     if(usize.max > maxU32){
         EXPECT_FALSE(ValidateDeferredBxdfCount(maxU32 + 1u));
         EXPECT_FALSE(ValidateMaterialSurfaceCount(maxU32 + 1u));
         expectedErrors += 2u;
     }
-    EXPECT_TRUE(ValidateGeneratedMaterialMeshShader(0u, s_NameNone));
-    EXPECT_FALSE(ValidateGeneratedMaterialMeshShader(1u, s_NameNone));
     EXPECT_FALSE(ValidateTransparentMaterialInterface("project/material", "", "occupancy"));
     EXPECT_FALSE(IsMaterialOpticalStageCombinationValid(true, false, true, false));
     EXPECT_FALSE(IsMaterialOpticalStageCombinationValid(true, false, false, true));

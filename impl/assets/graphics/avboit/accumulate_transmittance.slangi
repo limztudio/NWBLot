@@ -13,11 +13,6 @@ uint nwbAvboitActivePhysicalSliceCount(){
     return clamp(nwbAvboitControl()[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], 1u, nwbAvboitPhysicalSliceCount());
 }
 
-float nwbAvboitWarpedPhysicalSliceFromVirtualSlice(uint virtualSlice){
-    const uint clampedVirtualSlice = min(virtualSlice, nwbAvboitVirtualSliceCount() - 1u);
-    return float(min(nwbAvboitDepthWarp()[clampedVirtualSlice], nwbAvboitActivePhysicalSliceCount() - 1u));
-}
-
 float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const uint activeMax = nwbAvboitActivePhysicalSliceCount() - 1u;

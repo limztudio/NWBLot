@@ -208,15 +208,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
                     while(sp > 0u){
                         const uint nodeIdx = stack[--sp];
                         const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][nodeIdx];
-                        const uint lIdx = asuint(node.minLeft.w);
-                        const uint rIdx = asuint(node.maxRight.w);
-                        const NwbPhysicsGpuLbvhNode lNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][lIdx];
-                        const NwbPhysicsGpuLbvhNode rNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][rIdx];
-                        const bool hitL = all(lNode.minLeft.xyz <= queryMax) && all(queryMin <= lNode.maxRight.xyz);
-                        const bool hitR = all(rNode.minLeft.xyz <= queryMax) && all(queryMin <= rNode.maxRight.xyz);
-                        if(hitL){
-                            if(lIdx >= leafStart){
-                                const uint sB = asuint(lNode.minLeft.w);
+                        const uint childIndices[2] = { asuint(node.minLeft.w), asuint(node.maxRight.w) };
+                        [unroll]
+                        for(uint ci = 0u; ci < 2u; ++ci){
+                            const uint cIdx = childIndices[ci];
+                            const NwbPhysicsGpuLbvhNode cNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][cIdx];
+                            if(!all(cNode.minLeft.xyz <= queryMax) || !all(queryMin <= cNode.maxRight.xyz))
+                                continue;
+                            if(cIdx >= leafStart){
+                                const uint sB = asuint(cNode.minLeft.w);
                                 if(sB < awakeShapeOffset){
                                     nwbPhysicsResToiTestCandidateShape(
                                         sB,
@@ -239,35 +239,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
                                 }
                             }
                             else if(sp < 64u){
-                                stack[sp++] = lIdx;
-                            }
-                        }
-                        if(hitR){
-                            if(rIdx >= leafStart){
-                                const uint sB = asuint(rNode.minLeft.w);
-                                if(sB < awakeShapeOffset){
-                                    nwbPhysicsResToiTestCandidateShape(
-                                        sB,
-                                        queryMin,
-                                        queryMax,
-                                        bodySlotA,
-                                        shStart,
-                                        shCount,
-                                        awakeShapeOffset,
-                                        awakeBodyOffset,
-                                        speculativeDist,
-                                        shapeSlot,
-                                        shapeAabbSlot,
-                                        toiBodySimSlot,
-                                        bodyMaxRadiusSlot,
-                                        bulletShapeIdxSlot,
-                                        nonCollideSlot,
-                                        nonCollideMask
-                                    );
-                                }
-                            }
-                            else if(sp < 64u){
-                                stack[sp++] = rIdx;
+                                stack[sp++] = cIdx;
                             }
                         }
                     }

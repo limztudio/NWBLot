@@ -8,19 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> CsgReceiverKind{
     Static,
     Skinned
 }
 
-[reflect]
 enum<u8> CsgReceiverPass{
     Opaque,
     Transparent
 }
 
-[reflect]
 class CsgReceiverDrawState{
     public u32 firstCutter = 0u;
     public u32 cutterCount = 0u;
@@ -28,7 +25,6 @@ class CsgReceiverDrawState{
     public b8 active = false;
 }
 
-[reflect]
 class CsgFrameState{
     public b8 empty()const{
         return !this.hasAnyWork;
@@ -43,19 +39,16 @@ class CsgFrameState{
     public b8 hasTransparentSkinnedWork = false;
 }
 
-[reflect]
 class CsgFrameCutterRange{
     public u32 firstCutter = 0u;
     public u32 cutterCount = 0u;
 }
 
-[reflect]
 class CsgFrameCutterRangeEntry{
     public CsgFrameCutterRange range;
     public u32 writtenCount = 0u;
 }
 
-[reflect]
 class CsgResolvedReceiver{
     public CsgReceiverComponent receiver;
     public CsgReceiverKind receiverKind = CsgReceiverKind::Static;

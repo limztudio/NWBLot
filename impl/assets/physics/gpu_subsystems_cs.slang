@@ -9,54 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbPhysicsSubsysClosestPtSeg(const float3 p, const float3 a, const float3 b, out float outT){
-    const float3 ab = b - a;
-    const float dSq = dot(ab, ab);
-    outT = (dSq > 1.0e-12f) ? clamp(dot(p - a, ab) / dSq, 0.0f, 1.0f) : 0.0f;
-    return a + ab * outT;
-}
-
-float3 nwbPhysicsSubsysClosestPtTri(const float3 p, const float3 a, const float3 b, const float3 c){
-    const float3 ab = b - a;
-    const float3 ac = c - a;
-    const float3 ap = p - a;
-    const float d1 = dot(ab, ap);
-    const float d2 = dot(ac, ap);
-    if(d1 <= 0.0f && d2 <= 0.0f)
-        return a;
-
-    const float3 bp = p - b;
-    const float d3 = dot(ab, bp);
-    const float d4 = dot(ac, bp);
-    if(d3 >= 0.0f && d4 <= d3)
-        return b;
-
-    const float vc = d1 * d4 - d3 * d2;
-    if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
-        return a + ab * (d1 / (d1 - d3));
-
-    const float3 cp = p - c;
-    const float d5 = dot(ab, cp);
-    const float d6 = dot(ac, cp);
-    if(d6 >= 0.0f && d5 <= d6)
-        return c;
-
-    const float vb = d5 * d2 - d1 * d6;
-    if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
-        return a + ac * (d2 / (d2 - d6));
-
-    const float va = d3 * d6 - d5 * d4;
-    if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f){
-        const float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
-        return b + (c - b) * w;
-    }
-
-    const float denom = 1.0f / max(va + vb + vc, 1.0e-12f);
-    const float v = vb * denom;
-    const float w = vc * denom;
-    return a + ab * v + ac * w;
-}
-
 float nwbPhysicsSubsysFieldRadialFalloff(const float distSq, const float invDist, const float minDist, const float falloffPow){
     if(falloffPow <= 0.0f)
         return 1.0f;
@@ -242,7 +194,7 @@ bool nwbPhysicsSubsysCollideParticleShape(
 
     if(sType == NWB_PHYSICS_SHAPE_TYPE_CAPSULE || sType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT || sType == NWB_PHYSICS_SHAPE_TYPE_TAPERED_CAPSULE){
         float tSeg = 0.0f;
-        const float3 q = nwbPhysicsSubsysClosestPtSeg(lp, sp.localCenterRadius.xyz, sp.localExtentOrP1.xyz, tSeg);
+        const float3 q = nwbPhysicsClosestPointOnSegment(lp, sp.localCenterRadius.xyz, sp.localExtentOrP1.xyz, tSeg);
         const float3 d = lp - q;
         float effR = sumR;
         if(sType == NWB_PHYSICS_SHAPE_TYPE_SEGMENT)
@@ -386,7 +338,7 @@ bool nwbPhysicsSubsysCollideParticleShape(
             float3 tv2;
             nwbPhysicsHfExtractTriangle(flipD, ti, v00, v10, v01, v11, tv0, tv1, tv2);
             const float3 tN = nwbPhysicsHfTriNormal(tv0, tv1, tv2);
-            const float3 q = nwbPhysicsSubsysClosestPtTri(lp, tv0, tv1, tv2);
+            const float3 q = nwbPhysicsClosestPointOnTriangle(lp, tv0, tv1, tv2);
             const float signedD = dot(lp - q, tN);
             if(signedD > -thick - pRadius && signedD < bestDist){
                 bestDist = signedD;

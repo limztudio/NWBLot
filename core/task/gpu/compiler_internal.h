@@ -130,10 +130,6 @@ struct CompilerGraphAccess{
         return view.m_graph->m_resources[index];
     }
 
-    [[nodiscard]] static inline GpuTaskId TaskIdAt(const GpuTaskGraph::DeclarationReadView& view, const usize index)noexcept{
-        return GpuTaskId{ .generation = Generation(view), .index = static_cast<u32>(index) };
-    }
-
     [[nodiscard]] static inline Span<const GpuTaskId> TaskDependencies(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
         return node.dependencyCount > 0u ? Span<const GpuTaskId>(view.m_graph->m_dependencies.data() + node.dependencyOffset, node.dependencyCount) : Span<const GpuTaskId>();
     }
@@ -148,10 +144,6 @@ struct CompilerGraphAccess{
 
     [[nodiscard]] static inline Span<const GpuTaskResourceUse> TaskResourceUses(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
         return node.resourceUseCount > 0u ? Span<const GpuTaskResourceUse>(view.m_graph->m_resourceUses.data() + node.resourceUseOffset, node.resourceUseCount) : Span<const GpuTaskResourceUse>();
-    }
-
-    [[nodiscard]] static inline Span<const GpuTaskResourceVersionUse> TaskResourceVersionUses(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuTaskNode& node)noexcept{
-        return node.resourceVersionUseCount > 0u ? Span<const GpuTaskResourceVersionUse>(view.m_graph->m_resourceVersionUses.data() + node.resourceVersionUseOffset, node.resourceVersionUseCount) : Span<const GpuTaskResourceVersionUse>();
     }
 
     [[nodiscard]] static inline usize TotalDependencyCount(const GpuTaskGraph::DeclarationReadView& view)noexcept{
@@ -177,10 +169,6 @@ struct CompilerGraphAccess{
             .admittedQueueClasses = node.queueSharing,
             .usesConcurrentSharing = node.usesConcurrentSharing,
         };
-    }
-
-    [[nodiscard]] static inline Span<const GpuTaskGraphInitialOwnerHandoffSourceView> ResourceInitialOwnerHandoffSources(const GpuTaskGraph::DeclarationReadView& view, const GpuTaskGraphDetail::GpuGraphResourceNode& node)noexcept{
-        return node.initialOwnerHandoffSourceCount != 0u ? Span<const GpuTaskGraphInitialOwnerHandoffSourceView>(view.m_graph->m_initialOwnerHandoffSources.data() + node.initialOwnerHandoffSourceOffset, node.initialOwnerHandoffSourceCount) : Span<const GpuTaskGraphInitialOwnerHandoffSourceView>();
     }
 
     [[nodiscard]] static inline const GpuPresentEndpoint* PresentEndpoint(const GpuTaskGraph::DeclarationReadView& view)noexcept{
@@ -355,10 +343,6 @@ struct GpuTaskGraphResourceStatePlan{
     const u8 availableMask = static_cast<u8>(available);
     const u8 requiredMask = static_cast<u8>(required);
     return (availableMask & requiredMask) == requiredMask;
-}
-
-[[nodiscard]] inline b8 TaskAllowsPacketMerge(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowPacketMerge && !task.scheduling.forceSubmissionBoundary && !task.scheduling.joinsAcceptedQueueFrontier;
 }
 
 [[nodiscard]] inline b8 TaskNodeAllowsPacketMerge(const GpuTaskGraphDetail::GpuTaskNode& task)noexcept{

@@ -39,9 +39,6 @@ inline constexpr TStringView s_UnnamedAssetPathText = FOUNDATION_TEXT("<unnamed>
         return s_AssetTypeName; \
     }
 
-#define NWB_DEFINE_ASSET_CODEC_REGISTRAR(codecVariable, codecType) \
-    ::NWB::Core::Assets::AssetCodecAutoRegistrar codecVariable(&::NWB::Core::Assets::CreateAssetCodec<codecType>)
-
 #if defined(NWB_COOK)
 #define NWB_ASSET_CODEC_SERIALIZE_DECL() \
 public: \
@@ -133,11 +130,6 @@ private:
     Name m_assetType = s_NameNone;
     Name m_virtualPath = s_NameNone;
 };
-
-template<typename ArenaT>
-[[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(const IAsset& asset, ArenaT& arena){
-    return asset.virtualPath() ? ConvertString(arena, asset.virtualPath().resolvedText()) : TString<ArenaT>(s_UnnamedAssetPathText, arena);
-}
 
 template<typename AssetT, typename BaseAssetT = IAsset>
 class TypedAsset : public BaseAssetT{

@@ -48,12 +48,19 @@ b8 ValidateRawBufferLogicalByteCount(
 
 
 [cpp_unwind]
-b8 UploadMeshStream<T>(mut GraphicsRuntime graphics, in Name meshName, in StringView suffix, in Span<T> payload, in StringView label, mut BufferHandle destination, in b8 rawViews, in b8 buildInput){
+b8 CreateUploadedMeshBuffer(
+    mut GraphicsRuntime graphics,
+    in Name meshName,
+    in StringView suffix,
+    in StringView label,
+    in BufferFlags flags,
+    in Func<64u, Expected<BufferHandle, BufferSetupFailure>(mut GraphicsRuntime, in Name, in BufferFlags)> createBuffer,
+    mut BufferHandle destination
+){
     const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
     if(!bufferName.has_value())
         return false;
-    const BufferFlags flags(false, rawViews, buildInput, ResourceQueueSharing::GraphicsAndAsyncCompute, false);
-    const auto result = SetupRequiredBuffer<T>(graphics, bufferName.value(), payload, flags);
+    const auto result = createBuffer(graphics, bufferName.value(), flags);
     if(!result.has_value()){
         ReportMeshBufferSetupFailure(result.error(), meshName, label);
         return false;
@@ -63,18 +70,37 @@ b8 UploadMeshStream<T>(mut GraphicsRuntime graphics, in Name meshName, in String
 }
 
 [cpp_unwind]
+b8 UploadMeshStream<T>(mut GraphicsRuntime graphics, in Name meshName, in StringView suffix, in Span<T> payload, in StringView label, mut BufferHandle destination, in b8 rawViews, in b8 buildInput){
+    const Span<T> payloadRef = payload;
+    const BufferFlags flags(false, rawViews, buildInput, ResourceQueueSharing::GraphicsAndAsyncCompute, false);
+    return CreateUploadedMeshBuffer(
+        graphics,
+        meshName,
+        suffix,
+        label,
+        flags,
+        lambda[in payloadRef](mut GraphicsRuntime targetGraphics, in Name bufferName, in BufferFlags bufferFlags) -> Expected<BufferHandle, BufferSetupFailure>{
+            return SetupRequiredBuffer<T>(targetGraphics, bufferName, payloadRef, bufferFlags);
+        },
+        destination
+    );
+}
+
+[cpp_unwind]
 b8 UploadMeshBytes(mut GraphicsRuntime graphics, in Name meshName, in StringView suffix, in Span<u8> payload, in StringView label, mut BufferHandle destination){
-    const auto bufferName = DeriveMeshBufferName(meshName, suffix, label);
-    if(!bufferName.has_value())
-        return false;
+    const Span<u8> payloadRef = payload;
     const BufferFlags flags(false, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false);
-    const auto result = SetupRequiredPaddedRawByteBuffer(graphics, bufferName.value(), payload, flags);
-    if(!result.has_value()){
-        ReportMeshBufferSetupFailure(result.error(), meshName, label);
-        return false;
-    }
-    destination = result.value();
-    return true;
+    return CreateUploadedMeshBuffer(
+        graphics,
+        meshName,
+        suffix,
+        label,
+        flags,
+        lambda[in payloadRef](mut GraphicsRuntime targetGraphics, in Name bufferName, in BufferFlags bufferFlags) -> Expected<BufferHandle, BufferSetupFailure>{
+            return SetupRequiredPaddedRawByteBuffer(targetGraphics, bufferName, payloadRef, bufferFlags);
+        },
+        destination
+    );
 }
 
 b8 RuntimeMeshSourceMatches(in MeshResources mesh, in RuntimeMeshDesc desc){

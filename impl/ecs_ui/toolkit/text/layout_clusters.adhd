@@ -77,7 +77,7 @@ Expected<TextRasterMetrics> TryResolveTextRasterMetrics(in f32 fontSize, in Disp
     const VectorSingle pixelScale(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
     if(!IsValidTextFontSize(fontSize) || !IsFinite(pixelScale.xy) || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f)
         return MakeUnexpected(Failure());
-    const f32 physicalSize = fontSize * UiSimdMax(display.pixelScaleX, display.pixelScaleY);
+    const f32 physicalSize = fontSize * Max(display.pixelScaleX, display.pixelScaleY);
     const f32 rasterPpem = VectorCeiling(VectorSingle(physicalSize)).x;
     if(!IsFinite(VectorSingle(rasterPpem)) || rasterPpem < 1.0f || rasterPpem > s_TextMaxRasterPpemF32)
         return MakeUnexpected(Failure());

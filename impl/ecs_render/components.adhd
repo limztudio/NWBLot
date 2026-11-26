@@ -54,6 +54,7 @@ class MaterialInstanceComponent{
 
     public Name materialInterface;
     public Vector<MaterialInstanceParameter> overrides;
+    [transient]
     public u64 revision = 0u;
 }
 

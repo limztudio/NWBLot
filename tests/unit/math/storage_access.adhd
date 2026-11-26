@@ -46,12 +46,6 @@ extern class WideStorageInteger;
 [cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::s_HasInt128Storage")]
 extern const b8 s_HasInt128Storage;
 
-[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::s_Sse2Storage")]
-extern const b8 s_Sse2Storage;
-
-[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::s_LinuxStorage")]
-extern const b8 s_LinuxStorage;
-
 [cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::WideStorageBit")]
 extern WideStorageInteger WideStorageBit(in usize bit);
 

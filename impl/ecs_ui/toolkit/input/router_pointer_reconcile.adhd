@@ -86,10 +86,10 @@ void BuildTargetSpatialIndex(in Span<HitTarget> targets, mut TargetSpatialIndex 
             hasVisible = true;
         }
         else{
-            minX = UiSimdMin(minX, x0);
-            minY = UiSimdMin(minY, y0);
-            maxX = UiSimdMax(maxX, x1);
-            maxY = UiSimdMax(maxY, y1);
+            minX = Min(minX, x0);
+            minY = Min(minY, y0);
+            maxX = Max(maxX, x1);
+            maxY = Max(maxY, y1);
         }
     }
 
@@ -230,6 +230,30 @@ b8 IsBetterRouterHitTarget(
     return candidateIndex >= foundIndex;
 }
 
+void ConsiderRouterHitTargetCandidate(
+    in Span<HitTarget> targets,
+    in Span<TargetLookup> lookup,
+    in Span<PopupRecord> popups,
+    in Point position,
+    in usize index,
+    mut b8 inOutHasFound,
+    mut usize inOutFoundIndex,
+    mut u32 inOutFoundLayer,
+    mut u32 inOutFoundZOrder,
+    mut u64 inOutFoundPaintOrder
+){
+    in HitTarget target = targets[index];
+    if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
+        return;
+    if(IsBetterRouterHitTarget(target, index, inOutHasFound, inOutFoundLayer, inOutFoundZOrder, inOutFoundPaintOrder, inOutFoundIndex)){
+        inOutHasFound = true;
+        inOutFoundIndex = index;
+        inOutFoundLayer = target.layer;
+        inOutFoundZOrder = target.zOrder;
+        inOutFoundPaintOrder = target.paintOrder;
+    }
+}
+
 Expected<usize> FindRouterHitTargetIndex(
     in Span<HitTarget> targets,
     in Span<TargetLookup> lookup,
@@ -244,16 +268,18 @@ Expected<usize> FindRouterHitTargetIndex(
     u32 foundZOrder = 0u;
     u64 foundPaintOrder = 0u;
     for(usize index = 0u; index < targets.size(); ++index){
-        in HitTarget target = targets[index];
-        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
-            continue;
-        if(IsBetterRouterHitTarget(target, index, hasFound, foundLayer, foundZOrder, foundPaintOrder, foundIndex)){
-            hasFound = true;
-            foundIndex = index;
-            foundLayer = target.layer;
-            foundZOrder = target.zOrder;
-            foundPaintOrder = target.paintOrder;
-        }
+        ConsiderRouterHitTargetCandidate(
+            targets,
+            lookup,
+            popups,
+            position,
+            index,
+            hasFound,
+            foundIndex,
+            foundLayer,
+            foundZOrder,
+            foundPaintOrder
+        );
     }
     if(!hasFound)
         return MakeUnexpected(Failure());
@@ -287,30 +313,32 @@ Expected<usize> FindRouterHitTargetIndexIndexed(
     const usize cellBegin = cast<usize>(spatial.cellOffsets[cell]);
     const usize cellEnd = cast<usize>(spatial.cellOffsets[cell + 1u]);
     for(usize slot = cellBegin; slot < cellEnd; ++slot){
-        const usize index = cast<usize>(spatial.cellTargets[slot]);
-        in HitTarget target = targets[index];
-        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
-            continue;
-        if(IsBetterRouterHitTarget(target, index, hasFound, foundLayer, foundZOrder, foundPaintOrder, foundIndex)){
-            hasFound = true;
-            foundIndex = index;
-            foundLayer = target.layer;
-            foundZOrder = target.zOrder;
-            foundPaintOrder = target.paintOrder;
-        }
+        ConsiderRouterHitTargetCandidate(
+            targets,
+            lookup,
+            popups,
+            position,
+            cast<usize>(spatial.cellTargets[slot]),
+            hasFound,
+            foundIndex,
+            foundLayer,
+            foundZOrder,
+            foundPaintOrder
+        );
     }
     for(usize slot = 0u; slot < spatial.overflowTargets.size(); ++slot){
-        const usize index = cast<usize>(spatial.overflowTargets[slot]);
-        in HitTarget target = targets[index];
-        if(!UiRectContainsPoint(target.rectangle, position) || !UiRectContainsPoint(target.clip, position) || !IsRouterTargetInteractive(targets, lookup, popups, target))
-            continue;
-        if(IsBetterRouterHitTarget(target, index, hasFound, foundLayer, foundZOrder, foundPaintOrder, foundIndex)){
-            hasFound = true;
-            foundIndex = index;
-            foundLayer = target.layer;
-            foundZOrder = target.zOrder;
-            foundPaintOrder = target.paintOrder;
-        }
+        ConsiderRouterHitTargetCandidate(
+            targets,
+            lookup,
+            popups,
+            position,
+            cast<usize>(spatial.overflowTargets[slot]),
+            hasFound,
+            foundIndex,
+            foundLayer,
+            foundZOrder,
+            foundPaintOrder
+        );
     }
 
     if(!hasFound)

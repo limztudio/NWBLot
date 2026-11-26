@@ -22,13 +22,6 @@ b8 LoadAtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 font
     return TryLoadGlyphAtlasRectangle(glyph.position, topLeft, fontSize, atlas.unitsPerEm(), atlas.glyph(glyph.glyphId), outRectangle);
 }
 
-Expected<Rect> AtlasRectangle(in PlacedGlyph glyph, in BakedFontAtlas atlas, in f32 fontSize, in Point topLeft){
-    VectorDouble rectangle(0.0);
-    if(!LoadAtlasRectangle(glyph, atlas, fontSize, topLeft, rectangle))
-        return MakeUnexpected(Failure());
-    return ToTextGlyphAtlasRect(rectangle);
-}
-
 TextGlyphIntersection CandidateBorrowed(in PlacedGlyph glyph, in Optional<in BakedFontAtlas> selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
     const TextGlyphIntersection input = ValidateTextGlyphCandidateInputs(glyph.position, topLeft, fontSize, physicalSize, clip, pixelScale);
     if(input != TextGlyphIntersection::Visible)
@@ -45,24 +38,6 @@ TextGlyphIntersection CandidateBorrowed(in PlacedGlyph glyph, in Optional<in Bak
     if(hasValidFace)
         faceUnitsPerEm = glyph.face.deref().unitsPerEm();
     return EvaluateUnselectedAtlasGlyphCandidate(glyph.position, topLeft, glyph.ink, glyph.coverage, hasValidFace, coverageInkReliable, faceUnitsPerEm, fontSize, physicalSize, clip, pixelScale);
-}
-
-TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip, in Point pixelScale){
-    if(selectedAtlas.valid())
-        return CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(selectedAtlas.deref()), fontSize, physicalSize, topLeft, clip, pixelScale);
-    return CandidateBorrowed(glyph, Optional<in BakedFontAtlas>(), fontSize, physicalSize, topLeft, clip, pixelScale);
-}
-
-TextGlyphIntersection Candidate(in PlacedGlyph glyph, in SharedBakedFontAtlas selectedAtlas, in f32 fontSize, in f32 physicalSize, in Point topLeft, in Rect clip){
-    return Candidate(glyph, selectedAtlas, fontSize, physicalSize, topLeft, clip, Point(1.0f, 1.0f));
-}
-
-Expected<Rect> CoverageRectangle(in PlacedGlyph glyph, in AtlasGlyph record, in f32 rasterScale, in Point topLeft, in Point pixelScale){
-    return TryResolveGlyphCoverageRectangle(glyph.position, record.pageIndex, record.pixels, record.bearingX, record.bearingY, rasterScale, topLeft, pixelScale);
-}
-
-Expected<Rect> CoverageRectangle(in PlacedGlyph glyph, in AtlasGlyph record, in f32 rasterScale, in Point topLeft){
-    return CoverageRectangle(glyph, record, rasterScale, topLeft, Point(1.0f, 1.0f));
 }
 
 

@@ -122,8 +122,7 @@ extern Expected<PathScratchString> DeriveGraphicsScratchPath(in auto root, in St
 extern b8 ReserveGraphicsManifest(in usize count, mut CookPackManifest manifest);
 [cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::WriteBuiltAssets")]
 extern b8 WriteGraphicsBuiltAssets(in auto path, in CookPackManifest manifest, mut auto scratch);
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::s_Debug")]
-extern const b8 s_GraphicsDebugBuild;
+
 [cpp_header("<global/filesystem/operations.h>"), cpp_name("::EnsureDirectories")]
 extern Expected<void, ErrorCode> GraphicsEnsureDirectories(in GlobalPath path);
 [cpp_header("<global/filesystem/operations_remove.h>"), cpp_name("::EnsureEmptyDirectory")]
@@ -145,10 +144,6 @@ extern b8 WriteGraphicsRelativePath(in auto path, mut PathScratchString text);
 [cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::WriteTextFile")]
 extern b8 WriteGraphicsText(in GlobalPath path, in StringView text);
 
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::s_Final")]
-extern const b8 s_GraphicsFinalBuild;
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::s_Windows")]
-extern const b8 s_GraphicsWindowsHost;
 [cpp_header("<global/basic_string.h>"), cpp_name("::StringAppendFormat")]
 extern void GraphicsStringAppendFormat(mut auto text, in StringView format, ...);
 [cpp_header("<core/assets/module.h>"), cpp_name("static_cast<::NWB::Core::Assets::AssetBytes&>")]

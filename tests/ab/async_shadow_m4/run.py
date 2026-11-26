@@ -38,17 +38,17 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "ab"))
 sys.path.insert(0, str(REPO / LIT_TESTS_DIRECTORY / "smoke"))
 
-from bitmap_image import BitmapImage  # noqa: E402
 from gpu_timing_parse import (  # noqa: E402
-    INTERVAL_RE, ScopeSummary, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_non_negative, require_positive, summarize_scopes,)
+    INTERVAL_RE, load_name_symbols as load_timing_name_symbols, parse_timing_file, require_non_negative, require_positive, summarize_scopes,)
 from window_capture_environment import make_runtime_launch_args  # noqa: E402
+from window_capture_logs import (find_log_messages as smoke_find_log_messages, wait_for_process_log_message, wait_while_running as smoke_wait_while_running)  # noqa: E402
 from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (  # noqa: E402
-    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WindowsCapture, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
+    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, WindowsCapture, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
     require_normal_process_exit, shutdown_logserver_and_collect, )
 from window_capture_validation import validate_capture_result  # noqa: E402
 import async_shadow_m4_self_test  # noqa: E402
-from async_shadow_m4_lane import DedicatedComputeUnavailable, LaneStatus, PhysicalQueueId  # noqa: E402
+from async_shadow_m4_lane import LaneStatus  # noqa: E402
 from async_shadow_m4_report import (  # noqa: E402
     AsyncShadowM4Report, RunResult, LIT_ASYNC, LIT_COLLECTION_ERROR, LIT_FAIL, LIT_GATES, LIT_NWB_ASYNC_SHADOW_M4_V3, LIT_PASS, LIT_PIXEL_DIFF, LIT_SCHEMA, LIT_SYNC, LIT_UTF_8, LIT_VERDICT, REQUIRED_ASYNC_SCOPES,
 )
@@ -109,17 +109,7 @@ def wait_for_lane_status(process, log_directory: Path, log_baseline: Mapping[Pat
 
 
 def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, message: str, timeout_seconds: float,) -> None:
-    deadline = time.monotonic() + timeout_seconds
-    latest_log = ""
-    while time.monotonic() < deadline:
-        ensure_process_running(process, f"while waiting for benchmark log message '{message}'")
-        latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
-        if message in latest_log:
-            return
-        time.sleep(LIT_PROCESS_POLL_SECONDS)
-
-    detail = latest_log[-LOG_TAIL_CHAR_LIMIT:]
-    raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{detail}")
+    wait_for_process_log_message(process, log_directory, log_baseline, log_pattern, message, timeout_seconds, poll_seconds=LIT_PROCESS_POLL_SECONDS, ensure_running=ensure_process_running)
 
 
 def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_seconds: float) -> int:
@@ -153,14 +143,11 @@ def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
 
 
 def wait_while_running(process, seconds: float, stage: str) -> None:
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        ensure_process_running(process, stage)
-        time.sleep(min(LIT_WAIT_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
+    smoke_wait_while_running(process, seconds, stage, poll_seconds=LIT_WAIT_POLL_SECONDS, ensure_running=ensure_process_running)
 
 
 def find_forbidden_log_messages(log_text: str, needles: Sequence[str]) -> List[str]:
-    return [needle for needle in needles if needle in log_text]
+    return smoke_find_log_messages(log_text, needles)
 
 
 def capture_m4_client_area(capture_backend, window, capture_path):

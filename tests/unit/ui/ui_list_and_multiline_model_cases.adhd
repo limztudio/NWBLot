@@ -283,11 +283,11 @@ void VerifyUiListBuilderSelectionTests_EscapeBeforeReleaseCancelsRowSelectionAnd
     EXPECT_FALSE(self.m_result.selectionChanged);
     self.press(Key::Tab);
     ASSERT_EQ(self.m_context.input().focus(), self.id(s_UiListCaseListKey, s_UiListCasePanelKey));
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(4u));
     EXPECT_FALSE(self.m_result.activated);
     self.press(Key::Escape);
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(5u));
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_FALSE(self.m_result.activated);
@@ -303,11 +303,11 @@ void VerifyUiListBuilderSelectionTests_DatasetReplacementWhileSubmitIsHeldCannot
     self.m_state.select(1u);
     ASSERT_TRUE(self.accept(1u));
     self.press(Key::Tab);
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyDown, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     ++self.m_source.contentRevision;
     ASSERT_TRUE(self.accept(2u));
     EXPECT_FALSE(self.m_result.activated);
-    EXPECT_TRUE(self.send(MakeUiKeyEvent(InputEventType::KeyUp, Key::Enter)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     ASSERT_TRUE(self.accept(3u));
     EXPECT_EQ(self.m_state.selectedKey(), 1u);
     EXPECT_FALSE(self.m_result.activated);
@@ -528,7 +528,7 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
         const ScopedTestTrace trace = ScopedTestTrace(change);
         self.m_builder.style().fontSize = 16.0f;
         SetUiListBuilderRowStyle(self.m_builder, originalStyle);
-        ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en"));
+        ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "en", TextDirection::LeftToRight));
         ListState state = ListState();
         ArithmeticSource source = ArithmeticSource();
         source.specialIndex = 50000u;
@@ -566,7 +566,7 @@ void VerifyUiListBuilderTests_InvisibleTallMaximumIsInvalidatedByFontShapingDisp
             display.pixelScaleY = 1.5f;
             break;
         case 3u:
-            ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko"));
+            ASSERT_TRUE(self.m_builder.setTextShaping(PackFourCharTag('L', 'a', 't', 'n'), "ko", TextDirection::LeftToRight));
             break;
         case 4u:
             self.m_builder.listStyle().row.padding.bottom = self.m_builder.listStyle().row.padding.bottom + 2.0f;
@@ -1064,13 +1064,13 @@ void VerifyMultilineCommandTests_InvalidTextModeAndNonEditingAcceptAreRejected(i
 void VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("ab"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
-    const EditCommandResult inserted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), false, self.m_model.textMode()));
+    const EditCommandResult inserted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), false, self.m_model.textMode()), false);
     EXPECT_TRUE(inserted.handled);
     EXPECT_TRUE(inserted.textChanged);
     EXPECT_TRUE(inserted.selectionChanged);
     EXPECT_FALSE(inserted.submitted);
     EXPECT_EQ(self.m_model.text(), "a\nb");
-    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), true, self.m_model.textMode()));
+    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Accept, false, true), true, self.m_model.textMode()), false);
     EXPECT_TRUE(repeated.textChanged);
     EXPECT_FALSE(repeated.submitted);
     EXPECT_EQ(self.m_model.text(), "a\n\nb");
@@ -1079,13 +1079,13 @@ void VerifyMultilineCommandTests_RepeatedAcceptInsertsExactlyOneLfWithoutSubmitt
 void VerifyMultilineCommandTests_SubmitIntentReportsWithoutEditingAndSuppressesRepeats(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("a\nb"));
     const MultilineSnapshot before = MultilineSnapshot(self.m_model);
-    const EditCommandResult submitted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), false, self.m_model.textMode()));
+    const EditCommandResult submitted = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), false, self.m_model.textMode()), false);
     EXPECT_TRUE(submitted.handled);
     EXPECT_TRUE(submitted.submitted);
     EXPECT_FALSE(submitted.textChanged);
     EXPECT_FALSE(submitted.selectionChanged);
     before.expectUnchanged(self.m_model);
-    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), true, self.m_model.textMode()));
+    const EditCommandResult repeated = ApplyEditCommand(self.m_model, TranslateEditCommand(MakeUiCommandIntent(InputCommand::Submit, false, true), true, self.m_model.textMode()), false);
     EXPECT_TRUE(repeated.handled);
     EXPECT_FALSE(repeated.submitted);
     before.expectUnchanged(self.m_model);
@@ -1120,7 +1120,7 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
     ASSERT_TRUE(self.m_model.setText("ab\ncd"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("q\nr", 1u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("q\nr", 1u, 3u, Span<EditPreeditClause>()));
     const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<EditCommand, 8u> nativeOwned = Array<EditCommand, 8u>();
     nativeOwned[0u] = EditCommand::Newline;
@@ -1132,7 +1132,7 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
     nativeOwned[6u] = EditCommand::Backspace;
     nativeOwned[7u] = EditCommand::Copy;
     for(in EditCommand command : nativeOwned){
-        const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(command));
+        const EditCommandResult result = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(command), false);
         EXPECT_TRUE(result.handled);
         EXPECT_FALSE(result.textChanged);
         EXPECT_FALSE(result.selectionChanged);
@@ -1141,14 +1141,14 @@ void VerifyMultilineCommandTests_PreeditOwnsNewlineDocumentMovementAndSubmitUnti
         before.expectUnchanged(self.m_model);
     }
     const u64 selection = self.m_model.selectionGeneration();
-    const EditCommandResult firstEscape = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Cancel));
+    const EditCommandResult firstEscape = ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Cancel), false);
     EXPECT_TRUE(firstEscape.compositionChanged);
     EXPECT_FALSE(firstEscape.cancelled);
     EXPECT_FALSE(self.m_model.composition().active);
     EXPECT_EQ(self.m_model.text(), "ab\ncd");
     EXPECT_EQ(self.m_model.selectionGeneration(), selection);
-    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Cancel)).cancelled);
-    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Newline)).textChanged);
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Cancel), false).cancelled);
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::Newline), false).textChanged);
     EXPECT_EQ(self.m_model.text(), "a\nd");
 }
 
@@ -1156,7 +1156,7 @@ void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAl
     EditModel limited = EditModel(MakeUiEditLimits(3u, 8u, 128u), EditTextMode::Multiline);
     ASSERT_TRUE(limited.setText("a\nb"));
     const MultilineSnapshot before = MultilineSnapshot(limited);
-    const EditCommandResult rejected = ApplyEditCommand(limited, MakeUiMultilineCommand(EditCommand::Newline));
+    const EditCommandResult rejected = ApplyEditCommand(limited, MakeUiMultilineCommand(EditCommand::Newline), false);
     EXPECT_TRUE(rejected.handled);
     EXPECT_FALSE(rejected.textChanged);
     EXPECT_FALSE(rejected.selectionChanged);
@@ -1164,15 +1164,15 @@ void VerifyMultilineCommandTests_NewlineCapacityAndSingleLineRejectionPreserveAl
     EditModel single = EditModel();
     ASSERT_TRUE(single.setText("abc"));
     const MultilineSnapshot singleBefore = MultilineSnapshot(single);
-    EXPECT_FALSE(ApplyEditCommand(single, MakeUiMultilineCommand(EditCommand::Newline)).textChanged);
+    EXPECT_FALSE(ApplyEditCommand(single, MakeUiMultilineCommand(EditCommand::Newline), false).textChanged);
     singleBefore.expectUnchanged(single);
 }
 
 void VerifyMultilineCommandTests_WordDeletionAcrossNewlineRestoresEachOriginalSelectionOnUndo(mut MultilineCommandTests self){
     ASSERT_TRUE(self.m_model.setText("one\ntwo"));
-    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::WordBackspace)).textChanged);
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::WordBackspace), false).textChanged);
     EXPECT_EQ(self.m_model.text(), "one\n");
-    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::WordBackspace)).textChanged);
+    EXPECT_TRUE(ApplyEditCommand(self.m_model, MakeUiMultilineCommand(EditCommand::WordBackspace), false).textChanged);
     EXPECT_TRUE(self.m_model.text().empty());
     ASSERT_TRUE(self.m_model.undo());
     EXPECT_EQ(self.m_model.text(), "one\n");
@@ -1194,7 +1194,7 @@ void VerifyMultilineCompositionTests_PreeditKeepsOriginalByteOffsetsAcrossLinesA
     const u64 revision = self.m_model.revision();
     const u64 selection = self.m_model.selectionGeneration();
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1", 1u, 7u));
+    ASSERT_TRUE(self.m_model.updateComposition("a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1", 1u, 7u, Span<EditPreeditClause>()));
     const EditCompositionView composition = self.m_model.composition();
     EXPECT_EQ(composition.text, "a\xCC\x81\n\xE1\x84\x80\xE1\x85\xA1");
     EXPECT_EQ(composition.anchor, 1u);
@@ -1213,7 +1213,7 @@ void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWith
     ASSERT_TRUE(self.m_model.setText("a\nb"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 2u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 2u, 3u, Span<EditPreeditClause>()));
     const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<StringView, 6u> invalid = Array<StringView, 6u>();
     invalid[0u] = "x\r\ny";
@@ -1223,11 +1223,11 @@ void VerifyMultilineCompositionTests_PreeditAndCommitRejectNoncanonicalBytesWith
     invalid[4u] = "\xED\xA0\x80";
     invalid[5u] = StringView("x\0y", 3u);
     for(in StringView text : invalid){
-        EXPECT_FALSE(self.m_model.updateComposition(text, 0u, text.size()));
+        EXPECT_FALSE(self.m_model.updateComposition(text, 0u, text.size(), Span<EditPreeditClause>()));
         EXPECT_FALSE(self.m_model.commitComposition(text));
         before.expectUnchanged(self.m_model);
     }
-    EXPECT_FALSE(self.m_model.updateComposition("a\xCC\x81\nz", 2u, 5u));
+    EXPECT_FALSE(self.m_model.updateComposition("a\xCC\x81\nz", 2u, 5u, Span<EditPreeditClause>()));
     before.expectUnchanged(self.m_model);
 }
 
@@ -1236,9 +1236,9 @@ void VerifyMultilineCompositionTests_OverCapacityPreeditAndCommitPreserveEveryMo
     ASSERT_TRUE(limited.setText("a\nb"));
     ASSERT_TRUE(limited.setSelection(1u, 2u));
     ASSERT_TRUE(limited.beginComposition());
-    ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
+    ASSERT_TRUE(limited.updateComposition("x", 0u, 1u, Span<EditPreeditClause>()));
     const MultilineSnapshot before = MultilineSnapshot(limited);
-    EXPECT_FALSE(limited.updateComposition("12\n34", 0u, 5u));
+    EXPECT_FALSE(limited.updateComposition("12\n34", 0u, 5u, Span<EditPreeditClause>()));
     EXPECT_FALSE(limited.commitComposition("12\n34"));
     before.expectUnchanged(limited);
 }
@@ -1250,7 +1250,7 @@ void VerifyMultilineCompositionTests_CancellationPreservesCommittedSelectionEpoc
     const u64 selection = self.m_model.selectionGeneration();
     const u64 revision = self.m_model.revision();
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u, Span<EditPreeditClause>()));
     const u64 composition = self.m_model.compositionGeneration();
     self.m_model.cancelComposition();
     EXPECT_GT(self.m_model.compositionGeneration(), composition);
@@ -1269,7 +1269,7 @@ void VerifyMultilineCompositionTests_AliasedCompositionCommitOwnsBytesBeforeReti
     ASSERT_TRUE(self.m_model.setText("a\nb"));
     ASSERT_TRUE(self.m_model.selectAll());
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("a\xCC\x81\nz", 1u, 5u));
+    ASSERT_TRUE(self.m_model.updateComposition("a\xCC\x81\nz", 1u, 5u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.m_model.commitComposition(self.m_model.composition().text));
     EXPECT_EQ(self.m_model.text(), "a\xCC\x81\nz");
     EXPECT_EQ(self.m_model.caret(), 5u);
@@ -1284,8 +1284,8 @@ void VerifyMultilineCompositionTests_EmptyPreeditRetainsTheOriginalCrossLineRepl
     ASSERT_TRUE(self.m_model.setText("ab\ncd"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 4u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u));
-    ASSERT_TRUE(self.m_model.updateComposition("", 0u, 0u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 0u, 3u, Span<EditPreeditClause>()));
+    ASSERT_TRUE(self.m_model.updateComposition("", 0u, 0u, Span<EditPreeditClause>()));
     EXPECT_TRUE(self.m_model.composition().active);
     EXPECT_EQ(self.m_model.composition().replacementStart, 1u);
     EXPECT_EQ(self.m_model.composition().replacementEnd, 4u);
@@ -1343,7 +1343,7 @@ void VerifyMultilineModelTests_InvalidSetAndReplacementPreserveTextHistorySelect
     ASSERT_TRUE(self.m_model.undo());
     ASSERT_TRUE(self.m_model.setSelection(1u, 3u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("q\nr", 0u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("q\nr", 0u, 3u, Span<EditPreeditClause>()));
     const MultilineSnapshot before = MultilineSnapshot(self.m_model);
     Array<StringView, 7u> invalid = Array<StringView, 7u>();
     invalid[0u] = "\r\n";
@@ -1394,7 +1394,7 @@ void VerifyMultilineModelTests_CapacityFailureKeepsTheExactBorrowedModelState(mu
     ASSERT_TRUE(limited.replaceSelection("d"));
     ASSERT_TRUE(limited.setSelection(0u, 1u));
     ASSERT_TRUE(limited.beginComposition());
-    ASSERT_TRUE(limited.updateComposition("x", 0u, 1u));
+    ASSERT_TRUE(limited.updateComposition("x", 0u, 1u, Span<EditPreeditClause>()));
     const MultilineSnapshot before = MultilineSnapshot(limited);
     EXPECT_FALSE(limited.setText("abcdef\n"));
     EXPECT_FALSE(limited.replaceSelection("x\nyz"));
@@ -1413,7 +1413,7 @@ void VerifyMultilineModelTests_AliasedInsertionAndExternalSameTextReplacementOwn
     EXPECT_EQ(self.m_model.caret(), 4u);
     ASSERT_TRUE(self.m_model.redo());
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x", 0u, 1u));
+    ASSERT_TRUE(self.m_model.updateComposition("x", 0u, 1u, Span<EditPreeditClause>()));
     const u64 external = self.m_model.externalRevision();
     const u64 selection = self.m_model.selectionGeneration();
     const u64 revision = self.m_model.revision();

@@ -26,63 +26,9 @@ namespace Tests::AssetsGraphicsStep2Probe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class NthFailGraphicsArena final : public ArenaBase{
-public:
-    NthFailGraphicsArena()
-        : ArenaBase(Name("tests/assets_graphics/nth_fail"))
-        , m_backing(Name("tests/assets_graphics/nth_fail_backing"))
-    {}
-
-    void arm(const usize failOnCall)noexcept{
-        m_armed = true;
-        m_remaining = failOnCall;
-        m_hit = false;
-    }
-
-    void disarm()noexcept{
-        m_armed = false;
-        m_remaining = 0u;
-        m_hit = false;
-    }
-
-    [[nodiscard]] b8 hit()const noexcept{ return m_hit; }
-
-    void* allocate(usize align, usize size)override{
-        if(shouldFail())
-            return nullptr;
-        return m_backing.allocate(align, size);
-    }
-
-    void* reallocate(void* memory, usize align, usize size)override{
-        if(shouldFail())
-            return nullptr;
-        return m_backing.reallocate(memory, align, size);
-    }
-
-    void deallocate(void* memory, usize align, usize size)noexcept override{
-        m_backing.deallocate(memory, align, size);
-    }
 
 
-private:
-    [[nodiscard]] b8 shouldFail()noexcept{
-        if(!m_armed)
-            return false;
-        if(m_remaining <= 1u){
-            m_hit = true;
-            return true;
-        }
-        --m_remaining;
-        return false;
-    }
 
-
-private:
-    Core::Alloc::GlobalArena m_backing;
-    usize m_remaining = 0u;
-    b8 m_armed = false;
-    b8 m_hit = false;
-};
 
 
 [[nodiscard]] inline b8 VerifyFindOrBuildMaterialBindTypedLayoutOom(
@@ -91,7 +37,7 @@ private:
     const Impl::MaterialBindEntry& entryB,
     const Name nameB
 ){
-    NthFailGraphicsArena failArena;
+    Tests::NthFailArena failArena(Name("tests/assets_graphics/nth_fail"), Name("tests/assets_graphics/nth_fail_backing"));
     Impl::MaterialBindTypedLayoutCache cache(failArena);
 
     const auto committed = Impl::FindOrBuildMaterialBindTypedLayout(nameA, entryA, cache);

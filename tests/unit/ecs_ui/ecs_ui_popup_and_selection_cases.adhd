@@ -49,7 +49,7 @@ class UiPopupInputTests{
     public WidgetState m_baseWidget;
     public WidgetState m_popupWidget;
     public u64 m_generation = 0u;
-    public Rect m_viewport = MakeEcsUiRect(0.0f, 0.0f, 500.0f, 200.0f);
+    public Rect m_viewport = Rect(0.0f, 0.0f, 500.0f, 200.0f);
     public EditBoxResult m_childResult;
     public EditBoxResult m_popupResult;
 
@@ -120,7 +120,7 @@ b8 DeclareEcsUiPopupEdit(mut UiPopupInputTests self, in StringView key, in Rect 
         return false;
     }
     const EditBoxStyle style = EditBoxStyle();
-    const auto placement = view.arrange(bounds, style.padding, self.m_viewport, Point());
+    const auto placement = view.arrange(bounds, style.padding, self.m_viewport, Point(), 1.0f, true);
     if(!placement || !self.m_host.publish(outWidget, view, placement.value(), options)){
         return false;
     }
@@ -155,7 +155,7 @@ b8 BeginEcsUiPopupBaseFrame(mut UiPopupInputTests self){
         return false;
     }
     EditBoxResult unusedResult = EditBoxResult();
-    return DeclareEcsUiPopupEdit(self, "base", MakeEcsUiRect(10.0f, 20.0f, 180.0f, 30.0f), self.m_baseModel, self.m_baseWidget, unusedResult);
+    return DeclareEcsUiPopupEdit(self, "base", Rect(10.0f, 20.0f, 180.0f, 30.0f), self.m_baseModel, self.m_baseWidget, unusedResult);
 }
 
 b8 EndEcsUiPopupPreparedFrame(mut UiPopupInputTests self){
@@ -183,7 +183,7 @@ b8 PrepareEcsUiPopupFrame(mut UiPopupInputTests self){
     if(self.m_popupState.isOpen()){
         PopupScope scope = PopupScope();
         scope.token = self.m_token;
-        scope.bounds = MakeEcsUiRect(230.0f, 40.0f, 240.0f, 100.0f);
+        scope.bounds = Rect(230.0f, 40.0f, 240.0f, 100.0f);
         scope.viewport = self.m_viewport;
         if(!self.m_context.beginPopupScope(owner, scope) || !self.m_context.pushScope(s_EcsUiPopupKey)){
             return false;
@@ -194,7 +194,7 @@ b8 PrepareEcsUiPopupFrame(mut UiPopupInputTests self){
         if(!self.m_context.addTarget(owner, barrier)){
             return false;
         }
-        if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
+        if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, Rect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
             return false;
         }
         if(!self.m_context.popScope() || !self.m_context.endPopupScope(true)){
@@ -234,13 +234,13 @@ b8 PrepareEcsUiDeferredPopupFrame(mut UiPopupInputTests self){
             return false;
         }
         const EditBoxStyle style = EditBoxStyle();
-        const auto placement = view.arrange(MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), style.padding, self.m_viewport, Point());
+        const auto placement = view.arrange(Rect(250.0f, 60.0f, 180.0f, 30.0f), style.padding, self.m_viewport, Point(), 1.0f, true);
         if(!placement){
             return false;
         }
         PopupScope scope = PopupScope();
         scope.token = self.m_token;
-        scope.bounds = MakeEcsUiRect(230.0f, 40.0f, 240.0f, 100.0f);
+        scope.bounds = Rect(230.0f, 40.0f, 240.0f, 100.0f);
         scope.viewport = self.m_viewport;
         if(!self.m_context.beginPopupScope(popup, scope) || !self.m_host.publish(self.m_popupWidget, view, placement.value(), options)){
             return false;
@@ -287,7 +287,7 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
     if(self.m_popupState.isOpen()){
         PopupScope scope = PopupScope();
         scope.token = self.m_token;
-        scope.bounds = MakeEcsUiRect(230.0f, 40.0f, 240.0f, 100.0f);
+        scope.bounds = Rect(230.0f, 40.0f, 240.0f, 100.0f);
         scope.viewport = self.m_viewport;
         if(!self.m_context.beginPopupScope(parent, scope) || !self.m_context.pushScope(s_EcsUiPopupKey)){
             return false;
@@ -298,7 +298,7 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
         if(!self.m_context.addTarget(parent, barrier)){
             return false;
         }
-        if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
+        if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, Rect(250.0f, 60.0f, 180.0f, 30.0f), self.m_popupModel, self.m_popupWidget, self.m_popupResult)){
             return false;
         }
         const auto childResult = self.m_context.declare(s_EcsUiChildKey, WidgetKind::Popup);
@@ -314,7 +314,7 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
         if(self.m_childState.isOpen()){
             scope.token = self.m_childToken;
             scope.parent = self.m_token;
-            scope.bounds = MakeEcsUiRect(60.0f, 80.0f, 240.0f, 100.0f);
+            scope.bounds = Rect(60.0f, 80.0f, 240.0f, 100.0f);
             if(!self.m_context.beginPopupScope(child, scope) || !self.m_context.pushScope(s_EcsUiChildKey)){
                 return false;
             }
@@ -322,7 +322,7 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
             if(!self.m_context.addTarget(child, barrier)){
                 return false;
             }
-            if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, MakeEcsUiRect(80.0f, 100.0f, 180.0f, 30.0f), self.m_childModel, self.m_childWidget, self.m_childResult)){
+            if(!DeclareEcsUiPopupEdit(self, s_EcsUiEditKey, Rect(80.0f, 100.0f, 180.0f, 30.0f), self.m_childModel, self.m_childWidget, self.m_childResult)){
                 return false;
             }
             if(!self.m_context.popScope() || !self.m_context.endPopupScope(true)){
@@ -343,25 +343,11 @@ b8 PrepareEcsUiNestedPopupFrame(mut UiPopupInputTests self){
 }
 
 b8 CommitEcsUiPopupFrame(mut UiPopupInputTests self){
-    if(!self.m_context.commitFrame(self.m_generation)){
-        return false;
-    }
-    self.m_host.commitFrame(self.m_generation);
-    return true;
+    return CommitEcsUiHostFrame(self.m_context, self.m_host, self.m_generation);
 }
 
 InputRoutingResult DispatchEcsUiPopupEvent(mut UiPopupInputTests self, in InputEvent event){
-    self.m_host.collectNative();
-    const WidgetId previousCapture = self.m_context.input().capture();
-    const auto normalized = self.m_context.input().queue(NativeInput(event));
-    EXPECT_TRUE(cast<b8>(normalized));
-    if(!normalized){
-        return InputRoutingResult();
-    }
-    const b8 submit = self.m_host.prepareSubmit(normalized.value());
-    const InputRoutingResult result = self.m_context.input().process();
-    self.m_host.input(normalized.value(), previousCapture, submit);
-    return result;
+    return DispatchEcsUiHostEvent(self.m_context, self.m_host, event, true).value_or(InputRoutingResult());
 }
 
 b8 FrameEcsUiPopup(mut UiPopupInputTests self){
@@ -443,6 +429,28 @@ void ExpectSelectionDeletionBaseline(in UiSelectionDeletionTests self, in u64 re
     EXPECT_FALSE(self.m_model.composition().active);
 }
 
+void ExpectSelectionDeletionUndoHistory(mut EditModel model, in b8 reverse){
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "abDEFhi");
+    usize expectedMidAnchor = 2u;
+    usize expectedMidCaret = 5u;
+    usize expectedInitAnchor = 3u;
+    usize expectedInitCaret = 6u;
+    if(reverse){
+        expectedMidAnchor = 5u;
+        expectedMidCaret = 2u;
+        expectedInitAnchor = 6u;
+        expectedInitCaret = 3u;
+    }
+    EXPECT_EQ(model.anchor(), expectedMidAnchor);
+    EXPECT_EQ(model.caret(), expectedMidCaret);
+    ASSERT_TRUE(model.undo());
+    EXPECT_EQ(model.text(), "abcDEFghi");
+    EXPECT_EQ(model.anchor(), expectedInitAnchor);
+    EXPECT_EQ(model.caret(), expectedInitCaret);
+    EXPECT_FALSE(model.canUndo());
+}
+
 void VerifySelectionDeletionSessionOrder(mut UiSelectionDeletionTests self, in b8 reverse){
     ASSERT_TRUE(SeedSelectionDeletion(self, reverse));
     UiTextEditSession session = UiTextEditSession(self.m_textInput);
@@ -463,25 +471,7 @@ void VerifySelectionDeletionSessionOrder(mut UiSelectionDeletionTests self, in b
     EXPECT_EQ(self.m_model.caret(), 3u);
     EXPECT_FALSE(self.m_model.composition().active);
     ASSERT_TRUE(session.end(SelectionDeletionTestOwner(self), self.m_model));
-    ASSERT_TRUE(self.m_model.undo());
-    EXPECT_EQ(self.m_model.text(), "abDEFhi");
-    usize expectedMidAnchor = 2u;
-    usize expectedMidCaret = 5u;
-    usize expectedInitAnchor = 3u;
-    usize expectedInitCaret = 6u;
-    if(reverse){
-        expectedMidAnchor = 5u;
-        expectedMidCaret = 2u;
-        expectedInitAnchor = 6u;
-        expectedInitCaret = 3u;
-    }
-    EXPECT_EQ(self.m_model.anchor(), expectedMidAnchor);
-    EXPECT_EQ(self.m_model.caret(), expectedMidCaret);
-    ASSERT_TRUE(self.m_model.undo());
-    EXPECT_EQ(self.m_model.text(), "abcDEFghi");
-    EXPECT_EQ(self.m_model.anchor(), expectedInitAnchor);
-    EXPECT_EQ(self.m_model.caret(), expectedInitCaret);
-    EXPECT_FALSE(self.m_model.canUndo());
+    ExpectSelectionDeletionUndoHistory(self.m_model, reverse);
 }
 
 void VerifySelectionDeletionSessionRejected(mut UiSelectionDeletionTests self, in DeletionMutation mutation){
@@ -548,7 +538,7 @@ b8 MutateSelectionEpoch(mut UiSelectionEpochTests self, in EpochMutation mutatio
     if(mutation == EpochMutation::SameSelection){
         return self.m_model.setSelection(anchor, caret);
     }
-    if(!self.m_model.beginComposition() || !self.m_model.updateComposition("IME", 0u, 3u)){
+    if(!self.m_model.beginComposition() || !self.m_model.updateComposition("IME", 0u, 3u, Span<EditPreeditClause>())){
         return false;
     }
     self.m_model.cancelComposition();
@@ -569,7 +559,7 @@ void VerifySelectionEpochClipboardActionRejected(mut UiSelectionEpochTests self,
     const ScopedTestTrace trace = ScopedTestTrace(action);
     ASSERT_TRUE(SeedSelectionEpoch(self));
     UiEditClipboardController controller = UiEditClipboardController(self.m_clipboard);
-    ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, action).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, action, ClipboardChannel::Clipboard, false).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     const ClipboardRequestToken token = controller.token();
     ASSERT_EQ(self.m_clipboard.startedToken, token);
@@ -577,7 +567,7 @@ void VerifySelectionEpochClipboardActionRejected(mut UiSelectionEpochTests self,
     const u64 externalRevision = self.m_model.externalRevision();
     ASSERT_TRUE(MutateSelectionEpoch(self, mutation));
     ASSERT_TRUE(self.m_clipboard.deliver(token, ClipboardStatus::Success, "replacement"));
-    const UiEditClipboardResult result = controller.drain(SelectionEpochTestOwner(self), self.m_model);
+    const UiEditClipboardResult result = controller.drain(SelectionEpochTestOwner(self), self.m_model, false);
     EXPECT_EQ(result.status, UiEditClipboardStatus::StaleModel);
     EXPECT_FALSE(result.textChanged);
     EXPECT_FALSE(result.selectionChanged);
@@ -986,7 +976,7 @@ void VerifyUiPopupInputTests_DeferredEditorRejectsNativeIntentionAfterCompositio
     const u64 revision = self.m_popupModel.revision();
     const u64 generation = self.m_popupModel.compositionGeneration();
     ASSERT_TRUE(self.m_popupModel.beginComposition());
-    ASSERT_TRUE(self.m_popupModel.updateComposition("한", 0u, 3u));
+    ASSERT_TRUE(self.m_popupModel.updateComposition("한", 0u, 3u, Span<EditPreeditClause>()));
     self.m_popupModel.cancelComposition();
     ASSERT_EQ(self.m_popupModel.revision(), revision);
     ASSERT_GT(self.m_popupModel.compositionGeneration(), generation);
@@ -1138,25 +1128,7 @@ void VerifyUiSelectionDeletionTests_OrderedHostCopiesSelectionBasisAndPreservesB
         ASSERT_TRUE(self.frame(self.m_model));
         EXPECT_EQ(self.m_model.text(), "abXhi");
         EXPECT_FALSE(self.m_model.composition().active);
-        ASSERT_TRUE(self.m_model.undo());
-        EXPECT_EQ(self.m_model.text(), "abDEFhi");
-        usize expectedMidAnchor = 2u;
-        usize expectedMidCaret = 5u;
-        usize expectedInitAnchor = 3u;
-        usize expectedInitCaret = 6u;
-        if(reverse){
-            expectedMidAnchor = 5u;
-            expectedMidCaret = 2u;
-            expectedInitAnchor = 6u;
-            expectedInitCaret = 3u;
-        }
-        EXPECT_EQ(self.m_model.anchor(), expectedMidAnchor);
-        EXPECT_EQ(self.m_model.caret(), expectedMidCaret);
-        ASSERT_TRUE(self.m_model.undo());
-        EXPECT_EQ(self.m_model.text(), "abcDEFghi");
-        EXPECT_EQ(self.m_model.anchor(), expectedInitAnchor);
-        EXPECT_EQ(self.m_model.caret(), expectedInitCaret);
-        EXPECT_FALSE(self.m_model.canUndo());
+        ExpectSelectionDeletionUndoHistory(self.m_model, reverse);
     }
 }
 
@@ -1274,13 +1246,13 @@ void VerifyUiSelectionEpochTests_RejectedSelectionDoesNotRetireACompletedPaste(m
     ASSERT_TRUE(SeedSelectionEpoch(self));
     UiEditClipboardController controller = UiEditClipboardController(self.m_clipboard);
     self.m_clipboard.delayed = true;
-    ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
+    ASSERT_EQ(controller.request(SelectionEpochTestOwner(self), self.m_model, EditClipboardAction::Paste, ClipboardChannel::Clipboard, false).status, UiEditClipboardStatus::Pending);
     ASSERT_TRUE(self.m_clipboard.pump());
     const u64 selectionGeneration = self.m_model.selectionGeneration();
     ASSERT_FALSE(self.m_model.setSelection(0u, self.m_model.text().size() + 1u));
     EXPECT_EQ(self.m_model.selectionGeneration(), selectionGeneration);
     ASSERT_TRUE(self.m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "X"));
-    const UiEditClipboardResult result = controller.drain(SelectionEpochTestOwner(self), self.m_model);
+    const UiEditClipboardResult result = controller.drain(SelectionEpochTestOwner(self), self.m_model, false);
     EXPECT_EQ(result.status, UiEditClipboardStatus::Applied);
     EXPECT_EQ(self.m_model.text(), "aXd");
     ASSERT_TRUE(self.m_model.undo());

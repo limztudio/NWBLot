@@ -40,7 +40,6 @@ nwb_target_adhd_sources(nwb_assets_mesh
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_encode.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_validation.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_triangle_indices.adhd"
-        "${CMAKE_CURRENT_LIST_DIR}/meshlet_triangle_visit.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_vertex_attributes.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/skin_asset.adhd"
         "${CMAKE_CURRENT_LIST_DIR}/runtime.adhd"

@@ -21,9 +21,7 @@ const AStringView s_UiTextAreaPanelKey = "panel";
 const AStringView s_UiTextAreaWidgetKey = "area";
 const AStringView s_UiTextAreaPopupKey = "popup";
 const AStringView s_UiTextAreaChildPopupKey = "child";
-const AStringView s_UiTextAreaVerticalThumbPart = "scroll.y.thumb";
 const AStringView s_UiTextAreaKoreanLanguage = "ko";
-const AStringView s_UiTextAreaReenteredKey = "reentered";
 
 class UiTextAreaOrdinaryHost : IEditBoxHost{
     public usize ordinaryLoans = 0u;
@@ -760,7 +758,7 @@ void VerifyUiTextAreaLoanTests_CancelledCompositionStillRetiresAPreparedLoan(mut
     const u64 revision = self.m_model.revision();
     const u64 composition = self.m_model.compositionGeneration();
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 1u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("x\ny", 1u, 3u, Span<EditPreeditClause>()));
     self.m_model.cancelComposition();
     EXPECT_EQ(self.m_model.revision(), revision);
     EXPECT_GT(self.m_model.compositionGeneration(), composition);
@@ -1257,7 +1255,7 @@ void VerifyUiTextAreaNavigationTests_ActivePreeditIsPreservedAndNotResolved(mut 
     ASSERT_TRUE(self.m_model.setText("MM\nMM"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 1u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("pre\nedit", 3u, 8u));
+    ASSERT_TRUE(self.m_model.updateComposition("pre\nedit", 3u, 8u, Span<EditPreeditClause>()));
     const u64 generation = self.m_model.compositionGeneration();
     EXPECT_FALSE(self.resolve(EditNavigationDirection::Down, 160.0f).has_value());
     EXPECT_FALSE(self.resolve(EditNavigationDirection::PageDown, 160.0f).has_value());
@@ -1552,7 +1550,7 @@ void VerifyUiTextAreaBuilderTests_PlaceholderRendersOnlyWhenEmptyAndNotComposing
     }
     EXPECT_GT(emptyGlyphs, 0u);
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("im", 0u, 2u));
+    ASSERT_TRUE(self.m_model.updateComposition("im", 0u, 2u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.frameArea(2u, options));
     self.m_model.cancelComposition();
     ASSERT_TRUE(self.m_model.setText("typed"));

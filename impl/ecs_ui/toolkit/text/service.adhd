@@ -380,11 +380,6 @@ class TextService : NoCopy{
     }
 
     [cpp_unwind]
-    public b8 paint(mut PaintBuilder paint, in TextLayout layout, in Point topLeft){
-        return this.paint(paint, layout, topLeft, Color());
-    }
-
-    [cpp_unwind]
     public b8 paint(mut PaintBuilder paint, in TextLayout layout, in Point topLeft, in Color color){
         const DisplayMetrics display = paint.displayMetrics();
         const Expected<TextRasterMetrics> baseRasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), display);
@@ -431,13 +426,13 @@ class TextService : NoCopy{
             }
 
             const f32 xfScale = paint.currentTransformScale();
-            const f32 baseMaxScale = UiSimdMax(display.pixelScaleX, display.pixelScaleY);
+            const f32 baseMaxScale = Max(display.pixelScaleX, display.pixelScaleY);
             const f32 basePhysical = layout.fontSize() * baseMaxScale;
             if(IsFinite(VectorSingle(xfScale)) && xfScale > 0.0f && basePhysical > 0.0f){
                 const f32 minXfScale = 1.0f / basePhysical;
                 const f32 maxXfScale = (s_TextMaxRasterPpemF32 - 0.25f) / basePhysical;
                 if(minXfScale <= maxXfScale){
-                    const f32 effectiveScale = UiSimdClamp(xfScale, minXfScale, maxXfScale);
+                    const f32 effectiveScale = Clamp(xfScale, minXfScale, maxXfScale);
                     DisplayMetrics effectiveDisplay = display;
                     effectiveDisplay.pixelScaleX = display.pixelScaleX * effectiveScale;
                     effectiveDisplay.pixelScaleY = display.pixelScaleY * effectiveScale;
@@ -478,11 +473,11 @@ class TextService : NoCopy{
         const VectorDouble covHalfPixVec = VectorDouble(s_TextHalfPixel) / VectorDouble(cast<f64>(deviceScale.x), cast<f64>(deviceScale.y), cast<f64>(deviceScale.x), cast<f64>(deviceScale.y));
         const f64 covBaseMarginScalar = (1.0 / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / covRasterScaleF64);
         const VectorDouble covKnownMarginVec = VectorDouble(covBaseMarginScalar) + covHalfPixVec;
-        const f64 covUnknownMarginBaseScalar = (UiSimdMaxF64(1.0, covUnknownCorrection) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / covRasterScaleF64);
+        const f64 covUnknownMarginBaseScalar = (Max(1.0, covUnknownCorrection) / s_TextFixedPointScaleF64) + (s_TextRasterMarginPixels / covRasterScaleF64);
 
         if(useActiveCullClip){
             const VectorDouble layoutUnion = ComputeInitialMeasuredTextBounds(layout.measure(), layout.inkBounds());
-            const f64 layoutPad = UiSimdMaxF64(fontSizeF64 * 4.0, 64.0) + covUnknownMarginBaseScalar + UiSimdMaxF64(covHalfPixVec.x, covHalfPixVec.y);
+            const f64 layoutPad = Max(fontSizeF64 * 4.0, 64.0) + covUnknownMarginBaseScalar + Max(covHalfPixVec.x, covHalfPixVec.y);
             const f64 layoutMinX = topLeftVec.x + layoutUnion.x - layoutPad;
             const f64 layoutMinY = topLeftVec.y + layoutUnion.y - layoutPad;
             const f64 layoutMaxX = topLeftVec.x + layoutUnion.z + layoutPad;

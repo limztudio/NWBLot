@@ -8,6 +8,15 @@ extern b8 ReadVectorPayload(in auto a0, in isize a1, in StringView a2, in String
 [cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::ReadMagicHeaderPayload")]
 extern Expected<T> ReadMagicHeaderPayload<T>(in auto a0, in isize a1, in StringView a2, in StringView a3, mut usize a4);
 
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::ReadMagicVersionHeaderPayload")]
+extern Expected<T> ReadMagicVersionHeaderPayload<T>(in auto a0, in isize a1, in isize a2, in StringView a3, in StringView a4, mut usize a5);
+
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::ReadExactPodPayload")]
+extern Expected<T> ReadExactPodPayload<T>(in auto a0, in StringView a1);
+
+[cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::AppendFixedPodPayload")]
+extern b8 AppendFixedPodPayload(in auto a0, mut auto a1);
+
 [cpp_header("<core/assets/binary_payload_io.h>"), cpp_name("::NWB::Core::Assets::AppendVectorPayload")]
 extern b8 AppendVectorPayload(in auto a0, in StringView a1, in StringView a2, mut auto a3);
 

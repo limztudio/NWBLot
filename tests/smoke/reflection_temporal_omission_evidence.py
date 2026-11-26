@@ -2,7 +2,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import reflection_benchmark as benchmark
-from reflection_gpu_coverage import ReflectionGpuCoverage
+from reflection_gpu_coverage import ReflectionGpuCoverage, TEMPORAL
 from gpu_timing_evidence import GpuTimingEvidence
 
 LIT_VARIANT = "variant"
@@ -52,8 +52,8 @@ class ReflectionTemporalOmissionEvidence:
         for scope in benchmark.OBSERVED_CONTROLS:
             if abs(retained[scope][LIT_GPU_SAMPLES] - frames) > max(2, frames * .02):
                 raise benchmark.SmokeFailure("control scope coverage differs from completed GPU frames: " + scope)
-        all_temporal = sum(report[benchmark.TEMPORAL].gpu_samples for report in reports if benchmark.TEMPORAL in report)
+        all_temporal = sum(report[TEMPORAL].gpu_samples for report in reports if TEMPORAL in report)
         if history_samples == 1 and all_temporal:
             raise benchmark.SmokeFailure("cap-one temporal work appeared during warm-up, acquisition, or shutdown")
-        return {"history_samples": history_samples, LIT_COMPLETED_GPU_FRAMES: frames, "retained_temporal_ranges": retained.get(benchmark.TEMPORAL, {}).get(LIT_GPU_SAMPLES, 0), "all_completed_temporal_ranges": all_temporal, "finalized_reports": len(reports),
+        return {"history_samples": history_samples, LIT_COMPLETED_GPU_FRAMES: frames, "retained_temporal_ranges": retained.get(TEMPORAL, {}).get(LIT_GPU_SAMPLES, 0), "all_completed_temporal_ranges": all_temporal, "finalized_reports": len(reports),
             "expected_temporal_ranges_per_frame": int(history_samples > 1), "coverage_tolerance": "max(2 completed ranges, 2% of completed GPU frames)"}

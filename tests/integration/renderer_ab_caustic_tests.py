@@ -16,57 +16,61 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
 from renderer_workload_registry import RendererWorkloadRegistry, FRAME
+from window_capture_image_codec import Bmp24Codec
 from caustic_footprint import CausticFootprint
 from caustic_workload import CausticWorkload, PHOTONS, RESOLVE, PRESETS
 from renderer_benchmark_identity import RendererBenchmarkIdentity
 from renderer_ab_benchmark_test_support import scopes
+from renderer_ab_workload_fixture import (
+    LIT_A,
+    LIT_AR,
+    LIT_ARM,
+    LIT_AS_JSON,
+    LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32,
+    LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
+    LIT_B,
+    LIT_BASELINE,
+    LIT_BASELINE_EXECUTABLE,
+    LIT_BASELINE_RUNTIME,
+    LIT_BASELINE_SOURCE_MANIFEST,
+    LIT_BR,
+    LIT_BS_JSON,
+    LIT_CANDIDATE,
+    LIT_CANDIDATE_EXECUTABLE,
+    LIT_CANDIDATE_RUNTIME,
+    LIT_CANDIDATE_SOURCE_MANIFEST,
+    LIT_DEFERRED_TARGETS_READY_LOG,
+    LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG,
+    LIT_GPU_SAMPLES,
+    LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
+    LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG,
+    LIT_LOGGER,
+    LIT_LOGSERVER_EXECUTABLE,
+    LIT_MAIN,
+    LIT_N_1280X900,
+    LIT_N_16,
+    LIT_NATURAL_HARDWARE_SHADOW_ROUTE,
+    LIT_NATURAL_HYBRID_SHADOW_ROUTE,
+    LIT_OUTPUT,
+    LIT_OUTPUT_DIRECTORY,
+    LIT_SOFTWARE_SHADOW_DISPATCH_LOG,
+    LIT_TOTAL_MS,
+    LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN,
+    LIT_WORKLOAD,
+)
 
 
-LIT_A = "a"
-LIT_B = "b"
-LIT_NATURAL_HARDWARE_SHADOW_ROUTE = "natural hardware shadow route"
-LIT_NATURAL_HYBRID_SHADOW_ROUTE = "natural hybrid shadow route"
 LIT_B_ORIGINAL_FAILURE_EVIDENCE = b"original failure evidence"
-LIT_TOTAL_MS = "total_ms"
-LIT_GPU_SAMPLES = "gpu_samples"
 LIT_REPORTS = "reports"
-LIT_HARDWARE_TRANSPARENT_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched hardware transparent shadow traversal"
-LIT_SOFTWARE_SHADOW_DISPATCH_LOG = "RendererSystem: dispatched software shadow traversal"
 LIT_MODIFIED = "modified"
-LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32 = "AvboitTimingProbe: in-flight ranges 32"
-LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1 = "AvboitTimingProbe: render unfocused 1"
-LIT_DEFERRED_TARGETS_READY_LOG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
-LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU = "GraphicsRuntime: created device 'Example GPU'"
-LIT_GLASS_COMPUTE_EMULATION_SELECTED_LOG = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
-LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN = "TransparentMultiSmokeProject: shutdown"
 LIT_SOURCE = "source"
 LIT_REVISION = "revision"
 LIT_UTF_8 = "utf-8"
 LIT_SOURCE_JSON = "source.json"
 LIT_FILES = "files"
 LIT_RUNTIME = "runtime"
-LIT_BASELINE = "baseline"
-LIT_CANDIDATE = "candidate"
-LIT_ARM = "arm"
 LIT_SAMPLE_RATIO = "sample ratio"
-LIT_N_1280X900 = "1280x900"
-LIT_BASELINE_EXECUTABLE = "--baseline-executable"
-LIT_BASELINE_RUNTIME = "--baseline-runtime"
-LIT_AR = "ar"
-LIT_BASELINE_SOURCE_MANIFEST = "--baseline-source-manifest"
-LIT_AS_JSON = "as.json"
-LIT_CANDIDATE_EXECUTABLE = "--candidate-executable"
-LIT_CANDIDATE_RUNTIME = "--candidate-runtime"
-LIT_BR = "br"
-LIT_CANDIDATE_SOURCE_MANIFEST = "--candidate-source-manifest"
-LIT_BS_JSON = "bs.json"
-LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
-LIT_LOGGER = "logger"
-LIT_OUTPUT_DIRECTORY = "--output-directory"
-LIT_OUTPUT = "output"
 LIT_CAUSTIC_POPULATED = "caustic-populated"
-LIT_N_16 = "16"
-LIT_WORKLOAD = "--workload"
 LIT_POPULATED = "populated"
 LIT_DISABLED = "disabled"
 LIT_CAUSTIC = "caustic-"
@@ -93,7 +97,6 @@ LIT_PATH = "path"
 LIT_IDENTITY = "identity"
 LIT_LOG = "log"
 LIT_POPULATED_ON = "populated_on"
-LIT_MAIN = "__main__"
 
 
 def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
@@ -304,7 +307,7 @@ class CausticMeasurementTests(unittest.TestCase):
                         settings = CausticWorkload.environment(preset, enabled)
                         document[LIT_CAPTURES][key] = {"settings": settings, LIT_RUNTIME: CausticWorkload(width, height).validate_log(log.read_text(encoding=LIT_UTF_8), settings, capture=True), LIT_COMMAND: utility.capture_command(args, image, launcher=launchers[LIT_CANDIDATE]),
                             LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: benchmark.file_identity(image)}, LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: benchmark.file_identity(log)}}
-                        frames[enabled] = utility.read_bmp_24_rows(image)
+                        frames[enabled] = Bmp24Codec.read_bmp_24_rows(image)
                     document[LIT_METRICS][preset] = CausticFootprint(utility.POLICY, PRESETS).footprint(frames[True], frames[False], distance)
                 report = directory / LIT_QUALIFICATION_JSON
                 report.write_text(json.dumps(document), encoding=LIT_UTF_8)

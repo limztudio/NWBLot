@@ -68,13 +68,6 @@ class AtlasBuilder : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
-    bytes[offset] = cast<u8>(value);
-    bytes[offset + 1u] = cast<u8>(value >> 8u);
-    bytes[offset + 2u] = cast<u8>(value >> 16u);
-    bytes[offset + 3u] = cast<u8>(value >> 24u);
-}
-
 [cpp_unwind]
 FontAtlasPayload MakePayload(){
     FontAtlasPayload payload;
@@ -613,7 +606,7 @@ void VerifyAssetsFontAtlas_OriginalSourcePositioningSetAndBytesMustMatchTheShapi
     const Expected<Vector<u8>, StringView> bytesResult = ReadBundledFontBytes(sourcePath);
     ASSERT_TRUE(bytesResult.has_value());
     Vector<u8> loadedFontBytes = CopyFontFixtureBytes(bytesResult.value());
-    font.setFontBytes(loadedFontBytes);
+    font.setFontBytes(loadedFontBytes, 0u);
     ASSERT_TRUE(font.validatePayload());
     payload.fontSha256 = ComputeSha256(font.fontBytes());
     payload.positioningTables.clear();

@@ -131,9 +131,6 @@ public:
     explicit CookDependencyAutoRegistrar(CookDependencyRegistrationFunction function);
 };
 
-#define NWB_DEFINE_COOK_DEPENDENCY_REGISTRAR(registrarVariable, registerFunction) \
-    Core::Assets::CookDependencyAutoRegistrar registrarVariable(&registerFunction)
-
 [[nodiscard]] b8 RegisterAutoCollectedCookDependencyTypes(CookDependencyRegistry& registry, ScratchArena& scratchArena);
 
 

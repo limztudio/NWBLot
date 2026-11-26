@@ -101,10 +101,6 @@ void FinalizeAppliedEditCommand(
     return result;
 }
 
-[cpp_unwind] EditCommandResult ApplyEditCommand(mut EditModel model, in EditCommandRequest request){
-    return ApplyEditCommand(model, request, false);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

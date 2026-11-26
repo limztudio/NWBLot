@@ -99,14 +99,6 @@ class InputRouter : NoCopy{
         return result;
     }
     [cpp_unwind]
-    public b8 commitTargets(in Span<HitTarget> targets, in u64 layoutGeneration){
-        return this.commitTargets(targets, layoutGeneration, Span<PopupScope>(), u64.max);
-    }
-    [cpp_unwind]
-    public b8 commitTargets(in Span<HitTarget> targets, in u64 layoutGeneration, in Span<PopupScope> popups){
-        return this.commitTargets(targets, layoutGeneration, popups, u64.max);
-    }
-    [cpp_unwind]
     public b8 commitTargets(in Span<HitTarget> targets, in u64 layoutGeneration, in Span<PopupScope> popups, in u64 expectedFocusLossGeneration){
         if(!this.m_targetTable.canPublish(targets.size(), layoutGeneration))
             return false;
@@ -165,7 +157,6 @@ class InputRouter : NoCopy{
             return Optional<in HitTarget>();
         return Optional<in HitTarget>(this.m_targetTable.targets()[index.value()]);
     }
-    public Expected<HitTarget> tryFindTarget(in WidgetId id)const{ return this.tryFindTarget(id, 0u); }
     public Expected<HitTarget> tryFindTarget(in WidgetId id, in u64 declarationGeneration)const{
         const Optional<in HitTarget> target = this.findTarget(id, declarationGeneration);
         if(target.has_value())
@@ -350,7 +341,6 @@ class InputRouter : NoCopy{
     public b8 acceptsPointerSource(in InputSource source)const{
         return this.m_pointerState.accepts(source);
     }
-    public b8 ownsPointerSource(in InputSource source)const{ return this.ownsPointerSource(source, PointerIntent::Activate); }
     public b8 ownsPointerSource(in InputSource source, in PointerIntent intent)const{
         return this.m_pointerState.owns(source, intent);
     }

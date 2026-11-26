@@ -42,7 +42,6 @@ flag<u32> MaterialFlag{
     All = Transparent | TwoSided | Refractive
 }
 
-[reflect]
 enum<u32> MaterialParameterValueType{
     None = 0u,
     b8,
@@ -56,21 +55,18 @@ enum<u32> MaterialParameterValueType{
     f32
 }
 
-[reflect]
 enum<u32> MaterialBlockClass{
     None = 0u,
     MaterialConstant,
     MaterialMutable
 }
 
-[reflect]
 enum<u32> MaterialResourceKind{
     None = 0u,
     SampledImage2D,
     Sampler
 }
 
-[reflect]
 enum<u32> MaterialLayoutFieldType{
     None = 0u,
     b8,
@@ -113,7 +109,6 @@ enum<u32> MaterialLayoutFieldType{
     Sampler
 }
 
-[reflect]
 enum<u8> MaterialTypedLayoutValidationStatus{
     Valid = 0u,
     EmptyLayout,
@@ -136,7 +131,6 @@ enum<u8> MaterialTypedLayoutValidationStatus{
     TotalBlockByteCountMismatch
 }
 
-[reflect]
 class MaterialTypedLayoutBlock{
     public Name blockName = s_NameNone;
     public MaterialBlockClass blockClass = MaterialBlockClass::None;
@@ -145,7 +139,6 @@ class MaterialTypedLayoutBlock{
     public u32 byteSize = 0u;
 }
 
-[reflect]
 class MaterialTypedLayoutField{
     public Name fieldName = s_NameNone;
     public MaterialLayoutFieldType fieldType = MaterialLayoutFieldType::None;
@@ -153,7 +146,6 @@ class MaterialTypedLayoutField{
     public u32x4u defaultValue;
 }
 
-[reflect]
 class MaterialResourceReference{
     public Name blockName = s_NameNone;
     public Name fieldName = s_NameNone;

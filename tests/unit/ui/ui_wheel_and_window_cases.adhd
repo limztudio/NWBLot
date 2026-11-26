@@ -164,7 +164,7 @@ void VerifyUiGlyphSdf_FlatFieldsRemainFiniteAcrossEveryAdmittedSpread(){
 
 
 void VerifyUiWheelInputTests_DiagonalWheelCopiesBothAcceptedAxesIntoOneAction(mut UiWheelInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 5u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 5u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel(0.25, -0.5, Point(95.0f, 25.0f)).pointerConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     EXPECT_FALSE(self.m_router.focus().valid());
@@ -188,7 +188,7 @@ void VerifyUiWheelInputTests_DiagonalWheelCopiesBothAcceptedAxesIntoOneAction(mu
 void VerifyUiWheelInputTests_VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction(mut UiWheelInputTests self){
     self.m_targets[0u].scrollStepX = 0.0;
     self.m_targets[0u].gestureMaximumX = 0.0;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel(2.0, 0.0).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_FALSE(self.wheel(2.0, 0.0, Point(250.0f, 180.0f)).pointerConsumed);
@@ -198,7 +198,7 @@ void VerifyUiWheelInputTests_VerticalOnlyListConsumesPureXWithoutDeliveringACont
 void VerifyUiWheelInputTests_VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep(mut UiWheelInputTests self){
     self.m_targets[0u].scrollStepX = 0.0;
     self.m_targets[0u].gestureMaximumX = 0.0;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel(2.0, 0.5).pointerConsumed);
     const auto actionResult = self.m_router.consumeControlAction(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
     ASSERT_TRUE(actionResult.has_value());
@@ -213,7 +213,7 @@ void VerifyUiWheelInputTests_VerticalOnlyListDiagonalStillDeliversItsExactVertic
 }
 
 void VerifyUiWheelInputTests_DiagonalWheelOccupiesOnePositionBetweenGestureUpdates(mut UiWheelInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     ASSERT_TRUE(self.queuePointer(Point(95.0f, 25.0f), InputEventType::PrimaryDown));
     EXPECT_TRUE(self.m_router.process().pointerConsumed);
     const auto firstResult = self.m_router.consumePointerGesture(self.m_targets[1u].id, 7u);
@@ -235,7 +235,7 @@ void VerifyUiWheelInputTests_DiagonalWheelOccupiesOnePositionBetweenGestureUpdat
 }
 
 void VerifyUiWheelInputTests_InvalidHorizontalMetadataRejectsPublicationAndPreservesPendingAction(mut UiWheelInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel(1.0, -1.0).pointerConsumed);
     const HitTarget accepted = self.m_targets[0u];
     Array<f64, 3u> invalid;
@@ -246,10 +246,10 @@ void VerifyUiWheelInputTests_InvalidHorizontalMetadataRejectsPublicationAndPrese
         const f64 value = invalid[index];
         self.m_targets[0u] = accepted;
         self.m_targets[0u].scrollStepX = value;
-        EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+        EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
         self.m_targets[0u] = accepted;
         self.m_targets[0u].gestureMaximumX = value;
-        EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+        EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     }
     EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
@@ -261,7 +261,7 @@ void VerifyUiWheelInputTests_InvalidHorizontalMetadataRejectsPublicationAndPrese
 }
 
 void VerifyUiWheelInputTests_SceneOwnedPressCannotAcquireEitherWheelAxisOverAHost(mut UiWheelInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     ASSERT_TRUE(self.queuePointer(Point(250.0f, 180.0f), InputEventType::PrimaryDown));
     EXPECT_FALSE(self.m_router.process().pointerConsumed);
     EXPECT_FALSE(self.wheel(1.0, -1.0).pointerConsumed);
@@ -578,25 +578,25 @@ void VerifyUiWindowTests_KeyboardCollapseUsesTabFocusAndSuppressesRepeat(mut UiW
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(1u));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), self.id("@window.collapse"));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Enter, true)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter, true)).commandConsumed);
     ASSERT_TRUE(self.begin(2u));
     EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
     EXPECT_FALSE(self.m_builder.button("apply", "Apply"));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(2u));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter, false)).commandConsumed);
     ASSERT_TRUE(self.begin(3u));
     EXPECT_FALSE(self.m_builder.beginWindow("window", "Keyboard", state));
     ASSERT_TRUE(self.finishWindow());
     ASSERT_TRUE(self.m_context.commitFrame(3u));
     EXPECT_TRUE(state.collapsed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Space, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Space, false)).commandConsumed);
     ASSERT_TRUE(self.begin(4u));
     EXPECT_TRUE(self.m_builder.beginWindow("window", "Keyboard", state));
     EXPECT_FALSE(state.collapsed);
@@ -863,11 +863,11 @@ void VerifyUiWindowTests_CloseButtonHidesWindowImmediatelyReservesTitleSpaceAndA
     EXPECT_FLOAT_EQ(closeTarget.rectangle.x, 233.0f);
     EXPECT_FLOAT_EQ(closeTarget.rectangle.width, 20.0f);
 
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), self.id("@window.collapse"));
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
-    EXPECT_TRUE(self.send(MakeUiRepeatedKeyEvent(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Tab, false)).commandConsumed);
+    EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Tab, false)).commandConsumed);
     EXPECT_EQ(self.m_context.input().focus(), self.id("@window.close"));
 
     self.click(Point(243.0f, 46.0f));

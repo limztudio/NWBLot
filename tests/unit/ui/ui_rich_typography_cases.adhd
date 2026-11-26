@@ -4,6 +4,7 @@
 
 #include <tests/common/gtest_macros.adhd>
 #include <tests/unit/ui/ui_fixture_widget_base.adhd>
+#include <impl/ecs_ui/toolkit/gpu/image_resources.adhd>
 #include <impl/ecs_ui/toolkit/gpu/shader_abi.adhd>
 #include <impl/ecs_ui/toolkit/gpu/types.adhd>
 
@@ -423,10 +424,10 @@ void VerifyRichTypography_ColorGlyphPipeline(mut RichTypographyTests self){
     EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::ColorGlyph);
     EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::Glyph);
     EXPECT_EQ(snapshot.commands()[2u].material, PaintMaterial::ColorGlyph);
-    EXPECT_TRUE(ValidateDrawCommandGlyphBindings(snapshot.commands(), snapshot.glyphPages().size()));
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
 
     GpuPaintPushConstants push;
-    AssignGpuPaintMaterialPushConstants(PaintMaterial::ColorGlyph, 9u, 0u, 0u, 0u, s_ShaderUiInvalidHeapSlot, s_ShaderUiInvalidHeapSlot, s_ShaderUiInvalidHeapSlot, push);
+    AssignGpuPaintMaterialPushConstants(PaintMaterial::ColorGlyph, 9u, 0u, 0u, s_ShaderUiInvalidHeapSlot, s_ShaderUiInvalidHeapSlot, s_ShaderUiInvalidHeapSlot, push);
     EXPECT_EQ(push.material, s_ShaderUiMaterialColorGlyph);
     EXPECT_EQ(push.textureSlot, 9u);
 }

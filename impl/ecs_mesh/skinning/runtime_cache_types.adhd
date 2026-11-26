@@ -25,7 +25,6 @@ class SkinnedRuntimeMeshIdentity{
     public u64 version = 0u;
 }
 
-[serialize, reflect]
 class MeshSkinningRestToSkinnedCopyByteCounts{
     public usize positionBytes = 0u;
     public usize normalBytes = 0u;

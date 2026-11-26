@@ -63,12 +63,7 @@ class EditBoxLayoutTests{
 
     public EditBoxLayoutTests(){ this.m_builder = TextLayoutBuilder(this.m_shaper); }
     public b8 shapeView(){
-        if(!this.m_view.snapshot(this.m_model))
-            return false;
-        ShapeRequest request;
-        request.text = this.m_view.displayText();
-        auto layout = this.m_builder.layout(request);
-        return layout.has_value() && this.m_view.adoptLayout(layout.value());
+        return ShapeEditBoxView(this.m_model, this.m_view, this.m_builder);
     }
     public b8 tryAdoptBuiltLayout(in StringView text){ return this.tryAdoptBuiltLayout(text, TextDirection::LeftToRight); }
     public b8 tryAdoptBuiltLayout(in StringView text, in TextDirection direction){
@@ -102,7 +97,7 @@ class EditBoxLayoutTests{
     public b8 place(){ return this.place(100.0f); }
     public b8 place(in f32 width){ return this.place(width, 0.0f); }
     public b8 place(in f32 width, in f32 scroll){
-        const auto placement = this.m_view.arrange(Rect(10.0f, 20.0f, width, 20.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 500.0f), Point(scroll, 0.0f));
+        const auto placement = this.m_view.arrange(Rect(10.0f, 20.0f, width, 20.0f), Insets(), Rect(0.0f, 0.0f, 500.0f, 500.0f), Point(scroll, 0.0f), 1.0f, true);
         if(!placement.has_value())
             return false;
         this.m_placement = placement.value();
@@ -143,7 +138,7 @@ b8 UiEditCaretAdoptMismatchedSource(mut EditCaretFixture self){
     if(!layout.has_value() || !self.identityMapping("new"))
         return false;
     mut TextLayout candidate = layout.value();
-    const b8 adopted = self.m_geometry.adoptLayout(candidate, "wrong", self.m_mapping, 3u, EditTextMode::SingleLine);
+    const b8 adopted = self.m_geometry.adoptLayout(candidate, "wrong", self.m_mapping, 3u, EditTextMode::SingleLine, Span<usize>());
     EXPECT_FALSE(adopted);
     EXPECT_EQ(candidate.utf8(), "new");
     return !adopted && candidate.utf8() == "new";
@@ -156,7 +151,7 @@ b8 UiEditCaretAdoptBuiltLayout(mut EditCaretFixture self, in StringView layoutTe
 b8 UiEditCaretAdoptBuiltLayout(mut EditCaretFixture self, in StringView layoutText, in StringView sourceText, in usize committedBytes, in EditTextMode mode, in TextDirection direction){
     auto candidate = self.layout(layoutText, direction);
     EXPECT_TRUE(candidate.has_value());
-    return candidate.has_value() && self.m_geometry.adoptLayout(candidate.value(), sourceText, self.m_mapping, committedBytes, mode);
+    return candidate.has_value() && self.m_geometry.adoptLayout(candidate.value(), sourceText, self.m_mapping, committedBytes, mode, Span<usize>());
 }
 
 b8 UiEditCaretAdoptNonfinitePlacement(mut EditCaretFixture self){
@@ -170,7 +165,7 @@ b8 UiEditCaretAdoptNonfinitePlacement(mut EditCaretFixture self){
         return false;
     TextLayoutFaultFixture faults;
     faults.invalidateGlyphPosition(malformed);
-    return self.identityMapping("ab") && self.m_geometry.adoptLayout(malformed, "ab", self.m_mapping, 2u, EditTextMode::SingleLine);
+    return self.identityMapping("ab") && self.m_geometry.adoptLayout(malformed, "ab", self.m_mapping, 2u, EditTextMode::SingleLine, Span<usize>());
 }
 
 b8 UiEditCaretAdoptMutatedLineRecord(mut EditCaretFixture self, in u32 mutation){
@@ -181,7 +176,7 @@ b8 UiEditCaretAdoptMutatedLineRecord(mut EditCaretFixture self, in u32 mutation)
     mut TextLayout malformed = layout.value();
     TextLayoutFaultFixture faults;
     faults.invalidateLineRecord(malformed, mutation);
-    return self.m_geometry.adoptLayout(malformed, "a\nb", self.m_mapping, 3u, EditTextMode::Multiline);
+    return self.m_geometry.adoptLayout(malformed, "a\nb", self.m_mapping, 3u, EditTextMode::Multiline, Span<usize>());
 }
 
 EditBoxRange MakeUiEditCaretRange(in usize begin, in usize end){
@@ -217,7 +212,7 @@ HitTarget MakeUiControlInputHost(in u64 id, in f32 x){
 }
 
 void VerifyUiControlInputTests_AcceptedWheelOwnsItsStepAfterCallerTargetMutation(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 5u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 5u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel(-0.25).pointerConsumed);
     EXPECT_FALSE(self.m_router.focus().valid());
     self.m_targets[0u].scrollStep = 120.0;
@@ -240,13 +235,13 @@ void VerifyUiControlInputTests_OverlappingUnrelatedControlBlocksUnderlyingWheelR
     targets[1u] = self.m_targets[1u];
     targets[2u] = self.m_targets[2u];
     targets[3u] = cover;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel().pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
 }
 
 void VerifyUiControlInputTests_HorizontalOnlyWheelIsConsumedWithoutVerticalMutation(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     InputEvent event = Pointer(InputEventType::PointerWheel);
     event.scrollX = 2.0;
     EXPECT_TRUE(self.send(event).pointerConsumed);
@@ -256,7 +251,7 @@ void VerifyUiControlInputTests_HorizontalOnlyWheelIsConsumedWithoutVerticalMutat
 }
 
 void VerifyUiControlInputTests_SceneHeldPrimarySequenceCannotStartScrollingWhenPointerCrossesList(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.send(Pointer(InputEventType::PrimaryDown, Point(200.0f, 180.0f))).pointerConsumed);
     EXPECT_FALSE(self.wheel().pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -265,7 +260,7 @@ void VerifyUiControlInputTests_SceneHeldPrimarySequenceCannotStartScrollingWhenP
 }
 
 void VerifyUiControlInputTests_NavigationCopiesAcceptedPageSizeAndSubmissionDoesNotRepeat(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.focus();
     self.m_targets[0u].pageRows = 30u;
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::PageDown)).commandConsumed);
@@ -292,7 +287,7 @@ void VerifyUiControlInputTests_HeldNavigationCannotRetargetAnotherFocusedList(mu
     Array<HitTarget, 2u> targets = Array<HitTarget, 2u>();
     targets[0u] = self.m_targets[0u];
     targets[1u] = second;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     self.focus();
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     ASSERT_TRUE(self.take().has_value());
@@ -308,7 +303,7 @@ void VerifyUiControlInputTests_HeldNavigationCannotRetargetAnotherFocusedList(mu
 }
 
 void VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilAcceptance(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.click();
     EXPECT_TRUE(self.wheel().pointerConsumed);
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
@@ -326,7 +321,7 @@ void VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilA
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     self.click();
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
@@ -334,21 +329,21 @@ void VerifyUiControlInputTests_ReplacedContentFencesCaptureActionsAndFocusUntilA
 }
 
 void VerifyUiControlInputTests_CommitOfNewEpochRejectsOldPressWithoutLeakingItsRelease(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp)).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
 }
 
 void VerifyUiControlInputTests_ReplacedRowDeclarationRejectsItsQueuedClickWhileHostWheelSurvives(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.click();
     EXPECT_TRUE(self.wheel().pointerConsumed);
     ++self.m_targets[1u].declarationGeneration;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     const Expected<ControlAction> actionResult1 = self.take();
     ASSERT_TRUE(actionResult1.has_value());
     EXPECT_EQ(actionResult1.value().kind, ControlActionKind::Wheel);
@@ -362,7 +357,7 @@ void VerifyUiControlInputTests_ReplacedRowDeclarationRejectsItsQueuedClickWhileH
 }
 
 void VerifyUiControlInputTests_RemovedRowRejectsItsQueuedStableValueWhileHostWheelSurvives(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.click();
     EXPECT_TRUE(self.wheel().pointerConsumed);
     self.m_router.invalidateTarget(self.m_targets[1u].id);
@@ -374,7 +369,7 @@ void VerifyUiControlInputTests_RemovedRowRejectsItsQueuedStableValueWhileHostWhe
 }
 
 void VerifyUiControlInputTests_HostRetirementRemovesPartsAndGesturesButPreservesHeldOwnership(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.click();
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
@@ -387,7 +382,7 @@ void VerifyUiControlInputTests_HostRetirementRemovesPartsAndGesturesButPreserves
 }
 
 void VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResize(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     const Expected<PointerGesture> gestureResult1 = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(gestureResult1.has_value());
@@ -397,7 +392,7 @@ void VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossR
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 100.0f);
     self.m_targets[2u].gestureMaximum = 1000.0;
     self.m_targets[2u].gestureReference.height = 150.0f;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Pointer(InputEventType::PointerMove, Point(95.0f, 50.0f))).pointerConsumed);
     const Expected<PointerGesture> gestureResult2 = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(gestureResult2.has_value());
@@ -408,16 +403,16 @@ void VerifyUiControlInputTests_ThumbGestureRetainsAcceptedTrackAndMaximumAcrossR
 }
 
 void VerifyUiControlInputTests_ChangedThumbEpochRejectsAQueuedCompletedGesture(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryUp, Point(95.0f, 30.0f))).pointerConsumed);
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u).has_value());
 }
 
 void VerifyUiControlInputTests_FocusHintRestoresReplacedHostOnlyAtMatchingAcceptance(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.focus();
     self.revise();
     self.m_targets[0u].focusOnCommit = true;
@@ -430,13 +425,13 @@ void VerifyUiControlInputTests_FocusHintRestoresReplacedHostOnlyAtMatchingAccept
 
 void VerifyUiControlInputTests_FocusHintCannotStealAnotherFocusOrSurviveDelayedFocusLoss(mut UiControlInputTests self){
     const HitTarget second = MakeUiControlInputHost(4u, 140.0f);
-    ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(second), 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(second), 1u, Span<PopupScope>(), u64.max));
     self.click(Point(150.0f, 30.0f));
     self.m_targets[0u].focusOnCommit = true;
     Array<HitTarget, 2u> targets = Array<HitTarget, 2u>();
     targets[0u] = self.m_targets[0u];
     targets[1u] = second;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), second.id);
     const u64 preparedFocusLoss = self.m_router.focusLossGeneration();
     InputEvent focusLost = InputEvent();
@@ -451,12 +446,12 @@ void VerifyUiControlInputTests_FocusHintCannotStealAnotherFocusOrSurviveDelayedF
 }
 
 void VerifyUiControlInputTests_RepeatedNavigationDoesNotJumpToAcceptedReplacementEpoch(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.focus();
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     self.revise();
     self.m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -466,49 +461,49 @@ void VerifyUiControlInputTests_RepeatedNavigationDoesNotJumpToAcceptedReplacemen
 }
 
 void VerifyUiControlInputTests_InvalidOwnerReferencesRejectAtomicPublicationAndPreserveActions(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.click();
     ++self.m_targets[1u].ownerDeclarationGeneration;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     ASSERT_TRUE(self.take().has_value());
 }
 
 void VerifyUiControlInputTests_MalformedControlMetadataRejectsPublicationBeforeChangingFocus(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.focus();
     const HitTarget host = self.m_targets[0u];
     self.m_targets[0u].control.contentRevision = 0u;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     self.m_targets[0u] = host;
     self.m_targets[0u].scrollStep = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     self.m_targets[0u] = host;
     self.m_targets[0u].pageRows = 0u;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     self.m_targets[0u] = host;
     self.m_targets[0u].gestureMaximum = -1.0;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), host.id);
     EXPECT_EQ(self.m_router.layoutGeneration(), 1u);
 }
 
 void VerifyUiControlInputTests_MissingDisabledOrFocusablePartOwnerIsRejected(mut UiControlInputTests self){
-    EXPECT_FALSE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(self.m_targets[1u]), 1u));
+    EXPECT_FALSE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(self.m_targets[1u]), 1u, Span<PopupScope>(), u64.max));
     self.m_targets[0u].enabled = false;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.m_targets[0u].enabled = true;
     self.m_targets[1u].focusable = true;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.m_targets[1u].focusable = false;
     ++self.m_targets[1u].control.instanceGeneration;
-    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 1u));
+    EXPECT_FALSE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.m_router.targets().empty());
 }
 
 void VerifyUiControlInputTests_InvalidWheelCoordinatesAndDeltasNeverReachAcceptedActions(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     InputEvent event = Pointer(InputEventType::PointerWheel);
     event.scrollY = bit_cast<f64>(cast<u64>(0x7ff8000000000000u));
     EXPECT_FALSE(self.queueNative(event));
@@ -522,7 +517,7 @@ void VerifyUiControlInputTests_InvalidWheelCoordinatesAndDeltasNeverReachAccepte
 }
 
 void VerifyUiControlInputTests_BoundedControlActionsUseOneSharedSequenceAndOverflowOncePerProcess(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     for(usize index = 0u; index < s_InputMaxControlActions; ++index)
         EXPECT_FALSE(self.wheel().activationOverflow);
     EXPECT_TRUE(self.wheel().activationOverflow);
@@ -543,7 +538,7 @@ void VerifyUiControlInputTests_BoundedControlActionsUseOneSharedSequenceAndOverf
 }
 
 void VerifyUiControlInputTests_FocusLossCancelsActionsAndResetDoesNotRestartTheirSequence(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel().pointerConsumed);
     const u64 previousSequence = self.m_router.controlActions()[0u].id.sequence;
     self.focus();
@@ -552,7 +547,7 @@ void VerifyUiControlInputTests_FocusLossCancelsActionsAndResetDoesNotRestartThei
     EXPECT_TRUE(self.send(focusLost).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     self.m_router.reset();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.wheel().pointerConsumed);
     const Expected<ControlAction> actionResult = self.take();
     ASSERT_TRUE(actionResult.has_value());
@@ -583,7 +578,7 @@ void VerifyUiControlInputTests_AcceptedPopupMaskOwnsWheelAndListFocusAboveLowerH
     targets[0u] = self.m_targets[0u];
     targets[1u] = barrier;
     targets[2u] = upper;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(popup)));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(popup), u64.max));
     EXPECT_EQ(self.m_router.focus(), upper.id);
     EXPECT_TRUE(self.wheel().pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -619,15 +614,15 @@ void VerifyUiControlInputTests_ClosingPopupBlocksFocusHintAndHeldNavigationCanno
     targets[0u] = self.m_targets[0u];
     targets[1u] = barrier;
     targets[2u] = upper;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(popup)));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, MakeUiSinglePopupScopeArray(popup), u64.max));
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     self.m_router.closePopup(popup.token);
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, MakeUiSinglePopupScopeArray(popup)));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 2u, MakeUiSinglePopupScopeArray(popup), u64.max));
     EXPECT_FALSE(self.m_router.focus().valid());
     ++popup.token.openGeneration;
     targets[1u].popup = popup.token;
     targets[2u].popup = popup.token;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, MakeUiSinglePopupScopeArray(popup)));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 3u, MakeUiSinglePopupScopeArray(popup), u64.max));
     EXPECT_EQ(self.m_router.focus(), upper.id);
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -639,12 +634,12 @@ void VerifyUiControlInputTests_ActivationAlsoFencesItsCopiedControlEpoch(mut UiC
     target.navigable = false;
     target.scrollable = false;
     target.activatable = true;
-    ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 1u, Span<PopupScope>(), u64.max));
     self.click();
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     EXPECT_EQ(self.m_router.actions()[0u].control, target.control);
     ++target.control.instanceGeneration;
-    ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(MakeUiSingleHitTargetArray(target), 2u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.m_router.actions().empty());
     EXPECT_FALSE(self.m_router.consumeActivation(target.id));
 }
@@ -660,7 +655,7 @@ void VerifyUiControlInputTests_ControlActivationAndGestureActionsShareOneMonoton
     targets[1u] = self.m_targets[1u];
     targets[2u] = self.m_targets[2u];
     targets[3u] = button;
-    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(targets, 1u, Span<PopupScope>(), u64.max));
     self.click(Point(150.0f, 10.0f));
     ASSERT_EQ(self.m_router.actions().size(), 1u);
     const u64 activationSequence = self.m_router.actions()[0u].id.sequence;
@@ -686,16 +681,16 @@ void VerifyUiControlInputTests_NativeUnfocusedAcceptanceCannotApplyAControlFocus
 }
 
 void VerifyUiControlInputTests_RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenReturns(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     self.focus();
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down)).commandConsumed);
     const ControlToken original = self.m_targets[0u].control;
     self.revise();
     self.m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     for(mut HitTarget target : self.m_targets)
         target.control = original;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Down, true)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -705,7 +700,7 @@ void VerifyUiControlInputTests_RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTok
 }
 
 void VerifyUiControlInputTests_GestureUpdateSequenceOrdersLatestMotionAfterAnInterveningWheel(mut UiControlInputTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Pointer(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     const Expected<PointerGesture> initialResult = self.m_router.consumePointerGesture(self.m_targets[2u].id, 7u);
     ASSERT_TRUE(initialResult.has_value());
@@ -733,21 +728,21 @@ void VerifyUiControlInputTests_GestureUpdateSequenceOrdersLatestMotionAfterAnInt
 
 void VerifyUiControlInputTests_EscapeAndControlRebindingCancelHeldSubmitWithoutReleaseLeakage(mut UiControlInputTests self){
     self.m_targets[0u].focusOnCommit = true;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Escape)).commandConsumed);
     EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Escape)).commandConsumed);
     EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
     const ControlToken original = self.m_targets[0u].control;
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u, Span<PopupScope>(), u64.max));
     for(mut HitTarget target : self.m_targets)
         target.control = original;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 4u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 4u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(Key(InputEventType::KeyUp, Key::Enter)).commandConsumed);
     EXPECT_FALSE(self.take().has_value());
     EXPECT_TRUE(self.send(Key(InputEventType::KeyDown, Key::Enter)).commandConsumed);
@@ -808,7 +803,7 @@ void VerifyEditBoxLayoutTests_PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAn
     ASSERT_TRUE(self.m_model.setText("ABC"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("\xed\x95\x9c\xea\xb8\x80", 0u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("\xed\x95\x9c\xea\xb8\x80", 0u, 3u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.shapeView());
     EXPECT_EQ(self.m_model.text(), "ABC");
     EXPECT_EQ(self.m_view.displayText(), "A\355\225\234\352\270\200C");
@@ -843,7 +838,7 @@ void VerifyEditBoxLayoutTests_PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAn
 
 void VerifyEditBoxLayoutTests_NativePreeditCaretCanAddressScalarEdgesInsideOneGrapheme(mut EditBoxLayoutTests self){
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab", 3u, 6u));
+    ASSERT_TRUE(self.m_model.updateComposition("\xe1\x84\x92\xe1\x85\xa1\xe1\x86\xab", 3u, 6u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.shapeView());
     ASSERT_TRUE(self.place());
     EXPECT_FLOAT_EQ(self.m_placement.caret.x, 18.0f);
@@ -866,7 +861,7 @@ void VerifyEditBoxLayoutTests_HorizontalScrollFollowsCaretAndClampsWhenTextShrin
         Rect(10.0f, 20.0f, 26.0f, 20.0f),
         Insets(3.0f, 0.0f, 3.0f, 0.0f),
         Rect(0.0f, 0.0f, 500.0f, 500.0f),
-        Point()
+        Point(), 1.0f, true
     );
     ASSERT_TRUE(arranged.has_value());
     self.m_placement = arranged.value();
@@ -892,7 +887,7 @@ void VerifyEditBoxLayoutTests_PlacementIntersectsFrameAndContentClipsAndRejectsI
         Rect(10.0f, 20.0f, 100.0f, 30.0f),
         Insets(8.0f, 4.0f, 8.0f, 4.0f),
         Rect(30.0f, 22.0f, 20.0f, 40.0f),
-        Point()
+        Point(), 1.0f, true
     );
     ASSERT_TRUE(arranged.has_value());
     self.m_placement = arranged.value();
@@ -901,9 +896,9 @@ void VerifyEditBoxLayoutTests_PlacementIntersectsFrameAndContentClipsAndRejectsI
     EXPECT_FLOAT_EQ(self.m_placement.frameClip.height, 28.0f);
     EXPECT_FLOAT_EQ(self.m_placement.clip.y, 24.0f);
     EXPECT_FLOAT_EQ(self.m_placement.clip.height, 22.0f);
-    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, -1.0f, 20.0f), Insets(), Rect(), Point()).has_value());
-    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(-1.0f, 0.0f, 0.0f, 0.0f), Rect(), Point()).has_value());
-    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(), Rect(), Point(bit_cast<f32>(0x7fc00000u), 0.0f)).has_value());
+    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, -1.0f, 20.0f), Insets(), Rect(), Point(), 1.0f, true).has_value());
+    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(-1.0f, 0.0f, 0.0f, 0.0f), Rect(), Point(), 1.0f, true).has_value());
+    EXPECT_FALSE(self.m_view.arrange(Rect(0.0f, 0.0f, 20.0f, 20.0f), Insets(), Rect(), Point(bit_cast<f32>(0x7fc00000u), 0.0f), 1.0f, true).has_value());
     EXPECT_FALSE(self.m_view.hitTest(Point(bit_cast<f32>(0x7fc00000u), 0.0f), self.m_placement).has_value());
 }
 
@@ -942,12 +937,12 @@ void VerifyEditBoxLayoutTests_SnapshotOwnsModelBytesAndReshapingRejectsUnsupport
     ASSERT_TRUE(moved.snapshot(self.m_model));
     EXPECT_FALSE(moved.ready());
     TextService service = TextService();
-    EXPECT_EQ(moved.shape(service), TextLayoutStatus::FontFailure);
+    EXPECT_EQ(moved.shape(service, ShapeRequest()), TextLayoutStatus::FontFailure);
     ASSERT_TRUE(self.m_model.setText("A\x01B"));
     ASSERT_TRUE(moved.snapshot(self.m_model));
     EXPECT_FALSE(moved.ready());
-    EXPECT_EQ(moved.shape(service), TextLayoutStatus::UnsupportedControl);
-    EXPECT_FALSE(moved.arrange(Rect(), Insets(), Rect(), Point()).has_value());
+    EXPECT_EQ(moved.shape(service, ShapeRequest()), TextLayoutStatus::UnsupportedControl);
+    EXPECT_FALSE(moved.arrange(Rect(), Insets(), Rect(), Point(), 1.0f, true).has_value());
 }
 
 void VerifyEditBoxLayoutTests_EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSkinRegion(mut EditBoxLayoutTests self){
@@ -965,15 +960,15 @@ void VerifyEditBoxLayoutTests_EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEdi
     flags.caretVisible = false;
     const EditBoxStyle style = EditBoxStyle();
     self.beginSkinPaint(paint, skin, 1u);
-    ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags));
+    ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags, Optional<in TextLayout>()));
     EXPECT_EQ(paint.freeze().vertices().size(), 4u);
     flags.caretVisible = true;
     self.beginSkinPaint(paint, skin, 2u);
-    ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags));
+    ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags, Optional<in TextLayout>()));
     EXPECT_EQ(paint.freeze().vertices().size(), 8u);
     flags.readOnly = true;
     self.beginSkinPaint(paint, skin, 3u);
-    ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags));
+    ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags, Optional<in TextLayout>()));
     EXPECT_EQ(paint.freeze().vertices().size(), 4u);
 }
 
@@ -998,7 +993,7 @@ void VerifyEditBoxLayoutTests_EmptySelectionRejectsInvalidCaretWidthsAndRestores
         placement.caret.width = width;
         ++generation;
         self.beginSkinPaint(paint, skin, generation);
-        EXPECT_FALSE(self.m_view.paint(service, paint, skin, placement, style, flags));
+        EXPECT_FALSE(self.m_view.paint(service, paint, skin, placement, style, flags, Optional<in TextLayout>()));
         EXPECT_FALSE(paint.popClip());
         EXPECT_EQ(paint.freeze().vertices().size(), 4u);
     }
@@ -1009,15 +1004,15 @@ void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRes
     TextService service = TextService();
     ASSERT_TRUE(self.installBundledLatinFont(font, service));
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("IME", 3u, 3u));
+    ASSERT_TRUE(self.m_model.updateComposition("IME", 3u, 3u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
-    ASSERT_EQ(self.m_view.shape(service), TextLayoutStatus::Success);
+    ASSERT_EQ(self.m_view.shape(service, ShapeRequest()), TextLayoutStatus::Success);
     ASSERT_EQ(self.m_view.selectionRange().begin, self.m_view.selectionRange().end);
     const Expected<EditBoxPlacement> placement = self.m_view.arrange(
         Rect(10.0f, 20.0f, 180.0f, 80.0f),
         Insets(),
         Rect(0.0f, 0.0f, 200.0f, 120.0f),
-        Point()
+        Point(), 1.0f, true
     );
     ASSERT_TRUE(placement.has_value());
     UiSkin skin = UiSkin(s_UiEditBoxSkinAssetName);
@@ -1032,7 +1027,7 @@ void VerifyEditBoxLayoutTests_EmptyPreeditSelectionStillPaintsItsUnderlineAndRes
     flags.focused = true;
     flags.preeditCaretVisible = false;
     self.beginSkinPaint(paint, skin, 1u, 200.0f, 120.0f);
-    ASSERT_TRUE(self.m_view.paint(service, paint, skin, placement.value(), style, flags));
+    ASSERT_TRUE(self.m_view.paint(service, paint, skin, placement.value(), style, flags, Optional<in TextLayout>()));
     EXPECT_FALSE(paint.popClip());
     const DrawSnapshot snapshot = paint.freeze();
     usize underlineVertices = 0u;
@@ -1051,7 +1046,7 @@ void VerifyEditBoxLayoutTests_PaintingRestoresClipStackAndBoundsVerticesAcrossDi
     ASSERT_TRUE(self.m_model.setText("ffi"));
     ASSERT_TRUE(self.m_model.setSelection(1u, 2u));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model));
-    ASSERT_EQ(self.m_view.shape(service), TextLayoutStatus::Success);
+    ASSERT_EQ(self.m_view.shape(service, ShapeRequest()), TextLayoutStatus::Success);
     ASSERT_TRUE(self.place());
     UiSkin skin = UiSkin(s_UiEditBoxSkinAssetName);
     self.configureSkin(skin, true);
@@ -1064,7 +1059,7 @@ void VerifyEditBoxLayoutTests_PaintingRestoresClipStackAndBoundsVerticesAcrossDi
     scales[1u] = 2.0f;
     for(in f32 scale : scales){
         self.beginSkinPaint(paint, skin, cast<u64>(scale), 200.0f, 100.0f, scale);
-        ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags));
+        ASSERT_TRUE(self.m_view.paint(service, paint, skin, self.m_placement, style, flags, Optional<in TextLayout>()));
         EXPECT_FALSE(paint.popClip());
         const DrawSnapshot snapshot = paint.freeze();
         ASSERT_FALSE(snapshot.glyphPages().empty());
@@ -1664,7 +1659,7 @@ void VerifyEditBoxLayoutTests_PasswordMaskingMapsCaretsHitsAndImePreeditAcrossMu
     ASSERT_TRUE(hitMiddle.has_value());
     EXPECT_EQ(hitMiddle.value(), 1u);
     ASSERT_TRUE(self.m_model.beginComposition());
-    ASSERT_TRUE(self.m_model.updateComposition("xy", 1u, 2u));
+    ASSERT_TRUE(self.m_model.updateComposition("xy", 1u, 2u, Span<EditPreeditClause>()));
     ASSERT_TRUE(self.m_view.snapshot(self.m_model, true, 0x2au));
     EXPECT_EQ(self.m_view.displayText(), "***");
     EXPECT_EQ(self.m_view.preeditRange().begin, 1u);

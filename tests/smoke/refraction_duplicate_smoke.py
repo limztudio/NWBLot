@@ -10,7 +10,7 @@ import sys
 
 from refraction_gallery_smoke import CASES, COMMON_LIMIT, VARIANT_LABELS, capture, parse_selection
 from refraction_gallery_publisher import RefractionGalleryPublisher
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_DUPLICATE_SINGLE_COOL = "duplicate_single_cool"
@@ -85,8 +85,8 @@ def validate_captures(directory, variants):
     results = []
 
     def compare(first_case, first_variant, second_case, second_variant, equal):
-        first = read_bmp_24_rows(directory / f"{first_case}_{first_variant}.bmp")
-        second = read_bmp_24_rows(directory / f"{second_case}_{second_variant}.bmp")
+        first = Bmp24Codec.read_bmp_24_rows(directory / f"{first_case}_{first_variant}.bmp")
+        second = Bmp24Codec.read_bmp_24_rows(directory / f"{second_case}_{second_variant}.bmp")
         label = f"{second_case}/{second_variant} vs {first_case}/{first_variant}"
         metrics = (require_match if equal else require_distinct)(first, second, label)
         results.append({"reference": f"{first_case}_{first_variant}", "candidate": f"{second_case}_{second_variant}", "expectation": "match" if equal else "distinct", **metrics})

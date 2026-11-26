@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 
 import contextlib
-import copy
 import io
 from pathlib import Path
 import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from renderer_workload_log_policy import RendererWorkloadLogPolicy, SHADOW_ROUTES
 import renderer_ab_benchmark as benchmark
+from reflection_gpu_coverage import DEPTH, HARDWARE, SPATIAL, TEMPORAL
 from renderer_trial_comparison import LIT_MEANS_MS, RendererTrialComparison
-from renderer_workload_registry import RendererWorkloadRegistry, FRAME, CONTROLS, SHADOW_INACTIVE, SHADOW_PHASES
+from renderer_workload_registry import RendererWorkloadRegistry, CONTROLS
 from gpu_timing_evidence import GpuTimingEvidence
 
 TIMING_EVIDENCE = GpuTimingEvidence()
@@ -58,20 +57,20 @@ class ReflectionWorkloadTests(unittest.TestCase):
         workload = RendererWorkloadRegistry.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         for multiplier in (1, 9, 11):
             changed = scopes(workload)
-            changed[benchmark.reflection.DEPTH][LIT_GPU_SAMPLES] = 200 * multiplier
+            changed[DEPTH][LIT_GPU_SAMPLES] = 200 * multiplier
             with self.subTest(multiplier=multiplier), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_coverage(changed, workload, 6, 100)
 
     def test_mirror_rejects_missing_spatial_range(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_REFLECTION_MIRROR_SPATIAL]
         changed = scopes(workload)
-        del changed[benchmark.reflection.SPATIAL]
+        del changed[SPATIAL]
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.validate_coverage(changed, workload, 6, 100)
 
     def test_filtered_retains_temporal_one_per_frame_and_both_controls(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_REFLECTION_ROUGH_FILTERED]
-        for missing in (benchmark.reflection.TEMPORAL, benchmark.reflection.SPATIAL, CONTROLS[1]):
+        for missing in (TEMPORAL, SPATIAL, CONTROLS[1]):
             changed = scopes(workload)
             del changed[missing]
             with self.subTest(scope=missing), self.assertRaises(benchmark.SmokeFailure):
@@ -86,7 +85,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
     def test_inactive_hashed_scope_is_decoded_and_rejected(self):
         workload = RendererWorkloadRegistry.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         symbols = benchmark.load_name_symbols(None, workload.observed_scopes)
-        token = next(token for token, name in symbols.items() if name == benchmark.reflection.HARDWARE)
+        token = next(token for token, name in symbols.items() if name == HARDWARE)
         text = f"=== interval: 1 frames / 0.5s ===\n  {token}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples=1 sample_avg_ms=1\n"
         parsed = TIMING_EVIDENCE.summarize_intervals(GpuTimingEvidence(symbols).parse_intervals(text, finalized=True))
         with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_INACTIVE_REFLECTION_SCOPES):
@@ -122,7 +121,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
             workload = RendererWorkloadRegistry.workloads()[args.workload]
             value = scopes(workload)
             benchmark.validate_coverage(value, workload, 6, 100)
-            value[benchmark.reflection.HARDWARE][LIT_GPU_SAMPLES] *= count
+            value[HARDWARE][LIT_GPU_SAMPLES] *= count
             with self.subTest(native_calls=count), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_coverage(value, workload, 6, 100)
         for invalid in ("0", "-1", "1382401"):
@@ -141,12 +140,12 @@ class ReflectionWorkloadTests(unittest.TestCase):
             frame_ms = 2400 if candidate else 100
             trial[LIT_SCOPES] = scopes(workload, frame_ms=frame_ms)
             trial[LIT_WALL_FRAME] = {LIT_ELIGIBLE: True, LIT_MEAN_FRAME_MS: frame_ms, LIT_MEAN_FPS: 1000 / frame_ms}
-            hardware = trial[LIT_SCOPES][benchmark.reflection.HARDWARE]
+            hardware = trial[LIT_SCOPES][HARDWARE]
             hardware[LIT_MEAN_MS] = 2351 if candidate else 50
             hardware[LIT_TOTAL_MS] = hardware[LIT_MEAN_MS] * hardware[LIT_GPU_SAMPLES]
             benchmark.validate_coverage(trial[LIT_SCOPES], workload, 6, 100)
         result = RendererTrialComparison.compare_trials(trials, orders, workload)
-        self.assertEqual(result[LIT_MEANS_MS][LIT_CANDIDATE][benchmark.reflection.HARDWARE], 2351)
+        self.assertEqual(result[LIT_MEANS_MS][LIT_CANDIDATE][HARDWARE], 2351)
         self.assertEqual(result["secondary_per_frame_work"][LIT_MEANS_MS][LIT_CANDIDATE], 2351)
         self.assertEqual(result["secondary"][LIT_MEAN_MS], 2301)
         self.assertEqual(result["frame"][LIT_MEAN_MS], 2300)
@@ -159,8 +158,8 @@ class ReflectionWorkloadTests(unittest.TestCase):
             trial[LIT_SCOPES] = scopes(workload, frame_ms=frame_ms)
             trial[LIT_WALL_FRAME] = {LIT_ELIGIBLE: True, LIT_MEAN_FRAME_MS: frame_ms, LIT_MEAN_FPS: 1000 / frame_ms}
             if trial[LIT_ARM] == LIT_CANDIDATE:
-                trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_MEAN_MS] = .4
-                trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_TOTAL_MS] = .4 * 200 * 10
+                trial[LIT_SCOPES][DEPTH][LIT_MEAN_MS] = .4
+                trial[LIT_SCOPES][DEPTH][LIT_TOTAL_MS] = .4 * 200 * 10
         RendererTrialComparison.compare_trials(trials, orders, workload)
         with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
             RendererTrialComparison.compare_trials(trials[:-1], orders, workload)

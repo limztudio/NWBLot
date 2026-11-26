@@ -11,6 +11,7 @@
 #include <impl/assets_font_atlas/asset.adhd.h>
 #include <impl/assets_font_atlas/cook.adhd.h>
 #include <tests/common/gtest_sdk.h>
+#include <tests/common/memory_sdk.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,63 +24,7 @@ namespace Tests::FontAtlasCases{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class NthFailFontAtlasArena final : public ArenaBase{
-public:
-    NthFailFontAtlasArena()
-        : ArenaBase(Name("tests/assets_font_atlas/nth_fail"))
-        , m_backing(Name("tests/assets_font_atlas/nth_fail_backing"))
-    {}
 
-    void arm(const usize failOnCall)noexcept{
-        m_armed = true;
-        m_remaining = failOnCall;
-        m_hit = false;
-    }
-
-    void disarm()noexcept{
-        m_armed = false;
-        m_remaining = 0u;
-        m_hit = false;
-    }
-
-    [[nodiscard]] b8 hit()const noexcept{ return m_hit; }
-
-    void* allocate(const usize alignment, const usize size)override{
-        if(shouldFail())
-            throw AllocationException{};
-        return m_backing.allocate(alignment, size);
-    }
-
-    void* reallocate(void* p, const usize alignment, const usize size)override{
-        if(shouldFail())
-            throw AllocationException{};
-        return m_backing.reallocate(p, alignment, size);
-    }
-
-    void deallocate(void* p, const usize alignment, const usize size)noexcept override{
-        m_backing.deallocate(p, alignment, size);
-    }
-
-
-private:
-    [[nodiscard]] b8 shouldFail()noexcept{
-        if(!m_armed)
-            return false;
-        if(m_remaining == 0u){
-            m_hit = true;
-            return true;
-        }
-        --m_remaining;
-        return false;
-    }
-
-
-private:
-    Core::Alloc::GlobalArena m_backing;
-    usize m_remaining = 0u;
-    b8 m_armed = false;
-    b8 m_hit = false;
-};
 
 [[nodiscard]] inline b8 VerifyFontAtlasAllocationUnwindContracts(){
     static_assert(!noexcept(Impl::ValidateFontAtlasGroupGuardedOverlap(
@@ -138,8 +83,8 @@ private:
     const f32 expectedAscenderUnits = baselinePayload.ascenderUnits;
 
     b8 completedLoad = false;
-    for(usize failAt = 0u; failAt < 256u; ++failAt){
-        NthFailFontAtlasArena arena;
+    for(usize failAt = 1u; failAt <= 256u; ++failAt){
+        Tests::NthFailArena arena(Name("tests/assets_font_atlas/nth_fail"), Name("tests/assets_font_atlas/nth_fail_backing"), true);
         Impl::FontAtlas atlas(arena, baselinePath);
         atlas.setPayload(baselinePayload);
         atlas.markPayloadValidated();
@@ -191,9 +136,9 @@ private:
     sourceAtlas.setPayload(baselinePayload);
     sourceAtlas.markPayloadValidated();
 
-    for(usize failAt = 0u; failAt < 256u; ++failAt){
-        NthFailFontAtlasArena arena;
-        Vector<u8, NthFailFontAtlasArena> serialized(arena);
+    for(usize failAt = 1u; failAt <= 256u; ++failAt){
+        Tests::NthFailArena arena(Name("tests/assets_font_atlas/nth_fail"), Name("tests/assets_font_atlas/nth_fail_backing"), true);
+        Vector<u8, Tests::NthFailArena> serialized(arena);
         arena.arm(failAt);
         b8 threw = false;
         b8 ok = false;
@@ -226,8 +171,8 @@ private:
     }
 
     b8 completedCopyTables = false;
-    for(usize failAt = 0u; failAt < 128u; ++failAt){
-        NthFailFontAtlasArena arena;
+    for(usize failAt = 1u; failAt <= 128u; ++failAt){
+        Tests::NthFailArena arena(Name("tests/assets_font_atlas/nth_fail"), Name("tests/assets_font_atlas/nth_fail_backing"), true);
         arena.arm(failAt);
         b8 threw = false;
         Expected<Vector<Impl::FontAtlasPositioningTable, ArenaBase>> copied = MakeUnexpected(Failure{});
@@ -260,8 +205,8 @@ private:
     }
 
     b8 completedBuildAsset = false;
-    for(usize failAt = 0u; failAt < 256u; ++failAt){
-        NthFailFontAtlasArena arena;
+    for(usize failAt = 1u; failAt <= 256u; ++failAt){
+        Tests::NthFailArena arena(Name("tests/assets_font_atlas/nth_fail"), Name("tests/assets_font_atlas/nth_fail_backing"), true);
         Impl::FontAtlasCookEntry entry(sourceArena);
         entry.virtualPath = baselinePath;
         entry.payload = baselinePayload;

@@ -8,7 +8,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-from window_capture_image import read_bmp_24_rows, write_bmp_24
+from window_capture_image_codec import Bmp24Codec
+from window_capture_image_regions import ImageRegions
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 30
@@ -36,10 +37,7 @@ FOREGROUND_REGION = (0.30, 0.58, 0.70, 0.67)
 
 
 def region_pixels(width, height, region):
-    left, top, right, bottom = region
-    for y in range(int(height * top), int(height * bottom)):
-        for x in range(int(width * left), int(width * right)):
-            yield x, y
+    return ImageRegions.region_pixels(width, height, region)
 
 
 def red_foreground(pixel):
@@ -132,7 +130,7 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
         return None
     if result.returncode != 0:
         raise SmokeFailure(f"refraction {name} capture failed with exit {result.returncode}")
-    return read_bmp_24_rows(path)
+    return Bmp24Codec.read_bmp_24_rows(path)
 
 
 def parse_args(argv):
@@ -167,7 +165,7 @@ def main(argv):
             metrics[name] = compare_refraction_frames(baseline, result)
             width, height, rows = result
             difference = [[tuple(min(abs(a - b) * 3, 255) for a, b in zip(before, after)) for before, after in zip(reference_row, output_row)] for reference_row, output_row in zip(baseline[2], rows)]
-            write_bmp_24(args.output_directory / f"refraction_{name}_difference.bmp", width, height, difference)
+            Bmp24Codec.write_bmp_24(args.output_directory / f"refraction_{name}_difference.bmp", width, height, difference)
         (args.output_directory / "refraction_metrics.json").write_text(json.dumps(metrics, indent=2) + LIT_N, encoding=LIT_UTF_8)
         print("PASS: clear-glass displacement, foreground AVBOIT preservation, exterior stability, and both resolve routes\n" + json.dumps(metrics, indent=2))
         return 0

@@ -1,4 +1,5 @@
 import ctypes
+from dataclasses import dataclass
 import struct
 
 from window_capture_outcome import SmokeFailure
@@ -8,6 +9,20 @@ LIT_B_BM = b"BM"
 LIT_LITTLE = "little"
 LIT_BIG = "big"
 LIT_N_2SIHHI = "<2sIHHI"
+
+
+@dataclass(frozen=True)
+class PixelDiff:
+    width: int
+    height: int
+    max_abs: int
+    mean_abs: float
+    changed_pixels: int
+    total_pixels: int
+
+    @property
+    def changed_fraction(self) -> float:
+        return self.changed_pixels / self.total_pixels if self.total_pixels else 0.0
 
 
 class Bmp24Codec:
@@ -78,6 +93,95 @@ class Bmp24Codec:
 
         rows_rgb = stored_rows if signed_height < 0 else list(reversed(stored_rows))
         return width, height, rows_rgb
+
+    @staticmethod
+    def read_bmp_24_rgb(path, *, allow_extra_bytes=False):
+        try:
+            data = path.read_bytes()
+        except OSError as error:
+            raise SmokeFailure(f"could not read BMP '{path}': {error}") from error
+        if len(data) < 54 or data[:2] != LIT_B_BM:
+            raise SmokeFailure(f"capture is not a BMP: {path}")
+
+        pixel_offset = struct.unpack_from("<I", data, 10)[0]
+        dib_size = struct.unpack_from("<I", data, 14)[0]
+        if dib_size < 40 or len(data) < 14 + dib_size:
+            raise SmokeFailure(f"capture has an unsupported DIB header: {path}")
+        if pixel_offset < 14 + dib_size:
+            raise SmokeFailure(f"capture pixel data overlaps its headers: {path}")
+
+        width, signed_height, planes, bits_per_pixel, compression = struct.unpack_from("<iiHHI", data, 18)
+        if width <= 0 or signed_height == 0 or planes != 1 or bits_per_pixel != 24 or compression != 0:
+            raise SmokeFailure(f"capture must be an uncompressed 24-bit BMP: {path}")
+
+        height = abs(signed_height)
+        source_stride = ((width * 3 + 3) // 4) * 4
+        required_bytes = pixel_offset + source_stride * height
+        if required_bytes > len(data) or (not allow_extra_bytes and required_bytes != len(data)):
+            raise SmokeFailure(f"capture pixel data is truncated: {path}")
+
+        rows = []
+        bottom_up = signed_height > 0
+        for logical_row in range(height):
+            source_row = height - 1 - logical_row if bottom_up else logical_row
+            source_offset = pixel_offset + source_row * source_stride
+            source = data[source_offset:source_offset + width * 3]
+            rgb = bytearray(width * 3)
+            rgb[0::3] = source[2::3]
+            rgb[1::3] = source[1::3]
+            rgb[2::3] = source[0::3]
+            rows.append(bytes(rgb))
+        return width, height, b"".join(rows)
+
+    @staticmethod
+    def write_bmp_24_rgb(path, width, height, rgb):
+        if width <= 0 or height <= 0 or len(rgb) != width * height * 3:
+            raise ValueError("invalid RGB baseline image dimensions or byte count")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        row_stride = ((width * 3 + 3) // 4) * 4
+        image_size = row_stride * height
+        padding = b"\0" * (row_stride - width * 3)
+        with path.open("wb") as output:
+            output.write(struct.pack(LIT_N_2SIHHI, LIT_B_BM, 14 + 40 + image_size, 0, 0, 54))
+            output.write(struct.pack("<IIIHHIIIIII", 40, width, height, 1, 24, 0, image_size, 0, 0, 0, 0))
+            for row_index in range(height - 1, -1, -1):
+                row = rgb[row_index * width * 3:(row_index + 1) * width * 3]
+                bgr = bytearray(width * 3)
+                bgr[0::3] = row[2::3]
+                bgr[1::3] = row[1::3]
+                bgr[2::3] = row[0::3]
+                output.write(bgr)
+                output.write(padding)
+
+    @staticmethod
+    def compare_bmp_24_rgb(first_width, first_height, first_rgb, second_width, second_height, second_rgb, *, difference_path=None,
+            dimension_error="pixel-parity captures have different dimensions: {0}x{1} vs {2}x{3}"):
+        if (first_width, first_height) != (second_width, second_height):
+            raise SmokeFailure(dimension_error.format(first_width, first_height, second_width, second_height))
+
+        total_abs = 0
+        max_abs = 0
+        changed_pixels = 0
+        difference_rgb = bytearray(len(first_rgb)) if difference_path is not None else None
+        for offset in range(0, len(first_rgb), 3):
+            changed = False
+            for channel in range(3):
+                delta = abs(first_rgb[offset + channel] - second_rgb[offset + channel])
+                total_abs += delta
+                max_abs = max(max_abs, delta)
+                if difference_rgb is not None:
+                    difference_rgb[offset + channel] = min(255, delta * 8)
+                changed = changed or delta != 0
+            if changed:
+                changed_pixels += 1
+
+        if difference_path is not None:
+            Bmp24Codec.write_bmp_24_rgb(difference_path, first_width, first_height, bytes(difference_rgb))
+
+        total_pixels = first_width * first_height
+        return PixelDiff(width=first_width, height=first_height, max_abs=max_abs, mean_abs=total_abs / len(first_rgb),
+            changed_pixels=changed_pixels, total_pixels=total_pixels)
 
 
 class NativePixelCodec:

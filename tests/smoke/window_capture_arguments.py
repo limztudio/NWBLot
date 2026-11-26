@@ -2,7 +2,7 @@ import argparse
 import math
 from pathlib import Path
 
-from window_capture_image import TRANSPARENT_CSG_REGIONS
+from window_capture_scene_evidence import TRANSPARENT_CSG_REGIONS
 
 LIT_MINIMUM_CAPTURE_SETTLE_SECONDS = 1.0
 LIT_GPUDBG = "--gpudbg"

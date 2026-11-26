@@ -283,39 +283,57 @@ template<typename CharT>
     return MakeUnexpected(Failure{});
 }
 
+namespace NumericTextDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename CharT>
+[[nodiscard]] inline Expected<u64> ParseHexDigitsU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    u64 value = 0u;
+    for(const CharT ch : text){
+        const auto nibble = ParseHexDigit(ch);
+        if(!nibble)
+            return MakeUnexpected(Failure{});
+
+        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
+    }
+    return value;
+}
+
+template<typename StringT>
+concept PushBackStringLike = requires(StringT& text){
+    typename StringT::value_type;
+    text.size();
+    text.max_size();
+    text.push_back(typename StringT::value_type{});
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename CharT>
 [[nodiscard]] inline Expected<u64> ParseHexU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(text.size() != s_HexU64DigitCount)
         return MakeUnexpected(Failure{});
-
-    u64 value = 0u;
-    for(const CharT ch : text){
-        const auto nibble = ParseHexDigit(ch);
-        if(!nibble)
-            return MakeUnexpected(Failure{});
-
-        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
-    }
-
-    return value;
+    return NumericTextDetail::ParseHexDigitsU64(text);
 }
 
 template<typename CharT>
 [[nodiscard]] inline Expected<u64> ParseVariableHexU64(BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
-    u64 value = 0u;
     if(text.size() >= s_HexPrefixLength && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
         text.remove_prefix(s_HexPrefixLength);
     if(text.empty() || text.size() > s_HexU64DigitCount)
         return MakeUnexpected(Failure{});
-
-    for(const CharT ch : text){
-        const auto nibble = ParseHexDigit(ch);
-        if(!nibble)
-            return MakeUnexpected(Failure{});
-
-        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
-    }
-    return value;
+    return NumericTextDetail::ParseHexDigitsU64(text);
 }
 
 namespace NumericTextDetail{
@@ -362,12 +380,7 @@ inline void AppendHexByte(const u8 byte, StringT& outText)noexcept(noexcept(outT
 }
 
 template<typename StringT>
-    requires requires(StringT& text){
-        typename StringT::value_type;
-        text.size();
-        text.max_size();
-        text.push_back(typename StringT::value_type{});
-    }
+    requires NumericTextDetail::PushBackStringLike<StringT>
 inline void AppendHexU32(const u32 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText))){
     NumericTextDetail::AppendFixedHexImpl(static_cast<u64>(value), s_HexU32DigitCount, outText);
 }
@@ -386,12 +399,7 @@ inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText)noexce
 }
 
 template<typename StringT>
-    requires requires(StringT& text){
-        typename StringT::value_type;
-        text.size();
-        text.max_size();
-        text.push_back(typename StringT::value_type{});
-    }
+    requires NumericTextDetail::PushBackStringLike<StringT>
 inline void AppendHexU64(const u64 value, StringT& outText)noexcept(noexcept(NumericTextDetail::AppendFixedHexImpl(value, s_HexU64DigitCount, outText))){
     NumericTextDetail::AppendFixedHexImpl(value, s_HexU64DigitCount, outText);
 }

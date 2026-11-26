@@ -333,6 +333,34 @@ struct PacketRecordingFrontierEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuRecordedGraph::PacketRecordingScratch* GpuNativePacketRecorder::prepareOrValidateRecordingAttempt(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketRange& range,
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuRecordedGraph::ArtifactOperation& artifactAccess,
+    Alloc::ScratchArena& scratchArena,
+    const b8 alreadyPrepared,
+    GpuRecordedGraph& outRecordedGraph
+)const{
+    if(alreadyPrepared){
+        if(
+            m_device.getDeviceGeneration() != planAccess.deviceGeneration()
+            || !GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, scratchArena, m_timingRecorder)
+            || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactAccess)
+        )
+            return nullptr;
+    }
+    else if(!prepareRecordingAttempt(graph, compiledGraph, range, declarationAccess, planAccess, artifactAccess, scratchArena, outRecordedGraph)){
+        return nullptr;
+    }
+    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = outRecordedGraph.serialRecordingScratch(artifactAccess);
+    if(!serialScratch || !serialScratch->stateFanInScratchArena)
+        return nullptr;
+    return serialScratch;
+}
+
 b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -342,18 +370,15 @@ b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const outCommandIrCapture
 )const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    GpuRecordedGraph::ArtifactOperation artifactOperation(outRecordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
-    if(!artifactOperation.valid())
-        return false;
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
-        return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-    if(!declarationAccess.valid())
-        return false;
-    return recordPacketRangeInCompileOrderWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, scratchArena, outRecordedGraph, outFailedPacket, outCommandIrCapture, false);
+    return WithExclusiveRecordingAccess(
+        graph,
+        compiledGraph,
+        [&](const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuRecordedGraph::ArtifactOperation& artifactOperation){
+            return recordPacketRangeInCompileOrderWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, scratchArena, outRecordedGraph, outFailedPacket, outCommandIrCapture, false);
+        },
+        outRecordedGraph,
+        outFailedPacket
+    );
 }
 
 b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrderWithAccess(
@@ -370,6 +395,7 @@ b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrderWithAccess(
     const b8 alreadyPrepared,
     const b8 allowStateSeedElision
 )const{
+    if(outFailedPacket)
         *outFailedPacket = {};
     if(
         !declarationAccess.validFor(graph)
@@ -381,19 +407,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInCompileOrderWithAccess(
         return false;
 
     const Timer recordingOperationBegin = TimerNow();
-    if(alreadyPrepared){
-        if(
-            m_device.getDeviceGeneration() != planAccess.deviceGeneration()
-            || !GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, scratchArena, m_timingRecorder)
-            || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
-        )
-            return false;
-    }
-    else if(!prepareRecordingAttempt(graph, compiledGraph, range, declarationAccess, planAccess, artifactOperation, scratchArena, outRecordedGraph)){
-        return false;
-    }
-    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = outRecordedGraph.serialRecordingScratch(artifactOperation);
-    if(!serialScratch || !serialScratch->stateFanInScratchArena)
+    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = prepareOrValidateRecordingAttempt(graph, compiledGraph, range, declarationAccess, planAccess, artifactOperation, scratchArena, alreadyPrepared, outRecordedGraph);
+    if(!serialScratch)
         return false;
     Alloc::ScratchArena& stateFanInScratchArena = *serialScratch->stateFanInScratchArena;
     if(!recordPreparedPacketRangeInCompileOrder(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, stateFanInScratchArena, *serialScratch, outRecordedGraph, outCommandIrCapture, outFailedPacket, allowStateSeedElision))
@@ -439,18 +454,15 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const outCommandIrCapture
 )const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    GpuRecordedGraph::ArtifactOperation artifactOperation(outRecordedGraph, GpuRecordedGraph::ArtifactOperationMode::Exclusive);
-    if(!artifactOperation.valid())
-        return false;
-    GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    if(!planAccess.valid())
-        return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
-    if(!declarationAccess.valid())
-        return false;
-    return recordPacketRangeInReadyFrontiersWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, cpuScheduler, scratchArena, outRecordedGraph, outFailedPacket, outCommandIrCapture, false);
+    return WithExclusiveRecordingAccess(
+        graph,
+        compiledGraph,
+        [&](const GpuTaskGraph::DeclarationReadView& declarationAccess, const GpuCompiledGraph::ReadView& planAccess, const GpuRecordedGraph::ArtifactOperation& artifactOperation){
+            return recordPacketRangeInReadyFrontiersWithAccess(graph, declarationAccess, compiledGraph, planAccess, artifactOperation, range, cpuScheduler, scratchArena, outRecordedGraph, outFailedPacket, outCommandIrCapture, false);
+        },
+        outRecordedGraph,
+        outFailedPacket
+    );
 }
 
 b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
@@ -528,19 +540,8 @@ b8 GpuNativePacketRecorder::recordPacketRangeInReadyFrontiersWithAccess(
         frontierResults.reserve(range.packetCount);
         parallelAborts.reserve(parallelPacketCount);
     }
-    if(alreadyPrepared){
-        if(
-            m_device.getDeviceGeneration() != planAccess.deviceGeneration()
-            || !GpuPacketRecordingDetail::PrepareCompiledTimingQueries(declarationAccess, planAccess, scratchArena, m_timingRecorder)
-            || !outRecordedGraph.validForWithinArtifactOperation(graph, declarationAccess, compiledGraph, planAccess, artifactOperation)
-        )
-            return false;
-    }
-    else if(!prepareRecordingAttempt(graph, compiledGraph, range, declarationAccess, planAccess, artifactOperation, scratchArena, outRecordedGraph)){
-        return false;
-    }
-    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = outRecordedGraph.serialRecordingScratch(artifactOperation);
-    if(!serialScratch || !serialScratch->stateFanInScratchArena)
+    GpuRecordedGraph::PacketRecordingScratch* const serialScratch = prepareOrValidateRecordingAttempt(graph, compiledGraph, range, declarationAccess, planAccess, artifactOperation, scratchArena, alreadyPrepared, outRecordedGraph);
+    if(!serialScratch)
         return false;
     Alloc::ScratchArena& serialStateFanInScratchArena = *serialScratch->stateFanInScratchArena;
     const auto completeReadyFrontierTelemetry = [&]()noexcept{

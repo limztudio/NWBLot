@@ -42,13 +42,13 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
         return MakeUnexpected(Failure());
     f32 scrollX = 0.0f;
     if(previousScroll.x > 0.0f)
-        scrollX = UiSimdMin(maximumScroll, previousScroll.x);
+        scrollX = Min(maximumScroll, previousScroll.x);
     if(revealCaret && caretRect.x < scrollX)
         scrollX = caretRect.x;
     if(revealCaret && caretEndX > scrollX + placement.content.width)
         scrollX = caretEndX - placement.content.width;
     if(scrollX > 0.0f)
-        scrollX = UiSimdMin(maximumScroll, scrollX);
+        scrollX = Min(maximumScroll, scrollX);
     else
         scrollX = 0.0f;
     placement.scroll = scrollX;
@@ -67,13 +67,13 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
             return MakeUnexpected(Failure());
         f32 scrollY = 0.0f;
         if(previousScroll.y > 0.0f)
-            scrollY = UiSimdMin(maximumScrollY, previousScroll.y);
+            scrollY = Min(maximumScrollY, previousScroll.y);
         if(revealCaret && caretRect.y < scrollY)
             scrollY = caretRect.y;
         if(revealCaret && caretEndY > scrollY + placement.content.height)
             scrollY = caretEndY - placement.content.height;
         if(scrollY > 0.0f)
-            scrollY = UiSimdMin(maximumScrollY, scrollY);
+            scrollY = Min(maximumScrollY, scrollY);
         else
             scrollY = 0.0f;
         placement.scrollY = scrollY;
@@ -81,7 +81,7 @@ Expected<EditBoxPlacement> TryComputeEditBoxViewportPlacement(
         placement.textOrigin = Point(origin.x, origin.y);
     }
     else{
-        const f32 verticalOffset = UiSimdMax(0.0f, (placement.content.height - visualBounds.height) * s_RectCenterFraction);
+        const f32 verticalOffset = Max(0.0f, (placement.content.height - visualBounds.height) * s_RectCenterFraction);
         const VectorSingle base = VectorSingle(left, top, left, top) - VectorSingle(visualBounds.x, visualBounds.y, visualBounds.x, visualBounds.y);
         const VectorSingle origin(base.x - placement.scroll, base.y + verticalOffset, base.z - placement.scroll, base.w + verticalOffset);
         placement.textOrigin = Point(origin.x, origin.y);

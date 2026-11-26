@@ -84,7 +84,6 @@
 
 #define NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD) \
     FIELD(opaqueSpecularSlot) \
-    FIELD(glassSpecularSlot) \
     FIELD(opaqueOutputSlot) \
     FIELD(glassOutputSlot) \
     FIELD(opaqueRadianceSlot) \
@@ -98,7 +97,6 @@
     FIELD(deferredResourcesSlot) \
     FIELD(viewSlot) \
     FIELD(materialContextSlot) \
-    FIELD(debugView) \
     FIELD(depthPyramidSlot) \
     FIELD(depthMipCount) \
     FIELD(screenMaxSteps) \

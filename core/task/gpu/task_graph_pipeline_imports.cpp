@@ -60,7 +60,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::importPipeline(const GpuGraphPipeline
         return MakeUnexpected(Failure{});
 
     const u32 pipelineIndex = findPipelineIdentity(desc.identity);
-    if(pipelineIndex != s_InvalidImportIndex){
+    if(pipelineIndex != GpuGraphResourceImportIndex::s_InvalidImportIndex){
         if(!__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
             return MakeUnexpected(Failure{});
         return GpuGraphPipelineId{ .generation = m_generation, .index = pipelineIndex };
@@ -78,7 +78,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::importGraphicsPipeline(const Graphics
         return MakeUnexpected(Failure{});
 
     const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
-    if(match.index != s_InvalidImportIndex){
+    if(match.index != GpuGraphResourceImportIndex::s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
             return MakeUnexpected(Failure{});
         return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
@@ -96,7 +96,7 @@ Expected<GpuGraphPipelineId> GpuTaskGraph::importComputePipeline(const ComputePi
         return MakeUnexpected(Failure{});
 
     const PipelineImportMatch match = findPipelineImportMatch(desc.identity, { pipeline.get(), desc.type });
-    if(match.index != s_InvalidImportIndex){
+    if(match.index != GpuGraphResourceImportIndex::s_InvalidImportIndex){
         if(!match.samePointer || !__hidden_gpu_task_graph_pipeline_imports::CompatiblePipelineMetadata(pipelineAt(match.index), desc))
             return MakeUnexpected(Failure{});
         return GpuGraphPipelineId{ .generation = m_generation, .index = match.index };
@@ -113,13 +113,13 @@ u32 GpuTaskGraph::findPipelineIdentity(const Name& identity)const noexcept{
     const NameHash& key = identity.identityHash();
     if(m_pipelineIdentityIndex){
         const auto found = m_pipelineIdentityIndex->find(key);
-        return found == m_pipelineIdentityIndex->end() ? s_InvalidImportIndex : found.value();
+        return found == m_pipelineIdentityIndex->end() ? GpuGraphResourceImportIndex::s_InvalidImportIndex : found.value();
     }
     for(usize index = 0u; index < m_pipelines.size(); ++index){
         if(m_pipelines[index].identity.identityHash() == key)
             return static_cast<u32>(index);
     }
-    return s_InvalidImportIndex;
+    return GpuGraphResourceImportIndex::s_InvalidImportIndex;
 }
 
 GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(const Name& identity, const PipelinePointerKey& pointer)const noexcept{
@@ -149,7 +149,7 @@ GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(const Na
 
 void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPointer){
     if(!m_pipelineIdentityIndex){
-        if(m_pipelines.size() < s_InlineImportIndexCount)
+        if(m_pipelines.size() < GpuGraphResourceImportIndex::s_InlineImportIndexCount)
             return;
 
         const usize identityCount = AddSize(m_pipelines.size(), 1u);

@@ -13,7 +13,8 @@ import sys
 import tempfile
 
 from skinned_caustic_transition_image_evidence import (MATCH_LIMITS, REGIONS, SAMPLE_COUNT, SIGNAL_LIMITS, VARIANTS, SkinnedCausticTransitionImageEvidence)
-from window_capture_image import read_bmp_24_rows
+from smoke_capture_suite import build_window_capture_command, run_window_capture_subprocess
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import (SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure)
 from window_capture_validation import validate_expected_log_text
 
@@ -31,8 +32,6 @@ LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
 LIT_TIMEOUT = "--timeout"
 LIT_RUNTIME_LOG = "runtime.log"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
-LIT_SKIP_LOG_MESSAGE = "--skip-log-message"
 LIT_NO_GPU_VALIDATION = "--no-gpu-validation"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_UTF_8 = "utf-8"
@@ -117,22 +116,17 @@ def capture(args, variant):
     environment.pop(LIT_NWB_GPU_TIMING_FILE, None)
     environment.update({"NWB_SKINNED_CAUSTIC_CSG_TRANSITION": "1", "NWB_SKINNED_CAUSTIC_CSG_LAGGED": str(int(variant == LIT_LAGGED)), "NWB_SKINNED_CAUSTIC_CSG_NO_PHOTONS": str(int(variant == LIT_NO_PHOTONS)),
         LIT_NWB_GPU_TIMING_FILE: str((directory / "gpu_timing.txt").resolve()), "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "128"})
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(sample_path(directory, SAMPLE_COUNT - 1)), "--application-capture", "--application-capture-frame-count", "1", LIT_TIMEOUT, str(args.timeout),
-        "--log-output", str(directory / LIT_RUNTIME_LOG), LIT_EXPECT_LOG_MESSAGE, LIT_TRANSITION_SAMPLES_COMPLETE, LIT_EXPECT_LOG_MESSAGE, LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN,
-        LIT_SKIP_LOG_MESSAGE, "natural software-only shadow route selected because RayQuery-capable hardware is unavailable", "--gpu-validation" if args.gpu_validation else LIT_NO_GPU_VALIDATION]
+    skip_logs = ["natural software-only shadow route selected because RayQuery-capable hardware is unavailable"]
     if variant == LIT_LAGGED:
-        command += [LIT_SKIP_LOG_MESSAGE, "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue",
-            LIT_SKIP_LOG_MESSAGE, "SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"]
-    if args.logserver_executable:
-        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
-    else:
-        command.append("--no-logserver")
+        skip_logs.extend(("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue",
+            "SkinnedCausticTransition: photon reader remains on primary Graphics; asynchronous hazard route unavailable"))
+    command = build_window_capture_command(args, sample_path(directory, SAMPLE_COUNT - 1), frames=1, log_output=directory / LIT_RUNTIME_LOG,
+        expect_logs=(LIT_TRANSITION_SAMPLES_COMPLETE, LIT_SKINNEDCAUSTICSMOKEPROJECT_SHUTDOWN), skip_logs=skip_logs,
+        gpu_validation=args.gpu_validation, application_args=())
     print(f"Capturing skinned ordinary/CSG transitions: {variant}", flush=True)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode not in (0, SKIP_EXIT_CODE):
-        raise SmokeFailure(f"{variant} transition acquisition failed with exit {result.returncode}")
-    return result.returncode
+    result = run_window_capture_subprocess(command, env=environment, timeout=args.timeout,
+        failure_message=f"{variant} transition acquisition failed with exit {{code}}", timeout_margin=LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
+    return SKIP_EXIT_CODE if result is None else 0
 
 
 def analyze(directory):
@@ -146,7 +140,7 @@ def analyze(directory):
             path = sample_path(root, sample)
             if path.with_name(path.name + ".partial").exists():
                 raise SmokeFailure("transition acquisition left an incomplete framebuffer")
-            series[variant].append(SkinnedCausticTransitionImageEvidence.frame_regions(read_bmp_24_rows(path)))
+            series[variant].append(SkinnedCausticTransitionImageEvidence.frame_regions(Bmp24Codec.read_bmp_24_rows(path)))
             files.append({"path": str(path.resolve()), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
         runs[-1]["files"] = files
     return {"runs": runs, "comparisons": SkinnedCausticTransitionImageEvidence.compare_series(series), "match_limits": MATCH_LIMITS, "signal_limits": SIGNAL_LIMITS, "regions": REGIONS,

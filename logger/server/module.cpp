@@ -686,20 +686,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
     const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
-    const auto fileName = StringFormat(
-        scratchArena,
-        "{}{:04}{:02}{:02}_{:02}{:02}{:02}_{}_{}{}",
-        s_CrashUploadArchiveFilePrefix,
-        localTime.tm_year + s_LocalTimeYearBase,
-        localTime.tm_mon + s_LocalTimeMonthBase,
-        localTime.tm_mday,
-        localTime.tm_hour,
-        localTime.tm_min,
-        localTime.tm_sec,
-        CurrentProcessId(),
-        counter,
-        s_CrashUploadArchiveFileExtension
-    );
+    const auto fileName = FormatTimestampedProcessFilename(scratchArena, s_CrashUploadArchiveFilePrefix, localTime, counter, s_CrashUploadArchiveFileExtension);
 
     return Path(server.arena(), CrashInboxDirectory(scratchArena) / fileName);
 }

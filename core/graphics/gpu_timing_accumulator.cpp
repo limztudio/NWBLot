@@ -279,35 +279,6 @@ void GpuTimingAccumulator::releaseFailedBeginClaim(const GpuTimingScope& scope, 
     m_nextSearchIndex = scope.index;
 }
 
-Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(CommandList& commandList, const u64 frameIndex, const u32 epoch, const u64 performanceCaptureEpoch, const GpuTimingSampleAttribution attribution){
-    TimerQuery* claimedQuery = nullptr;
-    b8 previousDeviceReady = false;
-    auto claimed = claimQueryForBegin(
-        commandList,
-        commandList.canRecordTimerQueryHere(),
-        commandList.canResetTimerQueryHere(),
-        commandList.getResolvedDescription(),
-        frameIndex,
-        epoch,
-        performanceCaptureEpoch,
-        attribution,
-        claimedQuery,
-        previousDeviceReady
-    );
-    if(!claimed)
-        return MakeUnexpected(Failure{});
-    if(!claimed->scope.valid())
-        return claimed;
-
-    const auto timerQueryRecording = commandList.beginTimerQuery(*claimedQuery);
-    if(!timerQueryRecording){
-        releaseFailedBeginClaim(claimed->scope, previousDeviceReady);
-        return MakeUnexpected(Failure{});
-    }
-    claimed->scope.timerQueryRecording = *timerQueryRecording;
-    return claimed;
-}
-
 GpuTimingAccumulator::QueryEndResult::Enum GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return QueryEndResult::Invalid;

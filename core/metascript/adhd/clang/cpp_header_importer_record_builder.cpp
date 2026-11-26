@@ -605,22 +605,6 @@ void ImporterContext::extractClass(CXCursor classCursor){
         const CXCursor resolvedBase = ::clang_Cursor_isNull(def) ? baseRec : def;
         importClassMethodsFromCursor(resolvedBase, *cls, true, dedupe);
     }
-
-    if(const MStringView compatAliasName = CppImporterSemantics::FindCompatTypeAlias(cppExportName); !compatAliasName.empty() && FindExistingDeclForMerge(m_classByExportName, m_classByName, compatAliasName, {}) == nullptr){
-        if(m_aliasByName.find(compatAliasName) == m_aliasByName.end()){
-            TypeAliasDecl* compatAlias = AllocateAstNode<TypeAliasDecl>(m_arena);
-            compatAlias->name = compatAliasName;
-            compatAlias->cppNamespace = cls->cppNamespace;
-            compatAlias->cppExportName = cls->cppExportName;
-            compatAlias->requiredHeader = cls->requiredHeader;
-            compatAlias->isImported = true;
-            compatAlias->isExtern = true;
-            compatAlias->aliasedType = AllocateAstNode<TypeRef>(m_arena);
-            compatAlias->aliasedType->name = cls->name;
-            m_unit.typeAliases.push_back(compatAlias);
-            m_aliasByName.emplace(MString(compatAliasName.data(), compatAliasName.size(), m_arena), compatAlias);
-        }
-    }
 }
 
 

@@ -156,6 +156,26 @@ namespace GpuTaskGraphCompilerDetail{
     return *acceptedQueue;
 }
 
+[[nodiscard]] static b8 IsEligibleTimingFeedbackCandidate(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuPhysicalQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuPhysicalQueueInfo& candidate,
+    const usize queueIndex,
+    const GpuTaskQueueLegalityCache* const legalityCache
+)noexcept{
+    if(candidate.id == incumbent.id)
+        return false;
+    if(candidate.familyIndex != incumbent.familyIndex && !task.scheduling.allowCrossFamilySameClassQueueRouting)
+        return false;
+    if(candidate.queueClass == incumbent.queueClass ? !task.scheduling.allowSameClassQueueRouting : !task.scheduling.allowCrossClassTimingFeedbackRouting)
+        return false;
+    return legalityCache
+        ? legalityCache->isLegal(graph, topology, task, queueIndex)
+        : IsLegalQueueAssignmentCandidate(graph, topology, task, candidate);
+}
+
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackQueueCached(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
@@ -188,16 +208,7 @@ namespace GpuTaskGraphCompilerDetail{
     b8 hasResultScore = false;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
-        if(candidate.id == incumbent.id)
-            continue;
-        if(candidate.familyIndex != incumbent.familyIndex && !task.scheduling.allowCrossFamilySameClassQueueRouting)
-            continue;
-        if(candidate.queueClass == incumbent.queueClass ? !task.scheduling.allowSameClassQueueRouting : !task.scheduling.allowCrossClassTimingFeedbackRouting)
-            continue;
-        const b8 legal = legalityCache
-            ? legalityCache->isLegal(graph, topology, task, queueIndex)
-            : IsLegalQueueAssignmentCandidate(graph, topology, task, candidate);
-        if(!legal)
+        if(!IsEligibleTimingFeedbackCandidate(graph, topology, task, incumbent, candidate, queueIndex, legalityCache))
             continue;
 
         const GpuTaskTimingHistory* const candidateHistory = historySnapshot.find(TimingHistoryKeyForQueue(key, candidate.queueClass), candidate.id);
@@ -294,16 +305,7 @@ namespace GpuTaskGraphCompilerDetail{
     b8 needsCalibration = resultSampleCount < policy.minimumSampleCount;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
-        if(candidate.id == incumbent.id)
-            continue;
-        if(candidate.familyIndex != incumbent.familyIndex && !task.scheduling.allowCrossFamilySameClassQueueRouting)
-            continue;
-        if(candidate.queueClass == incumbent.queueClass ? !task.scheduling.allowSameClassQueueRouting : !task.scheduling.allowCrossClassTimingFeedbackRouting)
-            continue;
-        const b8 legal = legalityCache
-            ? legalityCache->isLegal(graph, topology, task, queueIndex)
-            : IsLegalQueueAssignmentCandidate(graph, topology, task, candidate);
-        if(!legal)
+        if(!IsEligibleTimingFeedbackCandidate(graph, topology, task, incumbent, candidate, queueIndex, legalityCache))
             continue;
 
         const u32 candidateSampleCount = sampleCountFor(candidate);

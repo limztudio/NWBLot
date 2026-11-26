@@ -24,14 +24,7 @@ namespace VulkanTextureDetail{
 
 
 [[nodiscard]] static b8 SliceCoversWholeMipExtent(const TextureDesc& description, const TextureSlice& resolvedSlice)noexcept{
-    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, resolvedSlice.mipLevel);
-    return resolvedSlice.x == 0u
-        && resolvedSlice.y == 0u
-        && resolvedSlice.z == 0u
-        && resolvedSlice.width == mipExtent.width
-        && resolvedSlice.height == mipExtent.height
-        && resolvedSlice.depth == mipExtent.depth
-    ;
+    return IsWholeMipExtent(description, resolvedSlice.mipLevel, resolvedSlice.x, resolvedSlice.y, resolvedSlice.z, resolvedSlice.width, resolvedSlice.height, resolvedSlice.depth);
 }
 
 Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sourceDesc, const TextureSlice& sourceSlice, const TextureDesc& destinationDesc, const TextureSlice& destinationSlice)noexcept{
@@ -97,9 +90,9 @@ Expected<TextureCopyContract> ResolveTextureCopyContract(const TextureDesc& sour
     if(contract.aspectMask == 0u)
         return MakeUnexpected(Failure{});
     if(sourceDesc.sampleCount > 1u && (contract.aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u)
-        contract.queueRequirement = TextureCopyQueueRequirement::Graphics;
+        contract.queueRequirement = TextureQueueRequirement::Graphics;
     else if(!sourceWholeMip || !destinationWholeMip)
-        contract.queueRequirement = TextureCopyQueueRequirement::ComputeOrGraphics;
+        contract.queueRequirement = TextureQueueRequirement::ComputeOrGraphics;
 
     return contract;
 }

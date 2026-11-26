@@ -294,16 +294,9 @@ void CaptureManualDumpContext([[maybe_unused]] CrashDumpRequestOptions& outOptio
 }
 
 CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, [[maybe_unused]] const u32 waitMilliseconds)noexcept{
-    static thread_local b8 s_InTransport = false;
-    if(s_InTransport)
+    CrashTransportFlightGuard flightGuard(g_State.transportInFlight);
+    if(!flightGuard.entered())
         return CrashDumpTransportStatus::Failed;
-    s_InTransport = true;
-
-    u32 expected = 0u;
-    if(!g_State.transportInFlight.compare_exchange_strong(expected, 1u, MemoryOrder::acq_rel, MemoryOrder::acquire)){
-        s_InTransport = false;
-        return CrashDumpTransportStatus::Failed;
-    }
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
 #if defined(FOUNDATION_PLATFORM_ANDROID)
@@ -319,8 +312,6 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     }
 #endif
 
-    g_State.transportInFlight.store(0u, MemoryOrder::release);
-    s_InTransport = false;
     return status;
 }
 
@@ -457,8 +448,7 @@ Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept{
     const auto signals = __hidden_crash_posix::InstallSignalHandlers();
     if(!signals)
         return MakeUnexpected(signals.error());
-    g_State.previousTerminateHandler = ExchangeTerminateHandler(PosixCallstackCapture::Terminate);
-    g_State.terminateHandlerInstalled = true;
+    InstallTerminateHandler(PosixCallstackCapture::Terminate);
     return {};
 }
 
@@ -472,12 +462,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
     CleanupOwnedDescriptor(g_State.ackReadFd, observations);
 #endif
     g_State.handlerStarted = false;
-    if(g_State.terminateHandlerInstalled){
-        if(QueryTerminateHandler() == PosixCallstackCapture::Terminate)
-            ExchangeTerminateHandler(g_State.previousTerminateHandler);
-        g_State.terminateHandlerInstalled = false;
-        g_State.previousTerminateHandler = nullptr;
-    }
+    RestoreTerminateHandler(PosixCallstackCapture::Terminate);
     b8 pending = false;
     for(usize remaining = s_MaxCrashSignals; remaining != 0u; --remaining){
         const usize index = remaining - 1u;

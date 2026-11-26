@@ -82,18 +82,6 @@ NWB_ADHD_BEGIN
     return false;
 }
 
-[[nodiscard]] b8 SimdVectorSourceAnalysis::TryGetAnyFloatVectorSourceInfo(const Expr& srcExpr, b8& outIsDouble, MStringView& outRegSimdType, MStringView& outStorageLoadFn, u32& outEffectiveZeroedAboveLane)noexcept{
-    if(SimdVectorSourceAnalysis::TryGetFloatVectorSourceInfo(srcExpr, false, outRegSimdType, outStorageLoadFn, outEffectiveZeroedAboveLane)){
-        outIsDouble = false;
-        return true;
-    }
-    if(SimdVectorSourceAnalysis::TryGetFloatVectorSourceInfo(srcExpr, true, outRegSimdType, outStorageLoadFn, outEffectiveZeroedAboveLane)){
-        outIsDouble = true;
-        return true;
-    }
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

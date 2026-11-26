@@ -399,6 +399,16 @@ private:
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;
     UploadManager m_accelStructInputManager;
+
+    template<typename Fn>
+    void forEachUploadManager(const u8 mask, Fn&& fn)noexcept(noexcept(fn(m_uploadManager))){
+        if((mask & UploadManager::s_UploadBit) != 0u)
+            fn(m_uploadManager);
+        if((mask & UploadManager::s_ScratchBit) != 0u)
+            fn(m_scratchManager);
+        if((mask & UploadManager::s_AccelInputBit) != 0u)
+            fn(m_accelStructInputManager);
+    }
 };
 
 

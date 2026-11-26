@@ -18,16 +18,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_buffer_ownership_transfer{
-
-static constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void CommandList::BufferOwnershipTransfer::release(Buffer* bufferResource, const GpuPhysicalQueueId destinationQueue, const BufferRange range){
     if(!bufferResource)
         return;
@@ -50,7 +40,7 @@ void CommandList::BufferOwnershipTransfer::release(Buffer* bufferResource, const
     }
     const BufferRange resolvedRange = range.resolve(buffer.m_creationDesc);
     if(!VulkanStateTrackingDetail::IsBufferStateRangeValid(range, buffer.m_creationDesc)){
-        m_command.rejectCommandRecording(s_OperationName, __hidden_buffer_ownership_transfer::s_ByteRangeOutsideBufferReason);
+        m_command.rejectCommandRecording(s_OperationName, VulkanStateTrackingDetail::s_ByteRangeOutsideBufferReason);
         return;
     }
     if(!m_command.m_device.getQueue(destinationQueue)){

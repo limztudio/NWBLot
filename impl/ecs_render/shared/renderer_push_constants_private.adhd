@@ -178,7 +178,6 @@ void SetTransparentDrawPushConstants(
     in AvboitFrameTargets targets,
     in MeshFrameHeapSlots frameHeapSlots,
     in u32 dispatchFlags,
-    in b8 hdr10OutputActive,
     in u32 csgContextHeapSlot,
     in b8 refractionCapture
 ){
@@ -191,7 +190,7 @@ void SetTransparentDrawPushConstants(
             frameHeapSlots,
             dispatchFlags
         ),
-        BuildRendererAvboitPushConstants(targets, hdr10OutputActive),
+        BuildRendererAvboitPushConstants(targets),
         csgContextHeapSlot,
         refractionCapture
     );

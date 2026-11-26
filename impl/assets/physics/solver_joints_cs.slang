@@ -33,9 +33,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         else if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START)
             nwbPhysicsWarmStartSingleJoint(idx, bodySimSlot, bodyStateSlot, jointSlot, flags);
         else if(mode == NWB_PHYSICS_SOLVER_MODE_PROJECT){
-            const bool didProj = nwbPhysicsProjectSingleJoint(idx, bodySimSlot, bodyStateSlot, jointSlot);
-            if(didProj){
-            }
+            nwbPhysicsProjectSingleJoint(idx, bodySimSlot, bodyStateSlot, jointSlot);
         }
         else
             nwbPhysicsSolveSingleJoint(idx, mode == NWB_PHYSICS_SOLVER_MODE_SOLVE_BIAS, bodySimSlot, bodyStateSlot, jointSlot, h);

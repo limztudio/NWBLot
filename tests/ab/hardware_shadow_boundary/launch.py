@@ -28,8 +28,6 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 
 import launch as AB_LAUNCH  # noqa: E402
 from launcher.build import BuildController  # noqa: E402
-from launcher.cli import LauncherCli  # noqa: E402
-from launcher.cmake_settings import CmakeSettings  # noqa: E402
 from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 
 LIT_DBG = "dbg"
@@ -75,8 +73,8 @@ def resolve_paths(args: argparse.Namespace, settings) -> BoundaryPaths:
         baseline_executable = healthy_executable
     else:
         baseline_executable = BuildController.resolve_executable_path(settings, HEALTHY_TARGET, baseline_executable, None, args.dry_run,)
-    runtime_directory = (CmakeSettings.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
-    output_directory = (CmakeSettings.resolve_path(settings.root, args.output_dir) if args.output_dir is not None else default_output_directory(settings.root))
+    runtime_directory = AB_LAUNCH.resolve_ab_runtime_directory(settings, args.runtime_dir, RUNTIME_DIRECTORY)
+    output_directory = AB_LAUNCH.resolve_ab_output_directory(settings, args.output_dir, LIT_HARDWARE_SHADOW_BOUNDARY)
     return BoundaryPaths(healthy_executable, baseline_executable, runtime_directory, output_directory)
 
 
@@ -100,7 +98,7 @@ def run_runner(args: argparse.Namespace, paths: BoundaryPaths) -> int:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    LauncherCli.add_build_options(parser)
+    AB_LAUNCH.LauncherCli.add_build_options(parser)
     parser.add_argument(LIT_HEALTHY_EXECUTABLE, type=Path, help="Override the healthy hardware transparent-shadow executable.")
     parser.add_argument(LIT_BASELINE_EXECUTABLE, dest="baseline_executable", type=Path, help="Override the executable reused for the opaque baseline arm.",)
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked stress-scene runtime directory.")
@@ -135,11 +133,7 @@ def run(args: argparse.Namespace) -> int:
     if args.self_test:
         return run_self_test()
     require_diagnostic_configuration(args.config)
-    environment = BuildController.build_environment(args)
-    settings = CmakeSettings.resolve_launch_settings(args, DEFAULT_DOMAIN)
-    CmakeSettings.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
-    settings = CmakeSettings.refresh_launch_settings(settings, args.domain)
-    build_benchmark_targets(args, settings, environment)
+    settings = AB_LAUNCH.configure_and_build_ab_targets(args, DEFAULT_DOMAIN, REQUIRED_DEFINES, (HEALTHY_TARGET,))
     return run_runner(args, resolve_paths(args, settings))
 
 

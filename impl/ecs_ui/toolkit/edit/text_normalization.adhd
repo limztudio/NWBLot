@@ -8,39 +8,36 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<MultilineTextStep> TryBuildMultilineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
-    MultilineTextStep outStep;
+Expected<EditTextStep> TryBuildEditTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes, in b8 multiline){
+    EditTextStep outStep;
     outStep.sourceBytes = decodedBytes;
-    if(IsMultilineLineBreakScalar(scalar)){
-        outStep.replacement = cast<u8>(s_EditUnicodeLineFeed);
-        outStep.outputBytes = 1u;
-        if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
-            ++outStep.sourceBytes;
+    if(multiline){
+        if(IsMultilineLineBreakScalar(scalar)){
+            outStep.replacement = cast<u8>(s_EditUnicodeLineFeed);
+            outStep.outputBytes = 1u;
+            if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
+                ++outStep.sourceBytes;
+            return outStep;
+        }
+        if(!IsCanonicalMultilineScalar(scalar))
+            return MakeUnexpected(Failure());
+        outStep.outputBytes = outStep.sourceBytes;
         return outStep;
     }
-    if(!IsCanonicalMultilineScalar(scalar))
-        return MakeUnexpected(Failure());
-    outStep.outputBytes = outStep.sourceBytes;
-    return outStep;
-}
-
-Expected<SingleLineTextStep> TryBuildSingleLineTextStep(in StringView source, in usize offset, in u32 scalar, in usize decodedBytes){
-    SingleLineTextStep outStep;
     if(IsSingleLineRejectedScalar(scalar))
         return MakeUnexpected(Failure());
-    const b8 space = IsSingleLineSpaceScalar(scalar);
-    outStep.sourceBytes = decodedBytes;
-    if(space)
+    if(IsSingleLineSpaceScalar(scalar)){
+        outStep.replacement = cast<u8>(s_TextUnicodeSpace);
         outStep.outputBytes = 1u;
+    }
     else
         outStep.outputBytes = outStep.sourceBytes;
-    outStep.space = space;
     if(scalar == s_EditUnicodeCarriageReturn && offset + outStep.sourceBytes < source.size() && cast<u32>(cast<u8>(source[offset + outStep.sourceBytes])) == s_EditUnicodeLineFeed)
         ++outStep.sourceBytes;
     return outStep;
 }
 
-b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
+b8 ValidateTextScalars(in StringView text, in b8 singleLine, in b8 canonicalMultiline){
     if(text.size() > cast<usize>(i32.max))
         return false;
     usize offset = 0u;
@@ -51,39 +48,27 @@ b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
             return false;
         if(singleLine && !IsSingleLineScalar(scalar))
             return false;
-        offset += byteCount;
-    }
-    return true;
-}
-
-b8 ValidateMultilineText(in StringView text){
-    if(text.size() > cast<usize>(i32.max))
-        return false;
-    usize offset = 0u;
-    while(offset < text.size()){
-        u32 scalar = 0u;
-        usize byteCount = 0u;
-        if(!TryDecodeUtf8Scalar(text.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount) || !IsCanonicalMultilineScalar(scalar))
+        if(canonicalMultiline && !IsCanonicalMultilineScalar(scalar))
             return false;
         offset += byteCount;
     }
     return true;
 }
 
-Expected<SingleLineTextStep> ReadSingleLineTextStep(in StringView source, in usize offset){
-    u32 scalar = 0u;
-    usize byteCount = 0u;
-    if(!TryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
-        return MakeUnexpected(Failure());
-    return TryBuildSingleLineTextStep(source, offset, scalar, byteCount);
+b8 ValidateGraphemeText(in StringView text, in b8 singleLine){
+    return ValidateTextScalars(text, singleLine, false);
 }
 
-Expected<MultilineTextStep> ReadMultilineTextStep(in StringView source, in usize offset){
+b8 ValidateMultilineText(in StringView text){
+    return ValidateTextScalars(text, false, true);
+}
+
+Expected<EditTextStep> ReadEditTextStep(in StringView source, in usize offset, in b8 multiline){
     u32 scalar = 0u;
     usize byteCount = 0u;
     if(!TryDecodeUtf8Scalar(source.substr(offset, s_EditUtf8MaxSequenceBytes), scalar, byteCount))
         return MakeUnexpected(Failure());
-    return TryBuildMultilineTextStep(source, offset, scalar, byteCount);
+    return TryBuildEditTextStep(source, offset, scalar, byteCount, multiline);
 }
 
 b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
@@ -92,13 +77,13 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     return ValidateGraphemeText(text, true);
 }
 
-[cpp_unwind] Expected<usize, EditTextStatus> NormalizeSingleLineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
+[cpp_unwind] Expected<usize, EditTextStatus> NormalizeEditTextInto(in StringView source, in usize maxBytes, in b8 multiline, mut String outCandidate){
     if(!ValidateGraphemeText(source, false))
         return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
     usize offset = 0u;
     while(offset < source.size()){
-        const Expected<SingleLineTextStep> step = ReadSingleLineTextStep(source, offset);
+        const Expected<EditTextStep> step = ReadEditTextStep(source, offset, multiline);
         if(!step.has_value())
             return MakeUnexpected(EditTextStatus::InvalidText);
         if(step.value().outputBytes > maxBytes - normalizedBytes)
@@ -110,36 +95,7 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     outCandidate.clear();
     offset = 0u;
     while(offset < source.size()){
-        const Expected<SingleLineTextStep> step = ReadSingleLineTextStep(source, offset);
-        assert(step.has_value());
-        if(step.value().space)
-            outCandidate += " ";
-        else
-            outCandidate.append(source.substr(offset, step.value().sourceBytes));
-        offset += step.value().sourceBytes;
-    }
-    return normalizedBytes;
-}
-
-[cpp_unwind] Expected<usize, EditTextStatus> NormalizeMultilineTextInto(in StringView source, in usize maxBytes, mut String outCandidate){
-    if(!ValidateGraphemeText(source, false))
-        return MakeUnexpected(EditTextStatus::InvalidText);
-    usize normalizedBytes = 0u;
-    usize offset = 0u;
-    while(offset < source.size()){
-        const Expected<MultilineTextStep> step = ReadMultilineTextStep(source, offset);
-        if(!step.has_value())
-            return MakeUnexpected(EditTextStatus::InvalidText);
-        if(step.value().outputBytes > maxBytes - normalizedBytes)
-            return MakeUnexpected(EditTextStatus::TooLarge);
-        normalizedBytes += step.value().outputBytes;
-        offset += step.value().sourceBytes;
-    }
-    outCandidate.reserve(normalizedBytes);
-    outCandidate.clear();
-    offset = 0u;
-    while(offset < source.size()){
-        const Expected<MultilineTextStep> step = ReadMultilineTextStep(source, offset);
+        const Expected<EditTextStep> step = ReadEditTextStep(source, offset, multiline);
         assert(step.has_value());
         if(step.value().replacement != 0u){
             if(cast<u32>(step.value().replacement) == s_EditUnicodeLineFeed)

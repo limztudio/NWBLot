@@ -108,7 +108,7 @@ Expected<SdfGlyphSupportOffset> TryComputeSdfGlyphSupportOffset(
     const VectorDouble weightedGradient = VectorDouble(cast<f64>(gradientX), cast<f64>(gradientY), 0.0, 0.0) * VectorDouble(physicalStep.x, physicalStep.y, 0.0, 0.0);
     const f64 derivative = weightedGradient.x + weightedGradient.y;
     const f64 minimumDerivative = (s_TextSdfMinimumFilterWidth * s_TextSdfEncodedHalfRange) / cast<f64>(spreadPixels);
-    const f64 halfWidth = s_TextHalfPixel * UiSimdMaxF64(derivative, minimumDerivative);
+    const f64 halfWidth = s_TextHalfPixel * Max(derivative, minimumDerivative);
     const VectorDouble zeroVec(0.0);
     const VectorDouble halfPixelVec(s_TextHalfPixel);
     VectorDouble supportMin = glyphExtent;

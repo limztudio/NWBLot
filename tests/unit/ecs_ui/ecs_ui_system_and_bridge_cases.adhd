@@ -32,10 +32,13 @@ const TextInputRect s_SessionTestCaret = TextInputRect(100, 32, 1, 18);
 type TextInputPollResultEnum = TextInputPollResult;
 type TextInputAdmissionEnum = TextInputAdmission;
 
-static_assert(is_cpp_type_alias<GpuRenderer, ShaderArchivePathResolver>(ShaderPathResolveCallback));
+[cpp_type_alias(TestTypeAlias, ShaderArchivePathResolver)]
+class TestTypeAliasedClass{}
+
+static_assert(is_cpp_type_alias<TestTypeAliasedClass, ShaderArchivePathResolver>(TestTypeAlias));
 static_assert(has_nothrow_rvalue_member<GpuRenderer, b8, DrawSnapshot>(submit));
 static_assert(!has_nothrow_rvalue_member<GpuRenderer, void, DrawSnapshot>(submit));
-static_assert(!is_cpp_type_alias<GpuRenderer, DrawSnapshot>(ShaderPathResolveCallback));
+static_assert(!is_cpp_type_alias<TestTypeAliasedClass, DrawSnapshot>(TestTypeAlias));
 
 [cpp_header("<tests/unit/ecs_ui/ecs_ui_unwind_probe.h>"), cpp_name("::NWB::Tests::EcsUiUnwind::TriggerProbeOom")]
 extern void TriggerProbeOom();
@@ -420,7 +423,7 @@ void VerifyUiTextEditOwned_TrustedLocalAdoptionRecoversAfterStrictRefreshRejects
     ASSERT_TRUE(model.replaceSelection(" local"));
     EXPECT_FALSE(session.matchesPublished(MakeSessionTestOwner(61u, 1u, 2u), model));
     EXPECT_EQ(session.refresh(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
-    ASSERT_EQ(session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::Accepted);
+    ASSERT_EQ(session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret, TextInputChangeCause::Other), TextInputAdmission::Accepted);
     EXPECT_GT(session.surroundingRevision(), oldSurrounding);
     EXPECT_TRUE(session.matchesPublished(MakeSessionTestOwner(61u, 1u, 2u), model));
     ASSERT_EQ(service.commit(" native"), TextInputAdmission::Accepted);
@@ -441,7 +444,7 @@ void VerifyUiTextEditOwned_CancelWithoutModelLeavesTransientCompositionForTheNex
     ASSERT_TRUE(session.cancel());
     EXPECT_TRUE(model.composition().active);
     EXPECT_EQ(model.text(), "base");
-    EXPECT_EQ(session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret), TextInputAdmission::InvalidSession);
+    EXPECT_EQ(session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret, TextInputChangeCause::Other), TextInputAdmission::InvalidSession);
     model.cancelComposition();
     ASSERT_EQ(session.begin(MakeSessionTestOwner(61u, 1u, 2u), s_OwnedTestCaret, model), TextInputAdmission::Accepted);
 }
@@ -524,7 +527,7 @@ void VerifyUiTextEditOwned_OwnedCollectionAdoptionAndCancellationRejectAnotherTh
     TextInputAdmissionEnum adopt = TextInputAdmission::Accepted;
     Thread other = Thread(lambda[mut session, mut event, mut model, mut poll, mut adopt, mut cancelled]() -> void{
         poll = session.pollOwned(event);
-        adopt = session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret);
+        adopt = session.adoptLocal(MakeSessionTestOwner(61u, 1u, 2u), model, s_OwnedTestCaret, TextInputChangeCause::Other);
         cancelled = session.cancel();
     });
     other.join();

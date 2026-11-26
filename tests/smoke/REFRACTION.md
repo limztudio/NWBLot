@@ -275,8 +275,7 @@ stable executable/dependency, packed-volume, logserver, and optional name-symbol
 identities before and after each trial. Mutable pipeline caches are recorded
 separately. A frozen source directory should contain the ordinary repository
 paths below its `source/` directory so fixture identity admission can resolve
-those paths unambiguously. Historical arms use the matched pair
-`tests/smoke/refraction_project.cpp` and `tests/smoke/avboit_timing_render_pass.cpp`.
+those paths unambiguously.
 
 For a scheduling-only comparison, retain a frozen unmerged tiled arm as the
 baseline, freeze a separately built tiled candidate with the proposed scheduling

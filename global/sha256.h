@@ -54,26 +54,11 @@ inline constexpr u8 s_PaddingMarker = 0x80u;
 inline constexpr u32 s_HexDigitsPerByte = 2u;
 
 [[nodiscard]] constexpr inline u32 ByteSwap32(const u32 value)noexcept{
-#if defined(__clang__) || defined(__GNUC__)
     return __builtin_bswap32(value);
-#else
-    return ((value & 0x000000ffu) << 24u) | ((value & 0x0000ff00u) << 8u) | ((value & 0x00ff0000u) >> 8u) | ((value & 0xff000000u) >> 24u);
-#endif
 }
 
 [[nodiscard]] constexpr inline u64 ByteSwap64(const u64 value)noexcept{
-#if defined(__clang__) || defined(__GNUC__)
     return __builtin_bswap64(value);
-#else
-    return ((value & 0x00000000000000ffull) << 56u)
-        | ((value & 0x000000000000ff00ull) << 40u)
-        | ((value & 0x0000000000ff0000ull) << 24u)
-        | ((value & 0x00000000ff000000ull) << 8u)
-        | ((value & 0x000000ff00000000ull) >> 8u)
-        | ((value & 0x0000ff0000000000ull) >> 24u)
-        | ((value & 0x00ff000000000000ull) >> 40u)
-        | ((value & 0xff00000000000000ull) >> 56u);
-#endif
 }
 
 [[nodiscard]] inline usize PrepareShaBe32TailBlocks(
@@ -137,70 +122,27 @@ inline void UnpackBlockWords(const u8* const block, u32* const outWords)noexcept
     }
 }
 
-inline void UnpackBlockWords(const Array<u8, s_BlockByteCount>& block, u32* const outWords)noexcept{
-    UnpackBlockWords(block.data(), outWords);
-}
+#if defined(__x86_64__) || defined(_M_X64)
+[[nodiscard]] b8 HasX86ShaNi()noexcept;
+#endif
 
-template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const u8*)>
-[[nodiscard]] inline DigestT ComputeDigest(const BinaryByteView input, const Array<u32, StateWordCount>& initialState)noexcept{
-    static_assert(DigestT::s_ByteCount == StateWordCount * s_WordByteCount);
-
+template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const u8*, usize)>
+[[nodiscard]] inline DigestT ComputeShaBe32WithKernel(
+    const Array<u32, StateWordCount>& initialState,
+    const BinaryByteView input
+)noexcept{
     Array<u32, StateWordCount> state = initialState;
-    usize offset = 0u;
     const usize inputSize = input.size();
     const u8* const inputData = input.data();
-    while(inputSize - offset >= s_BlockByteCount){
-        CompressFn(state, inputData + offset);
-        offset += s_BlockByteCount;
-    }
-    Array<u8, s_BlockByteCount> block = {};
-    const usize remainder = inputSize - offset;
-    if(remainder > 0u)
-        FOUNDATION_MEMCPY(block.data(), block.size(), inputData + offset, remainder);
-    block[remainder] = s_PaddingMarker;
-    if(remainder >= s_LengthFieldOffset){
-        CompressFn(state, block.data());
-        FOUNDATION_MEMSET(block.data(), 0, block.size());
-    }
-    const u64 bitCount = static_cast<u64>(inputSize) * s_BitsPerByte;
-    for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)
-        block[s_BlockByteCount - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
-    CompressFn(state, block.data());
-    DigestT digest;
-    for(u32 index = 0u; index < DigestT::s_ByteCount; ++index)
-        digest.bytes[index] = static_cast<u8>(state[index / s_WordByteCount] >> ((s_LastByteInWord - index % s_WordByteCount) * s_BitsPerByte));
-    return digest;
-}
+    const usize fullBlocks = inputSize / s_BlockByteCount;
+    const usize offset = fullBlocks * s_BlockByteCount;
+    if(fullBlocks > 0u)
+        CompressFn(state, inputData, fullBlocks);
 
-template<typename DigestT, u32 StateWordCount, void (*CompressFn)(Array<u32, StateWordCount>&, const Array<u8, s_BlockByteCount>&)>
-[[nodiscard]] inline DigestT ComputeDigest(const BinaryByteView input, const Array<u32, StateWordCount>& initialState)noexcept{
-    static_assert(DigestT::s_ByteCount == StateWordCount * s_WordByteCount);
-
-    Array<u32, StateWordCount> state = initialState;
-    Array<u8, s_BlockByteCount> block = {};
-    usize offset = 0u;
-    while(input.size() - offset >= block.size()){
-        FOUNDATION_MEMCPY(block.data(), block.size(), input.data() + offset, block.size());
-        CompressFn(state, block);
-        offset += block.size();
-    }
-    const usize remainder = input.size() - offset;
-    FOUNDATION_MEMSET(block.data(), 0, block.size());
-    if(remainder > 0u)
-        FOUNDATION_MEMCPY(block.data(), block.size(), input.data() + offset, remainder);
-    block[remainder] = s_PaddingMarker;
-    if(remainder >= s_LengthFieldOffset){
-        CompressFn(state, block);
-        FOUNDATION_MEMSET(block.data(), 0, block.size());
-    }
-    const u64 bitCount = static_cast<u64>(input.size()) * s_BitsPerByte;
-    for(u32 index = 0u; index < s_LengthFieldByteCount; ++index)
-        block[s_BlockByteCount - 1u - index] = static_cast<u8>(bitCount >> (index * s_BitsPerByte));
-    CompressFn(state, block);
-    DigestT digest;
-    for(u32 index = 0u; index < DigestT::s_ByteCount; ++index)
-        digest.bytes[index] = static_cast<u8>(state[index / s_WordByteCount] >> ((s_LastByteInWord - index % s_WordByteCount) * s_BitsPerByte));
-    return digest;
+    alignas(16) Array<u8, s_BlockByteCount * 2u> tail;
+    const usize tailBlockCount = PrepareShaBe32TailBlocks(inputData, inputSize, offset, tail);
+    CompressFn(state, tail.data(), tailBlockCount);
+    return FinalizeShaBe32Digest<DigestT, StateWordCount>(state);
 }
 
 
@@ -265,12 +207,7 @@ inline constexpr Array<u32, s_StateWordCount> s_InitialState = { 0x6a09e667u, 0x
     return (value >> count) | (value << (ShaBe32Detail::s_WordBits - count));
 }
 
-void CompressBlocks(Array<u32, s_StateWordCount>& state, const u8* blocks, usize blockCount)noexcept;
 [[nodiscard]] Sha256Digest ComputeSha256Impl(BinaryByteView input)noexcept;
-
-inline void Compress(Array<u32, s_StateWordCount>& state, const u8* const block)noexcept{
-    CompressBlocks(state, block, 1u);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

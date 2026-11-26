@@ -2,8 +2,9 @@ import statistics
 
 import refraction_density_benchmark as density
 from experiment_statistics import PairedExperimentAnalysis
+from refraction_density_comparison import COMPOSITE
 
-METRICS = (density.FRAME, density.RESOLVE, *density.CONTROLS, density.COMPOSITE, *density.AVBOIT)
+METRICS = (density.FRAME, density.RESOLVE, *density.CONTROLS, COMPOSITE, *density.AVBOIT)
 
 
 class ProfileResultAnalysis:

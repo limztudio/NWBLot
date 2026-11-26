@@ -51,12 +51,6 @@ class SplitterOptions{
     public LayoutItemOptions layout;
 }
 
-class SplitterResult{
-    public b8 valid = false;
-    public b8 ratioChanged = false;
-    public b8 dragging = false;
-}
-
 class SplitterState : NoCopy{
     public u64 m_instanceGeneration = AllocateServiceIdentity();
     public u64 m_inputGeneration = AllocateServiceIdentity();
@@ -81,7 +75,7 @@ class SplitterState : NoCopy{
     public b8 setRatio(in f32 ratio){
         if(!IsFinite(VectorSingle(ratio)))
             return false;
-        const f32 clamped = UiSimdMax(0.0f, UiSimdMin(1.0f, ratio));
+        const f32 clamped = Max(0.0f, Min(1.0f, ratio));
         if(clamped != this.m_ratio){
             this.m_ratio = clamped;
             AdvanceNonWrappingRevision(this.m_revision);
@@ -120,25 +114,25 @@ b8 IsValidSplitterStyle(in SplitterStyle style){
 f32 ResolveClampedSplitterRatio(in f32 ratio, in f32 available, in f32 minFirst, in f32 minSecond){
     if(!IsFinite(VectorSingle(ratio, available, minFirst, minSecond)))
         return 0.5f;
-    const f32 unitClamped = UiSimdMax(0.0f, UiSimdMin(1.0f, ratio));
+    const f32 unitClamped = Max(0.0f, Min(1.0f, ratio));
     if(available <= 0.0f)
         return unitClamped;
     const f32 sumMin = minFirst + minSecond;
     if(sumMin >= available){
         if(sumMin <= 0.0f)
             return 0.5f;
-        return UiSimdMax(0.0f, UiSimdMin(1.0f, minFirst / sumMin));
+        return Max(0.0f, Min(1.0f, minFirst / sumMin));
     }
     const f32 minRatio = minFirst / available;
     const f32 maxRatio = (available - minSecond) / available;
-    return UiSimdMax(minRatio, UiSimdMin(maxRatio, unitClamped));
+    return Max(minRatio, Min(maxRatio, unitClamped));
 }
 
 f32 ResolveSplitterAvailableExtent(in Rect bounds, in SplitterOrientation orientation, in f32 handleThickness){
     f32 total = bounds.width;
     if(orientation == SplitterOrientation::Vertical)
         total = bounds.height;
-    return UiSimdMax(0.0f, total - handleThickness);
+    return Max(0.0f, total - handleThickness);
 }
 
 b8 ApplySplitterDragDelta(in PointerGesture gesture, in SplitterOptions options, mut SplitterState state){
@@ -199,11 +193,6 @@ b8 ApplySplitterKeyboardStep(in ControlAction action, in SplitterOptions options
     return true;
 }
 
-void ApplySkinPaletteToSplitterStyle(in UiSkinPalette palette, mut SplitterStyle style){
-    style.hoverTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlHoverTint);
-    style.pressedTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlPressedTint);
-    style.disabledTint = ResolveUiSkinColor(palette, UiSkinColorRole::ControlDisabledTint);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

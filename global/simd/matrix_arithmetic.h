@@ -19,7 +19,6 @@ namespace SIMDMatrixDetail{
 
 static const SIMDVectorConstF s_SIMDMatrixSign = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 inline constexpr f32 s_MatrixHalf = 0.5f;
-inline constexpr usize s_MatrixRowCount = 4;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

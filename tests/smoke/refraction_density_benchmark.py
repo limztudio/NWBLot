@@ -23,7 +23,7 @@ from renderer_benchmark_identity import RendererBenchmarkIdentity
 from gpu_timing_evidence import GpuTimingEvidence, HEADER
 from gpu_timing_parse import load_name_symbols
 from refraction_density_evidence import RefractionDensityEvidence
-from refraction_density_comparison import (RefractionDensityComparison, FRAME, RESOLVE, CLASSIFY, CLEAR_ARGUMENTS, COMPOSITE,
+from refraction_density_comparison import (RefractionDensityComparison, FRAME, RESOLVE, CLASSIFY, CLEAR_ARGUMENTS,
     CONTROLS, OBSERVATIONS, AVBOIT, OBSERVED, EFFECT_COST)
 from smoke_volume_identity import file_identity
 from window_capture_termination import CaptureProcessTermination
@@ -37,7 +37,6 @@ DENSITIES = (0, 1, 10, 50, 100)
 ROUTES = ("screen", "hardware")
 SCHEDULING_STRATEGIES = ("full-frame", "tiled")
 FIXTURE_SOURCE_FILES = ("tests/smoke/refraction_scenes_and_runtime.adhd", "tests/smoke/avboit_timing_render_pass.adhd")
-LEGACY_FIXTURE_SOURCE_FILES = ("tests/smoke/refraction_project.cpp", "tests/smoke/avboit_timing_render_pass.cpp")
 
 
 @dataclass(frozen=True)
@@ -345,15 +344,10 @@ def parse_args(argv=None):
 
 def fixture_source_digests(identity):
     sources = {path.replace("\\", "/").rsplit("/source/", 1)[-1]: digest for path, digest in identity["source"]["files"].items()}
-    current = any(path in sources for path in FIXTURE_SOURCE_FILES)
-    legacy = any(path in sources for path in LEGACY_FIXTURE_SOURCE_FILES)
-    if current and legacy:
-        raise SmokeFailure("source manifest mixes ADHD and C++ density fixture instrumentation")
-    required = LEGACY_FIXTURE_SOURCE_FILES if legacy else FIXTURE_SOURCE_FILES
-    missing = [path for path in required if path not in sources]
+    missing = [path for path in FIXTURE_SOURCE_FILES if path not in sources]
     if missing:
         raise SmokeFailure("source manifest lacks compiled density fixture instrumentation: " + ", ".join(missing))
-    return {path: sources[path] for path in required}
+    return {path: sources[path] for path in FIXTURE_SOURCE_FILES}
 
 
 def require_same_fixture_sources(identities):

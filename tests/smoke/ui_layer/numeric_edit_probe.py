@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import math
-import re
 import struct
 
 from edit_probe import caret_pixel_column
-from probe_common import text_hash
+from probe_common import FrameProbeRecorder, compile_smoke_patterns, ink_coverage, snapshot_from_patterns, text_hash
 from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
+from probe_reference import linear_channels, linear_rgb_bytes
 
 LIT_CLIPBOARD_FOCUS = "clipboard_focus"
 LIT_ENABLED = "enabled"
@@ -29,14 +28,9 @@ LIT_PASSED = "passed"
 LIT_CLIPBOARD = "clipboard"
 LIT_COVERAGE = "coverage"
 
-
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiNumericEditSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiNumericEditSmoke: state sequence=(\d+) values=((?:\d+,){29}\d+)")
-GEOMETRY = re.compile(rf"UiNumericEditSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiNumericEditSmoke: skin=(default|alternate)")
 FIELDS = ("integer_bits", "float_bits", "i_bytes", "i_hash", "i_anchor", "i_caret", "i_status", "i_dirty", "i_focus", "f_bytes", "f_hash", "f_anchor", "f_caret", "f_status", "f_dirty", "f_focus", "clipboard_bytes", "clipboard_hash",
     "clipboard_anchor", "clipboard_caret", LIT_CLIPBOARD_FOCUS, LIT_ENABLED, LIT_READONLY, "clamp", "commits", "cancels", "rejects", "clamps", "restored", LIT_COHERENT)
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiNumericEditSmoke", len(FIELDS))
 RECTANGLES = tuple(f"{field}_{part}" for field in ("integer", "float", "clipboard") for part in ("bounds", "content", "caret", "selection"))
 MARKER_PARTS = tuple(6 if index < 2 else 3 if index in (3, 10, 17) else 2 for index in range(len(FIELDS))) + (2,)
 MARKER_TOLERANCE = 5
@@ -66,52 +60,17 @@ def draft_fields(prefix, text, *, anchor=None, caret=None, status=None, dirty=No
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
-        return None
-    state, display = states[-1], tuple(map(float, displays[-1].groups()))
-    sequence, values = int(state[1]), tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if any(name not in rectangles for name in RECTANGLES):
-        return None
-    geometry_values = (value for rectangle in rectangles.values() for value in rectangle)
-    if not all(math.isfinite(value) for value in (*display, *geometry_values)) or not all(value > 0.0 for value in display):
-        raise SmokeFailure("numeric fixture reported invalid geometry or display metrics")
-    if any(value > 0xFFFFFFFFFFFFFFFF for value in values):
-        raise SmokeFailure("numeric fixture state exceeds the unsigned 64-bit log schema")
-    return {LIT_SEQUENCE: sequence, LIT_SKIN: skins[-1][1], LIT_VALUES: values, **dict(zip(FIELDS, values)), LIT_LOGICAL_EXTENT: display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles}
-
-
-def ink_coverage(observed, background, foreground):
-    actual, backdrop = linear_channels(observed), linear_channels(background)
-    direction = tuple(target - base for target, base in zip(foreground, backdrop))
-    denominator = sum(component * component for component in direction)
-    coverage = sum((value - base) * component for value, base, component in zip(actual, backdrop, direction)) / denominator
-    coverage = max(0.0, min(1.0, coverage))
-    expected = linear_rgb_bytes(tuple(base + coverage * component for base, component in zip(backdrop, direction)))
-    residual = max(abs(value - target) for value, target in zip(observed, expected))
-    return coverage, residual, expected
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="numeric", max_value=UINT64_MASK)
 
 
 def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale_x, scale_y = snapshot[LIT_SCALE]
-    probes = []
+    recorder = FrameProbeRecorder(frame, snapshot[LIT_SCALE], "numeric")
+    probes = recorder.probes
+    probe = lambda name, position, color, tolerance=MARKER_TOLERANCE: recorder.probe(name, position, color, tolerance)
 
-    def probe(name, position, color, tolerance=MARKER_TOLERANCE):
-        x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"numeric probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-        observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({LIT_NAME: name, LIT_POSITION: [x, y], LIT_EXPECTED: list(color), LIT_OBSERVED: list(observed), LIT_ERROR: error, LIT_PASSED: error <= tolerance})
-
-    marker = 0
-    for index, (value, parts) in enumerate(zip((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), MARKER_PARTS)):
-        for part in range(parts):
-            probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot[LIT_LOGICAL_EXTENT][1] - 13.0), encoded_marker(value >> (part * 12)))
-            marker += 1
+    marker = recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), 11.0, 8.0, snapshot[LIT_LOGICAL_EXTENT][1] - 13.0, parts=MARKER_PARTS, tolerance=MARKER_TOLERANCE)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     probe("panel_gutter", (28.0, 330.0), panel, 8)
     geometry_matches = marker == 73 and snapshot[LIT_COHERENT] == 1

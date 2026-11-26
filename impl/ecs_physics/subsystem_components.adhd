@@ -86,11 +86,14 @@ class EcsJointBreakEvent{
 [arena, component("character_controller")]
 class CharacterControllerComponent{
     public CharacterControllerDef def;
+    [transient]
     public CharacterController controller;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
+    [transient]
     public b8 initialized = false;
     public b8 syncFromTransform = false;
+    [transient]
     public b8 dirty = true;
 }
 
@@ -99,23 +102,29 @@ class VehicleComponent{
     public VehicleEngineDef engine;
     public Vector<VehicleWheelDef> wheels;
     public Vector<Name> wheelEntityNames;
+    [transient]
     public Vector<EntityID> wheelEntities;
+    [transient]
     public EntityID skeletonEntity = s_InvalidEntityId;
     public Name skeletonEntityName = s_NameNone;
     public Vector<u32> wheelJointIndices;
     public VehicleInput input;
     public Filter queryFilter;
+    [transient]
     public VehicleController controller;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
     public b8 writeBackToSkeleton = false;
+    [transient]
     public b8 initialized = false;
+    [transient]
     public b8 dirty = true;
 }
 
 [arena, component("ragdoll")]
 class RagdollComponent{
     public Vector<RagdollBoneDef> bones;
+    [transient]
     public RagdollInstance instance;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
@@ -125,7 +134,9 @@ class RagdollComponent{
     public Vector<Transform3D> targetPose;
     public Vector<b8> boneKinematicMask;
     public Vector<Name> boneEntityNames;
+    [transient]
     public Vector<EntityID> boneEntities;
+    [transient]
     public EntityID skeletonEntity = s_InvalidEntityId;
     public Name skeletonEntityName = s_NameNone;
     public Vector<u32> boneJointIndices;
@@ -134,7 +145,9 @@ class RagdollComponent{
     public b8 autoGenerateFromSkeleton = false;
     public b8 enableSelfCollision = true;
     public Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs;
+    [transient]
     public b8 initialized = false;
+    [transient]
     public b8 dirty = true;
 }
 
@@ -156,8 +169,10 @@ class ForceFieldComponent{
 class ArticulationComponent{
     public Vector<ArticulationLinkDef> links;
     public Vector<Name> proxyEntityNames;
+    [transient]
     public Vector<EntityID> linkEntities;
     public Vector<Name> linkEntityNames;
+    [transient]
     public EntityID skeletonEntity = s_InvalidEntityId;
     public Name skeletonEntityName = s_NameNone;
     public Vector<u32> linkJointIndices;
@@ -177,11 +192,14 @@ class ArticulationComponent{
     public f32 sleepLinearThreshold = 0.02f;
     public f32 sleepAngularThreshold = 0.03f;
     public f32 sleepTimeThreshold = 0.5f;
+    [transient]
     public Articulation articulation;
     public b8 enabled = true;
     public b8 writeBackToSkeleton = false;
     public b8 writeBackLinkTransforms = true;
+    [transient]
     public b8 initialized = false;
+    [transient]
     public b8 dirty = true;
 }
 
@@ -191,6 +209,7 @@ class SoftBodyComponent{
     public Vector<Name> attachmentBodyEntityNames;
     public Name collisionLayer = s_NameNone;
     public b8 enabled = true;
+    [transient]
     public b8 dirty = false;
 }
 

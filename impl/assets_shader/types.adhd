@@ -15,14 +15,12 @@ const Name s_MeshComputeArchiveStageName = "mesh_compute";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[reflect]
 enum<u8> BytecodeValidationFailure{
     None,
     InvalidSize,
     InvalidMagic
 }
 
-[reflect]
 enum<u8> AssetPayloadEncodeFailure{
     None,
     InvalidEntryPoint,
@@ -30,7 +28,6 @@ enum<u8> AssetPayloadEncodeFailure{
     OutputSizeOverflow
 }
 
-[reflect]
 enum<u8> AssetPayloadDecodeFailure{
     InvalidHeader,
     UnsupportedVersion,

@@ -6,6 +6,7 @@
 #include "global_container_access.adhd"
 #include "name_case_types.adhd"
 #include <tests/common/gtest_macros.adhd>
+#include <tests/common/platform_features.adhd>
 #include <tests/common/test_context.adhd>
 #include <tests/common/value_storage.adhd>
 
@@ -574,7 +575,7 @@ void VerifyGlobal_AutoRegistrationQueueDeduplicatesAndSnapshots(){
 void VerifyGlobal_GenericPathKeepsNativeFilenameCharacters(){
     b8 windowsPlatform = false;
     {
-        windowsPlatform = s_WindowsPath;
+        windowsPlatform = s_IsWindowsPlatform;
     }
     const Path path = Path("one\\two");
     const String rendered = PathToGenericString(path);

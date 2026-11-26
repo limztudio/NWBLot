@@ -20,6 +20,7 @@ nwb_target_adhd_sources(nwb_test_common_names NAMESPACE "NWB::Tests" SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/common/floating_point_control.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/floating_point_environment_guard.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/font_fixture.adhd"
+    "${CMAKE_CURRENT_LIST_DIR}/common/platform_features.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/simd_memory_guard_fixture.adhd"
     "${CMAKE_CURRENT_LIST_DIR}/common/test_context.adhd"
 )

@@ -132,17 +132,17 @@ Expected<f64> TryEnsureScrollVisible(in f64 currentOffset, in f64 start, in f64 
 Expected<f64> TryScrollByOffset(in f64 currentOffset, in f64 delta, in f64 contentHeight, in f64 viewportHeight){
     if(!IsFinite(VectorDouble(delta, contentHeight, viewportHeight, 0.0)) || contentHeight < 0.0 || viewportHeight < 0.0)
         return MakeUnexpected(Failure());
-    const f64 maxOffset = UiSimdMaxF64(0.0, contentHeight - viewportHeight);
-    const f64 base = UiSimdMinF64(currentOffset, maxOffset);
+    const f64 maxOffset = Max(0.0, contentHeight - viewportHeight);
+    const f64 base = Min(currentOffset, maxOffset);
     if(delta >= 0.0)
-        return base + UiSimdMinF64(delta, maxOffset - base);
-    return UiSimdMaxF64(0.0, base + delta);
+        return base + Min(delta, maxOffset - base);
+    return Max(0.0, base + delta);
 }
 
 Expected<f64> TryClampScrollOffset(in f64 currentOffset, in f64 contentHeight, in f64 viewportHeight){
     if(!IsFinite(VectorDouble(contentHeight, viewportHeight, 0.0, 0.0)) || contentHeight < 0.0 || viewportHeight < 0.0)
         return MakeUnexpected(Failure());
-    return UiSimdMinF64(currentOffset, UiSimdMaxF64(0.0, contentHeight - viewportHeight));
+    return Min(currentOffset, Max(0.0, contentHeight - viewportHeight));
 }
 
 

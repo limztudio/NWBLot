@@ -29,17 +29,16 @@ b8 LoadBundledFont(mut Font font, in Path directory, in StringView filename){
     const auto bytes = ReadBundledFontBytes(directory / filename);
     if(!bytes.has_value())
         return false;
-    font.setFontBytes(bytes.value());
+    font.setFontBytes(bytes.value(), 0u);
     return font.validatePayload();
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void WriteLittleU32(in usize offset, in u32 value, mut Span<u8> bytes){
-    for(u32 index = 0u; index < 4u; ++index)
-        bytes[offset + cast<usize>(index)] = cast<u8>(value >> (index * 8u));
+void WriteLittleU32At(mut Vector<u8> bytes, in usize offset, in u32 value){
+    bytes[offset] = cast<u8>(value & 0xffu);
+    bytes[offset + 1u] = cast<u8>((value >> 8u) & 0xffu);
+    bytes[offset + 2u] = cast<u8>((value >> 16u) & 0xffu);
+    bytes[offset + 3u] = cast<u8>((value >> 24u) & 0xffu);
 }
 
 

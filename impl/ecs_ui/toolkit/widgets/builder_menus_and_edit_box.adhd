@@ -22,7 +22,6 @@ enum<u8> ContextMenuReconcileSourceAction{
     KeepSelectionAndScroll = 0,
     CloseOnNewGeneration = 1,
     ResetSelectionAndScroll = 2,
-    kCount
 }
 
 ContextMenuReconcileSourceAction ClassifyContextMenuSourceChange(
@@ -317,34 +316,28 @@ b8 Builder::prepareContextMenu(mut BuilderContextMenuFrame frame, mut ContextMen
 }
 
 b8 Builder::applyContextMenuInput(mut BuilderContextMenuFrame frame, mut ContextMenuResult result){
-    ListOptions options;
-    options.wheelRows = frame.options.wheelRows;
-    options.selectOnNavigate = false;
-    in ListOptions optionsRef = options;
-    ListInput inputs(this.m_context);
     const ListInputMatches matches = lambda[in this, mut frame]() -> b8{ return this.contextMenuMatches(frame); };
-    const ListInputApplyAction apply = lambda[mut this, mut frame, in optionsRef, mut result](in ControlAction action) -> ListActionOutcome{
-        ListResult preview;
-        if(!ApplyListControlAction(frame.source.value(), optionsRef, action, frame.state.value().m_list, preview) || !this.contextMenuMatches(frame))
-            return ListActionOutcome::Failed;
-        if(!preview.activated)
-            return ListActionOutcome::Continue;
-        result.activated = true;
-        result.key = frame.state.value().m_list.selectedKey();
-        frame.state.value().close();
-        this.m_context.input().closePopup(frame.popupToken);
-        this.snapshotContextMenu(frame);
-        return ListActionOutcome::Stop;
-    };
-    return inputs.consume(
+    b8 activated = false;
+    u64 key = 0u;
+    if(!this.applyPopupMenuListInput(
         frame.rows,
         frame.listToken,
-        true,
         frame.popupToken,
+        frame.options.wheelRows,
+        frame.source.value(),
         frame.state.value().m_list,
         matches,
-        apply
-    );
+        activated,
+        key
+    ))
+        return false;
+    if(activated){
+        result.activated = true;
+        result.key = key;
+        frame.state.value().close();
+        this.snapshotContextMenu(frame);
+    }
+    return true;
 }
 
 void Builder::snapshotContextMenu(mut BuilderContextMenuFrame frame){
@@ -380,51 +373,25 @@ b8 Builder::paintContextMenuPopup(mut BuilderContextMenuFrame frame){
         return true;
     }
     const PopupOptions options = BuildContextMenuPopupOptions(frame.state.value().m_anchor, frame.options.size);
-    const auto placement = PlacePopup(options, this.m_paint.displayMetrics());
-    if(!placement.has_value())
-        return false;
-    const PopupScope scope = UiScopeDescriptorFactory().basicPopup(frame.popupToken, frame.parentToken, placement.value());
-    if(!this.m_context.updatePopupScope(frame.popupToken, scope) || !this.m_context.activatePopupScope(frame.popupToken))
-        return false;
-    if(!this.m_paint.beginOverlay(this.m_context.popupLayer())){
-        const b8 ended = this.m_context.endPopupScope(false);
-        if(!ended)
-            this.m_context.fail();
-        return false;
-    }
-    const Insets padding = MaxUiPadding(frame.popupStyle.padding, background.value().padding);
-    this.m_paint.pushClip(placement.value().bounds);
-    const b8 backgroundPainted = this.m_paint.drawRegion(background.value().name, placement.value().bounds);
-    const b8 popped = this.m_paint.popClip();
-    HitTargetFactory targets;
-    const HitTarget barrier = targets.makeBarrierHitTarget(placement.value().bounds, placement.value().viewport);
-    b8 painted = backgroundPainted && popped && this.m_context.addTarget(frame.popup, barrier);
-    if(painted){
-        this.emitAccessibleNode(
-            frame.popup,
-            AccessibilityRole::Menu,
-            placement.value().bounds,
-            StringView(),
-            StringView(),
-            ResolveAccessibleVisibilityStateBits(frame.options.enabled, placement.value().bounds),
-            s_AccessibilityActionNone
-        );
-        const b8 pushedParent = this.m_context.pushAccessibleParent(frame.popup.id);
-        auto item = this.makeItem();
-        item.state = frame.rows;
-        item.list = frame.list;
-        LayoutBox box;
-        box.rectangle = InsetUiRectBounds(placement.value().bounds, padding);
-        box.clip = placement.value().bounds;
-        painted = this.paintList(item, box) && this.contextMenuMatches(frame);
-        if(pushedParent)
-            this.m_context.popAccessibleParent();
-    }
-    const b8 overlayEnded = this.m_paint.endOverlay();
-    const b8 scopeEnded = this.m_context.endPopupScope(painted);
-    if(painted)
-        frame.state.value().m_popup.m_placement = placement.value();
-    return painted && overlayEnded && scopeEnded;
+    const ListInputMatches checkMatches = lambda[in this, mut frame]() -> b8{ return this.contextMenuMatches(frame); };
+    PopupPlacement placement;
+    const b8 ok = this.paintPopupListOverlay(
+        frame.popup,
+        frame.rows,
+        frame.list,
+        frame.options.enabled,
+        frame.popupToken,
+        frame.parentToken,
+        options,
+        frame.popupStyle,
+        background.value(),
+        true,
+        checkMatches,
+        placement
+    );
+    if(ok)
+        frame.state.value().m_popup.m_placement = placement;
+    return ok;
 }
 
 
@@ -539,7 +506,6 @@ EditBoxResult Builder::declareEditBox(
             return result;
         }
         editFrame.placeholder = measuredPlaceholder.value().layout;
-        editFrame.placeholderBounds = measuredPlaceholder.value().bounds;
     }
     if(!this.prepareEditBox(result, model, state, item, editFrame)){
         result.valid = false;
@@ -696,7 +662,21 @@ b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in H
     const HitTarget target = targets.makeEditBoxHitTarget(navigationTarget, box.rectangle, clip, editFrame.editOptions.enabled, item.contextMenu, editFrame.editOptions.acceptTab);
     if(!this.m_context.addTarget(item.state, target))
         return false;
-    u32 a11yState = ResolveAccessibleVisibilityStateBits(editFrame.editOptions.enabled, clip) | s_AccessibilityStateFocusable;
+    this.emitTextInputAccessibleNode(item, box, clip, editFrame, view, AccessibilityRole::TextField, 0u);
+    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
+    return published && this.numericEditMatches(item);
+}
+
+void Builder::emitTextInputAccessibleNode(
+    in BuilderItem item,
+    in LayoutBox box,
+    in Rect clip,
+    in BuilderEditBoxFrame editFrame,
+    in EditBoxView view,
+    in AccessibilityRole role,
+    in u32 extraStateBits
+){
+    u32 a11yState = ResolveAccessibleVisibilityStateBits(editFrame.editOptions.enabled, clip) | s_AccessibilityStateFocusable | extraStateBits;
     if(editFrame.editOptions.readOnly)
         a11yState |= s_AccessibilityStateReadOnly;
     if(editFrame.editOptions.password)
@@ -714,15 +694,13 @@ b8 Builder::paintEditBox(in BuilderItem item, in LayoutBox box, in Optional<in H
         a11yActions |= s_AccessibilityActionContextMenu;
     this.emitAccessibleNode(
         item.state,
-        AccessibilityRole::TextField,
+        role,
         box.rectangle,
         a11yName,
         a11yValue,
         a11yState,
         a11yActions
     );
-    const b8 published = !this.m_editHost.has_value() || this.m_editHost.value().publish(item.state, view, placement, editFrame.editOptions);
-    return published && this.numericEditMatches(item);
 }
 
 

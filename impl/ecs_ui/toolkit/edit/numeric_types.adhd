@@ -106,28 +106,46 @@ Expected<f64, NumericParseStatus> ParseFloatDraft(in StringView text){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NumericParseStatus EvaluateIntegerDraftStatus(in StringView text, in IntegerBounds bounds){
-    if(!ValidateIntegerBounds(bounds))
+b8 IsNumericValueOutOfRange(in i64 value, in IntegerBounds bounds){
+    return value < bounds.minimum || value > bounds.maximum;
+}
+
+b8 IsNumericValueOutOfRange(in f64 value, in FloatBounds bounds){
+    return value < bounds.minimum || value > bounds.maximum;
+}
+
+i64 ClampNumericValueToBounds(in i64 value, in IntegerBounds bounds){
+    if(value < bounds.minimum)
+        return bounds.minimum;
+    return bounds.maximum;
+}
+
+f64 ClampNumericValueToBounds(in f64 value, in FloatBounds bounds){
+    if(value < bounds.minimum)
+        return bounds.minimum;
+    return bounds.maximum;
+}
+
+NumericParseStatus EvaluateNumericBoundsStatus<ValueT, BoundsT>(
+    in b8 boundsValid,
+    in Expected<ValueT, NumericParseStatus> parsed,
+    in BoundsT bounds
+){
+    if(!boundsValid)
         return NumericParseStatus::Invalid;
-    const Expected<i64, NumericParseStatus> parsed = ParseIntegerDraft(text);
     if(!parsed.has_value())
         return parsed.error();
-    const i64 value = parsed.value();
-    if(value < bounds.minimum || value > bounds.maximum)
+    if(IsNumericValueOutOfRange(parsed.value(), bounds))
         return NumericParseStatus::OutOfRange;
     return NumericParseStatus::Complete;
 }
 
+NumericParseStatus EvaluateIntegerDraftStatus(in StringView text, in IntegerBounds bounds){
+    return EvaluateNumericBoundsStatus(ValidateIntegerBounds(bounds), ParseIntegerDraft(text), bounds);
+}
+
 NumericParseStatus EvaluateFloatDraftStatus(in StringView text, in FloatBounds bounds){
-    if(!ValidateFloatBounds(bounds))
-        return NumericParseStatus::Invalid;
-    const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(text);
-    if(!parsed.has_value())
-        return parsed.error();
-    const f64 value = parsed.value();
-    if(value < bounds.minimum || value > bounds.maximum)
-        return NumericParseStatus::OutOfRange;
-    return NumericParseStatus::Complete;
+    return EvaluateNumericBoundsStatus(ValidateFloatBounds(bounds), ParseFloatDraft(text), bounds);
 }
 
 

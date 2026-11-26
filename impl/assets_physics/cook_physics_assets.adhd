@@ -59,42 +59,42 @@ class HeightfieldCookEntry{
 b8 SerializePhysicsMaterialAsset(in PhysicsMaterialAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializePhysicsMaterialUnchecked(asset.material, outBinary);
+    return PhysicsAssetBinaryCodec().serializePhysicsMaterialUnchecked(asset.surfaceMaterial(), outBinary);
 }
 
 [asset_writer]
 b8 SerializeCollisionLayerMatrixAsset(in CollisionLayerMatrixAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeCollisionLayerMatrixUnchecked(asset.matrix, outBinary);
+    return PhysicsAssetBinaryCodec().serializeCollisionLayerMatrixUnchecked(asset.layerMatrix(), outBinary);
 }
 
 [asset_writer]
 b8 SerializeConvexHullAsset(in ConvexHullAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeConvexHullUnchecked(asset.hull, outBinary);
+    return PhysicsAssetBinaryCodec().serializeConvexHullUnchecked(asset.hullShape(), outBinary);
 }
 
 [asset_writer]
 b8 SerializeCompoundHullAsset(in CompoundHullAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeCompoundHullUnchecked(asset.hulls, outBinary);
+    return PhysicsAssetBinaryCodec().serializeCompoundHullUnchecked(asset.hullShapes(), outBinary);
 }
 
 [asset_writer]
 b8 SerializeCollisionMeshAsset(in CollisionMeshAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeCollisionMeshUnchecked(asset.mesh, outBinary);
+    return PhysicsAssetBinaryCodec().serializeCollisionMeshUnchecked(asset.meshShape(), outBinary);
 }
 
 [asset_writer]
 b8 SerializeHeightfieldAsset(in HeightfieldAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
-    return PhysicsAssetBinaryCodec().serializeHeightfieldUnchecked(asset.heightfield, outBinary);
+    return PhysicsAssetBinaryCodec().serializeHeightfieldUnchecked(asset.heightfieldShape(), outBinary);
 }
 
 
@@ -441,25 +441,9 @@ b8 BuildCookHullFromMapValue(
             hasHalfExtents = true;
             return true;
         }
-        if(key == "box_rotation" || key == "box_rotation_euler" || key == "box_rotation_euler_degrees"){
-            VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-            if(!ReadPhysicsRotationVectorValue(
-                file,
-                fieldVal,
-                prefix,
-                key,
-                "box_rotation",
-                "box_rotation_euler",
-                "box_rotation_euler_degrees",
-                key == "box_rotation",
-                key == "box_rotation_euler_degrees",
-                rotFieldCount,
-                q
-            ))
-                return false;
-            boxRotation = q;
-            return true;
-        }
+        b8 rotOk = false;
+        if(TryReadPhysicsRotationField(file, key, fieldVal, prefix, "box_rotation", "box_rotation_euler", "box_rotation_euler_degrees", rotFieldCount, boxRotation, rotOk))
+            return rotOk;
         error("{} '{}': unsupported asset field '{}'", prefix, PathToString(file), key);
         return false;
     }))
@@ -571,15 +555,15 @@ Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Name virtualPat
         }
         if(key == "vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vertices);
         if(key == "indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, indices);
-        if(key == "vhacd_max_hulls" || key == "max_hulls") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxConvexHulls);
-        if(key == "vhacd_max_recursion_depth" || key == "max_recursion_depth") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxRecursionDepth);
-        if(key == "vhacd_concavity_threshold" || key == "concavity_threshold") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.concavityThreshold);
-        if(key == "vhacd_max_vertices_per_hull" || key == "max_vertices_per_hull") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxVerticesPerHull);
-        if(key == "skin_radius" || key == "hull_radius") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.hullRadius);
-        if(key == "vhacd_min_volume_ratio" || key == "min_volume_ratio") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.minVolumeRatio);
-        if(key == "vhacd_enable_arbitrary_planes" || key == "enable_arbitrary_planes") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableArbitraryPlanes);
-        if(key == "vhacd_enable_hull_merging" || key == "enable_hull_merging") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableHullMerging);
-        if(key == "vhacd_merge_volume_tolerance" || key == "merge_volume_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.mergeVolumeTolerance);
+        if(key == "vhacd_max_hulls") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxConvexHulls);
+        if(key == "vhacd_max_recursion_depth") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxRecursionDepth);
+        if(key == "vhacd_concavity_threshold") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.concavityThreshold);
+        if(key == "vhacd_max_vertices_per_hull") return ReadPhysicsU32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.maxVerticesPerHull);
+        if(key == "hull_radius") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.hullRadius);
+        if(key == "vhacd_min_volume_ratio") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.minVolumeRatio);
+        if(key == "vhacd_enable_arbitrary_planes") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableArbitraryPlanes);
+        if(key == "vhacd_enable_hull_merging") return ReadPhysicsBoolValue(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.enableHullMerging);
+        if(key == "vhacd_merge_volume_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_CompoundHullDiagnosticPrefix, key, vhacdParams.mergeVolumeTolerance);
         error("{} '{}': unsupported asset field '{}'", s_CompoundHullDiagnosticPrefix, PathToString(file), key);
         return false;
     }))
@@ -785,7 +769,7 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
         }
         if(key == "heights"){
             hasHeights = true;
-            return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, heights);
+            return ReadPhysicsF32ArrayValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key, true, heights);
         }
         if(key == "source_heightmap"){
             const Expected<StringView> srcRes = ReadPhysicsStringValue(file, fieldVal, s_HeightfieldDiagnosticPrefix, key);
@@ -800,11 +784,11 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
             if(!chRes.has_value())
                 return false;
             const StringView ch = chRes.value();
-            if(ch == "r" || ch == "red") heightmapChannel = 0u;
-            else if(ch == "g" || ch == "green") heightmapChannel = 1u;
-            else if(ch == "b" || ch == "blue") heightmapChannel = 2u;
-            else if(ch == "a" || ch == "alpha") heightmapChannel = 3u;
-            else if(ch == "luminance" || ch == "luma") heightmapChannel = 4u;
+            if(ch == "r") heightmapChannel = 0u;
+            else if(ch == "g") heightmapChannel = 1u;
+            else if(ch == "b") heightmapChannel = 2u;
+            else if(ch == "a") heightmapChannel = 3u;
+            else if(ch == "luminance") heightmapChannel = 4u;
             else{
                 error("{} '{}': field 'heightmap_channel' must be 'r', 'g', 'b', 'a', or 'luminance'", s_HeightfieldDiagnosticPrefix, PathToString(file));
                 return false;
@@ -968,7 +952,7 @@ Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in
 
 Expected<CollisionLayerMatrixAsset> BuildCollisionLayerMatrixAsset(in CollisionLayerMatrixCookEntry entry){
     CollisionLayerMatrixAsset asset(entry.virtualPath);
-    asset.matrix = entry.matrix;
+    asset.setMatrix(entry.matrix);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;

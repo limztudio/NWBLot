@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import math
-import re
-
-from window_capture_smoke import SmokeFailure
-from probe_reference import encoded_marker
+from probe_common import FrameProbeRecorder, compile_smoke_patterns, snapshot_from_patterns
 
 LIT_SEARCH = "search"
 LIT_MENU = "menu"
@@ -25,53 +21,25 @@ LIT_PARENT = "parent"
 LIT_CHILD = "child"
 LIT_FOCUS_CODE = "focus_code"
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiNestedPopupSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiNestedPopupSmoke: state sequence=(\d+) values=((?:\d+,){28}\d+)")
-GEOMETRY = re.compile(rf"UiNestedPopupSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiNestedPopupSmoke: skin=(default|alternate)")
 FIELDS = ("parent", "child", "focus_scope", "focus_code", "before_clicks", "after_clicks", "child_clicks", "outside", "before_bytes", "after_bytes", "child_bytes", "before_selected", "after_selected", "combo", "combo_selected",
     LIT_SEARCH, "search_selected", "query_bytes", LIT_MENU, "menu_cursor", "command", LIT_LABEL_READS, "raw_child", "raw_combo", "raw_search", "raw_menu", "popup_targets", "popup_count", "child_parent_scope")
 RECTANGLES = ("open", "counter", "parent", "child", "before_button", "before_edit", "before_list", "before_row2", "child_open", "after_button", "after_edit", "after_list", "after_row2", "child_action", "child_edit", "close_branch",
     LIT_COMBO, LIT_COMBO_POPUP, "combo_row2", LIT_SEARCH, LIT_SEARCH_POPUP, LIT_SEARCH_QUERY, "search_row2", "menu_anchor", LIT_MENU, "menu_row2")
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiNestedPopupSmoke", len(FIELDS))
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
-        return None
-    state = states[-1]
-    sequence = int(state[1])
-    values = tuple(map(int, state[2].split(",")))
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if any(name not in rectangles for name in RECTANGLES):
-        return None
-    display = tuple(map(float, displays[-1].groups()))
-    if not all(math.isfinite(value) for value in (*display, *(value for rect in rectangles.values() for value in rect))):
-        raise SmokeFailure("nested popup scene reported nonfinite geometry")
-    if not all(value > 0.0 for value in display):
-        raise SmokeFailure("nested popup scene reported invalid display metrics")
-    return {LIT_SEQUENCE: sequence, LIT_SKIN: skins[-1][1], LIT_VALUES: values, **dict(zip(FIELDS, values)), LIT_LOGICAL_EXTENT: display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles}
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="nested popup")
 
 
 def observe_nested_popup(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
-    width, height, rows = frame
-    scale_x, scale_y = snapshot[LIT_SCALE]
-    probes = []
+    width, height, _ = frame
+    _, scale_y = snapshot[LIT_SCALE]
+    recorder = FrameProbeRecorder(frame, snapshot[LIT_SCALE], "nested popup")
+    probes = recorder.probes
+    probe = lambda name, position, color, tolerance=8: recorder.probe(name, position, color, tolerance)
 
-    def probe(name, position, color, tolerance=8):
-        x, y = round(position[0] * scale_x), round(position[1] * scale_y)
-        if not 1 <= x < width - 1 or not 1 <= y < height - 1:
-            raise SmokeFailure(f"nested popup probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        pixels = [rows[py][px] for py in range(y - 1, y + 2) for px in range(x - 1, x + 2)]
-        observed = tuple(sorted(pixel[channel] for pixel in pixels)[4] for channel in range(3))
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": [x, y], LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-    for index, value in enumerate((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE])):
-        for part in range(2):
-            marker = index * 2 + part
-            probe(f"model_{index}_{part}", (16.0 + marker * 12.0, height / scale_y - 14.0), encoded_marker(value >> (part * 12)), 5)
+    recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), 16.0, 12.0, height / scale_y - 14.0, tolerance=5)
     probe("root_panel_skin", (28.0, 92.0), (39, 63, 34) if skin == "alternate" else (24, 29, 37))
     logical_width, logical_height = snapshot[LIT_LOGICAL_EXTENT]
     geometry_matches = True

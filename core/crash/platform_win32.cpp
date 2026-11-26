@@ -296,8 +296,7 @@ template Expected<void, PlatformFailure> StartDesktopHandler(const ::Path<Alloc:
 Expected<void, PlatformFailure> InstallPlatformHandlers()noexcept{
     g_State.previousExceptionFilter = SetUnhandledExceptionFilter(__hidden_crash_win32::UnhandledExceptionFilter);
     g_State.exceptionFilterInstalled = true;
-    g_State.previousTerminateHandler = ExchangeTerminateHandler(__hidden_crash_win32::TerminateHandler);
-    g_State.terminateHandlerInstalled = true;
+    InstallTerminateHandler(__hidden_crash_win32::TerminateHandler);
     return {};
 }
 
@@ -319,12 +318,7 @@ void UninstallPlatformResources(PlatformCleanupObservations& observations)noexce
         g_State.exceptionFilterInstalled = false;
         g_State.previousExceptionFilter = nullptr;
     }
-    if(g_State.terminateHandlerInstalled){
-        if(QueryTerminateHandler() == __hidden_crash_win32::TerminateHandler)
-            ExchangeTerminateHandler(g_State.previousTerminateHandler);
-        g_State.terminateHandlerInstalled = false;
-        g_State.previousTerminateHandler = nullptr;
-    }
+    RestoreTerminateHandler(__hidden_crash_win32::TerminateHandler);
     g_State.platformRestorePending = false;
 }
 

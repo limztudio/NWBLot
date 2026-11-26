@@ -344,14 +344,14 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         if(wheelY == 0.0f)
             return false;
         if(this.m_grabState.active && this.m_grabState.targetKind != TestbedGrabTargetKind::GizmoAxis){
-            this.m_grabState.distance = SimdClamp(this.m_grabState.distance + wheelY * 0.45f, 0.6f, 40.0f);
+            this.m_grabState.distance = Clamp(this.m_grabState.distance + wheelY * 0.45f, 0.6f, 40.0f);
             return true;
         }
         if(this.m_cameraMode != TestbedCameraMode::Fly){
-            this.m_orbitDistance = SimdClamp(this.m_orbitDistance - wheelY * 0.55f, 1.2f, 40.0f);
+            this.m_orbitDistance = Clamp(this.m_orbitDistance - wheelY * 0.55f, 1.2f, 40.0f);
             return true;
         }
-        this.m_flySpeedScale = SimdClamp(this.m_flySpeedScale * (1.0f + wheelY * 0.12f), 0.2f, 5.0f);
+        this.m_flySpeedScale = Clamp(this.m_flySpeedScale * (1.0f + wheelY * 0.12f), 0.2f, 5.0f);
         return true;
     }
 
@@ -514,7 +514,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 appendCentisMsText(mut CompactString str, in f32 ms)const{
         f32 clamped = 0.0f;
         if(IsFinite(VectorSingle(ms)) && ms > 0.0f)
-            clamped = SimdMin(ms, 99999.0f);
+            clamped = Min(ms, 99999.0f);
         const u64 centis = cast<u64>(cast<f64>(clamped) * 100.0 + 0.5);
         const u64 whole = centis / 100u;
         const u64 frac = centis % 100u;
@@ -581,21 +581,21 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         const usize n = cast<usize>(this.m_historyCount);
         for(usize i = 0u; i < n; ++i){
             const usize ringIdx = (cast<usize>(this.m_historyWriteIndex) + 96u - n + i) % 96u;
-            maxMs = SimdMax(maxMs, this.m_historyStepMs[ringIdx]);
-            maxAwake = SimdMax(maxAwake, this.m_historyAwake[ringIdx]);
+            maxMs = Max(maxMs, this.m_historyStepMs[ringIdx]);
+            maxAwake = Max(maxAwake, this.m_historyAwake[ringIdx]);
         }
         Array<Point, 96u> pts;
         for(usize i = 0u; i < n; ++i){
             const usize ringIdx = (cast<usize>(this.m_historyWriteIndex) + 96u - n + i) % 96u;
             const f32 fracX = cast<f32>(i) / cast<f32>(n - 1u);
-            const f32 fracY = SimdClamp(this.m_historyStepMs[ringIdx] / maxMs, 0.0f, 1.0f);
+            const f32 fracY = Clamp(this.m_historyStepMs[ringIdx] / maxMs, 0.0f, 1.0f);
             pts[i] = Point(box.x + 6.0f + fracX * (box.width - 12.0f), box.y + box.height - 6.0f - fracY * (box.height - 12.0f));
         }
         context.paint.drawPolyline(Span<Point>(pts.data(), n), false, lineStyle, Color(0.24f, 0.86f, 0.98f, 0.95f));
         for(usize i = 0u; i < n; ++i){
             const usize ringIdx = (cast<usize>(this.m_historyWriteIndex) + 96u - n + i) % 96u;
             const f32 fracX = cast<f32>(i) / cast<f32>(n - 1u);
-            const f32 fracY = SimdClamp(this.m_historyAwake[ringIdx] / maxAwake, 0.0f, 1.0f);
+            const f32 fracY = Clamp(this.m_historyAwake[ringIdx] / maxAwake, 0.0f, 1.0f);
             pts[i] = Point(box.x + 6.0f + fracX * (box.width - 12.0f), box.y + box.height - 6.0f - fracY * (box.height - 12.0f));
         }
         context.paint.drawPolyline(Span<Point>(pts.data(), n), false, lineStyle, Color(0.32f, 0.94f, 0.45f, 0.85f));
@@ -900,7 +900,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
                 f64 budgetFrac = 0.0;
                 if(this.m_physicsDebugOptions.maxLines > 0u)
-                    budgetFrac = SimdClamp(cast<f32>(this.m_lastDebugDrawStats.emittedLines) / cast<f32>(this.m_physicsDebugOptions.maxLines), 0.0f, 1.0f);
+                    budgetFrac = Clamp(cast<f32>(this.m_lastDebugDrawStats.emittedLines) / cast<f32>(this.m_physicsDebugOptions.maxLines), 0.0f, 1.0f);
                 declared = context.ui.progress("dbg_budget_bar", budgetFrac) && declared;
                 b8 bLineOk = this.m_cachedTempLine.assign("Lines: ");
                 AppendUnsignedU64Text(this.m_cachedTempLine, cast<u64>(this.m_lastDebugDrawStats.emittedLines));
@@ -1123,7 +1123,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
         if(debugTabRendered){
             if(this.m_sliderDebugThickness.result().valid && this.m_sliderDebugThickness.result().valueChanged)
-                this.m_physicsDebugOptions.lineThickness = SimdClamp(cast<f32>(this.m_sliderDebugThickness.value()), 0.5f, 8.0f);
+                this.m_physicsDebugOptions.lineThickness = Clamp(cast<f32>(this.m_sliderDebugThickness.value()), 0.5f, 8.0f);
             if(this.m_sliderDebugMaxLines.result().valid && this.m_sliderDebugMaxLines.result().valueChanged)
                 this.m_physicsDebugOptions.maxLines = Clamp(cast<u32>(this.m_sliderDebugMaxLines.value() + 0.5), 4096u, 65536u);
         }
@@ -1145,7 +1145,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_pendingParamsApply = true;
             }
             if(this.m_sliderGpuFraction.result().valid && this.m_sliderGpuFraction.result().valueChanged){
-                this.m_runtimeParams.gpuWorkloadFraction = SimdClamp(cast<f32>(this.m_sliderGpuFraction.value()), 0.0f, 1.0f);
+                this.m_runtimeParams.gpuWorkloadFraction = Clamp(cast<f32>(this.m_sliderGpuFraction.value()), 0.0f, 1.0f);
                 this.m_pendingParamsApply = true;
             }
         }

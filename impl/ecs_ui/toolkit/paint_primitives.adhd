@@ -84,7 +84,6 @@ enum<u8> PaintGradientSpread{
 }
 
 enum<u8> PaintClipShapeKind{
-    None = 0u,
     RoundedRect = 1u,
     Ellipse = 2u,
 }
@@ -246,7 +245,7 @@ class PaintGradient{
             return false;
         if(!IsFinite(VectorSingle(offset)) || !IsFinite(VectorSingle(color.r, color.g, color.b, color.a)) || color.a < 0.0f || color.a > 1.0f)
             return false;
-        this.stops[cast<usize>(this.stopCount)].offset = UiSimdClamp(offset, 0.0f, 1.0f);
+        this.stops[cast<usize>(this.stopCount)].offset = Clamp(offset, 0.0f, 1.0f);
         this.stops[cast<usize>(this.stopCount)].color = color;
         ++this.stopCount;
         return true;

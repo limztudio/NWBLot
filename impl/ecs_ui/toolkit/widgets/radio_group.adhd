@@ -116,11 +116,5 @@ Expected<RadioGroupChoices> ReconcileRadioGroup(in IListDataSource source, in IR
     return choices;
 }
 
-Expected<RadioGroupChoices> ReconcileRadioGroup(in IListDataSource source, mut RadioGroupState state, mut RadioGroupResult result){
-    AlwaysCurrentRadioGroupGuard guard;
-    return ReconcileRadioGroup(source, guard, state, result);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

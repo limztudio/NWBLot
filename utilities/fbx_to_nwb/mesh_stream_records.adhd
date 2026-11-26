@@ -13,9 +13,6 @@ type Vec3 = f32x3u;
 type Vec4 = f32x4u;
 type MeshSkinInfluence = SkinInfluence4;
 
-const usize s_Vector2ComponentCount = 2u;
-const usize s_Vector3ComponentCount = 3u;
-const usize s_Vector4ComponentCount = 4u;
 const f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
 const StringView s_DefaultNormalModeText = "imported";
 const StringView s_SmoothNormalModeText = "smooth";
@@ -23,11 +20,9 @@ const StringView s_RegenerateNormalModeText = "regenerate";
 const StringView s_GeneratedUvTangentModeText = "generated_uv";
 const StringView s_GeneratedFallbackTangentModeText = "generated_fallback";
 const StringView s_SkinStreamLabel = "skin";
-const usize s_DeduplicateParallelGrainSize = 4096u;
 const u32 s_PositionSkinKeySkinShiftBits = 32u;
 const StringView s_SourceVertexRefLabel = "vertex_ref";
 const f32 s_CleanFloatEpsilon = 0.00000001f;
-const i32 s_OutputFloatPrecision = 9;
 const StringView s_WriteNwbMeshContext = "Failed to write NWB mesh";
 const StringView s_WriteNwbModelContext = "Failed to write NWB model";
 
@@ -42,7 +37,6 @@ enum<u8> NormalMode{
     Regenerate
 }
 
-[reflect]
 enum<u8> SourceTangentMode{
     Imported,
     GeneratedUv,

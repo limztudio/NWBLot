@@ -523,10 +523,6 @@ f32 SampleUiMeasuredSdfDistance(in SharedSdfAtlasPage handle, in u32 channel, in
     return ((encoded * 255.0f - 128.0f) * cast<f32>(page.binding().spreadPixels)) / 128.0f;
 }
 
-Expected<Rect> UiTextVisibleAtlasRect(in PlacedGlyph glyph, in SharedBakedFontAtlas atlas, in f32 size, in Point origin){
-    return AtlasRectangle(glyph, atlas.deref(), size, origin);
-}
-
 void SortUiGlyphIds(mut Vector<u32> ids){
     for(usize i = 1u; i < ids.size(); ++i){
         const u32 id = ids[i];
@@ -583,7 +579,7 @@ Rect UiTextVisibleBakedRect(in PlacedGlyph glyph, in Point origin){
 
 b8 PaintUiTextVisibleClipped(mut TextVisibleCoverageTests self, in TextLayout layout, in Rect clip, in Point origin){
     self.m_paint.pushClip(clip);
-    const b8 painted = self.m_text.paint(self.m_paint, layout, origin);
+    const b8 painted = self.m_text.paint(self.m_paint, layout, origin, Color());
     const b8 popped = self.m_paint.popClip();
     return painted && popped;
 }
@@ -1196,7 +1192,7 @@ void VerifyTextVisibleBakedTests_PaddedSdfPlaneIntersectingClipSurvivesWhenShapi
     ASSERT_LE(ends.y, ends.w);
     self.beginPaint(1u);
     self.m_paint.pushClip(clip);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin, Color()));
     ASSERT_TRUE(self.m_paint.popClip());
     const DrawSnapshot snapshot = self.m_paint.freeze();
     EXPECT_TRUE(snapshot.glyphPages().empty());
@@ -1258,7 +1254,7 @@ void VerifyTextVisibleBakedTests_SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisi
     self.beginPaint(1u);
     ASSERT_TRUE(self.m_paint.prepareGlyphPages(prior));
     self.m_paint.pushClip(clip);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin, Color()));
     ASSERT_TRUE(self.m_paint.popClip());
     const DrawSnapshot snapshot = self.m_paint.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), prior.size());
@@ -1279,7 +1275,7 @@ void VerifyTextVisibleBakedTests_FullyOutsideBakedGroupsRemainAbsentUntilALaterV
     ASSERT_EQ(self.m_layout.glyphs().size(), 3u);
     self.beginPaint(1u);
     self.m_paint.pushClip(Rect(700.0f, 500.0f, 2.0f, 2.0f));
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     ASSERT_TRUE(self.m_paint.popClip());
     const DrawSnapshot hidden = self.m_paint.freeze();
     EXPECT_TRUE(hidden.glyphPages().empty());
@@ -1288,7 +1284,7 @@ void VerifyTextVisibleBakedTests_FullyOutsideBakedGroupsRemainAbsentUntilALaterV
     EXPECT_TRUE(hidden.indices().empty());
     EXPECT_TRUE(hidden.commands().empty());
     self.beginPaint(2u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot revealed = self.m_paint.freeze();
     EXPECT_TRUE(revealed.glyphPages().empty());
     ASSERT_EQ(revealed.sdfPages().size(), 3u);
@@ -1310,7 +1306,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     ASSERT_FALSE(FontFaceHasBakedAtlas(self.m_layout.glyphs()[0u].face));
     const u32 warmGlyph = self.m_layout.glyphs()[0u].glyphId;
     self.beginPaint(1u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot warm = self.m_paint.freeze();
     ASSERT_EQ(warm.glyphPages().size(), 1u);
     ASSERT_TRUE(warm.sdfPages().empty());
@@ -1340,7 +1336,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     reference.fillRect(Rect(2.0f, 3.0f, 5.0f, 7.0f), Color(0.6f, 0.3f, 0.2f, 0.5f));
     ASSERT_TRUE(reference.drawGlyph(oldPage, Rect(12.0f, 13.0f, 5.0f, 7.0f), Rect(0.0f, 0.0f, 0.25f, 0.25f)));
     const DrawSnapshot expected = reference.freeze();
-    EXPECT_FALSE(self.m_text.paint(self.m_paint, self.m_layout, Point(80.0f, 80.0f)));
+    EXPECT_FALSE(self.m_text.paint(self.m_paint, self.m_layout, Point(80.0f, 80.0f), Color()));
     const DrawSnapshot rejected = self.m_paint.freeze();
     ExpectUiSamePaintSnapshots(rejected, expected);
     EXPECT_TRUE(rejected.sdfPages().empty());
@@ -1349,7 +1345,7 @@ void VerifyTextVisibleBakedTests_VisibleMixedCapacityFailurePreservesPriorPageVe
     EXPECT_EQ(GlyphPageBindingOf(rejected.glyphPages()[0u]).generation, GlyphPageBindingOf(oldPage).generation);
     ASSERT_TRUE(self.applyLayout(MakeUiShapeRequest("\xEA\xB8\x80", 32.0f)));
     self.beginPaint(3u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot upgraded = self.m_paint.freeze();
     ASSERT_EQ(upgraded.glyphPages().size(), 1u);
     EXPECT_EQ(GlyphPageBindingOf(upgraded.glyphPages()[0u]).atlasIdentity, GlyphPageBindingOf(oldPage).atlasIdentity);
@@ -1432,7 +1428,7 @@ void VerifyTextVisibleCoverageTests_HiddenGlyphKeepsTheWarmPageExactUntilItIsRev
     const DrawSnapshot hidden = self.m_paint.freeze();
     ExpectUiSamePaintSnapshots(hidden, first);
     self.beginPaint(3u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot revealed = self.m_paint.freeze();
     ASSERT_EQ(revealed.glyphPages().size(), 1u);
     EXPECT_NE(revealed.glyphPages()[0u], original);
@@ -1451,16 +1447,16 @@ void VerifyTextVisibleCoverageTests_HiddenOversizedGlyphCannotRejectOrUpgradePri
     ASSERT_TRUE(oversizedLayoutResult.has_value());
     TestMoveAssign<TextLayout>(oversized, oversizedLayoutResult.value());
     self.beginPaint(1u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot before = self.m_paint.freeze();
     self.beginPaint(2u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, oversized, Point(10000.0f, 10000.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, oversized, Point(10000.0f, 10000.0f), Color()));
     const DrawSnapshot hidden = self.m_paint.freeze();
     ExpectUiSamePaintSnapshots(hidden, before);
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
     self.beginPaint(3u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot ordinary = self.m_paint.freeze();
     ASSERT_EQ(ordinary.glyphPages().size(), 1u);
     EXPECT_GT(GlyphPageBindingOf(ordinary.glyphPages()[0u]).generation, GlyphPageBindingOf(before.glyphPages()[0u]).generation);
@@ -1473,7 +1469,7 @@ void VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepare
     self.m_paint.fillRect(Rect(1.0f, 1.0f, 4.0f, 4.0f));
     self.m_paint.pushClip(Rect(10.0f, 10.0f, 20.0f, 20.0f));
     self.m_paint.pushClip(Rect(40.0f, 40.0f, 20.0f, 20.0f));
-    EXPECT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     ASSERT_TRUE(self.m_paint.popClip());
     ASSERT_TRUE(self.m_paint.popClip());
     EXPECT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color(1.0f, 1.0f, 1.0f, 0.0f)));
@@ -1484,7 +1480,7 @@ void VerifyTextVisibleCoverageTests_EmptyIntersectedClipAndZeroAlphaNeverPrepare
     EXPECT_EQ(snapshot.indices().size(), 6u);
     ASSERT_TRUE(self.applyLayout(MakeUiDefaultShapeRequest(s_UiTextVisibleWideGlyphText)));
     self.beginPaint(2u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     EXPECT_FALSE(self.m_paint.freeze().glyphPages().empty());
 }
 
@@ -1517,7 +1513,7 @@ void VerifyTextVisibleCoverageTests_FractionalOriginPlacesNativeCoverageOnThePhy
     const auto raster = self.rasterRectangle(self.m_layout.glyphs()[0u], self.m_layout.fontSize(), display, origin);
     ASSERT_TRUE(raster.has_value());
     self.beginPaint(1u, display);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, origin, Color()));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
     ASSERT_EQ(snapshot.vertices().size(), 4u);
@@ -1590,7 +1586,7 @@ void VerifyTextVisibleCoverageTests_SixtyThreePriorImagesLeaveRoomForOnlyTheVisi
         EXPECT_EQ(snapshot.glyphPages()[index], prior[index]);
     EXPECT_EQ(GlyphPageBindingOf(snapshot.glyphPages()[snapshot.glyphPages().size() - 1u]).font.name(), Name(s_TestLatinFontPath));
     self.beginPaint(2u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, self.m_layout, Point(20.0f, 20.0f), Color()));
     const DrawSnapshot revealed = self.m_paint.freeze();
     EXPECT_EQ(revealed.glyphPages().size(), 2u);
     EXPECT_EQ(revealed.vertices().size(), 8u);
@@ -1603,7 +1599,7 @@ void VerifyTextVisibleCoverageTests_OversizedMeasurementDoesNotAdmitAtlasCoverag
     ASSERT_TRUE(large.has_value());
     ASSERT_TRUE(self.m_text.measure(large.value(), DisplayMetrics(800.0f, 600.0f, 1.0f, 1.0f)).has_value());
     self.beginPaint(1u);
-    ASSERT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(20.0f, 20.0f)));
+    ASSERT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(20.0f, 20.0f), Color()));
     const DrawSnapshot snapshot = self.m_paint.freeze();
     ASSERT_FALSE(snapshot.glyphPages().empty());
     EXPECT_EQ(GlyphPageBindingOf(snapshot.glyphPages()[0u]).generation, 1u);
@@ -1714,7 +1710,7 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
             const DisplayMetrics display = DisplayMetrics(800.0f, 600.0f, scale.x, scale.y);
             const auto measured = self.m_text.measure(layout.value(), display);
             ASSERT_TRUE(measured.has_value());
-            const auto relativePlane = UiTextVisibleAtlasRect(placed, atlas, fontSize, Point());
+            const auto relativePlane = UiTextGlyphAtlasRect(placed, atlas, fontSize, Point());
             ASSERT_TRUE(relativePlane.has_value());
             EXPECT_GT(measured.value().x, relativePlane.value().x);
             EXPECT_GT(measured.value().y, relativePlane.value().y);
@@ -1724,7 +1720,7 @@ void VerifyTextVisibleCoverageTests_NaturalSdfMeasurementExcludesTransparentSpre
                 const Point origin = Point(content.x - measured.value().x, content.y - measured.value().y);
                 const f32 contentLimitX = content.x + content.width + 0.0001f;
                 const f32 contentLimitY = content.y + content.height + 0.0001f;
-                const auto plane = UiTextVisibleAtlasRect(placed, atlas, fontSize, origin);
+                const auto plane = UiTextGlyphAtlasRect(placed, atlas, fontSize, origin);
                 ASSERT_TRUE(plane.has_value());
                 const f32 planeRight = plane.value().x + plane.value().width;
                 const f32 planeBottom = plane.value().y + plane.value().height;
@@ -1780,7 +1776,7 @@ void VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingul
     BeginTextVisibleFixturePaint(self, 31u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
     self.m_paint.pushClip(Rect(0.0f, 0.0f, 100.0f, 100.0f));
     self.m_paint.pushTranslate(250.0f, 0.0f);
-    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(-220.0f, 20.0f)));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(-220.0f, 20.0f), Color()));
     ASSERT_TRUE(self.m_paint.popTransform());
     ASSERT_TRUE(self.m_paint.popClip());
     const DrawSnapshot inClipSnap = self.m_paint.freeze();
@@ -1794,7 +1790,7 @@ void VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingul
     BeginTextVisibleFixturePaint(self, 32u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
     self.m_paint.pushClip(Rect(0.0f, 0.0f, 100.0f, 100.0f));
     self.m_paint.pushTranslate(250.0f, 0.0f);
-    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(10.0f, 20.0f)));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(10.0f, 20.0f), Color()));
     ASSERT_TRUE(self.m_paint.popTransform());
     ASSERT_TRUE(self.m_paint.popClip());
     const DrawSnapshot outClipSnap = self.m_paint.freeze();
@@ -1804,7 +1800,7 @@ void VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingul
     self.m_paint.pushTranslate(50.0f, 50.0f);
     self.m_paint.pushRotate(0.4f);
     self.m_paint.pushScale(2.5f, 2.5f);
-    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(0.0f, 0.0f)));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(0.0f, 0.0f), Color()));
     ASSERT_TRUE(self.m_paint.popTransform());
     ASSERT_TRUE(self.m_paint.popTransform());
     ASSERT_TRUE(self.m_paint.popTransform());
@@ -1819,7 +1815,7 @@ void VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingul
     BeginTextVisibleFixturePaint(self, 34u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
     self.m_paint.pushClip(Rect(0.0f, 0.0f, 120.0f, 120.0f));
     self.m_paint.pushTranslate(300.0f, 0.0f);
-    EXPECT_TRUE(self.m_text.paint(self.m_paint, sdfLayout.value(), Point(-260.0f, 20.0f)));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, sdfLayout.value(), Point(-260.0f, 20.0f), Color()));
     ASSERT_TRUE(self.m_paint.popTransform());
     ASSERT_TRUE(self.m_paint.popClip());
     const DrawSnapshot sdfSnap = self.m_paint.freeze();
@@ -1827,7 +1823,7 @@ void VerifyTextVisibleCoverageTests_TransformedTranslationRotationScaleAndSingul
 
     BeginTextVisibleFixturePaint(self, 35u, DisplayMetrics(200.0f, 200.0f, 1.0f, 1.0f));
     self.m_paint.pushScale(0.0f, 1.0f);
-    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(10.0f, 20.0f)));
+    EXPECT_TRUE(self.m_text.paint(self.m_paint, layout.value(), Point(10.0f, 20.0f), Color()));
     ASSERT_TRUE(self.m_paint.popTransform());
     const DrawSnapshot singSnap = self.m_paint.freeze();
     EXPECT_EQ(singSnap.vertices().size(), 0u);

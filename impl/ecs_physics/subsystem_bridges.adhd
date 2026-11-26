@@ -46,7 +46,7 @@ SkeletonJointMatrix SkeletonJointMatrixFromTransform3D(in Transform3D xf){
 }
 
 Transform3D InterpolateEcsTransform3D(in Transform3D prevXf, in Transform3D currXf, in f32 alpha){
-    const f32 clampedAlpha = SimdClamp(alpha, 0.0f, 1.0f);
+    const f32 clampedAlpha = Clamp(alpha, 0.0f, 1.0f);
     if(clampedAlpha >= (1.0f - 1.0e-6f))
         return currXf;
     VectorSingle q0 = SafeNormalizeQuat(VectorSingle(prevXf.rotation));
@@ -250,11 +250,11 @@ FluidVolume BuildWorldTransformedFluidVolume(in FluidVolume src, in Transform3D 
     if(src.shape == FluidVolumeShape::HalfSpacePlane){
         const VectorSingle absScale = Max(Abs(worldScale), VectorSingle(1.0e-4f));
         const VectorSingle localN = src.normalizedSurfaceNormal();
-        const f32 nScale = SimdMax(Vector3Length(localN * absScale).x, 1.0e-4f);
+        const f32 nScale = Max(Vector3Length(localN * absScale).x, 1.0e-4f);
         VectorSingle t1(0.0f);
         VectorSingle t2(0.0f);
         ComputeTangentBasisFromUnitNormal(localN, t1, t2);
-        const f32 tScale = SimdMax(0.5f * (Vector3Length(t1 * absScale).x + Vector3Length(t2 * absScale).x), 1.0e-4f);
+        const f32 tScale = Max(0.5f * (Vector3Length(t1 * absScale).x + Vector3Length(t2 * absScale).x), 1.0e-4f);
         dst.waveAmplitude = src.waveAmplitude * nScale;
         dst.waveFrequency = src.waveFrequency / tScale;
         const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(localN, rot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -266,7 +266,7 @@ FluidVolume BuildWorldTransformedFluidVolume(in FluidVolume src, in Transform3D 
     else if(src.shape == FluidVolumeShape::Sphere){
         const VectorSingle scaledCenter = VectorSetW(VectorSingle(src.surfaceNormalOffset) * worldScale, 0.0f);
         const VectorSingle worldCenter = VectorSingle(xf.position) + Vector3Rotate(scaledCenter, rot);
-        const f32 scaledRadius = SimdMax(0.0f, src.surfaceNormalOffset.w) * Vector3MaxComponent(Abs(worldScale)).x;
+        const f32 scaledRadius = Max(0.0f, src.surfaceNormalOffset.w) * Vector3MaxComponent(Abs(worldScale)).x;
         dst.surfaceNormalOffset = f32x4(worldCenter, scaledRadius);
     }
     else{
@@ -423,15 +423,15 @@ void InitializeEcsVehicleController(
                 const VectorSingle suspAxis = SafeNormalizeVec3(VectorSingle(w.suspensionDirection), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
                 const VectorSingle axleAxis = SafeNormalizeVec3(VectorSingle(w.axleAxis), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
                 const VectorSingle fwdAxis = SafeNormalizeVec3(VectorSingle(w.forwardAxis), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-                const f32 suspScale = SimdMax(Vector3Length(suspAxis * absScale).x, 1.0e-4f);
-                const f32 widthScale = SimdMax(Vector3Length(axleAxis * absScale).x, 1.0e-4f);
-                const f32 fwdScale = SimdMax(Vector3Length(fwdAxis * absScale).x, 1.0e-4f);
-                const f32 wheelRadScale = SimdMax(suspScale, fwdScale);
+                const f32 suspScale = Max(Vector3Length(suspAxis * absScale).x, 1.0e-4f);
+                const f32 widthScale = Max(Vector3Length(axleAxis * absScale).x, 1.0e-4f);
+                const f32 fwdScale = Max(Vector3Length(fwdAxis * absScale).x, 1.0e-4f);
+                const f32 wheelRadScale = Max(suspScale, fwdScale);
                 w.attachmentPoint = f32x4(VectorSetW(VectorSingle(w.attachmentPoint) * signedScale, 0.0f));
-                w.wheelRadius = SimdMax(w.wheelRadius * wheelRadScale, 1.0e-3f);
-                w.wheelWidth = SimdMax(w.wheelWidth * widthScale, 1.0e-3f);
-                w.suspensionRestLength = SimdMax(w.suspensionRestLength * suspScale, 0.0f);
-                w.suspensionMaxTravel = SimdMax(w.suspensionMaxTravel * suspScale, 0.0f);
+                w.wheelRadius = Max(w.wheelRadius * wheelRadScale, 1.0e-3f);
+                w.wheelWidth = Max(w.wheelWidth * widthScale, 1.0e-3f);
+                w.suspensionRestLength = Max(w.suspensionRestLength * suspScale, 0.0f);
+                w.suspensionMaxTravel = Max(w.suspensionMaxTravel * suspScale, 0.0f);
                 scaledWheelsScratch[wi] = w;
             }
             vc.controller.init(chassisId, scaledEng, Span<VehicleWheelDef>(scaledWheelsScratch.data(), scaledWheelsScratch.size()));
@@ -688,7 +688,7 @@ void ComputeRagdollBoneToJointOffsetsFromDef(
         if(bDef.shapeType == RagdollBoneShapeType::Capsule && EcsVec3NearlyEqual(localAnchor, bDef.capsule.center1(), 1.0e-3f)){
             outOffsets[bi] = Transform3D(localAnchor, identRot);
         }
-        else if(bDef.shapeType == RagdollBoneShapeType::Box || bDef.useBox){
+        else if(bDef.shapeType == RagdollBoneShapeType::Box){
             const VectorSingle delta = bPos - jAnchor;
             if(Vector3LengthSq(delta).x > 1.0e-8f){
                 const VectorSingle deltaDir = SafeNormalizeVec3(delta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -774,12 +774,12 @@ void RebuildEcsRagdollComponent(
             bd.boxHalfExtents = f32x4(Max(VectorSingle(bd.boxHalfExtents) * absScale, VectorSingle(0.01f)), 0.0f);
             const VectorSingle c1 = bd.capsule.center1() * signedScale;
             const VectorSingle c2 = bd.capsule.center2Vec() * signedScale;
-            bd.capsule.center1Radius = f32x4(c1, SimdMax(bd.capsule.radius() * maxS, 1.0e-3f));
+            bd.capsule.center1Radius = f32x4(c1, Max(bd.capsule.radius() * maxS, 1.0e-3f));
             bd.capsule.center2 = f32x4(c2, 0.0f);
-            bd.sphere.centerRadius = f32x4(bd.sphere.center() * signedScale, SimdMax(bd.sphere.radius() * maxS, 1.0e-3f));
+            bd.sphere.centerRadius = f32x4(bd.sphere.center() * signedScale, Max(bd.sphere.radius() * maxS, 1.0e-3f));
             for(usize hi = 0u; hi < bd.hullVertices.size(); ++hi)
                 bd.hullVertices[hi] = f32x4(VectorSingle(bd.hullVertices[hi]) * signedScale, 0.0f);
-            bd.hullRadius = SimdMax(bd.hullRadius * maxS, 0.0f);
+            bd.hullRadius = Max(bd.hullRadius * maxS, 0.0f);
             bd.shapeDef.filter = ResolveEcsNamedLayerFilter(bd.shapeDef.filter, rc.collisionLayer, collisionLayerMatrix);
             for(usize ei = 0u; ei < bd.extraShapes.size(); ++ei){
                 mut RagdollExtraShapeDef ex = bd.extraShapes[ei];
@@ -787,12 +787,12 @@ void RebuildEcsRagdollComponent(
                 ex.boxHalfExtents = f32x4(Max(VectorSingle(ex.boxHalfExtents) * absScale, VectorSingle(0.01f)), 0.0f);
                 const VectorSingle ec1 = ex.capsule.center1() * signedScale;
                 const VectorSingle ec2 = ex.capsule.center2Vec() * signedScale;
-                ex.capsule.center1Radius = f32x4(ec1, SimdMax(ex.capsule.radius() * maxS, 1.0e-3f));
+                ex.capsule.center1Radius = f32x4(ec1, Max(ex.capsule.radius() * maxS, 1.0e-3f));
                 ex.capsule.center2 = f32x4(ec2, 0.0f);
-                ex.sphere.centerRadius = f32x4(ex.sphere.center() * signedScale, SimdMax(ex.sphere.radius() * maxS, 1.0e-3f));
+                ex.sphere.centerRadius = f32x4(ex.sphere.center() * signedScale, Max(ex.sphere.radius() * maxS, 1.0e-3f));
                 for(usize ehi = 0u; ehi < ex.hullVertices.size(); ++ehi)
                     ex.hullVertices[ehi] = f32x4(VectorSingle(ex.hullVertices[ehi]) * signedScale, 0.0f);
-                ex.hullRadius = SimdMax(ex.hullRadius * maxS, 0.0f);
+                ex.hullRadius = Max(ex.hullRadius * maxS, 0.0f);
                 ex.shapeDef.filter = ResolveEcsNamedLayerFilter(ex.shapeDef.filter, rc.collisionLayer, collisionLayerMatrix);
             }
             scratch.ragdollWorldBonesScratch[bi] = bd;
@@ -911,7 +911,7 @@ void CollectEcsPhysicsEnvironment(
 CharacterControllerDef BuildScaledCharacterControllerDef(in CharacterControllerDef src, in VectorSingle worldScale){
     CharacterControllerDef outDef = src;
     const VectorSingle absScale = Max(Abs(worldScale), VectorSingle(1.0e-4f));
-    const f32 radialScale = SimdMax(absScale.x, absScale.z);
+    const f32 radialScale = Max(absScale.x, absScale.z);
     if(src.shapeType == CharacterShapeType::Sphere)
         outDef.radius = src.radius * Vector3MaxComponent(absScale).x;
     else
@@ -965,7 +965,7 @@ ArticulationLinkDef ScaleArticulationLinkDef(in ArticulationLinkDef src, in Vect
     dst.inertiaTensor.m02 *= signedScale.x * signedScale.z;
     dst.inertiaTensor.m12 *= signedScale.y * signedScale.z;
     if(src.jointType == ArticulationJointType::Prismatic){
-        const f32 axisScale = SimdMax(Vector3Length(VectorSingle(src.jointAxisLocal) * absScale).x, 1.0e-4f);
+        const f32 axisScale = Max(Vector3Length(VectorSingle(src.jointAxisLocal) * absScale).x, 1.0e-4f);
         dst.lowerLimit *= axisScale;
         dst.upperLimit *= axisScale;
         dst.driveTargetPos *= axisScale;
@@ -1055,7 +1055,7 @@ void SyncArticulationLiveSettings(
         dst.jointFriction = src.jointFriction;
         dst.limitRestitution = src.limitRestitution;
         if(src.jointType == ArticulationJointType::Prismatic){
-            const f32 axisScale = SimdMax(Vector3Length(VectorSingle(src.jointAxisLocal) * absScale).x, 1.0e-4f);
+            const f32 axisScale = Max(Vector3Length(VectorSingle(src.jointAxisLocal) * absScale).x, 1.0e-4f);
             dst.lowerLimit *= axisScale;
             dst.upperLimit *= axisScale;
             dst.driveTargetPos *= axisScale;
@@ -1429,8 +1429,8 @@ void StepEcsPhysicsSubsystemBridges(
                     in VehicleWheelState ws = vc.controller.wheelStates[wi];
                     if(ws.isGrounded)
                         ++groundedCount;
-                    const f32 wheelSlip = SimdMax(Abs(VectorSingle(ws.longitudinalSlip)).x, Abs(VectorSingle(ws.lateralSlip)).x);
-                    maxSlip = SimdMax(maxSlip, wheelSlip);
+                    const f32 wheelSlip = Max(Abs(VectorSingle(ws.longitudinalSlip)).x, Abs(VectorSingle(ws.lateralSlip)).x);
+                    maxSlip = Max(maxSlip, wheelSlip);
                 }
                 if(vc.controller.currentGear != vehEvState.prevGear || groundedCount != vehEvState.prevGroundedWheelCount){
                     EcsVehicleStateEvent ev;
@@ -1984,9 +1984,9 @@ void StepEcsPhysicsSubsystemBridges(
                                     );
                                 }
                             }
-                            sb.softBody.particleRadius = SimdMax(sb.softBody.particleRadius * maxS, 1.0e-4f);
+                            sb.softBody.particleRadius = Max(sb.softBody.particleRadius * maxS, 1.0e-4f);
                             if(sb.softBody.selfCollisionRadius > 0.0f)
-                                sb.softBody.selfCollisionRadius = SimdMax(sb.softBody.selfCollisionRadius * maxS, 1.0e-4f);
+                                sb.softBody.selfCollisionRadius = Max(sb.softBody.selfCollisionRadius * maxS, 1.0e-4f);
                         }
                     }
                     syncState.transformApplied = true;
@@ -2090,7 +2090,7 @@ void WriteBackEcsRagdollRootPoses(
     in HashMap<EntityID, EcsTrackedRagdoll> ragdollsRef = activeRagdolls;
     in Vector<EcsBodyTransformSnapshot> snapsRef = bodyTransformSnapshots;
     in Vector<u32> snapMetaRef = bodyTransformSnapshotMeta;
-    const f32 alpha = SimdClamp(interpolationAlpha, 0.0f, 1.0f);
+    const f32 alpha = Clamp(interpolationAlpha, 0.0f, 1.0f);
     ragdollView.each(
         lambda[in physRef, in scopedRef, in ragdollsRef, in snapsRef, in snapMetaRef, in interpolateTransforms, in alpha, in hasAnyPhysicsParents, mut world, mut scratch](in EntityID entity, in RagdollComponent rc) -> void{
             if(!rc.enabled || !rc.initialized || rc.instance.boneBodies.empty())
@@ -2193,7 +2193,7 @@ void WriteBackEcsVehicleWheelPoses(
     in EcsScopedEntityNames scopedRef = scopedNames;
     in Vector<EcsBodyTransformSnapshot> snapsRef = bodyTransformSnapshots;
     in Vector<u32> snapMetaRef = bodyTransformSnapshotMeta;
-    const f32 alpha = SimdClamp(interpolationAlpha, 0.0f, 1.0f);
+    const f32 alpha = Clamp(interpolationAlpha, 0.0f, 1.0f);
     const b8 doInterp = interpolateTransforms && (alpha < (1.0f - 1.0e-6f));
     vehicleView.each(
         lambda[in physRef, in scopedRef, in snapsRef, in snapMetaRef, in doInterp, in alpha, in updateControllerWheelStates, in hasAnyPhysicsParents, mut world, mut scratch](
@@ -2278,7 +2278,7 @@ void WriteBackEcsArticulationPoses(
     in PhysicsWorld physRef = physicsWorld;
     in EcsScopedEntityNames scopedRef = scopedNames;
     in Vector<EcsSlotOwner> ownersRef = bodyIndexToEntity;
-    const f32 alpha = SimdClamp(interpolationAlpha, 0.0f, 1.0f);
+    const f32 alpha = Clamp(interpolationAlpha, 0.0f, 1.0f);
     const b8 doInterp = interpolateTransforms && (alpha < (1.0f - 1.0e-6f));
     artView.each(
         lambda[in physRef, in scopedRef, in ownersRef, in doInterp, in alpha, in updateStaticProxies, in hasAnyPhysicsParents, mut world, mut scratch](
@@ -2396,7 +2396,7 @@ void ApplyInterpolatedCharacterTransformsToEcs(
     const auto charView = world.view<CharacterControllerComponent>();
     if(charView.candidateCount() == 0u)
         return;
-    const f32 alpha = SimdClamp(interpolationAlpha, 0.0f, 1.0f);
+    const f32 alpha = Clamp(interpolationAlpha, 0.0f, 1.0f);
     const VectorSingle tVec(alpha);
     in HashMap<EntityID, EcsCharacterControllerSyncState> charSyncRef = charSyncStates;
     charView.each(

@@ -87,13 +87,13 @@ b8 TryUpdateScrollContainerBox(
         inoutBox.content = viewportRect.value();
         f64 maxScrollX = 0.0;
         if(description.horizontalScrollbar != ScrollbarPolicy::Never)
-            maxScrollX = UiSimdMaxF64(0.0, cast<f64>(inoutBox.contentSize.x) - cast<f64>(inoutBox.content.width));
+            maxScrollX = Max(0.0, cast<f64>(inoutBox.contentSize.x) - cast<f64>(inoutBox.content.width));
         f64 maxScrollY = 0.0;
         if(description.verticalScrollbar != ScrollbarPolicy::Never)
-            maxScrollY = UiSimdMaxF64(0.0, cast<f64>(inoutBox.contentSize.y) - cast<f64>(inoutBox.content.height));
+            maxScrollY = Max(0.0, cast<f64>(inoutBox.contentSize.y) - cast<f64>(inoutBox.content.height));
         inoutBox.scrollOffset = Point(
-            cast<f32>(UiSimdMinF64(cast<f64>(description.scrollOffset.x), maxScrollX)),
-            cast<f32>(UiSimdMinF64(cast<f64>(description.scrollOffset.y), maxScrollY))
+            cast<f32>(Min(cast<f64>(description.scrollOffset.x), maxScrollX)),
+            cast<f32>(Min(cast<f64>(description.scrollOffset.y), maxScrollY))
         );
     }
     else{
@@ -138,13 +138,13 @@ b8 TryComputeFlowChildEffectiveMeasured(
             && childDesc.flexWrap
         ){
             const f64 marginY = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
-            const f64 borderH = ClampLayoutAxisF64(UiSimdMaxF64(0.0, parentCrossExtent - marginY), childDesc.minHeight, childDesc.maxHeight);
-            const f64 innerH = UiSimdMaxF64(0.0, (borderH - cast<f64>(childDesc.padding.top)) - cast<f64>(childDesc.padding.bottom));
+            const f64 borderH = ClampLayoutAxisF64(Max(0.0, parentCrossExtent - marginY), childDesc.minHeight, childDesc.maxHeight);
+            const f64 innerH = Max(0.0, (borderH - cast<f64>(childDesc.padding.top)) - cast<f64>(childDesc.padding.bottom));
             f64 extX = 0.0;
             f64 extY = 0.0;
             if(!MeasureLayoutWrappedNodeF64(nodes, boxes, child, innerH, extX, extY))
                 return false;
-            extX = UiSimdMaxF64(extX, cast<f64>(childDesc.intrinsicSize.x));
+            extX = Max(extX, cast<f64>(childDesc.intrinsicSize.x));
             const f64 rawW = (extX + cast<f64>(childDesc.padding.left)) + cast<f64>(childDesc.padding.right);
             if(rawW > s_UiMaxFloatF64)
                 return false;
@@ -162,8 +162,8 @@ b8 TryComputeFlowChildEffectiveMeasured(
         && (childDesc.direction == LayoutDirection::Grid || (childDesc.direction == LayoutDirection::Row && childDesc.flexWrap))
     ){
         const f64 marginX = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
-        const f64 borderW = ClampLayoutAxisF64(UiSimdMaxF64(0.0, parentCrossExtent - marginX), childDesc.minWidth, childDesc.maxWidth);
-        const f64 innerW = UiSimdMaxF64(0.0, (borderW - cast<f64>(childDesc.padding.left)) - cast<f64>(childDesc.padding.right));
+        const f64 borderW = ClampLayoutAxisF64(Max(0.0, parentCrossExtent - marginX), childDesc.minWidth, childDesc.maxWidth);
+        const f64 innerW = Max(0.0, (borderW - cast<f64>(childDesc.padding.left)) - cast<f64>(childDesc.padding.right));
         f64 extX = 0.0;
         f64 extY = 0.0;
         if(childDesc.direction == LayoutDirection::Grid){
@@ -174,7 +174,7 @@ b8 TryComputeFlowChildEffectiveMeasured(
             if(!MeasureLayoutWrappedNodeF64(nodes, boxes, child, innerW, extX, extY))
                 return false;
         }
-        extY = UiSimdMaxF64(extY, cast<f64>(childDesc.intrinsicSize.y));
+        extY = Max(extY, cast<f64>(childDesc.intrinsicSize.y));
         const f64 rawH = (extY + cast<f64>(childDesc.padding.top)) + cast<f64>(childDesc.padding.bottom);
         if(rawH > s_UiMaxFloatF64)
             return false;
@@ -266,7 +266,7 @@ b8 TryArrangeFlexLineChildren(
         else{
             frozenMain[cast<usize>(i)] = true;
             if(mainSpec.policy == LayoutSizePolicy::Content && stretchCross && childDesc.aspectRatio > 0.0f){
-                const f64 crossAvail = ClampLayoutAxisF64(UiSimdMaxF64(0.0, lineCrossExtent - marginC), minC, maxC);
+                const f64 crossAvail = ClampLayoutAxisF64(Max(0.0, lineCrossExtent - marginC), minC, maxC);
                 VectorDouble derived(0.0);
                 if(row)
                     derived = ResolveLayoutConstrainedSizeF64(childDesc, measuredMain[cast<usize>(i)], crossAvail, false, true);
@@ -288,7 +288,7 @@ b8 TryArrangeFlexLineChildren(
         for(u32 pass = 0u; pass < count; ++pass){
             if(activeStretchCount == 0u || activeWeight <= 0.0)
                 break;
-            const f64 remaining = UiSimdMaxF64(0.0, (lineMainExtent - spacing) - (fixedSum + totalMargin));
+            const f64 remaining = Max(0.0, (lineMainExtent - spacing) - (fixedSum + totalMargin));
             const f64 invActiveWeight = 1.0 / activeWeight;
             b8 newlyFrozen = false;
             for(u32 i = 0u; i < count; ++i){
@@ -317,7 +317,7 @@ b8 TryArrangeFlexLineChildren(
     f64 totalOuterMain = spacing;
     for(u32 i = 0u; i < count; ++i)
         totalOuterMain += itemMain[cast<usize>(i)] + marginMains[cast<usize>(i)];
-    const f64 freeMain = UiSimdMaxF64(0.0, lineMainExtent - totalOuterMain);
+    const f64 freeMain = Max(0.0, lineMainExtent - totalOuterMain);
     f64 leadMain = 0.0;
     f64 extraGap = 0.0;
     ComputeJustifyOffsetsF64(parentDesc.justifyContent, freeMain, count, leadMain, extraGap);
@@ -346,7 +346,7 @@ b8 TryArrangeFlexLineChildren(
         const f64 rawMain = itemMain[cast<usize>(i)];
         f64 rawCross = measuredCross[cast<usize>(i)];
         if(stretchCross)
-            rawCross = UiSimdMaxF64(0.0, lineCrossExtent - marginCross);
+            rawCross = Max(0.0, lineCrossExtent - marginCross);
         const b8 mainDriven = mainSpec.policy != LayoutSizePolicy::Content;
         const b8 crossDriven = stretchCross || (crossSpec.policy == LayoutSizePolicy::Fixed);
         VectorDouble resolvedSize(0.0);
@@ -360,9 +360,9 @@ b8 TryArrangeFlexLineChildren(
             actualMain = resolvedSize.x;
             actualCross = resolvedSize.y;
         }
-        outUsedCross = UiSimdMaxF64(outUsedCross, actualCross + marginCross);
+        outUsedCross = Max(outUsedCross, actualCross + marginCross);
         const f64 mainCoord = cursor + marginMainStart;
-        const f64 availCross = UiSimdMaxF64(0.0, lineCrossExtent - marginCross);
+        const f64 availCross = Max(0.0, lineCrossExtent - marginCross);
         f64 crossCoord = lineCrossStart + marginCrossStart;
         if(align == LayoutAlign::Center)
             crossCoord += (availCross - actualCross) * 0.5;
@@ -398,19 +398,19 @@ b8 TryArrangeAbsoluteLayoutChild(
     const b8 pinSpanY = childDesc.pinTop && childDesc.pinBottom && childDesc.height.policy != LayoutSizePolicy::Fixed;
     f64 rawW = cast<f64>(childMeasured.x);
     if(pinSpanX)
-        rawW = UiSimdMaxF64(0.0, (cast<f64>(parentContent.width) - cast<f64>(childDesc.absoluteInsets.left) - cast<f64>(childDesc.absoluteInsets.right)) - marginW);
+        rawW = Max(0.0, (cast<f64>(parentContent.width) - cast<f64>(childDesc.absoluteInsets.left) - cast<f64>(childDesc.absoluteInsets.right)) - marginW);
     else if(childDesc.width.policy == LayoutSizePolicy::Stretch)
-        rawW = UiSimdMaxF64(0.0, cast<f64>(parentContent.width) - marginW);
+        rawW = Max(0.0, cast<f64>(parentContent.width) - marginW);
     f64 rawH = cast<f64>(childMeasured.y);
     if(pinSpanY)
-        rawH = UiSimdMaxF64(0.0, (cast<f64>(parentContent.height) - cast<f64>(childDesc.absoluteInsets.top) - cast<f64>(childDesc.absoluteInsets.bottom)) - marginH);
+        rawH = Max(0.0, (cast<f64>(parentContent.height) - cast<f64>(childDesc.absoluteInsets.top) - cast<f64>(childDesc.absoluteInsets.bottom)) - marginH);
     else if(childDesc.height.policy == LayoutSizePolicy::Stretch)
-        rawH = UiSimdMaxF64(0.0, cast<f64>(parentContent.height) - marginH);
+        rawH = Max(0.0, cast<f64>(parentContent.height) - marginH);
     const b8 widthDriven = pinSpanX || childDesc.width.policy != LayoutSizePolicy::Content;
     const b8 heightDriven = pinSpanY || childDesc.height.policy != LayoutSizePolicy::Content;
     const VectorDouble size = ResolveLayoutConstrainedSizeF64(childDesc, rawW, rawH, widthDriven, heightDriven);
-    const f64 availW = UiSimdMaxF64(0.0, cast<f64>(parentContent.width) - marginW);
-    const f64 availH = UiSimdMaxF64(0.0, cast<f64>(parentContent.height) - marginH);
+    const f64 availW = Max(0.0, cast<f64>(parentContent.width) - marginW);
+    const f64 availH = Max(0.0, cast<f64>(parentContent.height) - marginH);
     f64 x = cast<f64>(parentContent.x) + cast<f64>(childDesc.margin.left);
     if(childDesc.pinLeft){
         x += cast<f64>(childDesc.absoluteInsets.left);
@@ -512,8 +512,8 @@ b8 TryArrangeGridContainer(
         if(!description.scrollable)
             break;
         const Point nextContentSize(
-            cast<f32>(UiSimdMaxF64(gridExtentX, cast<f64>(description.intrinsicSize.x))),
-            cast<f32>(UiSimdMaxF64(gridExtentY, cast<f64>(description.intrinsicSize.y)))
+            cast<f32>(Max(gridExtentX, cast<f64>(description.intrinsicSize.x))),
+            cast<f32>(Max(gridExtentY, cast<f64>(description.intrinsicSize.y)))
         );
         const Point prevContentSize = boxes[cast<usize>(index)].contentSize;
         if(nextContentSize.x == prevContentSize.x && nextContentSize.y == prevContentSize.y)
@@ -532,7 +532,7 @@ b8 TryArrangeGridContainer(
         scrolled.x -= boxes[cast<usize>(index)].scrollOffset.x;
         scrolled.y -= boxes[cast<usize>(index)].scrollOffset.y;
     }
-    const f64 freeX = UiSimdMaxF64(0.0, cast<f64>(scrolled.width) - gridExtentX);
+    const f64 freeX = Max(0.0, cast<f64>(scrolled.width) - gridExtentX);
     f64 leadX = 0.0;
     f64 extraGapX = 0.0;
     ComputeJustifyOffsetsF64(description.justifyContent, freeX, usedCols, leadX, extraGapX);
@@ -563,8 +563,8 @@ b8 TryArrangeGridContainer(
         const f64 cellH = (rowY[lastRow] + rowHeights[lastRow]) - cellY;
         const f64 marginW = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
         const f64 marginH = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
-        const f64 availCellW = UiSimdMaxF64(0.0, cellW - marginW);
-        const f64 availCellH = UiSimdMaxF64(0.0, cellH - marginH);
+        const f64 availCellW = Max(0.0, cellW - marginW);
+        const f64 availCellH = Max(0.0, cellH - marginH);
         const LayoutAlign alignY = ResolveEffectiveLayoutAlign(description.alignItems, childDesc.alignSelf);
         const b8 stretchX = childDesc.width.policy == LayoutSizePolicy::Stretch;
         const b8 stretchY = (childDesc.height.policy == LayoutSizePolicy::Stretch) || (alignY == LayoutAlign::Stretch && childDesc.height.policy == LayoutSizePolicy::Content);
@@ -742,7 +742,7 @@ b8 ArrangeLayoutTreeNodeAt(
                             if(fi > curStart)
                                 curMain += mainGap;
                             curMain += itemOuterMain;
-                            curCross = UiSimdMaxF64(curCross, itemOuterCross);
+                            curCross = Max(curCross, itemOuterCross);
                         }
                     }
                     lineStarts.push_back(curStart);
@@ -750,7 +750,7 @@ b8 ArrangeLayoutTreeNodeAt(
                     lineCrossHeights.push_back(curCross);
                     const u32 lineCount = cast<u32>(lineStarts.size());
                     if(lineCount == 1u && !description.scrollable)
-                        lineCrossHeights[0u] = UiSimdMaxF64(lineCrossHeights[0u], lineCrossTotal);
+                        lineCrossHeights[0u] = Max(lineCrossHeights[0u], lineCrossTotal);
                     f64 crossCursor = lineCrossStart;
                     f64 maxUsedMain = 0.0;
                     f64 totalUsedCross = 0.0;
@@ -780,8 +780,8 @@ b8 ArrangeLayoutTreeNodeAt(
                             usedCross
                         ))
                             return false;
-                        const f64 effectiveLineCross = UiSimdMaxF64(lineCrossExt, usedCross);
-                        maxUsedMain = UiSimdMaxF64(maxUsedMain, usedMain);
+                        const f64 effectiveLineCross = Max(lineCrossExt, usedCross);
+                        maxUsedMain = Max(maxUsedMain, usedMain);
                         totalUsedCross += effectiveLineCross;
                         if(li > 0u)
                             totalUsedCross += crossGap;
@@ -796,8 +796,8 @@ b8 ArrangeLayoutTreeNodeAt(
                         wrapContentY = totalUsedCross;
                     }
                     const Point nextContentSize(
-                        cast<f32>(UiSimdMaxF64(wrapContentX, cast<f64>(description.intrinsicSize.x))),
-                        cast<f32>(UiSimdMaxF64(wrapContentY, cast<f64>(description.intrinsicSize.y)))
+                        cast<f32>(Max(wrapContentX, cast<f64>(description.intrinsicSize.x))),
+                        cast<f32>(Max(wrapContentY, cast<f64>(description.intrinsicSize.y)))
                     );
                     const Point prevContentSize = boxes[cast<usize>(index)].contentSize;
                     if(nextContentSize.x == prevContentSize.x && nextContentSize.y == prevContentSize.y)
@@ -821,8 +821,8 @@ b8 ArrangeLayoutTreeNodeAt(
             const LayoutAlign alignY = ResolveEffectiveLayoutAlign(description.alignItems, childDesc.alignSelf);
             const f64 marginW = cast<f64>(childDesc.margin.left) + cast<f64>(childDesc.margin.right);
             const f64 marginH = cast<f64>(childDesc.margin.top) + cast<f64>(childDesc.margin.bottom);
-            const f64 availW = UiSimdMaxF64(0.0, cast<f64>(scrolled.width) - marginW);
-            const f64 availH = UiSimdMaxF64(0.0, cast<f64>(scrolled.height) - marginH);
+            const f64 availW = Max(0.0, cast<f64>(scrolled.width) - marginW);
+            const f64 availH = Max(0.0, cast<f64>(scrolled.height) - marginH);
             const b8 stretchX = childDesc.width.policy == LayoutSizePolicy::Stretch;
             const b8 stretchY = (childDesc.height.policy == LayoutSizePolicy::Stretch) || (alignY == LayoutAlign::Stretch && childDesc.height.policy == LayoutSizePolicy::Content);
             f64 rawW = cast<f64>(boxes[cast<usize>(child)].measuredSize.x);
@@ -891,10 +891,10 @@ b8 ArrangeLayoutTree(
     const Point measured = stagedBoxes[0u].measuredSize;
     f64 rawW = cast<f64>(measured.x);
     if(root.width.policy == LayoutSizePolicy::Stretch)
-        rawW = UiSimdMaxF64(0.0, (cast<f64>(viewport.width) - cast<f64>(root.margin.left)) - cast<f64>(root.margin.right));
+        rawW = Max(0.0, (cast<f64>(viewport.width) - cast<f64>(root.margin.left)) - cast<f64>(root.margin.right));
     f64 rawH = cast<f64>(measured.y);
     if(root.height.policy == LayoutSizePolicy::Stretch)
-        rawH = UiSimdMaxF64(0.0, (cast<f64>(viewport.height) - cast<f64>(root.margin.top)) - cast<f64>(root.margin.bottom));
+        rawH = Max(0.0, (cast<f64>(viewport.height) - cast<f64>(root.margin.top)) - cast<f64>(root.margin.bottom));
     const VectorDouble rootSize = ResolveLayoutConstrainedSizeF64(
         root,
         rawW,

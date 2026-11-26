@@ -14,10 +14,10 @@
 
 static_assert(size_of<ReflectionFrameParameters>() == 176u, "Reflection frame parameters must match the shader");
 static_assert(offset_of<ReflectionFrameParameters>(opaqueSpecularSlot) == 16u, "Reflection frame parameters must match the shader");
-static_assert(offset_of<ReflectionFrameParameters>(maxRayDistance) == 128u, "Reflection frame parameters must match the shader");
-static_assert(offset_of<ReflectionFrameParameters>(environmentTopR) == 140u, "Reflection frame parameters must match the shader");
-static_assert(offset_of<ReflectionFrameParameters>(environmentBottomR) == 152u, "Reflection frame parameters must match the shader");
-static_assert(offset_of<ReflectionFrameParameters>(screenThickness) == 164u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(maxRayDistance) == 120u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(environmentTopR) == 132u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(environmentBottomR) == 144u, "Reflection frame parameters must match the shader");
+static_assert(offset_of<ReflectionFrameParameters>(screenThickness) == 156u, "Reflection frame parameters must match the shader");
 
 class ReflectionCsgDispatchState{
     public ReflectionFrameSnapshot resources;

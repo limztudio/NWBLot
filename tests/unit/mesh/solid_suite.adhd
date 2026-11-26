@@ -4,7 +4,6 @@
 
 #include <impl/assets_mesh/cook.adhd>
 #include <impl/assets_mesh/cook_solid_topology.adhd>
-#include <impl/assets_mesh/meshlet_triangle_visit.adhd>
 #include <tests/common/capturing_logger.adhd>
 #include <tests/common/gtest_macros.adhd>
 #include <tests/common/memory.adhd>
@@ -15,25 +14,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::NoThrowCornerVisitor")]
-extern class NoThrowCornerVisitor;
-
-[cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::ThrowingCornerVisitor")]
-extern class ThrowingCornerVisitor;
-
 [cpp_header("<tests/unit/mesh/mesh_stream_probes.h>"), cpp_name("::NWB::Tests::VerifyMeshCookAllocationUnwindPropagates")]
 extern b8 VerifyMeshCookAllocationUnwindPropagates();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-type OneMeshlet = Array<MeshletDesc, 1u>;
-type OneLocalVertex = Array<MeshletLocalVertexRef, 1u>;
-type OnePrimitive = Array<u8, 1u>;
-
-static_assert(is_nothrow_call<in OneMeshlet, in OneLocalVertex, in OnePrimitive, mut NoThrowCornerVisitor>(ForEachMeshletTriangleCorner));
-static_assert(!is_nothrow_call<in OneMeshlet, in OneLocalVertex, in OnePrimitive, mut ThrowingCornerVisitor>(ForEachMeshletTriangleCorner));
 
 const usize s_MeshletCountHeaderOffset = offset_of<MeshBinaryHeader>(meshletCount);
 const usize s_MeshletBoundCountHeaderOffset = offset_of<MeshBinaryHeader>(meshletBoundCount);
@@ -269,17 +255,17 @@ void VerifyMeshSolidTopology_MixedClosedOpenAndInwardComponentsKeepIndependentMe
     indices[21u] = 5u; indices[22u] = 7u; indices[23u] = 6u;
     indices[24u] = 8u; indices[25u] = 9u; indices[26u] = 10u;
 
-    const Expected<Vector<u32>> words = BuildSolidTriangleWords(positions, indices);
-    ASSERT_TRUE(words.has_value());
-    ASSERT_EQ(words.value().size(), 1u);
-    EXPECT_EQ(words.value()[0u], 0xffu);
+    Vector<u32> words;
+    ASSERT_TRUE(BuildSolidTriangleWordsInto(positions, indices, words));
+    ASSERT_EQ(words.size(), 1u);
+    EXPECT_EQ(words[0u], 0xffu);
 }
 
 void VerifySolidZeroWord(in Span<f32x3u> positions, in Span<u32> indices){
-    const Expected<Vector<u32>> words = BuildSolidTriangleWords(positions, indices);
-    ASSERT_TRUE(words.has_value());
-    ASSERT_EQ(words.value().size(), 1u);
-    EXPECT_EQ(words.value()[0u], 0u);
+    Vector<u32> words;
+    ASSERT_TRUE(BuildSolidTriangleWordsInto(positions, indices, words));
+    ASSERT_EQ(words.size(), 1u);
+    EXPECT_EQ(words[0u], 0u);
 }
 
 void VerifyMeshSolidTopology_BrokenWindingNonManifoldAndDegenerateFacesInvalidateTheirWholeComponent(){
@@ -350,11 +336,11 @@ void VerifyMeshSolidTopology_MembershipCrossesWordBoundariesWithoutSettingTailPa
         for(in u32 corner : tetrahedron)
             indices.push_back(component * 4u + corner);
     }
-    const Expected<Vector<u32>> words = BuildSolidTriangleWords(positions, indices);
-    ASSERT_TRUE(words.has_value());
-    ASSERT_EQ(words.value().size(), 2u);
-    EXPECT_EQ(words.value()[0u], 0xffffffffu);
-    EXPECT_EQ(words.value()[1u], 0xfu);
+    Vector<u32> words;
+    ASSERT_TRUE(BuildSolidTriangleWordsInto(positions, indices, words));
+    ASSERT_EQ(words.size(), 2u);
+    EXPECT_EQ(words[0u], 0xffffffffu);
+    EXPECT_EQ(words[1u], 0xfu);
 }
 
 void VerifyMeshSolidTopology_NonFinitePositionsAndInvalidCornerRangesCannotProduceMembership(){
@@ -368,10 +354,11 @@ void VerifyMeshSolidTopology_NonFinitePositionsAndInvalidCornerRangesCannotProdu
     missingCorner[0u] = 0u; missingCorner[1u] = 1u;
     Array<u32, 3> outOfRange = Array<u32, 3>();
     outOfRange[0u] = 0u; outOfRange[1u] = 1u; outOfRange[2u] = 3u;
-    EXPECT_FALSE(BuildSolidTriangleWords(positions, missingCorner).has_value());
-    EXPECT_FALSE(BuildSolidTriangleWords(positions, outOfRange).has_value());
+    Vector<u32> words;
+    EXPECT_FALSE(BuildSolidTriangleWordsInto(positions, missingCorner, words));
+    EXPECT_FALSE(BuildSolidTriangleWordsInto(positions, outOfRange, words));
     positions[2u].x = bit_cast<f32>(0x7fc00000u);
-    EXPECT_FALSE(BuildSolidTriangleWords(positions, validCorners).has_value());
+    EXPECT_FALSE(BuildSolidTriangleWordsInto(positions, validCorners, words));
 }
 
 void VerifyMeshSolidTopology_OpposedSheetsAndCoplanarClosedComponentsRemainSurfaces(){
@@ -411,10 +398,10 @@ void VerifyMeshSolidTopology_RelativeComponentVolumePreservesTinyAndTranslatedSo
         positions[1u] = f32x3u(shifted.x, origin.y, origin.z);
         positions[2u] = f32x3u(origin.x, shifted.y, origin.z);
         positions[3u] = f32x3u(origin.x, origin.y, shifted.z);
-        const Expected<Vector<u32>> words = BuildSolidTriangleWords(positions, indices);
-        ASSERT_TRUE(words.has_value());
-        ASSERT_EQ(words.value().size(), 1u);
-        EXPECT_EQ(words.value()[0u], 0xfu);
+        Vector<u32> words;
+        ASSERT_TRUE(BuildSolidTriangleWordsInto(positions, indices, words));
+        ASSERT_EQ(words.size(), 1u);
+        EXPECT_EQ(words[0u], 0xfu);
     }
 }
 

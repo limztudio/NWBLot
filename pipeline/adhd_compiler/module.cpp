@@ -37,7 +37,7 @@ inline constexpr Name s_AdhdCompilerArena("pipeline/adhd_compiler");
 int RunPipelineTool(const int argc, char** argv){
     Core::Assets::AssetArena arena(__hidden_adhd_compiler_module::s_AdhdCompilerArena);
     Core::Alloc::ScratchArena scratchArena(__hidden_adhd_compiler_module::s_AdhdCompilerArena);
-    PipelineCommandLine commandLine(PipelineTool::AdhdCompiler);
+    PipelineCommandLine commandLine;
     return commandLine.run(argc, argv, [&](PipelineOptions& options){
         AdhdCompiler::AdhdCompileOptions compileOptions(arena);
         compileOptions.inputs = options.inputs;

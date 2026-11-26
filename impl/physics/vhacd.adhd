@@ -63,8 +63,8 @@ void ClipVhacdTriangleByPlane(
     const f32 d0 = Vector3Dot(planeNormal, p0).x - planeOffset;
     const f32 d1 = Vector3Dot(planeNormal, p1).x - planeOffset;
     const f32 d2 = Vector3Dot(planeNormal, p2).x - planeOffset;
-    const f32 minD = SimdMin(d0, SimdMin(d1, d2));
-    const f32 maxD = SimdMax(d0, SimdMax(d1, d2));
+    const f32 minD = Min(d0, Min(d1, d2));
+    const f32 maxD = Max(d0, Max(d1, d2));
     if(maxD < -1.0e-5f){
         outNeg.push_back(tri);
         return;
@@ -100,7 +100,7 @@ void ClipVhacdTriangleByPlane(
 
             if(curVal <= 1.0e-5f){
                 if(prevVal > 1.0e-5f){
-                    const f32 t = SimdClamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
+                    const f32 t = Clamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
                     const VectorSingle inter = Lerp(prev, cur, VectorSingle(t));
                     if(side == 0u)
                         polyNeg.push_back(f32x4(inter, 0.0f));
@@ -113,7 +113,7 @@ void ClipVhacdTriangleByPlane(
                     polyPos.push_back(f32x4(cur, 0.0f));
             }
             else if(prevVal <= 1.0e-5f){
-                const f32 t = SimdClamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
+                const f32 t = Clamp(prevVal / (prevVal - curVal), 0.0f, 1.0f);
                 const VectorSingle inter = Lerp(prev, cur, VectorSingle(t));
                 if(side == 0u)
                     polyNeg.push_back(f32x4(inter, 0.0f));
@@ -173,7 +173,7 @@ void ComputeCovariancePrincipalAxes3x3(
         const VectorSingle p0 = VectorSingle(t.v0);
         const VectorSingle p1 = VectorSingle(t.v1);
         const VectorSingle p2 = VectorSingle(t.v2);
-        const f32 w = SimdMax(Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x, 1.0e-5f);
+        const f32 w = Max(Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x, 1.0e-5f);
         const VectorSingle cen = (p0 + p1 + p2) * (1.0f / 3.0f);
         meanSum = meanSum + cen * w;
         totalWeight += w;
@@ -193,7 +193,7 @@ void ComputeCovariancePrincipalAxes3x3(
         const VectorSingle p0 = VectorSingle(t.v0);
         const VectorSingle p1 = VectorSingle(t.v1);
         const VectorSingle p2 = VectorSingle(t.v2);
-        const f32 w = SimdMax(Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x, 1.0e-5f) / 3.0f;
+        const f32 w = Max(Vector3Length(VectorSingle(Cross(p1 - p0, p2 - p0), 0.0f)).x, 1.0e-5f) / 3.0f;
         const VectorSingle d0 = p0 - mean;
         const VectorSingle d1 = p1 - mean;
         const VectorSingle d2 = p2 - mean;
@@ -233,10 +233,10 @@ void ComputeCovariancePrincipalAxes3x3(
             const f32 tau = (aqq - app) / (2.0f * apq);
             f32 t = 0.0f;
             if(tau >= 0.0f)
-                t = 1.0f / (tau + SqrtFast(1.0f + tau * tau));
+                t = 1.0f / (tau + Sqrt(1.0f + tau * tau));
             else
-                t = -1.0f / (-tau + SqrtFast(1.0f + tau * tau));
-            const f32 c = 1.0f / SqrtFast(1.0f + t * t);
+                t = -1.0f / (-tau + Sqrt(1.0f + tau * tau));
+            const f32 c = 1.0f / Sqrt(1.0f + t * t);
             const f32 s = t * c;
 
             a[p * 3u + p] = app - t * apq;
@@ -390,7 +390,7 @@ void EvaluateVhacdPartitionWithScratch(
     VectorSingle deepestPtOut = VectorSingle(part.deepestPt);
     AccumulateHullTriangleConcavityDepth(part.hull, Span<VhacdTri>(part.triangles), VectorSingle(part.deepestPt), maxInteriorDepth, deepestPtOut);
     part.deepestPt = f32x4(deepestPtOut, 0.0f);
-    part.concavity = maxInteriorDepth / SimdMax(rootDiag, 1.0e-4f);
+    part.concavity = maxInteriorDepth / Max(rootDiag, 1.0e-4f);
 }
 
 void EvaluateVhacdPartition(
@@ -455,8 +455,8 @@ Expected<VhacdResult> ComputeConvexDecomposition(
         rootMin = Min(rootMin, Min(VectorSingle(t.v0), Min(VectorSingle(t.v1), VectorSingle(t.v2))));
         rootMax = Max(rootMax, Max(VectorSingle(t.v0), Max(VectorSingle(t.v1), VectorSingle(t.v2))));
     }
-    const f32 rootDiag = SimdMax(Vector3Length(VectorSingle(rootMax - rootMin, 0.0f)).x, 1.0e-4f);
-    const f32 rootVol = SimdMax(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
+    const f32 rootDiag = Max(Vector3Length(VectorSingle(rootMax - rootMin, 0.0f)).x, 1.0e-4f);
+    const f32 rootVol = Max(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
     const usize maxVerts = Max(cast<usize>(4u), Min(cast<usize>(params.maxVerticesPerHull), s_MaxHullVertices));
 
     EvaluateVhacdPartition(rootDiag, params.hullRadius, maxVerts, root);
@@ -527,15 +527,15 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 const f32 p0 = Vector3Dot(planeN, VectorSingle(tr.v0)).x;
                 const f32 p1 = Vector3Dot(planeN, VectorSingle(tr.v1)).x;
                 const f32 p2 = Vector3Dot(planeN, VectorSingle(tr.v2)).x;
-                lo = SimdMin(lo, SimdMin(p0, SimdMin(p1, p2)));
-                hi = SimdMax(hi, SimdMax(p0, SimdMax(p1, p2)));
+                lo = Min(lo, Min(p0, Min(p1, p2)));
+                hi = Max(hi, Max(p0, Max(p1, p2)));
             }
             if(hi - lo <= 1.0e-4f)
                 continue;
 
             Array<f32, 2u> candSplits;
             candSplits[0u] = 0.5f * (lo + hi);
-            candSplits[1u] = SimdClamp(Vector3Dot(planeN, VectorSingle(target.deepestPt)).x, lo + 1.0e-4f, hi - 1.0e-4f);
+            candSplits[1u] = Clamp(Vector3Dot(planeN, VectorSingle(target.deepestPt)).x, lo + 1.0e-4f, hi - 1.0e-4f);
 
             for(usize si = 0u; si < 2u; ++si){
                 if(si == 1u && Abs(VectorSingle(candSplits[1u] - candSplits[0u])).x <= 1.0e-4f)
@@ -575,7 +575,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                 if(!candNeg.hasHull || !candPos.hasHull)
                     continue;
 
-                const f32 score = SimdMax(candNeg.concavity, candPos.concavity);
+                const f32 score = Max(candNeg.concavity, candPos.concavity);
                 if(!foundSplit || score < bestSplitScore){
                     foundSplit = true;
                     bestSplitScore = score;
@@ -654,7 +654,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
 
         const f32 overlapPadScalar = 0.05f * rootDiag;
         const VectorSingle overlapPad(overlapPadScalar, overlapPadScalar, overlapPadScalar, 0.0f);
-        const f32 invRootDiag = 1.0f / SimdMax(rootDiag, 1.0e-4f);
+        const f32 invRootDiag = 1.0f / Max(rootDiag, 1.0e-4f);
 
         while(partitions.size() > 1u){
             const b8 mustMerge = partitions.size() > cast<usize>(params.maxConvexHulls);
@@ -692,7 +692,7 @@ Expected<VhacdResult> ComputeConvexDecomposition(
                     f32 mergedVol = ComputeHullBuoyancyVolume(mergedHull);
                     if(mergedVol <= 1.0e-7f)
                         mergedVol = partitions[i].volume + partitions[j].volume;
-                    const f32 volCost = SimdMax(0.0f, mergedVol - (hullVols[i] + hullVols[j])) / rootVol;
+                    const f32 volCost = Max(0.0f, mergedVol - (hullVols[i] + hullVols[j])) / rootVol;
 
                     const VectorSingle mergedMin = Min(VectorSingle(partitions[i].aabb.lowerBound), VectorSingle(partitions[j].aabb.lowerBound));
                     const VectorSingle mergedMax = Max(VectorSingle(partitions[i].aabb.upperBound), VectorSingle(partitions[j].aabb.upperBound));

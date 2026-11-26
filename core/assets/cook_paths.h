@@ -14,6 +14,7 @@
 #include "cook_metadata.h"
 
 #include <global/expected.h>
+#include <global/filesystem/operations_file_io.h>
 #include <global/span.h>
 
 
@@ -89,6 +90,21 @@ template<typename PathArenaT>
     const auto ensured = EnsureDirectories(includeRoot);
     if(!ensured){
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create generated include directory '{}': {}"), ConvertString(generatorName), PathToString<tchar>(includeRoot), ConvertString(ensured.error().message()));
+        return false;
+    }
+    return true;
+}
+
+template<typename PathArenaT>
+[[nodiscard]] inline b8 WriteGeneratedIncludeFile(const ::Path<PathArenaT>& outputPath, const AStringView source, const AStringView generatorName){
+    const auto parentPath = outputPath.parentPath();
+    const auto ensured = EnsureDirectories(parentPath);
+    if(!ensured){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to create generated include parent '{}' (error {})"), ConvertString(generatorName), PathToString<tchar>(parentPath), ensured.error().value());
+        return false;
+    }
+    if(!WriteTextFile(outputPath, source)){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("{}: failed to write generated include '{}'"), ConvertString(generatorName), PathToString<tchar>(outputPath));
         return false;
     }
     return true;

@@ -1389,7 +1389,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_EQ(document.value().totalSize, NativeDocumentSize());
     EXPECT_EQ(document.value().totalAlign, 8u);
     const auto docAlias = FindAstDeclaration(unit.typeAliases, "MetascriptDocument");
-    ASSERT_TRUE(docAlias.has_value());
+    EXPECT_FALSE(docAlias.has_value());
     b8 foundVisitVariable = false;
     for(usize methodIndex = 0u; methodIndex < document.value().methods.size(); ++methodIndex){
         const auto m = BorrowAstNode(document.value().methods, methodIndex);

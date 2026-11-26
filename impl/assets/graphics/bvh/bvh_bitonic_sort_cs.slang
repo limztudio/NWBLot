@@ -10,7 +10,6 @@
 
 
 struct NwbBvhBitonicSortPushConstants{
-    uint elementCount;
     uint compareDistance;
     uint sequenceSize;
     uint mode;

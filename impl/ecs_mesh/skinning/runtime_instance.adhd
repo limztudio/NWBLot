@@ -253,21 +253,6 @@ b8 BuildMeshSkinningJointPaletteValidated(
     );
 }
 
-b8 BuildMeshSkinningJointPalette(
-    in MeshSkinningRuntimeInstance instance,
-    in Span<SkeletonJointMatrix> sourceJoints,
-    in u32 skinningMode,
-    mut Vector<SkeletonJointMatrix> outJointPalette
-){
-    return BuildMeshSkinningJointPaletteValidated(
-        instance,
-        sourceJoints,
-        skinningMode,
-        false,
-        outJointPalette
-    );
-}
-
 b8 PopulateRuntimeSkinPayloadFromCachedPose(
     in MeshSkinningRuntimeInstance instance,
     in Span<SkeletonJointMatrix> cachedPoseJoints,

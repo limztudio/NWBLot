@@ -11,17 +11,11 @@
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::InitializeBasisTranscoder")]
 extern void InitializeBasisTranscoder();
 
-[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisAstcBlock")]
-extern b8 TranscodeBasisAstcBlock(in Span<u8> source, in usize offset, mut Span<u8> destination, in usize outputOffset);
-
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisAstcSlice")]
 extern b8 TranscodeBasisAstcSlice(in Span<u8> source, mut Span<u8> destination, in usize outputOffset);
 
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::TranscodeBasisAstcSliceRange")]
 extern b8 TranscodeBasisAstcSliceRange(in Span<u8> source, mut Span<u8> destination, in usize outputOffset, in usize blockBegin, in usize blockEnd);
-
-[cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::UnpackBasisRgbaBlock")]
-extern b8 UnpackBasisRgbaBlock(in Span<u8> source, in usize offset, mut Array<u8, 64> rgba);
 
 [cpp_header("<impl/assets_texture/basis_transcoder.h>"), cpp_name("::NWB::TextureBasis::UnpackBasisRgbaSlice")]
 extern b8 UnpackBasisRgbaSlice(in u32 width, in u32 height, in u32 blockCountX, in u32 blockCountY, in Span<u8> source, in b8 alphaOnly, mut Span<u8> destination, in usize outputOffset);

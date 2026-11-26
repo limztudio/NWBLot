@@ -111,7 +111,6 @@ const StringView s_ReflectionBuildArgsTaskLabel = "Reflection Build Arguments";
 const StringView s_ReflectionHardwareFastTaskLabel = "Reflection Hardware Fast Resolve";
 const StringView s_ReflectionBuildOpticalArgsTaskLabel = "Reflection Build Optical Arguments";
 
-[reflect]
 enum<u32> ReflectionDescriptorIndex{
     OpaqueSampled,
     OpaqueStorage,
@@ -123,7 +122,6 @@ enum<u32> ReflectionDescriptorIndex{
     Parameters
 }
 
-[reflect]
 enum<u8> ReflectionDispatchStage{
     Classify,
     BuildArgs,

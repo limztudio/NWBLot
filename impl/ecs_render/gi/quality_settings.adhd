@@ -87,7 +87,6 @@ class SurfelGiQualitySettings{
     public SurfelGiResolveResolution resolveResolution = SurfelGiResolveResolution::Half;
 }
 
-[reflect]
 class SurfelGiResolveSize{
     public u32 width = 0u;
     public u32 height = 0u;

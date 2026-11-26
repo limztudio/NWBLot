@@ -308,17 +308,6 @@ b8 BuildSolidTriangleWordsInto(
     return true;
 }
 
-[cpp_unwind]
-Expected<Vector<u32>> BuildSolidTriangleWords(
-    in Span<f32x3u> positions,
-    in Span<u32> triangleIndices
-){
-    Vector<u32> words;
-    if(!BuildSolidTriangleWordsInto(positions, triangleIndices, words))
-        return MakeUnexpected(Failure());
-    return words;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

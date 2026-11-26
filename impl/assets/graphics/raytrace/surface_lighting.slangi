@@ -20,10 +20,6 @@
 #endif
 #include "../scene/lighting.slangi"
 
-bool nwbBxdfRequiresLinearOutput(){
-    return true;
-}
-
 #include "deferred/generated/bxdf_dispatch.slangi"
 
 

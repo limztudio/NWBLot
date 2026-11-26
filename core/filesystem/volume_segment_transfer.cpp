@@ -91,32 +91,6 @@ static b8 ForEachSegmentChunk(const AStringView volumeName, const AStringView op
     return true;
 }
 
-template<typename Stream, typename SeekStream, typename TransferStream>
-static b8 TransferSegmentChunk(
-    const AStringView volumeName,
-    const Span<const Path> segmentPaths,
-    const usize segmentIndex,
-    const StreamOffset streamOffset,
-    const AStringView openOperation,
-    const AStringView seekOperation,
-    SeekStream&& seekStream,
-    TransferStream&& transferStream,
-    Stream& stream
-){
-    if(!stream.is_open()){
-        LogFailureWithPath(volumeName, openOperation, segmentPaths[segmentIndex], LastErrnoMessage());
-        return false;
-    }
-
-    seekStream(stream, streamOffset);
-    if(!stream.good()){
-        LogFailureWithPath(volumeName, seekOperation, segmentPaths[segmentIndex], LastErrnoMessage());
-        return false;
-    }
-
-    return transferStream(stream);
-}
-
 template<typename Bytes, typename TransferChunk>
 static b8 TransferVolumeBytes(const AStringView volumeName, const AStringView operation, const Span<const Path> segmentPaths, const u64 segmentSize, const u64 offset, const u64 byteCount, TransferChunk&& transferChunk, Bytes& bytes){
     return ForEachSegmentChunk(

@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureClearQueueRequirement::Enum")]
-extern enum TextureClearQueueRequirement : u8{
+[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureQueueRequirement::Enum")]
+extern enum TextureQueueRequirement : u8{
     Transfer,
     ComputeOrGraphics,
     Graphics
@@ -17,13 +17,6 @@ extern enum TextureClearValueKind : u8{
     DepthStencil
 };
 
-[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureCopyQueueRequirement::Enum")]
-extern enum TextureCopyQueueRequirement : u8{
-    Transfer,
-    ComputeOrGraphics,
-    Graphics
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,22 +24,22 @@ extern enum TextureCopyQueueRequirement : u8{
 [cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureClearContract"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TextureClearContract{
     TextureSubresourceSet subresources;
-    TextureClearQueueRequirement queueRequirement;
+    TextureQueueRequirement queueRequirement;
 };
 
 [cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureCopyContract"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
 extern class TextureCopyContract{
     TextureSlice sourceSlice;
     TextureSlice destinationSlice;
-    TextureCopyQueueRequirement queueRequirement;
+    TextureQueueRequirement queueRequirement;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureClearQueueRequirementSatisfied")]
-extern b8 TextureClearQueueRequirementSatisfied(in auto a0, in auto a1, in auto a2);
+[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureQueueRequirementSatisfied")]
+extern b8 TextureQueueRequirementSatisfied(in auto a0, in auto a1, in auto a2);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -66,7 +66,7 @@ Optional<i32> ParsePipelineOptions(in ConsoleArguments arguments, in PipelineToo
     StringView outputDescription = "Output directory";
     if(tool == PipelineTool::DependencyComputer)
         outputDescription = "Output dependency list file";
-    auto outputOption = app.addText("-o,--output,--output-dir,--output-directory", options.outputPath, outputDescription);
+    auto outputOption = app.addText("-o,--output,--output-directory", options.outputPath, outputDescription);
     outputOption.required();
     if(tool != PipelineTool::AssetGatherer){
         app.addText("--repo-root", options.repoRoot, "Repository root; defaults to the working directory");

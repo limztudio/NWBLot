@@ -86,11 +86,11 @@ void ApplyBuilderSkinStyles(
     ApplySkinPaletteToEditBoxStyle(palette, inOutEditStyle);
     ApplySkinPaletteToScrollbarStyle(palette, inOutScrollbarStyle);
     ApplySkinPaletteToPopupStyle(palette, inOutPopupStyle);
-    ApplySkinPaletteToRadioGroupStyle(palette, inOutRadioGroupStyle);
-    ApplySkinPaletteToSliderStyle(palette, inOutSliderStyle);
+    ApplySkinControlStateTints(palette, inOutRadioGroupStyle);
+    ApplySkinControlStateTints(palette, inOutSliderStyle);
     ApplySkinPaletteToProgressStyle(palette, inOutProgressStyle);
     ApplySkinPaletteToTabBarStyle(palette, inOutTabBarStyle);
-    ApplySkinPaletteToSplitterStyle(palette, inOutSplitterStyle);
+    ApplySkinControlStateTints(palette, inOutSplitterStyle);
     ApplySkinPaletteToTreeStyle(palette, inOutTreeStyle);
     ApplySkinPaletteToTableStyle(palette, inOutTableStyle);
     ApplySkinPaletteToDialogStyle(palette, inOutDialogStyle);

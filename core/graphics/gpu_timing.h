@@ -231,10 +231,8 @@ private:
     CommandMarkerRecordingToken m_marker;
 };
 
-void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>* timing);
 void DiscardGpuTimingMeasure(Optional<GpuTimingMeasure>& timing);
 
-[[nodiscard]] b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>* timing);
 [[nodiscard]] b8 FinishSplitGpuTimingMarker(Optional<GpuTimingMeasure>& timing);
 
 

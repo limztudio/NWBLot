@@ -125,7 +125,6 @@ class BuilderEditBoxFrame{
     public EditBoxOptions editOptions;
     public EditBoxPaintFlags editFlags;
     public SharedTextLayout placeholder;
-    public Rect placeholderBounds;
     public u32 editViewCache = u32.max;
 }
 
@@ -150,10 +149,6 @@ class CachedEditBoxView{
     public b8 preserveWrapSpaces = false;
     public b8 password = false;
     public b8 valid = false;
-
-    public b8 matchesShape(in TextAreaModelStamp stamp, in u64 textId, in u64 textGen, in u32 sizeBits, in u32 script, in StringView lang, in TextDirection dir, in b8 pass, in u32 mask)const{
-        return this.matchesShape(stamp, textId, textGen, sizeBits, script, lang, dir, pass, mask, TextWrapMode::None, 0u, s_TextDefaultTabStopSpaces, false);
-    }
 
     public b8 matchesShape(
         in TextAreaModelStamp stamp,
@@ -218,7 +213,6 @@ class BuilderTextAreaFrame{
     public EditNavigationSnapshot navigation;
     public TextAreaModelStamp modelStamp;
     public u64 stateRevision = 0u;
-    public u32 item = s_LayoutNoParent;
     public b8 focused = false;
 }
 
@@ -226,7 +220,6 @@ class BuilderNumericEditFrame<Model>{
     public Optional<mut EditBoxState> state;
     public TextAreaModelStamp draftStamp;
     public u64 revision = 0u;
-    public u32 item = s_LayoutNoParent;
     public b8 focused = false;
     public Optional<in Model> model;
 }
@@ -340,7 +333,6 @@ class BuilderContextMenuFrame{
     public u32 anchorIndex = 0u;
     public u32 list = s_LayoutNoParent;
     public b8 open = false;
-    public b8 focusOnCommit = false;
 }
 
 class MenuBarLabelEntry{
@@ -348,7 +340,6 @@ class MenuBarLabelEntry{
     public SharedTextLayout text;
     public Rect bounds;
     public b8 enabled = true;
-    public b8 hasDropdown = false;
 }
 
 class BuilderMenuBarFrame{
@@ -463,7 +454,6 @@ class PlotSeriesCopy{
 }
 
 class BuilderPlotFrame{
-    public WidgetState widget;
     public PlotStyle style;
     public WidgetStyle widgetStyle;
     public PlotOptions options;
@@ -498,7 +488,6 @@ class BuilderDockSpaceFrame{
     public DockSpaceOptions options;
     public ControlToken token;
     public u64 revision = 0u;
-    public u32 node = s_LayoutNoParent;
     public u32 layer = 1u;
     public Rect arrangedBounds;
     public Vector<DockPanelTitleEntry> panelTitles;
@@ -510,7 +499,6 @@ class BuilderDockSpaceFrame{
 
 
 class BuilderScrollAreaFrame{
-    public WidgetState widget;
     public Optional<mut ScrollAreaState> state;
     public ScrollAreaOptions options;
     public ScrollbarStyle scrollbarStyle;
@@ -551,7 +539,6 @@ class BuilderSplitterFrame{
     public u64 revision = 0u;
     public u32 containerNode = s_LayoutNoParent;
     public u32 firstPaneNode = s_LayoutNoParent;
-    public u32 handleNode = s_LayoutNoParent;
     public u32 secondPaneNode = s_LayoutNoParent;
     public b8 secondPaneStarted = false;
 }
@@ -562,33 +549,24 @@ class BuilderSpinBoxFrame{
     public Optional<mut FloatEditModel> floatModel;
     public IntegerBounds integerBounds;
     public FloatBounds floatBounds;
-    public Optional<mut EditBoxState> editState;
     public ControlToken token;
     public u32 decNode = s_LayoutNoParent;
     public u32 incNode = s_LayoutNoParent;
-    public f32 buttonWidth = s_SpinBoxDefaultButtonWidth;
     public b8 canStep = false;
     public b8 allowWheel = true;
-    public b8 wrap = false;
     public b8 isFloat = false;
     public i64 integerStep = s_SpinBoxDefaultIntegerStep;
-    public i64 integerFastStep = s_SpinBoxDefaultIntegerFastStep;
     public f64 floatStep = s_SpinBoxDefaultFloatStep;
-    public f64 floatFastStep = s_SpinBoxDefaultFloatFastStep;
 }
 
 class BuilderTreeFrame{
     public WidgetState widget;
-    public Vector<SharedTextLayout> rowTexts;
-    public Vector<Rect> rowTextBounds;
     public Optional<in ITreeDataSource> source;
     public Optional<mut TreeState> state;
     public WidgetStyle widgetStyle;
     public TreeStyle style;
     public TreeOptions options;
     public ListMeasureKey measureKey;
-    public ScrollPlacement placement;
-    public ScrollViewportPlacement scrollbars;
     public ControlToken token;
     public Insets padding;
     public f64 scrollOffset = 0.0;
@@ -605,18 +583,12 @@ class BuilderTableFrame{
     public WidgetState widget;
     public Vector<TableColumn> columns;
     public Vector<String> columnTitles;
-    public Vector<SharedTextLayout> headerLayouts;
-    public Vector<Rect> headerBounds;
-    public Vector<SharedTextLayout> cellLayouts;
-    public Vector<Rect> cellBounds;
     public Optional<in ITableDataSource> source;
     public Optional<mut TableState> state;
     public WidgetStyle widgetStyle;
     public TableStyle style;
     public TableOptions options;
     public ListMeasureKey measureKey;
-    public ScrollPlacement placement;
-    public ScrollViewportPlacement scrollbars;
     public ControlToken token;
     public Insets padding;
     public f64 scrollOffset = 0.0;
@@ -726,9 +698,12 @@ class BuilderScopeFrame : NoCopy{
         return true;
     }
 
+    private b8 popupStateTokenMatches(in Context context, in u64 currentToken, in u64 expectedToken)const{
+        return currentToken == expectedToken && this.popupAncestorsVisible(context);
+    }
+
     private b8 listStateMatches(in Context context, in BuilderListFrame frame)const{
-        return this.popupAncestorsVisible(context) && frame.state.has_value()
-            && frame.state.value().inputGeneration() == frame.token.instanceGeneration;
+        return frame.state.has_value() && this.popupStateTokenMatches(context, frame.state.value().inputGeneration(), frame.token.instanceGeneration);
     }
 
     [cpp_unwind]
@@ -741,8 +716,7 @@ class BuilderScopeFrame : NoCopy{
     }
 
     private b8 treeStateMatches(in Context context, in BuilderTreeFrame frame)const{
-        return this.popupAncestorsVisible(context) && frame.state.has_value()
-            && frame.state.value().inputGeneration() == frame.token.instanceGeneration;
+        return frame.state.has_value() && this.popupStateTokenMatches(context, frame.state.value().inputGeneration(), frame.token.instanceGeneration);
     }
 
     [cpp_unwind]
@@ -754,8 +728,7 @@ class BuilderScopeFrame : NoCopy{
     }
 
     private b8 tableStateMatches(in Context context, in BuilderTableFrame frame)const{
-        return this.popupAncestorsVisible(context) && frame.state.has_value()
-            && frame.state.value().inputGeneration() == frame.token.instanceGeneration;
+        return frame.state.has_value() && this.popupStateTokenMatches(context, frame.state.value().inputGeneration(), frame.token.instanceGeneration);
     }
 
     [cpp_unwind]
@@ -764,6 +737,33 @@ class BuilderScopeFrame : NoCopy{
             && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.tableStateMatches(context, frame)
             && frame.source.value().revision() == frame.token.contentRevision && this.tableStateMatches(context, frame)
             && frame.source.value().rowCount() == frame.rowCount && this.tableStateMatches(context, frame);
+    }
+
+    public b8 canPopChildScope(in BuilderScopeKind expectedKind)const{
+        return this.m_panelActive
+            && this.m_stack.size() > 1u
+            && this.m_scrollAreaStack.size() == this.m_stack.size()
+            && this.m_scopeKinds.size() == this.m_stack.size()
+            && this.m_virtualListStack.size() == this.m_stack.size()
+            && this.m_splitterStack.size() == this.m_stack.size()
+            && this.m_scopeKinds.back() == expectedKind;
+    }
+
+    public void popChildScopeStacks(){
+        this.m_stack.pop_back();
+        this.m_scrollAreaStack.pop_back();
+        this.m_scopeKinds.pop_back();
+        this.m_virtualListStack.pop_back();
+        this.m_splitterStack.pop_back();
+    }
+
+    public void clearScopeStacks(){
+        this.m_dockSpaceStack.clear();
+        this.m_stack.clear();
+        this.m_scrollAreaStack.clear();
+        this.m_scopeKinds.clear();
+        this.m_virtualListStack.clear();
+        this.m_splitterStack.clear();
     }
 
     private void reset(){
@@ -804,12 +804,7 @@ class BuilderScopeFrame : NoCopy{
         this.m_plots.clear();
         this.m_canvases.clear();
         this.m_dockSpaces.clear();
-        this.m_dockSpaceStack.clear();
-        this.m_stack.clear();
-        this.m_scrollAreaStack.clear();
-        this.m_scopeKinds.clear();
-        this.m_virtualListStack.clear();
-        this.m_splitterStack.clear();
+        this.clearScopeStacks();
         this.m_zNodeBeginItem.clear();
         this.m_zNodeEndItem.clear();
         this.m_zTraversalStack.clear();

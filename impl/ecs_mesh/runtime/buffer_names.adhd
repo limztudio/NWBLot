@@ -91,7 +91,6 @@ enum<u8> BufferSetupFailure{
     CreateFailed
 }
 
-[reflect]
 class RuntimeMeshHandle{
     public b8 operator==(in RuntimeMeshHandle rhs)const{
         return this.value == rhs.value;

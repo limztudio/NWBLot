@@ -124,10 +124,6 @@ half nwbShadowResolveValueWeightPrecomputed(const half centerLuma, const NwbShad
     return half(exp(-abs(nwbShadowResolveLuma(tapVis) - centerLuma) * invSigmaLum));
 }
 
-half nwbShadowResolveValueWeightVec(const NwbShadowResolveVisVec centerVis, const NwbShadowResolveVisVec tapVis, const float sigmaLum){
-    return nwbShadowResolveValueWeightPrecomputed(nwbShadowResolveLuma(centerVis), tapVis, half(1.0 / sigmaLum));
-}
-
 #endif
 
 NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){

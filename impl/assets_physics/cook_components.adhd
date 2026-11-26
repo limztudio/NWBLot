@@ -208,30 +208,38 @@ b8 DecodePhysicsFloat3Value(
     return true;
 }
 
-b8 ReadPhysicsRotationVectorValue(
+b8 TryReadPhysicsRotationField(
     in Path file,
+    in StringView key,
     in MetascriptValue fieldVal,
     in StringView prefix,
-    in StringView field,
     in StringView quatField,
     in StringView eulerField,
     in StringView eulerDegField,
-    in b8 isQuaternion,
-    in b8 inDegrees,
     mut u32 rotFieldCount,
-    mut VectorSingle outQuat
+    mut VectorSingle outQuat,
+    mut b8 outOk
 ){
+    if(key != quatField && key != eulerField && key != eulerDegField)
+        return false;
     ++rotFieldCount;
     if(rotFieldCount > 1u){
         error("{} '{}': only one of '{}', '{}', or '{}' may be set", prefix, PathToString(file), quatField, eulerField, eulerDegField);
-        return false;
+        outOk = false;
+        return true;
     }
-    if(isQuaternion)
-        return ParseSceneQuaternionValue(file, fieldVal, prefix, quatField, outQuat);
-    VectorSingle euler(0.0f);
-    if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, field, euler))
-        return false;
-    outQuat = BuildTransformEulerQuaternion(euler, inDegrees);
+    VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+    if(key == quatField){
+        outOk = ParseSceneQuaternionValue(file, fieldVal, prefix, quatField, q);
+    }
+    else{
+        VectorSingle euler(0.0f);
+        outOk = DecodePhysicsFloat3Value(file, fieldVal, prefix, key, euler);
+        if(outOk)
+            q = BuildTransformEulerQuaternion(euler, key == eulerDegField);
+    }
+    if(outOk)
+        outQuat = q;
     return true;
 }
 
@@ -365,29 +373,6 @@ b8 ReadPhysicsF32OrNaNValue(
         }
     }
     return ReadPhysicsF32Value(file, fieldVal, prefix, field, outVal);
-}
-
-b8 ReadPhysicsHeightfieldHeightsValue(
-    in Path file,
-    in MetascriptValue listVal,
-    in StringView prefix,
-    in StringView field,
-    mut Vector<f32> outValues
-){
-    if(!listVal.isList()){
-        error("{} '{}': field '{}' must be a list of numbers", prefix, PathToString(file), field);
-        return false;
-    }
-    const Span<MetascriptValue> items = listVal.listView();
-    outValues.clear();
-    outValues.reserve(items.size());
-    for(usize i = 0u; i < items.size(); ++i){
-        f32 v = 0.0f;
-        if(!ReadPhysicsF32OrNaNValue(file, items[i], prefix, field, v))
-            return false;
-        outValues.push_back(v);
-    }
-    return true;
 }
 
 b8 ParseHeightfieldCellHolesValue(
@@ -641,6 +626,7 @@ b8 ReadPhysicsF32ArrayValue(
     in MetascriptValue listVal,
     in StringView prefix,
     in StringView field,
+    in b8 allowNaN,
     mut Vector<f32> outValues
 ){
     if(!listVal.isList()){
@@ -652,7 +638,12 @@ b8 ReadPhysicsF32ArrayValue(
     outValues.reserve(items.size());
     for(usize i = 0u; i < items.size(); ++i){
         f32 v = 0.0f;
-        if(!ReadPhysicsF32Value(file, items[i], prefix, field, v))
+        b8 ok = false;
+        if(allowNaN)
+            ok = ReadPhysicsF32OrNaNValue(file, items[i], prefix, field, v);
+        else
+            ok = ReadPhysicsF32Value(file, items[i], prefix, field, v);
+        if(!ok)
             return false;
         outValues.push_back(v);
     }
@@ -682,166 +673,133 @@ Expected<f32x4> DecodePhysicsFloat4Value(
     return f32x4(x, y, z, w);
 }
 
-b8 ValidateCookColliderGeometryFields(
-    in Path file,
-    in ShapeType shapeType,
-    in AssetRef<Mesh> meshAsset,
-    in AssetRef<ConvexHullAsset> convexHullAsset,
-    in AssetRef<CompoundHullAsset> compoundHullAsset,
-    in AssetRef<CollisionMeshAsset> collisionMeshAsset,
-    in AssetRef<HeightfieldAsset> heightfieldAsset,
-    in b8 isBox,
-    in b8 useMeshComponentFallback,
-    in b8 isChain,
-    in f32 chainRadius,
-    in VectorSingle center,
-    in VectorSingle center2,
-    in VectorSingle halfExtents,
-    in f32 skinRadius,
-    in f32 radius,
-    in f32 cylinderHalfHeight,
-    in f32 topRadius,
-    in VectorSingle planeNormalOffset,
-    in u32 heightfieldCols,
-    in u32 heightfieldRows,
-    in VectorSingle heightfieldScale,
-    in f32 heightfieldThickness,
-    in u32 vhacdMaxHulls,
-    in u32 vhacdMaxRecursionDepth,
-    in f32 vhacdConcavityThreshold,
-    in u32 vhacdMaxVerticesPerHull,
-    in f32 vhacdMinVolumeRatio,
-    in f32 vhacdMergeVolumeTolerance,
-    in Span<f32x4> chainPoints,
-    in Span<f32x4> hullPoints,
-    in Span<f32x4> meshVertices,
-    in Span<u32> meshIndices,
-    in Span<f32> heightfieldHeights,
-    in Span<SurfaceMaterial> heightfieldMaterials,
-    in Span<u16> heightfieldCellMaterialIndices,
-    in Span<u8> heightfieldCellHoles
-){
+b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
     if(
-        vhacdMaxHulls < 1u
-        || vhacdMaxRecursionDepth < 1u
-        || vhacdMaxVerticesPerHull < 4u
-        || !IsFinite(VectorSingle(vhacdConcavityThreshold, vhacdMinVolumeRatio, vhacdMergeVolumeTolerance, 0.0f))
-        || vhacdConcavityThreshold < 0.0f
-        || vhacdMinVolumeRatio < 0.0f
-        || vhacdMergeVolumeTolerance < 0.0f
+        e.vhacdMaxHulls < 1u
+        || e.vhacdMaxRecursionDepth < 1u
+        || e.vhacdMaxVerticesPerHull < 4u
+        || !IsFinite(VectorSingle(e.vhacdConcavityThreshold, e.vhacdMinVolumeRatio, e.vhacdMergeVolumeTolerance, 0.0f))
+        || e.vhacdConcavityThreshold < 0.0f
+        || e.vhacdMinVolumeRatio < 0.0f
+        || e.vhacdMergeVolumeTolerance < 0.0f
     ){
         error("{} '{}': invalid VHACD parameters", s_ColliderComponentDiagnosticPrefix, PathToString(file));
         return false;
     }
-    if(shapeType == ShapeType::Hull){
-        if(convexHullAsset.valid() || compoundHullAsset.valid())
+    const VectorSingle center(e.center);
+    const VectorSingle center2(e.center2);
+    const VectorSingle halfExtents(e.halfExtents);
+    const VectorSingle planeNormalOffset(e.planeNormalOffset);
+    const VectorSingle heightfieldScale(e.heightfieldScale);
+    if(e.shapeType == ShapeType::Hull){
+        if(e.convexHullAsset.valid() || e.compoundHullAsset.valid())
             return true;
-        if(isBox){
-            if(!MakeBoxHull(halfExtents.x, halfExtents.y, halfExtents.z, skinRadius).has_value()){
+        if(e.isBox){
+            if(!MakeBoxHull(halfExtents.x, halfExtents.y, halfExtents.z, e.skinRadius).has_value()){
                 error("{} '{}': invalid box hull dimensions", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
             return true;
         }
-        if(hullPoints.empty() && (useMeshComponentFallback || meshAsset.valid()))
+        if(e.hullPoints.empty() && (e.useMeshComponentFallback || e.meshAsset.valid()))
             return true;
-        if(!BuildConvexHull(hullPoints, skinRadius).has_value()){
+        if(!BuildConvexHull(Span<f32x4>(e.hullPoints.data(), e.hullPoints.size()), e.skinRadius).has_value()){
             error("{} '{}': failed to cook inline convex hull geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::Mesh){
-        if(meshAsset.valid() || collisionMeshAsset.valid() || compoundHullAsset.valid())
+    if(e.shapeType == ShapeType::Mesh){
+        if(e.meshAsset.valid() || e.collisionMeshAsset.valid() || e.compoundHullAsset.valid())
             return true;
-        if(useMeshComponentFallback && meshVertices.empty() && meshIndices.empty())
+        if(e.useMeshComponentFallback && e.meshVertices.empty() && e.meshIndices.empty())
             return true;
-        if(!MakeMeshShape(meshVertices, meshIndices, skinRadius).has_value()){
+        if(!MakeMeshShape(Span<f32x4>(e.meshVertices.data(), e.meshVertices.size()), Span<u32>(e.meshIndices.data(), e.meshIndices.size()), e.skinRadius).has_value()){
             error("{} '{}': failed to cook inline triangle mesh geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::Cylinder){
-        if(!MakeCylinderShape(center, cylinderHalfHeight, radius, skinRadius).has_value()){
+    if(e.shapeType == ShapeType::Cylinder){
+        if(!MakeCylinderShape(center, e.cylinderHalfHeight, e.radius, e.skinRadius).has_value()){
             error("{} '{}': invalid cylinder geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::Cone){
-        if(!MakeConeShape(center, cylinderHalfHeight, radius, skinRadius).has_value()){
+    if(e.shapeType == ShapeType::Cone){
+        if(!MakeConeShape(center, e.cylinderHalfHeight, e.radius, e.skinRadius).has_value()){
             error("{} '{}': invalid cone geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::TaperedCapsule){
-        if(!MakeTaperedCapsuleShape(center, center2, radius, topRadius).has_value()){
+    if(e.shapeType == ShapeType::TaperedCapsule){
+        if(!MakeTaperedCapsuleShape(center, center2, e.radius, e.topRadius).has_value()){
             error("{} '{}': invalid tapered capsule geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::Plane){
+    if(e.shapeType == ShapeType::Plane){
         if(!MakePlaneShape(planeNormalOffset, planeNormalOffset.w, halfExtents).has_value()){
             error("{} '{}': invalid plane geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::Segment){
-        if(isChain){
-            if(chainPoints.size() < 2u || !IsFinite(VectorSingle(chainRadius)) || chainRadius < 0.0f){
+    if(e.shapeType == ShapeType::Segment){
+        if(e.isChain){
+            if(e.chainPoints.size() < 2u || !IsFinite(VectorSingle(e.chainRadius)) || e.chainRadius < 0.0f){
                 error("{} '{}': invalid chain collider geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
-            for(usize ci = 0u; ci < chainPoints.size(); ++ci){
-                if(!IsValidPositionVec3(VectorSingle(chainPoints[ci]))){
+            for(usize ci = 0u; ci < e.chainPoints.size(); ++ci){
+                if(!IsValidPositionVec3(VectorSingle(e.chainPoints[ci]))){
                     error("{} '{}': invalid chain point", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                     return false;
                 }
             }
             return true;
         }
-        if(!MakeSegmentShape(center, center2, radius).has_value()){
+        if(!MakeSegmentShape(center, center2, e.radius).has_value()){
             error("{} '{}': invalid segment geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(shapeType == ShapeType::Heightfield){
-        if(heightfieldAsset.valid())
+    if(e.shapeType == ShapeType::Heightfield){
+        if(e.heightfieldAsset.valid())
             return true;
-        if(!IsFinite(VectorSingle(heightfieldThickness)) || heightfieldThickness < 0.0f){
+        if(!IsFinite(VectorSingle(e.heightfieldThickness)) || e.heightfieldThickness < 0.0f){
             error("{} '{}': invalid heightfield thickness", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
-        if(!ValidateHeightfieldParameters(heightfieldCols, heightfieldRows, heightfieldHeights, heightfieldScale, center)){
+        if(!ValidateHeightfieldParameters(e.heightfieldCols, e.heightfieldRows, Span<f32>(e.heightfieldHeights.data(), e.heightfieldHeights.size()), heightfieldScale, center)){
             error("{} '{}': invalid heightfield geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
-        if(!heightfieldCellMaterialIndices.empty()){
-            if(heightfieldMaterials.empty()){
+        if(!e.heightfieldCellMaterialIndices.empty()){
+            if(e.heightfieldMaterials.empty()){
                 error("{} '{}': heightfield cell material indices require materials", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
-            const usize expectedCellCount = cast<usize>(heightfieldRows - 1u) * cast<usize>(heightfieldCols - 1u);
-            if(heightfieldCellMaterialIndices.size() != expectedCellCount){
+            const usize expectedCellCount = cast<usize>(e.heightfieldRows - 1u) * cast<usize>(e.heightfieldCols - 1u);
+            if(e.heightfieldCellMaterialIndices.size() != expectedCellCount){
                 error("{} '{}': heightfield cell material index count does not match heightfield cells", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
         }
-        for(usize ci = 0u; ci < heightfieldCellMaterialIndices.size(); ++ci){
-            if(cast<usize>(heightfieldCellMaterialIndices[ci]) >= heightfieldMaterials.size()){
+        for(usize ci = 0u; ci < e.heightfieldCellMaterialIndices.size(); ++ci){
+            if(cast<usize>(e.heightfieldCellMaterialIndices[ci]) >= e.heightfieldMaterials.size()){
                 error("{} '{}': heightfield cell material index out of range", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
         }
-        if(!heightfieldCellHoles.empty()){
-            const usize expectedCellCount = cast<usize>(heightfieldRows - 1u) * cast<usize>(heightfieldCols - 1u);
+        if(!e.heightfieldCellHoles.empty()){
+            const usize expectedCellCount = cast<usize>(e.heightfieldRows - 1u) * cast<usize>(e.heightfieldCols - 1u);
             const usize expectedHoleBytes = (expectedCellCount + 7u) / 8u;
-            if(heightfieldCellHoles.size() != expectedHoleBytes){
+            if(e.heightfieldCellHoles.size() != expectedHoleBytes){
                 error("{} '{}': heightfield cell hole byte count mismatch", s_ColliderComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
@@ -849,48 +807,6 @@ b8 ValidateCookColliderGeometryFields(
         return true;
     }
     return true;
-}
-
-b8 ValidateCookColliderEntryGeometry(in Path file, in ColliderShapeEntry e){
-    return ValidateCookColliderGeometryFields(
-        file,
-        e.shapeType,
-        e.meshAsset,
-        e.convexHullAsset,
-        e.compoundHullAsset,
-        e.collisionMeshAsset,
-        e.heightfieldAsset,
-        e.isBox,
-        e.useMeshComponentFallback,
-        e.isChain,
-        e.chainRadius,
-        VectorSingle(e.center),
-        VectorSingle(e.center2),
-        VectorSingle(e.halfExtents),
-        e.skinRadius,
-        e.radius,
-        e.cylinderHalfHeight,
-        e.topRadius,
-        VectorSingle(e.planeNormalOffset),
-        e.heightfieldCols,
-        e.heightfieldRows,
-        VectorSingle(e.heightfieldScale),
-        e.heightfieldThickness,
-        e.vhacdMaxHulls,
-        e.vhacdMaxRecursionDepth,
-        e.vhacdConcavityThreshold,
-        e.vhacdMaxVerticesPerHull,
-        e.vhacdMinVolumeRatio,
-        e.vhacdMergeVolumeTolerance,
-        Span<f32x4>(e.chainPoints.data(), e.chainPoints.size()),
-        Span<f32x4>(e.hullPoints.data(), e.hullPoints.size()),
-        Span<f32x4>(e.meshVertices.data(), e.meshVertices.size()),
-        Span<u32>(e.meshIndices.data(), e.meshIndices.size()),
-        Span<f32>(e.heightfieldHeights.data(), e.heightfieldHeights.size()),
-        Span<SurfaceMaterial>(e.heightfieldMaterials.data(), e.heightfieldMaterials.size()),
-        Span<u16>(e.heightfieldCellMaterialIndices.data(), e.heightfieldCellMaterialIndices.size()),
-        Span<u8>(e.heightfieldCellHoles.data(), e.heightfieldCellHoles.size())
-    );
 }
 
 b8 ApplyColliderShapeField(
@@ -941,24 +857,12 @@ b8 ApplyColliderShapeField(
         outEntry.halfExtents = f32x4(v, 0.0f);
         return true;
     }
-    if(key == "local_rotation" || key == "local_rotation_euler" || key == "local_rotation_euler_degrees"){
-        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-        if(!ReadPhysicsRotationVectorValue(
-            file,
-            fieldVal,
-            s_ColliderComponentDiagnosticPrefix,
-            key,
-            "local_rotation",
-            "local_rotation_euler",
-            "local_rotation_euler_degrees",
-            key == "local_rotation",
-            key == "local_rotation_euler_degrees",
-            inOutRotFieldCount,
-            q
-        ))
-            return false;
-        outEntry.localRotation = f32x4(q);
-        return true;
+    VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
+    b8 rotOk = false;
+    if(TryReadPhysicsRotationField(file, key, fieldVal, s_ColliderComponentDiagnosticPrefix, "local_rotation", "local_rotation_euler", "local_rotation_euler_degrees", inOutRotFieldCount, q, rotOk)){
+        if(rotOk)
+            outEntry.localRotation = f32x4(q);
+        return rotOk;
     }
     if(key == "radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.radius);
     if(key == "skin_radius") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.skinRadius);
@@ -1024,7 +928,7 @@ b8 ApplyColliderShapeField(
         outEntry.planeNormalOffset = v.value();
         return true;
     }
-    if(key == "heightfield_heights") return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldHeights);
+    if(key == "heightfield_heights") return ReadPhysicsF32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, true, outEntry.heightfieldHeights);
     if(key == "heightfield_rows") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldRows);
     if(key == "heightfield_cols") return ReadPhysicsU32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldCols);
     if(key == "heightfield_scale"){
@@ -1122,68 +1026,6 @@ b8 ApplyColliderShapeField(
     return false;
 }
 
-void CopyShapeScalarFieldsToColliderComponent(in ColliderShapeEntry src, mut ColliderComponent dst){
-    dst.shapeType = src.shapeType;
-    dst.center = src.center;
-    dst.center2 = src.center2;
-    dst.halfExtents = src.halfExtents;
-    dst.localRotation = src.localRotation;
-    dst.radius = src.radius;
-    dst.skinRadius = src.skinRadius;
-    dst.density = src.density;
-    dst.friction = src.friction;
-    dst.restitution = src.restitution;
-    dst.rollingResistance = src.rollingResistance;
-    dst.tangentSpeed = src.tangentSpeed;
-    dst.categoryBits = src.categoryBits;
-    dst.maskBits = src.maskBits;
-    dst.groupIndex = src.groupIndex;
-    dst.collisionLayer = src.collisionLayer;
-    dst.userData = src.userData;
-    dst.isBox = src.isBox;
-    dst.isSensor = src.isSensor;
-    dst.enableContactEvents = src.enableContactEvents;
-    dst.enableHitEvents = src.enableHitEvents;
-    dst.enableSensorEvents = src.enableSensorEvents;
-    dst.enablePreSolveEvents = src.enablePreSolveEvents;
-    dst.invokeContactCreation = src.invokeContactCreation;
-    dst.meshAsset = src.meshAsset;
-    dst.materialAsset = src.materialAsset;
-    dst.convexHullAsset = src.convexHullAsset;
-    dst.compoundHullAsset = src.compoundHullAsset;
-    dst.collisionMeshAsset = src.collisionMeshAsset;
-    dst.heightfieldAsset = src.heightfieldAsset;
-    dst.staticFriction = src.staticFriction;
-    dst.anisotropicFriction = src.anisotropicFriction;
-    dst.surfaceVelocity = src.surfaceVelocity;
-    dst.frictionDirection = src.frictionDirection;
-    dst.frictionCombineMode = src.frictionCombineMode;
-    dst.restitutionCombineMode = src.restitutionCombineMode;
-    dst.cullBackfaces = src.cullBackfaces;
-    dst.autoConvexDecompose = src.autoConvexDecompose;
-    dst.vhacdMaxHulls = src.vhacdMaxHulls;
-    dst.vhacdMaxRecursionDepth = src.vhacdMaxRecursionDepth;
-    dst.vhacdConcavityThreshold = src.vhacdConcavityThreshold;
-    dst.vhacdMaxVerticesPerHull = src.vhacdMaxVerticesPerHull;
-    dst.vhacdMinVolumeRatio = src.vhacdMinVolumeRatio;
-    dst.vhacdEnableArbitraryPlanes = src.vhacdEnableArbitraryPlanes;
-    dst.vhacdEnableHullMerging = src.vhacdEnableHullMerging;
-    dst.vhacdMergeVolumeTolerance = src.vhacdMergeVolumeTolerance;
-    dst.syncCsgCuts = src.syncCsgCuts;
-    dst.useMeshComponentFallback = src.useMeshComponentFallback;
-    dst.cylinderHalfHeight = src.cylinderHalfHeight;
-    dst.topRadius = src.topRadius;
-    dst.planeNormalOffset = src.planeNormalOffset;
-    dst.heightfieldRows = src.heightfieldRows;
-    dst.heightfieldCols = src.heightfieldCols;
-    dst.heightfieldScale = src.heightfieldScale;
-    dst.heightfieldThickness = src.heightfieldThickness;
-    dst.heightfieldFlipDiagonal = src.heightfieldFlipDiagonal;
-    dst.isChain = src.isChain;
-    dst.chainClosed = src.chainClosed;
-    dst.chainRadius = src.chainRadius;
-}
-
 b8 ParseColliderShapeEntryMap(in Path file, in MetascriptValue mapVal, mut ColliderShapeEntry outEntry){
     u32 rotFieldCount = 0u;
     if(!mapVal.forEachMapEntry(lambda[in file, mut outEntry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
@@ -1212,26 +1054,11 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
         || !AssignCookEntryVirtualPath(virtualPath, file, s_ColliderComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    ColliderShapeEntry primaryEntry;
     if(value.isMap()){
         u32 rotFieldCount = 0u;
-        if(!value.forEachMapEntry(lambda[in file, mut entry, mut primaryEntry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
+        if(!value.forEachMapEntry(lambda[in file, mut entry, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
             if(key == "entity_tag")
                 return ReadPhysicsNameValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, "entity_tag", entry.component.entityTag);
-            if(key == "hull_points")
-                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.hullPoints);
-            if(key == "mesh_vertices")
-                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.meshVertices);
-            if(key == "mesh_indices")
-                return ReadPhysicsU32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.meshIndices);
-            if(key == "heightfield_heights")
-                return ReadPhysicsHeightfieldHeightsValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.heightfieldHeights);
-            if(key == "heightfield_materials")
-                return ParseSurfaceMaterialList(file, fieldVal, s_ColliderComponentDiagnosticPrefix, entry.component.heightfieldMaterials);
-            if(key == "heightfield_cell_material_indices")
-                return ReadPhysicsU16ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.heightfieldCellMaterialIndices);
-            if(key == "chain_points")
-                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, entry.component.chainPoints);
             if(key == "extra_shapes"){
                 if(!fieldVal.isList()){
                     error("{} '{}': field 'extra_shapes' must be a list of collider maps", s_ColliderComponentDiagnosticPrefix, PathToString(file));
@@ -1251,13 +1078,10 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
                 }
                 return true;
             }
-            return ApplyColliderShapeField(file, key, fieldVal, primaryEntry, rotFieldCount);
+            return ApplyColliderShapeField(file, key, fieldVal, entry.component.primaryShape, rotFieldCount);
         }))
             return MakeUnexpected(Failure());
-    }
 
-    CopyShapeScalarFieldsToColliderComponent(primaryEntry, entry.component);
-    if(value.isMap()){
         const Optional<in MetascriptValue> holesOpt = value.borrowField("heightfield_cell_holes");
         if(holesOpt.has_value()){
             if(!ParseHeightfieldCellHolesValue(
@@ -1265,52 +1089,15 @@ Expected<ColliderComponentCookEntry> ParseColliderComponentCookMetadata(in Name 
                 holesOpt.value(),
                 s_ColliderComponentDiagnosticPrefix,
                 "heightfield_cell_holes",
-                entry.component.heightfieldCols,
-                entry.component.heightfieldRows,
-                entry.component.heightfieldCellHoles
+                entry.component.primaryShape.heightfieldCols,
+                entry.component.primaryShape.heightfieldRows,
+                entry.component.primaryShape.heightfieldCellHoles
             ))
                 return MakeUnexpected(Failure());
         }
     }
-    if(!ValidateCookColliderGeometryFields(
-        file,
-        entry.component.shapeType,
-        entry.component.meshAsset,
-        entry.component.convexHullAsset,
-        entry.component.compoundHullAsset,
-        entry.component.collisionMeshAsset,
-        entry.component.heightfieldAsset,
-        entry.component.isBox,
-        entry.component.useMeshComponentFallback,
-        entry.component.isChain,
-        entry.component.chainRadius,
-        VectorSingle(entry.component.center),
-        VectorSingle(entry.component.center2),
-        VectorSingle(entry.component.halfExtents),
-        entry.component.skinRadius,
-        entry.component.radius,
-        entry.component.cylinderHalfHeight,
-        entry.component.topRadius,
-        VectorSingle(entry.component.planeNormalOffset),
-        entry.component.heightfieldCols,
-        entry.component.heightfieldRows,
-        VectorSingle(entry.component.heightfieldScale),
-        entry.component.heightfieldThickness,
-        entry.component.vhacdMaxHulls,
-        entry.component.vhacdMaxRecursionDepth,
-        entry.component.vhacdConcavityThreshold,
-        entry.component.vhacdMaxVerticesPerHull,
-        entry.component.vhacdMinVolumeRatio,
-        entry.component.vhacdMergeVolumeTolerance,
-        Span<f32x4>(entry.component.chainPoints.data(), entry.component.chainPoints.size()),
-        Span<f32x4>(entry.component.hullPoints.data(), entry.component.hullPoints.size()),
-        Span<f32x4>(entry.component.meshVertices.data(), entry.component.meshVertices.size()),
-        Span<u32>(entry.component.meshIndices.data(), entry.component.meshIndices.size()),
-        Span<f32>(entry.component.heightfieldHeights.data(), entry.component.heightfieldHeights.size()),
-        Span<SurfaceMaterial>(entry.component.heightfieldMaterials.data(), entry.component.heightfieldMaterials.size()),
-        Span<u16>(entry.component.heightfieldCellMaterialIndices.data(), entry.component.heightfieldCellMaterialIndices.size()),
-        Span<u8>(entry.component.heightfieldCellHoles.data(), entry.component.heightfieldCellHoles.size())
-    ))
+
+    if(!ValidateCookColliderEntryGeometry(file, entry.component.primaryShape))
         return MakeUnexpected(Failure());
     if(!PhysicsComponentBinaryCodec().validateCollider(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
@@ -1354,23 +1141,24 @@ b8 ApplyJointEntryField(
     mut u32 inOutRotFieldCount,
     mut u32 inOutTargetRotFieldCount
 ){
+    mut JointSettings s = outEntry.settings;
     if(key == "type"){
         const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, s_JointComponentDiagnosticPrefix, "type");
         if(!text.has_value())
             return false;
-        if(text.value() == "distance") outEntry.type = JointType::Distance;
-        else if(text.value() == "spherical") outEntry.type = JointType::Spherical;
-        else if(text.value() == "revolute") outEntry.type = JointType::Revolute;
-        else if(text.value() == "prismatic") outEntry.type = JointType::Prismatic;
-        else if(text.value() == "fixed") outEntry.type = JointType::Fixed;
-        else if(text.value() == "motor") outEntry.type = JointType::Motor;
-        else if(text.value() == "wheel") outEntry.type = JointType::Wheel;
-        else if(text.value() == "six_dof") outEntry.type = JointType::SixDof;
-        else if(text.value() == "gear") outEntry.type = JointType::Gear;
-        else if(text.value() == "pulley") outEntry.type = JointType::Pulley;
-        else if(text.value() == "rack_pinion" || text.value() == "rack_and_pinion") outEntry.type = JointType::RackAndPinion;
-        else if(text.value() == "path") outEntry.type = JointType::Path;
-        else if(text.value() == "rope") outEntry.type = JointType::Rope;
+        if(text.value() == "distance") s.type = JointType::Distance;
+        else if(text.value() == "spherical") s.type = JointType::Spherical;
+        else if(text.value() == "revolute") s.type = JointType::Revolute;
+        else if(text.value() == "prismatic") s.type = JointType::Prismatic;
+        else if(text.value() == "fixed") s.type = JointType::Fixed;
+        else if(text.value() == "motor") s.type = JointType::Motor;
+        else if(text.value() == "wheel") s.type = JointType::Wheel;
+        else if(text.value() == "six_dof") s.type = JointType::SixDof;
+        else if(text.value() == "gear") s.type = JointType::Gear;
+        else if(text.value() == "pulley") s.type = JointType::Pulley;
+        else if(text.value() == "rack_and_pinion") s.type = JointType::RackAndPinion;
+        else if(text.value() == "path") s.type = JointType::Path;
+        else if(text.value() == "rope") s.type = JointType::Rope;
         else{
             error("{} '{}': unsupported joint 'type' '{}'", s_JointComponentDiagnosticPrefix, PathToString(file), text.value());
             return false;
@@ -1381,118 +1169,94 @@ b8 ApplyJointEntryField(
         VectorSingle v(0.0f);
         if(!DecodePhysicsFloat3Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, v))
             return false;
-        if(key == "local_anchor_a") outEntry.localAnchorA = f32x4(v, 0.0f);
-        else if(key == "local_anchor_b") outEntry.localAnchorB = f32x4(v, 0.0f);
-        else if(key == "local_axis_a") outEntry.localAxisA = f32x4(v, 0.0f);
-        else if(key == "local_axis_b") outEntry.localAxisB = f32x4(v, 0.0f);
-        else if(key == "ground_anchor_a") outEntry.groundAnchorA = f32x4(v, 0.0f);
-        else if(key == "ground_anchor_b") outEntry.groundAnchorB = f32x4(v, 0.0f);
-        else outEntry.linearOffset = f32x4(v, 0.0f);
+        if(key == "local_anchor_a") s.localAnchorA = f32x4(v, 0.0f);
+        else if(key == "local_anchor_b") s.localAnchorB = f32x4(v, 0.0f);
+        else if(key == "local_axis_a") s.localAxisA = f32x4(v, 0.0f);
+        else if(key == "local_axis_b") s.localAxisB = f32x4(v, 0.0f);
+        else if(key == "ground_anchor_a") s.groundAnchorA = f32x4(v, 0.0f);
+        else if(key == "ground_anchor_b") s.groundAnchorB = f32x4(v, 0.0f);
+        else s.linearOffset = f32x4(v, 0.0f);
         return true;
     }
-    if(key == "reference_rotation" || key == "reference_rotation_euler" || key == "reference_rotation_euler_degrees"){
-        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-        if(!ReadPhysicsRotationVectorValue(
-            file,
-            fieldVal,
-            s_JointComponentDiagnosticPrefix,
-            key,
-            "reference_rotation",
-            "reference_rotation_euler",
-            "reference_rotation_euler_degrees",
-            key == "reference_rotation",
-            key == "reference_rotation_euler_degrees",
-            inOutRotFieldCount,
-            q
-        ))
-            return false;
-        outEntry.referenceRotation = f32x4(q);
-        return true;
+    VectorSingle refRotQ(0.0f, 0.0f, 0.0f, 1.0f);
+    b8 refRotOk = false;
+    if(TryReadPhysicsRotationField(file, key, fieldVal, s_JointComponentDiagnosticPrefix, "reference_rotation", "reference_rotation_euler", "reference_rotation_euler_degrees", inOutRotFieldCount, refRotQ, refRotOk)){
+        if(refRotOk)
+            s.referenceRotation = f32x4(refRotQ);
+        return refRotOk;
     }
-    if(key == "use_reference_rotation") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.useReferenceRotation);
-    if(key == "length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.length);
-    if(key == "min_length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.minLength);
-    if(key == "max_length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.maxLength);
-    if(key == "enable_limit") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enableLimit);
-    if(key == "lower_limit") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.lowerLimit);
-    if(key == "upper_limit") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.upperLimit);
-    if(key == "enable_motor") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enableMotor);
-    if(key == "motor_speed") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.motorSpeed);
-    if(key == "max_motor_force") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.maxMotorForce);
-    if(key == "enable_spring") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enableSpring);
-    if(key == "hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.hertz);
-    if(key == "damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.dampingRatio);
-    if(key == "correction_factor") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.correctionFactor);
-    if(key == "max_torque") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.maxTorque);
-    if(key == "swing_limit") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.swingLimit);
-    if(key == "suspension_hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.suspensionHertz);
-    if(key == "suspension_damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.suspensionDampingRatio);
-    if(key == "break_force") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.breakForce);
-    if(key == "break_torque") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.breakTorque);
-    if(key == "collide_connected") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.collideConnected);
+    if(key == "use_reference_rotation") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.useReferenceRotation);
+    if(key == "length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.length);
+    if(key == "min_length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.minLength);
+    if(key == "max_length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.maxLength);
+    if(key == "enable_limit") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableLimit);
+    if(key == "lower_limit") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.lowerLimit);
+    if(key == "upper_limit") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.upperLimit);
+    if(key == "enable_motor") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableMotor);
+    if(key == "motor_speed") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.motorSpeed);
+    if(key == "max_motor_force") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.maxMotorForce);
+    if(key == "enable_spring") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableSpring);
+    if(key == "hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.hertz);
+    if(key == "damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.dampingRatio);
+    if(key == "correction_factor") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.correctionFactor);
+    if(key == "max_torque") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.maxTorque);
+    if(key == "swing_limit") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.swingLimit);
+    if(key == "suspension_hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.suspensionHertz);
+    if(key == "suspension_damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.suspensionDampingRatio);
+    if(key == "break_force") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.breakForce);
+    if(key == "break_torque") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.breakTorque);
+    if(key == "collide_connected") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.collideConnected);
     if(key == "body_entity_a") return ReadPhysicsNameValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.bodyEntityNameA);
     if(key == "body_entity_b") return ReadPhysicsNameValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.bodyEntityNameB);
     if(key == "user_data") return ReadPhysicsU64Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.userData);
-    if(key == "enabled") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enabled);
-    if(key == "enable_projection") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enableProjection);
-    if(key == "projection_linear_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.projectionLinearTolerance);
-    if(key == "projection_angular_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.projectionAngularTolerance);
-    if(key == "inv_mass_scale_a") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.invMassScaleA);
-    if(key == "inv_mass_scale_b") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.invMassScaleB);
-    if(key == "inv_inertia_scale_a") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.invInertiaScaleA);
-    if(key == "inv_inertia_scale_b") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.invInertiaScaleB);
-    if(key == "limit_restitution") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.limitRestitution);
-    if(key == "limit_hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.limitHertz);
-    if(key == "limit_damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.limitDampingRatio);
-    if(key == "swing_limit_y") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.swingLimitY);
-    if(key == "spring_target") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.springTarget);
-    if(key == "steering_angle") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.steeringAngle);
-    if(key == "suspension_rest_length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.suspensionRestLength);
-    if(key == "ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.ratio);
-    if(key == "length_a") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.lengthA);
-    if(key == "length_b") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.lengthB);
+    if(key == "enabled") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enabled);
+    if(key == "enable_projection") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableProjection);
+    if(key == "projection_linear_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.projectionLinearTolerance);
+    if(key == "projection_angular_tolerance") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.projectionAngularTolerance);
+    if(key == "inv_mass_scale_a") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.invMassScaleA);
+    if(key == "inv_mass_scale_b") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.invMassScaleB);
+    if(key == "inv_inertia_scale_a") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.invInertiaScaleA);
+    if(key == "inv_inertia_scale_b") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.invInertiaScaleB);
+    if(key == "limit_restitution") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.limitRestitution);
+    if(key == "limit_hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.limitHertz);
+    if(key == "limit_damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.limitDampingRatio);
+    if(key == "swing_limit_y") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.swingLimitY);
+    if(key == "spring_target") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.springTarget);
+    if(key == "steering_angle") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.steeringAngle);
+    if(key == "suspension_rest_length") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.suspensionRestLength);
+    if(key == "ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.ratio);
+    if(key == "length_a") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.lengthA);
+    if(key == "length_b") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.lengthB);
     if(key == "path_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.pathPoints);
-    if(key == "path_closed") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.pathClosed);
-    if(key == "path_lock_rotation") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.pathLockRotation);
-    if(key == "enable_twist_limit") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enableTwistLimit);
-    if(key == "enable_slerp_drive") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.enableSlerpDrive);
-    if(key == "target_orientation" || key == "target_orientation_euler" || key == "target_orientation_euler_degrees"){
-        VectorSingle q(0.0f, 0.0f, 0.0f, 1.0f);
-        if(!ReadPhysicsRotationVectorValue(
-            file,
-            fieldVal,
-            s_JointComponentDiagnosticPrefix,
-            key,
-            "target_orientation",
-            "target_orientation_euler",
-            "target_orientation_euler_degrees",
-            key == "target_orientation",
-            key == "target_orientation_euler_degrees",
-            inOutTargetRotFieldCount,
-            q
-        ))
-            return false;
-        outEntry.targetOrientation = f32x4(q);
-        return true;
+    if(key == "path_closed") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.pathClosed);
+    if(key == "path_lock_rotation") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.pathLockRotation);
+    if(key == "enable_twist_limit") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableTwistLimit);
+    if(key == "enable_slerp_drive") return ReadPhysicsBoolValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.enableSlerpDrive);
+    VectorSingle targetRotQ(0.0f, 0.0f, 0.0f, 1.0f);
+    b8 targetRotOk = false;
+    if(TryReadPhysicsRotationField(file, key, fieldVal, s_JointComponentDiagnosticPrefix, "target_orientation", "target_orientation_euler", "target_orientation_euler_degrees", inOutTargetRotFieldCount, targetRotQ, targetRotOk)){
+        if(targetRotOk)
+            s.targetOrientation = f32x4(targetRotQ);
+        return targetRotOk;
     }
-    if(key == "slerp_hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.slerpHertz);
-    if(key == "slerp_damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.slerpDampingRatio);
-    if(key == "slerp_max_torque") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.slerpMaxTorque);
+    if(key == "slerp_hertz") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.slerpHertz);
+    if(key == "slerp_damping_ratio") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.slerpDampingRatio);
+    if(key == "slerp_max_torque") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.slerpMaxTorque);
     if(key == "six_dof_swing_limit_mode"){
         const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key);
         if(!text.has_value())
             return false;
-        if(text.value() == "none") outEntry.sixDofSwingLimitMode = SixDofSwingLimitMode::None;
-        else if(text.value() == "cone") outEntry.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
-        else if(text.value() == "pyramid") outEntry.sixDofSwingLimitMode = SixDofSwingLimitMode::Pyramid;
+        if(text.value() == "none") s.sixDofSwingLimitMode = SixDofSwingLimitMode::None;
+        else if(text.value() == "cone") s.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
+        else if(text.value() == "pyramid") s.sixDofSwingLimitMode = SixDofSwingLimitMode::Pyramid;
         else{
             error("{} '{}': field 'six_dof_swing_limit_mode' must be 'none', 'cone', or 'pyramid'", s_JointComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
         return true;
     }
-    if(key == "six_dof_swing_limit_y") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.sixDofSwingLimitY);
-    if(key == "six_dof_swing_limit_z") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, outEntry.sixDofSwingLimitZ);
+    if(key == "six_dof_swing_limit_y") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.sixDofSwingLimitY);
+    if(key == "six_dof_swing_limit_z") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.sixDofSwingLimitZ);
     if(key == "six_dof_axes"){
         if(!fieldVal.isList()){
             error("{} '{}': field 'six_dof_axes' must be a list of up to 6 axis maps", s_JointComponentDiagnosticPrefix, PathToString(file));
@@ -1508,7 +1272,7 @@ b8 ApplyJointEntryField(
                 error("{} '{}': 'six_dof_axes[{}]' must be a map", s_JointComponentDiagnosticPrefix, PathToString(file), k);
                 return false;
             }
-            if(!ParseSixDofAxisConfigMap(file, items[k], s_JointComponentDiagnosticPrefix, outEntry.sixDofAxes[k]))
+            if(!ParseSixDofAxisConfigMap(file, items[k], s_JointComponentDiagnosticPrefix, s.sixDofAxes[k]))
                 return false;
         }
         return true;
@@ -1517,85 +1281,16 @@ b8 ApplyJointEntryField(
     return false;
 }
 
-void CopyJointScalarFieldsToComponent(in JointEntry src, mut JointComponent dst){
-    dst.bodyEntityNameA = src.bodyEntityNameA;
-    dst.bodyEntityNameB = src.bodyEntityNameB;
-    dst.userData = src.userData;
-    dst.type = src.type;
-    dst.localAnchorA = src.localAnchorA;
-    dst.localAnchorB = src.localAnchorB;
-    dst.localAxisA = src.localAxisA;
-    dst.localAxisB = src.localAxisB;
-    dst.referenceRotation = src.referenceRotation;
-    dst.useReferenceRotation = src.useReferenceRotation;
-    dst.length = src.length;
-    dst.minLength = src.minLength;
-    dst.maxLength = src.maxLength;
-    dst.enableLimit = src.enableLimit;
-    dst.lowerLimit = src.lowerLimit;
-    dst.upperLimit = src.upperLimit;
-    dst.enableMotor = src.enableMotor;
-    dst.motorSpeed = src.motorSpeed;
-    dst.maxMotorForce = src.maxMotorForce;
-    dst.enableSpring = src.enableSpring;
-    dst.hertz = src.hertz;
-    dst.dampingRatio = src.dampingRatio;
-    dst.linearOffset = src.linearOffset;
-    dst.correctionFactor = src.correctionFactor;
-    dst.maxTorque = src.maxTorque;
-    dst.swingLimit = src.swingLimit;
-    dst.suspensionHertz = src.suspensionHertz;
-    dst.suspensionDampingRatio = src.suspensionDampingRatio;
-    dst.breakForce = src.breakForce;
-    dst.breakTorque = src.breakTorque;
-    dst.collideConnected = src.collideConnected;
-    dst.enabled = src.enabled;
-    dst.enableProjection = src.enableProjection;
-    dst.projectionLinearTolerance = src.projectionLinearTolerance;
-    dst.projectionAngularTolerance = src.projectionAngularTolerance;
-    dst.invMassScaleA = src.invMassScaleA;
-    dst.invMassScaleB = src.invMassScaleB;
-    dst.invInertiaScaleA = src.invInertiaScaleA;
-    dst.invInertiaScaleB = src.invInertiaScaleB;
-    dst.limitRestitution = src.limitRestitution;
-    dst.limitHertz = src.limitHertz;
-    dst.limitDampingRatio = src.limitDampingRatio;
-    dst.swingLimitY = src.swingLimitY;
-    dst.springTarget = src.springTarget;
-    dst.steeringAngle = src.steeringAngle;
-    dst.suspensionRestLength = src.suspensionRestLength;
-    dst.ratio = src.ratio;
-    dst.groundAnchorA = src.groundAnchorA;
-    dst.groundAnchorB = src.groundAnchorB;
-    dst.lengthA = src.lengthA;
-    dst.lengthB = src.lengthB;
-    dst.sixDofAxes = src.sixDofAxes;
-    dst.pathClosed = src.pathClosed;
-    dst.pathLockRotation = src.pathLockRotation;
-    dst.enableTwistLimit = src.enableTwistLimit;
-    dst.enableSlerpDrive = src.enableSlerpDrive;
-    dst.targetOrientation = src.targetOrientation;
-    dst.slerpHertz = src.slerpHertz;
-    dst.slerpDampingRatio = src.slerpDampingRatio;
-    dst.slerpMaxTorque = src.slerpMaxTorque;
-    dst.sixDofSwingLimitMode = src.sixDofSwingLimitMode;
-    dst.sixDofSwingLimitY = src.sixDofSwingLimitY;
-    dst.sixDofSwingLimitZ = src.sixDofSwingLimitZ;
-}
-
 Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
     JointComponentCookEntry entry;
     if(!ValidateOptionalSceneMetadataMap(file, value, s_JointComponentDiagnosticPrefix)
         || !AssignCookEntryVirtualPath(virtualPath, file, s_JointComponentDiagnosticPrefix, entry))
         return MakeUnexpected(Failure());
 
-    JointEntry primaryEntry;
     if(value.isMap()){
         u32 rotFieldCount = 0u;
         u32 targetRotFieldCount = 0u;
-        if(!value.forEachMapEntry(lambda[in file, mut entry, mut primaryEntry, mut rotFieldCount, mut targetRotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
-            if(key == "path_points")
-                return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_JointComponentDiagnosticPrefix, key, entry.component.pathPoints);
+        if(!value.forEachMapEntry(lambda[in file, mut entry, mut rotFieldCount, mut targetRotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
             if(key == "extra_joints"){
                 if(!fieldVal.isList()){
                     error("{} '{}': field 'extra_joints' must be a list of joint maps", s_JointComponentDiagnosticPrefix, PathToString(file));
@@ -1619,12 +1314,11 @@ Expected<JointComponentCookEntry> ParseJointComponentCookMetadata(in Name virtua
                 }
                 return true;
             }
-            return ApplyJointEntryField(file, key, fieldVal, primaryEntry, rotFieldCount, targetRotFieldCount);
+            return ApplyJointEntryField(file, key, fieldVal, entry.component.primaryJoint, rotFieldCount, targetRotFieldCount);
         }))
             return MakeUnexpected(Failure());
     }
 
-    CopyJointScalarFieldsToComponent(primaryEntry, entry.component);
     if(!PhysicsComponentBinaryCodec().validateJoint(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;

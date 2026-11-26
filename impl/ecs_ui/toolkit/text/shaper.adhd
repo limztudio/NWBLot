@@ -168,7 +168,7 @@ class TextShaper : ITextShaper{
                     delta += request.letterSpacing;
                 if(delta != 0.0f){
                     mut ShapedGlyph adjusted = outGlyphs[cEnd - 1u];
-                    adjusted.advance.x = UiSimdMax(0.0f, adjusted.advance.x + delta);
+                    adjusted.advance.x = Max(0.0f, adjusted.advance.x + delta);
                 }
                 cBegin = cEnd;
             }
@@ -226,7 +226,7 @@ class TextShaper : ITextShaper{
             if(request.text[cast<usize>(pos)] == '\t'){
                 const f64 ratio = (penX / tabStopWidth) + 1.0e-4;
                 const f64 nextStop = (VectorDoubleFloor(VectorDouble(ratio)).x + 1.0) * tabStopWidth;
-                const f64 tabAdv = UiSimdMaxF64(0.0, nextStop - penX);
+                const f64 tabAdv = Max(0.0, nextStop - penX);
                 penX = nextStop;
                 TabShapedSegment tabSeg;
                 tabSeg.tabByte = pos;
@@ -254,45 +254,27 @@ class TextShaper : ITextShaper{
             segments.push_back(textSeg);
             pos = segEnd;
         }
-        if(request.direction == TextDirection::LeftToRight){
-            for(in TabShapedSegment seg : segments){
-                if(seg.isTab){
-                    outRun.glyphs.push_back(ShapedGlyph(
-                        this.m_fonts[primaryIndex],
-                        seg.tabGlyphId,
-                        seg.tabByte,
-                        seg.tabByte + 1u,
-                        Point(),
-                        Point(seg.tabAdvance, 0.0f),
-                        Rect(),
-                        GlyphCoverageBounds(Rect(), true)
-                    ));
-                }
-                else{
-                    for(u32 gi = seg.beginGlyph; gi < seg.endGlyph; ++gi)
-                        outRun.glyphs.push_back(tempGlyphs[cast<usize>(gi)]);
-                }
+        const b8 ltr = request.direction == TextDirection::LeftToRight;
+        for(usize step = 0u; step < segments.size(); ++step){
+            usize segIndex = step;
+            if(!ltr)
+                segIndex = segments.size() - 1u - step;
+            in TabShapedSegment seg = segments[segIndex];
+            if(seg.isTab){
+                outRun.glyphs.push_back(ShapedGlyph(
+                    this.m_fonts[primaryIndex],
+                    seg.tabGlyphId,
+                    seg.tabByte,
+                    seg.tabByte + 1u,
+                    Point(),
+                    Point(seg.tabAdvance, 0.0f),
+                    Rect(),
+                    GlyphCoverageBounds(Rect(), true)
+                ));
             }
-        }
-        else{
-            for(usize reverse = segments.size(); reverse > 0u; --reverse){
-                in TabShapedSegment seg = segments[reverse - 1u];
-                if(seg.isTab){
-                    outRun.glyphs.push_back(ShapedGlyph(
-                        this.m_fonts[primaryIndex],
-                        seg.tabGlyphId,
-                        seg.tabByte,
-                        seg.tabByte + 1u,
-                        Point(),
-                        Point(seg.tabAdvance, 0.0f),
-                        Rect(),
-                        GlyphCoverageBounds(Rect(), true)
-                    ));
-                }
-                else{
-                    for(u32 gi = seg.beginGlyph; gi < seg.endGlyph; ++gi)
-                        outRun.glyphs.push_back(tempGlyphs[cast<usize>(gi)]);
-                }
+            else{
+                for(u32 gi = seg.beginGlyph; gi < seg.endGlyph; ++gi)
+                    outRun.glyphs.push_back(tempGlyphs[cast<usize>(gi)]);
             }
         }
         return TextLayoutStatus::Success;

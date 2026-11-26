@@ -65,6 +65,39 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     return TextureSubresourcesContain(declaration, description, requested);
 }
 
+template<typename ResourceT, GpuGraphResourceType::Enum ExpectedType, typename LookupFn>
+[[nodiscard]] static Expected<ResourceT*, GpuCommandIrReplayError::Enum> ResolveGraphResourceImpl(
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuGraphResourceId resourceId,
+    LookupFn&& lookup
+)noexcept{
+    if(ResourceT* const resource = lookup(graph, resourceId))
+        return resource;
+    if(!graph.validResource(resourceId))
+        return MakeUnexpected(GpuCommandIrReplayError::InvalidResource);
+    if(graph.resourceTypeAt(resourceId.index) != ExpectedType)
+        return MakeUnexpected(GpuCommandIrReplayError::ResourceTypeMismatch);
+    return MakeUnexpected(GpuCommandIrReplayError::MissingBackendResource);
+}
+
+template<typename ResourceT, GpuGraphResourceType::Enum ExpectedType, typename LookupFn>
+[[nodiscard]] static Expected<Pair<ResourceT*, ResourceT*>, GpuCommandIrReplayError::Enum> ResolveGraphResourcePairImpl(
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuGraphResourceId firstId,
+    const GpuGraphResourceId secondId,
+    LookupFn&& lookup
+)noexcept{
+    const auto first = ResolveGraphResourceImpl<ResourceT, ExpectedType>(graph, firstId, lookup);
+    const auto second = ResolveGraphResourceImpl<ResourceT, ExpectedType>(graph, secondId, lookup);
+    if(!first && !second)
+        return MakeUnexpected(Min(first.error(), second.error()));
+    if(!first)
+        return MakeUnexpected(first.error());
+    if(!second)
+        return MakeUnexpected(second.error());
+    return Pair<ResourceT*, ResourceT*>{ *first, *second };
+}
+
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferCopyImpl(
     const GpuGraphResourceId sourceId,
     const GpuGraphResourceId destinationId,
@@ -74,15 +107,16 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task
 )noexcept{
-    Buffer* const source = graph.bufferForResource(sourceId);
-    Buffer* const destination = graph.bufferForResource(destinationId);
-    if(!source || !destination){
-        if(!graph.validResource(sourceId) || !graph.validResource(destinationId))
-            return GpuCommandIrReplayError::InvalidResource;
-        if(graph.resourceTypeAt(sourceId.index) != GpuGraphResourceType::Buffer || graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Buffer)
-            return GpuCommandIrReplayError::ResourceTypeMismatch;
-        return GpuCommandIrReplayError::MissingBackendResource;
-    }
+    const auto resolvedBuffers = ResolveGraphResourcePairImpl<Buffer, GpuGraphResourceType::Buffer>(
+        graph,
+        sourceId,
+        destinationId,
+        [](const GpuTaskGraphDeclarationReadView& view, const GpuGraphResourceId id)noexcept{ return view.bufferForResource(id); }
+    );
+    if(!resolvedBuffers)
+        return resolvedBuffers.error();
+    Buffer* const source = resolvedBuffers->first();
+    Buffer* const destination = resolvedBuffers->second();
 
     const BufferDesc& sourceDescription = source->getCreationDescription();
     const BufferDesc& destinationDescription = destination->getCreationDescription();
@@ -128,15 +162,16 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
 )noexcept{
     if(sourceId == destinationId)
         return GpuCommandIrReplayError::InvalidResource;
-    Texture* const source = graph.textureForResource(sourceId);
-    Texture* const destination = graph.textureForResource(destinationId);
-    if(!source || !destination){
-        if(!graph.validResource(sourceId) || !graph.validResource(destinationId))
-            return GpuCommandIrReplayError::InvalidResource;
-        if(graph.resourceTypeAt(sourceId.index) != GpuGraphResourceType::Texture || graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Texture)
-            return GpuCommandIrReplayError::ResourceTypeMismatch;
-        return GpuCommandIrReplayError::MissingBackendResource;
-    }
+    const auto resolvedTextures = ResolveGraphResourcePairImpl<Texture, GpuGraphResourceType::Texture>(
+        graph,
+        sourceId,
+        destinationId,
+        [](const GpuTaskGraphDeclarationReadView& view, const GpuGraphResourceId id)noexcept{ return view.textureForResource(id); }
+    );
+    if(!resolvedTextures)
+        return resolvedTextures.error();
+    Texture* const source = resolvedTextures->first();
+    Texture* const destination = resolvedTextures->second();
     if(source == destination)
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
@@ -169,14 +204,9 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     if(!hasContract || !hasSourceSlice || !hasDestinationSlice)
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
-    const u8 taskCapabilities = static_cast<u8>(task.commands.allowedCapabilities());
-    const u8 physicalQueueCapabilities = static_cast<u8>(queue.capabilities);
-    const b8 taskAndQueueShareComputeOrGraphics = (taskCapabilities & physicalQueueCapabilities & static_cast<u8>(GpuQueueCapability::Compute | GpuQueueCapability::Graphics)) != 0u;
-    const b8 taskHasGraphics = (taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
-    const b8 queueHasGraphics = (physicalQueueCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
     if(
-        (contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics && !taskAndQueueShareComputeOrGraphics)
-        || (contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Graphics && (!taskHasGraphics || !queueHasGraphics))
+        contract->queueRequirement != GraphicsBackend::TextureQueueRequirement::Transfer
+        && !GraphicsBackend::TextureQueueRequirementSatisfied(contract->queueRequirement, task.commands.allowedCapabilities(), queue.capabilities)
     )
         return GpuCommandIrReplayError::InvalidTextureCopy;
     return GpuCommandIrReplayError::None;
@@ -187,14 +217,10 @@ namespace __hidden_gpu_command_ir_builtin_preflight{
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task
 )noexcept{
-    Buffer* const destination = graph.bufferForResource(destinationId);
-    if(!destination){
-        if(!graph.validResource(destinationId))
-            return GpuCommandIrReplayError::InvalidResource;
-        if(graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Buffer)
-            return GpuCommandIrReplayError::ResourceTypeMismatch;
-        return GpuCommandIrReplayError::MissingBackendResource;
-    }
+    const auto destinationResult = GpuCommandIrDetail::ResolveGraphBuffer(graph, destinationId);
+    if(!destinationResult)
+        return destinationResult.error();
+    Buffer* const destination = *destinationResult;
 
     const GpuTaskResourceUse* const destinationUse = GpuCommandIrDetail::FindTaskResourceUse(task, destinationId, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
     if(!destinationUse)
@@ -216,14 +242,10 @@ struct TextureClearDestination{
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task
 )noexcept{
-    Texture* const destination = graph.textureForResource(destinationId);
-    if(!destination){
-        if(!graph.validResource(destinationId))
-            return MakeUnexpected(GpuCommandIrReplayError::InvalidResource);
-        if(graph.resourceTypeAt(destinationId.index) != GpuGraphResourceType::Texture)
-            return MakeUnexpected(GpuCommandIrReplayError::ResourceTypeMismatch);
-        return MakeUnexpected(GpuCommandIrReplayError::MissingBackendResource);
-    }
+    const auto destinationResult = GpuCommandIrDetail::ResolveGraphTexture(graph, destinationId);
+    if(!destinationResult)
+        return MakeUnexpected(destinationResult.error());
+    Texture* const destination = *destinationResult;
 
     const GpuTaskResourceUse* const destinationUse = GpuCommandIrDetail::FindTaskResourceUse(task, destinationId, ResourceStates::CopyDest, GpuTaskResourceAccess::Write);
     if(!destinationUse)
@@ -256,7 +278,7 @@ struct TextureClearDestination{
         || !valueKind
         || !(clearContract = GraphicsBackend::ResolveTextureClearContract(description, destinationSubresources, *valueKind, clearDepth, clearStencil))
         || clearContract->subresources != destinationSubresources
-        || !GraphicsBackend::TextureClearQueueRequirementSatisfied(clearContract->queueRequirement, task.commands.allowedCapabilities(), queue.capabilities)
+        || !GraphicsBackend::TextureQueueRequirementSatisfied(clearContract->queueRequirement, task.commands.allowedCapabilities(), queue.capabilities)
     )
         return GpuCommandIrReplayError::InvalidTextureClear;
     return GpuCommandIrReplayError::None;
@@ -287,13 +309,45 @@ struct TextureClearDestination{
         || !TextureSubresourcesContain(destinationUse.range.textureSubresources, description, destinationSubresources)
         || !(clearContract = GraphicsBackend::ResolveTextureClearContract(description, destinationSubresources, GraphicsBackend::TextureClearValueKind::UInt, false, false))
         || clearContract->subresources != destinationSubresources
-        || !GraphicsBackend::TextureClearQueueRequirementSatisfied(GraphicsBackend::TextureClearBoxQueueRequirement(description, clearContract->subresources, clearBox), task.commands.allowedCapabilities(), queue.capabilities)
+        || !GraphicsBackend::TextureQueueRequirementSatisfied(GraphicsBackend::TextureClearBoxQueueRequirement(description, clearContract->subresources, clearBox), task.commands.allowedCapabilities(), queue.capabilities)
     )
         return GpuCommandIrReplayError::InvalidTextureClear;
     return GpuCommandIrReplayError::None;
 }
 
 };
+
+
+namespace GpuCommandIrDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Expected<Buffer*, GpuCommandIrReplayError::Enum> ResolveGraphBuffer(const GpuTaskGraphDeclarationReadView& graph, const GpuGraphResourceId resourceId)noexcept{
+    return __hidden_gpu_command_ir_builtin_preflight::ResolveGraphResourceImpl<Buffer, GpuGraphResourceType::Buffer>(
+        graph,
+        resourceId,
+        [](const GpuTaskGraphDeclarationReadView& view, const GpuGraphResourceId id)noexcept{ return view.bufferForResource(id); }
+    );
+}
+
+Expected<Texture*, GpuCommandIrReplayError::Enum> ResolveGraphTexture(const GpuTaskGraphDeclarationReadView& graph, const GpuGraphResourceId resourceId)noexcept{
+    return __hidden_gpu_command_ir_builtin_preflight::ResolveGraphResourceImpl<Texture, GpuGraphResourceType::Texture>(
+        graph,
+        resourceId,
+        [](const GpuTaskGraphDeclarationReadView& view, const GpuGraphResourceId id)noexcept{ return view.textureForResource(id); }
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GpuCommandIrReplayError::Enum GpuCommandIrBuiltinPreflight::Validate(

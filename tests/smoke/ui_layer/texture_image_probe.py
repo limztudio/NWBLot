@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import math
 import re
 
-from probe_common import center
+from probe_common import FrameProbeRecorder, center, compile_smoke_patterns, snapshot_from_patterns
 from window_capture_smoke import SmokeFailure
-from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
+from probe_reference import compose, linear_rgb_bytes, sampled_region, sampled_tile
 
 LIT_BUILDER_SOURCE = "builder_source"
 LIT_BUILDER_HANDLE_EMPTY = "builder_handle_empty"
@@ -43,15 +42,11 @@ LIT_DOT = "dot"
 LIT_REPLACEMENT_ALTERNATE = "replacement_alternate"
 
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiTextureImageSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiTextureImageSmoke: state sequence=(\d+) values=((?:\d+,){15}\d+)")
-SOURCES = re.compile(r"UiTextureImageSmoke: sources sequence=(\d+) generations=(\d+),(\d+),(\d+) same_identity=(\d+)")
-GEOMETRY = re.compile(rf"UiTextureImageSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiTextureImageSmoke: skin=(default|alternate)")
 FIELDS = ("phase", "focus_code", "before_clicks", "after_clicks", "parent", "child", "popup_count", "image_targets", "declared_source", "post_handle_empty", "replacement_count", "replacement_alternate",
     "eviction_remaining", "eviction_completed", LIT_BUILDER_SOURCE, LIT_BUILDER_HANDLE_EMPTY,)
 RECTANGLES = ("before", "after", "default_tile", "alternate_tile", "tinted", "zero_alpha", "frozen", "external", "external_clip", "default_atlas", "alternate_atlas", "skin_fill", "parent_image", "child_image", "parent", "child", "builder_image",)
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiTextureImageSmoke", len(FIELDS))
+SOURCES = re.compile(r"UiTextureImageSmoke: sources sequence=(\d+) generations=(\d+),(\d+),(\d+) same_identity=(\d+)")
 DEFAULT = ((24, 29, 37), (63, 77, 93))
 ALTERNATE = ((39, 63, 34), (116, 150, 79))
 SEPARATOR = ((135, 156, 73), (135, 156, 73))
@@ -66,53 +61,32 @@ MAX_MARKER_24BIT_VALUE = 0xFFFFFF
 
 
 def snapshot_from_logs(text):
-    states, displays, skins = list(STATE.finditer(text)), list(DISPLAY.finditer(text)), list(SKIN.finditer(text))
-    if not states or not displays or not skins:
+    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="texture image", non_negative_extents=True, max_value=MAX_MARKER_24BIT_VALUE)
+    if snapshot is None:
         return None
-    state = states[-1]
-    sequence, values = int(state[1]), tuple(map(int, state[2].split(",")))
+    sequence = snapshot[LIT_SEQUENCE]
     sources = [match for match in SOURCES.finditer(text) if int(match[1]) == sequence]
-    rectangles = {match[2]: tuple(map(float, match.groups()[2:])) for match in GEOMETRY.finditer(text) if int(match[1]) == sequence}
-    if not sources or any(name not in rectangles for name in RECTANGLES):
+    if not sources:
         return None
     generations = tuple(map(int, sources[-1].groups()[1:4]))
-    display = tuple(map(float, displays[-1].groups()))
-    if not all(math.isfinite(value) for value in (*display, *(v for r in rectangles.values() for v in r))):
-        raise SmokeFailure("texture image fixture reported nonfinite display or geometry")
-    if any(value <= 0.0 for value in display) or any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
-        raise SmokeFailure("texture image fixture reported invalid display or placement extents")
-    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)):
-        raise SmokeFailure("texture image fixture exceeds its two-part displayed marker schema")
     if not all(generations) or generations[0] == generations[1]:
         raise SmokeFailure("independent concrete sources must have distinct nonzero generations")
-    return { LIT_SEQUENCE: sequence, LIT_SKIN: skins[-1][1], LIT_VALUES: values, **dict(zip(FIELDS, values)), LIT_GENERATIONS: generations, LIT_SAME_IDENTITY: int(sources[-1][5]), LIT_LOGICAL_EXTENT: display[:2], LIT_SCALE: display[2:], LIT_RECTANGLES: rectangles, }
+    snapshot[LIT_GENERATIONS] = generations
+    snapshot[LIT_SAME_IDENTITY] = int(sources[-1][5])
+    return snapshot
 
 
 def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale, rectangles = snapshot[LIT_SCALE], snapshot[LIT_RECTANGLES]
-    probes = []
+    recorder = FrameProbeRecorder(frame, scale, "texture image")
+    probes = recorder.probes
     geometry_matches = snapshot[LIT_PHASE] in (0, 1) and snapshot["image_targets"] == 0
+    pixel = recorder.pixel
+    inside = recorder.inside
+    record = lambda name, position, color, tolerance=9: recorder.record(name, position, color, tolerance, radius=0)
 
-    def pixel(point):
-        return round(point[0] * scale[0]), round(point[1] * scale[1])
-
-    def inside(rectangle, position):
-        x, y = (position[0] + 0.5) / scale[0], (position[1] + 0.5) / scale[1]
-        return rectangle[0] <= x < rectangle[0] + rectangle[2] and rectangle[1] <= y < rectangle[1] + rectangle[3]
-
-    def record(name, position, color, tolerance=9):
-        x, y = position
-        if not 0 <= x < width or not 0 <= y < height:
-            raise SmokeFailure(f"texture image probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        observed = rows[y][x]
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({LIT_NAME: name, "position": list(position), LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-    for index, value in enumerate((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE])):
-        for part in range(2):
-            marker = index * 2 + part
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
+    recorder.probe_markers((*snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE]), 16.0, 12.0, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0, tolerance=5, radius=0, flat_names=True)
     logical_width = snapshot[LIT_LOGICAL_EXTENT][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)
     right = 24.0 + main_width + 32.0

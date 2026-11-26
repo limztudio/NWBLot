@@ -17,10 +17,6 @@ class InputHoverState{
         AdvanceRouterHoverActivity(this.activityGeneration);
     }
 
-    public void clearTarget(){
-        ClearRouterHoverTarget(this.target, this.identity);
-    }
-
     public void forgetSource(){
         ForgetRouterHoverSource(this.activityGeneration, this.target, this.identity, this.known, this.source);
     }

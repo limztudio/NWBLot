@@ -12,7 +12,7 @@ import renderer_ab_benchmark as ab
 from renderer_workload_registry import RendererWorkloadRegistry
 from renderer_benchmark_identity import RendererBenchmarkIdentity
 from reflection_cpu_timing_evidence import CASES, LIT_DIAGNOSTIC, LIT_HARDWARE, LIT_PRESENTATIONS, ReflectionCpuTimingEvidence
-import reflection_benchmark as reflection
+from reflection_gpu_coverage import HARDWARE
 from smoke_volume_identity import file_identity
 from smoke_failure_reporting import write_failure_report
 from window_capture_termination import CaptureProcessTermination
@@ -32,7 +32,7 @@ RAW_NAME = "cpu_gpu_timing.txt"
 
 
 def launch_environment(base, case, raw_path):
-    workload = RendererWorkloadRegistry.reflection_workload(LIT_DIAGNOSTIC, case, LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE)
+    workload = RendererWorkloadRegistry.reflection_workload(LIT_DIAGNOSTIC, case, LIT_HARDWARE, 0.0, False, False, HARDWARE)
     env, overrides = ab.configure_environment(base, workload, raw_path)
     env.pop("NWB_GPU_TIMING_FILE", None)
     env.pop(LIT_NWB_REFLECTION_CPU_GPU_TIMING_FILE, None)

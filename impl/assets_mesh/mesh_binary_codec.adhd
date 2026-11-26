@@ -55,82 +55,6 @@ class MeshBinaryCodec{
         ;
     }
 
-    private b8 validateStreamRange(
-        in Span<u8> binary,
-        in u64 count,
-        in usize elementBytes,
-        in usize maxCount,
-        in StringView label,
-        in usize cursor
-    )const{
-        if(count > cast<u64>(usize.max / elementBytes)){
-            error("Mesh::loadBinary failed: '{}' payload byte size overflows", label);
-            return false;
-        }
-        const usize valueCount = cast<usize>(count);
-        if(!CanReadBytes(binary, cursor, valueCount * elementBytes) || valueCount > maxCount){
-            error("Mesh::loadBinary failed: malformed '{}' payload", label);
-            return false;
-        }
-        return true;
-    }
-
-    [cpp_unwind]
-    private b8 readPositions(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<f32x3u> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshPositionElementBytes, outValues.max_size(), "positions", inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readHalf4(in Span<u8> binary, in u64 count, in StringView label, mut usize inOutCursor, mut Vector<f16x4u> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshHalf4ElementBytes, outValues.max_size(), label, inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readUv0(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<f32x2u> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshUv0ElementBytes, outValues.max_size(), "uv0", inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readMeshlets(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletDesc> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshletDescElementBytes, outValues.max_size(), "meshlets", inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readMeshletBounds(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletBounds> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshletBoundsElementBytes, outValues.max_size(), "meshlet bounds", inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readBytes(in Span<u8> binary, in u64 count, in StringView label, mut usize inOutCursor, mut Vector<u8> outValues)const{
-        if(!this.validateStreamRange(binary, count, 1u, outValues.max_size(), label, inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readLocalVertexRefs(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<MeshletLocalVertexRef> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshletLocalVertexRefElementBytes, outValues.max_size(), "meshlet local vertex refs", inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
-    [cpp_unwind]
-    private b8 readSolidTriangleWords(in Span<u8> binary, in u64 count, mut usize inOutCursor, mut Vector<u32> outValues)const{
-        if(!this.validateStreamRange(binary, count, s_MeshSolidTriangleWordElementBytes, outValues.max_size(), "solid triangle words", inOutCursor))
-            return false;
-        return ReadBinaryVectorPayload(binary, cast<usize>(count), inOutCursor, outValues).has_value();
-    }
-
     [cpp_unwind]
     public b8 deserialize(
         in Span<u8> binary,
@@ -148,40 +72,30 @@ class MeshBinaryCodec{
         mut Vector<u32> outSolidTriangleWords
     )const{
         usize cursor = 0u;
-        const Expected<MeshBinaryHeader> headerResult = ReadPOD<MeshBinaryHeader>(binary, cursor);
-        if(!headerResult.has_value()){
-            error("Mesh::loadBinary failed: malformed header");
+        const Expected<MeshBinaryHeader> headerResult = ReadMagicHeaderPayload<MeshBinaryHeader>(binary, s_MeshBinaryMagic, "Mesh::loadBinary", "mesh", cursor);
+        if(!headerResult.has_value())
             return false;
-        }
         const MeshBinaryHeader header = headerResult.value();
-        if(header.magic != s_MeshBinaryMagic){
-            error("Mesh::loadBinary failed: invalid mesh asset format; recook required");
-            return false;
-        }
         if(!ValidateMeshBaseHeader(header))
             return false;
 
         if(
-            !this.readPositions(binary, header.positionCount, cursor, outPositions)
-            || !this.readHalf4(binary, header.normalCount, "normals", cursor, outNormals)
-            || !this.readHalf4(binary, header.tangentCount, "tangents", cursor, outTangents)
-            || !this.readUv0(binary, header.uv0Count, cursor, outUv0)
-            || !this.readHalf4(binary, header.colorCount, "colors", cursor, outColors)
-            || !this.readMeshlets(binary, header.meshletCount, cursor, outMeshlets)
-            || !this.readMeshletBounds(binary, header.meshletBoundCount, cursor, outMeshletBounds)
-            || !this.readBytes(binary, header.meshletPositionRefDeltaByteCount, "meshlet position ref deltas", cursor, outMeshletPositionRefDeltas)
-            || !this.readBytes(binary, header.meshletAttributeRefDeltaByteCount, "meshlet attribute ref deltas", cursor, outMeshletAttributeRefDeltas)
-            || !this.readLocalVertexRefs(binary, header.meshletLocalVertexRefCount, cursor, outMeshletLocalVertexRefs)
-            || !this.readBytes(binary, header.meshletPrimitiveIndexCount, "meshlet primitive indices", cursor, outMeshletPrimitiveIndices)
-            || !this.readSolidTriangleWords(binary, ComputeMeshSolidTriangleWordCount(header.meshletPrimitiveIndexCount), cursor, outSolidTriangleWords)
+            !ReadVectorPayload(binary, header.positionCount, "Mesh::loadBinary", "positions", cursor, outPositions)
+            || !ReadVectorPayload(binary, header.normalCount, "Mesh::loadBinary", "normals", cursor, outNormals)
+            || !ReadVectorPayload(binary, header.tangentCount, "Mesh::loadBinary", "tangents", cursor, outTangents)
+            || !ReadVectorPayload(binary, header.uv0Count, "Mesh::loadBinary", "uv0", cursor, outUv0)
+            || !ReadVectorPayload(binary, header.colorCount, "Mesh::loadBinary", "colors", cursor, outColors)
+            || !ReadVectorPayload(binary, header.meshletCount, "Mesh::loadBinary", "meshlets", cursor, outMeshlets)
+            || !ReadVectorPayload(binary, header.meshletBoundCount, "Mesh::loadBinary", "meshlet bounds", cursor, outMeshletBounds)
+            || !ReadVectorPayload(binary, header.meshletPositionRefDeltaByteCount, "Mesh::loadBinary", "meshlet position ref deltas", cursor, outMeshletPositionRefDeltas)
+            || !ReadVectorPayload(binary, header.meshletAttributeRefDeltaByteCount, "Mesh::loadBinary", "meshlet attribute ref deltas", cursor, outMeshletAttributeRefDeltas)
+            || !ReadVectorPayload(binary, header.meshletLocalVertexRefCount, "Mesh::loadBinary", "meshlet local vertex refs", cursor, outMeshletLocalVertexRefs)
+            || !ReadVectorPayload(binary, header.meshletPrimitiveIndexCount, "Mesh::loadBinary", "meshlet primitive indices", cursor, outMeshletPrimitiveIndices)
+            || !ReadVectorPayload(binary, ComputeMeshSolidTriangleWordCount(header.meshletPrimitiveIndexCount), "Mesh::loadBinary", "solid triangle words", cursor, outSolidTriangleWords)
         )
             return false;
 
-        if(cursor != binary.size()){
-            error("Mesh::loadBinary failed: trailing bytes detected");
-            return false;
-        }
-        return true;
+        return ReadCompletePayload(binary, cursor, "Mesh::loadBinary");
     }
 
     [cpp_unwind]

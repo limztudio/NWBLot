@@ -330,12 +330,14 @@ b8 ReadOptionalMatrix3x4ListField(
     return true;
 }
 
-b8 ReadOptionalParentJointListField(
+b8 ReadOptionalIntegerListField<OutT>(
     in Path file,
     in MetascriptValue asset,
     in StringView prefix,
     in StringView field,
-    mut Vector<u32> outParentJoints
+    in StringView overflowLabel,
+    in Func<64u, b8(in i64, mut OutT)> parseEntry,
+    mut Vector<OutT> outValues
 ){
     if(!asset.hasField(field))
         return true;
@@ -344,27 +346,54 @@ b8 ReadOptionalParentJointListField(
         return false;
     const Span<MetascriptValue> items = listResult.value();
     if(items.size() > cast<usize>(u32.max)){
-        error("{} '{}': field '{}' count overflows", prefix, file, field);
+        error("{} '{}': field '{}' {}", prefix, file, field, overflowLabel);
         return false;
     }
-    outParentJoints.clear();
-    outParentJoints.reserve(items.size());
+    outValues.clear();
+    outValues.reserve(items.size());
     for(in MetascriptValue item : items){
         if(!item.isInteger()){
             error("{} '{}': field '{}' entries must be integers", prefix, file, field);
             return false;
         }
-        const i64 val = item.asInteger();
-        if(val == -1 || val == cast<i64>(s_SkeletonInvalidJointIndex))
-            outParentJoints.push_back(s_SkeletonInvalidJointIndex);
-        else if(val >= 0 && val < cast<i64>(s_SkeletonInvalidJointIndex))
-            outParentJoints.push_back(cast<u32>(val));
-        else{
-            error("{} '{}': field '{}' entry {} is out of range", prefix, file, field, val);
+        OutT parsedValue = OutT();
+        if(!parseEntry(item.asInteger(), parsedValue))
             return false;
-        }
+        outValues.push_back(parsedValue);
     }
     return true;
+}
+
+b8 ReadOptionalParentJointListField(
+    in Path file,
+    in MetascriptValue asset,
+    in StringView prefix,
+    in StringView field,
+    mut Vector<u32> outParentJoints
+){
+    in auto fileRef = file;
+    in StringView prefixRef = prefix;
+    in StringView fieldRef = field;
+    return ReadOptionalIntegerListField<u32>(
+        file,
+        asset,
+        prefix,
+        field,
+        "count overflows",
+        lambda[in fileRef, in prefixRef, in fieldRef](in i64 val, mut u32 outValue) -> b8{
+            if(val == -1 || val == cast<i64>(s_SkeletonInvalidJointIndex)){
+                outValue = s_SkeletonInvalidJointIndex;
+                return true;
+            }
+            if(val >= 0 && val < cast<i64>(s_SkeletonInvalidJointIndex)){
+                outValue = cast<u32>(val);
+                return true;
+            }
+            error("{} '{}': field '{}' entry {} is out of range", prefixRef, fileRef, fieldRef, val);
+            return false;
+        },
+        outParentJoints
+    );
 }
 
 b8 ReadOptionalByteListField(
@@ -374,31 +403,25 @@ b8 ReadOptionalByteListField(
     in StringView field,
     mut Vector<u8> outBytes
 ){
-    if(!asset.hasField(field))
-        return true;
-    const Expected<Span<MetascriptValue>> listResult = ReadMetadataListField(file, asset, prefix, field);
-    if(!listResult.has_value())
-        return false;
-    const Span<MetascriptValue> items = listResult.value();
-    if(items.size() > cast<usize>(u32.max)){
-        error("{} '{}': field '{}' byte count overflows", prefix, file, field);
-        return false;
-    }
-    outBytes.clear();
-    outBytes.reserve(items.size());
-    for(in MetascriptValue item : items){
-        if(!item.isInteger()){
-            error("{} '{}': field '{}' entries must be integers", prefix, file, field);
-            return false;
-        }
-        const i64 val = item.asInteger();
-        if(val < 0 || val > 255){
-            error("{} '{}': field '{}' byte {} out of range [0, 255]", prefix, file, field, val);
-            return false;
-        }
-        outBytes.push_back(cast<u8>(val));
-    }
-    return true;
+    in auto fileRef = file;
+    in StringView prefixRef = prefix;
+    in StringView fieldRef = field;
+    return ReadOptionalIntegerListField<u8>(
+        file,
+        asset,
+        prefix,
+        field,
+        "byte count overflows",
+        lambda[in fileRef, in prefixRef, in fieldRef](in i64 val, mut u8 outValue) -> b8{
+            if(val < 0 || val > 255){
+                error("{} '{}': field '{}' byte {} out of range [0, 255]", prefixRef, fileRef, fieldRef, val);
+                return false;
+            }
+            outValue = cast<u8>(val);
+            return true;
+        },
+        outBytes
+    );
 }
 
 Expected<MaterialInstanceComponentCookEntry> ParseMaterialInstanceComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue asset){

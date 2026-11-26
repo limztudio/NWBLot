@@ -2,24 +2,15 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 import time
 
 from slider_native import SliderNativeInput
 from slider_probe import bits_value, f32, observe_slider, snapshot_from_logs, value_bits
-from probe_common import center
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS, accept_checkpoint, fail_checkpoint
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main
+from checkpoint_report import CHECKPOINT_SETTLE_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_FOCUS_CODE = "focus_code"
 LIT_CHANGES = "changes"
@@ -30,9 +21,7 @@ LIT_POPUP_BITS = "popup_bits"
 LIT_SCALE = "scale"
 LIT_RECTANGLES = "rectangles"
 LIT_MAIN = "main"
-LIT_LOGICAL_EXTENT = "logical_extent"
 LIT_PASSED = "passed"
-LIT_UTF_8 = "utf-8"
 LIT_TAB = "Tab"
 LIT_RIGHT = "Right"
 LIT_END = "End"
@@ -43,42 +32,22 @@ LIT_FENCE_VALUE = "fence_value"
 LIT_TOGGLE_ENABLED = "toggle_enabled"
 LIT_OPEN = "open"
 LIT_POPUP = "popup"
-LIT_UI_SLIDER_FIXTURE = "UI slider fixture"
 
 FIXTURE_TIMEOUT_SECONDS = 180
 HELD_INPUT_SETTLE_SECONDS = 0.15
 RESIZE_SETTLE_SECONDS = 0.3
 
 
-class SliderRun:
+class SliderRun(UiFixtureRunBase):
+    missing_placement_error = "slider fixture has no accepted placement for"
+
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = SliderNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-        self.failure_report = None
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=SliderNativeInput(backend, handle))
         self.expected = { LIT_FOCUS_CODE: 0, LIT_CHANGES: 0, LIT_POPUP_CHANGES: 0, "before_clicks": 0, "after_clicks": 0, "enabled": 1, LIT_RANGE_CODE: 0, "step_code": 0, "parent": 0, "popup_count": 0, "focus_scope": 0,
             "main_valid": 1, "main_dragging": 0, "popup_valid": 0, "popup_dragging": 0, "external_intents": 0, LIT_MAIN_BITS: value_bits(0.25), "disabled_bits": value_bits(0.75), "constant_bits": value_bits(0.5), LIT_POPUP_BITS: value_bits(0.5), }
 
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot[LIT_SCALE]
-        return round(x * scale_x), round(y * scale_y)
-
     def rectangle_point(self, name):
-        rectangle = self.snapshot[LIT_RECTANGLES][name]
-        if rectangle[2] <= 0.0 or rectangle[3] <= 0.0:
-            raise SmokeFailure(f"slider fixture has no accepted placement for '{name}'")
-        return self.point(*center(rectangle))
+        return super().rectangle_point(name, error_label=self.missing_placement_error)
 
     def click(self, name):
         self.native.click(*self.rectangle_point(name))
@@ -127,36 +96,24 @@ class SliderRun:
             self.native.pointer(4, 4)
         self.native.maintain_pointer()
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during slider UI capture")
-            self.native.maintain_pointer()
+
+        def before_capture(_snapshot, _report, _deadline):
             self.native.record("capture_before", name=name)
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 740.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 480.0:
-                raise SmokeSkip("the slider fixture needs a logical client of at least 740x480")
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
-            report = observe_slider(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, modes=modes)
+            return True
+
+        def evaluate(frame, snapshot):
+            report = observe_slider(frame, snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, modes=modes)
             self.native.record("capture_after", name=name, sequence=snapshot["sequence"], passed=report[LIT_PASSED])
-            if report[LIT_PASSED]:
-                accept_checkpoint(self, name, path, snapshot, report, dynamic)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        fail_checkpoint(self, name, path, report, "slider")
+            return report
+
+        self.poll_checkpoint(name, minimum_extent=(740.0, 480.0), minimum_extent_message="the slider fixture needs a logical client of at least 740x480",
+            process_stage="during slider UI capture", snapshot_reader=snapshot_from_logs, before_capture=before_capture, evaluate=evaluate,
+            raw_windows=True, failure_label="slider", maintain_pointer=True, accept_extras=lambda _: {"native_window": self.native.observe_window()}, dynamic=dynamic, failure_extras=True)
 
     def write_report(self, passed):
-        report = { LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "native_actions": self.native.actions,
-            "input_path": "Win32 ClipCursor-isolated physical cursor positioning with posted pointer/key messages" if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus",
-            "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.", }
-        (self.args.output_directory / "slider.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("slider.json", passed, include_failure=True, native_actions=self.native.actions,
+            input_path="Win32 ClipCursor-isolated physical cursor positioning with posted pointer/key messages" if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus",
+            runtime_limit="No native Wayland, physical pointer-grab, or live IME qualification.")
 
     def execute(self):
         self.checkpoint("initial_exact_values_and_atlas")
@@ -296,54 +253,8 @@ class SliderRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "SLIDER", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = slider_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the slider fixture appeared")
-            raise SmokeFailure("custom slider fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiSliderSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        slider_run = SliderRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        slider_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_SLIDER_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_SLIDER_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "slider.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                try:
-                    if logserver is not None:
-                        CaptureProcessTermination.terminate_process(logserver, "UI slider logserver")
-                finally:
-                    try:
-                        if slider_run is not None:
-                            slider_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    slider_run.write_report(True)
-    print(f"UI slider: {len(slider_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="SLIDER", display_marker="UiSliderSmoke: display", driver_type=SliderRun, log_name="slider.log", label="UI slider",
+        window_label="slider", process_label="slider", raw_windows=True, restore_pointer=True)
 
 
 def main(argv):

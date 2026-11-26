@@ -43,24 +43,19 @@ from hardware_shadow_report import (  # noqa: E402
     RunResult,
     FRAME_SCOPE,
     LIT_BASELINE,
-    LIT_FAIL,
     LIT_HEALTHY,
-    LIT_INCONCLUSIVE,
     LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCENT,
     LIT_PASS,
-    LIT_RENDER_SHADOW_VISIBILITY,
     LIT_UTF_8,
     LIT_VERDICT,
-    OPAQUE_TRACE_SCOPE,
     OPTIONAL_COMPARISON_SCOPES,
-    TRANSPARENT_RESOLVE_SCOPE,
-    TRANSPARENT_TRACE_SCOPE,
 )
 from hardware_shadow_checks import HardwareShadowBoundaryChecks  # noqa: E402
 from window_capture_environment import make_runtime_launch_args  # noqa: E402
+from window_capture_logs import (find_log_messages as smoke_find_log_messages, wait_for_process_log_message, wait_while_running as smoke_wait_while_running)  # noqa: E402
 from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (  # noqa: E402
-    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
+    SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed, require_normal_process_exit,
     shutdown_logserver_and_collect, )
 from window_capture_validation import validate_capture_result  # noqa: E402
 
@@ -106,7 +101,7 @@ def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
 
 
 def find_log_messages(log_text: str, needles: Sequence[str]) -> List[str]:
-    return [needle for needle in needles if needle in log_text]
+    return smoke_find_log_messages(log_text, needles)
 
 
 def find_missing_log_messages(log_text: str, needles: Sequence[str]) -> List[str]:
@@ -117,25 +112,11 @@ LOG_TAIL_CHAR_LIMIT = 4000
 
 
 def wait_for_log_message(process, log_directory: Path, log_baseline: Mapping[Path, int], log_pattern: str, message: str, timeout_seconds: float, skip_message: Optional[str] = None,) -> Optional[str]:
-    deadline = time.monotonic() + timeout_seconds
-    latest_log = ""
-    while time.monotonic() < deadline:
-        ensure_process_running(process, f"while waiting for benchmark log message '{message}'")
-        latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
-        if skip_message and skip_message in latest_log:
-            return skip_message
-        if message in latest_log:
-            return None
-        time.sleep(LIT_PROCESS_POLL_SECONDS)
-
-    raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{latest_log[-LOG_TAIL_CHAR_LIMIT:]}")
+    return wait_for_process_log_message(process, log_directory, log_baseline, log_pattern, message, timeout_seconds, skip_message, poll_seconds=LIT_PROCESS_POLL_SECONDS, ensure_running=ensure_process_running)
 
 
 def wait_while_running(process, seconds: float, stage: str) -> None:
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        ensure_process_running(process, stage)
-        time.sleep(min(LIT_WAIT_POLL_SECONDS, max(0.0, deadline - time.monotonic())))
+    smoke_wait_while_running(process, seconds, stage, poll_seconds=LIT_WAIT_POLL_SECONDS, ensure_running=ensure_process_running)
 
 
 def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_seconds: float) -> int:

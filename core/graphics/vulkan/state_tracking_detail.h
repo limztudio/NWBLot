@@ -25,6 +25,7 @@ namespace VulkanStateTrackingDetail{
 
 inline constexpr TStringView s_InitialStateUnknownReason = FOUNDATION_TEXT("initial state cannot be unknown");
 inline constexpr TStringView s_SubresourceRangeOutsideTextureReason = FOUNDATION_TEXT("subresource range is empty or outside the texture");
+inline constexpr TStringView s_ByteRangeOutsideBufferReason = FOUNDATION_TEXT("byte range is empty or outside the buffer");
 inline constexpr TStringView s_DestinationQueueUnavailableReason = FOUNDATION_TEXT("destination queue is unavailable");
 
 [[nodiscard]] VkImageMemoryBarrier2 BuildTextureStateBarrier(VkImage image, VkImageAspectFlags aspectMask, const TextureSubresourceSet& subresources, ResourceStates::Mask oldState, ResourceStates::Mask stateBits, b8 rayTracingStageAvailable)noexcept;

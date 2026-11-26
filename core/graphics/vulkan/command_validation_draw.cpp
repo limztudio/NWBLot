@@ -136,6 +136,31 @@ b8 CommandList::validateGraphicsState(const GraphicsState& state, GraphicsBuffer
     return true;
 }
 
+b8 CommandList::validateMeshletPipelineForFramebuffer(const MeshletPipeline& pipeline, const Framebuffer& framebuffer, const TStringView operationName){
+    if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
+        rejectCommandRecording(operationName, s_MeshShaderUnavailableReason);
+        return false;
+    }
+    if(pipeline.m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("task shader feature is unavailable"));
+        return false;
+    }
+    if(pipeline.m_pipeline == VK_NULL_HANDLE || pipeline.pipelineLayout == VK_NULL_HANDLE){
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("meshlet pipeline has no native pipeline or layout"));
+        return false;
+    }
+    if(pipeline.m_framebufferInfo != framebuffer.m_framebufferInfo){
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("meshlet pipeline and framebuffer are incompatible"));
+        return false;
+    }
+    const FramebufferAttachment& depthAttachment = framebuffer.m_desc.depthAttachment;
+    if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(pipeline.m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
+        rejectCommandRecording(operationName, FOUNDATION_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
+        return false;
+    }
+    return true;
+}
+
 b8 CommandList::validateMeshletState(const MeshletState& state){
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline belongs to another device"));
@@ -150,29 +175,8 @@ b8 CommandList::validateMeshletState(const MeshletState& state){
     if(!validateViewportState(state.viewport, s_SetMeshletStateOperation))
         return false;
 
-    if(state.pipeline){
-        if(!m_context.extensions.extMeshShader || m_context.meshShaderFeatures.meshShader != VK_TRUE || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
-            rejectCommandRecording(s_SetMeshletStateOperation, s_MeshShaderUnavailableReason);
-            return false;
-        }
-        if(state.pipeline->m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
-            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("task shader feature is unavailable"));
-            return false;
-        }
-        if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->pipelineLayout == VK_NULL_HANDLE){
-            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline has no native pipeline or layout"));
-            return false;
-        }
-        if(state.pipeline->m_framebufferInfo != state.framebuffer->m_framebufferInfo){
-            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline and framebuffer are incompatible"));
-            return false;
-        }
-        const FramebufferAttachment& depthAttachment = state.framebuffer->m_desc.depthAttachment;
-        if(depthAttachment.valid() && depthAttachment.isReadOnly && !VulkanDetail::IsDepthStencilReadOnlyCompatible(state.pipeline->m_desc.renderState.depthStencilState, depthAttachment.texture->m_aspectMask)){
-            rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("meshlet pipeline writes a read-only depth/stencil attachment"));
-            return false;
-        }
-    }
+    if(state.pipeline && !validateMeshletPipelineForFramebuffer(*state.pipeline, *state.framebuffer, s_SetMeshletStateOperation))
+        return false;
 
     if(state.indirectParams && (state.indirectParams->m_buffer == VK_NULL_HANDLE || !state.indirectParams->m_creationDesc.isDrawIndirectArgs || state.indirectParams->m_creationDesc.byteSize == 0u)){
         rejectCommandRecording(s_SetMeshletStateOperation, FOUNDATION_TEXT("mesh indirect-argument buffer is invalid"));

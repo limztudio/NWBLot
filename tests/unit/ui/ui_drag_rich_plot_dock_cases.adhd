@@ -19,12 +19,10 @@ const u32 s_PlotTestPosInfF32Bits = 0x7f800000u;
 class TestCanvasPainter : ICanvasPainter{
     public u32 m_paintCalls = 0u;
     public Rect m_lastBounds;
-    public Rect m_lastClip;
 
     public b8 paint(mut PaintBuilder paint, mut TextService text, in Rect bounds, in Rect clip)override{
         ++this.m_paintCalls;
         this.m_lastBounds = bounds;
-        this.m_lastClip = clip;
         paint.fillRect(bounds, Color(0.12f, 0.22f, 0.34f, 1.0f));
         paint.fillCircle(CenterUiRect(bounds), 6.0f, Color(0.95f, 0.85f, 0.25f, 1.0f));
         return true;
@@ -94,7 +92,6 @@ class DragDropTests : WidgetFixture{
 
 class HyperlinkRichTextTests : WidgetFixture{
     public b8 m_link1Activated = false;
-    public b8 m_link2Activated = false;
     public b8 m_link3Activated = false;
     public RichTextResult m_richResult;
     public RichTextResult m_trailingResult;
@@ -109,7 +106,7 @@ class HyperlinkRichTextTests : WidgetFixture{
 
         HyperlinkOptions opts2;
         opts2.visited = true;
-        this.m_link2Activated = this.m_builder.hyperlink("link2", "Visited", opts2);
+        this.m_builder.hyperlink("link2", "Visited", opts2);
 
         HyperlinkOptions opts3;
         opts3.enabled = false;
@@ -245,14 +242,12 @@ class DockSpaceTests : WidgetFixture{
     public DockSpaceState m_dock;
     public b8 m_p1Visible = false;
     public b8 m_p2Visible = false;
-    public b8 m_p3Visible = false;
     public u32 m_b1Clicks = 0u;
     public u32 m_b2Clicks = 0u;
 
     public b8 renderTwoPanels(in u64 generation, in DockSpaceOptions opts){
         this.m_p1Visible = false;
         this.m_p2Visible = false;
-        this.m_p3Visible = false;
         if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 420.0f, 320.0f)))
             return false;
 

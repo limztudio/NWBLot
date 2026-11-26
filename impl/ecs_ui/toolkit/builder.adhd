@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/builder_scope.adhd>
+#include <impl/ecs_ui/toolkit/widgets/list_input.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -488,8 +489,6 @@ class Builder : NoCopy{
     public void setSkin(in borrow UiSkin skin);
 
     [cpp_unwind]
-    public b8 setTextShaping(in u32 scriptTag, in StringView language);
-    [cpp_unwind]
     public b8 setTextShaping(in u32 scriptTag, in StringView language, in TextDirection direction);
     public b8 setTextDirection(in TextDirection direction);
     public TextDirection textDirection()const{ return this.m_textDirection; }
@@ -766,6 +765,9 @@ class Builder : NoCopy{
     }
 
     [cpp_unwind]
+    private b8 finishRootScope(in b8 painted);
+
+    [cpp_unwind]
     private b8 beginContainer(in StringView stableKey, in LayoutDirection direction, in ContainerOptions options);
 
     [cpp_unwind]
@@ -845,6 +847,9 @@ class Builder : NoCopy{
     private b8 emitAccessibleNode(in WidgetState state, in AccessibilityRole role, in Rect bounds, in StringView name, in StringView valueText, in u32 stateBits, in u32 actionBits);
 
     [cpp_unwind]
+    private void emitTextInputAccessibleNode(in BuilderItem item, in LayoutBox box, in Rect clip, in BuilderEditBoxFrame editFrame, in EditBoxView view, in AccessibilityRole role, in u32 extraStateBits);
+
+    [cpp_unwind]
     private b8 emitAccessibleRangeNode(in WidgetState state, in AccessibilityRole role, in Rect bounds, in StringView name, in StringView valueText, in f64 value, in f64 minValue, in f64 maxValue, in f64 stepValue, in u32 stateBits, in u32 actionBits);
 
     [cpp_unwind]
@@ -856,18 +861,6 @@ class Builder : NoCopy{
     [cpp_unwind]
     private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state){ return this.declareEditBox(stableKey, options, model, state,
         Optional<mut IEditActionSink>(), Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>()); }
-    [cpp_unwind]
-    private EditBoxResult declareEditBox(in StringView stableKey, in EditBoxOptions options, mut EditModel model, mut EditBoxState state, in Optional<mut IEditActionSink> actions){ return this.declareEditBox(stableKey,
-        options, model, state, actions, Optional<mut BuilderIntegerEditFrame>(), Optional<mut BuilderFloatEditFrame>()); }
-    [cpp_unwind]
-    private EditBoxResult declareEditBox(
-        in StringView stableKey,
-        in EditBoxOptions options,
-        mut EditModel model,
-        mut EditBoxState state,
-        in Optional<mut IEditActionSink> actions,
-        in Optional<mut BuilderIntegerEditFrame> integerFrame
-    ){ return this.declareEditBox(stableKey, options, model, state, actions, integerFrame, Optional<mut BuilderFloatEditFrame>()); }
     [cpp_unwind]
     private EditBoxResult declareEditBox(
         in StringView stableKey,
@@ -936,6 +929,18 @@ class Builder : NoCopy{
     private b8 paintSelectable(in BuilderItem item, in LayoutBox box);
 
     [cpp_unwind]
+    private Optional<in UiSkinRegion> declareVirtualListPreamble(
+        in StringView stableKey,
+        in borrow IListDataSource source,
+        in Optional<in IListRowHeightProvider> rowHeights,
+        mut ListState state,
+        in ListOptions options,
+        in b8 checkScopeDepth,
+        mut WidgetState outWidget,
+        mut BuilderListFrame outFrame,
+        mut ListResult outResult
+    );
+    [cpp_unwind]
     private ListResult declareVirtualList(
         in StringView stableKey,
         in borrow IListDataSource source,
@@ -995,6 +1000,44 @@ class Builder : NoCopy{
     private b8 appendSpinBoxStepButtons(in u32 containerNode, in f32 buttonWidth, mut u32 outDecNode, mut u32 outIncNode);
     private void popSpinBoxScope();
     [cpp_unwind]
+    private b8 prepareSpinBoxDeclaration(
+        in StringView stableKey,
+        in b8 validOptions,
+        in u64 instanceGeneration,
+        mut NumericEditBoxResult outResult,
+        mut WidgetState outWidget,
+        mut ControlToken outToken,
+        mut WidgetId outDecId,
+        mut WidgetId outIncId
+    );
+    [cpp_unwind]
+    private b8 beginSpinBoxContainer(
+        in StringView stableKey,
+        in WidgetState widget,
+        in u32 spinBoxIndex,
+        in LayoutSize width,
+        in LayoutSize height,
+        in LayoutItemOptions layoutOptions,
+        in b8 canStep,
+        in b8 enabled,
+        mut u32 outContainerNode,
+        mut usize outItemsBefore,
+        mut u32 outBeginStyleIndex
+    );
+    [cpp_unwind]
+    private b8 finishSpinBoxContainer(
+        in u32 containerNode,
+        in usize itemsBefore,
+        in f32 buttonWidth,
+        in WidgetState widget,
+        in u32 spinBoxIndex,
+        in u32 beginStyleIndex,
+        in b8 enabled,
+        in NumericEditResult spinNumeric,
+        mut BuilderSpinBoxFrame ioFrame,
+        mut NumericEditBoxResult inOutResult
+    );
+    [cpp_unwind]
     private b8 paintSpinBoxBegin(in BuilderItem item, in LayoutBox box);
     [cpp_unwind]
     private b8 paintSpinBoxEnd(in BuilderItem item, in LayoutBox box);
@@ -1002,6 +1045,7 @@ class Builder : NoCopy{
     private b8 paintTreeView(in BuilderItem item, in LayoutBox box);
     [cpp_unwind]
     private b8 paintDataTable(in BuilderItem item, in LayoutBox box);
+    private b8 popupStateTokenMatches(in u64 currentToken, in u64 expectedToken)const{ return currentToken == expectedToken && this.popupAncestorsVisible(); }
     private b8 treeStateMatches(in BuilderTreeFrame frame)const{ return this.m_scope.value().treeStateMatches(this.m_context, frame); }
     [cpp_unwind]
     private b8 treeMatches(in BuilderTreeFrame frame)const{ return this.m_scope.value().treeMatches(this.m_context, frame); }
@@ -1049,15 +1093,6 @@ class Builder : NoCopy{
         in Optional<in SearchComboOptions> searchOptions,
         mut ComboState state
     ){ return this.declareCombo(stableKey, source, options, searchOptions, state, Optional<mut SearchComboState>(), Optional<mut ISearchableListDataSource>()); }
-    [cpp_unwind]
-    private ComboResult declareCombo(
-        in StringView stableKey,
-        in borrow IListDataSource source,
-        in ComboOptions options,
-        in Optional<in SearchComboOptions> searchOptions,
-        mut ComboState state,
-        in Optional<mut SearchComboState> search
-    ){ return this.declareCombo(stableKey, source, options, searchOptions, state, search, Optional<mut ISearchableListDataSource>()); }
     [cpp_unwind]
     private ComboResult declareCombo(
         in StringView stableKey,
@@ -1113,9 +1148,35 @@ class Builder : NoCopy{
     [cpp_unwind]
     private b8 paintDeferred(){ return this.paintDeferredContents() && this.validateDeferredSources() && this.validateDeferredStates(); }
 
-    private b8 menuBarStateMatches(in BuilderMenuBarFrame frame)const;
     private b8 menuBarMatches(in BuilderMenuBarFrame frame)const;
     private void snapshotMenuBar(mut BuilderMenuBarFrame frame);
+    [cpp_unwind]
+    private b8 applyPopupMenuListInput(
+        in WidgetState rows,
+        in ControlToken listToken,
+        in PopupToken popupToken,
+        in u32 wheelRows,
+        in borrow IListDataSource source,
+        mut ListState listState,
+        in ListInputMatches matches,
+        mut b8 outActivated,
+        mut u64 outActivatedKey
+    );
+    [cpp_unwind]
+    private b8 paintPopupListOverlay(
+        in WidgetState popupWidget,
+        in WidgetState rowsWidget,
+        in u32 listIndex,
+        in b8 enabled,
+        in PopupToken popupToken,
+        in PopupToken parentToken,
+        in PopupOptions options,
+        in PopupStyle popupStyle,
+        in UiSkinRegion background,
+        in b8 emitMenuAccessibleNode,
+        in ListInputMatches checkMatches,
+        mut PopupPlacement outPlacement
+    );
     [cpp_unwind]
     private b8 applyMenuBarListInput(mut BuilderMenuBarFrame frame, mut MenuBarResult result);
     [cpp_unwind]
@@ -1125,16 +1186,12 @@ class Builder : NoCopy{
     [cpp_unwind]
     private b8 paintMenuBarPopup(mut BuilderMenuBarFrame frame);
 
-    private b8 toastStateMatches(in BuilderToastFrame frame)const;
     [cpp_unwind]
     private b8 paintToasts();
 
-    private b8 colorPickerStateMatches(in BuilderColorPickerFrame frame)const;
     [cpp_unwind]
     private b8 paintColorPicker(in BuilderItem item, in LayoutBox box);
 
-    private b8 dragSourceStateMatches(in BuilderDragSourceFrame frame)const;
-    private b8 dropTargetStateMatches(in BuilderDropTargetFrame frame)const;
     [cpp_unwind]
     private b8 paintDragDrops();
 
@@ -1148,7 +1205,6 @@ class Builder : NoCopy{
     [cpp_unwind]
     private b8 paintCanvas(in BuilderItem item, in LayoutBox box);
 
-    private b8 dockSpaceStateMatches(in BuilderDockSpaceFrame frame)const;
     [cpp_unwind]
     private b8 paintDockSpace(in BuilderItem item, in LayoutBox box);
     [cpp_unwind]
@@ -1236,13 +1292,36 @@ class Builder : NoCopy{
         return IntersectUiRectsBounds(Rect(0.0f, 0.0f, display.logicalWidth, display.logicalHeight), clip);
     }
 
-    private b8 numericEditFrameMatches(in BuilderIntegerEditFrame frame)const{
-        return frame.model.has_value() && frame.model.value().revision() == frame.revision && this.popupAncestorsVisible() && frame.state.has_value()
-            && frame.model.value().draft().matchesStamp(frame.draftStamp) && frame.state.value().matchesStamp(frame.draftStamp, frame.focused);
+    private b8 numericEditStampMatches(
+        in u64 modelRevision,
+        in u64 frameRevision,
+        in EditModel draft,
+        in TextAreaModelStamp draftStamp,
+        in Optional<mut EditBoxState> state,
+        in b8 focused
+    )const{
+        return modelRevision == frameRevision && this.popupAncestorsVisible() && state.has_value()
+            && draft.matchesStamp(draftStamp) && state.value().matchesStamp(draftStamp, focused);
     }
+
+    private b8 numericEditFrameMatches(in BuilderIntegerEditFrame frame)const{
+        if(!frame.model.has_value())
+            return false;
+        return this.numericEditStampMatches(frame.model.value().revision(), frame.revision, frame.model.value().draft(), frame.draftStamp, frame.state, frame.focused);
+    }
+
     private b8 numericEditFrameMatches(in BuilderFloatEditFrame frame)const{
-        return frame.model.has_value() && frame.model.value().revision() == frame.revision && this.popupAncestorsVisible() && frame.state.has_value()
-            && frame.model.value().draft().matchesStamp(frame.draftStamp) && frame.state.value().matchesStamp(frame.draftStamp, frame.focused);
+        if(!frame.model.has_value())
+            return false;
+        return this.numericEditStampMatches(frame.model.value().revision(), frame.revision, frame.model.value().draft(), frame.draftStamp, frame.state, frame.focused);
+    }
+
+    private b8 hasNumericEditState<Model>(in Vector<BuilderNumericEditFrame<Model>> frames, in EditBoxState state)const{
+        for(in auto frame : frames){
+            if(frame.state.has_value() && SameAddress(frame.state.value(), state))
+                return true;
+        }
+        return false;
     }
 }
 

@@ -172,7 +172,7 @@ class TextBakedTests{
     public DrawSnapshot paint(){ return this.paint(1.f); }
     public DrawSnapshot paint(in f32 scale){
         this.m_paint.begin(DisplayMetrics(800.0f, 600.0f, scale, scale), 1u, 1u, AssetRef<UiSkin>(s_TestSkinPath), this.m_skin);
-        EXPECT_TRUE(this.m_text.paint(this.m_paint, this.m_layout, Point(20.0f, 20.0f)));
+        EXPECT_TRUE(this.m_text.paint(this.m_paint, this.m_layout, Point(20.0f, 20.0f), Color()));
         return this.m_paint.freeze();
     }
 }
@@ -210,7 +210,7 @@ class UiTextControlLifetimeTests : RouterTestFixture{
             ++item.control.contentRevision;
     }
     public b8 commitFirstTarget(in u64 generation){
-        return this.m_router.commitTargets(Span<HitTarget>(this.m_targets).subspan(0u, 1u), generation);
+        return this.m_router.commitTargets(Span<HitTarget>(this.m_targets).subspan(0u, 1u), generation, Span<PopupScope>(), u64.max);
     }
 }
 
@@ -1111,12 +1111,12 @@ void VerifyTextBakedTests_WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage(mut T
 
 
 void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextFocusAndMainCapture(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, -1.0)).pointerConsumed);
     ASSERT_EQ(self.m_router.controlActions().size(), 1u);
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.m_router.controlActions().empty());
@@ -1129,19 +1129,19 @@ void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangePreservesTextF
 
 void VerifyUiTextControlLifetimeTests_AcceptedAuxiliaryEpochChangeRetiresOwnedPartCaptureAndGesture(mut UiTextControlLifetimeTests self){
     self.m_targets[1u].textEditable = true;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[1u].id);
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_FALSE(self.m_router.capture().valid());
     EXPECT_FALSE(self.m_router.consumePointerGesture(self.m_targets[1u].id, 7u).has_value());
 }
 
 void VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 0.0, -1.0)).pointerConsumed);
     self.revise();
@@ -1156,7 +1156,7 @@ void VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAnd
     EXPECT_FALSE(self.m_router.targets()[1u].enabled);
     EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, -1.0)).pointerConsumed);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.send(MakeUiTextScrollWheelEvent(Point(10.0f, 10.0f), 1.0, 0.0)).pointerConsumed);
@@ -1167,7 +1167,7 @@ void VerifyUiTextControlLifetimeTests_PrepublicationFencePreservesTextCaptureAnd
 }
 
 void VerifyUiTextControlLifetimeTests_RepeatedAuxiliaryFenceKeepsTextCaptureBeforeAnyNewAcceptance(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
@@ -1178,13 +1178,13 @@ void VerifyUiTextControlLifetimeTests_RepeatedAuxiliaryFenceKeepsTextCaptureBefo
     EXPECT_TRUE(self.m_router.targets()[0u].enabled);
     EXPECT_FALSE(self.m_router.targets()[1u].enabled);
     EXPECT_TRUE(self.m_router.controlActions().empty());
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
 }
 
 void VerifyUiTextControlLifetimeTests_PrepublicationFenceRetiresOwnedPartDragWithoutBlurringEditor(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(95.0f, 25.0f))).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
@@ -1194,7 +1194,7 @@ void VerifyUiTextControlLifetimeTests_PrepublicationFenceRetiresOwnedPartDragWit
 }
 
 void VerifyUiTextControlLifetimeTests_DifferentDeclarationFenceStillRetiresTextFocusAndCapture(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.m_router.fenceControl(self.m_targets[0u].id, 8u, self.m_targets[0u].control);
     EXPECT_FALSE(self.m_router.focus().valid());
@@ -1204,17 +1204,17 @@ void VerifyUiTextControlLifetimeTests_DifferentDeclarationFenceStillRetiresTextF
 }
 
 void VerifyUiTextControlLifetimeTests_ReplacedDeclarationStillRetiresTextFocusAndMainCapture(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     ++self.m_targets[0u].declarationGeneration;
     ++self.m_targets[1u].ownerDeclarationGeneration;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.capture().valid());
 }
 
 void VerifyUiTextControlLifetimeTests_DisabledTextHostCannotKeepFocusOrMainCapture(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_targets[0u].enabled = false;
@@ -1224,34 +1224,34 @@ void VerifyUiTextControlLifetimeTests_DisabledTextHostCannotKeepFocusOrMainCaptu
 }
 
 void VerifyUiTextControlLifetimeTests_FullyClippedTextHostCannotKeepFocusOrMainCapture(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_targets[0u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
     self.m_targets[1u].clip = Rect(200.0f, 0.0f, 10.0f, 100.0f);
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.capture().valid());
 }
 
 void VerifyUiTextControlLifetimeTests_RefreshedAuxiliaryTokenSupportsLaterOrdinaryControlRules(mut UiTextControlLifetimeTests self){
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     self.m_targets[0u].textEditable = false;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.focus(), self.m_targets[0u].id);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 4u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 4u, Span<PopupScope>(), u64.max));
     EXPECT_FALSE(self.m_router.focus().valid());
     EXPECT_FALSE(self.m_router.capture().valid());
 }
 
 void VerifyUiTextControlLifetimeTests_NonTextScrollHostKeepsItsExistingFullFenceBehavior(mut UiTextControlLifetimeTests self){
     self.m_targets[0u].textEditable = false;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     self.revise();
     self.m_router.fenceControl(self.m_targets[0u].id, 7u, self.m_targets[0u].control);
@@ -1263,18 +1263,18 @@ void VerifyUiTextControlLifetimeTests_NonTextScrollHostKeepsItsExistingFullFence
 
 void VerifyUiTextControlLifetimeTests_AuxiliaryTokenRestorationPreservesMainTextCaptureWithoutRevivingSubmission(mut UiTextControlLifetimeTests self){
     self.m_targets[0u].activatable = true;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 1u, Span<PopupScope>(), u64.max));
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryDown, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.m_router.pressed(self.m_targets[0u].id));
     const ControlToken original = self.m_targets[0u].control;
     self.revise();
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 2u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_FALSE(self.m_router.pressed(self.m_targets[0u].id));
     self.m_targets[0u].control = original;
     self.m_targets[1u].control = original;
-    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u));
+    ASSERT_TRUE(self.m_router.commitTargets(self.m_targets, 3u, Span<PopupScope>(), u64.max));
     EXPECT_EQ(self.m_router.capture(), self.m_targets[0u].id);
     EXPECT_TRUE(self.send(MakeUiPointerEvent(InputEventType::PrimaryUp, Point(10.0f, 10.0f))).pointerConsumed);
     EXPECT_FALSE(self.m_router.consumeActivation(self.m_targets[0u].id));

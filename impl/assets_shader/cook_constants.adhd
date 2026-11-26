@@ -116,7 +116,6 @@ enum<u8> ShaderOptimizationLevel{
     kCount
 }
 
-[reflect]
 enum<u8> IncludeKind{
     Relative,
     Standard,
@@ -130,26 +129,22 @@ enum<u8> ShaderDefineNameStatus{
     Invalid
 }
 
-[reflect]
 enum<u8> VariantSignatureSegmentError{
     None,
     EmptySegment,
     InvalidAssignment
 }
 
-[reflect]
 class IncludeDirective{
     public StringView name = "";
     public IncludeKind kind = IncludeKind::Relative;
 }
 
-[reflect]
 class ShaderMacroDefinition{
     public StringView name = "";
     public StringView value = "";
 }
 
-[reflect]
 class DependencyChecksum{
     public u64 checksum = 0u;
     public b8 compilerInputsHaveBom = false;

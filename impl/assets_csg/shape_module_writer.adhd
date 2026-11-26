@@ -51,22 +51,8 @@ Path ResolveDefaultCsgModuleOutputPath(in Path includeRoot){
     return includeRoot / s_DefaultGeneratedIncludeDirectory / s_CsgBuiltInModuleIncludeFileName;
 }
 
-b8 WriteCsgGeneratedIncludeFile(in Path outputPath, in StringView source){
-    const Path parentPath = outputPath.parentPath();
-    const auto ensureResult = EnsureDirectories(parentPath);
-    if(!ensureResult.has_value()){
-        error("CSG shape include generation: failed to create generated include parent '{}' (error {})", parentPath, ensureResult.error().value());
-        return false;
-    }
-    if(!WriteTextFile(outputPath, source)){
-        error("CSG shape include generation: failed to write generated include '{}'", outputPath);
-        return false;
-    }
-    return true;
-}
-
 b8 WriteEmptyDefaultCsgModuleInclude(in Path includeRoot){
-    return WriteCsgGeneratedIncludeFile(ResolveDefaultCsgModuleOutputPath(includeRoot), s_CsgEmptyGeneratedModule);
+    return WriteGeneratedIncludeFile(ResolveDefaultCsgModuleOutputPath(includeRoot), s_CsgEmptyGeneratedModule, s_CsgShapeIncludeGenerationLabel);
 }
 
 Expected<Path> CsgShapeModuleWriter::emit(in Path cacheDirectory, in StringView configuration, in Span<CsgShapeCookEntry> entries)const{
@@ -120,7 +106,7 @@ Expected<Path> CsgShapeModuleWriter::emit(in Path cacheDirectory, in StringView 
             if(entry.shaderModule == module.shaderModule)
                 CsgShapeModuleSource().appendEval(entry.shapeTypeId, entry.evalInclude, source);
         }
-        if(!WriteCsgGeneratedIncludeFile(ResolveCsgModuleOutputPath(root, module.moduleInclude), source))
+        if(!WriteGeneratedIncludeFile(ResolveCsgModuleOutputPath(root, module.moduleInclude), source, s_CsgShapeIncludeGenerationLabel))
             return MakeUnexpected(Failure());
     }
     return root;

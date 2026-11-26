@@ -88,23 +88,12 @@ b8 ValidateAcceptedSkinningGraphExecution(
     return true;
 }
 
-Expected<GpuDescriptorHandle> RegisterSkinningStorageBufferDescriptor(mut GpuDescriptorHeap heap, in DescriptorWriteItem item){
-    const Expected<GpuDescriptorHandle> handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+Expected<GpuDescriptorHandle> RegisterSkinningDescriptor(mut GpuDescriptorHeap heap, in GpuDescriptorClass descriptorClass, in DescriptorWriteItem item){
+    const Expected<GpuDescriptorHandle> handle = heap.allocate(descriptorClass);
     if(!handle.has_value())
         return MakeUnexpected(Failure());
     GpuDescriptorRetirementGuard retireHandle(heap, handle.value());
     if(!heap.write(handle.value(), item))
-        return MakeUnexpected(Failure());
-    retireHandle.release();
-    return handle.value();
-}
-
-Expected<GpuDescriptorHandle> RegisterSkinningUniformBufferDescriptor(mut GpuDescriptorHeap heap, mut Buffer buffer){
-    const Expected<GpuDescriptorHandle> handle = heap.allocate(GpuDescriptorClass::UniformBuffer);
-    if(!handle.has_value())
-        return MakeUnexpected(Failure());
-    GpuDescriptorRetirementGuard retireHandle(heap, handle.value());
-    if(!heap.write(handle.value(), DescriptorWriteItemConstantBuffer(0, buffer)))
         return MakeUnexpected(Failure());
     retireHandle.release();
     return handle.value();
@@ -116,7 +105,7 @@ b8 RegisterSkinningStorageSlot(
     in DescriptorWriteItem item,
     mut MeshSkinningRuntimeResources resources
 ){
-    const Expected<GpuDescriptorHandle> handle = RegisterSkinningStorageBufferDescriptor(heap, item);
+    const Expected<GpuDescriptorHandle> handle = RegisterSkinningDescriptor(heap, GpuDescriptorClass::StorageBuffer, item);
     if(!handle.has_value())
         return false;
     resources.bindlessHeapHandles.storageBuffers[cast<usize>(slot)] = handle.value();
@@ -224,53 +213,33 @@ b8 MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(
         && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::MeshletLocalBounds, DescriptorWriteItemRawBufferUav(0, instance.meshletLocalBoundsBuffer.deref()), resources)
         && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::LocalBounds, DescriptorWriteItemRawBufferUav(0, instance.localBoundsBuffer.deref()), resources)
     ;
-    if(!requiredRegistered){
-        this.releaseRuntimeResourceBindlessHeapHandles(resources);
-        error("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap", instance.handle.value);
-        return false;
-    }
-
-    if(resources.skinCount != 0u){
+    b8 ok = requiredRegistered;
+    if(ok && resources.skinCount != 0u){
         if(!resources.skinBuffer.valid() || !resources.jointPaletteBuffer.valid()){
             this.releaseRuntimeResourceBindlessHeapHandles(resources);
             error("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent skinning payload buffers", instance.handle.value);
             return false;
         }
-        const b8 skinRegistered =
+        ok =
             RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::SkinInfluences, DescriptorWriteItemStructuredBufferSrv(0, resources.skinBuffer.deref()), resources)
             && RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::JointPalette, DescriptorWriteItemStructuredBufferSrv(0, resources.jointPaletteBuffer.deref()), resources)
         ;
-        if(!skinRegistered){
-            this.releaseRuntimeResourceBindlessHeapHandles(resources);
-            error("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap", instance.handle.value);
-            return false;
+    }
+
+    if(ok && instance.attributeBuffer.valid())
+        ok = RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeBuffer, DescriptorWriteItemRawBufferUav(0, instance.attributeBuffer.deref()), resources);
+
+    if(ok){
+        const Expected<GpuDescriptorHandle> resourceSlots = RegisterSkinningDescriptor(heap, GpuDescriptorClass::UniformBuffer, DescriptorWriteItemConstantBuffer(0, resources.bindlessResourceSlotsBuffer.deref()));
+        if(resourceSlots.has_value()){
+            resources.bindlessHeapHandles.resourceSlots = resourceSlots.value();
+            return true;
         }
     }
 
-    if(instance.attributeBuffer.valid()){
-        if(!RegisterSkinningStorageSlot(heap, RuntimeStorageDescriptorSlot::AttributeBuffer, DescriptorWriteItemRawBufferUav(0, instance.attributeBuffer.deref()), resources)){
-            this.releaseRuntimeResourceBindlessHeapHandles(resources);
-            error("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap", instance.handle.value);
-            return false;
-        }
-    }
-
-    const Expected<GpuDescriptorHandle> resourceSlots = RegisterSkinningUniformBufferDescriptor(heap, resources.bindlessResourceSlotsBuffer.deref());
-    if(!resourceSlots.has_value()){
-        this.releaseRuntimeResourceBindlessHeapHandles(resources);
-        error("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap", instance.handle.value);
-        return false;
-    }
-    resources.bindlessHeapHandles.resourceSlots = resourceSlots.value();
-    return true;
-}
-
-Expected<BufferHandle, BufferSetupFailure> SetupSkinningStructuredBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload, in StringView label){
-    if(MultiplyOverflows<usize>(payload.size(), size_of<T>())){
-        error("MeshSkinningSystem: {} payload byte size overflows", label);
-        return MakeUnexpected(BufferSetupFailure::ByteSizeOverflow);
-    }
-    return SetupBuffer<T>(graphics, debugName, payload, BufferFlags(false, false, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false));
+    this.releaseRuntimeResourceBindlessHeapHandles(resources);
+    error("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap", instance.handle.value);
+    return false;
 }
 
 b8 MeshSkinningSystem::submitFrameSkinningGraph(){
@@ -538,8 +507,15 @@ Expected<b8> MeshSkinningSystem::ensureRuntimeResources(mut MeshSkinningRuntimeI
             return MakeUnexpected(Failure());
         }
 
-        auto skinBufferResult = SetupSkinningStructuredBuffer<MeshSkinningInfluenceGpu>(this.m_graphics, skinBufferName, Span<MeshSkinningInfluenceGpu>(skinInfluences.value()), "skin influence");
+        auto skinBufferResult = SetupBuffer<MeshSkinningInfluenceGpu>(
+            this.m_graphics,
+            skinBufferName,
+            Span<MeshSkinningInfluenceGpu>(skinInfluences.value()),
+            BufferFlags(false, false, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false)
+        );
         if(!skinBufferResult.has_value()){
+            if(skinBufferResult.error() == BufferSetupFailure::ByteSizeOverflow)
+                error("MeshSkinningSystem: skin influence payload byte size overflows");
             error("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'", instance.handle.value);
             return MakeUnexpected(Failure());
         }

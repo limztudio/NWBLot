@@ -47,15 +47,9 @@ void ComposeSceneWorldTransform(
     in b8 inheritScale,
     mut TransformComponent outWorld
 ){
-    VectorSingle pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
-    if(inheritScale)
-        pScale = VectorSingle(parentWorld.scale);
-    const VectorSingle pRot = SafeNormalizeSceneQuaternion(VectorSingle(parentWorld.rotation));
-    const VectorSingle cRot = SafeNormalizeSceneQuaternion(VectorSingle(local.rotation));
-    const VectorSingle scaledLocalPos = VectorSetW(VectorSingle(local.position) * pScale, 0.0f);
-    outWorld.position = f32x4(VectorSingle(parentWorld.position) + RotateSceneVector3(scaledLocalPos, pRot), 0.0f);
-    outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(QuaternionMultiply(pRot, cRot)));
-    outWorld.scale = f32x4(pScale * VectorSingle(local.scale), 0.0f);
+    TransformComponent normalizedParent = parentWorld;
+    normalizedParent.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(parentWorld.rotation)));
+    ComposeSceneWorldTransformNormalizedParent(normalizedParent, local, inheritScale, outWorld);
 }
 
 void ComposeSceneWorldTransformNormalizedParent(
@@ -314,11 +308,6 @@ void ResolveSceneParentNamesWithScratch(mut World world, in b8 useUnresolvedCach
     }
 }
 
-void ResolveSceneParentNames(mut World world){
-    SceneHierarchyScratch localScratch;
-    ResolveSceneParentNamesWithScratch(world, false, localScratch);
-}
-
 void AppendSceneHierarchyNode(mut SceneHierarchyScratch scratch, in EntityID entity, in SceneParentComponent sp){
     const u32 idx = cast<u32>(scratch.entities.size());
     scratch.entities.push_back(entity);
@@ -482,11 +471,6 @@ void PropagateSceneHierarchyTransformsWithScratch(mut World world, in b8 useUnre
             outWorld.scale = localXf.scale;
         }
     }
-}
-
-void PropagateSceneHierarchyTransforms(mut World world){
-    SceneHierarchyScratch localScratch;
-    PropagateSceneHierarchyTransformsWithScratch(world, false, localScratch);
 }
 
 

@@ -18,6 +18,51 @@ const usize s_ReflectionSurfaceReadCount = 9u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[cpp_unwind]
+void BindReflectionComputeDispatch<PushT>(
+    mut GraphicsRuntime graphics,
+    mut CommandList commandList,
+    in ComputePipelineHandle pipeline,
+    in b8 useIndirect,
+    in BufferHandle indirectArgs,
+    in GpuDescriptorHandle tlas,
+    in PushT pushConstants
+){
+    commandList.endRenderPass();
+    ComputeState state;
+    state.setPipeline(pipeline.deref());
+    if(useIndirect)
+        state.setIndirectParams(indirectArgs.deref());
+    commandList.setComputeState(state);
+    graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
+    commandList.setPushConstants(pushConstants);
+}
+
+[cpp_unwind]
+void ConfirmReflectionTimingBegin(mut GpuTimingFrameTransaction timing, in QueueSubmissionToken token){
+    if(!timing.confirmBeginSubmission(token)){
+        LogReflectionConfirmTimingBeginFailed();
+        timing.discard();
+    }
+}
+
+[cpp_unwind]
+void ConfirmReflectionTimingEnd(mut GpuTimingFrameTransaction timing, in QueueSubmissionToken token){
+    if(!timing.confirmEndSubmission(token, true)){
+        LogReflectionConfirmTimingEndFailed();
+        timing.discard();
+    }
+}
+
+void DiscardReflectionDispatchTiming(in ReflectionCsgDispatchHandle dispatch){
+    if(dispatch.valid())
+        dispatch.deref().timing.value().discard();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ReflectionParametersUploadTask{
     private BufferHandle m_buffer;
     private ReflectionFrameParameters m_parameters;
@@ -82,20 +127,16 @@ class ReflectionDispatchTask{
         in ComputePipelineHandle pipeline = ReflectionDispatchPipeline(resources, this.m_stage);
         if(!pipeline.valid() || (hardware && !resources.scene.valid()))
             return false;
-        commandList.endRenderPass();
-        ComputeState state;
-        state.setPipeline(pipeline.deref());
+        BufferHandle indirectArgs = BufferHandle();
         GpuDescriptorHandle tlas = GpuDescriptorHandleInvalid();
         if(hardware){
-            state.setIndirectParams(resources.indirectArgs.deref());
+            indirectArgs = resources.indirectArgs;
             tlas = resources.scene.tlasHeapHandle;
         }
-        commandList.setComputeState(state);
-        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
         if(ReflectionUsesSlicedCsgPushConstants(resources.scene.csgTraceContextBuffer.valid(), hardware, this.m_stage == ReflectionDispatchStage::BuildArgs))
-            commandList.setPushConstants(MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, 0u));
+            BindReflectionComputeDispatch(this.m_graphics, commandList, pipeline, hardware, indirectArgs, tlas, MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, 0u));
         else
-            commandList.setPushConstants(resources.frameParametersSlot);
+            BindReflectionComputeDispatch(this.m_graphics, commandList, pipeline, hardware, indirectArgs, tlas, resources.frameParametersSlot);
         const GpuTimingScopeDefinition scope = ReflectionDispatchTiming(this.m_stage);
         GpuTimingMeasure timing(this.m_graphics.gpuTiming(), scope, this.m_graphics.getDevice(), commandList);
         if(hardware)
@@ -155,12 +196,15 @@ class ReflectionCsgHardwareSliceTask{
         in ReflectionFrameSnapshot resources = this.m_dispatch.deref().resources;
         if(!resources.hardwarePipeline.valid() || !resources.scene.valid())
             return false;
-        commandList.endRenderPass();
-        ComputeState state;
-        state.setPipeline(resources.hardwarePipeline.deref()).setIndirectParams(resources.indirectArgs.deref());
-        commandList.setComputeState(state);
-        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, resources.hardwarePipeline.deref(), resources.scene.tlasHeapHandle);
-        commandList.setPushConstants(MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, ReflectionCsgSliceRayOffset(this.m_slice, s_ReflectionTraceSliceRays)));
+        BindReflectionComputeDispatch(
+            this.m_graphics,
+            commandList,
+            resources.hardwarePipeline,
+            true,
+            resources.indirectArgs,
+            resources.scene.tlasHeapHandle,
+            MakeReflectionCsgDispatchPushConstants(resources.frameParametersSlot, ReflectionCsgSliceRayOffset(this.m_slice, s_ReflectionTraceSliceRays))
+        );
         mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
         if(this.m_slice == 0u && !timing.begin(s_TimingScopeReflectionHardware, this.m_graphics.getDevice(), commandList))
             return false;
@@ -175,20 +219,13 @@ class ReflectionCsgHardwareSliceTask{
             return;
         this.m_raytracingSystem.confirmRayTraceContextReadSubmission(token);
         mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
-        if(this.m_slice == 0u && !timing.confirmBeginSubmission(token)){
-            LogReflectionConfirmTimingBeginFailed();
-            timing.discard();
-        }
-        if(IsFinalReflectionCsgHardwareSlice(this.m_slice, this.m_sliceCount) && !timing.confirmEndSubmission(token, true)){
-            LogReflectionConfirmTimingEndFailed();
-            timing.discard();
-        }
+        if(this.m_slice == 0u)
+            ConfirmReflectionTimingBegin(timing, token);
+        if(IsFinalReflectionCsgHardwareSlice(this.m_slice, this.m_sliceCount))
+            ConfirmReflectionTimingEnd(timing, token);
         LogHardwareReflectionResolveIfNeeded(this.m_hardwareDispatchLogged);
     }
-    public void discarded(){
-        if(this.m_dispatch.valid())
-            this.m_dispatch.deref().timing.value().discard();
-    }
+    public void discarded(){ DiscardReflectionDispatchTiming(this.m_dispatch); }
 }
 
 class ReflectionOpticalHardwareStageTask{
@@ -224,17 +261,10 @@ class ReflectionOpticalHardwareStageTask{
         const b8 buildArgs = this.m_stage == ReflectionDispatchStage::BuildOpticalArgs;
         if(!buildArgs && !resources.scene.valid())
             return false;
-        commandList.endRenderPass();
-        ComputeState state;
-        state.setPipeline(pipeline.deref());
         GpuDescriptorHandle tlas = GpuDescriptorHandleInvalid();
-        if(!buildArgs){
-            state.setIndirectParams(resources.indirectArgs.deref());
+        if(!buildArgs)
             tlas = resources.scene.tlasHeapHandle;
-        }
-        commandList.setComputeState(state);
-        this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, pipeline.deref(), tlas);
-        commandList.setPushConstants(resources.frameParametersSlot);
+        BindReflectionComputeDispatch(this.m_graphics, commandList, pipeline, !buildArgs, resources.indirectArgs, tlas, resources.frameParametersSlot);
         mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
         if(this.m_stage == ReflectionDispatchStage::HardwareFast && !timing.begin(s_TimingScopeReflectionHardware, this.m_graphics.getDevice(), commandList))
             return false;
@@ -254,22 +284,14 @@ class ReflectionOpticalHardwareStageTask{
         if(!this.m_hardwarePreparationReady)
             return;
         mut GpuTimingFrameTransaction timing = this.m_dispatch.deref().timing.value();
-        if(this.m_stage == ReflectionDispatchStage::HardwareFast && !timing.confirmBeginSubmission(token)){
-            LogReflectionConfirmTimingBeginFailed();
-            timing.discard();
-        }
+        if(this.m_stage == ReflectionDispatchStage::HardwareFast)
+            ConfirmReflectionTimingBegin(timing, token);
         if(this.m_stage == ReflectionDispatchStage::Hardware){
-            if(!timing.confirmEndSubmission(token, true)){
-                LogReflectionConfirmTimingEndFailed();
-                timing.discard();
-            }
+            ConfirmReflectionTimingEnd(timing, token);
             LogHardwareReflectionResolveIfNeeded(this.m_hardwareDispatchLogged);
         }
     }
-    public void discarded(){
-        if(this.m_dispatch.valid())
-            this.m_dispatch.deref().timing.value().discard();
-    }
+    public void discarded(){ DiscardReflectionDispatchTiming(this.m_dispatch); }
 }
 
 static_assert(size_of<ReflectionCsgDispatchPushConstants>() == s_ReflectionShaderCsgPushBytes, "CSG reflection push constants must match the shader");

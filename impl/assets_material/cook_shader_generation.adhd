@@ -35,19 +35,11 @@ Expected<String> BuildMaterialBindIncludeSourceFromData(
 }
 
 b8 WriteDeferredBxdfDispatchIncludeFile(in Path includeRoot, in Span<StringView> sourceById){
-    const String source = BuildDeferredBxdfDispatchModuleSource(sourceById);
-    const Path outputPath = includeRoot / s_DeferredBxdfModuleSubPath;
-    const Path parentPath = outputPath.parentPath();
-    const auto ensureDirectoriesResult = EnsureDirectories(parentPath);
-    if(!ensureDirectoriesResult.has_value()){
-        error("Deferred bxdf dispatch: failed to create generated include parent '{}' (error {})", parentPath, ensureDirectoriesResult.error().value());
-        return false;
-    }
-    if(!WriteTextFile(outputPath, source)){
-        error("Deferred bxdf dispatch: failed to write generated include '{}'", outputPath);
-        return false;
-    }
-    return true;
+    return WriteGeneratedIncludeFile(
+        includeRoot / s_DeferredBxdfModuleSubPath,
+        BuildDeferredBxdfDispatchModuleSource(sourceById),
+        s_DeferredBxdfDispatchGenerationLabel
+    );
 }
 
 
@@ -77,16 +69,8 @@ Expected<Path> EmitMaterialBindIncludes(in Path cache, in StringView configurati
         const Expected<String> source = BuildMaterialBindIncludeSource(entry);
         if(!source.has_value())
             return MakeUnexpected(Failure());
-        const Path output = root / includePath.value();
-        const Expected<void, ErrorCode> created = EnsureDirectories(output.parentPath());
-        if(!created.has_value()){
-            error("Material bind include generation: failed to create generated include parent '{}': {}", output.parentPath(), ErrorCodeMessage(created.error()));
+        if(!WriteGeneratedIncludeFile(root / includePath.value(), source.value(), s_MaterialBindIncludeGenerationLabel))
             return MakeUnexpected(Failure());
-        }
-        if(!WriteTextFile(output, source.value())){
-            error("Material bind include generation: failed to write generated include '{}'", output);
-            return MakeUnexpected(Failure());
-        }
     }
     return root;
 }
@@ -221,7 +205,7 @@ Expected<Path> EmitShadowSurfaceDispatch(in Path cache, in StringView configurat
         builder.appendBindAliasUndefines(aliases, source);
     }
     builder.appendDispatchFunction(surfaces, source);
-    if(!WriteShadowSurfaceGeneratedIncludeFile(root / s_ShadowSurfaceModuleSubPath, source))
+    if(!WriteGeneratedIncludeFile(root / s_ShadowSurfaceModuleSubPath, source, s_ShadowSurfaceDispatchGenerationLabel))
         return MakeUnexpected(Failure());
     return root;
 }

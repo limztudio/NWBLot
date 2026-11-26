@@ -20,22 +20,6 @@
 NWB_BEGIN
 namespace Tests::GraphicsCookToolSdk{
 
-#if defined(NWB_DEBUG)
-inline constexpr bool s_Debug = true;
-#else
-inline constexpr bool s_Debug = false;
-#endif
-#if defined(NWB_FINAL)
-inline constexpr bool s_Final = true;
-#else
-inline constexpr bool s_Final = false;
-#endif
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-inline constexpr bool s_Windows = true;
-#else
-inline constexpr bool s_Windows = false;
-#endif
-
 struct NullAllocation{
     static void* operator new(usize)noexcept{ return nullptr; }
     static void operator delete(void* pointer)noexcept{ ::operator delete(pointer); }

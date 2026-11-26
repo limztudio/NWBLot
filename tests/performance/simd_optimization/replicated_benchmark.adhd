@@ -13,8 +13,6 @@
 extern const f64 s_ReplicatedQuaternionEpsilon;
 [cpp_header("<global/simdmath.h>"), cpp_name("::SIMDVectorDoubleDetail::SinCosReplicated")]
 extern void ComputeReplicatedSinCos(mut VectorDouble sine, mut VectorDouble cosine, in VectorDouble value);
-[cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::s_HasSse2")]
-extern const b8 s_BenchmarkHasSse2;
 [cpp_header("<tests/performance/simd_optimization/benchmark_abi.h>"), cpp_name("::SimdBenchmarkAbi::SseReplicatedReciprocalSqrt")]
 extern VectorDouble BenchmarkReplicatedReciprocalSqrt(in VectorDouble value);
 
@@ -247,7 +245,7 @@ VectorDouble ReplicatedKernelQuaternionSlerp<const b8 Candidate>(in VectorDouble
 }
 
 VectorDouble ReplicatedKernelLength<const u32 Dimension, const b8 Reciprocal, const b8 Candidate>(in VectorDouble value){
-    if(Candidate && s_BenchmarkHasSse2){
+    if(Candidate && s_HasSse2InstructionSet){
         f64 root = Sqrt(VectorDoubleGetX(ReplicatedKernelDot<Dimension>(value, value)));
         if(Reciprocal)
             root = 1.0 / root;

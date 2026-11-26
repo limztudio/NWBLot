@@ -9,93 +9,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 BuildSceneBvhNode(
-    in u32 lo,
-    in u32 hi,
-    in Span<SceneBvhPrimitiveCalculation> primitiveBounds,
-    in Span<u32> instanceLeafCost,
-    mut Vector<u32> indices,
-    mut Vector<SceneBvhNodeCalculation> nodes,
-    mut VectorSingle outMinBounds,
-    mut VectorSingle outMaxBounds,
-    mut b8 outContainsTransparentOccluder
-){
-    const u32 nodeIndex = cast<u32>(nodes.size());
-    nodes.push_back(SceneBvhNodeCalculation());
-
-    if((hi - lo) == 1u){
-        const u32 instance = indices[cast<usize>(lo)];
-        in SceneBvhPrimitiveCalculation prim = primitiveBounds[cast<usize>(instance)];
-        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhLeafNode(prim, instance);
-        outMinBounds = VectorSingle(prim.aabbMin);
-        outMaxBounds = VectorSingle(prim.aabbMax);
-        outContainsTransparentOccluder = prim.transparentOccluder;
-        return nodeIndex;
-    }
-    if((hi - lo) == 2u){
-        const u32 leftInstance = indices[cast<usize>(lo)];
-        const u32 rightInstance = indices[cast<usize>(lo + 1u)];
-        in SceneBvhPrimitiveCalculation leftPrim = primitiveBounds[cast<usize>(leftInstance)];
-        in SceneBvhPrimitiveCalculation rightPrim = primitiveBounds[cast<usize>(rightInstance)];
-        const u32 leftChild = cast<u32>(nodes.size());
-        nodes.push_back(MakeSceneBvhLeafNode(leftPrim, leftInstance));
-        const u32 rightChild = cast<u32>(nodes.size());
-        nodes.push_back(MakeSceneBvhLeafNode(rightPrim, rightInstance));
-        outMinBounds = Min(VectorSingle(leftPrim.aabbMin), VectorSingle(rightPrim.aabbMin));
-        outMaxBounds = Max(VectorSingle(leftPrim.aabbMax), VectorSingle(rightPrim.aabbMax));
-        outContainsTransparentOccluder = leftPrim.transparentOccluder || rightPrim.transparentOccluder;
-        nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(outMinBounds, outMaxBounds, outContainsTransparentOccluder, leftChild, rightChild);
-        return nodeIndex;
-    }
-
-    const SceneBvhSahSplit split = SelectSceneBvhSahSplit(lo, hi, primitiveBounds, instanceLeafCost, indices);
-    u32 mid = lo;
-    if(split.valid){
-        for(u32 i = lo; i < hi; ++i){
-            const u32 instance = indices[cast<usize>(i)];
-            if(ComputeSceneBvhSahBinIndex(primitiveBounds[cast<usize>(instance)], split) < split.bin){
-                const u32 swap = indices[cast<usize>(i)];
-                indices[cast<usize>(i)] = indices[cast<usize>(mid)];
-                indices[cast<usize>(mid)] = swap;
-                ++mid;
-            }
-        }
-    }
-
-    mid = ResolveSceneBvhSplitMidpoint(split, lo, hi, mid);
-
-    VectorSingle leftMin = VectorZero();
-    VectorSingle leftMax = VectorZero();
-    b8 leftTransparent = false;
-    VectorSingle rightMin = VectorZero();
-    VectorSingle rightMax = VectorZero();
-    b8 rightTransparent = false;
-    const u32 leftChild = BuildSceneBvhNode(lo, mid, primitiveBounds, instanceLeafCost, indices, nodes, leftMin, leftMax, leftTransparent);
-    const u32 rightChild = BuildSceneBvhNode(mid, hi, primitiveBounds, instanceLeafCost, indices, nodes, rightMin, rightMax, rightTransparent);
-
-    outMinBounds = Min(leftMin, rightMin);
-    outMaxBounds = Max(leftMax, rightMax);
-    outContainsTransparentOccluder = leftTransparent || rightTransparent;
-    nodes[cast<usize>(nodeIndex)] = MakeSceneBvhInternalNode(outMinBounds, outMaxBounds, outContainsTransparentOccluder, leftChild, rightChild);
-    return nodeIndex;
-}
-
 b8 BuildAndPackSceneBvhNodesInto(
     in Span<SceneSwBvhInstanceGpu> instances,
     in Span<SceneBvhPrimitiveCalculation> instanceBvhPrimitives,
-    mut Vector<u32> indices,
-    mut Vector<u32> instanceLeafCost,
-    mut Vector<SceneBvhNodeCalculation> buildNodes,
     mut Vector<NwbBvhNodeGpu> outNodes
 ){
     const u32 instanceCount = cast<u32>(instances.size());
     if(instanceCount == 0u)
         return false;
     const usize requiredNodeCount = cast<usize>(instanceCount) * 2u - 1u;
-
-    indices.clear();
-    instanceLeafCost.clear();
-    buildNodes.clear();
 
     Vector<SceneBvhBuildWorkItem> work;
     work.resize(cast<usize>(instanceCount));

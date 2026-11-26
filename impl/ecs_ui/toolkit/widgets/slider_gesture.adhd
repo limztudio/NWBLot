@@ -220,14 +220,14 @@ Expected<f32> TryResolveSliderTrackContentWidth(in SliderMetrics metrics, in f32
     const f64 width = cast<f64>(metrics.padding.left) + cast<f64>(metrics.padding.right) + cast<f64>(metrics.thumbExtent.x) + cast<f64>(trackMinimumWidth);
     if(!IsFinite(VectorDouble(width)) || width > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
-    return UiSimdMax(metrics.contentSize.x, cast<f32>(width));
+    return Max(metrics.contentSize.x, cast<f32>(width));
 }
 
 Expected<f32> TryResolveSliderTrackContentHeight(in SliderMetrics metrics, in f32 trackMinimumHeight){
     const f64 height = cast<f64>(metrics.padding.top) + cast<f64>(metrics.padding.bottom) + cast<f64>(metrics.thumbExtent.y) + cast<f64>(trackMinimumHeight);
     if(!IsFinite(VectorDouble(height)) || height > s_UiMaxFloatF64)
         return MakeUnexpected(Failure());
-    return UiSimdMax(metrics.contentSize.y, cast<f32>(height));
+    return Max(metrics.contentSize.y, cast<f32>(height));
 }
 
 b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement placement){
@@ -238,16 +238,6 @@ b8 IsSliderPlacementInteractive(in SliderOptions options, in SliderPlacement pla
         && placement.thumb.height > 0.0f
         && placement.clip.width > 0.0f
         && placement.clip.height > 0.0f;
-}
-
-Color ResolveSliderThumbTint(in SliderStyle style, in b8 interactive, in b8 pressed, in b8 hover){
-    if(!interactive)
-        return style.disabledTint;
-    if(pressed)
-        return style.pressedTint;
-    if(hover)
-        return style.hoverTint;
-    return Color();
 }
 
 Name ResolveSliderThumbPreferredName(in SliderStyle style, in b8 interactive, in b8 pressed, in b8 hover){

@@ -7,39 +7,32 @@ This harness does not qualify physical pointer grabs or Wayland input.
 """
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
-import platform
 import re
 import sys
 import time
 
 SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(SMOKE_DIRECTORY))
+if str(SMOKE_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SMOKE_DIRECTORY))
 
-from window_capture_image import read_bmp_24_rows  # noqa: E402
+from window_capture_image_codec import Bmp24Codec  # noqa: E402
 from window_capture_logs import wait_for_log_message  # noqa: E402
-from window_capture_termination import CaptureProcessTermination
 from window_capture_smoke import (  # noqa: E402
-    run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
-    launch_logserver, launch_testbed, require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text  # noqa: E402
+    run_smoke_main, SmokeFailure, )
 import native_input
 from smoke_arguments import parse_ui_smoke_args
-from fixture_environment import build_fixture_environment
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS, UiFixtureRunBase, run_ui_fixture
 from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
 from probe_reference import linear_rgb_bytes
 
 LIT_ENABLED = "enabled"
 LIT_PASSED = "passed"
-LIT_UTF_8 = "utf-8"
 LIT_ESCAPE = "Escape"
 LIT_SPACE = "space"
 LIT_TAB = "Tab"
 LIT_RETURN = "Return"
-LIT_UI_INTERACTION_FIXTURE = "UI interaction fixture"
 
 DISPLAY_PATTERN = re.compile(r"UiInteractiveSmoke: display logical=([0-9.eE+-]+)x([0-9.eE+-]+) scale=([0-9.eE+-]+)x([0-9.eE+-]+)")
 ACTION_PATTERN = re.compile(r"UiInteractiveSmoke: action=(increase|enabled|reset) count=(\d+) enabled=([01]) actions=(\d+)")
@@ -75,23 +68,14 @@ def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
     return {"extent": [width, height], "count": expected_count, LIT_ENABLED: enabled, "probes": probes, LIT_PASSED: all(probe[LIT_PASSED] for probe in probes)}
 
 
-class InteractionRun:
+class InteractionRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = native_input.NativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=native_input.NativeInput(backend, handle))
         self.scale_x = 1.0
         self.scale_y = 1.0
-        self.stages = []
 
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
+    def on_after_display(self):
+        self.native.wait_for_foreground(self.process, min(self.args.timeout, 15.0))
 
     def update_display(self):
         matches = list(DISPLAY_PATTERN.finditer(self.logs()))
@@ -113,7 +97,7 @@ class InteractionRun:
             ensure_process_running(self.process, "during interactive UI capture")
             self.update_display()
             self.backend.capture_client_window(self.handle, path)
-            frame = read_bmp_24_rows(path)
+            frame = Bmp24Codec.read_bmp_24_rows(path)
             report = observe_markers(frame, self.scale_x, self.scale_y, count, enabled)
             if extent is not None and tuple(frame[:2]) != extent:
                 report[LIT_PASSED] = False
@@ -126,9 +110,9 @@ class InteractionRun:
         raise SmokeFailure(f"interactive marker gate '{name}' failed: {report}")
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "stages": self.stages, "input_path": "Win32 posted messages with native Shift modifier; posted activation loss/gain" if self.native.windows else "X11 XSendEvent and XSetInputFocus",
-            "runtime_limit": "No physical pointer grab or Wayland input qualification"}
-        (self.args.output_directory / "interaction.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("interaction.json", passed, include_skin=False,
+            input_path="Win32 posted messages with native Shift modifier; posted activation loss/gain" if self.native.windows else "X11 XSendEvent and XSetInputFocus",
+            runtime_limit="No physical pointer grab or Wayland input qualification")
 
     def execute(self):
         self.checkpoint("initial", 0, True)
@@ -188,54 +172,23 @@ class InteractionRun:
         self.checkpoint("resized_first_click", 6, True, extent=RESIZED_CLIENT_EXTENT)
 
 
-def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "INTERACTIVE", force_x11=True)
-    environment["NWB_UI_LAYER_MANY_ROOTS"] = "1" if args.many_roots else "0"
-    backend = create_capture_backend()
-    logserver = application = interaction = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the interactive window appeared")
-            raise SmokeFailure("interactive UI window did not appear")
-        backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiInteractiveSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        if args.many_roots:
-            wait_for_log_message(log_directory, log_baseline, log_pattern, "UiLayerSmokeProject: root beyond target limit painted", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-            wait_for_log_message(log_directory, log_baseline, log_pattern, "UiLayerSmokeProject: root removed during paint", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        interaction = InteractionRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        interaction.native.wait_for_foreground(application, min(args.timeout, 15.0))
-        interaction.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_INTERACTION_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_INTERACTION_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "interaction.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                if logserver is not None:
-                    CaptureProcessTermination.terminate_process(logserver, "UI interaction logserver")
-                backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
+def verify_interactive_actions(text, _driver):
     observed = [(action, int(count), int(enabled), int(sequence)) for action, count, enabled, sequence in ACTION_PATTERN.findall(text)]
     if observed != EXPECTED_ACTIONS:
         raise SmokeFailure(f"unexpected interactive action sequence: {observed}; expected {EXPECTED_ACTIONS}")
-    interaction.write_report(True)
-    print(f"UI interaction: {len(interaction.stages)} displayed gates, {len(EXPECTED_ACTIONS)} exact actions; no replay", flush=True)
-    return 0
+
+
+def run(args):
+    def after_display(launch):
+        if args.many_roots:
+            wait_for_log_message(launch.log_directory, launch.log_baseline, launch.log_pattern, "UiLayerSmokeProject: root beyond target limit painted", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
+            wait_for_log_message(launch.log_directory, launch.log_baseline, launch.log_pattern, "UiLayerSmokeProject: root removed during paint", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
+
+    return run_ui_fixture(args, fixture="INTERACTIVE", display_marker="UiInteractiveSmoke: display", driver_type=InteractionRun, log_name="interaction.log", label="UI interaction",
+        window_label="interactive window", process_label="interaction", missing_window_message="interactive UI window did not appear",
+        environment_kwargs={"force_x11": True}, extra_env={"NWB_UI_LAYER_MANY_ROOTS": "1" if args.many_roots else "0"},
+        after_display=after_display, after_collect=verify_interactive_actions,
+        summary_formatter=lambda driver: f"UI interaction: {len(driver.stages)} displayed gates, {len(EXPECTED_ACTIONS)} exact actions; no replay")
 
 
 def main(argv):

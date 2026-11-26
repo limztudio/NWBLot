@@ -25,10 +25,6 @@ class EditCaretGeometry{
     private b8 m_ready = false;
 
     [cpp_unwind]
-    public b8 adoptLayout(mut TextLayout layout, in StringView expectedText, in Span<EditCaretMapping> mapping, in usize committedBytes, in EditTextMode mode){
-        return this.adoptLayout(layout, expectedText, mapping, committedBytes, mode, Span<usize>());
-    }
-    [cpp_unwind]
     public b8 adoptLayout(mut TextLayout layout, in StringView expectedText, in Span<EditCaretMapping> mapping, in usize committedBytes, in EditTextMode mode, in Span<usize> requiredCarets){
         if(!ValidateEditCaretClusterGlyphs(Span<TextCluster>(layout.clusters()), Span<PlacedGlyph>(layout.glyphs())))
             return false;

@@ -1,27 +1,24 @@
 import fnmatch
 import hashlib
 import os
-import socket
 import sys
 from pathlib import Path
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from launcher.readiness import READINESS_OPTION, ReadinessError, wait_for_logserver  # noqa: E402
+from launcher.profile import ProfileSessionController  # noqa: E402
+from launcher.readiness import ReadinessError, wait_for_logserver  # noqa: E402
 from window_capture_outcome import SmokeFailure  # noqa: E402
 
 
 LIT_SHORT_POLL_SECONDS = 0.05
 LIT_LOG_POLL_SECONDS = 0.1
-LIT_N_127_0_0_1 = "127.0.0.1"
 LIT_RB = "rb"
 LIT_UTF_8 = "utf-8"
 LIT_REPLACE = "replace"
 
 
 def choose_free_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind((LIT_N_127_0_0_1, 0))
-        return sock.getsockname()[1]
+    return ProfileSessionController.choose_free_tcp_port()
 
 
 def wait_for_tcp_port(port, timeout_seconds, process, token):
@@ -117,18 +114,42 @@ def standalone_log_pattern(executable):
 LOG_TAIL_CHAR_LIMIT = 4000
 
 
-def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
+def find_log_messages(log_text, needles):
+    return [needle for needle in needles if needle in log_text]
+
+
+def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds, *, process=None, skip_message=None, poll_seconds=LIT_LOG_POLL_SECONDS, stage=None, ensure_running=None):
     deadline = time.monotonic() + timeout_seconds
     last_text = ""
+    if process is not None and ensure_running is None:
+        from window_capture_smoke import ensure_process_running as ensure_running
     while time.monotonic() < deadline:
+        if process is not None:
+            ensure_running(process, stage or f"while waiting for benchmark log message '{needle}'")
         text = collect_log_delta(directory, baseline, pattern)
+        if skip_message and skip_message in text:
+            return skip_message
         if needle in text:
-            return
+            return None
         if text:
             last_text = text[-LOG_TAIL_CHAR_LIMIT:]
-        time.sleep(LIT_LOG_POLL_SECONDS)
+        time.sleep(poll_seconds)
 
     raise SmokeFailure(f"timed out waiting for log message '{needle}'\n{last_text}")
+
+
+def wait_for_process_log_message(process, log_directory, log_baseline, log_pattern, message, timeout_seconds, skip_message=None, *, poll_seconds=LIT_LOG_POLL_SECONDS, ensure_running=None):
+    return wait_for_log_message(log_directory, log_baseline, log_pattern, message, timeout_seconds, process=process, skip_message=skip_message, poll_seconds=poll_seconds,
+        stage=f"while waiting for benchmark log message '{message}'", ensure_running=ensure_running)
+
+
+def wait_while_running(process, seconds, stage, *, poll_seconds=0.25, ensure_running=None):
+    if ensure_running is None:
+        from window_capture_smoke import ensure_process_running as ensure_running
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        ensure_running(process, stage)
+        time.sleep(min(poll_seconds, max(0.0, deadline - time.monotonic())))
 
 
 def wait_for_log_drain(directory, baseline, pattern, timeout_seconds=2.0, quiet_seconds=0.25):

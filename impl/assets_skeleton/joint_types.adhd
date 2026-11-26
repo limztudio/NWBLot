@@ -20,7 +20,6 @@ const StringView s_SkeletonJointMetaKind = "Skeleton joint meta";
 const StringView s_SkeletonJointDiagnosticPrefix = "Skeleton joint";
 const StringView s_SkeletonMetaDiagnosticPrefix = "Skeleton meta";
 
-[reflect]
 class SkeletonJoint{
     public SkeletonJointMatrix localBindPose(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
     public u32 parentIndex = s_SkeletonInvalidJointIndex;

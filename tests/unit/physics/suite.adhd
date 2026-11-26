@@ -462,15 +462,15 @@ void VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract(){
         mut RigidBodyComponent rb = dynEntity.addComponent<RigidBodyComponent>();
         rb.type = BodyType::Dynamic;
         mut ColliderComponent col = dynEntity.addComponent<ColliderComponent>();
-        col.shapeType = ShapeType::Sphere;
-        col.radius = 0.5f;
+        col.primaryShape.shapeType = ShapeType::Sphere;
+        col.primaryShape.radius = 0.5f;
 
         Entity groundEntity = testWorld.world.createEntity();
         mut TransformComponent gXf = groundEntity.addComponent<TransformComponent>();
         gXf.position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
         mut ColliderComponent gCol = groundEntity.addComponent<ColliderComponent>();
-        gCol.shapeType = ShapeType::Hull;
-        gCol.halfExtents = f32x4(4.0f, 0.5f, 4.0f, 0.0f);
+        gCol.primaryShape.shapeType = ShapeType::Hull;
+        gCol.primaryShape.halfExtents = f32x4(4.0f, 0.5f, 4.0f, 0.0f);
 
         for(u32 i = 0u; i < 90u; ++i){
             const auto tickRes = testWorld.world.tick(1.0f / 60.0f);
@@ -592,150 +592,86 @@ f32 ComputeRigidBodyMechanicalEnergy(
     return mass * 9.81f * xf.position.y + 0.5f * mass * linSq + 0.5f * inertiaScalar * angSq;
 }
 
-void VerifyPhysicsEdgeCases_CoupledTowerImpactAndCoplanarGjk(){
-    {
-        PhysicsWorld physWorld;
-        CpuTaskScheduler scheduler(1u);
+void VerifyCoupledTowerImpactCase(in f32 floorHalfExtent, in b8 checkFloorBounds){
+    PhysicsWorld physWorld;
+    CpuTaskScheduler scheduler(1u);
 
-        BodyDef floorDef;
-        floorDef.type = BodyType::Static;
-        floorDef.position = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-        const BodyId floorId = physWorld.createBody(floorDef).value();
-        ShapeDef floorSd;
-        floorSd.material.friction = 0.7f;
-        floorSd.material.restitution = 0.1f;
-        ASSERT_TRUE(physWorld.createHullShape(floorId, floorSd, MakeBoxHull(3.0f, 0.25f, 3.0f, 0.0f).value()).has_value());
+    BodyDef floorDef;
+    floorDef.type = BodyType::Static;
+    floorDef.position = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
+    const BodyId floorId = physWorld.createBody(floorDef).value();
+    ShapeDef floorSd;
+    floorSd.material.friction = 0.7f;
+    floorSd.material.restitution = 0.1f;
+    ASSERT_TRUE(physWorld.createHullShape(floorId, floorSd, MakeBoxHull(floorHalfExtent, 0.25f, floorHalfExtent, 0.0f).value()).has_value());
 
-        Array<BodyId, 4u> boxes;
-        const HullShape boxHull = MakeBoxHull(0.15f, 0.15f, 0.15f, 0.0f).value();
-        ShapeDef boxSd;
-        boxSd.density = 1.0f;
-        boxSd.material.friction = 0.6f;
-        boxSd.material.restitution = 0.05f;
+    Array<BodyId, 4u> boxes;
+    const HullShape boxHull = MakeBoxHull(0.15f, 0.15f, 0.15f, 0.0f).value();
+    ShapeDef boxSd;
+    boxSd.density = 1.0f;
+    boxSd.material.friction = 0.6f;
+    boxSd.material.restitution = 0.05f;
+    for(u32 i = 0u; i < 4u; ++i){
+        BodyDef bd;
+        bd.type = BodyType::Dynamic;
+        bd.position = f32x4(1.05f, 0.155f + cast<f32>(i) * 0.31f, -0.50f, 0.0f);
+        boxes[i] = physWorld.createBody(bd).value();
+        ASSERT_TRUE(physWorld.createHullShape(boxes[i], boxSd, boxHull).has_value());
+    }
+
+    Array<BodyId, 2u> spheres;
+    const f32 sphereR = 0.14f;
+    const SphereShape sphereShape = MakeSphereShape(VectorSingle(0.0f), sphereR).value();
+    ShapeDef sphereSd;
+    sphereSd.density = 1.2f;
+    sphereSd.material.friction = 0.4f;
+    sphereSd.material.restitution = 0.35f;
+    for(u32 i = 0u; i < 2u; ++i){
+        BodyDef bd;
+        bd.type = BodyType::Dynamic;
+        if(i == 0u)
+            bd.position = f32x4(0.96f, 1.55f, -0.44f, 0.0f);
+        else
+            bd.position = f32x4(1.16f, 2.05f, -0.56f, 0.0f);
+        spheres[i] = physWorld.createBody(bd).value();
+        ASSERT_TRUE(physWorld.createSphereShape(spheres[i], sphereSd, sphereShape).has_value());
+    }
+
+    const f32 boxI = (1.0f / 6.0f) * physWorld.bodyMass(boxes[0u]) * (0.30f * 0.30f);
+    const f32 sphereI = 0.4f * physWorld.bodyMass(spheres[0u]) * (sphereR * sphereR);
+    f32 initialEnergy = 0.0f;
+    for(u32 i = 0u; i < 4u; ++i)
+        initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
+    for(u32 i = 0u; i < 2u; ++i)
+        initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
+
+    const f32 dt = 1.0f / 60.0f;
+    for(u32 step = 0u; step < 180u; ++step){
+        StepPhysicsWorld(physWorld, dt, 4u, scheduler);
+
+        f32 totalEnergy = 0.0f;
         for(u32 i = 0u; i < 4u; ++i){
-            BodyDef bd;
-            bd.type = BodyType::Dynamic;
-            bd.position = f32x4(1.05f, 0.155f + cast<f32>(i) * 0.31f, -0.50f, 0.0f);
-            boxes[i] = physWorld.createBody(bd).value();
-            ASSERT_TRUE(physWorld.createHullShape(boxes[i], boxSd, boxHull).has_value());
-        }
-
-        Array<BodyId, 2u> spheres;
-        const f32 sphereR = 0.14f;
-        const SphereShape sphereShape = MakeSphereShape(VectorSingle(0.0f), sphereR).value();
-        ShapeDef sphereSd;
-        sphereSd.density = 1.2f;
-        sphereSd.material.friction = 0.4f;
-        sphereSd.material.restitution = 0.35f;
-        for(u32 i = 0u; i < 2u; ++i){
-            BodyDef bd;
-            bd.type = BodyType::Dynamic;
-            if(i == 0u)
-                bd.position = f32x4(0.96f, 1.55f, -0.44f, 0.0f);
-            else
-                bd.position = f32x4(1.16f, 2.05f, -0.56f, 0.0f);
-            spheres[i] = physWorld.createBody(bd).value();
-            ASSERT_TRUE(physWorld.createSphereShape(spheres[i], sphereSd, sphereShape).has_value());
-        }
-
-        const f32 boxI = (1.0f / 6.0f) * physWorld.bodyMass(boxes[0u]) * (0.30f * 0.30f);
-        const f32 sphereI = 0.4f * physWorld.bodyMass(spheres[0u]) * (sphereR * sphereR);
-        f32 initialEnergy = 0.0f;
-        for(u32 i = 0u; i < 4u; ++i)
-            initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
-        for(u32 i = 0u; i < 2u; ++i)
-            initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
-
-        const f32 dt = 1.0f / 60.0f;
-        for(u32 step = 0u; step < 180u; ++step){
-            StepPhysicsWorld(physWorld, dt, 4u, scheduler);
-
-            f32 totalEnergy = 0.0f;
-            for(u32 i = 0u; i < 4u; ++i){
+            if(checkFloorBounds){
                 const Transform3D xf = physWorld.tryGetBodyTransform(boxes[i]).value();
                 EXPECT_TRUE(IsValidPositionVec3(VectorSingle(xf.position)));
-                totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
             }
-            for(u32 i = 0u; i < 2u; ++i){
-                const Transform3D xf = physWorld.tryGetBodyTransform(spheres[i]).value();
-                EXPECT_TRUE(IsValidPositionVec3(VectorSingle(xf.position)));
-                const VectorSingle absPos = VectorAbs(VectorSingle(xf.position));
-                if(absPos.x < 2.90f && absPos.z < 2.90f)
-                    EXPECT_GT(xf.position.y - sphereR, -0.02f);
-                totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
-            }
-            EXPECT_LE(totalEnergy, 1.05f * initialEnergy);
+            totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
         }
-    }
-
-    {
-        PhysicsWorld physWorld;
-        CpuTaskScheduler scheduler(1u);
-
-        BodyDef floorDef;
-        floorDef.type = BodyType::Static;
-        floorDef.position = f32x4(0.0f, -0.25f, 0.0f, 0.0f);
-        const BodyId floorId = physWorld.createBody(floorDef).value();
-        ShapeDef floorSd;
-        floorSd.material.friction = 0.7f;
-        floorSd.material.restitution = 0.1f;
-        ASSERT_TRUE(physWorld.createHullShape(floorId, floorSd, MakeBoxHull(20.0f, 0.25f, 20.0f, 0.0f).value()).has_value());
-
-        Array<BodyId, 4u> boxes;
-        const HullShape boxHull = MakeBoxHull(0.15f, 0.15f, 0.15f, 0.0f).value();
-        ShapeDef boxSd;
-        boxSd.density = 1.0f;
-        boxSd.material.friction = 0.6f;
-        boxSd.material.restitution = 0.05f;
-        for(u32 i = 0u; i < 4u; ++i){
-            BodyDef bd;
-            bd.type = BodyType::Dynamic;
-            bd.position = f32x4(1.05f, 0.155f + cast<f32>(i) * 0.31f, -0.50f, 0.0f);
-            boxes[i] = physWorld.createBody(bd).value();
-            ASSERT_TRUE(physWorld.createHullShape(boxes[i], boxSd, boxHull).has_value());
-        }
-
-        Array<BodyId, 2u> spheres;
-        const f32 sphereR = 0.14f;
-        const SphereShape sphereShape = MakeSphereShape(VectorSingle(0.0f), sphereR).value();
-        ShapeDef sphereSd;
-        sphereSd.density = 1.2f;
-        sphereSd.material.friction = 0.4f;
-        sphereSd.material.restitution = 0.35f;
         for(u32 i = 0u; i < 2u; ++i){
-            BodyDef bd;
-            bd.type = BodyType::Dynamic;
-            if(i == 0u)
-                bd.position = f32x4(0.96f, 1.55f, -0.44f, 0.0f);
-            else
-                bd.position = f32x4(1.16f, 2.05f, -0.56f, 0.0f);
-            spheres[i] = physWorld.createBody(bd).value();
-            ASSERT_TRUE(physWorld.createSphereShape(spheres[i], sphereSd, sphereShape).has_value());
-        }
-
-        const f32 boxI = (1.0f / 6.0f) * physWorld.bodyMass(boxes[0u]) * (0.30f * 0.30f);
-        const f32 sphereI = 0.4f * physWorld.bodyMass(spheres[0u]) * (sphereR * sphereR);
-        f32 initialEnergy = 0.0f;
-        for(u32 i = 0u; i < 4u; ++i)
-            initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
-        for(u32 i = 0u; i < 2u; ++i)
-            initialEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
-
-        const f32 dt = 1.0f / 60.0f;
-        for(u32 step = 0u; step < 180u; ++step){
-            StepPhysicsWorld(physWorld, dt, 4u, scheduler);
-            f32 totalEnergy = 0.0f;
-            for(u32 i = 0u; i < 4u; ++i)
-                totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, boxes[i], boxI);
-            for(u32 i = 0u; i < 2u; ++i){
-                const Transform3D xf = physWorld.tryGetBodyTransform(spheres[i]).value();
-                EXPECT_TRUE(IsValidPositionVec3(VectorSingle(xf.position)));
+            const Transform3D xf = physWorld.tryGetBodyTransform(spheres[i]).value();
+            EXPECT_TRUE(IsValidPositionVec3(VectorSingle(xf.position)));
+            const VectorSingle absPos = VectorAbs(VectorSingle(xf.position));
+            if(!checkFloorBounds || (absPos.x < 2.90f && absPos.z < 2.90f))
                 EXPECT_GT(xf.position.y - sphereR, -0.02f);
-                totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
-            }
-            EXPECT_LE(totalEnergy, 1.05f * initialEnergy);
+            totalEnergy += ComputeRigidBodyMechanicalEnergy(physWorld, spheres[i], sphereI);
         }
+        EXPECT_LE(totalEnergy, 1.05f * initialEnergy);
     }
+}
+
+void VerifyPhysicsEdgeCases_CoupledTowerImpactAndCoplanarGjk(){
+    VerifyCoupledTowerImpactCase(3.0f, true);
+    VerifyCoupledTowerImpactCase(20.0f, false);
 
     {
         const HullShape boxHull = MakeBoxHull(1.0f, 0.5f, 1.0f, 0.0f).value();
@@ -935,11 +871,11 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
     ASSERT_TRUE(physWorld.createSphereShape(pendBody, dynSd, ballShape).has_value());
 
     JointDef sphDef;
-    sphDef.type = JointType::Spherical;
+    sphDef.settings.type = JointType::Spherical;
     sphDef.bodyIdA = sphAnchor;
     sphDef.bodyIdB = pendBody;
-    sphDef.localAnchorA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-    sphDef.localAnchorB = f32x4(-1.5f, 0.0f, 0.0f, 0.0f);
+    sphDef.settings.localAnchorA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    sphDef.settings.localAnchorB = f32x4(-1.5f, 0.0f, 0.0f, 0.0f);
     const JointId sphJoint = physWorld.createJoint(sphDef).value();
 
     BodyDef distBdA = anchorBd;
@@ -950,10 +886,10 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
     const BodyId distB = physWorld.createBody(distBdB).value();
     ASSERT_TRUE(physWorld.createSphereShape(distB, dynSd, ballShape).has_value());
     JointDef distDef;
-    distDef.type = JointType::Distance;
+    distDef.settings.type = JointType::Distance;
     distDef.bodyIdA = distA;
     distDef.bodyIdB = distB;
-    distDef.length = 2.0f;
+    distDef.settings.length = 2.0f;
     ASSERT_TRUE(physWorld.createJoint(distDef).has_value());
 
     BodyDef revBdA = anchorBd;
@@ -964,14 +900,14 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
     const BodyId revB = physWorld.createBody(revBdB).value();
     ASSERT_TRUE(physWorld.createHullShape(revB, dynSd, barHull).has_value());
     JointDef revDef;
-    revDef.type = JointType::Revolute;
+    revDef.settings.type = JointType::Revolute;
     revDef.bodyIdA = revA;
     revDef.bodyIdB = revB;
-    revDef.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-    revDef.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-    revDef.enableMotor = true;
-    revDef.motorSpeed = 4.0f;
-    revDef.maxMotorForce = 20.0f;
+    revDef.settings.localAxisA = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    revDef.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    revDef.settings.enableMotor = true;
+    revDef.settings.motorSpeed = 4.0f;
+    revDef.settings.maxMotorForce = 20.0f;
     ASSERT_TRUE(physWorld.createJoint(revDef).has_value());
 
     BodyDef priBdA = anchorBd;
@@ -983,14 +919,14 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
     const BodyId priB = physWorld.createBody(priBdB).value();
     ASSERT_TRUE(physWorld.createHullShape(priB, dynSd, barHull).has_value());
     JointDef priDef;
-    priDef.type = JointType::Prismatic;
+    priDef.settings.type = JointType::Prismatic;
     priDef.bodyIdA = priA;
     priDef.bodyIdB = priB;
-    priDef.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-    priDef.localAxisB = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-    priDef.enableLimit = true;
-    priDef.lowerLimit = -0.5f;
-    priDef.upperLimit = 0.8f;
+    priDef.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    priDef.settings.localAxisB = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+    priDef.settings.enableLimit = true;
+    priDef.settings.lowerLimit = -0.5f;
+    priDef.settings.upperLimit = 0.8f;
     ASSERT_TRUE(physWorld.createJoint(priDef).has_value());
 
     BodyDef fixBdA = anchorBd;
@@ -1001,10 +937,10 @@ void VerifyPhysicsEdgeCases_JointConstraints3D(){
     const BodyId fixB = physWorld.createBody(fixBdB).value();
     ASSERT_TRUE(physWorld.createHullShape(fixB, dynSd, barHull).has_value());
     JointDef fixDef;
-    fixDef.type = JointType::Fixed;
+    fixDef.settings.type = JointType::Fixed;
     fixDef.bodyIdA = fixA;
     fixDef.bodyIdB = fixB;
-    fixDef.localAnchorA = f32x4(0.5f, 0.0f, 0.0f, 0.0f);
+    fixDef.settings.localAnchorA = f32x4(0.5f, 0.0f, 0.0f, 0.0f);
     ASSERT_TRUE(physWorld.createJoint(fixDef).has_value());
 
     for(u32 s = 0u; s < 45u; ++s)
@@ -1315,13 +1251,13 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
         const BodyId anchorId = physWorld.createBody(staticBd).value();
 
         JointDef motorDef;
-        motorDef.type = JointType::Motor;
+        motorDef.settings.type = JointType::Motor;
         motorDef.bodyIdA = anchorId;
         motorDef.bodyIdB = bodyId;
-        motorDef.linearOffset = f32x4(1.0f, -1.0f, 0.0f, 0.0f);
-        motorDef.maxMotorForce = 1500.0f;
-        motorDef.maxTorque = 200.0f;
-        motorDef.correctionFactor = 0.4f;
+        motorDef.settings.linearOffset = f32x4(1.0f, -1.0f, 0.0f, 0.0f);
+        motorDef.settings.maxMotorForce = 1500.0f;
+        motorDef.settings.maxTorque = 200.0f;
+        motorDef.settings.correctionFactor = 0.4f;
         const JointId motorJoint = physWorld.createJoint(motorDef).value();
 
         for(u32 s = 0u; s < 60u; ++s)
@@ -1344,19 +1280,19 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
         ASSERT_TRUE(physWorld.createSphereShape(wheelId, sd, MakeSphereShape(VectorSingle(0.0f), 0.4f).value()).has_value());
 
         JointDef wheelDef;
-        wheelDef.type = JointType::Wheel;
+        wheelDef.settings.type = JointType::Wheel;
         wheelDef.bodyIdA = chassisId;
         wheelDef.bodyIdB = wheelId;
-        wheelDef.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        wheelDef.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        wheelDef.enableLimit = true;
-        wheelDef.lowerLimit = -0.3f;
-        wheelDef.upperLimit = 0.3f;
-        wheelDef.enableMotor = true;
-        wheelDef.motorSpeed = 8.0f;
-        wheelDef.maxMotorForce = 50.0f;
-        wheelDef.suspensionHertz = 5.0f;
-        wheelDef.suspensionDampingRatio = 0.7f;
+        wheelDef.settings.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        wheelDef.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        wheelDef.settings.enableLimit = true;
+        wheelDef.settings.lowerLimit = -0.3f;
+        wheelDef.settings.upperLimit = 0.3f;
+        wheelDef.settings.enableMotor = true;
+        wheelDef.settings.motorSpeed = 8.0f;
+        wheelDef.settings.maxMotorForce = 50.0f;
+        wheelDef.settings.suspensionHertz = 5.0f;
+        wheelDef.settings.suspensionDampingRatio = 0.7f;
         const JointId wheelJoint = physWorld.createJoint(wheelDef).value();
 
         BodyDef breakBd;
@@ -1365,11 +1301,11 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
         const BodyId breakBody = physWorld.createBody(breakBd).value();
         ASSERT_TRUE(physWorld.createSphereShape(breakBody, sd, MakeSphereShape(VectorSingle(0.0f), 0.5f).value()).has_value());
         JointDef breakDef;
-        breakDef.type = JointType::Fixed;
+        breakDef.settings.type = JointType::Fixed;
         breakDef.bodyIdA = chassisId;
         breakDef.bodyIdB = breakBody;
-        breakDef.localAnchorA = f32x4(-10.0f, 0.0f, 0.0f, 0.0f);
-        breakDef.breakForce = 5.0f;
+        breakDef.settings.localAnchorA = f32x4(-10.0f, 0.0f, 0.0f, 0.0f);
+        breakDef.settings.breakForce = 5.0f;
         const JointId breakJoint = physWorld.createJoint(breakDef).value();
 
         for(u32 s = 0u; s < 30u; ++s)
@@ -1395,12 +1331,12 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
         mut RigidBodyComponent wRb = wedgeEnt.addComponent<RigidBodyComponent>();
         wRb.type = BodyType::Dynamic;
         mut ColliderComponent wCol = wedgeEnt.addComponent<ColliderComponent>();
-        wCol.shapeType = ShapeType::Hull;
-        wCol.isBox = false;
-        wCol.hullPoints.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
-        wCol.hullPoints.push_back(f32x4(0.5f, -0.5f, -0.5f, 0.0f));
-        wCol.hullPoints.push_back(f32x4(0.0f, -0.5f, 0.5f, 0.0f));
-        wCol.hullPoints.push_back(f32x4(0.0f, 0.5f, 0.0f, 0.0f));
+        wCol.primaryShape.shapeType = ShapeType::Hull;
+        wCol.primaryShape.isBox = false;
+        wCol.primaryShape.hullPoints.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
+        wCol.primaryShape.hullPoints.push_back(f32x4(0.5f, -0.5f, -0.5f, 0.0f));
+        wCol.primaryShape.hullPoints.push_back(f32x4(0.0f, -0.5f, 0.5f, 0.0f));
+        wCol.primaryShape.hullPoints.push_back(f32x4(0.0f, 0.5f, 0.0f, 0.0f));
         ColliderShapeEntry extraSphere;
         extraSphere.shapeType = ShapeType::Sphere;
         extraSphere.center = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
@@ -1409,10 +1345,10 @@ void VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints(){
 
         Entity jointEnt = testWorld.world.createEntity();
         mut JointComponent jc = jointEnt.addComponent<JointComponent>();
-        jc.type = JointType::Distance;
-        jc.bodyEntityA = anchorEnt.id();
-        jc.bodyEntityB = wedgeEnt.id();
-        jc.length = 2.0f;
+        jc.primaryJoint.settings.type = JointType::Distance;
+        jc.primaryJoint.bodyEntityA = anchorEnt.id();
+        jc.primaryJoint.bodyEntityB = wedgeEnt.id();
+        jc.primaryJoint.settings.length = 2.0f;
 
         for(u32 s = 0u; s < 30u; ++s)
             ASSERT_TRUE(testWorld.world.tick(1.0f / 60.0f).has_value());
@@ -1487,10 +1423,10 @@ void SetupEquivalenceScenarioWorld(mut PhysicsWorld w, mut Vector<BodyId> outBod
         outBodyIds.push_back(jB);
 
         JointDef jd;
-        jd.type = JointType::Distance;
+        jd.settings.type = JointType::Distance;
         jd.bodyIdA = jA;
         jd.bodyIdB = jB;
-        jd.length = 1.5f;
+        jd.settings.length = 1.5f;
         ASSERT_TRUE(w.createJoint(jd).has_value());
     }
 }
@@ -1544,10 +1480,10 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
             ASSERT_TRUE(w.createSphereShape(bJB, sd, sphere).has_value());
 
             JointDef jd;
-            jd.type = JointType::Distance;
+            jd.settings.type = JointType::Distance;
             jd.bodyIdA = bJA;
             jd.bodyIdB = bJB;
-            jd.length = 1.5f;
+            jd.settings.length = 1.5f;
             ASSERT_TRUE(w.createJoint(jd).has_value());
         }
 
@@ -1767,16 +1703,16 @@ void VerifyPhysicsEdgeCases_SphericalConeImpulseAndBreakTorque(){
     ASSERT_TRUE(physWorld.createHullShape(bB, sd, boxRes.value()).has_value());
 
     JointDef jd;
-    jd.type = JointType::Spherical;
+    jd.settings.type = JointType::Spherical;
     jd.bodyIdA = bA;
     jd.bodyIdB = bB;
-    jd.localAnchorA = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
-    jd.localAnchorB = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
-    jd.localAxisA = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
-    jd.localAxisB = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
-    jd.enableLimit = true;
-    jd.swingLimit = 0.25f;
-    jd.breakTorque = 0.0f;
+    jd.settings.localAnchorA = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
+    jd.settings.localAnchorB = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
+    jd.settings.localAxisA = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+    jd.settings.localAxisB = f32x4(0.0f, -1.0f, 0.0f, 0.0f);
+    jd.settings.enableLimit = true;
+    jd.settings.swingLimit = 0.25f;
+    jd.settings.breakTorque = 0.0f;
     const Expected<JointId> jRes = physWorld.createJoint(jd);
     ASSERT_TRUE(jRes.has_value());
     const JointId jId = jRes.value();
@@ -1853,10 +1789,10 @@ void VerifyPhysicsEdgeCases_KinematicTargetSensorToggleAndJointMutators(){
     EXPECT_NEAR(dynPassXf.position.x, 0.0f, 1.0e-4f);
 
     JointDef jd;
-    jd.type = JointType::Distance;
+    jd.settings.type = JointType::Distance;
     jd.bodyIdA = kinBody;
     jd.bodyIdB = dynBody;
-    jd.length = 2.0f;
+    jd.settings.length = 2.0f;
     const Expected<JointId> jRes = physWorld.createJoint(jd);
     ASSERT_TRUE(jRes.has_value());
     const JointId jId = jRes.value();
@@ -1946,9 +1882,9 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     floorRb.type = BodyType::Static;
     floorRb.dirty = true;
     mut ColliderComponent floorCol = floorEnt.addComponent<ColliderComponent>();
-    floorCol.shapeType = ShapeType::Hull;
-    floorCol.halfExtents = f32x4(4.0f, 0.25f, 4.0f, 0.0f);
-    floorCol.localRotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.35f, 0.0f, 0.0f)));
+    floorCol.primaryShape.shapeType = ShapeType::Hull;
+    floorCol.primaryShape.halfExtents = f32x4(4.0f, 0.25f, 4.0f, 0.0f);
+    floorCol.primaryShape.localRotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.35f, 0.0f, 0.0f)));
     ColliderShapeEntry extraCap;
     extraCap.shapeType = ShapeType::Capsule;
     extraCap.center = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
@@ -1967,11 +1903,11 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     dropRb.linearVelocity = f32x4(0.0f, -8.0f, 0.0f, 0.0f);
     dropRb.dirty = true;
     mut ColliderComponent dropCol = dropEnt.addComponent<ColliderComponent>();
-    dropCol.shapeType = ShapeType::Sphere;
-    dropCol.radius = 0.3f;
-    dropCol.enableHitEvents = true;
-    dropCol.enableSensorEvents = true;
-    dropCol.enablePreSolveEvents = true;
+    dropCol.primaryShape.shapeType = ShapeType::Sphere;
+    dropCol.primaryShape.radius = 0.3f;
+    dropCol.primaryShape.enableHitEvents = true;
+    dropCol.primaryShape.enableSensorEvents = true;
+    dropCol.primaryShape.enablePreSolveEvents = true;
     dropCol.dirty = true;
 
     Entity kinEnt = tw.world.createEntity();
@@ -1982,8 +1918,8 @@ void VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem(){
     kinRb.driveKinematicFromTransform = true;
     kinRb.dirty = true;
     mut ColliderComponent kinCol = kinEnt.addComponent<ColliderComponent>();
-    kinCol.shapeType = ShapeType::Sphere;
-    kinCol.radius = 0.4f;
+    kinCol.primaryShape.shapeType = ShapeType::Sphere;
+    kinCol.primaryShape.radius = 0.4f;
     kinCol.dirty = true;
 
     EXPECT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
@@ -2080,21 +2016,21 @@ void VerifyPhysicsEdgeCases_InvalidAssetPathPreservesPhysicsComponentsOnReload()
     EXPECT_EQ(cast<u8>(rigidTarget.component.type), cast<u8>(BodyType::Static));
 
     ColliderComponentAsset colliderSource(Name("physics/source_collider"));
-    colliderSource.component.density = 2.0f;
+    colliderSource.component.primaryShape.density = 2.0f;
     ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(colliderSource, binary));
     ColliderComponentAsset colliderTarget(s_NameNone);
-    colliderTarget.component.density = 3.0f;
+    colliderTarget.component.primaryShape.density = 3.0f;
     EXPECT_FALSE(colliderTarget.loadBinary(binary));
-    EXPECT_EQ(colliderTarget.component.density, 3.0f);
+    EXPECT_EQ(colliderTarget.component.primaryShape.density, 3.0f);
 
     JointComponentAsset jointSource(Name("physics/source_joint"));
-    jointSource.component.type = JointType::Wheel;
-    jointSource.component.suspensionHertz = 6.0f;
+    jointSource.component.primaryJoint.settings.type = JointType::Wheel;
+    jointSource.component.primaryJoint.settings.suspensionHertz = 6.0f;
     ASSERT_TRUE(BuildPhysicsComponentTestEnvelope(jointSource, binary));
     JointComponentAsset jointTarget(s_NameNone);
-    jointTarget.component.suspensionHertz = 7.0f;
+    jointTarget.component.primaryJoint.settings.suspensionHertz = 7.0f;
     EXPECT_FALSE(jointTarget.loadBinary(binary));
-    EXPECT_EQ(jointTarget.component.suspensionHertz, 7.0f);
+    EXPECT_EQ(jointTarget.component.primaryJoint.settings.suspensionHertz, 7.0f);
 
     PhysicsWorldConfigComponentAsset configSource(Name("physics/source_config"));
     configSource.component.subStepCount = 6u;
@@ -2139,9 +2075,9 @@ void VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation(){
     EXPECT_TRUE(SawCapturedError(logger, "invalid payload size"));
 
     ColliderComponentAsset colAsset(Name("physics/test_col"));
-    colAsset.component.shapeType = ShapeType::Mesh;
-    colAsset.component.meshAsset.virtualPath = Name("meshes/test_ramp");
-    colAsset.component.localRotation = f32x4(0.0f, 0.70710678f, 0.0f, 0.70710678f);
+    colAsset.component.primaryShape.shapeType = ShapeType::Mesh;
+    colAsset.component.primaryShape.meshAsset.virtualPath = Name("meshes/test_ramp");
+    colAsset.component.primaryShape.localRotation = f32x4(0.0f, 0.70710678f, 0.0f, 0.70710678f);
     ColliderShapeEntry extraBox;
     extraBox.shapeType = ShapeType::Hull;
     extraBox.isBox = true;
@@ -2154,26 +2090,26 @@ void VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation(){
     ColliderComponentAsset colLoaded(Name("physics/test_col"));
     ASSERT_TRUE(colLoaded.loadComponentPayload(colPayload));
     EXPECT_TRUE(colLoaded.validatePayload());
-    EXPECT_EQ(colLoaded.component.meshAsset.name(), Name("meshes/test_ramp"));
+    EXPECT_EQ(colLoaded.component.primaryShape.meshAsset.name(), Name("meshes/test_ramp"));
     EXPECT_EQ(colLoaded.component.extraShapes.size(), cast<usize>(1u));
 
     ColliderComponentAsset badCol(Name("physics/bad_col"));
-    badCol.component.shapeType = ShapeType::Mesh;
+    badCol.component.primaryShape.shapeType = ShapeType::Mesh;
     EXPECT_FALSE(badCol.validatePayload());
 
     JointComponentAsset jAsset(Name("physics/test_joint"));
-    jAsset.component.type = JointType::Wheel;
-    jAsset.component.suspensionHertz = 6.0f;
-    jAsset.component.collideConnected = true;
+    jAsset.component.primaryJoint.settings.type = JointType::Wheel;
+    jAsset.component.primaryJoint.settings.suspensionHertz = 6.0f;
+    jAsset.component.primaryJoint.settings.collideConnected = true;
     EXPECT_TRUE(jAsset.validatePayload());
 
     Vector<u8> jPayload;
     ASSERT_TRUE(jAsset.serializeComponentPayload(jPayload));
     JointComponentAsset jLoaded(Name("physics/test_joint"));
     ASSERT_TRUE(jLoaded.loadComponentPayload(jPayload));
-    EXPECT_EQ(cast<u8>(jLoaded.component.type), cast<u8>(JointType::Wheel));
-    EXPECT_NEAR(jLoaded.component.suspensionHertz, 6.0f, 1.0e-5f);
-    EXPECT_TRUE(jLoaded.component.collideConnected);
+    EXPECT_EQ(cast<u8>(jLoaded.component.primaryJoint.settings.type), cast<u8>(JointType::Wheel));
+    EXPECT_NEAR(jLoaded.component.primaryJoint.settings.suspensionHertz, 6.0f, 1.0e-5f);
+    EXPECT_TRUE(jLoaded.component.primaryJoint.settings.collideConnected);
 
     PhysicsWorldConfigComponentAsset cfgAsset(Name("physics/test_cfg"));
     cfgAsset.component.backendMode = PhysicsBackendMode::GpuPreferred;
@@ -2413,11 +2349,11 @@ void VerifyPhysicsEdgeCases_WakeupsEventsGettersPreSolveAndHullMerge(){
     JointDef jd;
     jd.bodyIdA = jBodyA;
     jd.bodyIdB = jBodyB;
-    jd.type = JointType::Distance;
-    jd.length = 1.0f;
-    jd.minLength = 1.0f;
-    jd.maxLength = 1.0f;
-    jd.breakForce = 1.0f;
+    jd.settings.type = JointType::Distance;
+    jd.settings.length = 1.0f;
+    jd.settings.minLength = 1.0f;
+    jd.settings.maxLength = 1.0f;
+    jd.settings.breakForce = 1.0f;
     jd.userData = 777u;
     const JointId jId = jointPw.createJoint(jd).value();
     EXPECT_NEAR(jointPw.tryGetJointLength(jId).value(), 1.0f, 1.0e-5f);
@@ -2530,9 +2466,9 @@ void VerifyPhysicsEdgeCases_EcsHierarchyInterpolationNamedJointsAndQueries(){
     childRb.entityTag = Name("ecs_child");
     childRb.userData = 42u;
     mut ColliderComponent childCol = childEnt.addComponent<ColliderComponent>();
-    childCol.shapeType = ShapeType::Sphere;
-    childCol.radius = 0.25f;
-    childCol.userData = 99u;
+    childCol.primaryShape.shapeType = ShapeType::Sphere;
+    childCol.primaryShape.radius = 0.25f;
+    childCol.primaryShape.userData = 99u;
 
     Entity anchorA = tw.world.createEntity();
     mut TransformComponent axf = anchorA.addComponent<TransformComponent>();
@@ -2541,9 +2477,9 @@ void VerifyPhysicsEdgeCases_EcsHierarchyInterpolationNamedJointsAndQueries(){
     arb.type = BodyType::Static;
     arb.entityTag = Name("named_a");
     mut ColliderComponent acol = anchorA.addComponent<ColliderComponent>();
-    acol.shapeType = ShapeType::Hull;
-    acol.isBox = true;
-    acol.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+    acol.primaryShape.shapeType = ShapeType::Hull;
+    acol.primaryShape.isBox = true;
+    acol.primaryShape.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
 
     Entity anchorB = tw.world.createEntity();
     mut TransformComponent bxf = anchorB.addComponent<TransformComponent>();
@@ -2552,19 +2488,19 @@ void VerifyPhysicsEdgeCases_EcsHierarchyInterpolationNamedJointsAndQueries(){
     brb.type = BodyType::Dynamic;
     brb.entityTag = Name("named_b");
     mut ColliderComponent bcol = anchorB.addComponent<ColliderComponent>();
-    bcol.shapeType = ShapeType::Sphere;
-    bcol.radius = 0.25f;
+    bcol.primaryShape.shapeType = ShapeType::Sphere;
+    bcol.primaryShape.radius = 0.25f;
 
     Entity jointEnt = tw.world.createEntity();
     mut JointComponent jc = jointEnt.addComponent<JointComponent>();
-    jc.bodyEntityNameA = Name("named_a");
-    jc.bodyEntityNameB = Name("named_b");
-    jc.type = JointType::Distance;
-    jc.length = 1.0f;
-    jc.minLength = 1.0f;
-    jc.maxLength = 1.0f;
-    jc.breakForce = 0.5f;
-    jc.userData = 555u;
+    jc.primaryJoint.bodyEntityNameA = Name("named_a");
+    jc.primaryJoint.bodyEntityNameB = Name("named_b");
+    jc.primaryJoint.settings.type = JointType::Distance;
+    jc.primaryJoint.settings.length = 1.0f;
+    jc.primaryJoint.settings.minLength = 1.0f;
+    jc.primaryJoint.settings.maxLength = 1.0f;
+    jc.primaryJoint.settings.breakForce = 0.5f;
+    jc.primaryJoint.userData = 555u;
 
     EXPECT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
     EXPECT_TRUE(physSys.findNamedEntity(Name("ecs_child")) == childEnt.id());
@@ -2633,35 +2569,35 @@ void VerifyPhysicsEdgeCases_EcsHierarchyInterpolationNamedJointsAndQueries(){
     EXPECT_NEAR(rbOut.component.customMass, 7.5f, 1.0e-5f);
 
     ColliderComponentAsset colV2(Name("physics/v2_col"));
-    colV2.component.shapeType = ShapeType::Hull;
-    colV2.component.isBox = true;
-    colV2.component.radius = 0.0f;
-    colV2.component.userData = 6789u;
+    colV2.component.primaryShape.shapeType = ShapeType::Hull;
+    colV2.component.primaryShape.isBox = true;
+    colV2.component.primaryShape.radius = 0.0f;
+    colV2.component.primaryShape.userData = 6789u;
     colV2.component.entityTag = Name("v2_col_tag");
     EXPECT_TRUE(colV2.validatePayload());
     Vector<u8> colBuf;
     ASSERT_TRUE(colV2.serializeComponentPayload(colBuf));
     ColliderComponentAsset colOut(Name("physics/v2_col"));
     ASSERT_TRUE(colOut.loadComponentPayload(colBuf));
-    EXPECT_NEAR(colOut.component.radius, 0.0f, 1.0e-6f);
-    EXPECT_EQ(colOut.component.userData, cast<u64>(6789u));
+    EXPECT_NEAR(colOut.component.primaryShape.radius, 0.0f, 1.0e-6f);
+    EXPECT_EQ(colOut.component.primaryShape.userData, cast<u64>(6789u));
     EXPECT_TRUE(colOut.component.entityTag == Name("v2_col_tag"));
 
     JointComponentAsset jV2(Name("physics/v2_joint"));
-    jV2.component.bodyEntityNameA = Name("named_a");
-    jV2.component.bodyEntityNameB = Name("named_b");
-    jV2.component.userData = 9876u;
+    jV2.component.primaryJoint.bodyEntityNameA = Name("named_a");
+    jV2.component.primaryJoint.bodyEntityNameB = Name("named_b");
+    jV2.component.primaryJoint.userData = 9876u;
     Vector<u8> jBuf;
     ASSERT_TRUE(jV2.serializeComponentPayload(jBuf));
     JointComponentAsset jOut(Name("physics/v2_joint"));
     ASSERT_TRUE(jOut.loadComponentPayload(jBuf));
-    EXPECT_TRUE(jOut.component.bodyEntityNameA == Name("named_a"));
-    EXPECT_TRUE(jOut.component.bodyEntityNameB == Name("named_b"));
-    EXPECT_EQ(jOut.component.userData, cast<u64>(9876u));
+    EXPECT_TRUE(jOut.component.primaryJoint.bodyEntityNameA == Name("named_a"));
+    EXPECT_TRUE(jOut.component.primaryJoint.bodyEntityNameB == Name("named_b"));
+    EXPECT_EQ(jOut.component.primaryJoint.userData, cast<u64>(9876u));
 
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
-    jV2.component.correctionFactor = -0.1f;
+    jV2.component.primaryJoint.settings.correctionFactor = -0.1f;
     EXPECT_FALSE(jV2.validatePayload());
     EXPECT_TRUE(SawCapturedError(logger, "invalid joint parameters"));
 }
@@ -2786,27 +2722,27 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
     ASSERT_TRUE(jointWorld.createSphereShape(jB, dynSphSd, MakeSphereShape(VectorSingle(0.0f), 0.25f).value()).has_value());
 
     JointDef distDef;
-    distDef.type = JointType::Distance;
+    distDef.settings.type = JointType::Distance;
     distDef.bodyIdA = jA;
     distDef.bodyIdB = jB;
-    distDef.length = 1.5f;
-    distDef.enableSpring = true;
-    distDef.hertz = 6.0f;
-    distDef.dampingRatio = 0.8f;
-    distDef.enableLimit = true;
-    distDef.minLength = 0.5f;
-    distDef.maxLength = 2.0f;
+    distDef.settings.length = 1.5f;
+    distDef.settings.enableSpring = true;
+    distDef.settings.hertz = 6.0f;
+    distDef.settings.dampingRatio = 0.8f;
+    distDef.settings.enableLimit = true;
+    distDef.settings.minLength = 0.5f;
+    distDef.settings.maxLength = 2.0f;
     const JointId djId = jointWorld.createJoint(distDef).value();
 
     JointDef wheelDef;
-    wheelDef.type = JointType::Wheel;
+    wheelDef.settings.type = JointType::Wheel;
     wheelDef.bodyIdA = jA;
     wheelDef.bodyIdB = jB;
-    wheelDef.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-    wheelDef.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-    wheelDef.enableMotor = true;
-    wheelDef.motorSpeed = 3.0f;
-    wheelDef.maxMotorForce = 20.0f;
+    wheelDef.settings.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    wheelDef.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+    wheelDef.settings.enableMotor = true;
+    wheelDef.settings.motorSpeed = 3.0f;
+    wheelDef.settings.maxMotorForce = 20.0f;
     const JointId wjId = jointWorld.createJoint(wheelDef).value();
     for(u32 i = 0u; i < 20u; ++i)
         StepPhysicsWorld(jointWorld, 1.0f / 60.0f, 2u, scheduler);
@@ -2982,15 +2918,15 @@ void VerifyPhysicsEdgeCases_GpuStructParityAndAssetParentCodec(){
     EXPECT_FALSE(badRb.validatePayload());
 
     ColliderComponentAsset badCap(Name("physics/bad_capsule"));
-    badCap.component.shapeType = ShapeType::Capsule;
-    badCap.component.center = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-    badCap.component.center2 = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    badCap.component.primaryShape.shapeType = ShapeType::Capsule;
+    badCap.component.primaryShape.center = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+    badCap.component.primaryShape.center2 = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
     EXPECT_FALSE(badCap.validatePayload());
 
     JointComponentAsset badJoint(Name("physics/bad_limits"));
-    badJoint.component.enableLimit = true;
-    badJoint.component.lowerLimit = 1.0f;
-    badJoint.component.upperLimit = -1.0f;
+    badJoint.component.primaryJoint.settings.enableLimit = true;
+    badJoint.component.primaryJoint.settings.lowerLimit = 1.0f;
+    badJoint.component.primaryJoint.settings.upperLimit = -1.0f;
     EXPECT_FALSE(badJoint.validatePayload());
 
     PhysicsWorldConfigComponentAsset badCfg(Name("physics/bad_rest"));
@@ -3014,8 +2950,8 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     pRb.type = BodyType::Dynamic;
     pRb.entityTag = Name("ecs_hierarchy_parent");
     mut ColliderComponent pCol = parentEnt.addComponent<ColliderComponent>();
-    pCol.shapeType = ShapeType::Sphere;
-    pCol.radius = 0.5f;
+    pCol.primaryShape.shapeType = ShapeType::Sphere;
+    pCol.primaryShape.radius = 0.5f;
 
     Entity childEnt = tw.world.createEntity();
     childEnt.addComponent<TransformComponent>();
@@ -3028,18 +2964,18 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     cRb.type = BodyType::Dynamic;
     cRb.entityTag = Name("ecs_hierarchy_child");
     mut ColliderComponent cCol = childEnt.addComponent<ColliderComponent>();
-    cCol.shapeType = ShapeType::Capsule;
-    cCol.center = f32x4(0.0f, -0.3f, 0.0f, 0.0f);
-    cCol.center2 = f32x4(0.0f, 0.3f, 0.0f, 0.0f);
-    cCol.radius = 0.25f;
+    cCol.primaryShape.shapeType = ShapeType::Capsule;
+    cCol.primaryShape.center = f32x4(0.0f, -0.3f, 0.0f, 0.0f);
+    cCol.primaryShape.center2 = f32x4(0.0f, 0.3f, 0.0f, 0.0f);
+    cCol.primaryShape.radius = 0.25f;
 
     Entity jointEnt = tw.world.createEntity();
     mut JointComponent jc = jointEnt.addComponent<JointComponent>();
-    jc.type = JointType::Revolute;
-    jc.bodyEntityNameA = Name("ecs_hierarchy_parent");
-    jc.bodyEntityNameB = Name("ecs_hierarchy_child");
-    jc.localAnchorA = f32x4(0.0f, 1.2f, 0.0f, 0.0f);
-    jc.localAnchorB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    jc.primaryJoint.settings.type = JointType::Revolute;
+    jc.primaryJoint.bodyEntityNameA = Name("ecs_hierarchy_parent");
+    jc.primaryJoint.bodyEntityNameB = Name("ecs_hierarchy_child");
+    jc.primaryJoint.settings.localAnchorA = f32x4(0.0f, 1.2f, 0.0f, 0.0f);
+    jc.primaryJoint.settings.localAnchorB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
 
     Entity manualNamed = tw.world.createEntity();
     manualNamed.addComponent<TransformComponent>();
@@ -3055,13 +2991,13 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     ASSERT_TRUE(initialJoint.valid());
 
     mut ColliderComponent pColMut = parentEnt.getComponent<ColliderComponent>();
-    pColMut.radius = 0.75f;
-    pColMut.friction = 0.2f;
+    pColMut.primaryShape.radius = 0.75f;
+    pColMut.primaryShape.friction = 0.2f;
     pColMut.dirty = true;
     mut JointComponent jcMut = jointEnt.getComponent<JointComponent>();
-    jcMut.enableMotor = true;
-    jcMut.motorSpeed = 2.0f;
-    jcMut.maxMotorForce = 10.0f;
+    jcMut.primaryJoint.settings.enableMotor = true;
+    jcMut.primaryJoint.settings.motorSpeed = 2.0f;
+    jcMut.primaryJoint.settings.maxMotorForce = 10.0f;
     jcMut.dirty = true;
 
     ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
@@ -3086,9 +3022,9 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     mut RigidBodyComponent taRb = touchA.addComponent<RigidBodyComponent>();
     taRb.gravityScale = 0.0f;
     mut ColliderComponent taCol = touchA.addComponent<ColliderComponent>();
-    taCol.shapeType = ShapeType::Sphere;
-    taCol.radius = 0.6f;
-    taCol.enableContactEvents = true;
+    taCol.primaryShape.shapeType = ShapeType::Sphere;
+    taCol.primaryShape.radius = 0.6f;
+    taCol.primaryShape.enableContactEvents = true;
 
     Entity touchB = tw.world.createEntity();
     mut TransformComponent tbXf = touchB.addComponent<TransformComponent>();
@@ -3096,9 +3032,9 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     mut RigidBodyComponent tbRb = touchB.addComponent<RigidBodyComponent>();
     tbRb.gravityScale = 0.0f;
     mut ColliderComponent tbCol = touchB.addComponent<ColliderComponent>();
-    tbCol.shapeType = ShapeType::Sphere;
-    tbCol.radius = 0.6f;
-    tbCol.enableContactEvents = true;
+    tbCol.primaryShape.shapeType = ShapeType::Sphere;
+    tbCol.primaryShape.radius = 0.6f;
+    tbCol.primaryShape.enableContactEvents = true;
 
     ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
     tw.world.destroyEntity(touchB.id());
@@ -3126,13 +3062,13 @@ void VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw(){
     ASSERT_TRUE(dbgWorld.createCapsuleShape(enA, ShapeDef(), dbgCap).has_value());
     ASSERT_TRUE(dbgWorld.createCapsuleShape(enB, ShapeDef(), dbgCap).has_value());
     Array<JointDef, 7u> jTypes;
-    jTypes[0u].type = JointType::Distance; jTypes[0u].enableLimit = true; jTypes[0u].minLength = 0.5f; jTypes[0u].maxLength = 3.0f;
-    jTypes[1u].type = JointType::Spherical; jTypes[1u].enableLimit = true; jTypes[1u].swingLimit = 0.5f;
-    jTypes[2u].type = JointType::Revolute; jTypes[2u].enableLimit = true; jTypes[2u].lowerLimit = -0.4f; jTypes[2u].upperLimit = 0.4f;
-    jTypes[3u].type = JointType::Prismatic; jTypes[3u].enableLimit = true; jTypes[3u].lowerLimit = -0.3f; jTypes[3u].upperLimit = 0.3f;
-    jTypes[4u].type = JointType::Fixed;
-    jTypes[5u].type = JointType::Motor;
-    jTypes[6u].type = JointType::Wheel; jTypes[6u].enableLimit = true; jTypes[6u].lowerLimit = -0.2f; jTypes[6u].upperLimit = 0.2f;
+    jTypes[0u].settings.type = JointType::Distance; jTypes[0u].settings.enableLimit = true; jTypes[0u].settings.minLength = 0.5f; jTypes[0u].settings.maxLength = 3.0f;
+    jTypes[1u].settings.type = JointType::Spherical; jTypes[1u].settings.enableLimit = true; jTypes[1u].settings.swingLimit = 0.5f;
+    jTypes[2u].settings.type = JointType::Revolute; jTypes[2u].settings.enableLimit = true; jTypes[2u].settings.lowerLimit = -0.4f; jTypes[2u].settings.upperLimit = 0.4f;
+    jTypes[3u].settings.type = JointType::Prismatic; jTypes[3u].settings.enableLimit = true; jTypes[3u].settings.lowerLimit = -0.3f; jTypes[3u].settings.upperLimit = 0.3f;
+    jTypes[4u].settings.type = JointType::Fixed;
+    jTypes[5u].settings.type = JointType::Motor;
+    jTypes[6u].settings.type = JointType::Wheel; jTypes[6u].settings.enableLimit = true; jTypes[6u].settings.lowerLimit = -0.2f; jTypes[6u].settings.upperLimit = 0.2f;
     for(u32 ji = 0u; ji < 7u; ++ji){
         jTypes[ji].bodyIdA = enA;
         jTypes[ji].bodyIdB = enB;
@@ -3240,16 +3176,16 @@ void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
         rbB.type = BodyType::Dynamic;
         rbB.entityTag = Name("motor_scale_b");
         mut ColliderComponent colB = bodyB.addComponent<ColliderComponent>();
-        colB.shapeType = ShapeType::Sphere;
-        colB.radius = 0.4f;
+        colB.primaryShape.shapeType = ShapeType::Sphere;
+        colB.primaryShape.radius = 0.4f;
 
         Entity motorEnt = tw.world.createEntity();
         mut JointComponent jc = motorEnt.addComponent<JointComponent>();
-        jc.type = JointType::Motor;
-        jc.bodyEntityA = bodyA.id();
-        jc.bodyEntityB = bodyB.id();
-        jc.linearOffset = f32x4(1.5f, 0.0f, 0.0f, 0.0f);
-        jc.maxMotorForce = 100.0f;
+        jc.primaryJoint.settings.type = JointType::Motor;
+        jc.primaryJoint.bodyEntityA = bodyA.id();
+        jc.primaryJoint.bodyEntityB = bodyB.id();
+        jc.primaryJoint.settings.linearOffset = f32x4(1.5f, 0.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.maxMotorForce = 100.0f;
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         in JointComponent syncedBefore = motorEnt.getComponent<JointComponent>();
@@ -3352,11 +3288,11 @@ void VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries(){
     ASSERT_TRUE(lockWorld.createSphereShape(lockedRotId, sphSd, MakeSphereShape(VectorSingle(0.0f), 0.4f).value()).has_value());
 
     JointDef sphJd;
-    sphJd.type = JointType::Spherical;
+    sphJd.settings.type = JointType::Spherical;
     sphJd.bodyIdA = baseId;
     sphJd.bodyIdB = lockedRotId;
-    sphJd.localAnchorA = f32x4(0.5f, 0.0f, 0.0f, 0.0f);
-    sphJd.localAnchorB = f32x4(-0.5f, 0.0f, 0.0f, 0.0f);
+    sphJd.settings.localAnchorA = f32x4(0.5f, 0.0f, 0.0f, 0.0f);
+    sphJd.settings.localAnchorB = f32x4(-0.5f, 0.0f, 0.0f, 0.0f);
     ASSERT_TRUE(lockWorld.createJoint(sphJd).has_value());
     EXPECT_TRUE(lockWorld.applyAngularImpulse(lockedRotId, VectorSingle(0.5f, 0.6f, 2.0f, 0.0f), true));
     StepPhysicsWorld(lockWorld, 1.0f / 60.0f, 2u, scheduler);
@@ -3478,16 +3414,16 @@ void VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries(){
         EXPECT_TRUE(qWorld.rayCastClosest(faceRay).hit);
 
         JointDef badLimJd;
-        badLimJd.type = JointType::Revolute;
+        badLimJd.settings.type = JointType::Revolute;
         badLimJd.bodyIdA = dId;
         badLimJd.bodyIdB = sIdB;
-        badLimJd.enableLimit = true;
-        badLimJd.lowerLimit = 1.0f;
-        badLimJd.upperLimit = -1.0f;
+        badLimJd.settings.enableLimit = true;
+        badLimJd.settings.lowerLimit = 1.0f;
+        badLimJd.settings.upperLimit = -1.0f;
         EXPECT_FALSE(qWorld.createJoint(badLimJd).has_value());
 
         JointDef goodJd;
-        goodJd.type = JointType::Revolute;
+        goodJd.settings.type = JointType::Revolute;
         goodJd.bodyIdA = dId;
         goodJd.bodyIdB = sIdB;
         const JointId jId = qWorld.createJoint(goodJd).value();
@@ -3572,8 +3508,8 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     cmRb.useCustomMass = true;
     cmRb.customMass = 12.5f;
     mut ColliderComponent cmCol = cmEnt.addComponent<ColliderComponent>();
-    cmCol.shapeType = ShapeType::Sphere;
-    cmCol.radius = 0.5f;
+    cmCol.primaryShape.shapeType = ShapeType::Sphere;
+    cmCol.primaryShape.radius = 0.5f;
 
     Entity staticEnt = tw.world.createEntity();
     mut TransformComponent staticXf = staticEnt.addComponent<TransformComponent>();
@@ -3581,8 +3517,8 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     mut RigidBodyComponent staticRb = staticEnt.addComponent<RigidBodyComponent>();
     staticRb.type = BodyType::Static;
     mut ColliderComponent staticCol = staticEnt.addComponent<ColliderComponent>();
-    staticCol.shapeType = ShapeType::Sphere;
-    staticCol.radius = 0.4f;
+    staticCol.primaryShape.shapeType = ShapeType::Sphere;
+    staticCol.primaryShape.radius = 0.4f;
 
     Entity swapEnt = tw.world.createEntity();
     mut TransformComponent swapXf = swapEnt.addComponent<TransformComponent>();
@@ -3590,13 +3526,13 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     mut RigidBodyComponent swapRb = swapEnt.addComponent<RigidBodyComponent>();
     swapRb.type = BodyType::Static;
     mut ColliderComponent swapCol = swapEnt.addComponent<ColliderComponent>();
-    swapCol.shapeType = ShapeType::Mesh;
-    swapCol.meshVertices.push_back(f32x4(-1.0f, 0.0f, -1.0f, 0.0f));
-    swapCol.meshVertices.push_back(f32x4(-1.0f, 0.0f, 1.0f, 0.0f));
-    swapCol.meshVertices.push_back(f32x4(1.0f, 0.0f, 1.0f, 0.0f));
-    swapCol.meshVertices.push_back(f32x4(1.0f, 0.0f, -1.0f, 0.0f));
-    swapCol.meshIndices.push_back(0u); swapCol.meshIndices.push_back(1u); swapCol.meshIndices.push_back(2u);
-    swapCol.meshIndices.push_back(0u); swapCol.meshIndices.push_back(2u); swapCol.meshIndices.push_back(3u);
+    swapCol.primaryShape.shapeType = ShapeType::Mesh;
+    swapCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, 0.0f, -1.0f, 0.0f));
+    swapCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, 0.0f, 1.0f, 0.0f));
+    swapCol.primaryShape.meshVertices.push_back(f32x4(1.0f, 0.0f, 1.0f, 0.0f));
+    swapCol.primaryShape.meshVertices.push_back(f32x4(1.0f, 0.0f, -1.0f, 0.0f));
+    swapCol.primaryShape.meshIndices.push_back(0u); swapCol.primaryShape.meshIndices.push_back(1u); swapCol.primaryShape.meshIndices.push_back(2u);
+    swapCol.primaryShape.meshIndices.push_back(0u); swapCol.primaryShape.meshIndices.push_back(2u); swapCol.primaryShape.meshIndices.push_back(3u);
 
     Entity sleepEnt = tw.world.createEntity();
     mut TransformComponent sleepXf = sleepEnt.addComponent<TransformComponent>();
@@ -3605,8 +3541,8 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     sleepRb.type = BodyType::Dynamic;
     sleepRb.isAwake = false;
     mut ColliderComponent sleepCol = sleepEnt.addComponent<ColliderComponent>();
-    sleepCol.shapeType = ShapeType::Sphere;
-    sleepCol.radius = 0.5f;
+    sleepCol.primaryShape.shapeType = ShapeType::Sphere;
+    sleepCol.primaryShape.radius = 0.5f;
 
     Entity disEnt = tw.world.createEntity();
     disEnt.addComponent<TransformComponent>();
@@ -3614,16 +3550,16 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     disRb.type = BodyType::Dynamic;
     disRb.isEnabled = false;
     mut ColliderComponent disCol = disEnt.addComponent<ColliderComponent>();
-    disCol.shapeType = ShapeType::Sphere;
-    disCol.radius = 0.4f;
+    disCol.primaryShape.shapeType = ShapeType::Sphere;
+    disCol.primaryShape.radius = 0.4f;
 
     Entity extraEnt = tw.world.createEntity();
     mut TransformComponent extraXf = extraEnt.addComponent<TransformComponent>();
     extraXf.position = f32x4(-8.0f, 0.0f, 0.0f, 0.0f);
     extraEnt.addComponent<RigidBodyComponent>();
     mut ColliderComponent extraCol = extraEnt.addComponent<ColliderComponent>();
-    extraCol.shapeType = ShapeType::Sphere;
-    extraCol.radius = 0.4f;
+    extraCol.primaryShape.shapeType = ShapeType::Sphere;
+    extraCol.primaryShape.radius = 0.4f;
     ColliderShapeEntry badExtra;
     badExtra.shapeType = ShapeType::Capsule;
     badExtra.center = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -3650,8 +3586,8 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     cRb.isAwake = false;
     cRb.entityTag = Name("pm_child_tag");
     mut ColliderComponent cCol = childEnt.addComponent<ColliderComponent>();
-    cCol.shapeType = ShapeType::Sphere;
-    cCol.radius = 0.3f;
+    cCol.primaryShape.shapeType = ShapeType::Sphere;
+    cCol.primaryShape.radius = 0.3f;
 
     Entity jBodyA = tw.world.createEntity();
     jBodyA.addComponent<TransformComponent>();
@@ -3667,9 +3603,9 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
 
     Entity jointEnt = tw.world.createEntity();
     mut JointComponent jc = jointEnt.addComponent<JointComponent>();
-    jc.type = JointType::Revolute;
-    jc.bodyEntityNameA = Name("pm_joint_a");
-    jc.bodyEntityNameB = Name("pm_joint_b");
+    jc.primaryJoint.settings.type = JointType::Revolute;
+    jc.primaryJoint.bodyEntityNameA = Name("pm_joint_a");
+    jc.primaryJoint.bodyEntityNameB = Name("pm_joint_b");
 
     ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
 
@@ -3692,10 +3628,10 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     swapRbMut.type = BodyType::Dynamic;
     swapRbMut.dirty = true;
     mut ColliderComponent swapColMut = swapEnt.getComponent<ColliderComponent>();
-    swapColMut.shapeType = ShapeType::Sphere;
-    swapColMut.radius = 0.5f;
-    swapColMut.meshVertices.clear();
-    swapColMut.meshIndices.clear();
+    swapColMut.primaryShape.shapeType = ShapeType::Sphere;
+    swapColMut.primaryShape.radius = 0.5f;
+    swapColMut.primaryShape.meshVertices.clear();
+    swapColMut.primaryShape.meshIndices.clear();
     swapColMut.dirty = true;
 
     mut RigidBodyComponent sleepRbMut = sleepEnt.getComponent<RigidBodyComponent>();
@@ -3708,10 +3644,10 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     extraColMut.extraShapes[0u].center2 = f32x4(0.0f, 0.5f, 0.0f, 0.0f);
 
     mut JointComponent jcFail = jointEnt.getComponent<JointComponent>();
-    jcFail.localAnchorA = f32x4(0.1f, 0.0f, 0.0f, 0.0f);
-    jcFail.enableLimit = true;
-    jcFail.lowerLimit = 1.0f;
-    jcFail.upperLimit = -1.0f;
+    jcFail.primaryJoint.settings.localAnchorA = f32x4(0.1f, 0.0f, 0.0f, 0.0f);
+    jcFail.primaryJoint.settings.enableLimit = true;
+    jcFail.primaryJoint.settings.lowerLimit = 1.0f;
+    jcFail.primaryJoint.settings.upperLimit = -1.0f;
     jcFail.dirty = true;
 
     childEnt.removeComponent<PhysicsParentComponent>();
@@ -3734,16 +3670,16 @@ void VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle(){
     EXPECT_NEAR(childEnt.getComponent<TransformComponent>().position.y, 2.0f, 1.0e-4f);
 
     mut JointComponent jcRecover = jointEnt.getComponent<JointComponent>();
-    jcRecover.upperLimit = 2.0f;
+    jcRecover.primaryJoint.settings.upperLimit = 2.0f;
     jcRecover.dirty = true;
     ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
     EXPECT_TRUE(jointEnt.getComponent<JointComponent>().runtimeJointId.valid());
 
     mut JointComponent jcMiss = jointEnt.getComponent<JointComponent>();
-    jcMiss.bodyEntityNameA = Name("pm_missing_tag");
+    jcMiss.primaryJoint.bodyEntityNameA = Name("pm_missing_tag");
     jcMiss.dirty = true;
     ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
-    EXPECT_FALSE(jointEnt.getComponent<JointComponent>().bodyEntityA.valid());
+    EXPECT_FALSE(jointEnt.getComponent<JointComponent>().primaryJoint.bodyEntityA.valid());
     EXPECT_FALSE(jointEnt.getComponent<JointComponent>().runtimeJointId.valid());
 }
 
@@ -4013,8 +3949,8 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         mut RigidBodyComponent sRb = sEnt.addComponent<RigidBodyComponent>();
         sRb.type = BodyType::Static;
         mut ColliderComponent sCol = sEnt.addComponent<ColliderComponent>();
-        sCol.shapeType = ShapeType::Sphere;
-        sCol.radius = 0.5f;
+        sCol.primaryShape.shapeType = ShapeType::Sphere;
+        sCol.primaryShape.radius = 0.5f;
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         const BodyId sBodyId = sEnt.getComponent<RigidBodyComponent>().runtimeBodyId;
@@ -4052,10 +3988,10 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         mut RigidBodyComponent negRb = negEnt.addComponent<RigidBodyComponent>();
         negRb.type = BodyType::Static;
         mut ColliderComponent negCol = negEnt.addComponent<ColliderComponent>();
-        negCol.shapeType = ShapeType::Hull;
-        negCol.isBox = true;
-        negCol.halfExtents = f32x4(2.0f, 0.2f, 0.2f, 0.0f);
-        negCol.localRotation = f32x4(boxRot);
+        negCol.primaryShape.shapeType = ShapeType::Hull;
+        negCol.primaryShape.isBox = true;
+        negCol.primaryShape.halfExtents = f32x4(2.0f, 0.2f, 0.2f, 0.0f);
+        negCol.primaryShape.localRotation = f32x4(boxRot);
 
         Entity cycA = tw.world.createEntity();
         mut TransformComponent cycAXf = cycA.addComponent<TransformComponent>();
@@ -4064,8 +4000,8 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         cycARb.type = BodyType::Dynamic;
         cycARb.linearVelocity = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
         mut ColliderComponent cycACol = cycA.addComponent<ColliderComponent>();
-        cycACol.shapeType = ShapeType::Sphere;
-        cycACol.radius = 0.2f;
+        cycACol.primaryShape.shapeType = ShapeType::Sphere;
+        cycACol.primaryShape.radius = 0.2f;
 
         Entity cycB = tw.world.createEntity();
         mut TransformComponent cycBXf = cycB.addComponent<TransformComponent>();
@@ -4074,8 +4010,8 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         cycBRb.type = BodyType::Dynamic;
         cycBRb.linearVelocity = f32x4(-1.0f, 0.0f, 0.0f, 0.0f);
         mut ColliderComponent cycBCol = cycB.addComponent<ColliderComponent>();
-        cycBCol.shapeType = ShapeType::Sphere;
-        cycBCol.radius = 0.2f;
+        cycBCol.primaryShape.shapeType = ShapeType::Sphere;
+        cycBCol.primaryShape.radius = 0.2f;
 
         mut PhysicsParentComponent cycAPar = cycA.addComponent<PhysicsParentComponent>();
         cycAPar.parent = cycB.id();
@@ -4099,9 +4035,9 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
         JointComponentAsset limAsset(Name("physics/audit_lim"));
-        limAsset.component.enableLimit = false;
-        limAsset.component.lowerLimit = 1.0f;
-        limAsset.component.upperLimit = -1.0f;
+        limAsset.component.primaryJoint.settings.enableLimit = false;
+        limAsset.component.primaryJoint.settings.lowerLimit = 1.0f;
+        limAsset.component.primaryJoint.settings.upperLimit = -1.0f;
         EXPECT_FALSE(limAsset.validatePayload());
 
         RigidBodyComponentAsset nanRbAsset(Name("physics/audit_nan_rb"));
@@ -4110,8 +4046,8 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         EXPECT_FALSE(nanRbAsset.validatePayload());
 
         ColliderComponentAsset colAsset(Name("physics/audit_col_apply"));
-        colAsset.component.shapeType = ShapeType::Sphere;
-        colAsset.component.radius = 0.5f;
+        colAsset.component.primaryShape.shapeType = ShapeType::Sphere;
+        colAsset.component.primaryShape.radius = 0.5f;
         Entity applyEnt = tw.world.createEntity();
         mut ColliderComponent preCol = applyEnt.addComponent<ColliderComponent>();
         preCol.dirty = false;
@@ -4124,11 +4060,11 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         Entity entRefA = tw.world.createEntity();
         Entity entRefB = tw.world.createEntity();
         mut JointComponent preJoint = applyEnt.addComponent<JointComponent>();
-        preJoint.bodyEntityA = entRefA.id();
-        preJoint.bodyEntityB = entRefB.id();
+        preJoint.primaryJoint.bodyEntityA = entRefA.id();
+        preJoint.primaryJoint.bodyEntityB = entRefB.id();
         jApplyAsset.applyToEntity(applyEnt);
-        EXPECT_FALSE(applyEnt.getComponent<JointComponent>().bodyEntityA.valid());
-        EXPECT_FALSE(applyEnt.getComponent<JointComponent>().bodyEntityB.valid());
+        EXPECT_FALSE(applyEnt.getComponent<JointComponent>().primaryJoint.bodyEntityA.valid());
+        EXPECT_FALSE(applyEnt.getComponent<JointComponent>().primaryJoint.bodyEntityB.valid());
 
         Vector<u8> rawPayload;
         ASSERT_TRUE(colAsset.serializeComponentPayload(rawPayload));
@@ -4161,21 +4097,21 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
         ASSERT_TRUE(dbgWorld.createSphereShape(bodyB, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.5f).value()).has_value());
 
         JointDef revJd;
-        revJd.type = JointType::Revolute;
+        revJd.settings.type = JointType::Revolute;
         revJd.bodyIdA = bodyA;
         revJd.bodyIdB = bodyB;
-        revJd.enableLimit = true;
-        revJd.lowerLimit = -0.3f;
-        revJd.upperLimit = 0.3f;
-        revJd.referenceRotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.2f, 0.3f, 0.0f, 0.0f)));
+        revJd.settings.enableLimit = true;
+        revJd.settings.lowerLimit = -0.3f;
+        revJd.settings.upperLimit = 0.3f;
+        revJd.settings.referenceRotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.2f, 0.3f, 0.0f, 0.0f)));
         ASSERT_TRUE(dbgWorld.createJoint(revJd).has_value());
 
         JointDef motJd;
-        motJd.type = JointType::Motor;
+        motJd.settings.type = JointType::Motor;
         motJd.bodyIdA = bodyA;
         motJd.bodyIdB = bodyB;
-        motJd.maxTorque = 5.0f;
-        motJd.referenceRotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.5f, 0.0f, 0.0f)));
+        motJd.settings.maxTorque = 5.0f;
+        motJd.settings.referenceRotation = f32x4(QuaternionRotationRollPitchYawFromVector(VectorSingle(0.0f, 0.5f, 0.0f, 0.0f)));
         ASSERT_TRUE(dbgWorld.createJoint(motJd).has_value());
 
         BodyDef specC;
@@ -4427,13 +4363,13 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         const BodyId jB = dbgJ.createBody(bdB).value();
 
         JointDef prisJd;
-        prisJd.type = JointType::Prismatic;
+        prisJd.settings.type = JointType::Prismatic;
         prisJd.bodyIdA = jA;
         prisJd.bodyIdB = jB;
-        prisJd.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-        prisJd.enableLimit = true;
-        prisJd.lowerLimit = 0.0f;
-        prisJd.upperLimit = 30.0f;
+        prisJd.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        prisJd.settings.enableLimit = true;
+        prisJd.settings.lowerLimit = 0.0f;
+        prisJd.settings.upperLimit = 30.0f;
         const Expected<JointId> prisRes = dbgJ.createJoint(prisJd);
         ASSERT_TRUE(prisRes.has_value());
         const JointId prisId = prisRes.value();
@@ -4455,11 +4391,11 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
 
         EXPECT_TRUE(dbgJ.destroyJoint(prisId));
         JointDef motJd;
-        motJd.type = JointType::Motor;
+        motJd.settings.type = JointType::Motor;
         motJd.bodyIdA = jA;
         motJd.bodyIdB = jB;
-        motJd.linearOffset = f32x4(25.0f, 0.0f, 0.0f, 0.0f);
-        motJd.maxMotorForce = 10.0f;
+        motJd.settings.linearOffset = f32x4(25.0f, 0.0f, 0.0f, 0.0f);
+        motJd.settings.maxMotorForce = 10.0f;
         ASSERT_TRUE(dbgJ.createJoint(motJd).has_value());
         BuildPhysicsDebugLines(dbgJ, opts, projector, lines);
         EXPECT_GT(lines.size(), cast<usize>(0u));
@@ -4473,8 +4409,8 @@ void VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle(){
         ASSERT_EQ(idBoxLines.size(), rotBoxLines.size());
         f32 maxDiff = 0.0f;
         for(usize li = 0u; li < idBoxLines.size(); ++li){
-            maxDiff = SimdMax(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].start) - VectorSingle(idBoxLines[li].start)).x);
-            maxDiff = SimdMax(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].end) - VectorSingle(idBoxLines[li].end)).x);
+            maxDiff = Max(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].start) - VectorSingle(idBoxLines[li].start)).x);
+            maxDiff = Max(maxDiff, Vector3Length(VectorSingle(rotBoxLines[li].end) - VectorSingle(idBoxLines[li].end)).x);
         }
         EXPECT_GT(maxDiff, 1.0e-4f);
     }
@@ -4797,14 +4733,14 @@ void VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot(){
         ASSERT_TRUE(world.createSphereShape(bId, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.35f).value()).has_value());
 
         JointDef jd;
-        jd.type = JointType::SixDof;
+        jd.settings.type = JointType::SixDof;
         jd.bodyIdA = aId;
         jd.bodyIdB = bId;
-        jd.localAnchorA = f32x4(0.4f, 0.0f, 0.0f, 0.0f);
-        jd.localAnchorB = f32x4(-0.4f, 0.0f, 0.0f, 0.0f);
-        jd.sixDofAxes[0u].motion = JointMotion::Limited;
-        jd.sixDofAxes[0u].lowerLimit = -0.2f;
-        jd.sixDofAxes[0u].upperLimit = 0.2f;
+        jd.settings.localAnchorA = f32x4(0.4f, 0.0f, 0.0f, 0.0f);
+        jd.settings.localAnchorB = f32x4(-0.4f, 0.0f, 0.0f, 0.0f);
+        jd.settings.sixDofAxes[0u].motion = JointMotion::Limited;
+        jd.settings.sixDofAxes[0u].lowerLimit = -0.2f;
+        jd.settings.sixDofAxes[0u].upperLimit = 0.2f;
         ASSERT_TRUE(world.createJoint(jd).has_value());
 
         for(u32 i = 0u; i < 20u; ++i)
@@ -4863,12 +4799,14 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         EXPECT_FALSE(matLoaded.loadBinary(matTrunc));
 
         CollisionLayerMatrixAsset layerAsset(Name("physics/edge_layers"));
-        layerAsset.matrix.layerNames[0u] = Name("player");
-        layerAsset.matrix.layerNames[1u] = Name("trigger");
+        CollisionLayerMatrix layerMat;
+        layerMat.layerNames[0u] = Name("player");
+        layerMat.layerNames[1u] = Name("trigger");
+        layerAsset.setMatrix(layerMat);
         ASSERT_TRUE(layerAsset.setLayersCollide(0u, 1u, false));
         ASSERT_TRUE(layerAsset.validatePayload());
         Vector<u8> layerBin;
-        ASSERT_TRUE(codec.serializeCollisionLayerMatrix(layerAsset.matrix, layerBin));
+        ASSERT_TRUE(codec.serializeCollisionLayerMatrix(layerAsset.layerMatrix(), layerBin));
         CollisionLayerMatrixAsset layerLoaded(Name("physics/edge_layers"));
         ASSERT_TRUE(layerLoaded.loadBinary(layerBin));
         EXPECT_FALSE(layerLoaded.layersCollide(0u, 1u));
@@ -4926,11 +4864,11 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
 
     {
         ColliderComponentAsset colV3(Name("physics/v3_col"));
-        colV3.component.shapeType = ShapeType::Cylinder;
-        colV3.component.radius = 0.45f;
-        colV3.component.cylinderHalfHeight = 0.9f;
-        colV3.component.staticFriction = 0.75f;
-        colV3.component.anisotropicFriction = f32x4(1.0f, 0.5f, 0.5f, 0.0f);
+        colV3.component.primaryShape.shapeType = ShapeType::Cylinder;
+        colV3.component.primaryShape.radius = 0.45f;
+        colV3.component.primaryShape.cylinderHalfHeight = 0.9f;
+        colV3.component.primaryShape.staticFriction = 0.75f;
+        colV3.component.primaryShape.anisotropicFriction = f32x4(1.0f, 0.5f, 0.5f, 0.0f);
         ColliderShapeEntry extraCone;
         extraCone.shapeType = ShapeType::Cone;
         extraCone.radius = 0.35f;
@@ -4946,28 +4884,28 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         ASSERT_TRUE(colV3.serializeComponentPayload(colBytes));
         ColliderComponentAsset colOut(Name("physics/v3_col"));
         ASSERT_TRUE(colOut.loadComponentPayload(colBytes));
-        EXPECT_EQ(cast<u8>(colOut.component.shapeType), cast<u8>(ShapeType::Cylinder));
-        EXPECT_FLOAT_EQ(colOut.component.cylinderHalfHeight, 0.9f);
+        EXPECT_EQ(cast<u8>(colOut.component.primaryShape.shapeType), cast<u8>(ShapeType::Cylinder));
+        EXPECT_FLOAT_EQ(colOut.component.primaryShape.cylinderHalfHeight, 0.9f);
         ASSERT_EQ(colOut.component.extraShapes.size(), 2u);
         EXPECT_EQ(cast<u8>(colOut.component.extraShapes[0u].shapeType), cast<u8>(ShapeType::Cone));
         EXPECT_EQ(cast<u8>(colOut.component.extraShapes[1u].shapeType), cast<u8>(ShapeType::Plane));
 
         JointComponentAsset jV3(Name("physics/v3_joint"));
-        jV3.component.type = JointType::SixDof;
-        jV3.component.sixDofAxes[0u].motion = JointMotion::Limited;
-        jV3.component.sixDofAxes[0u].lowerLimit = -0.5f;
-        jV3.component.sixDofAxes[0u].upperLimit = 0.5f;
+        jV3.component.primaryJoint.settings.type = JointType::SixDof;
+        jV3.component.primaryJoint.settings.sixDofAxes[0u].motion = JointMotion::Limited;
+        jV3.component.primaryJoint.settings.sixDofAxes[0u].lowerLimit = -0.5f;
+        jV3.component.primaryJoint.settings.sixDofAxes[0u].upperLimit = 0.5f;
         JointEntry pulleyExtra;
-        pulleyExtra.type = JointType::Pulley;
-        pulleyExtra.ratio = 1.5f;
-        pulleyExtra.groundAnchorA = f32x4(-1.0f, 4.0f, 0.0f, 0.0f);
-        pulleyExtra.groundAnchorB = f32x4(1.0f, 4.0f, 0.0f, 0.0f);
-        pulleyExtra.lengthA = 2.0f;
-        pulleyExtra.lengthB = 2.0f;
+        pulleyExtra.settings.type = JointType::Pulley;
+        pulleyExtra.settings.ratio = 1.5f;
+        pulleyExtra.settings.groundAnchorA = f32x4(-1.0f, 4.0f, 0.0f, 0.0f);
+        pulleyExtra.settings.groundAnchorB = f32x4(1.0f, 4.0f, 0.0f, 0.0f);
+        pulleyExtra.settings.lengthA = 2.0f;
+        pulleyExtra.settings.lengthB = 2.0f;
         jV3.component.extraJoints.push_back(pulleyExtra);
         JointEntry pathExtra;
-        pathExtra.type = JointType::Path;
-        pathExtra.pathClosed = true;
+        pathExtra.settings.type = JointType::Path;
+        pathExtra.settings.pathClosed = true;
         pathExtra.pathPoints.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
         pathExtra.pathPoints.push_back(f32x4(2.0f, 0.0f, 0.0f, 0.0f));
         pathExtra.pathPoints.push_back(f32x4(2.0f, 2.0f, 0.0f, 0.0f));
@@ -4977,11 +4915,11 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         ASSERT_TRUE(jV3.serializeComponentPayload(jBytes));
         JointComponentAsset jOut(Name("physics/v3_joint"));
         ASSERT_TRUE(jOut.loadComponentPayload(jBytes));
-        EXPECT_EQ(cast<u8>(jOut.component.type), cast<u8>(JointType::SixDof));
-        EXPECT_EQ(cast<u8>(jOut.component.sixDofAxes[0u].motion), cast<u8>(JointMotion::Limited));
+        EXPECT_EQ(cast<u8>(jOut.component.primaryJoint.settings.type), cast<u8>(JointType::SixDof));
+        EXPECT_EQ(cast<u8>(jOut.component.primaryJoint.settings.sixDofAxes[0u].motion), cast<u8>(JointMotion::Limited));
         ASSERT_EQ(jOut.component.extraJoints.size(), 2u);
-        EXPECT_EQ(cast<u8>(jOut.component.extraJoints[0u].type), cast<u8>(JointType::Pulley));
-        EXPECT_EQ(cast<u8>(jOut.component.extraJoints[1u].type), cast<u8>(JointType::Path));
+        EXPECT_EQ(cast<u8>(jOut.component.extraJoints[0u].settings.type), cast<u8>(JointType::Pulley));
+        EXPECT_EQ(cast<u8>(jOut.component.extraJoints[1u].settings.type), cast<u8>(JointType::Path));
         EXPECT_EQ(jOut.component.extraJoints[1u].pathPoints.size(), 3u);
 
         PhysicsParentComponentAsset ppAsset(Name("physics/v3_parent"));
@@ -5027,9 +4965,9 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         mut RigidBodyComponent pRb = parentEnt.addComponent<RigidBodyComponent>();
         pRb.type = BodyType::Dynamic;
         mut ColliderComponent pCol = parentEnt.addComponent<ColliderComponent>();
-        pCol.shapeType = ShapeType::Hull;
-        pCol.isBox = true;
-        pCol.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+        pCol.primaryShape.shapeType = ShapeType::Hull;
+        pCol.primaryShape.isBox = true;
+        pCol.primaryShape.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         const BodyId parentBodyId = pRb.runtimeBodyId;
@@ -5044,8 +4982,8 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         childEnt.addComponent<PhysicsParentComponent>().parent = parentEnt.id();
         childEnt.getComponent<PhysicsParentComponent>().attachColliderToParentBody = true;
         mut ColliderComponent cCol = childEnt.addComponent<ColliderComponent>();
-        cCol.shapeType = ShapeType::Sphere;
-        cCol.radius = 0.5f;
+        cCol.primaryShape.shapeType = ShapeType::Sphere;
+        cCol.primaryShape.radius = 0.5f;
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         EXPECT_EQ(cCol.boundBodyId, parentBodyId);
@@ -5100,7 +5038,7 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         deadXf.position = f32x4(-5.0f, 2.0f, 0.0f, 0.0f);
         mut RigidBodyComponent deadRb = deadEnt.addComponent<RigidBodyComponent>();
         deadRb.type = BodyType::Dynamic;
-        deadEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        deadEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         const BodyId deadBodyId = deadRb.runtimeBodyId;
         ASSERT_TRUE(deadBodyId.valid());
@@ -5131,8 +5069,8 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         floatEnt.addComponent<TransformComponent>().position = f32x4(0.0f, 1.0f, 15.0f, 0.0f);
         floatEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         mut ColliderComponent flCol = floatEnt.addComponent<ColliderComponent>();
-        flCol.shapeType = ShapeType::Sphere;
-        flCol.density = 300.0f;
+        flCol.primaryShape.shapeType = ShapeType::Sphere;
+        flCol.primaryShape.density = 300.0f;
 
         Entity charEnt = tw.world.createEntity();
         charEnt.addComponent<TransformComponent>().position = f32x4(0.0f, 1.5f, -10.0f, 0.0f);
@@ -5211,29 +5149,29 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         }
 
         JointDef j6;
-        j6.type = JointType::SixDof;
+        j6.settings.type = JointType::SixDof;
         j6.bodyIdA = bodyA; j6.bodyIdB = bodyB;
-        j6.sixDofAxes[0u].motion = JointMotion::Limited;
-        j6.sixDofAxes[0u].lowerLimit = -0.3f; j6.sixDofAxes[0u].upperLimit = 0.3f;
+        j6.settings.sixDofAxes[0u].motion = JointMotion::Limited;
+        j6.settings.sixDofAxes[0u].lowerLimit = -0.3f; j6.settings.sixDofAxes[0u].upperLimit = 0.3f;
         ASSERT_TRUE(dbg.createJoint(j6).has_value());
 
         JointDef jp;
-        jp.type = JointType::Pulley;
+        jp.settings.type = JointType::Pulley;
         jp.bodyIdA = bodyA; jp.bodyIdB = bodyB;
-        jp.groundAnchorA = f32x4(-1.0f, 2.0f, 0.0f, 0.0f);
-        jp.groundAnchorB = f32x4( 1.0f, 2.0f, 0.0f, 0.0f);
+        jp.settings.groundAnchorA = f32x4(-1.0f, 2.0f, 0.0f, 0.0f);
+        jp.settings.groundAnchorB = f32x4( 1.0f, 2.0f, 0.0f, 0.0f);
         ASSERT_TRUE(dbg.createJoint(jp).has_value());
 
         JointDef jg;
-        jg.type = JointType::Gear;
+        jg.settings.type = JointType::Gear;
         jg.bodyIdA = bodyA; jg.bodyIdB = bodyB;
-        jg.ratio = 2.0f;
+        jg.settings.ratio = 2.0f;
         ASSERT_TRUE(dbg.createJoint(jg).has_value());
 
         JointDef jr;
-        jr.type = JointType::Rope;
+        jr.settings.type = JointType::Rope;
         jr.bodyIdA = bodyA; jr.bodyIdB = bodyB;
-        jr.length = 1.5f;
+        jr.settings.length = 1.5f;
         ASSERT_TRUE(dbg.createJoint(jr).has_value());
 
         StepPhysicsWorld(dbg, 1.0f / 60.0f, 1u, scheduler);
@@ -5310,61 +5248,61 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         EXPECT_EQ(payload.size(), cast<usize>(128u));
 
         ColliderComponent chainCol;
-        chainCol.shapeType = ShapeType::Segment;
-        chainCol.isChain = true;
-        chainCol.chainClosed = true;
-        chainCol.chainRadius = 0.05f;
-        chainCol.surfaceVelocity = f32x4(1.0f, 0.0f, -2.0f, 0.0f);
-        chainCol.frictionDirection = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        chainCol.frictionCombineMode = MaterialCombineMode::Max;
-        chainCol.restitutionCombineMode = MaterialCombineMode::Min;
-        chainCol.chainPoints.push_back(f32x4(-1.0f, 0.0f, 0.0f, 0.0f));
-        chainCol.chainPoints.push_back(f32x4( 1.0f, 0.0f, 0.0f, 0.0f));
-        chainCol.chainPoints.push_back(f32x4( 0.0f, 0.0f, 1.0f, 0.0f));
+        chainCol.primaryShape.shapeType = ShapeType::Segment;
+        chainCol.primaryShape.isChain = true;
+        chainCol.primaryShape.chainClosed = true;
+        chainCol.primaryShape.chainRadius = 0.05f;
+        chainCol.primaryShape.surfaceVelocity = f32x4(1.0f, 0.0f, -2.0f, 0.0f);
+        chainCol.primaryShape.frictionDirection = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        chainCol.primaryShape.frictionCombineMode = MaterialCombineMode::Max;
+        chainCol.primaryShape.restitutionCombineMode = MaterialCombineMode::Min;
+        chainCol.primaryShape.chainPoints.push_back(f32x4(-1.0f, 0.0f, 0.0f, 0.0f));
+        chainCol.primaryShape.chainPoints.push_back(f32x4( 1.0f, 0.0f, 0.0f, 0.0f));
+        chainCol.primaryShape.chainPoints.push_back(f32x4( 0.0f, 0.0f, 1.0f, 0.0f));
         ASSERT_TRUE(codec.serializeCollider(chainCol, payload));
         const Expected<ColliderComponent> decodedChain = codec.deserializeCollider(payload);
         ASSERT_TRUE(decodedChain.has_value());
-        EXPECT_TRUE(decodedChain.value().isChain);
-        EXPECT_TRUE(decodedChain.value().chainClosed);
-        EXPECT_FLOAT_EQ(decodedChain.value().chainRadius, 0.05f);
-        EXPECT_FLOAT_EQ(decodedChain.value().surfaceVelocity.z, -2.0f);
-        EXPECT_EQ(decodedChain.value().frictionCombineMode, MaterialCombineMode::Max);
-        EXPECT_EQ(decodedChain.value().restitutionCombineMode, MaterialCombineMode::Min);
-        EXPECT_EQ(decodedChain.value().chainPoints.size(), cast<usize>(3u));
+        EXPECT_TRUE(decodedChain.value().primaryShape.isChain);
+        EXPECT_TRUE(decodedChain.value().primaryShape.chainClosed);
+        EXPECT_FLOAT_EQ(decodedChain.value().primaryShape.chainRadius, 0.05f);
+        EXPECT_FLOAT_EQ(decodedChain.value().primaryShape.surfaceVelocity.z, -2.0f);
+        EXPECT_EQ(decodedChain.value().primaryShape.frictionCombineMode, MaterialCombineMode::Max);
+        EXPECT_EQ(decodedChain.value().primaryShape.restitutionCombineMode, MaterialCombineMode::Min);
+        EXPECT_EQ(decodedChain.value().primaryShape.chainPoints.size(), cast<usize>(3u));
 
         ColliderComponent hfCol;
-        hfCol.shapeType = ShapeType::Heightfield;
-        hfCol.heightfieldRows = 3u;
-        hfCol.heightfieldCols = 3u;
-        hfCol.heightfieldThickness = 0.75f;
-        hfCol.heightfieldHeights.push_back(0.0f);
-        hfCol.heightfieldHeights.push_back(bit_cast<f32>(0x7fc00000u));
-        hfCol.heightfieldHeights.push_back(0.25f);
-        hfCol.heightfieldHeights.push_back(0.5f);
-        hfCol.heightfieldHeights.push_back(0.0f);
-        hfCol.heightfieldHeights.push_back(0.0f);
-        hfCol.heightfieldHeights.push_back(0.0f);
-        hfCol.heightfieldHeights.push_back(0.0f);
-        hfCol.heightfieldHeights.push_back(0.0f);
+        hfCol.primaryShape.shapeType = ShapeType::Heightfield;
+        hfCol.primaryShape.heightfieldRows = 3u;
+        hfCol.primaryShape.heightfieldCols = 3u;
+        hfCol.primaryShape.heightfieldThickness = 0.75f;
+        hfCol.primaryShape.heightfieldHeights.push_back(0.0f);
+        hfCol.primaryShape.heightfieldHeights.push_back(bit_cast<f32>(0x7fc00000u));
+        hfCol.primaryShape.heightfieldHeights.push_back(0.25f);
+        hfCol.primaryShape.heightfieldHeights.push_back(0.5f);
+        hfCol.primaryShape.heightfieldHeights.push_back(0.0f);
+        hfCol.primaryShape.heightfieldHeights.push_back(0.0f);
+        hfCol.primaryShape.heightfieldHeights.push_back(0.0f);
+        hfCol.primaryShape.heightfieldHeights.push_back(0.0f);
+        hfCol.primaryShape.heightfieldHeights.push_back(0.0f);
         SurfaceMaterial mat0;
         mat0.friction = 0.2f;
         SurfaceMaterial mat1;
         mat1.friction = 0.9f;
-        hfCol.heightfieldMaterials.push_back(mat0);
-        hfCol.heightfieldMaterials.push_back(mat1);
-        hfCol.heightfieldCellMaterialIndices.push_back(0u);
-        hfCol.heightfieldCellMaterialIndices.push_back(1u);
-        hfCol.heightfieldCellMaterialIndices.push_back(1u);
-        hfCol.heightfieldCellMaterialIndices.push_back(0u);
+        hfCol.primaryShape.heightfieldMaterials.push_back(mat0);
+        hfCol.primaryShape.heightfieldMaterials.push_back(mat1);
+        hfCol.primaryShape.heightfieldCellMaterialIndices.push_back(0u);
+        hfCol.primaryShape.heightfieldCellMaterialIndices.push_back(1u);
+        hfCol.primaryShape.heightfieldCellMaterialIndices.push_back(1u);
+        hfCol.primaryShape.heightfieldCellMaterialIndices.push_back(0u);
         ASSERT_TRUE(codec.serializeCollider(hfCol, payload));
         const Expected<ColliderComponent> decodedHf = codec.deserializeCollider(payload);
         ASSERT_TRUE(decodedHf.has_value());
-        EXPECT_FLOAT_EQ(decodedHf.value().heightfieldThickness, 0.75f);
-        ASSERT_EQ(decodedHf.value().heightfieldHeights.size(), cast<usize>(9u));
-        EXPECT_NE(decodedHf.value().heightfieldHeights[1u], decodedHf.value().heightfieldHeights[1u]);
-        EXPECT_EQ(decodedHf.value().heightfieldMaterials.size(), cast<usize>(2u));
-        EXPECT_FLOAT_EQ(decodedHf.value().heightfieldMaterials[1u].friction, 0.9f);
-        EXPECT_EQ(decodedHf.value().heightfieldCellMaterialIndices[1u], 1u);
+        EXPECT_FLOAT_EQ(decodedHf.value().primaryShape.heightfieldThickness, 0.75f);
+        ASSERT_EQ(decodedHf.value().primaryShape.heightfieldHeights.size(), cast<usize>(9u));
+        EXPECT_NE(decodedHf.value().primaryShape.heightfieldHeights[1u], decodedHf.value().primaryShape.heightfieldHeights[1u]);
+        EXPECT_EQ(decodedHf.value().primaryShape.heightfieldMaterials.size(), cast<usize>(2u));
+        EXPECT_FLOAT_EQ(decodedHf.value().primaryShape.heightfieldMaterials[1u].friction, 0.9f);
+        EXPECT_EQ(decodedHf.value().primaryShape.heightfieldCellMaterialIndices[1u], 1u);
 
         PhysicsWorldConfigComponent wcV4;
         wcV4.timeToSleep = 1.75f;
@@ -5397,7 +5335,7 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
 
         RagdollComponent ragIn;
         RagdollBoneDef ragBone;
-        ragBone.useBox = true;
+        ragBone.shapeType = RagdollBoneShapeType::Box;
         ragBone.boxHalfExtents = f32x4(0.15f, 0.25f, 0.15f, 0.0f);
         ragIn.bones.push_back(ragBone);
         ragIn.targetPose.push_back(Transform3D(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), QuaternionIdentity()));
@@ -5504,7 +5442,7 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         rb.type = BodyType::Dynamic;
         rb.hasCustomMaxAngularVelocity = true;
         rb.maxAngularVelocity = 12.5f;
-        dynEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        dynEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         EXPECT_FLOAT_EQ(physSys.physicsWorld().bodyMaxAngularVelocity(rb.runtimeBodyId), 12.5f);
@@ -5522,7 +5460,7 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         cfg.dirty = true;
         Entity extraEnt = tw.world.createEntity();
         extraEnt.addComponent<TransformComponent>().position = f32x4(4.0f, 4.0f, 0.0f, 0.0f);
-        extraEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        extraEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         EXPECT_EQ(physSys.lastStepStats().bodyCount, 2u);
         EXPECT_EQ(physSys.lastStepStats().shapeCount, 2u);
@@ -5602,13 +5540,13 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         dDef.position = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
         const BodyId bB = sixWorld.createBody(dDef).value();
         JointDef jd;
-        jd.type = JointType::SixDof;
+        jd.settings.type = JointType::SixDof;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.sixDofAxes[3u].motion = JointMotion::Free;
-        jd.sixDofAxes[4u].motion = JointMotion::Limited;
-        jd.sixDofAxes[4u].lowerLimit = -0.5f;
-        jd.sixDofAxes[4u].upperLimit = 0.5f;
+        jd.settings.sixDofAxes[3u].motion = JointMotion::Free;
+        jd.settings.sixDofAxes[4u].motion = JointMotion::Limited;
+        jd.settings.sixDofAxes[4u].lowerLimit = -0.5f;
+        jd.settings.sixDofAxes[4u].upperLimit = 0.5f;
         ASSERT_TRUE(sixWorld.createJoint(jd).has_value());
 
         PhysicsDebugDrawOptions jointOpts;
@@ -5704,12 +5642,12 @@ void VerifyPhysicsEdgeCases_Phase2ACoreFixesAndFeatures(){
         ASSERT_TRUE(world.createHullShape(bB, ShapeDef(), MakeBoxHull(0.5f, 0.5f, 0.5f, 0.0f).value()).has_value());
 
         JointDef jd;
-        jd.type = JointType::Fixed;
+        jd.settings.type = JointType::Fixed;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.enableSpring = true;
-        jd.hertz = 2.0f;
-        jd.dampingRatio = 0.7f;
+        jd.settings.enableSpring = true;
+        jd.settings.hertz = 2.0f;
+        jd.settings.dampingRatio = 0.7f;
         ASSERT_TRUE(world.createJoint(jd).has_value());
 
         world.applyAngularVelocityChange(bB, VectorSingle(0.0f, 4.0f, 0.0f, 0.0f), true);
@@ -5727,10 +5665,10 @@ void VerifyPhysicsEdgeCases_Phase2ACoreFixesAndFeatures(){
         bd.position = f32x4(4.0f, 0.0f, 0.0f, 0.0f);
         const BodyId bB = world.createBody(bd).value();
         JointDef jd;
-        jd.type = JointType::Distance;
+        jd.settings.type = JointType::Distance;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.length = 4.0f;
+        jd.settings.length = 4.0f;
         const JointId jId = world.createJoint(jd).value();
         EXPECT_TRUE(world.setJointEnabled(jId, false));
         EXPECT_TRUE(world.setBodyEnabled(bA, false));
@@ -5819,10 +5757,10 @@ void VerifyPhysicsEdgeCases_Phase2ACoreFixesAndFeatures(){
         bd.position = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
         const BodyId bB = world.createBody(bd).value();
         JointDef jd;
-        jd.type = JointType::Distance;
+        jd.settings.type = JointType::Distance;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.length = 2.0f;
+        jd.settings.length = 2.0f;
         ASSERT_TRUE(world.createJoint(jd).has_value());
         StepPhysicsWorld(world, dt, 1u, scheduler);
         EXPECT_TRUE(world.setBodyAwake(bA, false));
@@ -6149,20 +6087,20 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         EXPECT_NEAR(outAniso.y, 0.5f, 1.0e-4f);
 
         JointDef pulJd;
-        pulJd.type = JointType::Pulley;
+        pulJd.settings.type = JointType::Pulley;
         pulJd.bodyIdA = bodyA;
         pulJd.bodyIdB = bodyB;
-        pulJd.groundAnchorA = f32x4(0.0f, 6.0f, 0.0f, 0.0f);
-        pulJd.groundAnchorB = f32x4(1.0f, 6.0f, 0.0f, 0.0f);
-        pulJd.ratio = 1.5f;
-        pulJd.enableProjection = true;
-        pulJd.projectionLinearTolerance = 0.05f;
-        pulJd.projectionAngularTolerance = 0.25f;
-        pulJd.limitHertz = 25.0f;
-        pulJd.limitDampingRatio = 0.6f;
-        pulJd.limitRestitution = 0.35f;
-        pulJd.invInertiaScaleA = 0.4f;
-        pulJd.invInertiaScaleB = 0.6f;
+        pulJd.settings.groundAnchorA = f32x4(0.0f, 6.0f, 0.0f, 0.0f);
+        pulJd.settings.groundAnchorB = f32x4(1.0f, 6.0f, 0.0f, 0.0f);
+        pulJd.settings.ratio = 1.5f;
+        pulJd.settings.enableProjection = true;
+        pulJd.settings.projectionLinearTolerance = 0.05f;
+        pulJd.settings.projectionAngularTolerance = 0.25f;
+        pulJd.settings.limitHertz = 25.0f;
+        pulJd.settings.limitDampingRatio = 0.6f;
+        pulJd.settings.limitRestitution = 0.35f;
+        pulJd.settings.invInertiaScaleA = 0.4f;
+        pulJd.settings.invInertiaScaleB = 0.6f;
         const JointId pulId = pw.createJoint(pulJd).value();
         GpuPhysicsJointConstraint pulGjc;
         PrepareGpuJointConstraintDirect(pw.m_bodies, pw.m_solverSets, pw.m_joints[pulId.index], pw.m_jointExtraData, Span<u32>(awakeToGpu), 30.0f, h, true, pulGjc);
@@ -6178,13 +6116,13 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         EXPECT_NEAR(pulGjc.projectionParams.y, 0.25f, 1.0e-5f);
 
         JointDef sphJd;
-        sphJd.type = JointType::Spherical;
+        sphJd.settings.type = JointType::Spherical;
         sphJd.bodyIdA = bodyA;
         sphJd.bodyIdB = bodyB;
-        sphJd.enableLimit = true;
-        sphJd.swingLimit = 0.0f;
-        sphJd.swingLimitY = 0.5f;
-        sphJd.breakTorque = 10.0f;
+        sphJd.settings.enableLimit = true;
+        sphJd.settings.swingLimit = 0.0f;
+        sphJd.settings.swingLimitY = 0.5f;
+        sphJd.settings.breakTorque = 10.0f;
         const JointId sphId = pw.createJoint(sphJd).value();
         pw.m_joints[sphId.index].setConeOrSuspensionImpulse(-3.0f);
         GpuPhysicsJointConstraint sphGjc;
@@ -6200,13 +6138,13 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         EXPECT_GT(Vector3Length(VectorSingle(pw.tryGetJointConstraintTorque(sphId).value())).x, 10.0f);
 
         JointDef rpJd;
-        rpJd.type = JointType::RackAndPinion;
+        rpJd.settings.type = JointType::RackAndPinion;
         rpJd.bodyIdA = bodyA;
         rpJd.bodyIdB = bodyB;
-        rpJd.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-        rpJd.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        rpJd.ratio = 3.0f;
-        rpJd.breakTorque = 200.0f;
+        rpJd.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        rpJd.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        rpJd.settings.ratio = 3.0f;
+        rpJd.settings.breakTorque = 200.0f;
         const JointId rpId = pw.createJoint(rpJd).value();
         GpuPhysicsJointConstraint rpGjc;
         PrepareGpuJointConstraintDirect(pw.m_bodies, pw.m_solverSets, pw.m_joints[rpId.index], pw.m_jointExtraData, Span<u32>(awakeToGpu), 30.0f, h, false, rpGjc);
@@ -6239,14 +6177,14 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         Vector<u8> payload;
 
         ColliderComponent colLayer;
-        colLayer.collisionLayer = Name("player_hitbox");
+        colLayer.primaryShape.collisionLayer = Name("player_hitbox");
         ColliderShapeEntry extraCol;
         extraCol.collisionLayer = Name("sensor_zone");
         colLayer.extraShapes.push_back(extraCol);
         ASSERT_TRUE(codec.serializeCollider(colLayer, payload));
         const Expected<ColliderComponent> colDec = codec.deserializeCollider(payload);
         ASSERT_TRUE(colDec.has_value());
-        EXPECT_EQ(colDec.value().collisionLayer, Name("player_hitbox"));
+        EXPECT_EQ(colDec.value().primaryShape.collisionLayer, Name("player_hitbox"));
         ASSERT_EQ(colDec.value().extraShapes.size(), cast<usize>(1u));
         EXPECT_EQ(colDec.value().extraShapes[0u].collisionLayer, Name("sensor_zone"));
 
@@ -6255,25 +6193,25 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         EXPECT_FALSE(codec.serializeWorldConfig(badCfg, payload));
 
         JointComponent badJoint;
-        badJoint.type = JointType::Revolute;
-        badJoint.localAxisA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        badJoint.primaryJoint.settings.type = JointType::Revolute;
+        badJoint.primaryJoint.settings.localAxisA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         EXPECT_FALSE(codec.serializeJoint(badJoint, payload));
 
         JointComponent badPathLock;
-        badPathLock.type = JointType::Path;
-        badPathLock.pathLockRotation = true;
-        badPathLock.localAxisB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        badPathLock.pathPoints.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-        badPathLock.pathPoints.push_back(f32x4(1.0f, 0.0f, 0.0f, 0.0f));
+        badPathLock.primaryJoint.settings.type = JointType::Path;
+        badPathLock.primaryJoint.settings.pathLockRotation = true;
+        badPathLock.primaryJoint.settings.localAxisB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        badPathLock.primaryJoint.pathPoints.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        badPathLock.primaryJoint.pathPoints.push_back(f32x4(1.0f, 0.0f, 0.0f, 0.0f));
         EXPECT_FALSE(codec.serializeJoint(badPathLock, payload));
 
         ColliderComponent badHfMat;
-        badHfMat.shapeType = ShapeType::Heightfield;
-        badHfMat.heightfieldRows = 3u;
-        badHfMat.heightfieldCols = 3u;
-        badHfMat.heightfieldHeights.resize(9u, 0.0f);
-        badHfMat.heightfieldMaterials.resize(1u);
-        badHfMat.heightfieldCellMaterialIndices.resize(3u, 0u);
+        badHfMat.primaryShape.shapeType = ShapeType::Heightfield;
+        badHfMat.primaryShape.heightfieldRows = 3u;
+        badHfMat.primaryShape.heightfieldCols = 3u;
+        badHfMat.primaryShape.heightfieldHeights.resize(9u, 0.0f);
+        badHfMat.primaryShape.heightfieldMaterials.resize(1u);
+        badHfMat.primaryShape.heightfieldCellMaterialIndices.resize(3u, 0u);
         EXPECT_FALSE(codec.serializeCollider(badHfMat, payload));
 
         RagdollComponent badRag;
@@ -6362,38 +6300,38 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         Entity jEnt = tw.world.createEntity();
         {
             mut JointComponent jcInit = jEnt.addComponent<JointComponent>();
-            jcInit.bodyEntityA = aEnt.id();
-            jcInit.bodyEntityB = bEnt.id();
-            jcInit.type = JointType::Motor;
-            jcInit.enableMotor = false;
-            jcInit.maxMotorForce = 10.0f;
+            jcInit.primaryJoint.bodyEntityA = aEnt.id();
+            jcInit.primaryJoint.bodyEntityB = bEnt.id();
+            jcInit.primaryJoint.settings.type = JointType::Motor;
+            jcInit.primaryJoint.settings.enableMotor = false;
+            jcInit.primaryJoint.settings.maxMotorForce = 10.0f;
 
             JointEntry ropeJ;
             ropeJ.bodyEntityA = aEnt.id();
             ropeJ.bodyEntityB = bEnt.id();
-            ropeJ.type = JointType::Rope;
-            ropeJ.length = 3.5f;
-            ropeJ.maxLength = s_HugeCoordinate;
+            ropeJ.settings.type = JointType::Rope;
+            ropeJ.settings.length = 3.5f;
+            ropeJ.settings.maxLength = s_HugeCoordinate;
             jcInit.extraJoints.push_back(ropeJ);
 
             JointEntry pulleyJ;
             pulleyJ.bodyEntityA = aEnt.id();
             pulleyJ.bodyEntityB = bEnt.id();
-            pulleyJ.type = JointType::Pulley;
-            pulleyJ.groundAnchorA = f32x4(0.0f, 8.0f, 0.0f, 0.0f);
-            pulleyJ.groundAnchorB = f32x4(3.0f, 8.0f, 0.0f, 0.0f);
-            pulleyJ.ratio = 1.0f;
+            pulleyJ.settings.type = JointType::Pulley;
+            pulleyJ.settings.groundAnchorA = f32x4(0.0f, 8.0f, 0.0f, 0.0f);
+            pulleyJ.settings.groundAnchorB = f32x4(3.0f, 8.0f, 0.0f, 0.0f);
+            pulleyJ.settings.ratio = 1.0f;
             jcInit.extraJoints.push_back(pulleyJ);
         }
 
         Entity pathEnt = tw.world.createEntity();
         {
             mut JointComponent pathJcInit = pathEnt.addComponent<JointComponent>();
-            pathJcInit.bodyEntityA = aEnt.id();
-            pathJcInit.bodyEntityB = bEnt.id();
-            pathJcInit.type = JointType::Path;
-            pathJcInit.pathPoints.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-            pathJcInit.pathPoints.push_back(f32x4(2.0f, 0.0f, 0.0f, 0.0f));
+            pathJcInit.primaryJoint.bodyEntityA = aEnt.id();
+            pathJcInit.primaryJoint.bodyEntityB = bEnt.id();
+            pathJcInit.primaryJoint.settings.type = JointType::Path;
+            pathJcInit.primaryJoint.pathPoints.push_back(f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+            pathJcInit.primaryJoint.pathPoints.push_back(f32x4(2.0f, 0.0f, 0.0f, 0.0f));
         }
 
         mut JointComponent jc = tw.world.getComponent<JointComponent>(jEnt.id());
@@ -6410,10 +6348,10 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         EXPECT_NEAR(physSys.physicsWorld().m_joints[ropeId.index].maxLength(), 3.5f, 1.0e-5f);
         EXPECT_NEAR(physSys.physicsWorld().tryGetJointPulleyConstant(pulleyId).value(), 12.0f, 1.0e-3f);
 
-        jc.maxMotorForce = 20.0f;
-        jc.extraJoints[1u].groundAnchorA = f32x4(0.0f, 12.0f, 0.0f, 0.0f);
+        jc.primaryJoint.settings.maxMotorForce = 20.0f;
+        jc.extraJoints[1u].settings.groundAnchorA = f32x4(0.0f, 12.0f, 0.0f, 0.0f);
         jc.dirty = true;
-        pathJc.pathPoints.resize(1u);
+        pathJc.primaryJoint.pathPoints.resize(1u);
         pathJc.dirty = true;
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
         EXPECT_TRUE(physSys.physicsWorld().m_joints[jc.runtimeJointId.index].enableMotor());
@@ -6488,9 +6426,9 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         layerEnt.addComponent<TransformComponent>();
         {
             mut ColliderComponent col = layerEnt.addComponent<ColliderComponent>();
-            col.categoryBits = 0x2u;
-            col.maskBits = 0x4u;
-            col.collisionLayer = Name("hitbox");
+            col.primaryShape.categoryBits = 0x2u;
+            col.primaryShape.maskBits = 0x4u;
+            col.primaryShape.collisionLayer = Name("hitbox");
         }
 
         Entity kinEnt = tw.world.createEntity();
@@ -6498,8 +6436,8 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         kinEnt.addComponent<RigidBodyComponent>().type = BodyType::Kinematic;
         {
             mut ColliderComponent kinCol = kinEnt.addComponent<ColliderComponent>();
-            kinCol.shapeType = ShapeType::Plane;
-            kinCol.halfExtents = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            kinCol.primaryShape.shapeType = ShapeType::Plane;
+            kinCol.primaryShape.halfExtents = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         }
 
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
@@ -6514,8 +6452,8 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
             kinRb.type = BodyType::Dynamic;
             kinRb.dirty = true;
             mut ColliderComponent kinCol = kinEnt.getComponent<ColliderComponent>();
-            kinCol.shapeType = ShapeType::Hull;
-            kinCol.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
+            kinCol.primaryShape.shapeType = ShapeType::Hull;
+            kinCol.primaryShape.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
             kinCol.dirty = true;
         }
         ASSERT_TRUE(tw.world.tick(1.0f / 60.0f).has_value());
@@ -6547,7 +6485,7 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         Entity floorEnt = tw.world.createEntity();
         floorEnt.addComponent<TransformComponent>().position = f32x4(0.0f, -5.0f, 0.0f, 0.0f);
         mut ColliderComponent floorCol = floorEnt.addComponent<ColliderComponent>();
-        floorCol.halfExtents = f32x4(20.0f, 0.5f, 20.0f, 0.0f);
+        floorCol.primaryShape.halfExtents = f32x4(20.0f, 0.5f, 20.0f, 0.0f);
 
         Entity fluidEnt = tw.world.createEntity();
         fluidEnt.addComponent<TransformComponent>();
@@ -6625,7 +6563,7 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
             mut RagdollComponent ragInit = ragEnt.addComponent<RagdollComponent>();
             ragInit.kinematic = true;
             RagdollBoneDef rBone;
-            rBone.useBox = true;
+            rBone.shapeType = RagdollBoneShapeType::Box;
             rBone.boxHalfExtents = f32x4(0.2f, 0.2f, 0.2f, 0.0f);
             ragInit.bones.push_back(rBone);
             ragInit.targetPose.push_back(Transform3D(VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), QuaternionIdentity()));
@@ -6894,14 +6832,14 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         EXPECT_FALSE(hfLoaded.loadBinary(hfTrunc));
 
         ColliderComponent colHfAsset;
-        colHfAsset.shapeType = ShapeType::Heightfield;
-        colHfAsset.heightfieldAsset.virtualPath = Name("physics/edge_hf");
+        colHfAsset.primaryShape.shapeType = ShapeType::Heightfield;
+        colHfAsset.primaryShape.heightfieldAsset.virtualPath = Name("physics/edge_hf");
         ASSERT_TRUE(compCodec.serializeCollider(colHfAsset, payload));
         const Expected<ColliderComponent> colHfDec = compCodec.deserializeCollider(payload);
         ASSERT_TRUE(colHfDec.has_value());
-        EXPECT_EQ(cast<u8>(colHfDec.value().shapeType), cast<u8>(ShapeType::Heightfield));
-        EXPECT_EQ(colHfDec.value().heightfieldAsset.name(), Name("physics/edge_hf"));
-        EXPECT_TRUE(colHfDec.value().heightfieldHeights.empty());
+        EXPECT_EQ(cast<u8>(colHfDec.value().primaryShape.shapeType), cast<u8>(ShapeType::Heightfield));
+        EXPECT_EQ(colHfDec.value().primaryShape.heightfieldAsset.name(), Name("physics/edge_hf"));
+        EXPECT_TRUE(colHfDec.value().primaryShape.heightfieldHeights.empty());
     }
 
     {
@@ -7449,8 +7387,8 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         hfEntA.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent colA = hfEntA.addComponent<ColliderComponent>();
-            colA.shapeType = ShapeType::Heightfield;
-            colA.heightfieldAsset.virtualPath = hfAssetName;
+            colA.primaryShape.shapeType = ShapeType::Heightfield;
+            colA.primaryShape.heightfieldAsset.virtualPath = hfAssetName;
         }
 
         Entity hfEntB = tw.world.createEntity();
@@ -7460,8 +7398,8 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         hfEntB.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent colB = hfEntB.addComponent<ColliderComponent>();
-            colB.shapeType = ShapeType::Heightfield;
-            colB.heightfieldAsset.virtualPath = hfAssetName;
+            colB.primaryShape.shapeType = ShapeType::Heightfield;
+            colB.primaryShape.heightfieldAsset.virtualPath = hfAssetName;
         }
 
         Entity dropBall = tw.world.createEntity();
@@ -7471,8 +7409,8 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         dropBall.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         {
             mut ColliderComponent ballCol = dropBall.addComponent<ColliderComponent>();
-            ballCol.shapeType = ShapeType::Sphere;
-            ballCol.radius = 0.4f;
+            ballCol.primaryShape.shapeType = ShapeType::Sphere;
+            ballCol.primaryShape.radius = 0.4f;
         }
 
         ASSERT_TRUE(tw.world.tick(dt).has_value());
@@ -7549,12 +7487,12 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         bdB.position = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
         const BodyId bB = world.createBody(bdB).value();
         JointDef jd;
-        jd.type = JointType::RackAndPinion;
+        jd.settings.type = JointType::RackAndPinion;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-        jd.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jd.ratio = 0.25f;
+        jd.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+        jd.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jd.settings.ratio = 0.25f;
         ASSERT_TRUE(world.createJoint(jd).has_value());
 
         PhysicsDebugDrawOptions opts;
@@ -7588,10 +7526,10 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         bdB.position = f32x4(2.5f, 1.0f, 0.0f, 0.0f);
         const BodyId bB = world.createBody(bdB).value();
         JointDef jd;
-        jd.type = JointType::Path;
+        jd.settings.type = JointType::Path;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.localAnchorA = f32x4(2.0f, 1.0f, 0.0f, 0.0f);
+        jd.settings.localAnchorA = f32x4(2.0f, 1.0f, 0.0f, 0.0f);
         jd.pathPoints.push_back(f32x4(0.5f, 0.0f, 0.0f, 0.0f));
         jd.pathPoints.push_back(f32x4(0.5f, 0.5f, 0.0f, 0.0f));
         ASSERT_TRUE(world.createJoint(jd).has_value());
@@ -7620,14 +7558,14 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         BodyDef bdB; bdB.type = BodyType::Dynamic;
         const BodyId bB = world.createBody(bdB).value();
         JointDef jd;
-        jd.type = JointType::SixDof;
+        jd.settings.type = JointType::SixDof;
         jd.bodyIdA = bA;
         jd.bodyIdB = bB;
-        jd.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        jd.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
-        jd.sixDofAxes[0u].motion = JointMotion::Limited;
-        jd.sixDofAxes[0u].lowerLimit = -0.5f;
-        jd.sixDofAxes[0u].upperLimit = 0.5f;
+        jd.settings.localAxisA = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
+        jd.settings.localAxisB = f32x4(0.0f, 0.0f, 1.0f, 0.0f);
+        jd.settings.sixDofAxes[0u].motion = JointMotion::Limited;
+        jd.settings.sixDofAxes[0u].lowerLimit = -0.5f;
+        jd.settings.sixDofAxes[0u].upperLimit = 0.5f;
         ASSERT_TRUE(world.createJoint(jd).has_value());
 
         PhysicsDebugDrawOptions opts;
@@ -7639,7 +7577,7 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         f32 maxAbsY = 0.0f;
         for(usize li = 0u; li < lines.size(); ++li){
             const VectorSingle ay = Abs(VectorSingle(lines[li].start.y, lines[li].end.y, 0.0f, 0.0f));
-            maxAbsY = SimdMax(maxAbsY, SimdMax(ay.x, ay.y));
+            maxAbsY = Max(maxAbsY, Max(ay.x, ay.y));
         }
         EXPECT_GE(maxAbsY, 0.45f);
     }
@@ -7772,8 +7710,8 @@ void VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep(){
         ball.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         {
             mut ColliderComponent col = ball.addComponent<ColliderComponent>();
-            col.shapeType = ShapeType::Sphere;
-            col.radius = 0.25f;
+            col.primaryShape.shapeType = ShapeType::Sphere;
+            col.primaryShape.radius = 0.25f;
         }
 
         Entity fluidEnt = tw.world.createEntity();
@@ -8435,28 +8373,28 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
         ASSERT_TRUE(jw.createSphereShape(dynId, ShapeDef(), MakeSphereShape(VectorSingle(0.0f), 0.4f).value()).has_value());
 
         JointDef badSlerpJd;
-        badSlerpJd.type = JointType::SixDof;
+        badSlerpJd.settings.type = JointType::SixDof;
         badSlerpJd.bodyIdA = ancId;
         badSlerpJd.bodyIdB = dynId;
-        badSlerpJd.slerpHertz = -1.0f;
+        badSlerpJd.settings.slerpHertz = -1.0f;
         EXPECT_FALSE(jw.createJoint(badSlerpJd).has_value());
 
         JointDef badSwingJd;
-        badSwingJd.type = JointType::SixDof;
+        badSwingJd.settings.type = JointType::SixDof;
         badSwingJd.bodyIdA = ancId;
         badSwingJd.bodyIdB = dynId;
-        badSwingJd.sixDofSwingLimitMode = SixDofSwingLimitMode::Pyramid;
-        badSwingJd.sixDofSwingLimitY = -0.2f;
+        badSwingJd.settings.sixDofSwingLimitMode = SixDofSwingLimitMode::Pyramid;
+        badSwingJd.settings.sixDofSwingLimitY = -0.2f;
         EXPECT_FALSE(jw.createJoint(badSwingJd).has_value());
 
         JointDef jd;
-        jd.type = JointType::SixDof;
+        jd.settings.type = JointType::SixDof;
         jd.bodyIdA = ancId;
         jd.bodyIdB = dynId;
         for(usize ax = 0u; ax < 3u; ++ax)
-            jd.sixDofAxes[ax].motion = JointMotion::Locked;
+            jd.settings.sixDofAxes[ax].motion = JointMotion::Locked;
         for(usize ax = 3u; ax < 6u; ++ax)
-            jd.sixDofAxes[ax].motion = JointMotion::Free;
+            jd.settings.sixDofAxes[ax].motion = JointMotion::Free;
         const JointId jId = jw.createJoint(jd).value();
 
         const VectorSingle targetQ = QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.7f);
@@ -9194,7 +9132,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         Entity bodyA1 = tw.world.createEntity();
         bodyA1.addComponent<TransformComponent>().position = f32x4(-5.0f, 0.0f, 0.0f, 0.0f);
         bodyA1.addComponent<RigidBodyComponent>().type = BodyType::Static;
-        bodyA1.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        bodyA1.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity bodyB1 = tw.world.createEntity();
         bodyB1.addComponent<TransformComponent>().position = f32x4(-4.0f, 0.0f, 0.0f, 0.0f);
@@ -9203,24 +9141,24 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             rbB1.type = BodyType::Dynamic;
             rbB1.gravityScale = 0.0f;
         }
-        bodyB1.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        bodyB1.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity joint1 = tw.world.createEntity();
         {
             mut JointComponent jc1 = joint1.addComponent<JointComponent>();
-            jc1.type = JointType::Revolute;
-            jc1.bodyEntityNameA = Name("partA");
-            jc1.bodyEntityNameB = Name("partB");
-            jc1.localAnchorA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-            jc1.enableMotor = true;
-            jc1.motorSpeed = 2.0f;
-            jc1.maxTorque = 25.0f;
+            jc1.primaryJoint.settings.type = JointType::Revolute;
+            jc1.primaryJoint.bodyEntityNameA = Name("partA");
+            jc1.primaryJoint.bodyEntityNameB = Name("partB");
+            jc1.primaryJoint.settings.localAnchorA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+            jc1.primaryJoint.settings.enableMotor = true;
+            jc1.primaryJoint.settings.motorSpeed = 2.0f;
+            jc1.primaryJoint.settings.maxTorque = 25.0f;
             JointEntry extraJ1;
-            extraJ1.type = JointType::Prismatic;
+            extraJ1.settings.type = JointType::Prismatic;
             extraJ1.bodyEntityNameA = Name("partA");
             extraJ1.bodyEntityNameB = Name("partB");
-            extraJ1.localAnchorA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
-            extraJ1.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+            extraJ1.settings.localAnchorA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
+            extraJ1.settings.localAxisA = f32x4(1.0f, 0.0f, 0.0f, 0.0f);
             jc1.extraJoints.push_back(extraJ1);
         }
 
@@ -9233,7 +9171,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         Entity bodyA2 = tw.world.createEntity();
         bodyA2.addComponent<TransformComponent>().position = f32x4(5.0f, 0.0f, 0.0f, 0.0f);
         bodyA2.addComponent<RigidBodyComponent>().type = BodyType::Static;
-        bodyA2.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        bodyA2.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity bodyB2 = tw.world.createEntity();
         bodyB2.addComponent<TransformComponent>().position = f32x4(6.0f, 0.0f, 0.0f, 0.0f);
@@ -9242,32 +9180,32 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             rbB2.type = BodyType::Dynamic;
             rbB2.gravityScale = 0.0f;
         }
-        bodyB2.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        bodyB2.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity joint2 = tw.world.createEntity();
         {
             mut JointComponent jc2 = joint2.addComponent<JointComponent>();
-            jc2.type = JointType::Spherical;
-            jc2.bodyEntityNameA = Name("partA");
-            jc2.bodyEntityNameB = Name("partB");
-            jc2.enableTwistLimit = true;
-            jc2.lowerLimit = -0.3f;
-            jc2.upperLimit = 0.3f;
-            jc2.enableSlerpDrive = true;
-            jc2.slerpHertz = 6.0f;
-            jc2.slerpDampingRatio = 0.8f;
-            jc2.slerpMaxTorque = 50.0f;
+            jc2.primaryJoint.settings.type = JointType::Spherical;
+            jc2.primaryJoint.bodyEntityNameA = Name("partA");
+            jc2.primaryJoint.bodyEntityNameB = Name("partB");
+            jc2.primaryJoint.settings.enableTwistLimit = true;
+            jc2.primaryJoint.settings.lowerLimit = -0.3f;
+            jc2.primaryJoint.settings.upperLimit = 0.3f;
+            jc2.primaryJoint.settings.enableSlerpDrive = true;
+            jc2.primaryJoint.settings.slerpHertz = 6.0f;
+            jc2.primaryJoint.settings.slerpDampingRatio = 0.8f;
+            jc2.primaryJoint.settings.slerpMaxTorque = 50.0f;
         }
 
         Entity joint6Dof = tw.world.createEntity();
         {
             mut JointComponent jc6 = joint6Dof.addComponent<JointComponent>();
-            jc6.type = JointType::SixDof;
-            jc6.bodyEntityA = bodyA2.id();
-            jc6.bodyEntityB = bodyB2.id();
-            jc6.sixDofSwingLimitMode = SixDofSwingLimitMode::Pyramid;
-            jc6.sixDofSwingLimitY = 0.4f;
-            jc6.sixDofSwingLimitZ = 0.6f;
+            jc6.primaryJoint.settings.type = JointType::SixDof;
+            jc6.primaryJoint.bodyEntityA = bodyA2.id();
+            jc6.primaryJoint.bodyEntityB = bodyB2.id();
+            jc6.primaryJoint.settings.sixDofSwingLimitMode = SixDofSwingLimitMode::Pyramid;
+            jc6.primaryJoint.settings.sixDofSwingLimitY = 0.4f;
+            jc6.primaryJoint.settings.sixDofSwingLimitZ = 0.6f;
         }
 
         physSys.assignEntityToNameScope(bodyA2.id(), scopeB);
@@ -9400,8 +9338,8 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         }
         {
             mut ColliderComponent col = ent.addComponent<ColliderComponent>();
-            col.shapeType = ShapeType::Sphere;
-            col.radius = 0.5f;
+            col.primaryShape.shapeType = ShapeType::Sphere;
+            col.primaryShape.radius = 0.5f;
             ColliderShapeEntry goodExtra;
             goodExtra.shapeType = ShapeType::Hull;
             goodExtra.isBox = true;
@@ -9446,11 +9384,11 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         }
         {
             mut ColliderComponent hullCol = hullEnt.addComponent<ColliderComponent>();
-            hullCol.shapeType = ShapeType::Hull;
-            hullCol.hullPoints.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
-            hullCol.hullPoints.push_back(f32x4(0.5f, -0.5f, -0.5f, 0.0f));
-            hullCol.hullPoints.push_back(f32x4(0.0f, -0.5f, 0.5f, 0.0f));
-            hullCol.hullPoints.push_back(f32x4(0.0f, 0.5f, 0.0f, 0.0f));
+            hullCol.primaryShape.shapeType = ShapeType::Hull;
+            hullCol.primaryShape.hullPoints.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
+            hullCol.primaryShape.hullPoints.push_back(f32x4(0.5f, -0.5f, -0.5f, 0.0f));
+            hullCol.primaryShape.hullPoints.push_back(f32x4(0.0f, -0.5f, 0.5f, 0.0f));
+            hullCol.primaryShape.hullPoints.push_back(f32x4(0.0f, 0.5f, 0.0f, 0.0f));
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         hullEnt.getComponent<TransformComponent>().scale = f32x4(2.0f, 2.0f, 2.0f, 0.0f);
@@ -9474,13 +9412,13 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         hfEnt.addComponent<TransformComponent>().position = f32x4(-10.0f, 0.0f, 0.0f, 0.0f);
         {
             mut ColliderComponent hfCol = hfEnt.addComponent<ColliderComponent>();
-            hfCol.shapeType = ShapeType::Heightfield;
-            hfCol.heightfieldRows = 3u;
-            hfCol.heightfieldCols = 3u;
-            hfCol.heightfieldHeights.resize(9u, 0.0f);
-            hfCol.heightfieldFlipDiagonal = true;
-            hfCol.heightfieldCellHoles.resize(4u, 0u);
-            hfCol.heightfieldCellHoles[0u] = 1u;
+            hfCol.primaryShape.shapeType = ShapeType::Heightfield;
+            hfCol.primaryShape.heightfieldRows = 3u;
+            hfCol.primaryShape.heightfieldCols = 3u;
+            hfCol.primaryShape.heightfieldHeights.resize(9u, 0.0f);
+            hfCol.primaryShape.heightfieldFlipDiagonal = true;
+            hfCol.primaryShape.heightfieldCellHoles.resize(4u, 0u);
+            hfCol.primaryShape.heightfieldCellHoles[0u] = 1u;
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         const ShapeId hfShapeId = hfEnt.getComponent<ColliderComponent>().runtimeShapeId;
@@ -9502,32 +9440,32 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         vhEnt.addComponent<TransformComponent>().position = f32x4(10.0f, 0.0f, 0.0f, 0.0f);
         {
             mut ColliderComponent vhCol = vhEnt.addComponent<ColliderComponent>();
-            vhCol.shapeType = ShapeType::Mesh;
-            vhCol.autoConvexDecompose = true;
-            vhCol.vhacdMaxHulls = 4u;
-            vhCol.vhacdEnableArbitraryPlanes = true;
-            vhCol.vhacdEnableHullMerging = false;
-            vhCol.vhacdMergeVolumeTolerance = 0.01f;
-            vhCol.meshVertices.push_back(f32x4(-1.0f, -1.0f, -1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(1.0f, -1.0f, -1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(1.0f, 1.0f, -1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(-1.0f, 1.0f, -1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(-1.0f, -1.0f, 1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(1.0f, -1.0f, 1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(1.0f, 1.0f, 1.0f, 0.0f));
-            vhCol.meshVertices.push_back(f32x4(-1.0f, 1.0f, 1.0f, 0.0f));
-            vhCol.meshIndices.push_back(0u); vhCol.meshIndices.push_back(2u); vhCol.meshIndices.push_back(1u);
-            vhCol.meshIndices.push_back(0u); vhCol.meshIndices.push_back(3u); vhCol.meshIndices.push_back(2u);
-            vhCol.meshIndices.push_back(4u); vhCol.meshIndices.push_back(5u); vhCol.meshIndices.push_back(6u);
-            vhCol.meshIndices.push_back(4u); vhCol.meshIndices.push_back(6u); vhCol.meshIndices.push_back(7u);
-            vhCol.meshIndices.push_back(0u); vhCol.meshIndices.push_back(1u); vhCol.meshIndices.push_back(5u);
-            vhCol.meshIndices.push_back(0u); vhCol.meshIndices.push_back(5u); vhCol.meshIndices.push_back(4u);
-            vhCol.meshIndices.push_back(2u); vhCol.meshIndices.push_back(3u); vhCol.meshIndices.push_back(7u);
-            vhCol.meshIndices.push_back(2u); vhCol.meshIndices.push_back(7u); vhCol.meshIndices.push_back(6u);
-            vhCol.meshIndices.push_back(1u); vhCol.meshIndices.push_back(2u); vhCol.meshIndices.push_back(6u);
-            vhCol.meshIndices.push_back(1u); vhCol.meshIndices.push_back(6u); vhCol.meshIndices.push_back(5u);
-            vhCol.meshIndices.push_back(3u); vhCol.meshIndices.push_back(0u); vhCol.meshIndices.push_back(4u);
-            vhCol.meshIndices.push_back(3u); vhCol.meshIndices.push_back(4u); vhCol.meshIndices.push_back(7u);
+            vhCol.primaryShape.shapeType = ShapeType::Mesh;
+            vhCol.primaryShape.autoConvexDecompose = true;
+            vhCol.primaryShape.vhacdMaxHulls = 4u;
+            vhCol.primaryShape.vhacdEnableArbitraryPlanes = true;
+            vhCol.primaryShape.vhacdEnableHullMerging = false;
+            vhCol.primaryShape.vhacdMergeVolumeTolerance = 0.01f;
+            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, -1.0f, -1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, -1.0f, -1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, 1.0f, -1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, 1.0f, -1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, -1.0f, 1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, -1.0f, 1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, 1.0f, 1.0f, 0.0f));
+            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, 1.0f, 1.0f, 0.0f));
+            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(1u);
+            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(2u);
+            vhCol.primaryShape.meshIndices.push_back(4u); vhCol.primaryShape.meshIndices.push_back(5u); vhCol.primaryShape.meshIndices.push_back(6u);
+            vhCol.primaryShape.meshIndices.push_back(4u); vhCol.primaryShape.meshIndices.push_back(6u); vhCol.primaryShape.meshIndices.push_back(7u);
+            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(1u); vhCol.primaryShape.meshIndices.push_back(5u);
+            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(5u); vhCol.primaryShape.meshIndices.push_back(4u);
+            vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(7u);
+            vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(7u); vhCol.primaryShape.meshIndices.push_back(6u);
+            vhCol.primaryShape.meshIndices.push_back(1u); vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(6u);
+            vhCol.primaryShape.meshIndices.push_back(1u); vhCol.primaryShape.meshIndices.push_back(6u); vhCol.primaryShape.meshIndices.push_back(5u);
+            vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(4u);
+            vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(4u); vhCol.primaryShape.meshIndices.push_back(7u);
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         EXPECT_TRUE(vhEnt.getComponent<ColliderComponent>().runtimeShapeId.valid());
@@ -9551,9 +9489,9 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         floorEnt.addComponent<TransformComponent>().position = f32x4(0.0f, -0.5f, 0.0f, 0.0f);
         {
             mut ColliderComponent floorCol = floorEnt.addComponent<ColliderComponent>();
-            floorCol.shapeType = ShapeType::Hull;
-            floorCol.isBox = true;
-            floorCol.halfExtents = f32x4(40.0f, 0.5f, 40.0f, 0.0f);
+            floorCol.primaryShape.shapeType = ShapeType::Hull;
+            floorCol.primaryShape.isBox = true;
+            floorCol.primaryShape.halfExtents = f32x4(40.0f, 0.5f, 40.0f, 0.0f);
         }
 
         Entity ragEnt = tw.world.createEntity();
@@ -9585,8 +9523,8 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         chEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         {
             mut ColliderComponent chCol = chEnt.addComponent<ColliderComponent>();
-            chCol.shapeType = ShapeType::Hull;
-            chCol.isBox = true;
+            chCol.primaryShape.shapeType = ShapeType::Hull;
+            chCol.primaryShape.isBox = true;
         }
         Entity wheelEnt = tw.world.createEntity();
         wheelEnt.addComponent<TransformComponent>();
@@ -9613,12 +9551,12 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             proxyKinRb.type = BodyType::Kinematic;
             proxyKinRb.gravityScale = 0.0f;
         }
-        proxyKinEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        proxyKinEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         physSys.registerNamedEntity(Name("artKin"), proxyKinEnt.id());
 
         Entity proxyStatEnt = tw.world.createEntity();
         proxyStatEnt.addComponent<TransformComponent>().position = f32x4(8.0f, 4.0f, 0.0f, 0.0f);
-        proxyStatEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        proxyStatEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         physSys.registerNamedEntity(Name("artStat"), proxyStatEnt.id());
 
         Entity artEnt = tw.world.createEntity();
@@ -9660,8 +9598,8 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         }
         {
             mut ColliderComponent charSelfCol = charEnt.addComponent<ColliderComponent>();
-            charSelfCol.shapeType = ShapeType::Sphere;
-            charSelfCol.radius = 0.3f;
+            charSelfCol.primaryShape.shapeType = ShapeType::Sphere;
+            charSelfCol.primaryShape.radius = 0.3f;
         }
         {
             mut CharacterControllerComponent cc = charEnt.addComponent<CharacterControllerComponent>();
@@ -9762,8 +9700,8 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         boxEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         {
             mut ColliderComponent boxCol = boxEnt.addComponent<ColliderComponent>();
-            boxCol.shapeType = ShapeType::Hull;
-            boxCol.isBox = true;
+            boxCol.primaryShape.shapeType = ShapeType::Hull;
+            boxCol.primaryShape.isBox = true;
         }
 
         Entity sbEnt = tw.world.createEntity();
@@ -9817,7 +9755,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         Entity a = tw.world.createEntity();
         a.addComponent<TransformComponent>().position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         a.addComponent<RigidBodyComponent>().type = BodyType::Static;
-        a.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        a.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity b = tw.world.createEntity();
         b.addComponent<TransformComponent>().position = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
@@ -9826,16 +9764,16 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             bRb.type = BodyType::Dynamic;
             bRb.gravityScale = 0.0f;
         }
-        b.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        b.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity jEnt = tw.world.createEntity();
         {
             mut JointComponent jc = jEnt.addComponent<JointComponent>();
-            jc.type = JointType::Distance;
-            jc.bodyEntityA = a.id();
-            jc.bodyEntityB = b.id();
-            jc.length = 2.0f;
-            jc.breakForce = 0.01f;
+            jc.primaryJoint.settings.type = JointType::Distance;
+            jc.primaryJoint.bodyEntityA = a.id();
+            jc.primaryJoint.bodyEntityB = b.id();
+            jc.primaryJoint.settings.length = 2.0f;
+            jc.primaryJoint.settings.breakForce = 0.01f;
         }
 
         ASSERT_TRUE(tw.world.tick(dt).has_value());
@@ -9855,9 +9793,9 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         Entity jEnt2 = tw.world.createEntity();
         {
             mut JointComponent jc2 = jEnt2.addComponent<JointComponent>();
-            jc2.type = JointType::Distance;
-            jc2.bodyEntityA = a.id();
-            jc2.bodyEntityB = b.id();
+            jc2.primaryJoint.settings.type = JointType::Distance;
+            jc2.primaryJoint.bodyEntityA = a.id();
+            jc2.primaryJoint.bodyEntityB = b.id();
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         const JointId reusedJId = jEnt2.getComponent<JointComponent>().runtimeJointId;
@@ -9896,7 +9834,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             rb.useCustomMass = true;
             rb.customMass = 9.0f;
         }
-        bodyEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        bodyEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity fluidEnt = tw.world.createEntity();
         fluidEnt.addComponent<TransformComponent>();
@@ -9924,8 +9862,8 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         vehEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         {
             mut ColliderComponent vehCol = vehEnt.addComponent<ColliderComponent>();
-            vehCol.shapeType = ShapeType::Hull;
-            vehCol.isBox = true;
+            vehCol.primaryShape.shapeType = ShapeType::Hull;
+            vehCol.primaryShape.isBox = true;
         }
         {
             mut VehicleComponent vehComp = vehEnt.addComponent<VehicleComponent>();
@@ -9968,7 +9906,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
         Entity orphanTestEnt = tw.world.createEntity();
         orphanTestEnt.addComponent<TransformComponent>().position = f32x4(25.0f, 5.0f, 0.0f, 0.0f);
         orphanTestEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
-        orphanTestEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        orphanTestEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         EXPECT_EQ(physSys.physicsWorld().activeBodyCount(), 4u);
@@ -10123,9 +10061,9 @@ void VerifyPhysicsEdgeCases_Wave3AAssetsPhysicsCodecsAndCompoundHull(){
         entA.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent colA = entA.addComponent<ColliderComponent>();
-            colA.shapeType = ShapeType::Mesh;
-            colA.isBox = false;
-            colA.compoundHullAsset.virtualPath = sharedCompoundName;
+            colA.primaryShape.shapeType = ShapeType::Mesh;
+            colA.primaryShape.isBox = false;
+            colA.primaryShape.compoundHullAsset.virtualPath = sharedCompoundName;
         }
 
         Entity entB = tw.world.createEntity();
@@ -10133,9 +10071,9 @@ void VerifyPhysicsEdgeCases_Wave3AAssetsPhysicsCodecsAndCompoundHull(){
         entB.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent colB = entB.addComponent<ColliderComponent>();
-            colB.shapeType = ShapeType::Mesh;
-            colB.isBox = false;
-            colB.compoundHullAsset.virtualPath = sharedCompoundName;
+            colB.primaryShape.shapeType = ShapeType::Mesh;
+            colB.primaryShape.isBox = false;
+            colB.primaryShape.compoundHullAsset.virtualPath = sharedCompoundName;
         }
 
         ASSERT_TRUE(tw.world.tick(dt).has_value());
@@ -10196,76 +10134,76 @@ void VerifyPhysicsEdgeCases_Wave3AAssetsPhysicsCodecsAndCompoundHull(){
     Vector<u8> payload;
     {
         ColliderComponent colMeshIn;
-        colMeshIn.shapeType = ShapeType::Mesh;
-        colMeshIn.isBox = false;
-        colMeshIn.autoConvexDecompose = true;
-        colMeshIn.compoundHullAsset.virtualPath = compoundName;
-        colMeshIn.vhacdMaxHulls = 12u;
-        colMeshIn.vhacdMaxRecursionDepth = 5u;
-        colMeshIn.vhacdConcavityThreshold = 0.04f;
-        colMeshIn.vhacdMaxVerticesPerHull = 24u;
-        colMeshIn.vhacdMinVolumeRatio = 0.01f;
-        colMeshIn.vhacdEnableArbitraryPlanes = false;
-        colMeshIn.vhacdEnableHullMerging = false;
-        colMeshIn.vhacdMergeVolumeTolerance = 0.12f;
+        colMeshIn.primaryShape.shapeType = ShapeType::Mesh;
+        colMeshIn.primaryShape.isBox = false;
+        colMeshIn.primaryShape.autoConvexDecompose = true;
+        colMeshIn.primaryShape.compoundHullAsset.virtualPath = compoundName;
+        colMeshIn.primaryShape.vhacdMaxHulls = 12u;
+        colMeshIn.primaryShape.vhacdMaxRecursionDepth = 5u;
+        colMeshIn.primaryShape.vhacdConcavityThreshold = 0.04f;
+        colMeshIn.primaryShape.vhacdMaxVerticesPerHull = 24u;
+        colMeshIn.primaryShape.vhacdMinVolumeRatio = 0.01f;
+        colMeshIn.primaryShape.vhacdEnableArbitraryPlanes = false;
+        colMeshIn.primaryShape.vhacdEnableHullMerging = false;
+        colMeshIn.primaryShape.vhacdMergeVolumeTolerance = 0.12f;
         ASSERT_TRUE(compCodec.serializeCollider(colMeshIn, payload));
         const Expected<ColliderComponent> colMeshOut = compCodec.deserializeCollider(payload);
         ASSERT_TRUE(colMeshOut.has_value());
-        EXPECT_EQ(colMeshOut.value().compoundHullAsset.name(), compoundName);
-        EXPECT_EQ(colMeshOut.value().vhacdMaxHulls, 12u);
-        EXPECT_EQ(colMeshOut.value().vhacdMaxRecursionDepth, 5u);
-        EXPECT_NEAR(colMeshOut.value().vhacdConcavityThreshold, 0.04f, 1.0e-5f);
-        EXPECT_EQ(colMeshOut.value().vhacdMaxVerticesPerHull, 24u);
-        EXPECT_NEAR(colMeshOut.value().vhacdMinVolumeRatio, 0.01f, 1.0e-5f);
-        EXPECT_FALSE(colMeshOut.value().vhacdEnableArbitraryPlanes);
-        EXPECT_FALSE(colMeshOut.value().vhacdEnableHullMerging);
-        EXPECT_NEAR(colMeshOut.value().vhacdMergeVolumeTolerance, 0.12f, 1.0e-5f);
+        EXPECT_EQ(colMeshOut.value().primaryShape.compoundHullAsset.name(), compoundName);
+        EXPECT_EQ(colMeshOut.value().primaryShape.vhacdMaxHulls, 12u);
+        EXPECT_EQ(colMeshOut.value().primaryShape.vhacdMaxRecursionDepth, 5u);
+        EXPECT_NEAR(colMeshOut.value().primaryShape.vhacdConcavityThreshold, 0.04f, 1.0e-5f);
+        EXPECT_EQ(colMeshOut.value().primaryShape.vhacdMaxVerticesPerHull, 24u);
+        EXPECT_NEAR(colMeshOut.value().primaryShape.vhacdMinVolumeRatio, 0.01f, 1.0e-5f);
+        EXPECT_FALSE(colMeshOut.value().primaryShape.vhacdEnableArbitraryPlanes);
+        EXPECT_FALSE(colMeshOut.value().primaryShape.vhacdEnableHullMerging);
+        EXPECT_NEAR(colMeshOut.value().primaryShape.vhacdMergeVolumeTolerance, 0.12f, 1.0e-5f);
 
         ColliderComponent colHfIn;
-        colHfIn.shapeType = ShapeType::Heightfield;
-        colHfIn.heightfieldRows = 3u;
-        colHfIn.heightfieldCols = 3u;
-        colHfIn.heightfieldHeights.resize(9u, 0.5f);
-        colHfIn.heightfieldFlipDiagonal = true;
-        colHfIn.heightfieldCellHoles.push_back(0x02u);
+        colHfIn.primaryShape.shapeType = ShapeType::Heightfield;
+        colHfIn.primaryShape.heightfieldRows = 3u;
+        colHfIn.primaryShape.heightfieldCols = 3u;
+        colHfIn.primaryShape.heightfieldHeights.resize(9u, 0.5f);
+        colHfIn.primaryShape.heightfieldFlipDiagonal = true;
+        colHfIn.primaryShape.heightfieldCellHoles.push_back(0x02u);
         ASSERT_TRUE(compCodec.serializeCollider(colHfIn, payload));
         const Expected<ColliderComponent> colHfOut = compCodec.deserializeCollider(payload);
         ASSERT_TRUE(colHfOut.has_value());
-        EXPECT_TRUE(colHfOut.value().heightfieldFlipDiagonal);
-        ASSERT_EQ(colHfOut.value().heightfieldCellHoles.size(), cast<usize>(1u));
-        EXPECT_EQ(colHfOut.value().heightfieldCellHoles[0u], 0x02u);
+        EXPECT_TRUE(colHfOut.value().primaryShape.heightfieldFlipDiagonal);
+        ASSERT_EQ(colHfOut.value().primaryShape.heightfieldCellHoles.size(), cast<usize>(1u));
+        EXPECT_EQ(colHfOut.value().primaryShape.heightfieldCellHoles[0u], 0x02u);
 
         JointComponent jIn;
-        jIn.type = JointType::SixDof;
-        jIn.enableTwistLimit = true;
-        jIn.enableSlerpDrive = true;
-        jIn.targetOrientation = f32x4(0.0f, 0.25881904f, 0.0f, 0.9659258f);
-        jIn.slerpHertz = 6.0f;
-        jIn.slerpDampingRatio = 0.8f;
-        jIn.slerpMaxTorque = 150.0f;
-        jIn.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
-        jIn.sixDofSwingLimitY = 0.6f;
-        jIn.sixDofSwingLimitZ = 0.45f;
+        jIn.primaryJoint.settings.type = JointType::SixDof;
+        jIn.primaryJoint.settings.enableTwistLimit = true;
+        jIn.primaryJoint.settings.enableSlerpDrive = true;
+        jIn.primaryJoint.settings.targetOrientation = f32x4(0.0f, 0.25881904f, 0.0f, 0.9659258f);
+        jIn.primaryJoint.settings.slerpHertz = 6.0f;
+        jIn.primaryJoint.settings.slerpDampingRatio = 0.8f;
+        jIn.primaryJoint.settings.slerpMaxTorque = 150.0f;
+        jIn.primaryJoint.settings.sixDofSwingLimitMode = SixDofSwingLimitMode::Cone;
+        jIn.primaryJoint.settings.sixDofSwingLimitY = 0.6f;
+        jIn.primaryJoint.settings.sixDofSwingLimitZ = 0.45f;
         ASSERT_TRUE(compCodec.serializeJoint(jIn, payload));
         const Expected<JointComponent> jOut = compCodec.deserializeJoint(payload);
         ASSERT_TRUE(jOut.has_value());
-        EXPECT_TRUE(jOut.value().enableTwistLimit);
-        EXPECT_TRUE(jOut.value().enableSlerpDrive);
-        EXPECT_NEAR(jOut.value().targetOrientation.y, 0.25881904f, 1.0e-5f);
-        EXPECT_NEAR(jOut.value().targetOrientation.w, 0.9659258f, 1.0e-5f);
-        EXPECT_NEAR(jOut.value().slerpHertz, 6.0f, 1.0e-5f);
-        EXPECT_NEAR(jOut.value().slerpDampingRatio, 0.8f, 1.0e-5f);
-        EXPECT_NEAR(jOut.value().slerpMaxTorque, 150.0f, 1.0e-5f);
-        EXPECT_EQ(cast<u8>(jOut.value().sixDofSwingLimitMode), cast<u8>(SixDofSwingLimitMode::Cone));
-        EXPECT_NEAR(jOut.value().sixDofSwingLimitY, 0.6f, 1.0e-5f);
-        EXPECT_NEAR(jOut.value().sixDofSwingLimitZ, 0.45f, 1.0e-5f);
+        EXPECT_TRUE(jOut.value().primaryJoint.settings.enableTwistLimit);
+        EXPECT_TRUE(jOut.value().primaryJoint.settings.enableSlerpDrive);
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.targetOrientation.y, 0.25881904f, 1.0e-5f);
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.targetOrientation.w, 0.9659258f, 1.0e-5f);
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.slerpHertz, 6.0f, 1.0e-5f);
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.slerpDampingRatio, 0.8f, 1.0e-5f);
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.slerpMaxTorque, 150.0f, 1.0e-5f);
+        EXPECT_EQ(cast<u8>(jOut.value().primaryJoint.settings.sixDofSwingLimitMode), cast<u8>(SixDofSwingLimitMode::Cone));
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.sixDofSwingLimitY, 0.6f, 1.0e-5f);
+        EXPECT_NEAR(jOut.value().primaryJoint.settings.sixDofSwingLimitZ, 0.45f, 1.0e-5f);
 
         JointComponent badZeroQuat = jIn;
-        badZeroQuat.targetOrientation = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        badZeroQuat.primaryJoint.settings.targetOrientation = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         EXPECT_FALSE(compCodec.serializeJoint(badZeroQuat, payload));
 
         JointComponent badSwingMode = jIn;
-        badSwingMode.sixDofSwingLimitMode = cast<SixDofSwingLimitMode>(9u);
+        badSwingMode.primaryJoint.settings.sixDofSwingLimitMode = cast<SixDofSwingLimitMode>(9u);
         EXPECT_FALSE(compCodec.serializeJoint(badSwingMode, payload));
     }
 
@@ -10712,10 +10650,10 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         const BodyId pendBodId = w.createBody(pendBodBd).value();
         ASSERT_TRUE(w.createHullShape(pendBodId, ShapeDef(), MakeBoxHull(0.3f, 0.3f, 0.3f, 0.0f).value()).has_value());
         JointDef dj;
-        dj.type = JointType::Distance;
+        dj.settings.type = JointType::Distance;
         dj.bodyIdA = pendAncId;
         dj.bodyIdB = pendBodId;
-        dj.length = 1.0f;
+        dj.settings.length = 1.0f;
         ASSERT_TRUE(w.createJoint(dj).has_value());
 
         StepPhysicsWorld(w, dt, 4u, scheduler);
@@ -10764,8 +10702,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         floorEnt.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent col = floorEnt.addComponent<ColliderComponent>();
-            col.shapeType = ShapeType::Hull;
-            col.halfExtents = f32x4(10.0f, 0.5f, 10.0f, 0.0f);
+            col.primaryShape.shapeType = ShapeType::Hull;
+            col.primaryShape.halfExtents = f32x4(10.0f, 0.5f, 10.0f, 0.0f);
         }
 
         Entity charEnt = tw.world.createEntity();
@@ -10825,7 +10763,7 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
 
 void VerifyPhysicsEdgeCases_Wave4ASceneEntityNameSync(){
     EcsTestWorld tw;
-    mut PhysicsSystem physSys = tw.world.addSystem<PhysicsSystem>(tw.world);
+    tw.world.addSystem<PhysicsSystem>(tw.world);
 
     Entity parentScopeA = tw.world.createEntity();
     parentScopeA.addComponent<TransformComponent>().position = f32x4(10.0f, 0.0f, 0.0f, 0.0f);
@@ -10930,15 +10868,15 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
 
     {
         ColliderComponentAsset defaultBad(Name("physics/wave4b_bad_col"));
-        defaultBad.component.shapeType = ShapeType::Mesh;
-        defaultBad.component.useMeshComponentFallback = false;
+        defaultBad.component.primaryShape.shapeType = ShapeType::Mesh;
+        defaultBad.component.primaryShape.useMeshComponentFallback = false;
         EXPECT_FALSE(defaultBad.validatePayload());
 
         ColliderComponentAsset colAsset(Name("physics/wave4b_col"));
-        colAsset.component.shapeType = ShapeType::Hull;
-        colAsset.component.isBox = false;
-        colAsset.component.syncCsgCuts = true;
-        colAsset.component.useMeshComponentFallback = true;
+        colAsset.component.primaryShape.shapeType = ShapeType::Hull;
+        colAsset.component.primaryShape.isBox = false;
+        colAsset.component.primaryShape.syncCsgCuts = true;
+        colAsset.component.primaryShape.useMeshComponentFallback = true;
         ColliderShapeEntry colExtra;
         colExtra.shapeType = ShapeType::Mesh;
         colExtra.isBox = false;
@@ -10951,8 +10889,8 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         ASSERT_TRUE(colAsset.serializeComponentPayload(payload));
         ColliderComponentAsset colLoaded(Name("physics/wave4b_col"));
         ASSERT_TRUE(colLoaded.loadComponentPayload(payload));
-        EXPECT_TRUE(colLoaded.component.syncCsgCuts);
-        EXPECT_TRUE(colLoaded.component.useMeshComponentFallback);
+        EXPECT_TRUE(colLoaded.component.primaryShape.syncCsgCuts);
+        EXPECT_TRUE(colLoaded.component.primaryShape.useMeshComponentFallback);
         ASSERT_EQ(colLoaded.component.extraShapes.size(), cast<usize>(1u));
         EXPECT_TRUE(colLoaded.component.extraShapes[0u].syncCsgCuts);
         EXPECT_TRUE(colLoaded.component.extraShapes[0u].useMeshComponentFallback);
@@ -11187,7 +11125,7 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         Entity sleepProxy0 = tw.world.createEntity();
         sleepProxy0.addComponent<TransformComponent>();
         sleepProxy0.addComponent<RigidBodyComponent>().type = BodyType::Kinematic;
-        sleepProxy0.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        sleepProxy0.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         Entity sleepProxy1 = tw.world.createEntity();
         sleepProxy1.addComponent<TransformComponent>();
         {
@@ -11195,7 +11133,7 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
             spRb.type = BodyType::Kinematic;
             spRb.angularVelocity = f32x4(0.0f, 0.0f, 3.0f, 0.0f);
         }
-        sleepProxy1.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        sleepProxy1.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
 
         Entity artSleepEnt = tw.world.createEntity();
         artSleepEnt.addComponent<TransformComponent>().position = f32x4(-8.0f, 2.0f, 0.0f, 0.0f);
@@ -11237,12 +11175,12 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         Entity awakeProxy0 = tw.world.createEntity();
         awakeProxy0.addComponent<TransformComponent>();
         awakeProxy0.addComponent<RigidBodyComponent>().type = BodyType::Kinematic;
-        awakeProxy0.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        awakeProxy0.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         awakeProxy0.addComponent<SceneEntityNameComponent>().name = Name("awake_p0");
         Entity awakeProxy1 = tw.world.createEntity();
         awakeProxy1.addComponent<TransformComponent>();
         awakeProxy1.addComponent<RigidBodyComponent>().type = BodyType::Kinematic;
-        awakeProxy1.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        awakeProxy1.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         awakeProxy1.addComponent<SceneEntityNameComponent>().name = Name("awake_p1");
 
         Entity artAwakeEnt = tw.world.createEntity();
@@ -11308,9 +11246,9 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         floorEnt.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent floorCol = floorEnt.addComponent<ColliderComponent>();
-            floorCol.shapeType = ShapeType::Hull;
-            floorCol.isBox = true;
-            floorCol.halfExtents = f32x4(50.0f, 0.5f, 50.0f, 0.0f);
+            floorCol.primaryShape.shapeType = ShapeType::Hull;
+            floorCol.primaryShape.isBox = true;
+            floorCol.primaryShape.halfExtents = f32x4(50.0f, 0.5f, 50.0f, 0.0f);
         }
 
         Entity vehSkelEnt = tw.world.createEntity();
@@ -11338,10 +11276,10 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         }
         {
             mut ColliderComponent vCol = vehEnt.addComponent<ColliderComponent>();
-            vCol.shapeType = ShapeType::Hull;
-            vCol.isBox = true;
-            vCol.halfExtents = f32x4(0.9f, 0.3f, 1.8f, 0.0f);
-            vCol.density = 300.0f;
+            vCol.primaryShape.shapeType = ShapeType::Hull;
+            vCol.primaryShape.isBox = true;
+            vCol.primaryShape.halfExtents = f32x4(0.9f, 0.3f, 1.8f, 0.0f);
+            vCol.primaryShape.density = 300.0f;
         }
         {
             mut VehicleComponent vc = vehEnt.addComponent<VehicleComponent>();
@@ -11453,11 +11391,11 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         floorEnt.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent fc = floorEnt.addComponent<ColliderComponent>();
-            fc.shapeType = ShapeType::Hull;
-            fc.isBox = true;
-            fc.halfExtents = f32x4(40.0f, 0.5f, 40.0f, 0.0f);
-            fc.enableContactEvents = true;
-            fc.enableHitEvents = true;
+            fc.primaryShape.shapeType = ShapeType::Hull;
+            fc.primaryShape.isBox = true;
+            fc.primaryShape.halfExtents = f32x4(40.0f, 0.5f, 40.0f, 0.0f);
+            fc.primaryShape.enableContactEvents = true;
+            fc.primaryShape.enableHitEvents = true;
         }
 
         Entity dropBall = tw.world.createEntity();
@@ -11469,11 +11407,11 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         }
         {
             mut ColliderComponent dbCol = dropBall.addComponent<ColliderComponent>();
-            dbCol.shapeType = ShapeType::Sphere;
-            dbCol.radius = 0.5f;
-            dbCol.enableContactEvents = true;
-            dbCol.enableHitEvents = true;
-            dbCol.enableSensorEvents = true;
+            dbCol.primaryShape.shapeType = ShapeType::Sphere;
+            dbCol.primaryShape.radius = 0.5f;
+            dbCol.primaryShape.enableContactEvents = true;
+            dbCol.primaryShape.enableHitEvents = true;
+            dbCol.primaryShape.enableSensorEvents = true;
         }
 
         Entity sensorEnt = tw.world.createEntity();
@@ -11481,29 +11419,29 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         sensorEnt.addComponent<RigidBodyComponent>().type = BodyType::Static;
         {
             mut ColliderComponent sc = sensorEnt.addComponent<ColliderComponent>();
-            sc.shapeType = ShapeType::Hull;
-            sc.isBox = true;
-            sc.halfExtents = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-            sc.isSensor = true;
-            sc.enableSensorEvents = true;
+            sc.primaryShape.shapeType = ShapeType::Hull;
+            sc.primaryShape.isBox = true;
+            sc.primaryShape.halfExtents = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
+            sc.primaryShape.isSensor = true;
+            sc.primaryShape.enableSensorEvents = true;
         }
 
         Entity jAnchorA = tw.world.createEntity();
         jAnchorA.addComponent<TransformComponent>().position = f32x4(-10.0f, 5.0f, 0.0f, 0.0f);
         jAnchorA.addComponent<RigidBodyComponent>().type = BodyType::Static;
-        jAnchorA.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        jAnchorA.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         Entity jAnchorB = tw.world.createEntity();
         jAnchorB.addComponent<TransformComponent>().position = f32x4(-8.0f, 5.0f, 0.0f, 0.0f);
         jAnchorB.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
-        jAnchorB.addComponent<ColliderComponent>().shapeType = ShapeType::Sphere;
+        jAnchorB.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Sphere;
         Entity breakJointEnt = tw.world.createEntity();
         {
             mut JointComponent jc = breakJointEnt.addComponent<JointComponent>();
-            jc.type = JointType::Distance;
-            jc.bodyEntityA = jAnchorA.id();
-            jc.bodyEntityB = jAnchorB.id();
-            jc.length = 2.0f;
-            jc.breakForce = 0.01f;
+            jc.primaryJoint.settings.type = JointType::Distance;
+            jc.primaryJoint.bodyEntityA = jAnchorA.id();
+            jc.primaryJoint.bodyEntityB = jAnchorB.id();
+            jc.primaryJoint.settings.length = 2.0f;
+            jc.primaryJoint.settings.breakForce = 0.01f;
         }
 
         Entity charEnt = tw.world.createEntity();
@@ -11518,7 +11456,7 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         Entity vehEvtEnt = tw.world.createEntity();
         vehEvtEnt.addComponent<TransformComponent>().position = f32x4(10.0f, 0.7f, 0.0f, 0.0f);
         vehEvtEnt.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
-        vehEvtEnt.addComponent<ColliderComponent>().shapeType = ShapeType::Hull;
+        vehEvtEnt.addComponent<ColliderComponent>().primaryShape.shapeType = ShapeType::Hull;
         vehEvtEnt.addComponent<VehicleComponent>().wheels.push_back(VehicleWheelDef());
 
         Entity fluidEnt = tw.world.createEntity();
@@ -11536,8 +11474,8 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         fluidBall.addComponent<RigidBodyComponent>().type = BodyType::Dynamic;
         {
             mut ColliderComponent fbCol = fluidBall.addComponent<ColliderComponent>();
-            fbCol.shapeType = ShapeType::Sphere;
-            fbCol.density = 800.0f;
+            fbCol.primaryShape.shapeType = ShapeType::Sphere;
+            fbCol.primaryShape.density = 800.0f;
         }
 
         Entity sbEnt = tw.world.createEntity();
@@ -11699,9 +11637,9 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         }
         {
             mut ColliderComponent col = meshFbEnt.addComponent<ColliderComponent>();
-            col.shapeType = ShapeType::Mesh;
-            col.isBox = false;
-            col.useMeshComponentFallback = true;
+            col.primaryShape.shapeType = ShapeType::Mesh;
+            col.primaryShape.isBox = false;
+            col.primaryShape.useMeshComponentFallback = true;
         }
 
         Entity hullFbEnt = tw.world.createEntity();
@@ -11713,9 +11651,9 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         }
         {
             mut ColliderComponent colH = hullFbEnt.addComponent<ColliderComponent>();
-            colH.shapeType = ShapeType::Hull;
-            colH.isBox = false;
-            colH.useMeshComponentFallback = true;
+            colH.primaryShape.shapeType = ShapeType::Hull;
+            colH.primaryShape.isBox = false;
+            colH.primaryShape.useMeshComponentFallback = true;
         }
 
         ASSERT_TRUE(tw.world.tick(dt).has_value());
@@ -11752,12 +11690,12 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         }
         {
             mut ColliderComponent wallCol = wallEnt.addComponent<ColliderComponent>();
-            wallCol.shapeType = ShapeType::Mesh;
-            wallCol.isBox = false;
-            wallCol.syncCsgCuts = true;
+            wallCol.primaryShape.shapeType = ShapeType::Mesh;
+            wallCol.primaryShape.isBox = false;
+            wallCol.primaryShape.syncCsgCuts = true;
             for(u32 iy = 0u; iy < 5u; ++iy){
                 for(u32 ix = 0u; ix < 5u; ++ix)
-                    wallCol.meshVertices.push_back(f32x4(-2.0f + cast<f32>(ix), -2.0f + cast<f32>(iy), 0.0f, 0.0f));
+                    wallCol.primaryShape.meshVertices.push_back(f32x4(-2.0f + cast<f32>(ix), -2.0f + cast<f32>(iy), 0.0f, 0.0f));
             }
             for(u32 iy = 0u; iy < 4u; ++iy){
                 for(u32 ix = 0u; ix < 4u; ++ix){
@@ -11765,12 +11703,12 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
                     const u32 i1 = i0 + 1u;
                     const u32 i2 = i0 + 5u;
                     const u32 i3 = i2 + 1u;
-                    wallCol.meshIndices.push_back(i0);
-                    wallCol.meshIndices.push_back(i1);
-                    wallCol.meshIndices.push_back(i3);
-                    wallCol.meshIndices.push_back(i0);
-                    wallCol.meshIndices.push_back(i3);
-                    wallCol.meshIndices.push_back(i2);
+                    wallCol.primaryShape.meshIndices.push_back(i0);
+                    wallCol.primaryShape.meshIndices.push_back(i1);
+                    wallCol.primaryShape.meshIndices.push_back(i3);
+                    wallCol.primaryShape.meshIndices.push_back(i0);
+                    wallCol.primaryShape.meshIndices.push_back(i3);
+                    wallCol.primaryShape.meshIndices.push_back(i2);
                 }
             }
         }

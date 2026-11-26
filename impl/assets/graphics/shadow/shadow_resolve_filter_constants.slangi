@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_SHADOW_RESOLVE_NORMAL_POWER 8.0
 #define NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC 0.02
 #define NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY 4.0
 #define NWB_SHADOW_RESOLVE_SCALAR_SIGMA_SCALE 1.0

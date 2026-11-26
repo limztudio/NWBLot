@@ -32,9 +32,9 @@ b8 IsValidWindowMaximumSize(in Point minimumSize, in Point maximumSize){
 VectorDouble ClampWindowSizeF64(in VectorDouble size, in Point minimumSize, in Point maximumSize){
     VectorDouble clamped = Max(VectorDouble(cast<f64>(minimumSize.x), cast<f64>(minimumSize.y), 0.0, 0.0), size);
     if(maximumSize.x > 0.0f)
-        clamped.x = UiSimdMinF64(clamped.x, cast<f64>(maximumSize.x));
+        clamped.x = Min(clamped.x, cast<f64>(maximumSize.x));
     if(maximumSize.y > 0.0f)
-        clamped.y = UiSimdMinF64(clamped.y, cast<f64>(maximumSize.y));
+        clamped.y = Min(clamped.y, cast<f64>(maximumSize.y));
     return clamped;
 }
 
@@ -222,15 +222,15 @@ void ApplyWindowFirstUseContentBounds(
     mut WindowState inOutState
 ){
     if(firstUse && options.contentWidthFirstUse){
-        f32 width = UiSimdMax(rootRectangle.width, metrics.minimumSize.x);
+        f32 width = Max(rootRectangle.width, metrics.minimumSize.x);
         if(metrics.maximumSize.x > 0.0f)
-            width = UiSimdMin(width, metrics.maximumSize.x);
+            width = Min(width, metrics.maximumSize.x);
         inOutState.bounds.width = width;
     }
     if(firstUse && options.contentHeightFirstUse){
-        f32 height = UiSimdMax(rootRectangle.height + metrics.titleHeight, metrics.minimumSize.y);
+        f32 height = Max(rootRectangle.height + metrics.titleHeight, metrics.minimumSize.y);
         if(metrics.maximumSize.y > 0.0f)
-            height = UiSimdMin(height, metrics.maximumSize.y);
+            height = Min(height, metrics.maximumSize.y);
         inOutState.bounds.height = height;
     }
 }

@@ -31,10 +31,8 @@ class Context : NoCopy{
     private PopupToken m_currentPopup;
     private Array<PopupToken, s_InputMaxPopups> m_popupStack;
     private Array<ContextScrollOwnerEntry, s_ContextMaxScopeDepth> m_scrollOwners;
-    private Array<ContextFocusGroupEntry, s_ContextMaxScopeDepth> m_focusGroups;
     private usize m_popupDepth = 0u;
     private usize m_scrollOwnerDepth = 0u;
-    private usize m_focusGroupDepth = 0u;
     private usize m_declarationCount = 0u;
     private usize m_stateClaimCount = 0u;
     private WidgetState m_lastDeclaredState;
@@ -103,7 +101,6 @@ class Context : NoCopy{
         this.m_activeWindowId = WidgetId();
         this.m_activeWindowDeclarationGeneration = 0u;
         this.m_scrollOwnerDepth = 0u;
-        this.m_focusGroupDepth = 0u;
         this.m_accessibleParents.clear();
         this.m_accessibility.beginFrame();
         this.m_frameCursor = PointerCursor::Default;
@@ -157,7 +154,6 @@ class Context : NoCopy{
     public b8 endRoot(){
         this.endWindowLayer();
         this.m_scrollOwnerDepth = 0u;
-        this.m_focusGroupDepth = 0u;
         this.m_accessibleParents.clear();
         this.clearNextTargetOverrides();
         this.clearNextAccessibleOverride();
@@ -390,31 +386,6 @@ class Context : NoCopy{
         return false;
     }
     [cpp_unwind]
-    public b8 pushFocusGroup(in StringView stableKey, in b8 trapDirectional){
-        if(this.m_failed || !this.m_rootActive || this.m_focusGroupDepth >= s_ContextMaxScopeDepth || this.m_scopes.empty() || stableKey.empty())
-            return false;
-        const Expected<WidgetId> id = TryMakeWidgetId(this.m_scopes.back(), stableKey);
-        if(!id.has_value())
-            return false;
-        const u64 raw = id.value().value;
-        u32 groupId = cast<u32>((raw ^ (raw >> 32u)) & 0xFFFFFFFFu);
-        if(groupId == 0u)
-            groupId = 1u;
-        ContextFocusGroupEntry entry;
-        entry.id = groupId;
-        entry.trapDirectional = trapDirectional;
-        entry.popup = this.m_currentPopup;
-        this.m_focusGroups[this.m_focusGroupDepth] = entry;
-        ++this.m_focusGroupDepth;
-        return true;
-    }
-    public b8 popFocusGroup(){
-        if(this.m_focusGroupDepth == 0u)
-            return false;
-        --this.m_focusGroupDepth;
-        return true;
-    }
-    [cpp_unwind]
     public b8 pushScope(in StringView stableKey){
         if(!TryPushContextScope(this.m_failed, this.m_rootActive, stableKey, this.m_scopes)){
             this.fail();
@@ -482,13 +453,6 @@ class Context : NoCopy{
             this.m_nextTargetTrapDirectional = false;
             this.m_hasNextTargetFocusGroup = false;
         }
-        else if(this.m_focusGroupDepth > 0u){
-            in ContextFocusGroupEntry groupTop = this.m_focusGroups[this.m_focusGroupDepth - 1u];
-            if(groupTop.popup == this.m_currentPopup && resolved.focusGroup == 0u){
-                resolved.focusGroup = groupTop.id;
-                resolved.trapDirectionalFocus = groupTop.trapDirectional;
-            }
-        }
         if(this.m_hasNextTargetCursor){
             resolved.cursor = this.m_nextTargetCursor;
             this.m_nextTargetCursor = PointerCursor::Default;
@@ -527,13 +491,6 @@ class Context : NoCopy{
             if(this.m_nextTargetFocusGroup != 0u && resolved.focusGroup == 0u){
                 resolved.focusGroup = this.m_nextTargetFocusGroup;
                 resolved.trapDirectionalFocus = this.m_nextTargetTrapDirectional;
-            }
-        }
-        else if(this.m_focusGroupDepth > 0u){
-            in ContextFocusGroupEntry groupTop = this.m_focusGroups[this.m_focusGroupDepth - 1u];
-            if(groupTop.popup == this.m_currentPopup && resolved.focusGroup == 0u){
-                resolved.focusGroup = groupTop.id;
-                resolved.trapDirectionalFocus = groupTop.trapDirectional;
             }
         }
         if(this.m_failed || !this.currentDeclaration(owner) || !TryAppendContextPartTarget(owner, part, this.m_currentPopup, this.m_popupLayer, this.m_windowZOrder, this.m_activeWindowId, this.m_activeWindowDeclarationGeneration, scrollOwnerId, scrollOwnerGen, resolved, this.m_targets, this.m_targetRoots)){
@@ -714,7 +671,6 @@ class Context : NoCopy{
         this.m_failed = false;
         this.m_lastDeclaredState = WidgetState();
         this.m_windowPromotions.clear();
-        this.m_focusGroupDepth = 0u;
         this.m_accessibleParents.clear();
         this.m_accessibility.beginFrame();
         this.m_frameCursor = PointerCursor::Default;
@@ -725,7 +681,6 @@ class Context : NoCopy{
         this.m_input.reset();
         this.endWindowLayer();
         this.m_scrollOwnerDepth = 0u;
-        this.m_focusGroupDepth = 0u;
         this.m_accessibleParents.clear();
         this.m_accessibility.reset();
         this.m_accessibleNumericRequests.clear();

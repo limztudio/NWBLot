@@ -36,17 +36,6 @@ inline b8 EnableFloatTraps(i32)noexcept{ return false; }
 #endif
 
 
-#if defined(FOUNDATION_HAS_SSE2)
-inline constexpr b8 s_HasSse2 = true;
-#else
-inline constexpr b8 s_HasSse2 = false;
-#endif
-#if defined(FOUNDATION_HAS_SSE2) && !defined(FOUNDATION_HAS_AVX)
-inline constexpr b8 s_UsesSsePairs = true;
-#else
-inline constexpr b8 s_UsesSsePairs = false;
-#endif
-
 [[nodiscard]] inline SIMDVectorDouble DoubleRow(const SIMDMatrixDouble& matrix, const usize index)noexcept{ return matrix.v[index]; }
 
 [[nodiscard]] inline SIMDVectorDouble SseReplicatedReciprocalSqrt(const SIMDVectorDouble value)noexcept{
@@ -56,12 +45,6 @@ inline constexpr b8 s_UsesSsePairs = false;
     return VectorDoubleReciprocalSqrt(value);
 #endif
 }
-
-#if defined(FOUNDATION_HAS_AVX)
-inline constexpr b8 s_HasAvx = true;
-#else
-inline constexpr b8 s_HasAvx = false;
-#endif
 
 [[nodiscard]] inline u32 AvxMoveMask(const SIMDVectorDouble value)noexcept{
 #if defined(FOUNDATION_HAS_AVX)

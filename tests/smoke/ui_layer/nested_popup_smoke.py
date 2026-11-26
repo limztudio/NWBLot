@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 import time
 
@@ -11,15 +9,8 @@ from nested_popup_native import NestedPopupNativeInput
 from nested_popup_probe import observe_nested_popup, snapshot_from_logs
 from probe_common import center
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS, accept_checkpoint, fail_checkpoint
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_FOCUS_CODE = "focus_code"
 LIT_COMBO = "combo"
@@ -30,9 +21,6 @@ LIT_RAW_COMBO = "raw_combo"
 LIT_RAW_SEARCH = "raw_search"
 LIT_RAW_MENU = "raw_menu"
 LIT_RECTANGLES = "rectangles"
-LIT_LOGICAL_EXTENT = "logical_extent"
-LIT_PASSED = "passed"
-LIT_UTF_8 = "utf-8"
 LIT_LABEL_READS = "label_reads"
 LIT_POPUP_TARGETS = "popup_targets"
 LIT_AFTER_BUTTON = "after_button"
@@ -42,70 +30,31 @@ LIT_RETURN = "Return"
 LIT_ESCAPE = "Escape"
 LIT_DOWN = "Down"
 LIT_MENU_ANCHOR = "menu_anchor"
-LIT_UI_NESTED_POPUP_FIXTURE = "UI nested popup fixture"
 
 NESTED_POPUP_SETTLE_SECONDS = 0.2
 
 
-class NestedPopupRun:
+class NestedPopupRun(UiFixtureRunBase):
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = NestedPopupNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-        self.failure_report = None
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=NestedPopupNativeInput(backend, handle))
         self.expected = {"parent": 0, "child": 0, "focus_scope": 0, LIT_FOCUS_CODE: 0, "before_clicks": 0, "after_clicks": 0, "child_clicks": 0, "outside": 0, "before_bytes": 6, "after_bytes": 5, "child_bytes": 5,
             "before_selected": 0, "after_selected": 0, LIT_COMBO: 0, "combo_selected": 1, LIT_SEARCH: 0, "search_selected": 1, "query_bytes": 0, "menu": 0, LIT_MENU_CURSOR: 0, "command": 0, LIT_RAW_CHILD: 0, LIT_RAW_COMBO: 0,
             LIT_RAW_SEARCH: 0, LIT_RAW_MENU: 0, "popup_count": 0, "child_parent_scope": 0}
-
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
-        return round(x * scale_x), round(y * scale_y)
-
-    def click(self, name):
-        self.native.click(*self.point(*center(self.snapshot[LIT_RECTANGLES][name])))
 
     def checkpoint(self, name, *, extent=None, extra=None, dynamic=(), **changes):
         self.expected.update(changes)
         for field in dynamic:
             self.expected.pop(field, None)
         time.sleep(NESTED_POPUP_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during nested popup capture")
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 800.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 540.0:
-                raise SmokeSkip("the nested popup fixture needs a logical client of at least 800x540")
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
-            report = observe_nested_popup(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra)
-            if report[LIT_PASSED]:
-                accept_checkpoint(self, name, path, snapshot, report, dynamic)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        fail_checkpoint(self, name, path, report, "nested popup")
+        self.poll_checkpoint(name, minimum_extent=(800.0, 540.0), minimum_extent_message="the nested popup fixture needs a logical client of at least 800x540",
+            process_stage="during nested popup capture", snapshot_reader=snapshot_from_logs,
+            evaluate=lambda frame, snapshot: observe_nested_popup(frame, snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra),
+            raw_windows=True, failure_label="nested popup", accept_extras=lambda _: {"native_window": self.native.observe_window()}, dynamic=dynamic, failure_extras=True)
 
     def write_report(self, passed):
-        report = {LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 physical hover positioning, prepared raw capture, posted buttons/keys/WM_CHAR"
-                if self.native.windows else "X11 XSendEvent ASCII keys/button1/button3 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical pointer-grab, or native Linux qualification."}
-        (self.args.output_directory / "nested_popup.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("nested_popup.json", passed, include_failure=True,
+            input_path="Win32 physical hover positioning, prepared raw capture, posted buttons/keys/WM_CHAR" if self.native.windows else "X11 XSendEvent ASCII keys/button1/button3 and XSetInputFocus",
+            runtime_limit="No live IME, native Wayland, physical pointer-grab, or native Linux qualification.")
 
     def reopen_parent(self, name):
         self.click("open")
@@ -214,54 +163,8 @@ class NestedPopupRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "NESTED_POPUP", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = nested_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the nested popup fixture appeared")
-            raise SmokeFailure("custom nested popup fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiNestedPopupSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        nested_run = NestedPopupRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        nested_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_NESTED_POPUP_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_NESTED_POPUP_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "nested_popup.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                try:
-                    if logserver is not None:
-                        CaptureProcessTermination.terminate_process(logserver, "UI nested popup logserver")
-                finally:
-                    try:
-                        if nested_run is not None:
-                            nested_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    nested_run.write_report(True)
-    print(f"UI nested popup: {len(nested_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="NESTED_POPUP", display_marker="UiNestedPopupSmoke: display", driver_type=NestedPopupRun, log_name="nested_popup.log", label="UI nested popup",
+        window_label="nested popup", process_label="nested popup", raw_windows=True, restore_pointer=True)
 
 
 def main(argv):

@@ -10,7 +10,8 @@ import sys
 from caustic_quality_smoke import verify_settings
 from csg_caustic_reference import analyze_route, compare_routes
 from csg_shadow_smoke import capture_environment
-from window_capture_image import read_bmp_24_rows
+from smoke_capture_suite import build_window_capture_command, run_window_capture_subprocess
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 45.0
@@ -21,9 +22,7 @@ LIT_DISABLED = "disabled"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"
 LIT_TIMEOUT = "--timeout"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_GPU_VALIDATION = "--gpu-validation"
-LIT_REJECT_LOG_MESSAGE = "--reject-log-message"
 LIT_SOFTWARE = "software"
 LIT_REFERENCE = "reference"
 LIT_CUT = "cut"
@@ -40,25 +39,26 @@ def capture(args, route, arm):
     output = args.output_directory / (route + "_" + arm + ".bmp")
     capture_script = Path(__file__).with_name("window_capture_smoke.py") if arm != LIT_DISABLED \
         else Path(__file__).parent / "ui_layer" / "raster_ir_flat_capture.py"
-    command = [sys.executable, str(capture_script), LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory), "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
-        LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG_SUFFIX)), LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: shutdown",
-        LIT_EXPECT_LOG_MESSAGE, "CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two", LIT_EXPECT_LOG_MESSAGE, "CsgCausticSmokeProject: photons " + (LIT_DISABLED if arm == LIT_DISABLED else "enabled"),
-        LIT_GPU_VALIDATION if args.gpu_validation else "--no-gpu-validation"]
+    expect_logs = ["CsgShadowSmokeProject: shutdown",
+        "CsgCausticSmokeProject: split cavity has four interfaces before the receiver; control has two",
+        "CsgCausticSmokeProject: photons " + (LIT_DISABLED if arm == LIT_DISABLED else "enabled")]
+    reject_logs = []
+    skip_logs = []
+    extra_args = []
     if arm != LIT_DISABLED:
-        command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched " + route + " caustic producer"]
+        expect_logs.append("RendererSystem: dispatched " + route + " caustic producer")
     else:
-        command += [LIT_REJECT_LOG_MESSAGE, "caustic producer ("]
+        reject_logs.append("caustic producer (")
     if route == LIT_SOFTWARE:
-        command += ["--application-arg=--disable-hardware-ray-tracing", LIT_EXPECT_LOG_MESSAGE, "Loader: hardware ray tracing disabled before device creation"]
+        extra_args.append("--application-arg=--disable-hardware-ray-tracing")
+        expect_logs.append("Loader: hardware ray tracing disabled before device creation")
     else:
         index = {LIT_REFERENCE: 0, LIT_CUT: 1, LIT_UNCUT: 2, LIT_DISABLED: 1}[arm]
-        command += ["--skip-log-message", f"atlas arm={index} light=directional hardware=0"]
-    for message in ("[ERROR]", "[WARNING]", "VUID-", "Validation Error", "failed to resolve shader"):
-        command += [LIT_REJECT_LOG_MESSAGE, message]
-    if args.logserver_executable:
-        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
-    else:
-        command += ["--no-logserver"]
+        skip_logs.append(f"atlas arm={index} light=directional hardware=0")
+    reject_logs.extend(("[ERROR]", "[WARNING]", "VUID-", "Validation Error", "failed to resolve shader"))
+    command = build_window_capture_command(args, output, frames=args.frames, log_output=output.with_suffix(LIT_LOG_SUFFIX),
+        expect_logs=expect_logs, reject_logs=reject_logs, skip_logs=skip_logs, extra_args=extra_args,
+        script_path=capture_script, gpu_validation=args.gpu_validation, application_args=())
     environment = capture_environment(LIT_CUT if arm == LIT_DISABLED else arm, "directional")
     for key in tuple(environment):
         if key.startswith(("NWB_CAUSTIC_", "NWB_REFLECTION_SMOKE_", "NWB_REFRACTION_SMOKE_")):
@@ -66,13 +66,11 @@ def capture(args, route, arm):
     environment["NWB_CSG_CAUSTIC_DISABLED"] = "1" if arm == LIT_DISABLED else "0"
     environment["NWB_CAUSTIC_PHOTON_GRID_DIVISOR"] = str(PHOTON_GRID_DIVISOR)
     print(f"Capturing CSG caustics {route}/{arm} at frame {args.frames}...", flush=True)
-    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode == SKIP_EXIT_CODE:
+    if run_window_capture_subprocess(command, env=environment, timeout=args.timeout,
+            failure_message=f"CSG caustic {route}/{arm} capture failed: {{code}}", timeout_margin=LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS) is None:
         return None
-    if result.returncode:
-        raise SmokeFailure(f"CSG caustic {route}/{arm} capture failed: {result.returncode}")
     verify_settings(output.with_suffix(LIT_LOG_SUFFIX).read_text(encoding=LIT_UTF_8), PHOTON_GRID_DIVISOR, producer_enabled=arm != LIT_DISABLED)
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     if frame[:2] != (960, 720):
         raise SmokeFailure("CSG caustic smoke requires the actual 960x720 framebuffer")
     return frame

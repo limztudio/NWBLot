@@ -204,9 +204,9 @@ Expected<GpuTaskId> GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, co
             && appendResourceUse(region.destination, TextureSubresourceSet(contract->destinationSlice.mipLevel, 1u, contract->destinationSlice.arraySlice, 1u), ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
         ;
         if(valid){
-            requiresTransferCapability = requiresTransferCapability || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Transfer;
-            requiresGraphicsCapability = requiresGraphicsCapability || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Graphics;
-            requiresComputeOrGraphicsCapability = requiresComputeOrGraphicsCapability || contract->queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics;
+            requiresTransferCapability = requiresTransferCapability || contract->queueRequirement == GraphicsBackend::TextureQueueRequirement::Transfer;
+            requiresGraphicsCapability = requiresGraphicsCapability || contract->queueRequirement == GraphicsBackend::TextureQueueRequirement::Graphics;
+            requiresComputeOrGraphicsCapability = requiresComputeOrGraphicsCapability || contract->queueRequirement == GraphicsBackend::TextureQueueRequirement::ComputeOrGraphics;
             payload->copies.push_back(CopyTask::Copy{
                 .sourceResource = region.source,
                 .source = sourceResource.texture,

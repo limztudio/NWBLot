@@ -43,8 +43,8 @@ b8 TryHandleScrollTrackClick(
         f64 delta = -1.0;
         if(action.source == vBefore)
             delta = 1.0;
-        const f64 step = UiSimdMaxF64(1.0, cast<f64>(placement.viewport.height));
-        const f64 maximum = UiSimdMaxF64(0.0, scrollbars.vertical.maximum);
+        const f64 step = Max(1.0, cast<f64>(placement.viewport.height));
+        const f64 maximum = Max(0.0, scrollbars.vertical.maximum);
         const Expected<f64> nextY = TryComputeListWheelOffset(scroll.offset(), delta, step, maximum);
         if(!nextY.has_value() || !scroll.setOffset(nextY.value()))
             return false;
@@ -58,8 +58,8 @@ b8 TryHandleScrollTrackClick(
         f64 deltaX = 1.0;
         if(action.source == hBefore)
             deltaX = -1.0;
-        const f64 stepX = UiSimdMaxF64(1.0, scrollbars.horizontal.viewportExtent);
-        const f64 maximumX = UiSimdMaxF64(0.0, scrollbars.horizontal.maximum);
+        const f64 stepX = Max(1.0, scrollbars.horizontal.viewportExtent);
+        const f64 maximumX = Max(0.0, scrollbars.horizontal.maximum);
         const Expected<f64> nextX = TryComputeListHorizontalWheelOffset(scrollX.offset(), deltaX, stepX, maximumX);
         if(!nextX.has_value() || !scrollX.setOffset(nextX.value()))
             return false;
@@ -69,11 +69,205 @@ b8 TryHandleScrollTrackClick(
     return true;
 }
 
+class ScrollWidgetPartIds{
+    public WidgetId vThumb = WidgetId();
+    public WidgetId hThumb = WidgetId();
+    public WidgetId vBefore = WidgetId();
+    public WidgetId vAfter = WidgetId();
+    public WidgetId hBefore = WidgetId();
+    public WidgetId hAfter = WidgetId();
+}
+
+interface ITreeTableScrollActionHandler : NoCopy{
+    ListActionOutcome apply(in ControlAction action);
+}
+
+class TreeTableScrollSink<StateT> : IScrollInputSink{
+    private ScrollWidgetPartIds m_scrollIds;
+    private b8 m_allowHorizontal;
+    private mut StateT m_state;
+    private mut ITreeTableScrollActionHandler m_handler;
+
+    public TreeTableScrollSink(in ScrollWidgetPartIds scrollIds, in b8 allowHorizontal, mut StateT state, mut ITreeTableScrollActionHandler handler){
+        this.m_scrollIds = scrollIds;
+        this.m_allowHorizontal = allowHorizontal;
+        this.m_state = state;
+        this.m_handler = handler;
+    }
+
+    public b8 matches()const override{ return true; }
+
+    public ListActionOutcome applyHorizontal(in PointerGesture gesture)override{
+        const auto offsetX = TryComputeListGestureScrollOffset(gesture, true);
+        if(!offsetX.has_value() || !this.m_state.m_scrollX.setOffset(offsetX.value()))
+            return ListActionOutcome::Failed;
+        this.m_state.m_ensureCursor = false;
+        return ListActionOutcome::Continue;
+    }
+
+    public ListActionOutcome applyVertical(in PointerGesture gesture)override{
+        const auto offsetY = TryComputeListGestureScrollOffset(gesture, false);
+        if(!offsetY.has_value() || !this.m_state.m_scroll.setOffset(offsetY.value()))
+            return ListActionOutcome::Failed;
+        this.m_state.m_ensureCursor = false;
+        return ListActionOutcome::Continue;
+    }
+
+    public ListActionOutcome applyAction(in ControlAction action)override{
+        b8 trackHandled = false;
+        if(!TryHandleScrollTrackClick(
+            action,
+            this.m_scrollIds.vBefore,
+            this.m_scrollIds.vAfter,
+            this.m_scrollIds.hBefore,
+            this.m_scrollIds.hAfter,
+            this.m_allowHorizontal,
+            this.m_state.m_placement,
+            this.m_state.m_scrollbars,
+            this.m_state.m_scroll,
+            this.m_state.m_scrollX,
+            this.m_state.m_ensureCursor,
+            trackHandled
+        ))
+            return ListActionOutcome::Failed;
+        if(trackHandled)
+            return ListActionOutcome::Continue;
+        return this.m_handler.apply(action);
+    }
+}
+
+class TreeViewScrollActionHandler : ITreeTableScrollActionHandler{
+    private in ITreeDataSource m_source;
+    private in TreeOptions m_options;
+    private WidgetId m_toggleRootId;
+    private mut TreeState m_state;
+    private mut TreeResult m_result;
+
+    public TreeViewScrollActionHandler(
+        in borrow ITreeDataSource source,
+        in TreeOptions options,
+        in WidgetId toggleRootId,
+        mut TreeState state,
+        mut TreeResult result
+    ){
+        this.m_source = source;
+        this.m_options = options;
+        this.m_toggleRootId = toggleRootId;
+        this.m_state = state;
+        this.m_result = result;
+    }
+
+    public ListActionOutcome apply(in ControlAction action)override{
+        b8 isToggle = false;
+        if(action.kind == ControlActionKind::Activate){
+            const auto toggleId = TryMakeWidgetPartId(this.m_toggleRootId, action.value);
+            isToggle = toggleId.has_value() && action.source == toggleId.value();
+        }
+        TreeResult stepResult;
+        if(!ApplyTreeControlAction(this.m_source, this.m_options, action, isToggle, this.m_state, stepResult))
+            return ListActionOutcome::Failed;
+        this.m_result.selectionChanged = this.m_result.selectionChanged || stepResult.selectionChanged;
+        if(stepResult.expansionChanged){
+            this.m_result.expansionChanged = true;
+            this.m_result.toggledKey = stepResult.toggledKey;
+        }
+        if(stepResult.activated){
+            this.m_result.activated = true;
+            this.m_result.activatedKey = stepResult.activatedKey;
+        }
+        return ListActionOutcome::Continue;
+    }
+}
+
+class DataTableScrollActionHandler : ITreeTableScrollActionHandler{
+    private Span<TableColumn> m_columns;
+    private in ITableDataSource m_source;
+    private in TableOptions m_options;
+    private WidgetId m_headerRootId;
+    private mut TableState m_state;
+    private mut TableResult m_result;
+
+    public DataTableScrollActionHandler(
+        in Span<TableColumn> columns,
+        in borrow ITableDataSource source,
+        in TableOptions options,
+        in WidgetId headerRootId,
+        mut TableState state,
+        mut TableResult result
+    ){
+        this.m_columns = columns;
+        this.m_source = source;
+        this.m_options = options;
+        this.m_headerRootId = headerRootId;
+        this.m_state = state;
+        this.m_result = result;
+    }
+
+    public ListActionOutcome apply(in ControlAction action)override{
+        b8 isHeader = false;
+        if(action.kind == ControlActionKind::Activate){
+            const auto headerId = TryMakeWidgetPartId(this.m_headerRootId, action.value);
+            isHeader = headerId.has_value() && action.source == headerId.value();
+        }
+        TableResult stepResult;
+        if(!ApplyTableControlAction(this.m_columns, this.m_source, this.m_options, action, isHeader, this.m_state, stepResult))
+            return ListActionOutcome::Failed;
+        this.m_result.selectionChanged = this.m_result.selectionChanged || stepResult.selectionChanged;
+        this.m_result.sortChanged = this.m_result.sortChanged || stepResult.sortChanged;
+        if(stepResult.activated){
+            this.m_result.activated = true;
+            this.m_result.activatedKey = stepResult.activatedKey;
+        }
+        return ListActionOutcome::Continue;
+    }
+}
+
+b8 TryResolveScrollWidgetPartIds(in WidgetId ownerId, mut ScrollWidgetPartIds outIds){
+    const auto vThumbId = TryMakeWidgetId(ownerId, s_WidgetPartScrollbar);
+    const auto hThumbId = TryMakeWidgetId(ownerId, s_WidgetPartScrollHorizontalThumb);
+    const auto vBeforeId = TryMakeWidgetId(ownerId, s_WidgetPartScrollVerticalBefore);
+    const auto vAfterId = TryMakeWidgetId(ownerId, s_WidgetPartScrollVerticalAfter);
+    const auto hBeforeId = TryMakeWidgetId(ownerId, s_WidgetPartScrollHorizontalBefore);
+    const auto hAfterId = TryMakeWidgetId(ownerId, s_WidgetPartScrollHorizontalAfter);
+    if(!vThumbId.has_value() || !hThumbId.has_value() || !vBeforeId.has_value() || !vAfterId.has_value() || !hBeforeId.has_value() || !hAfterId.has_value())
+        return false;
+    outIds.vThumb = vThumbId.value();
+    outIds.hThumb = hThumbId.value();
+    outIds.vBefore = vBeforeId.value();
+    outIds.vAfter = vAfterId.value();
+    outIds.hBefore = hBeforeId.value();
+    outIds.hAfter = hAfterId.value();
+    return true;
+}
+
+b8 ConsumeTreeTableScrollStreams<StateT>(
+    mut Context context,
+    in WidgetState widget,
+    in ScrollWidgetPartIds scrollIds,
+    in b8 allowHorizontal,
+    in ControlToken token,
+    mut StateT state,
+    mut ITreeTableScrollActionHandler handler
+){
+    TreeTableScrollSink<StateT> sink(scrollIds, allowHorizontal, state, handler);
+    return ConsumeScrollInputStreams(
+        context,
+        widget,
+        scrollIds.hThumb,
+        scrollIds.vThumb,
+        token,
+        true,
+        false,
+        PopupToken(),
+        sink
+    );
+}
+
 f32 ResolveAlignedCellTextInsetX(in TextAlignment alignment, in f32 colWidth, in Insets cellPadding, in Rect textBounds){
     if(alignment == TextAlignment::Center)
-        return UiSimdMax(cellPadding.left, (colWidth - textBounds.width) * s_RectCenterFraction);
+        return Max(cellPadding.left, (colWidth - textBounds.width) * s_RectCenterFraction);
     if(alignment == TextAlignment::Trailing)
-        return UiSimdMax(cellPadding.left, (colWidth - cellPadding.right) - textBounds.width);
+        return Max(cellPadding.left, (colWidth - cellPadding.right) - textBounds.width);
     return cellPadding.left;
 }
 
@@ -164,19 +358,9 @@ TreeResult Builder::treeView(in StringView stableKey, in borrow ITreeDataSource 
         return result;
     }
     this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
-    const auto vThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollbar);
-    const auto hThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalThumb);
-    const auto vBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalBefore);
-    const auto vAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalAfter);
-    const auto hBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalBefore);
-    const auto hAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalAfter);
+    ScrollWidgetPartIds scrollIds;
     const auto toggleRoot = TryMakeWidgetId(widget.id, s_WidgetPartTreeToggle);
-    if(
-        !vThumbId.has_value() || !hThumbId.has_value()
-        || !vBeforeId.has_value() || !vAfterId.has_value()
-        || !hBeforeId.has_value() || !hAfterId.has_value()
-        || !toggleRoot.has_value()
-    ){
+    if(!TryResolveScrollWidgetPartIds(widget.id, scrollIds) || !toggleRoot.has_value()){
         this.m_context.fail();
         return result;
     }
@@ -184,90 +368,11 @@ TreeResult Builder::treeView(in StringView stableKey, in borrow ITreeDataSource 
     result.focused = options.enabled && this.m_context.input().focus() == widget.id;
     const b8 allowHorizontal = options.horizontalScrollbar != ScrollbarPolicy::Never;
     if(options.enabled){
-        auto horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
-        b8 haveH = horizontal.has_value() && horizontal.value().control == token;
-        auto vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
-        b8 haveV = vertical.has_value() && vertical.value().control == token;
-        auto action = this.m_context.takeControlAction(widget, true, token);
-        b8 haveAction = action.has_value();
-        while(haveH || haveV || haveAction){
-            u64 hSeq = 0u;
-            u64 vSeq = 0u;
-            u64 aSeq = 0u;
-            if(haveH)
-                hSeq = horizontal.value().updateSequence;
-            if(haveV)
-                vSeq = vertical.value().updateSequence;
-            if(haveAction)
-                aSeq = action.value().id.sequence;
-            const u8 stream = SelectNextScrollInputStream(haveH, hSeq, haveV, vSeq, haveAction, aSeq);
-            if(stream == 0u){
-                const auto offsetX = TryComputeListHorizontalGestureScrollOffset(horizontal.value());
-                if(!offsetX.has_value() || !state.m_scrollX.setOffset(offsetX.value())){
-                    this.m_context.fail();
-                    result.valid = false;
-                    return result;
-                }
-                state.m_ensureCursor = false;
-                horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
-                haveH = horizontal.has_value() && horizontal.value().control == token;
-            }
-            else if(stream == 1u){
-                const auto offsetY = TryComputeListGestureScrollOffset(vertical.value());
-                if(!offsetY.has_value() || !state.m_scroll.setOffset(offsetY.value())){
-                    this.m_context.fail();
-                    result.valid = false;
-                    return result;
-                }
-                state.m_ensureCursor = false;
-                vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
-                haveV = vertical.has_value() && vertical.value().control == token;
-            }
-            else{
-                b8 trackHandled = false;
-                if(!TryHandleScrollTrackClick(
-                    action.value(),
-                    vBeforeId.value(),
-                    vAfterId.value(),
-                    hBeforeId.value(),
-                    hAfterId.value(),
-                    allowHorizontal,
-                    state.m_placement,
-                    state.m_scrollbars,
-                    state.m_scroll,
-                    state.m_scrollX,
-                    state.m_ensureCursor,
-                    trackHandled
-                )){
-                    this.m_context.fail();
-                    result.valid = false;
-                    return result;
-                }
-                if(!trackHandled){
-                    b8 isToggle = false;
-                    if(action.value().kind == ControlActionKind::Activate){
-                        const auto toggleId = TryMakeWidgetPartId(toggleRoot.value(), action.value().value);
-                        isToggle = toggleId.has_value() && action.value().source == toggleId.value();
-                    }
-                    TreeResult stepResult;
-                    if(!ApplyTreeControlAction(source, options, action.value(), isToggle, state, stepResult)){
-                        this.m_context.fail();
-                        result.valid = false;
-                        return result;
-                    }
-                    result.selectionChanged = result.selectionChanged || stepResult.selectionChanged;
-                    if(stepResult.expansionChanged){
-                        result.expansionChanged = true;
-                        result.toggledKey = stepResult.toggledKey;
-                    }
-                    if(stepResult.activated){
-                        result.activated = true;
-                        result.activatedKey = stepResult.activatedKey;
-                    }
-                }
-                action = this.m_context.takeControlAction(widget, true, token);
-                haveAction = action.has_value();
-            }
+        TreeViewScrollActionHandler onTreeAction(source, options, toggleRoot.value(), state, result);
+        if(!ConsumeTreeTableScrollStreams(this.m_context, widget, scrollIds, allowHorizontal, token, state, onTreeAction)){
+            this.m_context.fail();
+            result.valid = false;
+            return result;
         }
     }
     else
@@ -326,7 +431,7 @@ TreeResult Builder::treeView(in StringView stableKey, in borrow ITreeDataSource 
                 + measured.value().bounds.width
                 + resolvedStyle.list.row.padding.right
             );
-            contentWidth = UiSimdMaxF64(contentWidth, rowW);
+            contentWidth = Max(contentWidth, rowW);
         }
         state.m_contentWidth = contentWidth;
     }
@@ -383,9 +488,16 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
     in ITreeDataSource source = frame.source.value();
     const Rect clip = this.visibleClip(box.clip);
     Span<f64> emptyOffsets;
-    f64 scrollY = frame.scrollOffset;
-    f64 scrollX = frame.scrollOffsetX;
-    auto placed = CalculateListScrollPlacement(
+    u64 cursorIndex = 0u;
+    b8 hasCursorIndex = false;
+    if(frame.revealCursor && frame.cursorKey != 0u){
+        const auto curFound = state.m_visibleIndexByKey.find(frame.cursorKey);
+        if(curFound != state.m_visibleIndexByKey.end()){
+            cursorIndex = curFound.value();
+            hasCursorIndex = true;
+        }
+    }
+    const auto placed = PlaceListScrollWithCursor(
         box.rectangle,
         clip,
         frame.padding,
@@ -395,55 +507,36 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
         frame.rowHeight,
         emptyOffsets,
         frame.contentWidth,
-        scrollX,
-        scrollY,
+        frame.scrollOffsetX,
+        frame.scrollOffset,
         frame.options.horizontalScrollbar,
-        frame.options.verticalScrollbar
+        frame.options.verticalScrollbar,
+        hasCursorIndex,
+        cursorIndex
     );
     if(!placed.has_value())
         return false;
-    if(frame.revealCursor && frame.cursorKey != 0u){
-        const auto curFound = state.m_visibleIndexByKey.find(frame.cursorKey);
-        if(curFound != state.m_visibleIndexByKey.end()){
-            const f64 start = cast<f64>(curFound.value()) * cast<f64>(frame.rowHeight);
-            const f64 end = start + cast<f64>(frame.rowHeight);
-            const Expected<f64> ensured = TryEnsureScrollVisible(scrollY, start, end, cast<f64>(placed.value().placement.viewport.height));
-            if(!ensured.has_value())
-                return false;
-            if(ensured.value() != scrollY){
-                scrollY = ensured.value();
-                placed = CalculateListScrollPlacement(
-                    box.rectangle,
-                    clip,
-                    frame.padding,
-                    frame.style.list.scrollbarWidth,
-                    frame.style.list.minimumThumb,
-                    frame.visibleCount,
-                    frame.rowHeight,
-                    emptyOffsets,
-                    frame.contentWidth,
-                    scrollX,
-                    scrollY,
-                    frame.options.horizontalScrollbar,
-                    frame.options.verticalScrollbar
-                );
-                if(!placed.has_value())
-                    return false;
-            }
-        }
-    }
     in ScrollPlacement placement = placed.value().placement;
     in ScrollViewportPlacement scrollbars = placed.value().scrollbars;
-    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+    if(!CommitListScrollState(
+        placement,
+        scrollbars,
+        frame.rowHeight,
+        frame.token.contentGeneration,
+        frame.revealCursor,
+        frame.cursorKey,
+        state.cursorKey(),
+        state.m_scroll,
+        state.m_scrollX,
+        state.m_scrollRowHeight,
+        state.m_scrollSourceGeneration,
+        state.m_ensureCursor,
+        state.m_placement,
+        state.m_scrollbars,
+        state.m_visibleFirstRow,
+        state.m_visibleEndRow
+    ))
         return false;
-    state.m_scrollRowHeight = frame.rowHeight;
-    state.m_scrollSourceGeneration = frame.token.contentGeneration;
-    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
-        state.m_ensureCursor = false;
-    state.m_placement = placement;
-    state.m_scrollbars = scrollbars;
-    state.m_visibleFirstRow = placement.firstRow;
-    state.m_visibleEndRow = placement.endRow;
     const Optional<usize> panelIdx = this.m_paint.resolveRegionIndex(frame.style.list.background, frame.style.list.backgroundFallback);
     if(!panelIdx.has_value())
         return false;
@@ -453,17 +546,21 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
     if(!panelPopped)
         return false;
     HitTargetFactory targets;
-    const HitTarget host = targets.makeTreeHostHitTarget(
+    const HitTarget host = targets.makeScrollableListHostHitTarget(
         box.rectangle,
         clip,
         item.enabled,
         item.contextMenu,
         frame.token,
         frame.rowHeight,
-        frame.options,
+        frame.options.wheelRows,
+        frame.options.horizontalScrollbar != ScrollbarPolicy::Never,
+        frame.options.wheelColumns,
+        true,
         placement,
         scrollbars,
         frame.visibleCount,
+        false,
         frame.focusOnCommit
     );
     if(!this.m_context.addTarget(frame.widget, host))
@@ -510,21 +607,7 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
         const b8 rowSelected = state.isSelected(node.key);
         const b8 rowHovered = rowEnabled && input.hover() == rowPartId.value();
         const b8 rowFocused = treeFocused && state.cursorKey() == node.key;
-        Name preferred = rowStyle.normal;
-        Name fallback = rowStyle.fallback;
-        if(!rowEnabled){
-            preferred = rowStyle.disabled;
-            fallback = rowStyle.disabledFallback;
-        }
-        else if(rowSelected){
-            preferred = rowStyle.selected;
-            fallback = rowStyle.selectedFallback;
-        }
-        else if(rowHovered){
-            preferred = rowStyle.hover;
-            fallback = rowStyle.hoverFallback;
-        }
-        const Optional<usize> rowRegionIdx = this.m_paint.resolveRegionIndex(preferred, fallback);
+        const Optional<usize> rowRegionIdx = ResolveSelectableRegionIndex(this.m_paint, rowStyle, rowEnabled, rowSelected, rowHovered);
         if(!rowRegionIdx.has_value())
             return false;
         this.m_paint.pushClip(rowClip);
@@ -546,9 +629,9 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
         }
         Rect toggleRect;
         if(node.hasChildren){
-            const f32 innerH = UiSimdMax(4.0f, rowRect.height - rowPad.top - rowPad.bottom);
-            const f32 toggleSize = UiSimdMin(frame.style.toggleExtent, innerH);
-            const f32 toggleY = rowRect.y + UiSimdMax(0.0f, (rowRect.height - toggleSize) * s_RectCenterFraction);
+            const f32 innerH = Max(4.0f, rowRect.height - rowPad.top - rowPad.bottom);
+            const f32 toggleSize = Min(frame.style.toggleExtent, innerH);
+            const f32 toggleY = rowRect.y + Max(0.0f, (rowRect.height - toggleSize) * s_RectCenterFraction);
             toggleRect = Rect(indentX, toggleY, toggleSize, toggleSize);
             const b8 toggleHover = rowEnabled && input.hover() == togglePartId.value();
             Color toggleColor = frame.style.toggleColor;
@@ -607,14 +690,14 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
                 + measured.value().bounds.width
                 + rowPad.right
             );
-            nextContentWidth = UiSimdMaxF64(nextContentWidth, rowW);
+            nextContentWidth = Max(nextContentWidth, rowW);
         }
         if(item.enabled){
-            const HitTarget rowTarget = targets.makeListRowHitTarget(rowRect, rowClip, rowEnabled, frame.token, node.key);
+            const HitTarget rowTarget = targets.makeActivatablePartHitTarget(rowRect, rowClip, rowEnabled, frame.token, node.key);
             if(!this.m_context.addPartTarget(frame.widget, rowPartId.value(), rowTarget))
                 return false;
             if(node.hasChildren && toggleRect.width > 0.0f && toggleRect.height > 0.0f){
-                const HitTarget toggleTarget = targets.makeTreeToggleHitTarget(toggleRect, rowClip, rowEnabled, frame.token, node.key);
+                const HitTarget toggleTarget = targets.makeActivatablePartHitTarget(toggleRect, rowClip, rowEnabled, frame.token, node.key);
                 if(!this.m_context.addPartTarget(frame.widget, togglePartId.value(), toggleTarget))
                     return false;
             }
@@ -703,20 +786,10 @@ TableResult Builder::dataTable(
         return result;
     }
     this.m_context.input().fenceControl(widget.id, widget.declarationGeneration, token);
-    const auto vThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollbar);
-    const auto hThumbId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalThumb);
-    const auto vBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalBefore);
-    const auto vAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollVerticalAfter);
-    const auto hBeforeId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalBefore);
-    const auto hAfterId = TryMakeWidgetId(widget.id, s_WidgetPartScrollHorizontalAfter);
+    ScrollWidgetPartIds scrollIds;
     const auto headerRoot = TryMakeWidgetId(widget.id, s_WidgetPartTableHeader);
     const auto resizeRoot = TryMakeWidgetId(widget.id, s_WidgetPartTableResize);
-    if(
-        !vThumbId.has_value() || !hThumbId.has_value()
-        || !vBeforeId.has_value() || !vAfterId.has_value()
-        || !hBeforeId.has_value() || !hAfterId.has_value()
-        || !headerRoot.has_value() || !resizeRoot.has_value()
-    ){
+    if(!TryResolveScrollWidgetPartIds(widget.id, scrollIds) || !headerRoot.has_value() || !resizeRoot.has_value()){
         this.m_context.fail();
         return result;
     }
@@ -756,87 +829,11 @@ TableResult Builder::dataTable(
                 }
             }
         }
-        auto horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
-        b8 haveH = horizontal.has_value() && horizontal.value().control == token;
-        auto vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
-        b8 haveV = vertical.has_value() && vertical.value().control == token;
-        auto action = this.m_context.takeControlAction(widget, true, token);
-        b8 haveAction = action.has_value();
-        while(haveH || haveV || haveAction){
-            u64 hSeq = 0u;
-            u64 vSeq = 0u;
-            u64 aSeq = 0u;
-            if(haveH)
-                hSeq = horizontal.value().updateSequence;
-            if(haveV)
-                vSeq = vertical.value().updateSequence;
-            if(haveAction)
-                aSeq = action.value().id.sequence;
-            const u8 stream = SelectNextScrollInputStream(haveH, hSeq, haveV, vSeq, haveAction, aSeq);
-            if(stream == 0u){
-                const auto offsetX = TryComputeListHorizontalGestureScrollOffset(horizontal.value());
-                if(!offsetX.has_value() || !state.m_scrollX.setOffset(offsetX.value())){
-                    this.m_context.fail();
-                    result.valid = false;
-                    return result;
-                }
-                state.m_ensureCursor = false;
-                horizontal = this.m_context.takePartPointerGesture(widget, hThumbId.value(), true);
-                haveH = horizontal.has_value() && horizontal.value().control == token;
-            }
-            else if(stream == 1u){
-                const auto offsetY = TryComputeListGestureScrollOffset(vertical.value());
-                if(!offsetY.has_value() || !state.m_scroll.setOffset(offsetY.value())){
-                    this.m_context.fail();
-                    result.valid = false;
-                    return result;
-                }
-                state.m_ensureCursor = false;
-                vertical = this.m_context.takePartPointerGesture(widget, vThumbId.value(), true);
-                haveV = vertical.has_value() && vertical.value().control == token;
-            }
-            else{
-                b8 trackHandled = false;
-                if(!TryHandleScrollTrackClick(
-                    action.value(),
-                    vBeforeId.value(),
-                    vAfterId.value(),
-                    hBeforeId.value(),
-                    hAfterId.value(),
-                    allowHorizontal,
-                    state.m_placement,
-                    state.m_scrollbars,
-                    state.m_scroll,
-                    state.m_scrollX,
-                    state.m_ensureCursor,
-                    trackHandled
-                )){
-                    this.m_context.fail();
-                    result.valid = false;
-                    return result;
-                }
-                if(!trackHandled){
-                    b8 isHeader = false;
-                    if(action.value().kind == ControlActionKind::Activate){
-                        const auto headerId = TryMakeWidgetPartId(headerRoot.value(), action.value().value);
-                        isHeader = headerId.has_value() && action.value().source == headerId.value();
-                    }
-                    TableResult stepResult;
-                    if(!ApplyTableControlAction(columns, source, options, action.value(), isHeader, state, stepResult)){
-                        this.m_context.fail();
-                        result.valid = false;
-                        return result;
-                    }
-                    result.selectionChanged = result.selectionChanged || stepResult.selectionChanged;
-                    result.sortChanged = result.sortChanged || stepResult.sortChanged;
-                    if(stepResult.activated){
-                        result.activated = true;
-                        result.activatedKey = stepResult.activatedKey;
-                    }
-                }
-                action = this.m_context.takeControlAction(widget, true, token);
-                haveAction = action.has_value();
-            }
+        DataTableScrollActionHandler onTableAction(columns, source, options, headerRoot.value(), state, result);
+        if(!ConsumeTreeTableScrollStreams(this.m_context, widget, scrollIds, allowHorizontal, token, state, onTableAction)){
+            this.m_context.fail();
+            result.valid = false;
+            return result;
         }
     }
     else{
@@ -868,8 +865,8 @@ TableResult Builder::dataTable(
         return result;
     }
     const f32 textLineHeight = baseMeasured.value().bounds.height;
-    f32 rowHeight = UiSimdMax(metrics.value().minimum.y, textLineHeight + this.m_tableStyle.cellPadding.top + this.m_tableStyle.cellPadding.bottom);
-    rowHeight = UiSimdMax(rowHeight, ResolveListRowBaseHeight(metrics.value(), textLineHeight));
+    f32 rowHeight = Max(metrics.value().minimum.y, textLineHeight + this.m_tableStyle.cellPadding.top + this.m_tableStyle.cellPadding.bottom);
+    rowHeight = Max(rowHeight, ResolveListRowBaseHeight(metrics.value(), textLineHeight));
     state.m_measureKey = measureKey.value();
     state.m_rowHeight = rowHeight;
     TableStyle resolvedStyle = this.m_tableStyle;
@@ -946,24 +943,31 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         return false;
     f32 headerHeight = 0.0f;
     if(frame.options.showHeader)
-        headerHeight = UiSimdMin(UiSimdMax(0.0f, box.rectangle.height - frame.padding.top - frame.padding.bottom), frame.style.headerHeight);
+        headerHeight = Min(Max(0.0f, box.rectangle.height - frame.padding.top - frame.padding.bottom), frame.style.headerHeight);
     const Rect headerOuter(
         box.rectangle.x + frame.padding.left,
         box.rectangle.y + frame.padding.top,
-        UiSimdMax(0.0f, box.rectangle.width - frame.padding.left - frame.padding.right),
+        Max(0.0f, box.rectangle.width - frame.padding.left - frame.padding.right),
         headerHeight
     );
     const Rect bodyOuter(
         box.rectangle.x,
         box.rectangle.y + frame.padding.top + headerHeight,
         box.rectangle.width,
-        UiSimdMax(0.0f, box.rectangle.height - frame.padding.top - headerHeight)
+        Max(0.0f, box.rectangle.height - frame.padding.top - headerHeight)
     );
     const Insets bodyPadding(frame.padding.left, 0.0f, frame.padding.right, frame.padding.bottom);
     Span<f64> emptyOffsets;
-    f64 scrollY = frame.scrollOffset;
-    f64 scrollX = frame.scrollOffsetX;
-    auto placed = CalculateListScrollPlacement(
+    u64 cursorIndex = 0u;
+    b8 hasCursorIndex = false;
+    if(frame.revealCursor && frame.cursorKey != 0u){
+        const auto curFound = state.m_displayIndexByKey.find(frame.cursorKey);
+        if(curFound != state.m_displayIndexByKey.end()){
+            cursorIndex = curFound.value();
+            hasCursorIndex = true;
+        }
+    }
+    const auto placed = PlaceListScrollWithCursor(
         bodyOuter,
         clip,
         bodyPadding,
@@ -973,72 +977,57 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         frame.rowHeight,
         emptyOffsets,
         frame.contentWidth,
-        scrollX,
-        scrollY,
+        frame.scrollOffsetX,
+        frame.scrollOffset,
         frame.options.horizontalScrollbar,
-        frame.options.verticalScrollbar
+        frame.options.verticalScrollbar,
+        hasCursorIndex,
+        cursorIndex
     );
     if(!placed.has_value())
         return false;
-    if(frame.revealCursor && frame.cursorKey != 0u){
-        const auto curFound = state.m_displayIndexByKey.find(frame.cursorKey);
-        if(curFound != state.m_displayIndexByKey.end()){
-            const f64 start = cast<f64>(curFound.value()) * cast<f64>(frame.rowHeight);
-            const f64 end = start + cast<f64>(frame.rowHeight);
-            const Expected<f64> ensured = TryEnsureScrollVisible(scrollY, start, end, cast<f64>(placed.value().placement.viewport.height));
-            if(!ensured.has_value())
-                return false;
-            if(ensured.value() != scrollY){
-                scrollY = ensured.value();
-                placed = CalculateListScrollPlacement(
-                    bodyOuter,
-                    clip,
-                    bodyPadding,
-                    frame.style.list.scrollbarWidth,
-                    frame.style.list.minimumThumb,
-                    frame.rowCount,
-                    frame.rowHeight,
-                    emptyOffsets,
-                    frame.contentWidth,
-                    scrollX,
-                    scrollY,
-                    frame.options.horizontalScrollbar,
-                    frame.options.verticalScrollbar
-                );
-                if(!placed.has_value())
-                    return false;
-            }
-        }
-    }
     in ScrollPlacement placement = placed.value().placement;
     in ScrollViewportPlacement scrollbars = placed.value().scrollbars;
-    if(!state.m_scroll.setOffset(placement.offset) || !state.m_scrollX.setOffset(scrollbars.horizontal.offset))
+    if(!CommitListScrollState(
+        placement,
+        scrollbars,
+        frame.rowHeight,
+        frame.token.contentGeneration,
+        frame.revealCursor,
+        frame.cursorKey,
+        state.cursorKey(),
+        state.m_scroll,
+        state.m_scrollX,
+        state.m_scrollRowHeight,
+        state.m_scrollSourceGeneration,
+        state.m_ensureCursor,
+        state.m_placement,
+        state.m_scrollbars,
+        state.m_visibleFirstRow,
+        state.m_visibleEndRow
+    ))
         return false;
-    state.m_scrollRowHeight = frame.rowHeight;
-    state.m_scrollSourceGeneration = frame.token.contentGeneration;
-    if(frame.revealCursor && state.cursorKey() == frame.cursorKey)
-        state.m_ensureCursor = false;
-    state.m_placement = placement;
-    state.m_scrollbars = scrollbars;
     state.m_contentWidth = frame.contentWidth;
-    state.m_visibleFirstRow = placement.firstRow;
-    state.m_visibleEndRow = placement.endRow;
     this.m_paint.pushClip(clip);
     this.m_paint.drawRegionByIndex(panelIdx.value(), box.rectangle);
     if(!this.m_paint.popClip())
         return false;
     HitTargetFactory targets;
-    const HitTarget host = targets.makeTableHostHitTarget(
+    const HitTarget host = targets.makeScrollableListHostHitTarget(
         box.rectangle,
         clip,
         item.enabled,
         item.contextMenu,
         frame.token,
         frame.rowHeight,
-        frame.options,
+        frame.options.wheelRows,
+        frame.options.horizontalScrollbar != ScrollbarPolicy::Never,
+        frame.options.wheelColumns,
+        false,
         placement,
         scrollbars,
         frame.rowCount,
+        false,
         frame.focusOnCommit
     );
     if(!this.m_context.addTarget(frame.widget, host))
@@ -1136,7 +1125,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
                 f32 reservedSortW = 0.0f;
                 if(state.sortColumnKey() == col.key && state.sortDirection() != TableSortDirection::None)
                     reservedSortW = s_TableSortIndicatorExtent + s_TableSortIndicatorGap;
-                const f32 textAvailW = UiSimdMax(0.0f, col.width - reservedSortW);
+                const f32 textAvailW = Max(0.0f, col.width - reservedSortW);
                 const f32 insetX = ResolveAlignedCellTextInsetX(col.alignment, textAvailW, frame.style.cellPadding, titleMeasured.value().bounds);
                 const Point titleOrigin = ResolveCenteredTextOrigin(cellRect, insetX, titleMeasured.value().bounds);
                 const Rect textClip = InsetUiRectBounds(Rect(cellRect.x, cellRect.y, textAvailW, cellRect.height), frame.style.cellPadding);
@@ -1150,7 +1139,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
                     return false;
             }
             if(state.sortColumnKey() == col.key && state.sortDirection() != TableSortDirection::None){
-                const f32 indSize = UiSimdMin(s_TableSortIndicatorExtent, UiSimdMax(4.0f, cellRect.height * 0.4f));
+                const f32 indSize = Min(s_TableSortIndicatorExtent, Max(4.0f, cellRect.height * 0.4f));
                 const f32 indCx = (cellRect.x + cellRect.width - frame.style.cellPadding.right) - indSize * s_RectCenterFraction;
                 const f32 indCy = cellRect.y + cellRect.height * s_RectCenterFraction;
                 const f32 half = indSize * s_RectCenterFraction;
@@ -1202,21 +1191,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         const b8 rowSelected = state.isSelected(rKey);
         const b8 rowHovered = rEnabled && input.hover() == rowPartId.value();
         const b8 rowFocused = tableFocused && state.cursorKey() == rKey;
-        Name preferred = rowStyle.normal;
-        Name fallback = rowStyle.fallback;
-        if(!rEnabled){
-            preferred = rowStyle.disabled;
-            fallback = rowStyle.disabledFallback;
-        }
-        else if(rowSelected){
-            preferred = rowStyle.selected;
-            fallback = rowStyle.selectedFallback;
-        }
-        else if(rowHovered){
-            preferred = rowStyle.hover;
-            fallback = rowStyle.hoverFallback;
-        }
-        const Optional<usize> rowRegionIdx = this.m_paint.resolveRegionIndex(preferred, fallback);
+        const Optional<usize> rowRegionIdx = ResolveSelectableRegionIndex(this.m_paint, rowStyle, rEnabled, rowSelected, rowHovered);
         if(!rowRegionIdx.has_value())
             return false;
         this.m_paint.pushClip(rowClip);
@@ -1278,7 +1253,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         if(!rowRectPopped || !rowClipPopped)
             return false;
         if(item.enabled){
-            const HitTarget rowTarget = targets.makeListRowHitTarget(rowRect, rowClip, rEnabled, frame.token, rKey);
+            const HitTarget rowTarget = targets.makeActivatablePartHitTarget(rowRect, rowClip, rEnabled, frame.token, rKey);
             if(!this.m_context.addPartTarget(frame.widget, rowPartId.value(), rowTarget))
                 return false;
         }
@@ -1310,7 +1285,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
             const Rect hitRect = IntersectUiRectsBounds(cellRect, viewportHeaderClip);
             if(hitRect.width > 0.0f && hitRect.height > 0.0f){
                 if(item.enabled){
-                    const HitTarget headerTarget = targets.makeTableHeaderHitTarget(hitRect, viewportHeaderClip, col.sortable, frame.token, col.key);
+                    const HitTarget headerTarget = targets.makeActivatablePartHitTarget(hitRect, viewportHeaderClip, col.sortable, frame.token, col.key);
                     if(!this.m_context.addPartTarget(frame.widget, headerId.value(), headerTarget))
                         return false;
                 }
@@ -1333,7 +1308,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         }
         const f32 resizeW = frame.style.resizeHandleWidth;
         const f32 resizeHalfW = resizeW * s_RectCenterFraction;
-        const f32 resizeMargin = UiSimdMax(resizeHalfW, 0.0f);
+        const f32 resizeMargin = Max(resizeHalfW, 0.0f);
         usize resizeBeginCol = 0u;
         usize resizeEndCol = 0u;
         ResolveVisibleTableColumnRange(

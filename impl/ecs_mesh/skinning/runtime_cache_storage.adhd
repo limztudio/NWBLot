@@ -28,23 +28,6 @@ enum<u8> ExistingRuntimeMeshDisposition{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SkinningBatchUploadReadyTask{
-    public GpuTaskCommandRequirements commandRequirements()const{
-        GpuTaskCommandRequirements requirements;
-        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
-        requirements.requiresPrimaryGraphicsQueue = true;
-        return requirements;
-    }
-
-    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
-        return !commands.commandRecordingFailed();
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [cpp_unwind]
 b8 BuildRuntimeZippedPayload(in Mesh mesh, in Span<SkinInfluence4> skinStream, mut MeshSkinningRuntimeInstance instance){
     const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
@@ -159,28 +142,43 @@ b8 ValidateRuntimeMeshUploadPayload(in MeshSkinningRuntimeInstance instance){
     return true;
 }
 
-Expected<BufferHandle, BufferSetupFailure> CreateSkinningRuntimeBuffer(
-    mut GraphicsRuntime graphics,
-    in Name debugName,
-    in u64 byteCount,
+b8 CreateNamedRuntimeBuffer(
+    in MeshSkinningRuntimeInstance instance,
+    in StringView suffix,
+    in b8 emptyPayload,
+    in Expected<usize> byteCount,
     in u32 structStride,
-    in BufferFlags flags
+    in BufferFlags flags,
+    in StringView label,
+    mut GraphicsRuntime graphics,
+    mut BufferHandle outBuffer
 ){
-    BufferDesc desc = BufferDesc();
-    desc
-        .setByteSize(byteCount)
-        .setStructStride(structStride)
-        .setCanHaveUAVs(flags.canHaveUAVs)
-        .setCanHaveRawViews(flags.canHaveRawViews)
-        .setIsAccelStructBuildInput(flags.accelStructBuildInput)
-        .setIsIndexBuffer(flags.isIndexBuffer)
-        .setQueueSharing(flags.queueSharing)
-        .setDebugName(debugName)
-    ;
-    const Expected<BufferHandle> buffer = graphics.createBuffer(desc);
-    if(!buffer.has_value())
-        return MakeUnexpected(BufferSetupFailure::CreateFailed);
-    return buffer.value();
+    const Name name = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
+    if(name == s_NameNone){
+        outBuffer.reset();
+        return false;
+    }
+    if(emptyPayload){
+        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label);
+        outBuffer.reset();
+        return finalized.has_value();
+    }
+    if(!byteCount.has_value()){
+        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label);
+        outBuffer.reset();
+        return finalized.has_value();
+    }
+    const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(
+        CreateRuntimeMeshBuffer(graphics, name, cast<u64>(byteCount.value()), structStride, flags),
+        instance.handle.value,
+        label
+    );
+    if(!finalized.has_value()){
+        outBuffer.reset();
+        return false;
+    }
+    outBuffer = finalized.value();
+    return true;
 }
 
 b8 CreateTypedRuntimeBuffer<T>(
@@ -196,33 +194,17 @@ b8 CreateTypedRuntimeBuffer<T>(
     in b8 indexBuffer,
     mut BufferHandle outBuffer
 ){
-    const Name name = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
-    if(name == s_NameNone){
-        outBuffer.reset();
-        return false;
-    }
-    if(payload.empty()){
-        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label);
-        outBuffer.reset();
-        return finalized.has_value();
-    }
-    const Expected<usize> byteCount = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(T));
-    if(!byteCount.has_value()){
-        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label);
-        outBuffer.reset();
-        return finalized.has_value();
-    }
-    const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(
-        CreateSkinningRuntimeBuffer(graphics, name, cast<u64>(byteCount.value()), cast<u32>(sizeof(T)), BufferFlags(writable, raw, buildInput, sharing, indexBuffer)),
-        instance.handle.value,
-        label
+    return CreateNamedRuntimeBuffer(
+        instance,
+        suffix,
+        payload.empty(),
+        TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(T)),
+        cast<u32>(sizeof(T)),
+        BufferFlags(writable, raw, buildInput, sharing, indexBuffer),
+        label,
+        graphics,
+        outBuffer
     );
-    if(!finalized.has_value()){
-        outBuffer.reset();
-        return false;
-    }
-    outBuffer = finalized.value();
-    return true;
 }
 
 b8 CreatePaddedRawRuntimeBuffer(
@@ -233,114 +215,17 @@ b8 CreatePaddedRawRuntimeBuffer(
     mut GraphicsRuntime graphics,
     mut BufferHandle outBuffer
 ){
-    const Name name = DeriveNamedRuntimeBufferName(instance.sourceName, instance.handle.value, instance.editRevision, suffix, label);
-    if(name == s_NameNone){
-        outBuffer.reset();
-        return false;
-    }
-    if(payload.empty()){
-        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::EmptyPayload), instance.handle.value, label);
-        outBuffer.reset();
-        return finalized.has_value();
-    }
-    const Expected<usize> paddedBytes = TryComputePaddedRawByteCount(payload.size());
-    if(!paddedBytes.has_value()){
-        const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(MakeUnexpected(BufferSetupFailure::ByteSizeOverflow), instance.handle.value, label);
-        outBuffer.reset();
-        return finalized.has_value();
-    }
-    const Expected<BufferHandle> finalized = FinalizeRuntimeBufferUpload(
-        CreateSkinningRuntimeBuffer(graphics, name, cast<u64>(paddedBytes.value()), cast<u32>(sizeof(u8)), BufferFlags(false, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false)),
-        instance.handle.value,
-        label
+    return CreateNamedRuntimeBuffer(
+        instance,
+        suffix,
+        payload.empty(),
+        TryComputePaddedRawByteCount(payload.size()),
+        cast<u32>(sizeof(u8)),
+        BufferFlags(false, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false),
+        label,
+        graphics,
+        outBuffer
     );
-    if(!finalized.has_value()){
-        outBuffer.reset();
-        return false;
-    }
-    outBuffer = finalized.value();
-    return true;
-}
-
-GpuTaskSchedulingHint MakeSkinningBatchUploadScheduling(){
-    GpuTaskSchedulingHint scheduling;
-    scheduling.cost = GpuTaskCostHint::Small;
-    scheduling.overlapPreferred = false;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    return scheduling;
-}
-
-[cpp_unwind]
-b8 DeclareSkinningBatchBufferUploadBlob(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in StringView label,
-    in Expected<GpuUploadBlobId> blob,
-    mut Vector<GpuTaskId> outTasks
-){
-    if(!buffer.valid() || !blob.has_value())
-        return false;
-    in BufferDesc description = buffer.deref().getCreationDescription();
-    GpuGraphResourceDesc resourceDesc = GpuGraphResourceDesc();
-    resourceDesc
-        .setIdentity(description.debugName)
-        .setMarkerLabel(label)
-        .setType(GpuGraphResourceType::Buffer)
-        .setInitialState(ResourceStates::Common)
-        .setQueueSharing(description.queueSharing)
-    ;
-    const auto destination = graph.importBuffer(buffer, resourceDesc);
-    if(!destination.has_value())
-        return false;
-    GpuTaskDesc taskDesc = GpuTaskDesc();
-    taskDesc
-        .setIdentity(description.debugName)
-        .setMarkerLabel(label)
-        .setScheduling(MakeSkinningBatchUploadScheduling())
-    ;
-    GpuUploadBufferTaskDesc upload = GpuUploadBufferTaskDesc();
-    upload.source = blob.value();
-    upload.destination = destination.value();
-    upload.finalState = ResourceStates::Common;
-    const auto task = graph.addUploadBufferTask(taskDesc, upload);
-    if(!task.has_value())
-        return false;
-    outTasks.push_back(task.value());
-    return true;
-}
-
-[cpp_unwind]
-b8 DeclareSkinningBatchTypedUpload<T>(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in StringView label,
-    in Span<T> payload,
-    mut Vector<GpuTaskId> outTasks
-){
-    return DeclareSkinningBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadElements<T>(payload), outTasks);
-}
-
-[cpp_unwind]
-b8 DeclareSkinningBatchPaddedRawUpload(
-    mut GpuTaskGraph graph,
-    in BufferHandle buffer,
-    in StringView label,
-    in Span<u8> payload,
-    mut Vector<GpuTaskId> outTasks
-){
-    const Expected<usize> paddedBytes = TryComputePaddedRawByteCount(payload.size());
-    if(!paddedBytes.has_value())
-        return false;
-    if(paddedBytes.value() == payload.size())
-        return DeclareSkinningBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadBytes<u32>(payload), outTasks);
-    Vector<u8> paddedPayload = Vector<u8>();
-    paddedPayload.reserve(paddedBytes.value());
-    paddedPayload.assign(payload.begin(), payload.end());
-    paddedPayload.resize(paddedBytes.value(), 0u);
-    return DeclareSkinningBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadBytes<u32>(paddedPayload), outTasks);
 }
 
 void ResetSkinningRuntimeUploadBuffers(mut MeshSkinningRuntimeInstance instance){
@@ -539,23 +424,23 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeIns
         lambda[in instanceRef, in traceIndices, in traceAttributes, in batchReadyName](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
             Vector<GpuTaskId> uploadTasks;
             uploadTasks.reserve(17u);
-            b8 ok = DeclareSkinningBatchTypedUpload<f32x3u>(graph, instanceRef.restPositionBuffer, s_RuntimeCacheRestPositionLabel, instanceRef.restPositions, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f16x4u>(graph, instanceRef.restNormalBuffer, s_RuntimeCacheRestNormalLabel, instanceRef.restNormals, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f16x4u>(graph, instanceRef.restTangentBuffer, s_RuntimeCacheRestTangentLabel, instanceRef.restTangents, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f32x3u>(graph, instanceRef.skinnedPositionBuffer, s_RuntimeCacheSkinnedPositionLabel, instanceRef.restPositions, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f16x4u>(graph, instanceRef.skinnedNormalBuffer, s_RuntimeCacheSkinnedNormalLabel, instanceRef.restNormals, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f16x4u>(graph, instanceRef.skinnedTangentBuffer, s_RuntimeCacheSkinnedTangentLabel, instanceRef.restTangents, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f32x2u>(graph, instanceRef.uv0Buffer, s_RuntimeCacheUv0Label, instanceRef.uv0, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<f16x4u>(graph, instanceRef.colorBuffer, s_RuntimeCacheColorLabel, instanceRef.colors, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<MeshletDesc>(graph, instanceRef.meshletDescBuffer, s_RuntimeCacheMeshletDescriptorLabel, instanceRef.meshlets, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<MeshletBounds>(graph, instanceRef.meshletBoundsBuffer, s_RuntimeCacheMeshletBoundsLabel, instanceRef.meshletBounds, uploadTasks);
-            ok = ok && DeclareSkinningBatchPaddedRawUpload(graph, instanceRef.meshletPositionRefDeltaBuffer, s_RuntimeCacheMeshletPositionRefDeltaLabel, instanceRef.meshletPositionRefDeltas, uploadTasks);
-            ok = ok && DeclareSkinningBatchPaddedRawUpload(graph, instanceRef.meshletAttributeRefDeltaBuffer, s_RuntimeCacheMeshletAttributeRefDeltaLabel, instanceRef.meshletAttributeRefDeltas, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<MeshletLocalVertexRef>(graph, instanceRef.meshletLocalVertexRefBuffer, s_RuntimeCacheMeshletLocalVertexRefLabel, instanceRef.meshletLocalVertexRefs, uploadTasks);
-            ok = ok && DeclareSkinningBatchPaddedRawUpload(graph, instanceRef.meshletPrimitiveIndexBuffer, s_RuntimeCacheMeshletPrimitiveIndexLabel, instanceRef.meshletPrimitiveIndices, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<u32>(graph, instanceRef.attributeSkinBuffer, s_RuntimeCacheAttributeSkinLabel, instanceRef.attributeSkins, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<u32>(graph, instanceRef.triangleIndexBuffer, s_RuntimeCacheRtTriangleIndexLabel, traceIndices, uploadTasks);
-            ok = ok && DeclareSkinningBatchTypedUpload<AttribGpu>(graph, instanceRef.attributeBuffer, s_RuntimeCacheRtTriangleAttributeLabel, traceAttributes, uploadTasks);
+            b8 ok = DeclareRuntimeMeshBatchTypedUpload<f32x3u>(graph, instanceRef.restPositionBuffer, s_RuntimeCacheRestPositionLabel, instanceRef.restPositions, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, instanceRef.restNormalBuffer, s_RuntimeCacheRestNormalLabel, instanceRef.restNormals, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, instanceRef.restTangentBuffer, s_RuntimeCacheRestTangentLabel, instanceRef.restTangents, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f32x3u>(graph, instanceRef.skinnedPositionBuffer, s_RuntimeCacheSkinnedPositionLabel, instanceRef.restPositions, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, instanceRef.skinnedNormalBuffer, s_RuntimeCacheSkinnedNormalLabel, instanceRef.restNormals, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, instanceRef.skinnedTangentBuffer, s_RuntimeCacheSkinnedTangentLabel, instanceRef.restTangents, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f32x2u>(graph, instanceRef.uv0Buffer, s_RuntimeCacheUv0Label, instanceRef.uv0, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<f16x4u>(graph, instanceRef.colorBuffer, s_RuntimeCacheColorLabel, instanceRef.colors, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<MeshletDesc>(graph, instanceRef.meshletDescBuffer, s_RuntimeCacheMeshletDescriptorLabel, instanceRef.meshlets, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<MeshletBounds>(graph, instanceRef.meshletBoundsBuffer, s_RuntimeCacheMeshletBoundsLabel, instanceRef.meshletBounds, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchPaddedRawUpload(graph, instanceRef.meshletPositionRefDeltaBuffer, s_RuntimeCacheMeshletPositionRefDeltaLabel, instanceRef.meshletPositionRefDeltas, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchPaddedRawUpload(graph, instanceRef.meshletAttributeRefDeltaBuffer, s_RuntimeCacheMeshletAttributeRefDeltaLabel, instanceRef.meshletAttributeRefDeltas, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<MeshletLocalVertexRef>(graph, instanceRef.meshletLocalVertexRefBuffer, s_RuntimeCacheMeshletLocalVertexRefLabel, instanceRef.meshletLocalVertexRefs, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchPaddedRawUpload(graph, instanceRef.meshletPrimitiveIndexBuffer, s_RuntimeCacheMeshletPrimitiveIndexLabel, instanceRef.meshletPrimitiveIndices, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<u32>(graph, instanceRef.attributeSkinBuffer, s_RuntimeCacheAttributeSkinLabel, instanceRef.attributeSkins, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<u32>(graph, instanceRef.triangleIndexBuffer, s_RuntimeCacheRtTriangleIndexLabel, traceIndices, uploadTasks);
+            ok = ok && DeclareRuntimeMeshBatchTypedUpload<AttribGpu>(graph, instanceRef.attributeBuffer, s_RuntimeCacheRtTriangleAttributeLabel, traceAttributes, uploadTasks);
             if(!ok)
                 return MakeUnexpected(Failure());
 
@@ -565,7 +450,7 @@ b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeIns
                 .setMarkerLabel("Skinning Runtime Batch Upload Ready")
                 .setDependencies(Span<GpuTaskId>(uploadTasks))
             ;
-            SkinningBatchUploadReadyTask readyTask;
+            RuntimeMeshBatchUploadReadyTask readyTask;
             return graph.addPayloadTask(readyDesc, readyTask);
         },
         graphicsQueue

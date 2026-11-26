@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from framebuffer_png_encoder import FramebufferPngEncoder
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 
 LIT_GALLERY_HTML = "gallery.html"
 LIT_CASES = "cases"
@@ -64,7 +64,7 @@ class RefractionGalleryPublisher:
         embedded = json.loads(json.dumps(manifest))
         for case in embedded[LIT_CASES]:
             for capture_item in case[LIT_CAPTURES]:
-                content = FramebufferPngEncoder.encode(read_bmp_24_rows(output_directory / capture_item[LIT_FILE]))
+                content = FramebufferPngEncoder.encode(Bmp24Codec.read_bmp_24_rows(output_directory / capture_item[LIT_FILE]))
                 (output_directory / Path(capture_item[LIT_FILE]).with_suffix(".png")).write_bytes(content)
                 capture_item["image"] = "data:image/png;base64," + base64.b64encode(content).decode("ascii")
         data = json.dumps(embedded, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")

@@ -219,24 +219,6 @@ QueueSubmissionToken MakeQueueToken(in u64 value, in u16 physicalQueueIndex, in 
     return token;
 }
 
-GpuTaskTimingFeedbackPolicy MakeFeedbackPolicy(
-    in f64 minimumAbsoluteBenefitSeconds,
-    in f64 minimumRelativeBenefit,
-    in u32 minimumFramesBetweenSwitches,
-    in u32 minimumSampleCount,
-    in u32 calibrationIntervalFrames,
-    in b8 enabled
-){
-    GpuTaskTimingFeedbackPolicy policy;
-    policy.minimumAbsoluteBenefitSeconds = minimumAbsoluteBenefitSeconds;
-    policy.minimumRelativeBenefit = minimumRelativeBenefit;
-    policy.minimumFramesBetweenSwitches = minimumFramesBetweenSwitches;
-    policy.minimumSampleCount = minimumSampleCount;
-    policy.calibrationIntervalFrames = calibrationIntervalFrames;
-    policy.enabled = enabled;
-    return policy;
-}
-
 f32 GatherBoundaryValue(in VectorSingle position, in b8 validateCell){
     const VectorSingle biasedPositionVec = position + VectorSingle(0.0f, 0.0f, 0.05f, 0.0f);
     const f32x3u biasedPosition = f32x3u(biasedPositionVec);
@@ -851,7 +833,6 @@ void VerifySurfelGiQualitySettings_StorageCountsAndResolveExtentsRejectEitherEmp
     EXPECT_FALSE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(0u, 1u, 2u)));
     EXPECT_FALSE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(1u, 0u, 2u)));
     EXPECT_TRUE(IsValidSurfelGiResolveSize(MakeSurfelGiResolveSize(1u, 1u, 2u)));
-    EXPECT_EQ(TestReflectedMethodCount<SurfelGiResolveSize>(), 0u);
 }
 
 void VerifySurfelGiQualitySettings_BufferByteSizeKeepsWideMultiplicationAndWrapping(){
@@ -1051,25 +1032,6 @@ void VerifyRendererTaskTimingFeedbackState_PublishedSampleBeforeAcceptanceDrains
     EXPECT_EQ(assignment.value().lastAcceptedQueue, queue);
     EXPECT_EQ(assignment.value().lastAcceptedFrameIndex, 42u);
     EXPECT_EQ(timing.value().sampleCount, 1u);
-}
-
-void VerifyRendererTaskTimingFeedbackState_FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy(){
-    const GpuTaskTimingFeedbackPolicy enabledPolicy = MakeFeedbackPolicy(0.002, 0.3, 13u, 7u, 9u, true);
-    const GpuTaskTimingFeedbackPolicy disabledPolicy = MakeFeedbackPolicy(0.004, 0.4, 23u, 17u, 19u, false);
-    GpuTaskTimingFeedbackPolicy currentPolicy = disabledPolicy;
-
-    const RendererTaskTimingFeedbackPolicyTransition failedEnableTransition = PrepareRendererTaskTimingFeedbackPolicyTransition(enabledPolicy, true, currentPolicy);
-    EXPECT_EQ(failedEnableTransition.action, RendererTaskTimingFeedbackCollectionAction::Enable);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
-    ResolveRendererTaskTimingFeedbackPolicyTransition(failedEnableTransition, false, currentPolicy);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
-
-    currentPolicy = enabledPolicy;
-    const RendererTaskTimingFeedbackPolicyTransition failedDisableTransition = PrepareRendererTaskTimingFeedbackPolicyTransition(disabledPolicy, true, currentPolicy);
-    EXPECT_EQ(failedDisableTransition.action, RendererTaskTimingFeedbackCollectionAction::Disable);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
-    ResolveRendererTaskTimingFeedbackPolicyTransition(failedDisableTransition, false, currentPolicy);
-    ExpectPolicyEqual(currentPolicy, enabledPolicy);
 }
 
 void VerifyRendererTaskTimingFeedbackState_RejectedAndDiscardedCallbacksDoNotAllocate(){
@@ -1366,8 +1328,6 @@ NWB_ADHD_GTEST(SurfelSpawnPolicy, DifferentCellsSharingAHashBucketDoNotDeduplica
 NWB_ADHD_GTEST(SurfelSpawnPolicy, DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel, VerifySurfelSpawnPolicy_DistantOrOffsetParallelSurfaceNeedsItsOwnSurfel)
 
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssignmentAndDurationWithoutAllocation, VerifyRendererTaskTimingFeedbackState_PublishedSampleBeforeAcceptanceDrainsAssignmentAndDurationWithoutAllocation)
-
-NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy, VerifyRendererTaskTimingFeedbackState_FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy)
 
 NWB_ADHD_GTEST(RendererTaskTimingFeedbackState, RejectedAndDiscardedCallbacksDoNotAllocate, VerifyRendererTaskTimingFeedbackState_RejectedAndDiscardedCallbacksDoNotAllocate)
 

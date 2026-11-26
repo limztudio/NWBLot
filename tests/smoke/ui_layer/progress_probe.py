@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import math
-import re
 
 from slider_probe import bits_value, value_bits
-from window_capture_smoke import SmokeFailure
-from probe_common import center, snapshot_from_patterns
-from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region
+from probe_common import FrameProbeRecorder, center, compile_smoke_patterns, snapshot_from_patterns
+from probe_reference import compose, linear_rgb_bytes, sampled_region
 
 LIT_VALUES = "values"
 LIT_SEQUENCE = "sequence"
@@ -23,13 +21,9 @@ LIT_PARENT = "parent"
 LIT_CHILD = "child"
 
 
-NUMBER = r"[0-9.eE+-]+"
-DISPLAY = re.compile(rf"UiProgressSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiProgressSmoke: state sequence=(\d+) values=((?:\d+,){7}\d+) bits=(\d+,\d+)")
-GEOMETRY = re.compile(rf"UiProgressSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
-SKIN = re.compile(r"UiProgressSmoke: skin=(default|alternate)")
 FIELDS = ("phase", "focus_code", "before_clicks", "after_clicks", "parent", "child", "popup_count", "progress_targets")
 BIT_FIELDS = ("declared_frozen_bits", "post_declaration_bits")
+DISPLAY, STATE, GEOMETRY, SKIN = compile_smoke_patterns("UiProgressSmoke", len(FIELDS), bit_count=len(BIT_FIELDS))
 RECTANGLES = ("before", "after", "zero", "quarter", "full", "below", "above", "tiny", "frozen", "external", "external_clip", "parent_progress", "child_progress", "parent", "child",)
 FRACTIONS = {"zero": 0.0, "quarter": 0.25, "full": 1.0, "below": -2.0, "above": 3.0, "tiny": 0.01}
 TRACK = ((20, 29, 41), (63, 80, 101))
@@ -43,46 +37,23 @@ MAX_UINT64_VALUE = 0xFFFFFFFFFFFFFFFF
 
 
 def snapshot_from_logs(text):
-    snapshot = snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="progress", bit_fields=BIT_FIELDS)
-    if snapshot is None:
-        return None
-    values, sequence, rectangles = snapshot[LIT_VALUES], snapshot[LIT_SEQUENCE], snapshot[LIT_RECTANGLES]
-    bits = snapshot[LIT_BITS]
-    if any(r[2] < 0.0 or r[3] < 0.0 for r in rectangles.values()):
-        raise SmokeFailure("progress fixture reported invalid display or placement extents")
-    if any(value > MAX_MARKER_24BIT_VALUE for value in (*values, sequence)) or any(value > MAX_UINT64_VALUE for value in bits):
-        raise SmokeFailure("progress fixture exceeds its displayed marker schema")
-    if not all(math.isfinite(bits_value(value)) for value in bits):
-        raise SmokeFailure("progress fixture reported a nonfinite frozen value")
-    return snapshot
+    return snapshot_from_patterns(text, STATE, DISPLAY, SKIN, GEOMETRY, FIELDS, RECTANGLES, fixture="progress", bit_fields=BIT_FIELDS,
+        non_negative_extents=True, max_value=MAX_MARKER_24BIT_VALUE, max_bit=MAX_UINT64_VALUE, bit_validator=lambda value: math.isfinite(bits_value(value)))
 
 
 def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
-    width, height, rows = frame
+    width, height, _ = frame
     scale, rectangles = snapshot["scale"], snapshot[LIT_RECTANGLES]
-    probes = []
+    recorder = FrameProbeRecorder(frame, scale, "progress")
+    probes = recorder.probes
     geometry_matches = snapshot[LIT_PHASE] in (0, 1) and snapshot["progress_targets"] == 0
+    pixel = recorder.pixel
+    inside = recorder.inside
+    record = lambda name, position, color, tolerance=8: recorder.record(name, position, color, tolerance, radius=0)
 
-    def pixel(point):
-        return round(point[0] * scale[0]), round(point[1] * scale[1])
-
-    def record(name, position, color, tolerance=8):
-        x, y = position
-        if not 0 <= x < width or not 0 <= y < height:
-            raise SmokeFailure(f"progress probe '{name}' falls outside {width}x{height}: ({x},{y})")
-        observed = rows[y][x]
-        error = max(abs(actual - reference) for actual, reference in zip(observed, color))
-        probes.append({"name": name, "position": list(position), LIT_EXPECTED: list(color), "observed": list(observed), "error": error, LIT_PASSED: error <= tolerance})
-
-    def inside(rectangle, position):
-        x, y = (position[0] + 0.5) / scale[0], (position[1] + 0.5) / scale[1]
-        return rectangle[0] <= x < rectangle[0] + rectangle[2] and rectangle[1] <= y < rectangle[1] + rectangle[3]
-
-    marker = 0
-    for value, parts in (*((v, 2) for v in snapshot[LIT_VALUES]), *((v, 6) for v in snapshot[LIT_BITS]), (snapshot[LIT_SEQUENCE], 2)):
-        for part in range(parts):
-            record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0)), encoded_marker(value >> (12 * part)), 5)
-            marker += 1
+    marker_values = (*snapshot[LIT_VALUES], *snapshot[LIT_BITS], snapshot[LIT_SEQUENCE])
+    marker_parts = (*((2,) * len(snapshot[LIT_VALUES])), *((6,) * len(snapshot[LIT_BITS])), 2)
+    recorder.probe_markers(marker_values, 16.0, 12.0, snapshot[LIT_LOGICAL_EXTENT][1] - 14.0, parts=marker_parts, tolerance=5, radius=0, flat_names=True)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     logical_width = snapshot[LIT_LOGICAL_EXTENT][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)

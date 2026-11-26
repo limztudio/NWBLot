@@ -271,10 +271,6 @@ NwbCsgRayTriangleHit nwbCsgRayIntersectTriangleWoop(const NwbRtInstanceMaterial 
     return result;
 }
 
-NwbCsgRayTriangleHit nwbCsgRayIntersectTriangle(const NwbRtInstanceMaterial material, const uint primitive, const bool closed, const float3 origin, const float3 direction){
-    return nwbCsgRayIntersectTriangleWoop(material, primitive, closed, nwbCsgMakeWoopRay(origin, direction));
-}
-
 bool nwbCsgRaySameCrossingDistance(const float first, const float second){
 #if NWB_CSG_RAY_SOFTWARE_CROSSINGS
     return first == second;

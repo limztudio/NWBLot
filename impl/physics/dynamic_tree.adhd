@@ -286,73 +286,30 @@ class DynamicTree{
             return;
         }
 
-        Array<u32, 64u> fixedStack;
-        fixedStack[0u] = this.m_root;
-        u32 fixedCount = 1u;
-        Vector<u32> overflowStack;
-        b8 useOverflow = false;
-        while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
-            u32 nodeId = 0u;
-            if(useOverflow){
-                nodeId = overflowStack.back();
-                overflowStack.pop_back();
-            }
-            else{
-                --fixedCount;
-                nodeId = fixedStack[fixedCount];
-            }
+        BvhSpillStack<u32, 64u> stack;
+        stack.push(this.m_root);
+        u32 nodeId = 0u;
+        while(stack.pop(nodeId)){
             in TreeNode node = this.m_nodes[nodeId];
-            if(node.child1 != s_NullIndex){
-                in TreeNode c1 = this.m_nodes[node.child1];
+            Array<u32, 2u> children;
+            children[0u] = node.child1;
+            children[1u] = node.child2;
+            for(usize ci = 0u; ci < 2u; ++ci){
+                const u32 childIdx = children[ci];
+                if(childIdx == s_NullIndex)
+                    continue;
+                in TreeNode child = this.m_nodes[childIdx];
                 if(
-                    (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(c1.aabbMinUser, 0.0f), VectorSingle(c1.aabbMaxCategory, 0.0f), queryMin, queryMax)
+                    (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
+                    && AabbOverlapsValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxCategory, 0.0f), queryMin, queryMax)
                 ){
-                    if(c1.isLeaf()){
-                        if(!callback(node.child1, c1.userData()))
+                    if(child.isLeaf()){
+                        if(!callback(childIdx, child.userData()))
                             return;
                     }
-                    else if(!useOverflow && fixedCount < 64u){
-                        fixedStack[fixedCount] = node.child1;
-                        ++fixedCount;
-                    }
                     else{
-                        if(!useOverflow){
-                            useOverflow = true;
-                            overflowStack.reserve(128u);
-                            for(u32 si = 0u; si < fixedCount; ++si)
-                                overflowStack.push_back(fixedStack[si]);
-                            fixedCount = 0u;
-                        }
-                        overflowStack.push_back(node.child1);
-                    }
-                }
-            }
-            if(node.child2 != s_NullIndex){
-                in TreeNode c2 = this.m_nodes[node.child2];
-                if(
-                    (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(c2.aabbMinUser, 0.0f), VectorSingle(c2.aabbMaxCategory, 0.0f), queryMin, queryMax)
-                ){
-                    if(c2.isLeaf()){
-                        if(!callback(node.child2, c2.userData()))
-                            return;
-                    }
-                    else if(!useOverflow && fixedCount < 64u){
-                        fixedStack[fixedCount] = node.child2;
-                        ++fixedCount;
-                    }
-                    else{
-                        if(!useOverflow){
-                            useOverflow = true;
-                            overflowStack.reserve(128u);
-                            for(u32 si = 0u; si < fixedCount; ++si)
-                                overflowStack.push_back(fixedStack[si]);
-                            fixedCount = 0u;
-                        }
-                        overflowStack.push_back(node.child2);
+                        stack.push(childIdx);
                     }
                 }
             }
@@ -366,93 +323,15 @@ class DynamicTree{
         in Callback callback,
         mut Vector<u32> stackScratch
     )const{
-        if(this.m_root == s_NullIndex || maskBits == 0u)
-            return;
-
-        in TreeNode rootNode = this.m_nodes[this.m_root];
-        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
-            return;
-        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
-            return;
-        const VectorSingle queryMin(queryBox.lowerBound);
-        const VectorSingle queryMax(queryBox.upperBound);
-        if(!AabbOverlapsValues(VectorSingle(rootNode.aabbMinUser, 0.0f), VectorSingle(rootNode.aabbMaxCategory, 0.0f), queryMin, queryMax))
-            return;
-        if(rootNode.isLeaf()){
-            callback(this.m_root, rootNode.userData());
-            return;
-        }
-
-        Array<u32, 64u> localStack;
-        localStack[0u] = this.m_root;
-        u32 localCount = 1u;
-        b8 useHeap = false;
-        while(localCount > 0u || (useHeap && !stackScratch.empty())){
-            u32 nodeId = 0u;
-            if(useHeap){
-                nodeId = stackScratch.back();
-                stackScratch.pop_back();
-            }
-            else{
-                --localCount;
-                nodeId = localStack[localCount];
-            }
-            in TreeNode node = this.m_nodes[nodeId];
-            if(node.child1 != s_NullIndex){
-                in TreeNode c1 = this.m_nodes[node.child1];
-                if(
-                    (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(c1.aabbMinUser, 0.0f), VectorSingle(c1.aabbMaxCategory, 0.0f), queryMin, queryMax)
-                ){
-                    if(c1.isLeaf()){
-                        if(!callback(node.child1, c1.userData()))
-                            return;
-                    }
-                    else if(localCount < 64u && !useHeap){
-                        localStack[localCount] = node.child1;
-                        ++localCount;
-                    }
-                    else{
-                        if(!useHeap){
-                            useHeap = true;
-                            stackScratch.clear();
-                            for(u32 si = 0u; si < localCount; ++si)
-                                stackScratch.push_back(localStack[si]);
-                            localCount = 0u;
-                        }
-                        stackScratch.push_back(node.child1);
-                    }
-                }
-            }
-            if(node.child2 != s_NullIndex){
-                in TreeNode c2 = this.m_nodes[node.child2];
-                if(
-                    (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(c2.aabbMinUser, 0.0f), VectorSingle(c2.aabbMaxCategory, 0.0f), queryMin, queryMax)
-                ){
-                    if(c2.isLeaf()){
-                        if(!callback(node.child2, c2.userData()))
-                            return;
-                    }
-                    else if(localCount < 64u && !useHeap){
-                        localStack[localCount] = node.child2;
-                        ++localCount;
-                    }
-                    else{
-                        if(!useHeap){
-                            useHeap = true;
-                            stackScratch.clear();
-                            for(u32 si = 0u; si < localCount; ++si)
-                                stackScratch.push_back(localStack[si]);
-                            localCount = 0u;
-                        }
-                        stackScratch.push_back(node.child2);
-                    }
-                }
-            }
-        }
+        this.queryAabbFilteredMovedScratch(
+            queryBox,
+            maskBits,
+            requiredNodeFlags,
+            lambda[in callback](in u32 proxyId, in u32 userData, in b8 moved) -> b8{
+                return callback(proxyId, userData);
+            },
+            stackScratch
+        );
     }
 
     public void queryAabbFilteredMovedScratch<Callback>(
@@ -494,19 +373,25 @@ class DynamicTree{
                 nodeId = localStack[localCount];
             }
             in TreeNode node = this.m_nodes[nodeId];
-            if(node.child1 != s_NullIndex){
-                in TreeNode c1 = this.m_nodes[node.child1];
+            Array<u32, 2u> children;
+            children[0u] = node.child1;
+            children[1u] = node.child2;
+            for(usize ci = 0u; ci < 2u; ++ci){
+                const u32 childIdx = children[ci];
+                if(childIdx == s_NullIndex)
+                    continue;
+                in TreeNode child = this.m_nodes[childIdx];
                 if(
-                    (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(c1.aabbMinUser, 0.0f), VectorSingle(c1.aabbMaxCategory, 0.0f), queryMin, queryMax)
+                    (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                    && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
+                    && AabbOverlapsValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxCategory, 0.0f), queryMin, queryMax)
                 ){
-                    if(c1.isLeaf()){
-                        if(!callback(node.child1, c1.userData(), c1.moved))
+                    if(child.isLeaf()){
+                        if(!callback(childIdx, child.userData(), child.moved))
                             return;
                     }
                     else if(localCount < 64u && !useHeap){
-                        localStack[localCount] = node.child1;
+                        localStack[localCount] = childIdx;
                         ++localCount;
                     }
                     else{
@@ -517,34 +402,7 @@ class DynamicTree{
                                 stackScratch.push_back(localStack[si]);
                             localCount = 0u;
                         }
-                        stackScratch.push_back(node.child1);
-                    }
-                }
-            }
-            if(node.child2 != s_NullIndex){
-                in TreeNode c2 = this.m_nodes[node.child2];
-                if(
-                    (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(c2.aabbMinUser, 0.0f), VectorSingle(c2.aabbMaxCategory, 0.0f), queryMin, queryMax)
-                ){
-                    if(c2.isLeaf()){
-                        if(!callback(node.child2, c2.userData(), c2.moved))
-                            return;
-                    }
-                    else if(localCount < 64u && !useHeap){
-                        localStack[localCount] = node.child2;
-                        ++localCount;
-                    }
-                    else{
-                        if(!useHeap){
-                            useHeap = true;
-                            stackScratch.clear();
-                            for(u32 si = 0u; si < localCount; ++si)
-                                stackScratch.push_back(localStack[si]);
-                            localCount = 0u;
-                        }
-                        stackScratch.push_back(node.child2);
+                        stackScratch.push_back(childIdx);
                     }
                 }
             }
@@ -584,28 +442,11 @@ class DynamicTree{
             return;
         }
 
-        Array<u32, 256u> fixedStack;
-        Array<f32, 256u> fixedStackTMin;
-        fixedStack[0u] = this.m_root;
-        fixedStackTMin[0u] = rootTMin;
-        u32 fixedCount = 1u;
-        Vector<u32> overflowStack;
-        Vector<f32> overflowStackTMin;
-        b8 useOverflow = false;
-        while(fixedCount > 0u || (useOverflow && !overflowStack.empty())){
-            u32 nodeId = 0u;
-            f32 poppedTMin = 0.0f;
-            if(useOverflow){
-                nodeId = overflowStack.back();
-                overflowStack.pop_back();
-                poppedTMin = overflowStackTMin.back();
-                overflowStackTMin.pop_back();
-            }
-            else{
-                --fixedCount;
-                nodeId = fixedStack[fixedCount];
-                poppedTMin = fixedStackTMin[fixedCount];
-            }
+        BvhMetricSpillStack<256u> stack;
+        stack.push(this.m_root, rootTMin);
+        u32 nodeId = 0u;
+        f32 poppedTMin = 0.0f;
+        while(stack.pop(nodeId, poppedTMin)){
             if(poppedTMin > maxFraction)
                 continue;
 
@@ -616,40 +457,25 @@ class DynamicTree{
                     return;
             }
             else{
-                b8 hit1 = false;
-                f32 t1 = 0.0f;
-                if(node.child1 != s_NullIndex){
-                    in TreeNode c1 = this.m_nodes[node.child1];
-                    if(
-                        (maskBits == u32.max || (c1.categoryBits() & maskBits) != 0u)
-                        && (requiredNodeFlags == 0u || (c1.nodeFlags & requiredNodeFlags) != 0u)
-                    )
-                        hit1 = AabbRayCastValues(VectorSingle(c1.aabbMinUser, 0.0f), VectorSingle(c1.aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, t1);
+                Array<u32, 2u> children;
+                children[0u] = node.child1;
+                children[1u] = node.child2;
+                Array<b8, 2u> hits;
+                Array<f32, 2u> tMins;
+                for(usize ci = 0u; ci < 2u; ++ci){
+                    hits[ci] = false;
+                    tMins[ci] = 0.0f;
+                    const u32 childIdx = children[ci];
+                    if(childIdx != s_NullIndex){
+                        in TreeNode child = this.m_nodes[childIdx];
+                        if(
+                            (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                            && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
+                        )
+                            hits[ci] = AabbRayCastValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, tMins[ci]);
+                    }
                 }
-                b8 hit2 = false;
-                f32 t2 = 0.0f;
-                if(node.child2 != s_NullIndex){
-                    in TreeNode c2 = this.m_nodes[node.child2];
-                    if(
-                        (maskBits == u32.max || (c2.categoryBits() & maskBits) != 0u)
-                        && (requiredNodeFlags == 0u || (c2.nodeFlags & requiredNodeFlags) != 0u)
-                    )
-                        hit2 = AabbRayCastValues(VectorSingle(c2.aabbMinUser, 0.0f), VectorSingle(c2.aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, t2);
-                }
-                PushRayCastChildrenOrderedWithSpill(
-                    node.child1,
-                    hit1,
-                    t1,
-                    node.child2,
-                    hit2,
-                    t2,
-                    fixedStack,
-                    fixedStackTMin,
-                    fixedCount,
-                    overflowStack,
-                    overflowStackTMin,
-                    useOverflow
-                );
+                stack.pushOrderedPair(node.child1, hits[0u], tMins[0u], node.child2, hits[1u], tMins[1u]);
             }
         }
     }

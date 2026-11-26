@@ -730,7 +730,7 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
 }
 
 f32 ComputeHullBuoyancyVolume(in HullShape hull){
-    const f32 r = SimdMax(0.0f, hull.radius());
+    const f32 r = Max(0.0f, hull.radius());
     if(hull.isBox()){
         const VectorSingle he = hull.halfExtents();
         const f32 coreVol = 8.0f * he.x * he.y * he.z;
@@ -1423,7 +1423,7 @@ f32 ComputeMeshBuoyancyVolume(in MeshShape mesh){
         const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
         surfArea += 0.5f * twiceArea;
     }
-    return surfArea * SimdMax(2.0f * r, 0.02f);
+    return surfArea * Max(2.0f * r, 0.02f);
 }
 
 void ComputeMeshAabbValues(in MeshShape mesh, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
@@ -1569,8 +1569,8 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
 
     const VectorSingle u = d * (1.0f / len);
     const VectorSingle mid = (p1 + p2) * 0.5f;
-    const f32 sinA = SimdClamp((r1 - r2) / len, -0.99999f, 0.99999f);
-    const f32 cosA = SqrtFast(SimdMax(0.0f, 1.0f - sinA * sinA));
+    const f32 sinA = Clamp((r1 - r2) / len, -0.99999f, 0.99999f);
+    const f32 cosA = Sqrt(Max(0.0f, 1.0f - sinA * sinA));
     const f32 c1y = -0.5f * len;
     const f32 c2y = 0.5f * len;
     const f32 y1 = c1y + r1 * sinA;
@@ -1600,7 +1600,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
         for(usize k = 0u; k < 3u; ++k){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 dy = y - c1y;
-            const f32 rSq = SimdMax(0.0f, r1 * r1 - dy * dy);
+            const f32 rSq = Max(0.0f, r1 * r1 - dy * dy);
             const f32 w = glWeights[k] * halfSpan * s_Pi;
             totalVol += w * rSq;
             momentY += w * rSq * y;
@@ -1634,7 +1634,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
         for(usize k = 0u; k < 3u; ++k){
             const f32 y = midSpan + halfSpan * glNodes[k];
             const f32 dy = y - c2y;
-            const f32 rSq = SimdMax(0.0f, r2 * r2 - dy * dy);
+            const f32 rSq = Max(0.0f, r2 * r2 - dy * dy);
             const f32 w = glWeights[k] * halfSpan * s_Pi;
             totalVol += w * rSq;
             momentY += w * rSq * y;
@@ -1649,7 +1649,7 @@ MassData ComputeTaperedCapsuleMass(in TaperedCapsuleShape tc, in f32 density){
     const f32 totalMass = density * totalVol;
     const f32 comY = momentY / totalVol;
     const f32 iAxis = density * iAxisVol;
-    const f32 iPerp = SimdMax(1.0e-6f * iAxis, density * iPerpOriginVol - totalMass * comY * comY);
+    const f32 iPerp = Max(1.0e-6f * iAxis, density * iPerpOriginVol - totalMass * comY * comY);
     const MatrixSingle localI(
         VectorSingle(iPerp, 0.0f, 0.0f, 0.0f),
         VectorSingle(0.0f, iAxis, 0.0f, 0.0f),
@@ -1793,7 +1793,7 @@ void ComputePlaneAabbValues(in PlaneShape plane, in VectorSingle xfPos, in Vecto
 void ComputeSegmentAabbValues(in SegmentShape seg, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
     const VectorSingle p1 = TransformPointValues(xfPos, xfRot, seg.point1());
     const VectorSingle p2 = TransformPointValues(xfPos, xfRot, seg.point2());
-    const f32 rad = SimdMax(seg.radius(), s_LinearSlop);
+    const f32 rad = Max(seg.radius(), s_LinearSlop);
     const VectorSingle r(rad, rad, rad, 0.0f);
     outMin = Min(p1, p2) - r;
     outMax = Max(p1, p2) + r;

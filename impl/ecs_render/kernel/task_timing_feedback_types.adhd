@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/kernel/task_timing_telemetry_labels.adhd>
-#include <impl/ecs_render/kernel/timing_policy.adhd>
 #include <impl/ecs_render/shared/frame_types.adhd>
 
 
@@ -43,27 +42,6 @@ class RendererTaskTimingFeedbackState : NoCopy{
     public void reset(){
         this.m_pendingSamples.clear();
     }
-}
-
-RendererTaskTimingFeedbackPolicyTransition PrepareRendererTaskTimingFeedbackPolicyTransition(in RendererTimingPolicy requestedPolicy, in b8 rendererActive, mut RendererTimingPolicy currentPolicy){
-    RendererTaskTimingFeedbackPolicyTransition transition = RendererTaskTimingFeedbackPolicyTransition(
-        currentPolicy,
-        requestedPolicy,
-        ResolveRendererTaskTimingFeedbackCollectionAction(rendererActive, currentPolicy.enabled, requestedPolicy.enabled)
-    );
-    if(transition.action != RendererTaskTimingFeedbackCollectionAction::Enable)
-        currentPolicy = requestedPolicy;
-    return transition;
-}
-
-void ResolveRendererTaskTimingFeedbackPolicyTransition(in RendererTaskTimingFeedbackPolicyTransition transition, in b8 collectionUpdated, mut RendererTimingPolicy currentPolicy){
-    if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
-        return;
-
-    if(collectionUpdated)
-        currentPolicy = transition.requestedPolicy;
-    else
-        currentPolicy = transition.previousPolicy;
 }
 
 

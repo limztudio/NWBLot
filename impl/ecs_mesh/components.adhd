@@ -16,6 +16,7 @@ class MeshComponent{
 [arena, component("skinned_mesh_binding")]
 class SkinnedMeshBindingComponent{
     public AssetRef<Skin> skin;
+    [transient]
     public EntityID skeletonEntity = s_InvalidEntityId;
     public Name skeletonEntityName = s_NameNone;
     [transient]

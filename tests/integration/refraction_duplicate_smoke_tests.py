@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from refraction_duplicate_smoke import (  # noqa: E402
     MATCHES, MAXIMUM_CHANNEL_ERROR, MINIMUM_DISTINCT_PIXELS, RETAINED_CASES, pixel_difference, require_distinct, require_match, validate_captures,)
+from window_capture_image_codec import Bmp24Codec  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
 LIT_DOES_NOT_MATCH = "does not match"
@@ -86,7 +87,7 @@ class RefractionDuplicateAnalysisTests(unittest.TestCase):
         for candidate in ("coincident_tinted_identical", "coincident_tinted"):
             captures[f"{candidate}_disabled"] = captures[LIT_DUPLICATE_SINGLE_COOL_TINTED_DISABLED]
         captures["coincident_preserved_disabled"] = shifted(blue=40)
-        with patch("refraction_duplicate_smoke.read_bmp_24_rows", side_effect=lambda path: captures[path.stem]):
+        with patch.object(Bmp24Codec, "read_bmp_24_rows", side_effect=lambda path: captures[path.stem]):
             self.assertEqual(len(validate_captures(Path(LIT_UNUSED), (LIT_AUTOMATIC, LIT_SCREEN))), 29)
             captures["coincident_priority_swap_screen"] = captures["duplicate_single_cool_screen"]
             with self.assertRaisesRegex(SmokeFailure, "coincident_priority_swap/screen.*does not match"):

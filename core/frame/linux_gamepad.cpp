@@ -3,6 +3,7 @@
 
 
 #include "linux_gamepad.h"
+#include "gamepad_common.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,8 +14,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include <global/simd/vector.h>
 
 #include <cerrno>
 #include <fcntl.h>
@@ -44,10 +43,6 @@ namespace __hidden_linux_gamepad{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_ReconnectScanIntervalSeconds = 2.0f;
-static constexpr f32 s_AxisChangeEpsilon = 1e-4f;
-static constexpr f32 s_NegAxisScale = 1.0f / 32768.0f;
-static constexpr f32 s_PosAxisScale = 1.0f / 32767.0f;
 static constexpr Array<const char*, s_MaxGamepadCount> s_JoystickPaths = {{
     "/dev/input/js0",
     "/dev/input/js1",
@@ -76,33 +71,16 @@ static i32 MapJoystickButton(const u8 number)noexcept{
 static f32 NormalizeSignedAxis(const i16 rawValue, const b8 invert)noexcept{
     const f32 raw = invert ? -static_cast<f32>(rawValue) : static_cast<f32>(rawValue);
     const SIMDVectorSingle vec = VectorReplicate(raw);
-    const SIMDVectorSingle scale = VectorSelect(VectorReplicate(s_PosAxisScale), VectorReplicate(s_NegAxisScale), VectorLess(vec, VectorZero()));
+    const SIMDVectorSingle scale = VectorSelect(VectorReplicate(s_PosThumbScale), VectorReplicate(s_NegThumbScale), VectorLess(vec, VectorZero()));
     return VectorGetX(VectorClamp(VectorMultiply(vec, scale), VectorReplicate(-1.0f), VectorSplatOne()));
 }
 
 static f32 NormalizeTriggerAxis(const i16 rawValue)noexcept{
     const SIMDVectorSingle raw = VectorReplicate(static_cast<f32>(rawValue));
-    const SIMDVectorSingle scale = VectorSelect(VectorReplicate(s_PosAxisScale), VectorReplicate(s_NegAxisScale), VectorLess(raw, VectorZero()));
+    const SIMDVectorSingle scale = VectorSelect(VectorReplicate(s_PosThumbScale), VectorReplicate(s_NegThumbScale), VectorLess(raw, VectorZero()));
     const SIMDVectorSingle signedNorm = VectorMultiply(raw, scale);
     const SIMDVectorSingle unit = VectorMultiply(VectorAdd(signedNorm, VectorSplatOne()), VectorReplicate(0.5f));
     return VectorGetX(VectorClamp(unit, VectorZero(), VectorSplatOne()));
-}
-
-static void SetButtonState(InputDispatcher& input, const u32 slotIndex, const i32 button, const b8 pressed, u32& buttons){
-    if(button < 0 || button >= GamepadButton::kCount)
-        return;
-    const u32 bit = static_cast<u32>(1u) << static_cast<u32>(button);
-    const b8 wasDown = (buttons & bit) != 0u;
-    if(pressed == wasDown)
-        return;
-    if(pressed){
-        buttons |= bit;
-        input.gamepadButtonUpdate(slotIndex, button, InputAction::Press);
-    }
-    else{
-        buttons &= ~bit;
-        input.gamepadButtonUpdate(slotIndex, button, InputAction::Release);
-    }
 }
 
 static void EmitAxisIfChanged(
@@ -162,28 +140,10 @@ void LinuxGamepadPoller::closeSlot(const u32 index)noexcept{
 }
 
 void LinuxGamepadPoller::releaseSlot(InputDispatcher& input, const u32 index){
-    using namespace __hidden_linux_gamepad;
-
     SlotState& slot = m_slots[index];
-    for(i32 button = 0; button < GamepadButton::kCount; ++button){
-        const u32 bit = static_cast<u32>(1u) << static_cast<u32>(button);
-        if((slot.buttons & bit) != 0u){
-            slot.buttons &= ~bit;
-            input.gamepadButtonUpdate(index, button, InputAction::Release);
-        }
-    }
-    slot.buttons = 0u;
     slot.hatX = 0;
     slot.hatY = 0;
-    for(usize axisIdx = 0u; axisIdx < slot.axes.size(); ++axisIdx){
-        const f32 magnitude = VectorGetX(VectorAbs(VectorReplicate(slot.axes[axisIdx])));
-        if(magnitude > s_AxisChangeEpsilon){
-            slot.axes[axisIdx] = 0.0f;
-            input.gamepadAxisUpdate(index, static_cast<i32>(axisIdx), 0.0f);
-        }
-        else
-            slot.axes[axisIdx] = 0.0f;
-    }
+    ReleaseGamepadButtonsAndAxes(input, index, slot.buttons, slot.axes);
 }
 
 void LinuxGamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 allowInput){
@@ -208,28 +168,12 @@ void LinuxGamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
         }
     }
 
-    const f32 safeDelta = delta > 0.0f ? delta : 0.0f;
-    const b8 scanAllDisconnected = m_topologyDirty;
-    b8 scanOneFallback = false;
-    if(scanAllDisconnected){
-        m_topologyDirty = false;
-        m_fallbackScanCooldown = s_ReconnectScanIntervalSeconds;
-    }
-    else if(m_inotifyFd < 0){
-        m_fallbackScanCooldown = VectorGetX(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(m_fallbackScanCooldown), VectorReplicate(safeDelta))));
-        if(m_fallbackScanCooldown <= 0.0f){
-            scanOneFallback = true;
-            m_fallbackScanCooldown = s_ReconnectScanIntervalSeconds;
-        }
-    }
-    const u32 fallbackSlot = m_fallbackScanSlot;
-    if(scanOneFallback)
-        m_fallbackScanSlot = (m_fallbackScanSlot + 1u) % s_MaxGamepadCount;
+    const GamepadScanSchedule scanSchedule = AdvanceGamepadScanSchedule(delta, m_inotifyFd < 0, m_topologyDirty, m_fallbackScanCooldown, m_fallbackScanSlot);
 
     for(u32 i = 0u; i < s_MaxGamepadCount; ++i){
         SlotState& slot = m_slots[i];
         if(!slot.connected){
-            if(!scanAllDisconnected && (!scanOneFallback || i != fallbackSlot))
+            if(!scanSchedule.scanAllDisconnected && (!scanSchedule.scanOneFallback || i != scanSchedule.fallbackSlot))
                 continue;
 
             const i32 fd = ::open(s_JoystickPaths[i], O_RDONLY | O_NONBLOCK);
@@ -254,7 +198,7 @@ void LinuxGamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
                     const u8 type = static_cast<u8>(ev.type & ~JS_EVENT_INIT);
                     if(type == JS_EVENT_BUTTON){
                         const i32 mapped = MapJoystickButton(ev.number);
-                        SetButtonState(input, i, mapped, ev.value != 0, slot.buttons);
+                        UpdateGamepadButtonState(input, i, mapped, ev.value != 0, slot.buttons);
                     }
                     else if(type == JS_EVENT_AXIS){
                         switch(ev.number){
@@ -278,13 +222,13 @@ void LinuxGamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
                             break;
                         case 6u:
                             slot.hatX = ev.value < 0 ? -1 : (ev.value > 0 ? 1 : 0);
-                            SetButtonState(input, i, GamepadButton::DPadLeft, slot.hatX < 0, slot.buttons);
-                            SetButtonState(input, i, GamepadButton::DPadRight, slot.hatX > 0, slot.buttons);
+                            UpdateGamepadButtonState(input, i, GamepadButton::DPadLeft, slot.hatX < 0, slot.buttons);
+                            UpdateGamepadButtonState(input, i, GamepadButton::DPadRight, slot.hatX > 0, slot.buttons);
                             break;
                         case 7u:
                             slot.hatY = ev.value < 0 ? -1 : (ev.value > 0 ? 1 : 0);
-                            SetButtonState(input, i, GamepadButton::DPadUp, slot.hatY < 0, slot.buttons);
-                            SetButtonState(input, i, GamepadButton::DPadDown, slot.hatY > 0, slot.buttons);
+                            UpdateGamepadButtonState(input, i, GamepadButton::DPadUp, slot.hatY < 0, slot.buttons);
+                            UpdateGamepadButtonState(input, i, GamepadButton::DPadDown, slot.hatY > 0, slot.buttons);
                             break;
                         default:
                             break;

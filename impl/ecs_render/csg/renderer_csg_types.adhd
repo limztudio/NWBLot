@@ -86,17 +86,6 @@ static_assert(is_trivially_copyable<CsgCutterGpuData>(), "CsgCutterGpuData must 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<CsgClipWorkBounds> ResolveCsgClipWorkBounds(in CsgShapeRegistry shapeRegistry, in CsgShapeTypeInfo shapeType, in MatrixSingle shapeToWorld, in Span<u8> parameterBytes, in CsgClipWorkBounds receiverBounds){
-    if(!CsgClipCutterRequiresShapeBounds(receiverBounds.valid, shapeType.desc.shaderModule != s_NameNone, shapeType.desc.name))
-        return CsgClipWorkBounds();
-
-    const auto cutterBounds = shapeRegistry.buildShapeBounds(shapeType.id, shapeToWorld, parameterBytes);
-    if(!cutterBounds.has_value())
-        return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, false, false, VectorSingle(0.0f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.0f, 0.0f));
-
-    return ResolveCsgClipWorkBoundsFromCutterBounds(receiverBounds, true, cutterBounds.value().finiteBounds, VectorSingle(cutterBounds.value().minBounds), VectorSingle(cutterBounds.value().maxBounds));
-}
-
 Rect ToCoreRect(in CsgWorkRect rect){
     return Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
 }

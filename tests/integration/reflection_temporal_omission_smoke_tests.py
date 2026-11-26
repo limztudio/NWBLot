@@ -9,7 +9,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_temporal_omission_smoke as proof
 from reflection_temporal_omission_evidence import VARIANT, ReflectionTemporalOmissionEvidence
-from reflection_gpu_coverage import ReflectionGpuCoverage
+from reflection_gpu_coverage import ReflectionGpuCoverage, TEMPORAL
 from gpu_timing_evidence import GpuTimingEvidence
 
 TIMING_EVIDENCE = GpuTimingEvidence()
@@ -35,7 +35,7 @@ class TemporalOmissionEvidenceTests(unittest.TestCase):
                 count = control_count if scope in benchmark.OBSERVED_CONTROLS else frames
                 rows.append(f"  {scope}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples={count} sample_avg_ms={1/count}")
             if temporal and cap == 1:
-                rows.append(f"  {benchmark.TEMPORAL}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples=1 sample_avg_ms=1")
+                rows.append(f"  {TEMPORAL}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples=1 sample_avg_ms=1")
             return LIT_N.join(rows) + LIT_N
         text = report(warmup_temporal, 100) + report(False, 100) + report(tail_temporal, 100)
         (self.path / "gpu_timing.txt").write_text(text, encoding=LIT_UTF_8)

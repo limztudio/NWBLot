@@ -33,8 +33,6 @@ using AssetString = AString<AssetArena>;
 
 using ScratchArena = Alloc::ScratchArena;
 
-template<typename T>
-using ScratchVector = Vector<T, ScratchArena>;
 using ScratchString = AString<ScratchArena>;
 
 #if defined(NWB_COOK)

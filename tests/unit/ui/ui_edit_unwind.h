@@ -21,62 +21,6 @@ namespace Tests::UiEditUnwind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class NthFailRootArena final : public ArenaBase{
-public:
-    NthFailRootArena()
-        : ArenaBase(Name("tests/ui/nth_fail_edit"))
-        , m_backing(Name("tests/ui/nth_fail_edit_backing"))
-    {}
-
-    void arm(const usize failOnCall)noexcept{
-        m_armed = true;
-        m_remaining = failOnCall;
-        m_hit = false;
-    }
-
-    void disarm()noexcept{
-        m_armed = false;
-        m_remaining = 0u;
-        m_hit = false;
-    }
-
-    [[nodiscard]] b8 hit()const noexcept{ return m_hit; }
-
-    void* allocate(usize align, usize size)override{
-        if(shouldFail())
-            return nullptr;
-        return m_backing.allocate(align, size);
-    }
-
-    void* reallocate(void* memory, usize align, usize size)override{
-        if(shouldFail())
-            return nullptr;
-        return m_backing.reallocate(memory, align, size);
-    }
-
-    void deallocate(void* memory, usize align, usize size)noexcept override{
-        m_backing.deallocate(memory, align, size);
-    }
-
-private:
-    [[nodiscard]] b8 shouldFail()noexcept{
-        if(!m_armed)
-            return false;
-        if(m_remaining <= 1u){
-            m_hit = true;
-            return true;
-        }
-        --m_remaining;
-        return false;
-    }
-
-private:
-    Core::Alloc::GlobalArena m_backing;
-    usize m_remaining = 0u;
-    b8 m_armed = false;
-    b8 m_hit = false;
-};
-
 struct CapturedEditModelState{
     explicit CapturedEditModelState(::ArenaBase& arena)
         : text(arena)
@@ -166,7 +110,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
     HeapStorage support;
     usize hits = 0u;
     for(usize failAt = 1u; failAt <= 64u; ++failAt){
-        NthFailRootArena arena;
+        Tests::NthFailArena arena(Name("tests/ui/nth_fail"), Name("tests/ui/nth_fail_backing"));
         Impl::Ui::EditLimits limits;
         limits.maxBytes = 4096u;
         limits.maxHistoryRecords = 3u;
@@ -211,7 +155,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 }
 
 [[nodiscard]] inline b8 EditModelConstructorUnwindCase(){
-    NthFailRootArena arena;
+    Tests::NthFailArena arena(Name("tests/ui/nth_fail"), Name("tests/ui/nth_fail_backing"));
     Impl::Ui::EditLimits limits;
     usize hits = 0u;
     for(usize failAt = 1u; failAt <= 16u; ++failAt){
@@ -235,7 +179,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 [[nodiscard]] inline b8 ReplaceSelectionRedoAndEvictUnwindCase(){
     return SweepEditModelOom(
         1u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> a(100u, 'a', support);
             AString<::ArenaBase> b(100u, 'b', support);
             AString<::ArenaBase> c(100u, 'c', support);
@@ -249,7 +193,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
                 return false;
             if(!model.setSelection(4u, 20u))
                 return false;
-            return model.beginComposition() && model.updateComposition("comp", 1u, 3u);
+            return model.beginComposition() && model.updateComposition("comp", 1u, 3u, Span<const Impl::Ui::EditPreeditClause>{});
         },
         [](Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> replacement(260u, 'z', support);
@@ -276,7 +220,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
     HeapStorage support;
     usize hits = 0u;
     for(usize failAt = 1u; failAt <= 64u; ++failAt){
-        NthFailRootArena arena;
+        Tests::NthFailArena arena(Name("tests/ui/nth_fail"), Name("tests/ui/nth_fail_backing"));
         Impl::Ui::EditLimits limits;
         limits.maxBytes = 4096u;
         limits.maxHistoryRecords = 2u;
@@ -284,7 +228,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
         Impl::Ui::EditModel model(arena, limits, Impl::Ui::EditTextMode::SingleLine);
         if(!model.setText("first") || !model.selectAll() || !model.replaceSelection("second") || !model.setSelection(1u, 4u))
             return false;
-        if(!model.beginComposition() || !model.updateComposition("pre", 0u, 2u))
+        if(!model.beginComposition() || !model.updateComposition("pre", 0u, 2u, Span<const Impl::Ui::EditPreeditClause>{}))
             return false;
 
         const CapturedEditModelState before = CaptureState(support.arena, model);
@@ -311,7 +255,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 [[nodiscard]] inline b8 EraseAroundSelectionUnwindCase(){
     return SweepEditModelOom(
         1u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> seed(64u, 'k', support);
             return model.setText(AStringView(seed)) && model.setSelection(12u, 20u);
         },
@@ -327,8 +271,8 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 [[nodiscard]] inline b8 SetTextExtendedAndSelfAliasedUnwindCases(){
     const b8 extendedOk = SweepEditModelOom(
         1u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase&){
-            return model.setText("seed") && model.setSelection(1u, 3u) && model.beginComposition() && model.updateComposition("p", 0u, 1u);
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase&){
+            return model.setText("seed") && model.setSelection(1u, 3u) && model.beginComposition() && model.updateComposition("p", 0u, 1u, Span<const Impl::Ui::EditPreeditClause>{});
         },
         [](Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> longText(512u, 's', support);
@@ -341,9 +285,9 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
     );
     const b8 selfAliasedReplaceOk = SweepEditModelOom(
         1u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> seed(128u, 'q', support);
-            return model.setText(AStringView(seed)) && model.beginComposition() && model.updateComposition("comp", 1u, 2u);
+            return model.setText(AStringView(seed)) && model.beginComposition() && model.updateComposition("comp", 1u, 2u, Span<const Impl::Ui::EditPreeditClause>{});
         },
         [](Impl::Ui::EditModel& model, ::ArenaBase&){
             return model.replaceSelection(model.text());
@@ -354,9 +298,9 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
     );
     const b8 selfAliasedSetTextOk = SweepEditModelOom(
         0u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> seed(128u, 'q', support);
-            return model.setText(AStringView(seed)) && model.beginComposition() && model.updateComposition("comp", 1u, 2u);
+            return model.setText(AStringView(seed)) && model.beginComposition() && model.updateComposition("comp", 1u, 2u, Span<const Impl::Ui::EditPreeditClause>{});
         },
         [](Impl::Ui::EditModel& model, ::ArenaBase&){
             return model.setText(model.text());
@@ -371,22 +315,22 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 [[nodiscard]] inline b8 UndoRedoAndCompositionUnwindCases(){
     const b8 compOk = SweepEditModelOom(
         1u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase&){
-            return model.setText("base") && model.setSelection(1u, 3u) && model.beginComposition() && model.updateComposition("pre", 1u, 2u);
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase&){
+            return model.setText("base") && model.setSelection(1u, 3u) && model.beginComposition() && model.updateComposition("pre", 1u, 2u, Span<const Impl::Ui::EditPreeditClause>{});
         },
         [](Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> longComp(512u, 'u', support);
-            return model.updateComposition(AStringView(longComp), 10u, 20u);
+            return model.updateComposition(AStringView(longComp), 10u, 20u, Span<const Impl::Ui::EditPreeditClause>{});
         },
         [](Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> longComp(512u, 'u', support);
-            return model.updateComposition(AStringView(longComp), 10u, 20u) && model.composition().text == AStringView(longComp);
+            return model.updateComposition(AStringView(longComp), 10u, 20u, Span<const Impl::Ui::EditPreeditClause>{}) && model.composition().text == AStringView(longComp);
         }
     );
 
     const b8 undoRedoOk = SweepEditModelOom(
         0u,
-        [](NthFailRootArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
+        [](Tests::NthFailArena&, Impl::Ui::EditModel& model, ::ArenaBase& support){
             AString<::ArenaBase> first(128u, 'a', support);
             AString<::ArenaBase> second(96u, 'b', support);
             return model.setText(AStringView(first)) && model.selectAll() && model.replaceSelection(AStringView(second));
@@ -406,7 +350,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
     HeapStorage support;
     usize draftHits = 0u;
     for(usize failAt = 1u; failAt <= 64u; ++failAt){
-        NthFailRootArena arena;
+        Tests::NthFailArena arena(Name("tests/ui/nth_fail"), Name("tests/ui/nth_fail_backing"));
         Impl::Ui::IntegerEditModel model(arena);
         if(!model.setValue(42))
             return false;
@@ -454,7 +398,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 
     usize ctorHits = 0u;
     for(usize failAt = 1u; failAt <= 32u; ++failAt){
-        NthFailRootArena arena;
+        Tests::NthFailArena arena(Name("tests/ui/nth_fail"), Name("tests/ui/nth_fail_backing"));
         arena.arm(failAt);
         b8 constructed = false;
         const b8 threw = static_cast<b8>(ThrowsException<AllocationException>([&](){
@@ -475,7 +419,7 @@ template<typename SetupFn, typename MutateFn, typename RecoverFn>
 
     usize valueCleanRuns = 0u;
     for(usize failAt = 1u; failAt <= 16u; ++failAt){
-        NthFailRootArena arena;
+        Tests::NthFailArena arena(Name("tests/ui/nth_fail"), Name("tests/ui/nth_fail_backing"));
         Impl::Ui::IntegerEditModel model(arena);
         AString<::ArenaBase> dirtyLong(120u, 'x', support.arena);
         if(!model.setDraft(AStringView(dirtyLong)))

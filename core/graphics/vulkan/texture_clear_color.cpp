@@ -275,8 +275,8 @@ void CommandList::clearColorTextureBox(Texture& texture, TextureSubresourceSet s
     if(!hasNonemptyMip)
         return;
 
-    const TextureClearQueueRequirement::Enum queueRequirement = VulkanTextureDetail::TextureClearBoxQueueRequirement(desc, resolvedSubresources, box);
-    if(queueRequirement == TextureClearQueueRequirement::Transfer){
+    const TextureQueueRequirement::Enum queueRequirement = VulkanTextureDetail::TextureClearBoxQueueRequirement(desc, resolvedSubresources, box);
+    if(queueRequirement == TextureQueueRequirement::Transfer){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, FOUNDATION_TEXT("clear color texture box through staging")))
             return;
     }

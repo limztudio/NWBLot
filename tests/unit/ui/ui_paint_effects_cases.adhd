@@ -306,7 +306,7 @@ void VerifyPaintEffects_IsolatedEffectLayerAndBlur(mut PaintEffectsTests self){
 
     GpuPaintPushConstants a;
     GpuPaintPushConstants b;
-    AssignGpuPaintMaterialPushConstants(PaintMaterial::Gradient, s_ShaderUiInvalidHeapSlot, 0u, 0u, 0u, 3u, 64u, 128u, a);
+    AssignGpuPaintMaterialPushConstants(PaintMaterial::Gradient, s_ShaderUiInvalidHeapSlot, 0u, 0u, 3u, 64u, 128u, a);
     b = a;
     EXPECT_TRUE(SameGpuPaintPushConstants(a, b));
     b.effectBufferSlot = 4u;

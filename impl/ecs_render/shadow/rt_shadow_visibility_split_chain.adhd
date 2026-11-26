@@ -472,10 +472,21 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
         opaqueDesc.setResourceSetUses(inputs.traceResourceSetUses);
     else if(!route.hardwareShadowSupported && route.traceGeometryStatesGraphOwned)
         opaqueDesc.setResourceSetUses(singleTraceSet);
+    const SoftShadowSplitTaskContext splitContext(
+        inputs.targets,
+        inputs.deferredLightingResources,
+        inputs.timingTicket,
+        inputs.asyncTiming,
+        inputs.shadowVisibilityTiming,
+        inputs.opaqueResolveTiming,
+        inputs.transparentResolveTiming,
+        inputs.opaqueProduced,
+        inputs.opaqueFrameIndex,
+        inputs.transparentTraceProduced
+    );
     const auto opaqueTaskResult = this.m_raytracingSystem.declareShadowVisibilityOpaqueTask(
-        this.m_graph, opaqueDesc, inputs.deferredLightingResources, inputs.shadowPrepared, route.hardwareShadowSupported,
-        route.graphOwnsOpaqueTemporalMergeEntryStates, inputs.rayTracingPlan.lightSpace, inputs.targets, inputs.timingTicket,
-        inputs.asyncTiming, inputs.shadowVisibilityTiming, inputs.opaqueProduced, inputs.opaqueFrameIndex
+        this.m_graph, opaqueDesc, splitContext, inputs.shadowPrepared, route.hardwareShadowSupported,
+        route.graphOwnsOpaqueTemporalMergeEntryStates, inputs.rayTracingPlan.lightSpace
     );
     if(!opaqueTaskResult.has_value()){
         tasks.opaque = GpuTaskId();
@@ -496,10 +507,9 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
             .setResourceUses(Span<GpuTaskResourceUse>(uses.opaqueFirstWavelet).first(uses.opaqueFirstWaveletCount))
         ;
         const auto opaqueFirstWaveletTaskResult = this.m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
-            this.m_graph, opaqueFirstWaveletDesc, inputs.deferredLightingResources, inputs.opaqueFrameIndex,
+            this.m_graph, opaqueFirstWaveletDesc, splitContext,
             route.hardwareShadowSupported, route.graphOwnsOpaqueTemporalMergeEntryStates, route.combinedSoftUpsample,
-            route.combinedSoftWavelet, inputs.targets, inputs.timingTicket, inputs.asyncTiming, inputs.shadowVisibilityTiming,
-            inputs.opaqueResolveTiming, inputs.opaqueProduced
+            route.combinedSoftWavelet
         );
         if(!opaqueFirstWaveletTaskResult.has_value()){
             tasks.opaqueFirstWavelet = GpuTaskId();
@@ -520,8 +530,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
             .setResourceUses(Span<GpuTaskResourceUse>(uses.opaqueResolve).first(uses.opaqueResolveCount))
         ;
         const auto opaqueResolveTaskResult = this.m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
-            this.m_graph, opaqueResolveDesc, inputs.deferredLightingResources, inputs.opaqueFrameIndex, route.hardwareShadowSupported,
-            inputs.targets, inputs.timingTicket, inputs.asyncTiming, inputs.shadowVisibilityTiming, inputs.opaqueResolveTiming, inputs.opaqueProduced
+            this.m_graph, opaqueResolveDesc, splitContext, route.hardwareShadowSupported
         );
         if(!opaqueResolveTaskResult.has_value()){
             tasks.opaqueResolve = GpuTaskId();
@@ -542,6 +551,18 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     mut SoftShadowSplitTasks tasks
 ){
     in SoftShadowSplitRoute route = inputs.route;
+    const SoftShadowSplitTaskContext splitContext(
+        inputs.targets,
+        inputs.deferredLightingResources,
+        inputs.timingTicket,
+        inputs.asyncTiming,
+        inputs.shadowVisibilityTiming,
+        inputs.opaqueResolveTiming,
+        inputs.transparentResolveTiming,
+        inputs.opaqueProduced,
+        inputs.opaqueFrameIndex,
+        inputs.transparentTraceProduced
+    );
 
     const GpuTaskId opaqueCompletionTask = SelectOpaqueShadowCompletion(route.combinedSoftTemporal, route.combinedSoftUpsample, tasks.opaque, tasks.opaqueFirstWavelet, tasks.opaqueResolve);
     const Array<GpuTaskId, 1u> traceDependencies(opaqueCompletionTask);
@@ -556,8 +577,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setResourceSetUses(inputs.traceResourceSetUses)
     ;
     const auto transparentTraceTaskResult = this.m_raytracingSystem.declareShadowTransparentSoftTraceTask(
-        this.m_graph, traceDesc, inputs.deferredLightingResources, inputs.opaqueProduced, inputs.opaqueFrameIndex,
-        inputs.rayTracingPlan.lightSpace, inputs.targets, inputs.timingTicket, inputs.transparentTraceProduced
+        this.m_graph, traceDesc, splitContext, inputs.rayTracingPlan.lightSpace
     );
     if(!transparentTraceTaskResult.has_value()){
         tasks.transparentTrace = GpuTaskId();
@@ -579,9 +599,8 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
             .setResourceUses(Span<GpuTaskResourceUse>(uses.transparentTemporalMerge).first(uses.transparentTemporalMergeCount))
         ;
         const auto transparentTemporalMergeTaskResult = this.m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
-            this.m_graph, transparentTemporalMergeDesc, inputs.deferredLightingResources, inputs.opaqueProduced, inputs.opaqueFrameIndex,
-            true, route.combinedSoftTemporal, route.hardwareShadowSupported, inputs.targets, inputs.timingTicket,
-            inputs.transparentResolveTiming, inputs.transparentTraceProduced
+            this.m_graph, transparentTemporalMergeDesc, splitContext,
+            true, route.combinedSoftTemporal, route.hardwareShadowSupported
         );
         if(!transparentTemporalMergeTaskResult.has_value()){
             tasks.transparentTemporalMerge = GpuTaskId();
@@ -602,9 +621,8 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setResourceUses(Span<GpuTaskResourceUse>(uses.transparentFirstWavelet).first(uses.transparentFirstWaveletCount))
     ;
     const auto transparentFirstWaveletTaskResult = this.m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
-        this.m_graph, transparentFirstWaveletDesc, inputs.deferredLightingResources, inputs.opaqueProduced, inputs.opaqueFrameIndex,
-        true, !uses.graphOwnsTransparentTemporalMergeEntryStates, route.combinedSoftWavelet, inputs.targets, inputs.timingTicket,
-        inputs.transparentResolveTiming, inputs.transparentTraceProduced
+        this.m_graph, transparentFirstWaveletDesc, splitContext,
+        true, !uses.graphOwnsTransparentTemporalMergeEntryStates, route.combinedSoftWavelet
     );
     if(!transparentFirstWaveletTaskResult.has_value()){
         tasks.transparentFirstWavelet = GpuTaskId();
@@ -623,9 +641,7 @@ b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
         .setResourceUses(Span<GpuTaskResourceUse>(uses.transparentFold).first(uses.transparentFoldCount))
     ;
     const auto foldTaskResult = this.m_raytracingSystem.declareShadowTransparentSoftFoldTask(
-        this.m_graph, foldDesc, inputs.deferredLightingResources, inputs.opaqueProduced, inputs.opaqueFrameIndex,
-        route.combinedSoftUpsample, inputs.targets, inputs.timingTicket, inputs.asyncTiming, inputs.shadowVisibilityTiming,
-        inputs.transparentResolveTiming, inputs.transparentTraceProduced
+        this.m_graph, foldDesc, splitContext, route.combinedSoftUpsample
     );
     if(!foldTaskResult.has_value()){
         tasks.fold = GpuTaskId();

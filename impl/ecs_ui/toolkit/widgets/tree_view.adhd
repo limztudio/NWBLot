@@ -157,25 +157,20 @@ class TreeState : NoCopy{
     }
 
     public void select(in u64 key){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_selectedKeys.clear();
-        this.m_selectedKeySet.clear();
-        if(key != 0u){
-            this.m_selectedKeys.push_back(key);
-            this.m_selectedKeySet.insert(key);
-        }
-        this.m_selected = key;
-        this.m_cursor = key;
-        this.m_anchor = key;
-        this.m_ensureCursor = key != 0u;
+        SelectListKey(
+            key,
+            this.m_inputGeneration,
+            this.m_selectedKeys,
+            this.m_selectedKeySet,
+            this.m_selected,
+            this.m_cursor,
+            this.m_anchor,
+            this.m_ensureCursor
+        );
     }
 
     public void clearSelection(){
-        this.m_inputGeneration = AllocateServiceIdentity();
-        this.m_selectedKeys.clear();
-        this.m_selectedKeySet.clear();
-        this.m_selected = 0u;
-        this.m_anchor = 0u;
+        ClearListSelection(this.m_inputGeneration, this.m_selectedKeys, this.m_selectedKeySet, this.m_selected, this.m_anchor);
     }
 }
 
@@ -184,14 +179,15 @@ class TreeState : NoCopy{
 
 
 b8 IsValidTreeOptions(in TreeOptions options){
-    return IsValidLayoutSize(options.width)
-        && IsValidLayoutSize(options.height)
-        && options.selectionMode < ListSelectionMode::kCount
-        && options.horizontalScrollbar <= ScrollbarPolicy::Never
-        && options.verticalScrollbar <= ScrollbarPolicy::Never
-        && IsFinite(VectorSingle(options.wheelRows, options.wheelColumns, 0.0f, 0.0f))
-        && options.wheelRows > 0.0f
-        && options.wheelColumns > 0.0f;
+    return IsValidScrollableSelectionOptions(
+        options.width,
+        options.height,
+        options.selectionMode,
+        options.horizontalScrollbar,
+        options.verticalScrollbar,
+        options.wheelRows,
+        options.wheelColumns
+    );
 }
 
 b8 IsValidTreeStyle(in TreeStyle style){
@@ -484,21 +480,19 @@ b8 ApplyTreeSelectionCandidate(
         return true;
     }
     if(options.selectionMode == ListSelectionMode::Single){
-        const u64 prevSelected = state.m_selected;
-        ListOptions listOpts;
-        listOpts.selectOnNavigate = options.selectOnNavigate;
         ListResult listResult;
-        ApplyListCandidateSelection(listOpts, activate, candidate, state.m_selected, state.m_cursor, state.m_ensureCursor, listResult);
-        if(state.m_selected != prevSelected || (state.m_selected != 0u && state.m_selectedKeySet.find(state.m_selected) == state.m_selectedKeySet.end()) || (state.m_selected == 0u && !state.m_selectedKeys.empty())){
-            state.m_selectedKeys.clear();
-            state.m_selectedKeySet.clear();
-            if(state.m_selected != 0u){
-                state.m_selectedKeys.push_back(state.m_selected);
-                state.m_selectedKeySet.insert(state.m_selected);
-            }
-        }
-        if(activate || options.selectOnNavigate)
-            state.m_anchor = state.m_selected;
+        ApplySingleListSelection(
+            options.selectOnNavigate,
+            activate,
+            candidate,
+            state.m_selectedKeys,
+            state.m_selectedKeySet,
+            state.m_selected,
+            state.m_cursor,
+            state.m_anchor,
+            state.m_ensureCursor,
+            listResult
+        );
         result.selectionChanged = result.selectionChanged || listResult.selectionChanged;
         if(activate){
             result.activated = true;
@@ -582,21 +576,8 @@ b8 ApplyTreeControlAction(
     if((action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown) && action.pageRows == 0u)
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        b8 scrolled = false;
-        if(action.delta != 0.0){
-            const Expected<f64> nextY = TryComputeListWheelOffset(state.m_scroll.offset(), action.delta, action.step, action.maximum);
-            if(!nextY.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(nextY.value()))
-                return false;
-            scrolled = true;
-        }
-        if(action.deltaX != 0.0 && options.horizontalScrollbar != ScrollbarPolicy::Never){
-            const Expected<f64> nextX = TryComputeListHorizontalWheelOffset(state.m_scrollX.offset(), action.deltaX, action.stepX, action.maximumX);
-            if(!nextX.has_value() || state.m_inputGeneration != inputGeneration || !state.m_scrollX.setOffset(nextX.value()))
-                return false;
-            scrolled = true;
-        }
-        if(scrolled)
-            state.m_ensureCursor = false;
+        if(!ApplyListWheelScroll(action, inputGeneration, options.horizontalScrollbar != ScrollbarPolicy::Never, false, state.m_scroll, state.m_scrollX, state.m_inputGeneration, state.m_ensureCursor))
+            return false;
         result.valid = true;
         return true;
     }
@@ -709,27 +690,12 @@ b8 ApplyTreeControlAction(
             candidate = lookupKey;
     }
     else{
-        const b8 reverse = action.kind == ControlActionKind::Up || action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::End;
-        u64 start = 0u;
-        if(reverse)
-            start = count - 1u;
-        if(action.kind == ControlActionKind::Home)
-            start = 0u;
-        else if(action.kind == ControlActionKind::End)
-            start = count - 1u;
-        else{
-            const auto foundCur = state.m_visibleIndexByKey.find(state.m_cursor);
-            if(foundCur != state.m_visibleIndexByKey.end()){
-                const u64 curIdx = foundCur.value();
-                u64 dist = 1u;
-                if(action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown)
-                    dist = action.pageRows;
-                if(reverse)
-                    start = curIdx - Min(dist, curIdx);
-                else
-                    start = curIdx + Min(dist, count - 1u - curIdx);
-            }
-        }
+        const b8 reverse = IsReverseListControlAction(action.kind);
+        const auto foundCur = state.m_visibleIndexByKey.find(state.m_cursor);
+        u64 curIdx = 0u;
+        if(foundCur != state.m_visibleIndexByKey.end())
+            curIdx = foundCur.value();
+        const u64 start = ResolveIndexNavigationStart(count, foundCur != state.m_visibleIndexByKey.end(), curIdx, action);
         const Expected<u64> targetIdx = FindEnabledTreeNodeIndex(Span<TreeVisibleNode>(state.m_visibleNodes), start, reverse);
         if(targetIdx.has_value())
             candidate = state.m_visibleNodes[cast<usize>(targetIdx.value())].key;

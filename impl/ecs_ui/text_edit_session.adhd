@@ -127,10 +127,6 @@ class UiTextEditSession : NoCopy{
         return this.syncSession(owner, model, caret, cause, true);
     }
 
-    [cpp_unwind] public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
-        return this.adoptLocal(owner, model, caret, TextInputChangeCause::Other);
-    }
-
     public b8 end(in UiTextEditOwner owner, mut EditModel model){
         if(!this.m_service.isOwnerThread() || !this.m_token.valid() || this.m_owner != owner)
             return false;
@@ -255,9 +251,10 @@ b8 IsStaleUiTextEditSurroundingRevision(
                 model.selectionEnd()
             );
             String normalized;
-            const Expected<usize, EditTextStatus> status = NormalizeMultilineTextInto(
+            const Expected<usize, EditTextStatus> status = NormalizeEditTextInto(
                 StringView(event.text),
                 model.limits().maxBytes - retainedBytes,
+                true,
                 normalized
             );
             if(!status.has_value())

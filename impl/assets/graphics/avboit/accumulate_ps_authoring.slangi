@@ -25,14 +25,6 @@
 
 #include "../scene/lighting.slangi"
 
-bool nwbBxdfPresentationIsHdr10(){
-    return nwbAvboitPresentationIsHdr10();
-}
-
-bool nwbBxdfRequiresLinearOutput(){
-    return true;
-}
-
 #include "../mesh/gbuffer_io.slangi"
 
 #include "material_context_authoring.slangi"

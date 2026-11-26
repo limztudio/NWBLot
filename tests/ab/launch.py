@@ -13,6 +13,7 @@ from typing import Callable, List, Optional, Sequence
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
+from launcher.build import BuildController  # noqa: E402
 from launcher.cli import LauncherCli  # noqa: E402
 from launcher.cmake_settings import CmakeSettings  # noqa: E402
 from launcher.commands import LauncherCommands  # noqa: E402
@@ -47,6 +48,26 @@ REQUIRED_AB_DEFINES = {
 def default_ab_output_directory(root: Path, benchmark_name: str) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / benchmark_name / stamp
+
+
+def resolve_ab_runtime_directory(settings, runtime_dir: Optional[Path], default_relative: Path) -> Path:
+    return CmakeSettings.resolve_path(settings.root, runtime_dir) if runtime_dir is not None else settings.build_dir / default_relative / settings.config
+
+
+def resolve_ab_output_directory(settings, output_dir: Optional[Path], benchmark_name: str) -> Path:
+    return CmakeSettings.resolve_path(settings.root, output_dir) if output_dir is not None else default_ab_output_directory(settings.root, benchmark_name)
+
+
+def configure_and_build_ab_targets(args: argparse.Namespace, default_domain: str, required_defines, targets: Sequence[str]):
+    environment = BuildController.build_environment(args)
+    settings = CmakeSettings.resolve_launch_settings(args, default_domain)
+    CmakeSettings.maybe_configure(args, settings, required_defines, environment)
+    settings = CmakeSettings.refresh_launch_settings(settings, args.domain)
+    if len(targets) == 1:
+        BuildController.build_target(args, settings, targets[0], environment)
+    else:
+        BuildController.build_targets(args, settings, targets, environment)
+    return settings
 
 
 def append_ab_runner_args(command: List[object], args: argparse.Namespace, repo: Path = REPO) -> List[object]:

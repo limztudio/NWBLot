@@ -2,7 +2,7 @@ import hashlib
 import statistics
 from array import array
 
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from csg_gi_temporal_schedule import CsgTemporalSchedule
 from window_capture_smoke import SmokeFailure
 from csg_gi_temporal_contract import (
@@ -116,7 +116,7 @@ class CsgTemporalAnalysis:
             path = CsgTemporalAnalysis.sample_path(directory, index)
             if path.with_name(path.name + LIT_PARTIAL_SUFFIX).exists():
                 raise SmokeFailure("temporal series left an incomplete capture")
-            width, height, rows = read_bmp_24_rows(path)
+            width, height, rows = Bmp24Codec.read_bmp_24_rows(path)
             if (width, height) != EXPECTED_EXTENT:
                 raise SmokeFailure("temporal series must retain the actual 1280x900 framebuffer")
             for name, (center_x, center_y, half_width, half_height) in region_bounds.items():

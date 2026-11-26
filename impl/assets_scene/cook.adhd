@@ -161,79 +161,71 @@ Expected<AssetT> BuildComponentAssetFromEntry<AssetT : IComponent, EntryT>(in En
     return asset;
 }
 
-Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
-    TransformComponentCookEntry entry;
-    if(!ValidateOptionalSceneMetadataMap(file, value, s_TransformDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_TransformDiagnosticPrefix, entry))
+Expected<EntryT> ParseSceneComponentCookMetadata<EntryT, ComponentT>(
+    in Name path,
+    in Path file,
+    in MetascriptValue value,
+    in StringView diagnosticPrefix,
+    in Func<32u, Expected<ComponentT>(in MetascriptValue)> parseData,
+    in Func<16u, b8(in ComponentT, in Name)> validatePayload
+){
+    EntryT entry = EntryT();
+    if(!ValidateOptionalSceneMetadataMap(file, value, diagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, diagnosticPrefix, entry))
         return MakeUnexpected(Failure());
     if(value.isMap()){
-        const Expected<TransformComponent> component = ParseTransformComponentData(file, value);
+        const Expected<ComponentT> component = parseData(value);
         if(!component.has_value())
             return MakeUnexpected(Failure());
         entry.component = component.value();
     }
-    if(!ValidateTransformComponentAssetPayload(entry.component, entry.virtualPath))
+    if(!validatePayload(entry.component, entry.virtualPath))
         return MakeUnexpected(Failure());
     return entry;
+}
+
+Expected<TransformComponentCookEntry> ParseTransformComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
+    in auto fileRef = file;
+    return ParseSceneComponentCookMetadata<TransformComponentCookEntry, TransformComponent>(
+        path, file, value, s_TransformDiagnosticPrefix,
+        lambda[in fileRef](in MetascriptValue v) -> Expected<TransformComponent>{ return ParseTransformComponentData(fileRef, v); },
+        lambda[](in TransformComponent c, in Name vp) -> b8{ return ValidateTransformComponentAssetPayload(c, vp); }
+    );
 }
 
 Expected<LocalTransformComponentCookEntry> ParseLocalTransformComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
-    LocalTransformComponentCookEntry entry;
-    if(!ValidateOptionalSceneMetadataMap(file, value, s_LocalTransformDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_LocalTransformDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
-    if(value.isMap()){
-        const Expected<LocalTransformComponent> component = ParseLocalTransformComponentData(file, value);
-        if(!component.has_value())
-            return MakeUnexpected(Failure());
-        entry.component = component.value();
-    }
-    if(!ValidateLocalTransformComponentAssetPayload(entry.component, entry.virtualPath))
-        return MakeUnexpected(Failure());
-    return entry;
+    in auto fileRef = file;
+    return ParseSceneComponentCookMetadata<LocalTransformComponentCookEntry, LocalTransformComponent>(
+        path, file, value, s_LocalTransformDiagnosticPrefix,
+        lambda[in fileRef](in MetascriptValue v) -> Expected<LocalTransformComponent>{ return ParseLocalTransformComponentData(fileRef, v); },
+        lambda[](in LocalTransformComponent c, in Name vp) -> b8{ return ValidateLocalTransformComponentAssetPayload(c, vp); }
+    );
 }
 
 Expected<SceneParentComponentCookEntry> ParseSceneParentComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
-    SceneParentComponentCookEntry entry;
-    if(!ValidateOptionalSceneMetadataMap(file, value, s_SceneParentDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_SceneParentDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
-    if(value.isMap()){
-        const Expected<SceneParentComponent> component = ParseSceneParentComponentData(file, value);
-        if(!component.has_value())
-            return MakeUnexpected(Failure());
-        entry.component = component.value();
-    }
-    if(!ValidateSceneParentComponentAssetPayload(entry.component, entry.virtualPath))
-        return MakeUnexpected(Failure());
-    return entry;
+    in auto fileRef = file;
+    return ParseSceneComponentCookMetadata<SceneParentComponentCookEntry, SceneParentComponent>(
+        path, file, value, s_SceneParentDiagnosticPrefix,
+        lambda[in fileRef](in MetascriptValue v) -> Expected<SceneParentComponent>{ return ParseSceneParentComponentData(fileRef, v); },
+        lambda[](in SceneParentComponent c, in Name vp) -> b8{ return ValidateSceneParentComponentAssetPayload(c, vp); }
+    );
 }
 
 Expected<CameraComponentCookEntry> ParseCameraComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
-    CameraComponentCookEntry entry;
-    if(!ValidateOptionalSceneMetadataMap(file, value, s_CameraDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_CameraDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
-    if(value.isMap()){
-        const Expected<CameraComponent> component = ParseCameraComponentData(file, value);
-        if(!component.has_value())
-            return MakeUnexpected(Failure());
-        entry.component = component.value();
-    }
-    if(!ValidateCameraComponentAssetPayload(entry.component, entry.virtualPath))
-        return MakeUnexpected(Failure());
-    return entry;
+    in auto fileRef = file;
+    return ParseSceneComponentCookMetadata<CameraComponentCookEntry, CameraComponent>(
+        path, file, value, s_CameraDiagnosticPrefix,
+        lambda[in fileRef](in MetascriptValue v) -> Expected<CameraComponent>{ return ParseCameraComponentData(fileRef, v); },
+        lambda[](in CameraComponent c, in Name vp) -> b8{ return ValidateCameraComponentAssetPayload(c, vp); }
+    );
 }
 
 Expected<LightComponentCookEntry> ParseLightComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){
-    LightComponentCookEntry entry;
-    if(!ValidateOptionalSceneMetadataMap(file, value, s_LightDiagnosticPrefix) || !AssignCookEntryVirtualPath(path, file, s_LightDiagnosticPrefix, entry))
-        return MakeUnexpected(Failure());
-    if(value.isMap()){
-        const Expected<LightComponent> component = ParseLightComponentData(file, value);
-        if(!component.has_value())
-            return MakeUnexpected(Failure());
-        entry.component = component.value();
-    }
-    if(!ValidateLightComponentAssetPayload(entry.component, entry.virtualPath))
-        return MakeUnexpected(Failure());
-    return entry;
+    in auto fileRef = file;
+    return ParseSceneComponentCookMetadata<LightComponentCookEntry, LightComponent>(
+        path, file, value, s_LightDiagnosticPrefix,
+        lambda[in fileRef](in MetascriptValue v) -> Expected<LightComponent>{ return ParseLightComponentData(fileRef, v); },
+        lambda[](in LightComponent c, in Name vp) -> b8{ return ValidateLightComponentAssetPayload(c, vp); }
+    );
 }
 
 Expected<ActiveCameraComponentCookEntry> ParseActiveCameraComponentCookMetadata(in Name path, in Path file, in MetascriptValue value){

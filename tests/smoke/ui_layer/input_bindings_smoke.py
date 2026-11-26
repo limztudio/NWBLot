@@ -10,7 +10,7 @@ from edit_native import KEYS, TEXT_SETTLE_SECONDS
 from edit_probe import model
 from edit_smoke import EditRun, run
 from interaction_smoke import parse_args
-from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, SmokeSkip
+from window_capture_smoke import SmokeFailure, run_smoke_main
 
 LIT_W = "w"
 LIT_X = "x"
@@ -103,15 +103,7 @@ class InputBindingsRun(EditRun):
 
 
 def main(argv):
-    args = parse_args(argv, description=__doc__)
-    try:
-        return run(args, run_type=InputBindingsRun, input_bindings=True)
-    except SmokeSkip as error:
-        print(f"SKIP: {error}", flush=True)
-        return SKIP_EXIT_CODE
-    except (SmokeFailure, OSError, ValueError, TimeoutError) as error:
-        print(f"FAIL: {error}", flush=True)
-        return 1
+    return run_smoke_main(argv, lambda current_argv: parse_args(current_argv, description=__doc__), lambda args: run(args, run_type=InputBindingsRun, input_bindings=True))
 
 
 if __name__ == "__main__":

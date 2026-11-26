@@ -19,10 +19,10 @@ from smoke_volume_identity import file_identity
 from renderer_benchmark_identity import RendererBenchmarkIdentity
 from renderer_workload_registry import RendererWorkloadRegistry
 from caustic_workload import CausticWorkload, PRESETS, FRAME_COUNT, WIDTH, HEIGHT
-from caustic_footprint import (CausticFootprint, LIT_POPULATED, LIT_SPARSE, LIT_CAMERA_HEIGHT, LIT_VERTICAL_FOV_DEGREES, LIT_SPHERE_RADIUS, LIT_SPHERE_EXCLUSION_MARGIN,
+from caustic_footprint import (CausticFootprint, LIT_CAMERA_HEIGHT, LIT_VERTICAL_FOV_DEGREES, LIT_SPHERE_RADIUS, LIT_SPHERE_EXCLUSION_MARGIN,
     LIT_GROUND_Y, LIT_GROUND_X, LIT_GROUND_Z, LIT_RECEIVER_EDGE_MARGIN, LIT_POSITIVE_CHANNEL_SUM_THRESHOLD, LIT_MINIMUM_POSITIVE_PIXELS, LIT_MINIMUM_CHANNEL_GAIN,
-    LIT_TILE_EXTENT, LIT_MAXIMUM_SPARSE_PIXEL_RATIO, LIT_MAXIMUM_SPARSE_TILE_RATIO, LIT_POSITIVE_PIXELS, LIT_POSITIVE_CHANNEL_GAIN, LIT_POSITIVE_TILES)
-from window_capture_image import read_bmp_24_rows
+    LIT_TILE_EXTENT, LIT_MAXIMUM_SPARSE_PIXEL_RATIO, LIT_MAXIMUM_SPARSE_TILE_RATIO)
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SmokeFailure
 
 LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
@@ -134,7 +134,7 @@ def validate_report(path, identity):
         args = SimpleNamespace(executable=identity[LIT_EXECUTABLE], runtime=identity[LIT_RUNTIME], logserver_executable=logger, timeout=report[LIT_TIMEOUT_SECONDS], application_arg=report[LIT_APPLICATION_ARGS])
         if record.get(LIT_COMMAND) != capture_command(args, files[LIT_IMAGE], launcher=launcher):
             raise SmokeFailure("qualification launch command changed its exact capture contract")
-        frames[key] = read_bmp_24_rows(files[LIT_IMAGE])
+        frames[key] = Bmp24Codec.read_bmp_24_rows(files[LIT_IMAGE])
         if frames[key][:2] != (WIDTH, HEIGHT):
             raise SmokeFailure("qualification must use the native 1280x900 framebuffer")
     analysis = CausticFootprint(POLICY, PRESETS)
@@ -208,7 +208,7 @@ def main(argv=None):
                 text = log.read_text(encoding=LIT_UTF_8)
                 validate_gpu_debug(text, args.application_arg)
                 runtime = CausticWorkload(WIDTH, HEIGHT).validate_log(text, settings, capture=True)
-                frames[key] = read_bmp_24_rows(image)
+                frames[key] = Bmp24Codec.read_bmp_24_rows(image)
                 if frames[key][:2] != (WIDTH, HEIGHT):
                     raise SmokeFailure("actual caustic framebuffer has the wrong native extent")
                 report[LIT_CAPTURES][key] = {LIT_SETTINGS: settings, LIT_RUNTIME: runtime, LIT_COMMAND: command, LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: file_identity(image)}, LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: file_identity(log)}}

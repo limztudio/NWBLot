@@ -23,10 +23,6 @@ NWB_BEGIN
 namespace Tests{
 
 template<typename T>
-[[nodiscard]] constexpr usize TestReflectedMethodCount()noexcept{ return T::reflectedMethodCount(); }
-
-
-template<typename T>
 [[nodiscard]] T& TestProcessValue(){
     static T s_Value{};
     return s_Value;

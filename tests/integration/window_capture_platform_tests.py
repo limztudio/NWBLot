@@ -18,7 +18,6 @@ sys.path.insert(0, str(SMOKE_DIRECTORY / "ui_layer"))
 import window_capture_outcome
 import window_capture_smoke
 import window_capture_win32
-import interaction_smoke
 import native_input
 
 LIT_CREATE_WINDOWS_USER32 = "create_windows_user32"
@@ -228,10 +227,10 @@ class InteractionForegroundTests(unittest.TestCase):
         with mock.patch.object(native_input, "ensure_process_running"), \
              mock.patch.object(native_input.time, "monotonic", side_effect=[0.0, 0.0, 2.0]), \
              mock.patch.object(native_input.time, "sleep"):
-            with self.assertRaisesRegex(interaction_smoke.SmokeSkip, "foreground"):
+            with self.assertRaisesRegex(window_capture_outcome.SmokeSkip, "foreground"):
                 native.wait_for_foreground(object(), 1.0)
-        with mock.patch.object(native_input, "ensure_process_running", side_effect=interaction_smoke.SmokeFailure("stopped")):
-            with self.assertRaisesRegex(interaction_smoke.SmokeFailure, "stopped"):
+        with mock.patch.object(native_input, "ensure_process_running", side_effect=window_capture_outcome.SmokeFailure("stopped")):
+            with self.assertRaisesRegex(window_capture_outcome.SmokeFailure, "stopped"):
                 native.wait_for_foreground(object(), 1.0)
 
 

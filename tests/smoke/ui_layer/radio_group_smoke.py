@@ -2,24 +2,15 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 import time
 
 from radio_group_native import RadioGroupNativeInput
 from radio_group_probe import observe_radio_group, snapshot_from_logs
-from probe_common import center
 from window_smoke import parse_args
-from window_capture_image import read_bmp_24_rows
-from window_capture_logs import wait_for_log_message
-from window_capture_termination import CaptureProcessTermination
-from window_capture_smoke import (run_smoke_main, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running, launch_logserver, launch_testbed,
-    require_normal_process_exit, shutdown_logserver_and_collect, )
-from window_capture_validation import validate_expected_log_text
-from fixture_environment import build_fixture_environment
-from checkpoint_report import CHECKPOINT_POLL_SECONDS, CHECKPOINT_SETTLE_SECONDS, CHECKPOINT_STAGE_TIMEOUT_SECONDS
-from fixture_launch import DISPLAY_MARKER_TIMEOUT_SECONDS
+from window_capture_smoke import run_smoke_main
+from checkpoint_report import CHECKPOINT_SETTLE_SECONDS
+from fixture_launch import UiFixtureRunBase, run_ui_fixture
 
 LIT_MAIN_SELECTED = "main_selected"
 LIT_MAIN_CURSOR = "main_cursor"
@@ -27,12 +18,6 @@ LIT_PARENT = "parent"
 LIT_POPUP_CURSOR = "popup_cursor"
 LIT_LABEL_READS = "label_reads"
 LIT_CHOICE_COUNT = "choice_count"
-LIT_LOGICAL_EXTENT = "logical_extent"
-LIT_PASSED = "passed"
-LIT_STAGE = "stage"
-LIT_CAPTURE = "capture"
-LIT_NATIVE_WINDOW = "native_window"
-LIT_UTF_8 = "utf-8"
 LIT_TAB = "Tab"
 LIT_RIGHT = "Right"
 LIT_DOWN = "Down"
@@ -43,41 +28,21 @@ LIT_ROW40 = "row40"
 LIT_TOGGLE_ENABLED = "toggle_enabled"
 LIT_ROW50 = "row50"
 LIT_OPEN = "open"
-LIT_UI_RADIO_FIXTURE = "UI radio fixture"
 
 FIXTURE_TIMEOUT_SECONDS = 180
 RESIZE_SETTLE_SECONDS = 0.3
 
 
-class RadioGroupRun:
+class RadioGroupRun(UiFixtureRunBase):
+    missing_placement_error = "radio fixture has no accepted placement for"
+
     def __init__(self, args, backend, handle, process, log_directory, log_baseline, log_pattern):
-        self.args = args
-        self.backend = backend
-        self.handle = handle
-        self.process = process
-        self.log_directory = log_directory
-        self.log_baseline = log_baseline
-        self.log_pattern = log_pattern
-        self.native = RadioGroupNativeInput(backend, handle)
-        self.deadline = time.monotonic() + args.timeout
-        self.snapshot = None
-        self.stages = []
-        self.failure_report = None
+        super().__init__(args, backend, handle, process, log_directory, log_baseline, log_pattern, native=RadioGroupNativeInput(backend, handle))
         self.expected = { LIT_MAIN_SELECTED: 10, LIT_MAIN_CURSOR: 10, "focus_code": 0, "changes": 0, "activations": 0, "before_clicks": 0, "after_clicks": 0, "enabled": 1, "source_revision": 1, "source_generation": 1701,
             "reversed": 0, "removed": 0, LIT_PARENT: 0, "popup_selected": 10, LIT_POPUP_CURSOR: 10, "popup_changes": 0, "popup_activations": 0, "popup_count": 0, "focus_scope": 0, LIT_LABEL_READS: 10, "disabled_selected": 30, LIT_CHOICE_COUNT: 5, }
 
-    def logs(self):
-        return collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern)
-
-    def point(self, x, y):
-        scale_x, scale_y = self.snapshot["scale"]
-        return round(x * scale_x), round(y * scale_y)
-
     def rectangle_point(self, name):
-        rectangle = self.snapshot["rectangles"][name]
-        if rectangle[2] <= 0.0 or rectangle[3] <= 0.0:
-            raise SmokeFailure(f"radio fixture has no accepted placement for '{name}'")
-        return self.point(*center(rectangle))
+        return super().rectangle_point(name, error_label=self.missing_placement_error)
 
     def click(self, name):
         self.native.click(*self.rectangle_point(name))
@@ -97,38 +62,15 @@ class RadioGroupRun:
             self.native.pointer(4, 4)
         self.native.maintain_pointer()
         time.sleep(CHECKPOINT_SETTLE_SECONDS)
-        path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
-        stage_deadline = min(self.deadline, time.monotonic() + CHECKPOINT_STAGE_TIMEOUT_SECONDS)
-        report = None
-        while time.monotonic() < stage_deadline:
-            ensure_process_running(self.process, "during radio group UI capture")
-            self.native.maintain_pointer()
-            snapshot = snapshot_from_logs(self.logs())
-            if snapshot is None:
-                time.sleep(CHECKPOINT_POLL_SECONDS)
-                continue
-            if snapshot[LIT_LOGICAL_EXTENT][0] < 700.0 or snapshot[LIT_LOGICAL_EXTENT][1] < 400.0:
-                raise SmokeSkip("the radio fixture needs a logical client of at least 700x400")
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
-            report = observe_radio_group(read_bmp_24_rows(path), snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, pressed=pressed)
-            if report[LIT_PASSED]:
-                self.snapshot = snapshot
-                report.update({LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window()})
-                self.stages.append(report)
-                self.write_report(False)
-                return
-            time.sleep(CHECKPOINT_POLL_SECONDS)
-        self.failure_report = {LIT_STAGE: name, LIT_CAPTURE: str(path), LIT_NATIVE_WINDOW: self.native.observe_window(), "observation": report}
-        self.write_report(False)
-        raise SmokeFailure(f"radio displayed-state gate '{name}' failed: {self.failure_report}")
+        self.poll_checkpoint(name, minimum_extent=(700.0, 400.0), minimum_extent_message="the radio fixture needs a logical client of at least 700x400",
+            process_stage="during radio group UI capture", snapshot_reader=snapshot_from_logs,
+            evaluate=lambda frame, snapshot: observe_radio_group(frame, snapshot, self.expected, extent=extent, skin=self.args.skin, extra=extra, pressed=pressed),
+            raw_windows=True, failure_label="radio", maintain_pointer=True, accept_extras=lambda _: {"native_window": self.native.observe_window()}, failure_extras=True)
 
     def write_report(self, passed):
-        report = { LIT_PASSED: passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 physical cursor positioning with posted pointer/key messages"
-                if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus", "runtime_limit": "No native Wayland, physical pointer-grab, or live IME qualification.", }
-        (self.args.output_directory / "radio_group.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("radio_group.json", passed, include_failure=True,
+            input_path="Win32 physical cursor positioning with posted pointer/key messages" if self.native.windows else "X11 XSendEvent keys/button1 and XSetInputFocus",
+            runtime_limit="No native Wayland, physical pointer-grab, or live IME qualification.")
 
     def execute(self):
         self.checkpoint("initial_checked_disabled_and_atlas_state")
@@ -219,54 +161,8 @@ class RadioGroupRun:
 
 
 def run(args):
-    if not args.executable.is_file():
-        raise SmokeFailure(f"executable does not exist: {args.executable}")
-    args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_fixture_environment(build_launch_environment(args), "RADIO_GROUP", skin=args.skin, force_x11=True)
-    backend = create_capture_backend()
-    logserver = application = radio_run = None
-    handle = None
-    log_directory = log_baseline = log_pattern = None
-    try:
-        logserver, port, log_directory, log_baseline, log_pattern = launch_logserver(args, args.executable, environment)
-        application = launch_testbed(args, args.executable, environment, port)
-        handle = backend.wait_for_window(application.pid, args.timeout, args.window_title)
-        if not handle:
-            ensure_process_running(application, "before the radio fixture appeared")
-            raise SmokeFailure("custom radio fixture did not appear")
-        if platform.system() == "Windows":
-            backend.prepare_raw_client_window(handle)
-        else:
-            backend.prepare_window(handle)
-        wait_for_log_message(log_directory, log_baseline, log_pattern, "UiRadioGroupSmoke: display", min(args.timeout, DISPLAY_MARKER_TIMEOUT_SECONDS))
-        radio_run = RadioGroupRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
-        radio_run.execute()
-    finally:
-        try:
-            if application is not None:
-                exit_code, tail = CaptureProcessTermination.terminate_process(application, LIT_UI_RADIO_FIXTURE, handle)
-                require_normal_process_exit(exit_code, tail, LIT_UI_RADIO_FIXTURE)
-        finally:
-            try:
-                text = ""
-                if log_directory is not None:
-                    text = shutdown_logserver_and_collect(logserver, log_directory, log_baseline, log_pattern)
-                    logserver = None
-                    (args.output_directory / "radio_group.log").write_text(text, encoding=LIT_UTF_8)
-            finally:
-                try:
-                    if logserver is not None:
-                        CaptureProcessTermination.terminate_process(logserver, "UI radio logserver")
-                finally:
-                    try:
-                        if radio_run is not None:
-                            radio_run.native.restore_pointer()
-                    finally:
-                        backend.close()
-    validate_expected_log_text(text, ["Loader: project startup complete", "UiLayerSmokeProject: shutdown"], STRICT_LOG_FAILURE_MESSAGES)
-    radio_run.write_report(True)
-    print(f"UI radio group: {len(radio_run.stages)} matching native/GPU gates with {args.skin} atlas", flush=True)
-    return 0
+    return run_ui_fixture(args, fixture="RADIO_GROUP", display_marker="UiRadioGroupSmoke: display", driver_type=RadioGroupRun, log_name="radio_group.log", label="UI radio group",
+        window_label="radio", process_label="radio", raw_windows=True, restore_pointer=True)
 
 
 def main(argv):

@@ -131,29 +131,15 @@ b8 SimdConstructorEmitter::tryEmitLaneConstructor(const b8 isDouble, const b8 is
             MStringView baseRegType;
             MStringView baseLoadFn;
             u32 baseZeroedAbove = 4u;
-            if(
-                i < arguments.size()
-                && SimdExpressionAnalysis::TryMatchNegatedSingleLaneAccess(arguments[i], base, idx)
-                && base
-                && idx == i
-                && SimdVectorSourceAnalysis::TryGetFloatVectorSourceInfo(*base, isDouble, baseRegType, baseLoadFn, baseZeroedAbove)
-                && idx < baseZeroedAbove
-            ){
-                if(!negBase){
-                    negBase = base;
-                    negRegType = baseRegType;
-                    negLoadFn = baseLoadFn;
-                    negZeroedAbove = baseZeroedAbove;
-                }
-                else if(!SimdExpressionAnalysis::AreSamePureSimdExpr(*negBase, *base)){
-                    allNegInPlaceOrZero = false;
-                    break;
-                }
-                negMask |= static_cast<u8>(1u << i);
+            b8 matchedNegated = false;
+            b8 matchedSingle = false;
+            if(i < arguments.size()){
+                matchedNegated = SimdExpressionAnalysis::TryMatchNegatedSingleLaneAccess(arguments[i], base, idx);
+                if(!matchedNegated)
+                    matchedSingle = SimdExpressionAnalysis::TryMatchSingleLaneAccess(arguments[i], base, idx);
             }
-            else if(
-                i < arguments.size()
-                && SimdExpressionAnalysis::TryMatchSingleLaneAccess(arguments[i], base, idx)
+            if(
+                (matchedNegated || matchedSingle)
                 && base
                 && idx == i
                 && SimdVectorSourceAnalysis::TryGetFloatVectorSourceInfo(*base, isDouble, baseRegType, baseLoadFn, baseZeroedAbove)
@@ -169,7 +155,10 @@ b8 SimdConstructorEmitter::tryEmitLaneConstructor(const b8 isDouble, const b8 is
                     allNegInPlaceOrZero = false;
                     break;
                 }
-                posMask |= static_cast<u8>(1u << i);
+                if(matchedNegated)
+                    negMask |= static_cast<u8>(1u << i);
+                else
+                    posMask |= static_cast<u8>(1u << i);
             }
             else if(i < arguments.size() && (!arguments[i] || !SimdExpressionAnalysis::IsZeroScalarLiteral(*arguments[i], &m_emitter.m_symbols))){
                 allNegInPlaceOrZero = false;

@@ -94,12 +94,6 @@ class ScrollAreaScrollState{
         return ControlToken(stateGeneration, inputGeneration, this.revision);
     }
 
-    public ControlToken currentToken(in u64 stateGeneration, in u64 inputGeneration)const{
-        if(!this.prepared)
-            return ControlToken();
-        return ControlToken(stateGeneration, inputGeneration, this.revision);
-    }
-
     public void retire(){
         ++this.revision;
         this.prepared = false;

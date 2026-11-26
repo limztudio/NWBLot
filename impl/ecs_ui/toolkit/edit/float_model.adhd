@@ -53,39 +53,16 @@ class FloatEditModel : NoCopy{
 
     [cpp_unwind] public NumericEditResult abandon(){ return this.m_draft.restore(this.canonicalize(this.m_value), false); }
 
+    [cpp_unwind] public NumericEditResult applyAction(in FloatBounds bounds, in EditAction action, in b8 readOnly){
+        return ApplyNumericEditModelAction(bounds, ParseFloatDraft(this.draft().text()), action, readOnly, this.m_draft, this.m_value);
+    }
+
     [cpp_unwind] private Expected<b8, ErrorCode> canonicalize(in f64 value){
-        CompactString text;
-        const Expected<void, ErrorCode> formatted = FormatF64Into(value, text);
-        if(!formatted.has_value())
-            return MakeUnexpected(formatted.error());
-        return this.m_draft.canonicalize(text.view());
+        return CanonicalizeNumericEditDraft(value, this.m_draft);
     }
 
     [cpp_unwind] private NumericEditResult commit(in FloatBounds bounds, in b8 canonical){
-        if(!ValidateFloatBounds(bounds))
-            return NumericEditResult();
-        const Expected<f64, NumericParseStatus> parsed = ParseFloatDraft(this.draft().text());
-        const b8 outside = parsed.has_value() && (parsed.value() < bounds.minimum || parsed.value() > bounds.maximum);
-        const b8 clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
-        const b8 accepted = parsed.has_value() && (!outside || clamped);
-        f64 candidate = this.m_value;
-        if(accepted){
-            candidate = parsed.value();
-            if(clamped){
-                if(candidate < bounds.minimum)
-                    candidate = bounds.minimum;
-                else
-                    candidate = bounds.maximum;
-            }
-        }
-        const b8 changed = HasFloatEditBitsChanged(candidate, this.m_value);
-        Expected<b8, ErrorCode> canonicalized = false;
-        if(canonical || clamped)
-            canonicalized = this.canonicalize(candidate);
-        const NumericEditResult result = this.m_draft.commit(canonical, accepted, clamped, changed, canonicalized);
-        if(result.committed)
-            this.m_value = candidate;
-        return result;
+        return CommitNumericEdit(bounds, ParseFloatDraft(this.draft().text()), canonical, this.m_draft, this.m_value);
     }
 }
 

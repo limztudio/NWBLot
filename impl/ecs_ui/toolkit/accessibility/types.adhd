@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u32 s_AccessibleNoIndex = 0xffffffffu;
 const usize s_AccessibleMaxAnnouncements = 64u;
 const u64 s_AccessibleInputDeviceId = 0x4131315900000000u;
 
@@ -85,51 +84,6 @@ u32 ResolveAccessibleVisibilityStateBits(in b8 enabled, in Rect clip){
     if(clip.width <= 0.0f || clip.height <= 0.0f)
         bits |= s_AccessibilityStateOffscreen;
     return bits;
-}
-
-AccessibilityRole DefaultAccessibilityRoleForWidgetKind(in WidgetKind kind){
-    switch(kind){
-    case WidgetKind::Panel: return AccessibilityRole::Panel;
-    case WidgetKind::Container: return AccessibilityRole::Group;
-    case WidgetKind::Label: return AccessibilityRole::Text;
-    case WidgetKind::Button: return AccessibilityRole::Button;
-    case WidgetKind::Checkbox: return AccessibilityRole::CheckBox;
-    case WidgetKind::Window: return AccessibilityRole::Window;
-    case WidgetKind::Separator: return AccessibilityRole::None;
-    case WidgetKind::EditBox: return AccessibilityRole::TextField;
-    case WidgetKind::Popup: return AccessibilityRole::Panel;
-    case WidgetKind::Selectable: return AccessibilityRole::ListItem;
-    case WidgetKind::VirtualList: return AccessibilityRole::List;
-    case WidgetKind::ComboBox:
-    case WidgetKind::SearchComboBox:
-        return AccessibilityRole::ComboBox;
-    case WidgetKind::Tooltip: return AccessibilityRole::Tooltip;
-    case WidgetKind::ContextMenu: return AccessibilityRole::Menu;
-    case WidgetKind::TextArea: return AccessibilityRole::TextArea;
-    case WidgetKind::RadioGroup: return AccessibilityRole::RadioGroup;
-    case WidgetKind::Slider: return AccessibilityRole::Slider;
-    case WidgetKind::Progress: return AccessibilityRole::ProgressBar;
-    case WidgetKind::Image: return AccessibilityRole::Image;
-    case WidgetKind::ScrollArea: return AccessibilityRole::Region;
-    case WidgetKind::CollapsibleHeader: return AccessibilityRole::ToggleButton;
-    case WidgetKind::TabBar: return AccessibilityRole::TabList;
-    case WidgetKind::Splitter: return AccessibilityRole::Splitter;
-    case WidgetKind::SpinBox: return AccessibilityRole::SpinButton;
-    case WidgetKind::TreeView: return AccessibilityRole::Tree;
-    case WidgetKind::DataTable: return AccessibilityRole::Table;
-    case WidgetKind::MenuBar: return AccessibilityRole::MenuBar;
-    case WidgetKind::ToastStack: return AccessibilityRole::Alert;
-    case WidgetKind::ColorPicker: return AccessibilityRole::ColorPicker;
-    case WidgetKind::DragSource:
-    case WidgetKind::DropTarget:
-        return AccessibilityRole::Group;
-    case WidgetKind::Hyperlink: return AccessibilityRole::Link;
-    case WidgetKind::RichText: return AccessibilityRole::Text;
-    case WidgetKind::Plot: return AccessibilityRole::Image;
-    case WidgetKind::Canvas: return AccessibilityRole::Canvas;
-    case WidgetKind::DockSpace: return AccessibilityRole::DockSpace;
-    default: return AccessibilityRole::None;
-    }
 }
 
 

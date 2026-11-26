@@ -26,8 +26,6 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 
 import launch as AB_LAUNCH  # noqa: E402
 from launcher.build import BuildController  # noqa: E402
-from launcher.cli import LauncherCli  # noqa: E402
-from launcher.cmake_settings import CmakeSettings  # noqa: E402
 from launcher.constants import DEFAULT_DOMAIN  # noqa: E402
 
 LIT_ASYNC_SHADOW_M4 = "async-shadow-m4"
@@ -60,8 +58,8 @@ def default_output_directory(root: Path) -> Path:
 def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
     sync_executable = BuildController.resolve_executable_path(settings, SYNC_TARGET, args.sync_executable, None, args.dry_run,)
     async_executable = BuildController.resolve_executable_path(settings, ASYNC_TARGET, args.async_executable, None, args.dry_run,)
-    runtime_directory = (CmakeSettings.resolve_path(settings.root, args.runtime_dir) if args.runtime_dir is not None else settings.build_dir / RUNTIME_DIRECTORY / settings.config)
-    output_directory = (CmakeSettings.resolve_path(settings.root, args.output_dir) if args.output_dir is not None else default_output_directory(settings.root))
+    runtime_directory = AB_LAUNCH.resolve_ab_runtime_directory(settings, args.runtime_dir, RUNTIME_DIRECTORY)
+    output_directory = AB_LAUNCH.resolve_ab_output_directory(settings, args.output_dir, LIT_ASYNC_SHADOW_M4)
     return M4Paths(sync_executable, async_executable, runtime_directory, output_directory)
 
 
@@ -85,7 +83,7 @@ def run_runner(args: argparse.Namespace, paths: M4Paths) -> int:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    LauncherCli.add_build_options(parser)
+    AB_LAUNCH.LauncherCli.add_build_options(parser)
     parser.add_argument(LIT_SYNC_EXECUTABLE, type=Path, help="Override the synchronous benchmark executable.")
     parser.add_argument(LIT_ASYNC_EXECUTABLE, type=Path, help="Override the asynchronous benchmark executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked M4 runtime directory.")
@@ -104,11 +102,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run(args: argparse.Namespace) -> int:
-    environment = BuildController.build_environment(args)
-    settings = CmakeSettings.resolve_launch_settings(args, DEFAULT_DOMAIN)
-    CmakeSettings.maybe_configure(args, settings, REQUIRED_DEFINES, environment)
-    settings = CmakeSettings.refresh_launch_settings(settings, args.domain)
-    build_benchmark_targets(args, settings, environment)
+    settings = AB_LAUNCH.configure_and_build_ab_targets(args, DEFAULT_DOMAIN, REQUIRED_DEFINES, (SYNC_TARGET, ASYNC_TARGET))
     return run_runner(args, resolve_paths(args, settings))
 
 

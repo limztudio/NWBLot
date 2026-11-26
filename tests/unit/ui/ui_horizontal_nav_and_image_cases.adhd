@@ -326,7 +326,7 @@ Vector<u8> MakeImageTextureBinary(in u8 seed){
 }
 
 b8 UiGpuValAllImageBindings(in DrawSnapshot snapshot){
-    return ValidateGpuGlyphPages(snapshot) && ValidateGpuSdfPages(snapshot) && ValidateGpuTextureImages(snapshot);
+    return ValidateGpuSnapshotImages(snapshot);
 }
 
 void UiGpuValSetCommandTextureIndex(mut DrawSnapshot snapshot, in usize commandIndex, in u32 imageIndex){
@@ -375,7 +375,7 @@ Expected<DrawSnapshot> UiGpuValBuildMaxBudgetSnapshot(mut PaintImageFixture self
         return MakeUnexpected(Failure());
     const Rect rectangle(2.0f, 3.0f, 16.0f, 8.0f);
     const Rect uv(0.0f, 0.0f, 1.0f, 1.0f);
-    if(!extraImage && (!self.m_builder.drawGlyph(glyphs[0u], rectangle, uv) || !self.m_builder.drawSdfGlyph(sdf.value(), 2u, rectangle, uv)))
+    if(!extraImage && (!self.m_builder.drawGlyph(glyphs[0u], rectangle, uv) || !self.m_builder.drawSdfGlyph(sdf.value(), 2u, rectangle, uv, Color())))
         return MakeUnexpected(Failure());
     if(!self.m_builder.drawImage(image.value(), rectangle))
         return MakeUnexpected(Failure());
@@ -461,9 +461,7 @@ void VerifyGpuTextureImageValidationFixture_SameIdentityDistinctGenerationsRemai
     const DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
     ASSERT_EQ(snapshot.commands().size(), 2u);
-    EXPECT_TRUE(ValidateGpuGlyphPages(snapshot));
-    EXPECT_TRUE(ValidateGpuSdfPages(snapshot));
-    EXPECT_TRUE(ValidateGpuTextureImages(snapshot));
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_ImageIndexMustAddressAnOwnedTextureSource(mut GpuTextureImageValidationFixture self){
@@ -479,8 +477,7 @@ void VerifyGpuTextureImageValidationFixture_ImageIndexMustAddressAnOwnedTextureS
     invalidIndices[1u] = u32.max;
     for(in u32 index : invalidIndices){
         UiGpuValSetCommandTextureIndex(snapshot, 0u, index);
-        EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
-        EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
+        EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
     }
     UiGpuValSetCommandTextureIndex(snapshot, 0u, 0u);
     EXPECT_TRUE(UiGpuValAllImageBindings(snapshot));
@@ -495,8 +492,7 @@ void VerifyGpuTextureImageValidationFixture_NullTextureSourceRejectsTheSnapshot(
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.textureImages().size(), 1u);
     UiGpuValResetFirstTexture(snapshot);
-    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
-    EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_DuplicateSourceGenerationRejectsTheSnapshot(mut GpuTextureImageValidationFixture self){
@@ -509,8 +505,7 @@ void VerifyGpuTextureImageValidationFixture_DuplicateSourceGenerationRejectsTheS
     UiGpuValAppendTexture(snapshot, image);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
     ASSERT_EQ(ImageSourceGeneration(snapshot.textureImages()[0u]), ImageSourceGeneration(snapshot.textureImages()[1u]));
-    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
-    EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_TextureBindingCountOverflowRejectsEveryValidator(mut GpuTextureImageValidationFixture self){
@@ -529,9 +524,7 @@ void VerifyGpuTextureImageValidationFixture_TextureBindingCountOverflowRejectsEv
     ASSERT_EQ(snapshot.textureImages().size(), s_PaintMaxImages + 1u);
     EXPECT_TRUE(snapshot.glyphPages().empty());
     EXPECT_TRUE(snapshot.sdfPages().empty());
-    EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
-    EXPECT_FALSE(ValidateGpuSdfPages(snapshot));
-    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_SharedImageBudgetAcceptsMixedSourcesAtCapacity(mut GpuTextureImageValidationFixture self){
@@ -539,9 +532,7 @@ void VerifyGpuTextureImageValidationFixture_SharedImageBudgetAcceptsMixedSources
     ASSERT_TRUE(snapshotResult.has_value());
     in DrawSnapshot snapshot = snapshotResult.value();
     ASSERT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size() + snapshot.textureImages().size(), s_PaintMaxImages);
-    EXPECT_TRUE(ValidateGpuGlyphPages(snapshot));
-    EXPECT_TRUE(ValidateGpuSdfPages(snapshot));
-    EXPECT_TRUE(ValidateGpuTextureImages(snapshot));
+    EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_SharedImageBudgetOverflowIncludesEveryImageKind(mut GpuTextureImageValidationFixture self){
@@ -551,9 +542,7 @@ void VerifyGpuTextureImageValidationFixture_SharedImageBudgetOverflowIncludesEve
     ASSERT_EQ(snapshot.glyphPages().size(), s_PaintMaxImages - 2u);
     ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
-    EXPECT_FALSE(ValidateGpuSdfPages(snapshot));
-    EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextureBindings(mut GpuTextureImageValidationFixture self){
@@ -572,7 +561,7 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
     self.m_builder.fillRect(rectangle);
     ASSERT_TRUE(self.m_builder.drawRegion(s_UiInputNameSprite, rectangle));
     ASSERT_TRUE(self.m_builder.drawGlyph(glyph, rectangle, uv));
-    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, rectangle, uv));
+    ASSERT_TRUE(self.m_builder.drawSdfGlyph(sdf, 3u, rectangle, uv, Color()));
     ASSERT_TRUE(self.m_builder.drawImage(image, rectangle));
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 5u);
@@ -583,8 +572,7 @@ void VerifyGpuTextureImageValidationFixture_NonImageCommandsCannotReferenceTextu
             continue;
         ++nonImageCount;
         UiGpuValSetCommandTextureIndex(snapshot, index, 0u);
-        EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
-        EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
+        EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
         UiGpuValSetCommandTextureIndex(snapshot, index, u32.max);
     }
     EXPECT_EQ(nonImageCount, 4u);
@@ -608,9 +596,7 @@ void VerifyGpuTextureImageValidationFixture_ImageCommandRejectsGlyphAndSdfMetada
         else
             mutated.sdfChannel = 1u;
         UiGpuValSetCommand(snapshot, 0u, mutated);
-        EXPECT_FALSE(ValidateGpuTextureImages(snapshot));
-        EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
-        EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
+        EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
     }
     UiGpuValSetCommand(snapshot, 0u, original);
     EXPECT_TRUE(UiGpuValAllImageBindings(snapshot));
@@ -624,8 +610,7 @@ void VerifyGpuTextureImageValidationFixture_UnknownMaterialRejectsCombinedImageV
     DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
     UiGpuValSetFirstCommandUnknownMaterial(snapshot);
-    EXPECT_FALSE(ValidateGpuGlyphPages(snapshot));
-    EXPECT_FALSE(UiGpuValAllImageBindings(snapshot));
+    EXPECT_FALSE(ValidateGpuSnapshotImages(snapshot));
 }
 
 void VerifyHorizontalNavigationFixture_CapabilityRemovalRetiresHorizontalIntentionsWhileVerticalHoldSurvives(mut HorizontalNavigationFixture self){
@@ -1154,12 +1139,12 @@ void VerifyUiImageLayoutTests_NineSliceMinimumsRemainLogicalAndCanExceedTheNatur
 
 void VerifyUiImageLayoutTests_EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins(){
     const Rect bounds = Rect(-100.0f, -50.0f, 200.0f, 100.0f);
-    const Expected<ImagePlacement> placementResult = PlaceImage(bounds, Rect(150.0f, 0.0f, 20.0f, 20.0f));
+    const Expected<ImagePlacement> placementResult = PlaceImage(bounds, Rect(150.0f, 0.0f, 20.0f, 20.0f), Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
     ASSERT_TRUE(placementResult.has_value());
     ExpectUiRectExact(placementResult.value().bounds, bounds);
     ExpectUiRectExact(placementResult.value().clip, Rect(150.0f, 0.0f, 0.0f, 20.0f));
     const Rect emptyBounds = Rect(-10.0f, -20.0f, 0.0f, 0.0f);
-    const Expected<ImagePlacement> placementResult2 = PlaceImage(emptyBounds, bounds);
+    const Expected<ImagePlacement> placementResult2 = PlaceImage(emptyBounds, bounds, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
     ASSERT_TRUE(placementResult2.has_value());
     ExpectUiRectExact(placementResult2.value().bounds, emptyBounds);
     ExpectUiRectExact(placementResult2.value().clip, placementResult2.value().bounds);
@@ -1168,12 +1153,12 @@ void VerifyUiImageLayoutTests_EmptyAndDisjointClipsRemainValidAtFiniteNegativeOr
 void VerifyUiImageLayoutTests_SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainValid(){
     const f32 tiny = bit_cast<f32>(1u);
     const Rect small = Rect(0.0f, 0.0f, tiny, tiny);
-    const Expected<ImagePlacement> placementResult = PlaceImage(small, small);
+    const Expected<ImagePlacement> placementResult = PlaceImage(small, small, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
     ASSERT_TRUE(placementResult.has_value());
     ExpectUiRectExact(placementResult.value().bounds, small);
     ExpectUiRectExact(placementResult.value().clip, small);
     const Rect large = Rect(-f32.max, 0.0f, f32.max, 1.0f);
-    const Expected<ImagePlacement> placementResult2 = PlaceImage(large, large);
+    const Expected<ImagePlacement> placementResult2 = PlaceImage(large, large, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill);
     ASSERT_TRUE(placementResult2.has_value());
     ExpectUiRectExact(placementResult2.value().bounds, large);
     ExpectUiRectExact(placementResult2.value().clip, large);
@@ -1251,8 +1236,8 @@ void VerifyUiImageLayoutTests_InvalidAndCollapsedProspectiveEndpointsRejectPlace
     invalidList[5u] = Rect(f32.max, 0.0f, 1.0f, 1.0f);
     invalidList[6u] = Rect(0.0f, f32.max, 1.0f, 1.0f);
     for(in Rect invalid : invalidList){
-        EXPECT_FALSE(PlaceImage(invalid, normal).has_value());
-        EXPECT_FALSE(PlaceImage(normal, invalid).has_value());
+        EXPECT_FALSE(PlaceImage(invalid, normal, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill).has_value());
+        EXPECT_FALSE(PlaceImage(normal, invalid, Point(), Rect(0.0f, 0.0f, 1.0f, 1.0f), ImageFitMode::Fill).has_value());
     }
 }
 

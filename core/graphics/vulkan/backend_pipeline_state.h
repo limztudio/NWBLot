@@ -55,13 +55,8 @@ inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectTyp
     return Object(nullptr);
 }
 
-inline void AttachPipelineBindingState(VkComputePipelineCreateInfo& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
-    pipelineInfo.pNext = next;
-    pipelineInfo.layout = bindingState.pipelineLayout;
-    pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-}
-
-inline void AttachPipelineBindingState(VkGraphicsPipelineCreateInfo& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
+template<typename PipelineCreateInfoT>
+inline void AttachPipelineBindingState(PipelineCreateInfoT& pipelineInfo, const PipelineBindingState& bindingState, const void* next = nullptr)noexcept{
     pipelineInfo.pNext = next;
     pipelineInfo.layout = bindingState.pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;

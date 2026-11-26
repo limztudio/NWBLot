@@ -69,17 +69,12 @@ struct CompileOptions{
 };
 
 [[nodiscard]] b8 Compile(const CompileOptions& options, MetaArena& arena, CompileResult& outResult);
-[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, const MStringView customNamespace, const Span<const MString> macroDefinitions, MetaArena& arena, CompileResult& outResult){
+[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult){
     CompileOptions options;
     options.source = source;
     options.virtualFilePath = virtualFilePath;
-    options.includeResolver = includeResolver;
-    options.customNamespace = customNamespace;
-    options.macroDefinitions = macroDefinitions;
     return Compile(options, arena, outResult);
 }
-[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, IIncludeResolver* includeResolver, MetaArena& arena, CompileResult& outResult){ return Compile(source, virtualFilePath, includeResolver, {}, {}, arena, outResult); }
-[[nodiscard]] inline b8 Compile(const MStringView source, const MStringView virtualFilePath, MetaArena& arena, CompileResult& outResult){ return Compile(source, virtualFilePath, nullptr, {}, {}, arena, outResult); }
 
 [[nodiscard]] MString DeriveOutputFilename(MStringView virtualFilePath, MStringView suffix, MetaArena& arena);
 [[nodiscard]] MString DeriveNamespaceFromPath(MStringView virtualFilePath, MetaArena& arena);

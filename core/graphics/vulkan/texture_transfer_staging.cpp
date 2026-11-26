@@ -52,11 +52,6 @@ static constexpr TStringView s_SliceCopyContractReason = FOUNDATION_TEXT("source
     return region;
 }
 
-[[nodiscard]] inline b8 IsWholeImageSubresourceCopy(const TextureDesc& imageDesc, const VkBufferImageCopy& region)noexcept{
-    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(imageDesc, region.imageSubresource.mipLevel);
-    return region.imageOffset.x == 0 && region.imageOffset.y == 0 && region.imageOffset.z == 0 && region.imageExtent.width == mipExtent.width && region.imageExtent.height == mipExtent.height && region.imageExtent.depth == mipExtent.depth;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,15 +75,7 @@ void CommandList::copyTexture(StagingTexture& dest, const TextureSlice& destSlic
         return;
     }
     const b8 depthStencilCopy = (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
-    if(depthStencilCopy){
-        if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
-            return;
-    }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src.m_creationDesc, *region)){
-        if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
-            return;
-    }
-    else if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_OperationName))
+    if(!validateStagingTextureCopyQueueCapability(src.m_creationDesc, *region, depthStencilCopy, s_OperationName))
         return;
 
     endActiveRenderPass();
@@ -116,15 +103,7 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Stag
         return;
     }
     const b8 depthStencilCopy = (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
-    if(depthStencilCopy){
-        if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
-            return;
-    }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest.m_creationDesc, *region)){
-        if(!recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, s_OperationName))
-            return;
-    }
-    else if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_OperationName))
+    if(!validateStagingTextureCopyQueueCapability(dest.m_creationDesc, *region, depthStencilCopy, s_OperationName))
         return;
 
     endActiveRenderPass();
@@ -136,6 +115,28 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Stag
 
     retainResource(&dest);
     retainResource(&src);
+}
+
+b8 CommandList::validateStagingTextureCopyQueueCapability(const TextureDesc& desc, const VkBufferImageCopy& region, const b8 depthStencilCopy, const TStringView operationName){
+    if(depthStencilCopy)
+        return recordAndValidateCommandCapability(GpuQueueCapability::Graphics, operationName);
+    const b8 wholeMip =
+        region.imageOffset.x >= 0
+        && region.imageOffset.y >= 0
+        && region.imageOffset.z >= 0
+        && VulkanTextureDetail::IsWholeMipExtent(
+            desc,
+            region.imageSubresource.mipLevel,
+            static_cast<u32>(region.imageOffset.x),
+            static_cast<u32>(region.imageOffset.y),
+            static_cast<u32>(region.imageOffset.z),
+            region.imageExtent.width,
+            region.imageExtent.height,
+            region.imageExtent.depth
+        );
+    if(!wholeMip)
+        return recordAndValidateAnyCommandCapability(GpuQueueCapability::Compute | GpuQueueCapability::Graphics, operationName);
+    return recordAndValidateCommandCapability(GpuQueueCapability::Transfer, operationName);
 }
 
 

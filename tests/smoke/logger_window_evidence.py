@@ -1,7 +1,7 @@
 import ctypes
 import time
 
-from window_capture_image import read_bmp_24_rows
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SmokeFailure, ensure_process_running
 from window_capture_win32 import WinRect
 
@@ -124,7 +124,7 @@ class LoggerWindowEvidence:
     @staticmethod
     def capture_visible_messages(backend, handle, output, minimum_rows=1):
         capture = backend.capture_client_window(handle, output)
-        width, height, rows = read_bmp_24_rows(output)
+        width, height, rows = Bmp24Codec.read_bmp_24_rows(output)
         if (width, height) != (capture.width, capture.height):
             raise SmokeFailure("saved logger capture dimensions changed")
         count = LoggerWindowEvidence.query_log_list(backend, handle, LB_GETCOUNT)

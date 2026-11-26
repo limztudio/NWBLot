@@ -6,6 +6,45 @@ set(_nwb_ui_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/ui_layer_runtime/$<C
 set(_nwb_ui_smoke_ctest_margin_seconds 120)
 set(_nwb_ui_smoke_default_timeout_seconds 90)
 math(EXPR _nwb_ui_smoke_default_ctest_timeout_seconds "${_nwb_ui_smoke_default_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
+set(_nwb_ui_layer_fixture_flags INTERACTIVE WINDOW EDIT POPUP POPUP_TOOLS NESTED_POPUP LIST COMBO SEARCH_COMBO NUMERIC_EDIT TEXT_AREA RADIO_GROUP SLIDER PROGRESS IMAGE TEXTURE_IMAGE)
+
+function(nwb_ui_layer_env OUT_VAR)
+    cmake_parse_arguments(PARSE_ARGV 1 _arg "" "ACTIVE_FLAG;ACTIVE_SKIN" "")
+    set(_env_items)
+    foreach(_flag IN LISTS _nwb_ui_layer_fixture_flags)
+        if(_arg_ACTIVE_FLAG AND _flag STREQUAL _arg_ACTIVE_FLAG)
+            list(APPEND _env_items "NWB_UI_LAYER_${_flag}=1")
+        else()
+            list(APPEND _env_items "NWB_UI_LAYER_${_flag}=0")
+        endif()
+        if(NOT _flag STREQUAL "INTERACTIVE" AND NOT _flag STREQUAL "EDIT")
+            if(_arg_ACTIVE_FLAG AND _flag STREQUAL _arg_ACTIVE_FLAG AND DEFINED _arg_ACTIVE_SKIN)
+                list(APPEND _env_items "NWB_UI_LAYER_${_flag}_SKIN=${_arg_ACTIVE_SKIN}")
+            else()
+                list(APPEND _env_items "NWB_UI_LAYER_${_flag}_SKIN=0")
+            endif()
+        endif()
+    endforeach()
+    set(${OUT_VAR} "${_env_items}" PARENT_SCOPE)
+endfunction()
+
+function(nwb_add_ui_layer_skin_smoke_pair FIXTURE_NAME ENV_FLAG TIMEOUT_SECONDS)
+    math(EXPR _ctest_timeout "${TIMEOUT_SECONDS} + ${_nwb_ui_smoke_ctest_margin_seconds}")
+    foreach(_skin IN ITEMS default alternate)
+        if(_skin STREQUAL "alternate")
+            set(_test_name "nwb_ui_layer_${FIXTURE_NAME}_skin_smoke")
+            set(_skin_flag 1)
+        else()
+            set(_test_name "nwb_ui_layer_${FIXTURE_NAME}_smoke")
+            set(_skin_flag 0)
+        endif()
+        nwb_ui_layer_env(_test_env ACTIVE_FLAG "${ENV_FLAG}" ACTIVE_SKIN ${_skin_flag})
+        add_test(NAME "${_test_name}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/${FIXTURE_NAME}_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
+                --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_${FIXTURE_NAME}_${_skin}" --skin "${_skin}" --timeout ${TIMEOUT_SECONDS} ${_nwb_ui_smoke_capture_args})
+        set_tests_properties("${_test_name}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_ctest_timeout}
+            LABELS "ui;standalone_gpu;native_input;${FIXTURE_NAME};skin" ENVIRONMENT "${_test_env}")
+    endforeach()
+endfunction()
 
 nwb_declare_executable(nwb_ui_layer_smoke)
 nwb_target_adhd_sources(nwb_ui_layer_smoke NAMESPACE "NWB::Tests::Smoke" SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.adhd")
@@ -18,29 +57,20 @@ if(COMMAND nwb_copy_aftermath_runtime)
 endif()
 if(TARGET nwb_logserver)
     add_dependencies(nwb_ui_layer_smoke nwb_logserver)
-    set(_nwb_ui_smoke_capture_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
-else()
-    set(_nwb_ui_smoke_capture_args)
 endif()
-list(APPEND _nwb_ui_smoke_capture_args "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
+set(_nwb_ui_smoke_capture_args ${_nwb_smoke_optional_logserver_args} "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
 
-file(GLOB_RECURSE _nwb_ui_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*" "${PROJECT_SOURCE_DIR}/global/slang/*" "${CMAKE_CURRENT_LIST_DIR}/assets/*")
-set(_nwb_ui_smoke_asset_stamp "${_nwb_ui_smoke_runtime_root}/res/.nwb_ui_layer_assets_$<CONFIG>.stamp")
-add_custom_command(OUTPUT "${_nwb_ui_smoke_asset_stamp}" COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_ui_smoke_runtime_root}/res" COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
-        --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>" --repo-root "${PROJECT_SOURCE_DIR}" --asset-root "impl/assets" --asset-root "tests/smoke/ui_layer/assets" --output-directory "${_nwb_ui_smoke_runtime_root}/res"
-        --configuration "$<CONFIG>" COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_ui_smoke_asset_stamp}"
-    DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_ui_smoke_asset_inputs} WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
-    COMMENT "Cooking standalone UI smoke engine and fixture assets for $<CONFIG>..." VERBATIM USES_TERMINAL)
-add_custom_target(nwb_ui_layer_smoke_assets DEPENDS "${_nwb_ui_smoke_asset_stamp}")
+nwb_add_fixture_smoke_assets(nwb_ui_layer_smoke_assets ui_layer "${_nwb_ui_smoke_runtime_root}" "UI" ASSET_ROOTS "impl/assets" "tests/smoke/ui_layer/assets"
+    COMMENT "Cooking standalone UI smoke engine and fixture assets for $<CONFIG>...")
 add_dependencies(nwb_ui_layer_smoke nwb_ui_layer_smoke_assets)
 
+nwb_ui_layer_env(_nwb_ui_zero_env)
 foreach(_nwb_ui_smoke_mode IN ITEMS framebuffer resize)
     set(_nwb_ui_smoke_test "nwb_ui_layer_${_nwb_ui_smoke_mode}_smoke")
     add_test(NAME "${_nwb_ui_smoke_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/capture_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_${_nwb_ui_smoke_mode}" --mode "${_nwb_ui_smoke_mode}" ${_nwb_ui_smoke_capture_args})
     set_tests_properties("${_nwb_ui_smoke_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_smoke_default_ctest_timeout_seconds} LABELS "ui;standalone_gpu"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
+        ENVIRONMENT "${_nwb_ui_zero_env}")
 endforeach()
 
 add_test(NAME nwb_ui_layer_many_roots_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/capture_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
@@ -51,11 +81,11 @@ add_test(NAME nwb_ui_layer_persistent_state_smoke COMMAND "${Python3_EXECUTABLE}
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_persistent_state" --mode framebuffer --persistent-state-test ${_nwb_ui_smoke_capture_args})
 set_tests_properties(nwb_ui_layer_persistent_state_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_smoke_default_ctest_timeout_seconds} LABELS "ui;standalone_gpu")
 
+nwb_ui_layer_env(_nwb_ui_interactive_env ACTIVE_FLAG INTERACTIVE)
 add_test(NAME nwb_ui_layer_interaction_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/interaction_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_interaction" ${_nwb_ui_smoke_capture_args})
 set_tests_properties(nwb_ui_layer_interaction_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_smoke_default_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input"
-    ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=1;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-)
+    ENVIRONMENT "${_nwb_ui_interactive_env}")
 
 add_test(NAME nwb_ui_layer_many_roots_interaction_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/interaction_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_many_roots_interaction" --many-roots ${_nwb_ui_smoke_capture_args})
@@ -63,337 +93,63 @@ set_tests_properties(nwb_ui_layer_many_roots_interaction_smoke PROPERTIES RESOUR
 
 set(_nwb_ui_window_timeout_seconds 180)
 math(EXPR _nwb_ui_window_ctest_timeout_seconds "${_nwb_ui_window_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
+nwb_ui_layer_env(_nwb_ui_window_default_env ACTIVE_FLAG WINDOW ACTIVE_SKIN 0)
+nwb_ui_layer_env(_nwb_ui_window_alt_env ACTIVE_FLAG WINDOW ACTIVE_SKIN 1)
 
 add_test(NAME nwb_ui_layer_window_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/window_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_window" --timeout ${_nwb_ui_window_timeout_seconds} ${_nwb_ui_smoke_capture_args})
 set_tests_properties(nwb_ui_layer_window_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_window_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;window"
-    ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-)
+    ENVIRONMENT "${_nwb_ui_window_default_env}")
 
 add_test(NAME nwb_ui_layer_window_skin_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/window_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_window_skin" --skin alternate --timeout ${_nwb_ui_window_timeout_seconds} ${_nwb_ui_smoke_capture_args})
 set_tests_properties(nwb_ui_layer_window_skin_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_window_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;window;skin"
-    ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=1;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-)
+    ENVIRONMENT "${_nwb_ui_window_alt_env}")
 
 set(_nwb_ui_edit_timeout_seconds 480)
 math(EXPR _nwb_ui_edit_ctest_timeout_seconds "${_nwb_ui_edit_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
+nwb_ui_layer_env(_nwb_ui_edit_env ACTIVE_FLAG EDIT)
 add_test(NAME nwb_ui_layer_edit_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/edit_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_edit" --timeout ${_nwb_ui_edit_timeout_seconds} ${_nwb_ui_smoke_capture_args})
 set_tests_properties(nwb_ui_layer_edit_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_edit_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;edit"
-    ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=1;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-)
+    ENVIRONMENT "${_nwb_ui_edit_env}")
 
 include("${CMAKE_CURRENT_LIST_DIR}/input_bindings_smoke.cmake")
 
-set(_nwb_ui_popup_timeout_seconds 240)
-math(EXPR _nwb_ui_popup_ctest_timeout_seconds "${_nwb_ui_popup_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_popup_skin IN ITEMS default alternate)
-    if(_nwb_ui_popup_skin STREQUAL "alternate")
-        set(_nwb_ui_popup_test "nwb_ui_layer_popup_skin_smoke")
-        set(_nwb_ui_popup_skin_flag 1)
-    else()
-        set(_nwb_ui_popup_test "nwb_ui_layer_popup_smoke")
-        set(_nwb_ui_popup_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_popup_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/popup_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_popup_${_nwb_ui_popup_skin}" --skin "${_nwb_ui_popup_skin}" --timeout ${_nwb_ui_popup_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_popup_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_popup_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;popup;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=1;NWB_UI_LAYER_POPUP_SKIN=${_nwb_ui_popup_skin_flag};NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_list_timeout_seconds 300)
-math(EXPR _nwb_ui_list_ctest_timeout_seconds "${_nwb_ui_list_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_list_skin IN ITEMS default alternate)
-    if(_nwb_ui_list_skin STREQUAL "alternate")
-        set(_nwb_ui_list_test "nwb_ui_layer_list_skin_smoke")
-        set(_nwb_ui_list_skin_flag 1)
-    else()
-        set(_nwb_ui_list_test "nwb_ui_layer_list_smoke")
-        set(_nwb_ui_list_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_list_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/list_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_list_${_nwb_ui_list_skin}" --skin "${_nwb_ui_list_skin}" --timeout ${_nwb_ui_list_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_list_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_list_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;list;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=1;NWB_UI_LAYER_LIST_SKIN=${_nwb_ui_list_skin_flag};NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_combo_timeout_seconds 480)
-math(EXPR _nwb_ui_combo_ctest_timeout_seconds "${_nwb_ui_combo_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_combo_skin IN ITEMS default alternate)
-    if(_nwb_ui_combo_skin STREQUAL "alternate")
-        set(_nwb_ui_combo_test "nwb_ui_layer_combo_skin_smoke")
-        set(_nwb_ui_combo_skin_flag 1)
-    else()
-        set(_nwb_ui_combo_test "nwb_ui_layer_combo_smoke")
-        set(_nwb_ui_combo_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_combo_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/combo_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_combo_${_nwb_ui_combo_skin}" --skin "${_nwb_ui_combo_skin}" --timeout ${_nwb_ui_combo_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_combo_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_combo_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;combo;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=1;NWB_UI_LAYER_COMBO_SKIN=${_nwb_ui_combo_skin_flag};NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_search_combo_timeout_seconds 360)
-math(EXPR _nwb_ui_search_combo_ctest_timeout_seconds "${_nwb_ui_search_combo_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_search_combo_skin IN ITEMS default alternate)
-    if(_nwb_ui_search_combo_skin STREQUAL "alternate")
-        set(_nwb_ui_search_combo_test "nwb_ui_layer_search_combo_skin_smoke")
-        set(_nwb_ui_search_combo_skin_flag 1)
-    else()
-        set(_nwb_ui_search_combo_test "nwb_ui_layer_search_combo_smoke")
-        set(_nwb_ui_search_combo_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_search_combo_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/search_combo_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_search_combo_${_nwb_ui_search_combo_skin}" --skin "${_nwb_ui_search_combo_skin}" --timeout ${_nwb_ui_search_combo_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_search_combo_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_search_combo_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;search_combo;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=1;NWB_UI_LAYER_SEARCH_COMBO_SKIN=${_nwb_ui_search_combo_skin_flag};NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_popup_tools_timeout_seconds 420)
-math(EXPR _nwb_ui_popup_tools_ctest_timeout_seconds "${_nwb_ui_popup_tools_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_popup_tools_skin IN ITEMS default alternate)
-    if(_nwb_ui_popup_tools_skin STREQUAL "alternate")
-        set(_nwb_ui_popup_tools_test "nwb_ui_layer_popup_tools_skin_smoke")
-        set(_nwb_ui_popup_tools_skin_flag 1)
-    else()
-        set(_nwb_ui_popup_tools_test "nwb_ui_layer_popup_tools_smoke")
-        set(_nwb_ui_popup_tools_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_popup_tools_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/popup_tools_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_popup_tools_${_nwb_ui_popup_tools_skin}" --skin "${_nwb_ui_popup_tools_skin}" --timeout ${_nwb_ui_popup_tools_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_popup_tools_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_popup_tools_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;popup_tools;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=1;NWB_UI_LAYER_POPUP_TOOLS_SKIN=${_nwb_ui_popup_tools_skin_flag};NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_nested_popup_timeout_seconds 420)
-math(EXPR _nwb_ui_nested_popup_ctest_timeout_seconds "${_nwb_ui_nested_popup_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_nested_popup_skin IN ITEMS default alternate)
-    if(_nwb_ui_nested_popup_skin STREQUAL "alternate")
-        set(_nwb_ui_nested_popup_test "nwb_ui_layer_nested_popup_skin_smoke")
-        set(_nwb_ui_nested_popup_skin_flag 1)
-    else()
-        set(_nwb_ui_nested_popup_test "nwb_ui_layer_nested_popup_smoke")
-        set(_nwb_ui_nested_popup_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_nested_popup_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/nested_popup_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_nested_popup_${_nwb_ui_nested_popup_skin}" --skin "${_nwb_ui_nested_popup_skin}" --timeout ${_nwb_ui_nested_popup_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_nested_popup_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_nested_popup_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;nested_popup;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=1;NWB_UI_LAYER_NESTED_POPUP_SKIN=${_nwb_ui_nested_popup_skin_flag};NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_numeric_edit_timeout_seconds 720)
-math(EXPR _nwb_ui_numeric_edit_ctest_timeout_seconds "${_nwb_ui_numeric_edit_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_numeric_edit_skin IN ITEMS default alternate)
-    if(_nwb_ui_numeric_edit_skin STREQUAL "alternate")
-        set(_nwb_ui_numeric_edit_test "nwb_ui_layer_numeric_edit_skin_smoke")
-        set(_nwb_ui_numeric_edit_skin_flag 1)
-    else()
-        set(_nwb_ui_numeric_edit_test "nwb_ui_layer_numeric_edit_smoke")
-        set(_nwb_ui_numeric_edit_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_numeric_edit_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_numeric_edit_${_nwb_ui_numeric_edit_skin}" --skin "${_nwb_ui_numeric_edit_skin}" --timeout ${_nwb_ui_numeric_edit_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_numeric_edit_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_numeric_edit_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;numeric_edit;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=1;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=${_nwb_ui_numeric_edit_skin_flag};NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_text_area_timeout_seconds 720)
-math(EXPR _nwb_ui_text_area_ctest_timeout_seconds "${_nwb_ui_text_area_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_text_area_skin IN ITEMS default alternate)
-    if(_nwb_ui_text_area_skin STREQUAL "alternate")
-        set(_nwb_ui_text_area_test "nwb_ui_layer_text_area_skin_smoke")
-        set(_nwb_ui_text_area_skin_flag 1)
-    else()
-        set(_nwb_ui_text_area_test "nwb_ui_layer_text_area_smoke")
-        set(_nwb_ui_text_area_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_text_area_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/text_area_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_text_area_${_nwb_ui_text_area_skin}" --skin "${_nwb_ui_text_area_skin}" --timeout ${_nwb_ui_text_area_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_text_area_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_text_area_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;text_area;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=1;NWB_UI_LAYER_TEXT_AREA_SKIN=${_nwb_ui_text_area_skin_flag};NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_radio_group_timeout_seconds 300)
-math(EXPR _nwb_ui_radio_group_ctest_timeout_seconds "${_nwb_ui_radio_group_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_radio_group_skin IN ITEMS default alternate)
-    if(_nwb_ui_radio_group_skin STREQUAL "alternate")
-        set(_nwb_ui_radio_group_test "nwb_ui_layer_radio_group_skin_smoke")
-        set(_nwb_ui_radio_group_skin_flag 1)
-    else()
-        set(_nwb_ui_radio_group_test "nwb_ui_layer_radio_group_smoke")
-        set(_nwb_ui_radio_group_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_radio_group_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/radio_group_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_radio_group_${_nwb_ui_radio_group_skin}" --skin "${_nwb_ui_radio_group_skin}" --timeout ${_nwb_ui_radio_group_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_radio_group_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_radio_group_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;radio_group;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=1;NWB_UI_LAYER_RADIO_GROUP_SKIN=${_nwb_ui_radio_group_skin_flag};NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_slider_timeout_seconds 300)
-math(EXPR _nwb_ui_slider_ctest_timeout_seconds "${_nwb_ui_slider_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_slider_skin IN ITEMS default alternate)
-    if(_nwb_ui_slider_skin STREQUAL "alternate")
-        set(_nwb_ui_slider_test "nwb_ui_layer_slider_skin_smoke")
-        set(_nwb_ui_slider_skin_flag 1)
-    else()
-        set(_nwb_ui_slider_test "nwb_ui_layer_slider_smoke")
-        set(_nwb_ui_slider_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_slider_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/slider_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_slider_${_nwb_ui_slider_skin}" --skin "${_nwb_ui_slider_skin}" --timeout ${_nwb_ui_slider_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_slider_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_slider_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;slider;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_SLIDER=1;NWB_UI_LAYER_SLIDER_SKIN=${_nwb_ui_slider_skin_flag};NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_progress_timeout_seconds 120)
-math(EXPR _nwb_ui_progress_ctest_timeout_seconds "${_nwb_ui_progress_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_progress_skin IN ITEMS default alternate)
-    if(_nwb_ui_progress_skin STREQUAL "alternate")
-        set(_nwb_ui_progress_test "nwb_ui_layer_progress_skin_smoke")
-        set(_nwb_ui_progress_skin_flag 1)
-    else()
-        set(_nwb_ui_progress_test "nwb_ui_layer_progress_smoke")
-        set(_nwb_ui_progress_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_progress_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/progress_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_progress_${_nwb_ui_progress_skin}" --skin "${_nwb_ui_progress_skin}" --timeout ${_nwb_ui_progress_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_progress_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_progress_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;progress;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=1;NWB_UI_LAYER_PROGRESS_SKIN=${_nwb_ui_progress_skin_flag};NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_image_timeout_seconds 120)
-math(EXPR _nwb_ui_image_ctest_timeout_seconds "${_nwb_ui_image_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_image_skin IN ITEMS default alternate)
-    if(_nwb_ui_image_skin STREQUAL "alternate")
-        set(_nwb_ui_image_test "nwb_ui_layer_image_skin_smoke")
-        set(_nwb_ui_image_skin_flag 1)
-    else()
-        set(_nwb_ui_image_test "nwb_ui_layer_image_smoke")
-        set(_nwb_ui_image_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_image_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/image_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_image_${_nwb_ui_image_skin}" --skin "${_nwb_ui_image_skin}" --timeout ${_nwb_ui_image_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_image_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_image_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;image;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=1;NWB_UI_LAYER_IMAGE_SKIN=${_nwb_ui_image_skin_flag};NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
-    )
-endforeach()
-
-set(_nwb_ui_texture_image_timeout_seconds 120)
-math(EXPR _nwb_ui_texture_image_ctest_timeout_seconds "${_nwb_ui_texture_image_timeout_seconds} + ${_nwb_ui_smoke_ctest_margin_seconds}")
-foreach(_nwb_ui_texture_image_skin IN ITEMS default alternate)
-    if(_nwb_ui_texture_image_skin STREQUAL "alternate")
-        set(_nwb_ui_texture_image_test "nwb_ui_layer_texture_image_skin_smoke")
-        set(_nwb_ui_texture_image_skin_flag 1)
-    else()
-        set(_nwb_ui_texture_image_test "nwb_ui_layer_texture_image_smoke")
-        set(_nwb_ui_texture_image_skin_flag 0)
-    endif()
-    add_test(NAME "${_nwb_ui_texture_image_test}" COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/texture_image_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
-            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_texture_image_${_nwb_ui_texture_image_skin}" --skin "${_nwb_ui_texture_image_skin}" --timeout ${_nwb_ui_texture_image_timeout_seconds} ${_nwb_ui_smoke_capture_args})
-    set_tests_properties("${_nwb_ui_texture_image_test}" PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_texture_image_ctest_timeout_seconds} LABELS "ui;standalone_gpu;native_input;texture_image;skin"
-        ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=0;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=0;NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=1;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=${_nwb_ui_texture_image_skin_flag}"
-    )
-endforeach()
+nwb_add_ui_layer_skin_smoke_pair(popup POPUP 240)
+nwb_add_ui_layer_skin_smoke_pair(list LIST 300)
+nwb_add_ui_layer_skin_smoke_pair(combo COMBO 480)
+nwb_add_ui_layer_skin_smoke_pair(search_combo SEARCH_COMBO 360)
+nwb_add_ui_layer_skin_smoke_pair(popup_tools POPUP_TOOLS 420)
+nwb_add_ui_layer_skin_smoke_pair(nested_popup NESTED_POPUP 420)
+nwb_add_ui_layer_skin_smoke_pair(numeric_edit NUMERIC_EDIT 720)
+nwb_add_ui_layer_skin_smoke_pair(text_area TEXT_AREA 720)
+nwb_add_ui_layer_skin_smoke_pair(radio_group RADIO_GROUP 300)
+nwb_add_ui_layer_skin_smoke_pair(slider SLIDER 300)
+nwb_add_ui_layer_skin_smoke_pair(progress PROGRESS 120)
+nwb_add_ui_layer_skin_smoke_pair(image IMAGE 120)
+nwb_add_ui_layer_skin_smoke_pair(texture_image TEXTURE_IMAGE 120)
 
 set(_nwb_ui_raster_ir_parity_timeout_seconds 720)
 add_test(NAME nwb_ui_layer_raster_ir_parity_smoke COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/raster_ir_parity_smoke.py" --executable "$<TARGET_FILE:nwb_ui_layer_smoke>" --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_raster_ir_parity" --replay-marker "UiGpuRenderer: raster command IR replay active" ${_nwb_ui_smoke_capture_args})
 set_tests_properties(nwb_ui_layer_raster_ir_parity_smoke PROPERTIES RESOURCE_LOCK ${NWB_TEST_DISPLAY_RESOURCE_LOCK} SKIP_RETURN_CODE ${NWB_TEST_SKIP_RETURN_CODE} TIMEOUT ${_nwb_ui_raster_ir_parity_timeout_seconds} LABELS "ui;standalone_gpu;command_ir")
+
 unset(_nwb_ui_raster_ir_parity_timeout_seconds)
-
-unset(_nwb_ui_texture_image_skin)
-unset(_nwb_ui_texture_image_test)
-unset(_nwb_ui_texture_image_skin_flag)
-
-unset(_nwb_ui_image_skin)
-unset(_nwb_ui_image_test)
-unset(_nwb_ui_image_skin_flag)
-
-unset(_nwb_ui_progress_skin)
-unset(_nwb_ui_progress_test)
-unset(_nwb_ui_progress_skin_flag)
-
-unset(_nwb_ui_slider_skin)
-unset(_nwb_ui_slider_test)
-unset(_nwb_ui_slider_skin_flag)
-
-unset(_nwb_ui_radio_group_skin)
-unset(_nwb_ui_radio_group_test)
-unset(_nwb_ui_radio_group_skin_flag)
-
-unset(_nwb_ui_text_area_skin)
-unset(_nwb_ui_text_area_test)
-unset(_nwb_ui_text_area_skin_flag)
-
 unset(_nwb_ui_smoke_runtime_root)
-unset(_nwb_ui_popup_timeout_seconds)
-unset(_nwb_ui_popup_ctest_timeout_seconds)
-unset(_nwb_ui_window_timeout_seconds)
-unset(_nwb_ui_window_ctest_timeout_seconds)
-unset(_nwb_ui_list_timeout_seconds)
-unset(_nwb_ui_list_ctest_timeout_seconds)
-unset(_nwb_ui_combo_timeout_seconds)
-unset(_nwb_ui_combo_ctest_timeout_seconds)
-unset(_nwb_ui_search_combo_timeout_seconds)
-unset(_nwb_ui_search_combo_ctest_timeout_seconds)
-unset(_nwb_ui_popup_tools_timeout_seconds)
-unset(_nwb_ui_popup_tools_ctest_timeout_seconds)
-unset(_nwb_ui_nested_popup_timeout_seconds)
-unset(_nwb_ui_nested_popup_ctest_timeout_seconds)
-unset(_nwb_ui_numeric_edit_timeout_seconds)
-unset(_nwb_ui_numeric_edit_ctest_timeout_seconds)
-unset(_nwb_ui_text_area_timeout_seconds)
-unset(_nwb_ui_text_area_ctest_timeout_seconds)
-unset(_nwb_ui_radio_group_timeout_seconds)
-unset(_nwb_ui_radio_group_ctest_timeout_seconds)
-unset(_nwb_ui_slider_timeout_seconds)
-unset(_nwb_ui_slider_ctest_timeout_seconds)
-unset(_nwb_ui_progress_timeout_seconds)
-unset(_nwb_ui_progress_ctest_timeout_seconds)
-unset(_nwb_ui_image_timeout_seconds)
-unset(_nwb_ui_image_ctest_timeout_seconds)
-unset(_nwb_ui_texture_image_timeout_seconds)
-unset(_nwb_ui_texture_image_ctest_timeout_seconds)
-unset(_nwb_ui_edit_timeout_seconds)
-unset(_nwb_ui_edit_ctest_timeout_seconds)
 unset(_nwb_ui_smoke_ctest_margin_seconds)
 unset(_nwb_ui_smoke_default_timeout_seconds)
 unset(_nwb_ui_smoke_default_ctest_timeout_seconds)
+unset(_nwb_ui_layer_fixture_flags)
 unset(_nwb_ui_smoke_capture_args)
-unset(_nwb_ui_smoke_asset_inputs)
-unset(_nwb_ui_smoke_asset_stamp)
+unset(_nwb_ui_zero_env)
 unset(_nwb_ui_smoke_test)
 unset(_nwb_ui_smoke_mode)
-unset(_nwb_ui_popup_skin)
-unset(_nwb_ui_popup_test)
-unset(_nwb_ui_popup_skin_flag)
-unset(_nwb_ui_list_skin)
-unset(_nwb_ui_list_test)
-unset(_nwb_ui_list_skin_flag)
-unset(_nwb_ui_combo_skin)
-unset(_nwb_ui_combo_test)
-unset(_nwb_ui_combo_skin_flag)
-unset(_nwb_ui_search_combo_skin)
-unset(_nwb_ui_search_combo_test)
-unset(_nwb_ui_search_combo_skin_flag)
-unset(_nwb_ui_popup_tools_skin)
-unset(_nwb_ui_popup_tools_test)
-unset(_nwb_ui_popup_tools_skin_flag)
-unset(_nwb_ui_nested_popup_skin)
-unset(_nwb_ui_nested_popup_test)
-unset(_nwb_ui_nested_popup_skin_flag)
-unset(_nwb_ui_numeric_edit_skin)
-unset(_nwb_ui_numeric_edit_test)
-unset(_nwb_ui_numeric_edit_skin_flag)
+unset(_nwb_ui_interactive_env)
+unset(_nwb_ui_window_timeout_seconds)
+unset(_nwb_ui_window_ctest_timeout_seconds)
+unset(_nwb_ui_window_default_env)
+unset(_nwb_ui_window_alt_env)
+unset(_nwb_ui_edit_timeout_seconds)
+unset(_nwb_ui_edit_ctest_timeout_seconds)
+unset(_nwb_ui_edit_env)

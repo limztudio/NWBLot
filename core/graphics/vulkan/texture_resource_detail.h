@@ -130,6 +130,20 @@ struct TextureCreateMetadata{
     ;
 }
 
+[[nodiscard]] inline b8 IsWholeMipExtent(
+    const TextureDesc& description,
+    const MipLevel mipLevel,
+    const u32 x,
+    const u32 y,
+    const u32 z,
+    const u32 width,
+    const u32 height,
+    const u32 depth
+)noexcept{
+    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(description, mipLevel);
+    return x == 0u && y == 0u && z == 0u && width == mipExtent.width && height == mipExtent.height && depth == mipExtent.depth;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

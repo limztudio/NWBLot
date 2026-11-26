@@ -36,6 +36,58 @@ class BufferFlags{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class RuntimeMeshBatchUploadReadyTask{
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        requirements.requiresPrimaryGraphicsQueue = true;
+        return requirements;
+    }
+
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return !commands.commandRecordingFailed();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_unwind]
+Vector<u8> PadRuntimeMeshRawBytePayload(in Span<u8> payload, in usize paddedByteCount){
+    Vector<u8> paddedPayload = Vector<u8>();
+    paddedPayload.reserve(paddedByteCount);
+    paddedPayload.assign(payload.begin(), payload.end());
+    paddedPayload.resize(paddedByteCount, 0u);
+    return paddedPayload;
+}
+
+Expected<BufferHandle, BufferSetupFailure> CreateRuntimeMeshBuffer(
+    mut GraphicsRuntime graphics,
+    in Name debugName,
+    in u64 byteCount,
+    in u32 structStride,
+    in BufferFlags flags
+){
+    if(debugName == s_NameNone || byteCount == 0u)
+        return MakeUnexpected(BufferSetupFailure::EmptyPayload);
+    BufferDesc desc = BufferDesc();
+    desc
+        .setByteSize(byteCount)
+        .setStructStride(structStride)
+        .setCanHaveUAVs(flags.canHaveUAVs)
+        .setCanHaveRawViews(flags.canHaveRawViews)
+        .setIsAccelStructBuildInput(flags.accelStructBuildInput)
+        .setIsIndexBuffer(flags.isIndexBuffer)
+        .setQueueSharing(flags.queueSharing)
+        .setDebugName(debugName)
+    ;
+    const Expected<BufferHandle> buffer = graphics.createBuffer(desc);
+    if(!buffer.has_value())
+        return MakeUnexpected(BufferSetupFailure::CreateFailed);
+    return buffer.value();
+}
+
 Expected<BufferHandle, BufferSetupFailure> SetupBuffer<T>(mut GraphicsRuntime graphics, in Name debugName, in Span<T> payload, in BufferFlags flags){
     const Expected<usize> byteCount = TryComputeRuntimeMeshBufferByteCount(payload.size(), sizeof(T));
     if(!byteCount.has_value())
@@ -75,11 +127,90 @@ Expected<BufferHandle, BufferSetupFailure> SetupRequiredPaddedRawByteBuffer(mut 
     if(paddedByteCount.value() == payload.size())
         return SetupBuffer<u8>(graphics, debugName, payload, flags);
 
-    Vector<u8> paddedPayload = Vector<u8>();
-    paddedPayload.reserve(paddedByteCount.value());
-    paddedPayload.assign(payload.begin(), payload.end());
-    paddedPayload.resize(paddedByteCount.value(), 0u);
+    const Vector<u8> paddedPayload = PadRuntimeMeshRawBytePayload(payload, paddedByteCount.value());
     return SetupBuffer<u8>(graphics, debugName, paddedPayload, flags);
+}
+
+GpuTaskSchedulingHint MakeRuntimeMeshBatchUploadScheduling(){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Small;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    return scheduling;
+}
+
+[cpp_unwind]
+b8 DeclareRuntimeMeshBatchBufferUploadBlob(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView label,
+    in Expected<GpuUploadBlobId> blob,
+    mut Vector<GpuTaskId> outTasks
+){
+    if(!buffer.valid() || !blob.has_value())
+        return false;
+    in BufferDesc description = buffer.deref().getCreationDescription();
+    GpuGraphResourceDesc resourceDesc = GpuGraphResourceDesc();
+    resourceDesc
+        .setIdentity(description.debugName)
+        .setMarkerLabel(label)
+        .setType(GpuGraphResourceType::Buffer)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(description.queueSharing)
+    ;
+    const Expected<GpuGraphResourceId> destination = graph.importBuffer(buffer, resourceDesc);
+    if(!destination.has_value())
+        return false;
+    GpuTaskDesc taskDesc = GpuTaskDesc();
+    taskDesc
+        .setIdentity(description.debugName)
+        .setMarkerLabel(label)
+        .setScheduling(MakeRuntimeMeshBatchUploadScheduling())
+    ;
+    GpuUploadBufferTaskDesc upload = GpuUploadBufferTaskDesc();
+    upload.source = blob.value();
+    upload.destination = destination.value();
+    upload.finalState = ResourceStates::Common;
+    const Expected<GpuTaskId> task = graph.addUploadBufferTask(taskDesc, upload);
+    if(!task.has_value())
+        return false;
+    outTasks.push_back(task.value());
+    return true;
+}
+
+[cpp_unwind]
+b8 DeclareRuntimeMeshBatchTypedUpload<T>(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView label,
+    in Span<T> payload,
+    mut Vector<GpuTaskId> outTasks
+){
+    if(payload.empty())
+        return false;
+    return DeclareRuntimeMeshBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadElements<T>(payload), outTasks);
+}
+
+[cpp_unwind]
+b8 DeclareRuntimeMeshBatchPaddedRawUpload(
+    mut GpuTaskGraph graph,
+    in BufferHandle buffer,
+    in StringView label,
+    in Span<u8> payload,
+    mut Vector<GpuTaskId> outTasks
+){
+    if(payload.empty())
+        return false;
+    const Expected<usize> paddedBytes = TryComputePaddedRawByteCount(payload.size());
+    if(!paddedBytes.has_value())
+        return false;
+    if(paddedBytes.value() == payload.size())
+        return DeclareRuntimeMeshBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadBytes<u32>(payload), outTasks);
+    const Vector<u8> paddedPayload = PadRuntimeMeshRawBytePayload(payload, paddedBytes.value());
+    return DeclareRuntimeMeshBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadBytes<u32>(Span<u8>(paddedPayload)), outTasks);
 }
 
 

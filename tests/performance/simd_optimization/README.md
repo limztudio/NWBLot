@@ -198,6 +198,4 @@ python -m launcher build nwb_simd_pow_qualification --configure-preset windows-c
 
 Invoke `simd_pow_qualification production|packed_single|packed_double [traps]` directly from the build output directory. It returns `1` when any selected variant is rejected, `2` when requested trap qualification is unavailable on the host, and `0` only when every requested gate passes; it runs no timings, so its results establish neither speed nor behavior on other platforms.
 
-> **Note:** `tests/performance/simd_optimization/run_pow_qualification.py` predates the `.adhd` migration (its `compile_commands.json` lookup and standalone probe paths still reference removed `math_tests.cpp` and `pow_qualification.cpp`), so build `nwb_simd_pow_qualification` directly through CMake/`launcher` until that wrapper script is updated.
-
 Recorded rejection evidence is retained in the separate [power qualification report](pow_qualification_report.md).

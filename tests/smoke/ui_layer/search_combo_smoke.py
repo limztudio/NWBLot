@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 
 from search_combo_native import SearchComboNativeInput
@@ -44,9 +42,9 @@ class SearchComboRun(KeyedRun):
         self.expected.update({"query_bytes": length, "query_hash": text_hash(value) & 0xFFFFFF, "query_anchor": length if anchor is None else anchor, "query_caret": length if caret is None else caret})
 
     def write_report(self, passed):
-        report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "input_path": "Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages"
-                if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus", "runtime_limit": "No live IME, native Wayland, physical grabs, or native Linux qualification."}
-        (self.args.output_directory / "search_combo.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
+        self.write_smoke_report("search_combo.json", passed,
+            input_path="Win32 posted keys/pointer/positioned WM_MOUSEWHEEL messages" if self.native.windows else "X11 XSendEvent keys/button4/button5 and XSetInputFocus",
+            runtime_limit="No live IME, native Wayland, physical grabs, or native Linux qualification.")
 
     def execute(self):
         self.checkpoint("initial_closed_search_combo")

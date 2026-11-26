@@ -41,7 +41,6 @@ class ReflectionFrameParameters{
     public u32 traceMode = 0u;
     public u32 hardwareEnabled = 0u;
     public u32 opaqueSpecularSlot = 0u;
-    public u32 glassSpecularSlot = 0u;
     public u32 opaqueOutputSlot = 0u;
     public u32 glassOutputSlot = 0u;
     public u32 opaqueRadianceSlot = 0u;
@@ -55,7 +54,6 @@ class ReflectionFrameParameters{
     public u32 deferredResourcesSlot = 0u;
     public u32 viewSlot = 0u;
     public u32 materialContextSlot = 0u;
-    public u32 debugView = 0u;
     public u32 depthPyramidSlot = 0u;
     public u32 depthMipCount = 0u;
     public u32 screenMaxSteps = s_ReflectionDefaultScreenMaxSteps;
@@ -80,6 +78,8 @@ class ReflectionFrameParameters{
     public f32 screenThickness = s_ReflectionDefaultScreenThickness;
     public f32 screenConfidenceThreshold = s_ReflectionDefaultScreenConfidenceThreshold;
     public f32 screenEdgeFade = s_ReflectionDefaultScreenEdgeFade;
+    public u32 padding0 = 0u;
+    public u32 padding1 = 0u;
 }
 
 [serialize]
@@ -105,7 +105,6 @@ class ReflectionSpatialPushConstants{
     public u32 deferredResourcesSlot = 0u;
     public u32 opaqueSpecularSlot = 0u;
     public u32 viewSlot = 0u;
-    public u32 radius = 0u;
 }
 
 [serialize]
@@ -244,8 +243,7 @@ ReflectionSpatialPushConstants MakeReflectionSpatialPushConstants(
     in u32 destinationRadianceUavSlot,
     in u32 deferredResourcesSlot,
     in u32 opaqueSpecularSlot,
-    in u32 viewSlot,
-    in u32 radius
+    in u32 viewSlot
 ){
     ReflectionSpatialPushConstants parameters;
     parameters.width = width;
@@ -255,7 +253,6 @@ ReflectionSpatialPushConstants MakeReflectionSpatialPushConstants(
     parameters.deferredResourcesSlot = deferredResourcesSlot;
     parameters.opaqueSpecularSlot = opaqueSpecularSlot;
     parameters.viewSlot = viewSlot;
-    parameters.radius = radius;
     return parameters;
 }
 

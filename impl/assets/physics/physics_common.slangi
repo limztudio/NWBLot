@@ -326,15 +326,15 @@ float4 nwbPhysicsIntegrateDeltaQuat(const float4 q, const float3 omega, const fl
     return nwbPhysicsQuatNormalize(combined);
 }
 
-float3 nwbPhysicsMulMat3Rows(const float3 r0, const float3 r1, const float3 r2, const float3 v){
-    return float3(dot(r0, v), dot(r1, v), dot(r2, v));
-}
-
-float3 nwbPhysicsMulSymmetric3(const float4 m0, const float4 m1, const float3 v){
+float3 nwbPhysicsMulSymmetric3(const float4 m0, const float2 m1, const float3 v){
     const float3 r0 = float3(m0.x, m0.y, m0.z);
     const float3 r1 = float3(m0.y, m0.w, m1.x);
     const float3 r2 = float3(m0.z, m1.x, m1.y);
     return float3(dot(r0, v), dot(r1, v), dot(r2, v));
+}
+
+float3 nwbPhysicsMulSymmetric3(const float4 m0, const float4 m1, const float3 v){
+    return nwbPhysicsMulSymmetric3(m0, m1.xy, v);
 }
 
 float3 nwbPhysicsApplyLinearLocks(const float3 v, const uint flags){
@@ -405,6 +405,430 @@ float3 nwbPhysicsSafeNormal(const float3 v, const float3 fallback){
     if(lenSq > 1.0e-12f)
         return v * rsqrt(lenSq);
     return fallback;
+}
+
+void nwbPhysicsComputeTangentBasis(const float3 n, out float3 outU1, out float3 outU2){
+    const float3 up = abs(n.y) < 0.9f ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f);
+    outU1 = nwbPhysicsSafeNormal(cross(up, n), float3(1.0f, 0.0f, 0.0f));
+    outU2 = cross(n, outU1);
+}
+
+bool nwbPhysicsAabbOverlaps(const float3 minA, const float3 maxA, const float3 minB, const float3 maxB){
+    return all(minA <= maxB) && all(minB <= maxA);
+}
+
+float nwbPhysicsLinearInvMassDot(const float3 a, const float3 b, const float invMass, const uint flags){
+    const float3 ma = ((flags & 0x07u) != 0u) ? nwbPhysicsApplyLinearLocks(a, flags) : a;
+    return invMass * dot(ma, b);
+}
+
+float3 nwbPhysicsClosestPointOnSegment(const float3 p, const float3 a, const float3 b, out float outT){
+    const float3 ab = b - a;
+    const float lenSq = dot(ab, ab);
+    outT = (lenSq > 1.0e-12f) ? clamp(dot(p - a, ab) / lenSq, 0.0f, 1.0f) : 0.0f;
+    return a + ab * outT;
+}
+
+float3 nwbPhysicsClosestPointOnSegment(const float3 p, const float3 a, const float3 b){
+    float dummyT;
+    return nwbPhysicsClosestPointOnSegment(p, a, b, dummyT);
+}
+
+float3 nwbPhysicsClosestPointOnTriangle(const float3 p, const float3 a, const float3 b, const float3 c){
+    const float3 ab = b - a;
+    const float3 ac = c - a;
+    const float3 ap = p - a;
+    const float d1 = dot(ab, ap);
+    const float d2 = dot(ac, ap);
+    if(d1 <= 0.0f && d2 <= 0.0f)
+        return a;
+
+    const float3 bp = p - b;
+    const float d3 = dot(ab, bp);
+    const float d4 = dot(ac, bp);
+    if(d3 >= 0.0f && d4 <= d3)
+        return b;
+
+    const float vc = d1 * d4 - d3 * d2;
+    if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+        return a + ab * (d1 / (d1 - d3));
+
+    const float3 cp = p - c;
+    const float d5 = dot(ab, cp);
+    const float d6 = dot(ac, cp);
+    if(d6 >= 0.0f && d5 <= d6)
+        return c;
+
+    const float vb = d5 * d2 - d1 * d6;
+    if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+        return a + ac * (d2 / (d2 - d6));
+
+    const float va = d3 * d6 - d5 * d4;
+    if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+        return b + (c - b) * ((d4 - d3) / ((d4 - d3) + (d5 - d6)));
+
+    const float denom = 1.0f / max(va + vb + vc, 1.0e-12f);
+    return a + ab * (vb * denom) + ac * (vc * denom);
+}
+
+struct NwbPhysicsHfHeader{
+    float3 origin;
+    float maxY;
+    float sx;
+    float sy;
+    float sz;
+    float minY;
+    uint cols;
+    uint rows;
+    uint flags;
+    float thickness;
+};
+
+bool nwbPhysicsHfLoadHeader(const uint hullVertexSlot, const uint hfBase, out NwbPhysicsHfHeader outHeader){
+    const float4 hdr0 = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 0u];
+    const float4 hdr1 = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 1u];
+    const float4 hdr2 = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 2u];
+    outHeader.origin = hdr0.xyz;
+    outHeader.maxY = hdr0.w;
+    outHeader.sx = hdr1.x;
+    outHeader.sy = hdr1.y;
+    outHeader.sz = hdr1.z;
+    outHeader.minY = hdr1.w;
+    outHeader.cols = asuint(hdr2.x);
+    outHeader.rows = asuint(hdr2.y);
+    outHeader.flags = asuint(hdr2.z);
+    outHeader.thickness = hdr2.w;
+    return outHeader.cols >= 2u && outHeader.rows >= 2u && outHeader.sx > 0.0f && outHeader.sz > 0.0f;
+}
+
+uint nwbPhysicsClosedMeshRayVote(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    const float3 rayDir,
+    out bool outOverflow,
+    inout uint stack[64]
+){
+    outOverflow = false;
+    const float3 invDir = 1.0f / rayDir;
+    uint hitCount = 0u;
+    uint sp = 0u;
+    stack[sp++] = 0u;
+    while(sp > 0u){
+        const uint nodeRel = stack[--sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + nodeRel) * 2u + 1u];
+        const float3 t0 = (n0.xyz - localPoint) * invDir;
+        const float3 t1 = (n1.xyz - localPoint) * invDir;
+        const float3 tSmall = min(t0, t1);
+        const float3 tLarge = max(t0, t1);
+        const float tEnter = max(0.0f, max(tSmall.x, max(tSmall.y, tSmall.z)));
+        const float tExit = min(tLarge.x, min(tLarge.y, tLarge.z));
+        if(tExit < tEnter)
+            continue;
+
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint triIdx = triBase + firstTri + ti;
+                const float3 v0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 v1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 v2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                const float3 e1 = v1 - v0;
+                const float3 e2 = v2 - v0;
+                const float3 pvec = cross(rayDir, e2);
+                const float det = dot(e1, pvec);
+                if(abs(det) <= 1.0e-8f)
+                    continue;
+                const float invDet = 1.0f / det;
+                const float3 tvec = localPoint - v0;
+                const float u = dot(tvec, pvec) * invDet;
+                if(u < -1.0e-5f || u > 1.0f + 1.0e-5f)
+                    continue;
+                const float3 qvec = cross(tvec, e1);
+                const float v = dot(rayDir, qvec) * invDet;
+                if(v < -1.0e-5f || u + v > 1.0f + 1.0e-5f)
+                    continue;
+                const float t = dot(e2, qvec) * invDet;
+                if(t > 1.0e-6f)
+                    ++hitCount;
+            }
+        }
+        else{
+            if(sp + 2u > 64u){
+                outOverflow = true;
+                return 0u;
+            }
+            stack[sp++] = asuint(n0.w);
+            stack[sp++] = meta & 0x7fffffffu;
+        }
+    }
+    return hitCount & 1u;
+}
+
+bool nwbPhysicsIsPointInsideClosedMesh(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    out bool outOverflow,
+    inout uint stack[64]
+){
+    outOverflow = false;
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    if(any(localPoint < rootN0.xyz) || any(localPoint > rootN1.xyz))
+        return false;
+
+    const float3 rayDirs[3] = {
+        normalize(float3(1.0f, 0.37139067f, 0.21821789f)),
+        normalize(float3(-0.29317123f, 1.0f, 0.51791341f)),
+        normalize(float3(0.43189211f, -0.61923417f, 1.0f))
+    };
+    uint votes = 0u;
+    [loop]
+    for(uint d = 0u; d < 3u; ++d){
+        const uint vote = nwbPhysicsClosedMeshRayVote(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, rayDirs[d], outOverflow, stack);
+        if(outOverflow)
+            return false;
+        if(d == 1u && vote == votes)
+            return vote != 0u;
+        votes += vote;
+    }
+    return votes >= 2u;
+}
+
+bool nwbPhysicsIsPointInsideClosedMesh(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    out bool outOverflow
+){
+    uint stack[64];
+    return nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, outOverflow, stack);
+}
+
+void nwbPhysicsSolveSimplex2Slots(
+    const float3 a,
+    const float3 b,
+    out uint outSlots[4],
+    out float outU[4],
+    out uint outCount
+){
+    outSlots[0] = 0u; outSlots[1] = 1u; outSlots[2] = 2u; outSlots[3] = 3u;
+    outU[0] = 0.0f; outU[1] = 0.0f; outU[2] = 0.0f; outU[3] = 0.0f;
+    const float3 ab = b - a;
+    const float lenSq = dot(ab, ab);
+    if(lenSq <= 1.0e-12f){
+        outU[0] = 1.0f;
+        outCount = 1u;
+        return;
+    }
+    const float t = clamp(-dot(a, ab) / lenSq, 0.0f, 1.0f);
+    if(t <= 0.0f){
+        outU[0] = 1.0f;
+        outCount = 1u;
+    }
+    else if(t >= 1.0f){
+        outSlots[0] = 1u;
+        outU[0] = 1.0f;
+        outCount = 1u;
+    }
+    else{
+        outU[0] = 1.0f - t;
+        outU[1] = t;
+        outCount = 2u;
+    }
+}
+
+void nwbPhysicsSolveSimplex3Slots(
+    const float3 a,
+    const float3 b,
+    const float3 c,
+    out uint outSlots[4],
+    out float outU[4],
+    out uint outCount
+){
+    outSlots[0] = 0u; outSlots[1] = 1u; outSlots[2] = 2u; outSlots[3] = 3u;
+    outU[0] = 0.0f; outU[1] = 0.0f; outU[2] = 0.0f; outU[3] = 0.0f;
+    const float d1 = -dot(a, b - a);
+    const float d2 = -dot(a, c - a);
+    const float d3 = -dot(b, b - a);
+    const float d4 = -dot(b, c - a);
+    const float d5 = -dot(c, b - a);
+    const float d6 = -dot(c, c - a);
+    const float edgeAbWeightB = d1;
+    const float edgeAbWeightA = -d3;
+    const float edgeAcWeightC = d2;
+    const float edgeAcWeightA = -d6;
+    const float edgeBcWeightC = d4 - d3;
+    const float edgeBcWeightB = d5 - d6;
+    const float triangleWeightC = d1 * d4 - d3 * d2;
+    const float triangleWeightB = d5 * d2 - d1 * d6;
+    const float triangleWeightA = d3 * d6 - d5 * d4;
+
+    if(edgeAbWeightB <= 0.0f && edgeAcWeightC <= 0.0f){
+        outU[0] = 1.0f;
+        outCount = 1u;
+        return;
+    }
+    if(edgeAbWeightA <= 0.0f && edgeBcWeightC <= 0.0f){
+        outSlots[0] = 1u;
+        outU[0] = 1.0f;
+        outCount = 1u;
+        return;
+    }
+    if(edgeAcWeightA <= 0.0f && edgeBcWeightB <= 0.0f){
+        outSlots[0] = 2u;
+        outU[0] = 1.0f;
+        outCount = 1u;
+        return;
+    }
+    if(triangleWeightC <= 0.0f && edgeAbWeightA >= 0.0f && edgeAbWeightB >= 0.0f && (edgeAbWeightA + edgeAbWeightB) > 1.0e-12f){
+        const float inv = 1.0f / (edgeAbWeightA + edgeAbWeightB);
+        outU[0] = edgeAbWeightA * inv;
+        outU[1] = edgeAbWeightB * inv;
+        outCount = 2u;
+        return;
+    }
+    if(triangleWeightB <= 0.0f && edgeAcWeightA >= 0.0f && edgeAcWeightC >= 0.0f && (edgeAcWeightA + edgeAcWeightC) > 1.0e-12f){
+        const float inv = 1.0f / (edgeAcWeightA + edgeAcWeightC);
+        outSlots[1] = 2u;
+        outU[0] = edgeAcWeightA * inv;
+        outU[1] = edgeAcWeightC * inv;
+        outCount = 2u;
+        return;
+    }
+    if(triangleWeightA <= 0.0f && edgeBcWeightB >= 0.0f && edgeBcWeightC >= 0.0f && (edgeBcWeightB + edgeBcWeightC) > 1.0e-12f){
+        const float inv = 1.0f / (edgeBcWeightB + edgeBcWeightC);
+        outSlots[0] = 1u;
+        outSlots[1] = 2u;
+        outU[0] = edgeBcWeightB * inv;
+        outU[1] = edgeBcWeightC * inv;
+        outCount = 2u;
+        return;
+    }
+    const float sum = triangleWeightA + triangleWeightB + triangleWeightC;
+    if(sum <= 1.0e-12f){
+        nwbPhysicsSolveSimplex2Slots(a, b, outSlots, outU, outCount);
+        return;
+    }
+    const float inv = 1.0f / sum;
+    outU[0] = triangleWeightA * inv;
+    outU[1] = triangleWeightB * inv;
+    outU[2] = triangleWeightC * inv;
+    outCount = 3u;
+}
+
+void nwbPhysicsSolveSimplex4Slots(
+    const float3 w[4],
+    out uint outSlots[4],
+    out float outU[4],
+    out uint outCount
+){
+    outSlots[0] = 0u; outSlots[1] = 1u; outSlots[2] = 2u; outSlots[3] = 3u;
+    outU[0] = 0.0f; outU[1] = 0.0f; outU[2] = 0.0f; outU[3] = 0.0f;
+    const float3 a = w[0];
+    const float3 b = w[1];
+    const float3 c = w[2];
+    const float3 d = w[3];
+
+    const float signDet = dot(b - a, cross(c - a, d - a));
+    const float signVal = (signDet >= 0.0f) ? 1.0f : -1.0f;
+
+    const float tetrahedronWeightD = signVal * dot(a, cross(b, c));
+    const float tetrahedronWeightC = signVal * dot(d, cross(b, a));
+    const float tetrahedronWeightB = signVal * dot(c, cross(d, a));
+    const float tetrahedronWeightA = signVal * dot(b, cross(d, c));
+
+    const float testABC = dot(d - a, cross(b - a, c - a));
+    const float oriABC = dot(-a, cross(b - a, c - a));
+    const float testABD = dot(c - a, cross(b - a, d - a));
+    const float oriABD = dot(-a, cross(b - a, d - a));
+    const float testACD = dot(b - a, cross(c - a, d - a));
+    const float oriACD = dot(-a, cross(c - a, d - a));
+    const float testBCD = dot(a - b, cross(c - b, d - b));
+    const float oriBCD = dot(-b, cross(c - b, d - b));
+
+    bool outABC = (oriABC * testABC) < 0.0f;
+    bool outABD = (oriABD * testABD) < 0.0f;
+    bool outACD = (oriACD * testACD) < 0.0f;
+    bool outBCD = (oriBCD * testBCD) < 0.0f;
+
+    if(abs(signDet) <= 1.0e-10f){
+        outABC = true;
+        outABD = true;
+        outACD = true;
+        outBCD = true;
+    }
+
+    if(!outABC && !outABD && !outACD && !outBCD){
+        const float total = tetrahedronWeightA + tetrahedronWeightB + tetrahedronWeightC + tetrahedronWeightD;
+        if(abs(total) > 1.0e-12f){
+            const float inv = 1.0f / total;
+            outU[0] = tetrahedronWeightA * inv;
+            outU[1] = tetrahedronWeightB * inv;
+            outU[2] = tetrahedronWeightC * inv;
+            outU[3] = tetrahedronWeightD * inv;
+        }
+        else{
+            outU[0] = 0.25f;
+            outU[1] = 0.25f;
+            outU[2] = 0.25f;
+            outU[3] = 0.25f;
+        }
+        outCount = 4u;
+        return;
+    }
+
+    uint bestSlots[4] = { 3u, 0u, 0u, 0u };
+    float bestU[4] = { 1.0f, 0.0f, 0.0f, 0.0f };
+    uint bestCount = 1u;
+    float bestDistSq = dot(d, d);
+
+    const uint faceMap[4][3] = {
+        { 0u, 1u, 3u },
+        { 0u, 2u, 3u },
+        { 1u, 2u, 3u },
+        { 0u, 1u, 2u }
+    };
+    const bool faceActive[4] = { outABD, outACD, outBCD, outABC };
+    for(uint face = 0u; face < 4u; ++face){
+        if(!faceActive[face])
+            continue;
+        uint fSlots[4];
+        float fU[4];
+        uint fCount = 3u;
+        const float3 fa = w[faceMap[face][0]];
+        const float3 fb = w[faceMap[face][1]];
+        const float3 fc = w[faceMap[face][2]];
+        nwbPhysicsSolveSimplex3Slots(fa, fb, fc, fSlots, fU, fCount);
+        float3 p = float3(0.0f, 0.0f, 0.0f);
+        for(uint k = 0u; k < fCount; ++k)
+            p += w[faceMap[face][fSlots[k]]] * fU[k];
+        const float dSq = dot(p, p);
+        if(dSq < bestDistSq){
+            bestDistSq = dSq;
+            bestCount = fCount;
+            for(uint k = 0u; k < 4u; ++k){
+                bestSlots[k] = (k < fCount) ? faceMap[face][fSlots[k]] : 0u;
+                bestU[k] = fU[k];
+            }
+        }
+    }
+
+    outCount = bestCount;
+    for(uint k = 0u; k < 4u; ++k){
+        outSlots[k] = bestSlots[k];
+        outU[k] = bestU[k];
+    }
 }
 
 void nwbPhysicsResolveShapeWorldPose(

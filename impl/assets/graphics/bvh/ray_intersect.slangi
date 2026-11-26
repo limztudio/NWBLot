@@ -74,21 +74,6 @@ bool nwbBvhRayAabbIntervalFma(const float3 invDir, const float3 negOriginInvDir,
     return nwbBvhRayAabbIntervalPaddedFma(invDir, negOriginInvDir, negOriginInvDir, tMin, tMax, boxMin, boxMax, outTEntry);
 }
 
-bool nwbBvhRayAabbInterval(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, const float padding, out float outTEntry){
-    const float3 minBias = (-padding - origin) * invDir;
-    const float3 maxBias = (padding - origin) * invDir;
-    return nwbBvhRayAabbIntervalPaddedFma(invDir, minBias, maxBias, tMin, tMax, boxMin, boxMax, outTEntry);
-}
-
-bool nwbBvhRayAabb(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, const float padding){
-    float unusedTEntry;
-    return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, unusedTEntry);
-}
-
-bool nwbBvhRayAabbT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax, const float padding, out float tEntry){
-    return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, tEntry);
-}
-
 bool nwbBvhPickNearChildFma(
     const float3 invDir,
     const float3 negOriginInvDir,
@@ -135,24 +120,6 @@ bool nwbBvhPickNearChildFma(
     descendNode = (NwbBvhNode)0;
     farChildIndex = 0u;
     return false;
-}
-
-bool nwbBvhPickNearChild(
-    const float3 origin,
-    const float3 invDir,
-    const float tMin,
-    const float tMax,
-    const NwbBvhNode node,
-    const NwbBvhNode leftNode,
-    const uint rightChildIndex,
-    const NwbBvhNode rightNode,
-    out NwbBvhNode descendNode,
-    out uint farChildIndex,
-    out bool bothHit
-){
-    const float3 negOriginInvDir = -origin * invDir;
-    float unusedFarEntryT;
-    return nwbBvhPickNearChildFma(invDir, negOriginInvDir, tMin, tMax, node, leftNode, rightChildIndex, rightNode, descendNode, farChildIndex, unusedFarEntryT, bothHit);
 }
 
 

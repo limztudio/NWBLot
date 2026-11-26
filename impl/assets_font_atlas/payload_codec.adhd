@@ -64,10 +64,6 @@ b8 ValidateFontAtlasMatchedPositioningTableCount(in usize matched, in usize expo
     return false;
 }
 
-Sha256Digest ComputePositioningTableSha256(in Span<u8> tableBytes){
-    return ComputeSha256(tableBytes);
-}
-
 Expected<Sha256Digest> ReadFontAtlasSha256Digest(in Span<u8> bytes, mut usize cursor){
     const usize digestBytes = cast<usize>(s_Sha256DigestByteCount);
     if(!CanReadBytes(bytes, cursor, digestBytes))
@@ -226,7 +222,7 @@ Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Sp
         mut FontAtlasPositioningTable table = tables.back();
         table.tag = tag;
         AssignVector(table.bytes, sourceBytes);
-        table.sha256 = ComputePositioningTableSha256(table.bytes);
+        table.sha256 = ComputeSha256(table.bytes);
     }
     return tables;
 }

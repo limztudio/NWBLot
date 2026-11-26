@@ -72,6 +72,35 @@ struct ImplementationTypes{
     typedef typename CallTraits<second_type>::reference second_reference;
     typedef typename CallTraits<first_type>::const_reference first_const_reference;
     typedef typename CallTraits<second_type>::const_reference second_const_reference;
+
+    static constexpr b8 s_NothrowDefaultConstruct =
+        IsNothrowConstructible_V<first_type>
+        && IsNothrowConstructible_V<second_type>
+        && IsNothrowDestructible_V<first_type>
+        && IsNothrowDestructible_V<second_type>
+    ;
+    static constexpr b8 s_NothrowBothConstruct =
+        IsNothrowConstructible_V<first_type, typename AddLValueReference<first_param_type>::type>
+        && IsNothrowConstructible_V<second_type, typename AddLValueReference<second_param_type>::type>
+        && IsNothrowDestructible_V<first_type>
+        && IsNothrowDestructible_V<second_type>
+        && IsNothrowDestructible_V<first_param_type>
+        && IsNothrowDestructible_V<second_param_type>
+    ;
+    static constexpr b8 s_NothrowFirstConstruct =
+        IsNothrowConstructible_V<first_type, typename AddLValueReference<first_param_type>::type>
+        && IsNothrowConstructible_V<second_type>
+        && IsNothrowDestructible_V<first_type>
+        && IsNothrowDestructible_V<second_type>
+        && IsNothrowDestructible_V<first_param_type>
+    ;
+    static constexpr b8 s_NothrowSecondConstruct =
+        IsNothrowConstructible_V<first_type>
+        && IsNothrowConstructible_V<second_type, typename AddLValueReference<second_param_type>::type>
+        && IsNothrowDestructible_V<first_type>
+        && IsNothrowDestructible_V<second_type>
+        && IsNothrowDestructible_V<second_param_type>
+    ;
 };
 
 struct FirstValueTag{};
@@ -85,34 +114,15 @@ private:
 
 
 public:
-    ValueStorage()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-    ValueStorage(BothValuesTag, typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    ValueStorage()noexcept(Types::s_NothrowDefaultConstruct){}
+    ValueStorage(BothValuesTag, typename Types::first_param_type x, typename Types::second_param_type y)noexcept(Types::s_NothrowBothConstruct)
         : m_first(x)
         , m_second(y)
     {}
-    ValueStorage(FirstValueTag, typename Types::first_param_type x)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-    )
+    ValueStorage(FirstValueTag, typename Types::first_param_type x)noexcept(Types::s_NothrowFirstConstruct)
         : m_first(x)
     {}
-    ValueStorage(SecondValueTag, typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    ValueStorage(SecondValueTag, typename Types::second_param_type y)noexcept(Types::s_NothrowSecondConstruct)
         : m_second(y)
     {}
 
@@ -186,34 +196,15 @@ private:
 
 
 public:
-    Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    Implementation()noexcept(Types::s_NothrowDefaultConstruct){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(Types::s_NothrowBothConstruct)
         : T1(x)
         , m_second(y)
     {}
-    Implementation(typename Types::first_param_type x)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-    )
+    Implementation(typename Types::first_param_type x)noexcept(Types::s_NothrowFirstConstruct)
         : T1(x)
     {}
-    Implementation(typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    Implementation(typename Types::second_param_type y)noexcept(Types::s_NothrowSecondConstruct)
         : m_second(y)
     {}
 
@@ -242,34 +233,15 @@ private:
 
 
 public:
-    Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    Implementation()noexcept(Types::s_NothrowDefaultConstruct){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(Types::s_NothrowBothConstruct)
         : T2(y)
         , m_first(x)
     {}
-    Implementation(typename Types::first_param_type x)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-    )
+    Implementation(typename Types::first_param_type x)noexcept(Types::s_NothrowFirstConstruct)
         : m_first(x)
     {}
-    Implementation(typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    Implementation(typename Types::second_param_type y)noexcept(Types::s_NothrowSecondConstruct)
         : T2(y)
     {}
 
@@ -304,34 +276,15 @@ private:
 
 
 public:
-    Implementation()noexcept(IsNothrowConstructible_V<typename Types::first_type> && IsNothrowConstructible_V<typename Types::second_type> && IsNothrowDestructible_V<typename Types::first_type> && IsNothrowDestructible_V<typename Types::second_type>){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    Implementation()noexcept(Types::s_NothrowDefaultConstruct){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)noexcept(Types::s_NothrowBothConstruct)
         : T1(x)
         , T2(y)
     {}
-    Implementation(typename Types::first_param_type x)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type, decltype((x))>
-        && IsNothrowConstructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::first_param_type>
-    )
+    Implementation(typename Types::first_param_type x)noexcept(Types::s_NothrowFirstConstruct)
         : T1(x)
     {}
-    Implementation(typename Types::second_param_type y)noexcept(
-        IsNothrowConstructible_V<typename Types::first_type>
-        && IsNothrowConstructible_V<typename Types::second_type, decltype((y))>
-        && IsNothrowDestructible_V<typename Types::first_type>
-        && IsNothrowDestructible_V<typename Types::second_type>
-        && IsNothrowDestructible_V<typename Types::second_param_type>
-    )
+    Implementation(typename Types::second_param_type y)noexcept(Types::s_NothrowSecondConstruct)
         : T2(y)
     {}
 };

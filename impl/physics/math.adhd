@@ -11,10 +11,6 @@
 [cpp_header("<global/bit.h>"), cpp_name("::CountTrailingZeros")]
 extern i32 CountTrailingZerosU32(in u32 value);
 
-f32 SqrtFast(in f32 v){
-    return VectorSqrt(VectorSingle(v)).x;
-}
-
 SymMat3 ZeroSymMat3(){
     return SymMat3();
 }
@@ -36,25 +32,6 @@ VectorSingle SymMat3MulVec(in SymMat3 m, in VectorSingle v){
     const VectorSingle c1(m.m01, m.m11, m.m12, 0.0f);
     const VectorSingle c2(m.m02, m.m12, m.m22, 0.0f);
     return c0 * v.x + c1 * v.y + c2 * v.z;
-}
-
-f32 SimdMin(in f32 a, in f32 b){
-    const VectorSingle va(a);
-    const VectorSingle vb(b);
-    return VectorSelect(vb, va, VectorLess(va, vb)).x;
-}
-
-f32 SimdMax(in f32 a, in f32 b){
-    const VectorSingle va(a);
-    const VectorSingle vb(b);
-    return VectorSelect(vb, va, VectorGreater(va, vb)).x;
-}
-
-f32 SimdClamp(in f32 v, in f32 lo, in f32 hi){
-    const VectorSingle vv(v);
-    const VectorSingle vlo(lo);
-    const VectorSingle vhi(hi);
-    return VectorSelect(vlo, VectorSelect(vv, vhi, VectorGreater(vv, vhi)), VectorGreater(vv, vlo)).x;
 }
 
 b8 IsFiniteVec3(in VectorSingle v){
@@ -269,7 +246,7 @@ MatrixSingle Matrix3InvertSymmetric(in MatrixSingle a){
         return MatrixSingle(0.0f);
 
     const VectorSingle magTerms = Abs(VectorSingle(det, tr * s2, tr * tr * tr, 0.0f));
-    const f32 detTol = SimdMax(1.0e-30f, 1.0e-6f * magTerms.y + 1.0e-12f * magTerms.z);
+    const f32 detTol = Max(1.0e-30f, 1.0e-6f * magTerms.y + 1.0e-12f * magTerms.z);
     if(magTerms.x > detTol){
         const f32 invDet = 1.0f / det;
         if(!IsFinite(VectorSingle(invDet)))
@@ -473,7 +450,7 @@ f32 AabbPerimeterValues(in VectorSingle bMin, in VectorSingle bMax){
 f32 ComputeAabbMarginValues(in VectorSingle bMin, in VectorSingle bMax){
     const VectorSingle extent = (bMax - bMin) * 0.5f;
     const f32 maxExtent = Vector3MaxComponent(extent).x;
-    return SimdClamp(maxExtent * s_AabbMarginFraction, s_SpeculativeDistance, s_MaxAabbMargin);
+    return Clamp(maxExtent * s_AabbMarginFraction, s_SpeculativeDistance, s_MaxAabbMargin);
 }
 
 void ComputeRayCastSlabValues(in VectorSingle translation, mut VectorSingle outInvDir, mut u32 outParallelMask){
@@ -508,8 +485,8 @@ b8 AabbRayCastValues(
         const VectorSingle t2 = (bMax - origin) * invDir;
         const VectorSingle tNear = Min(t1, t2);
         const VectorSingle tFar = Max(t1, t2);
-        const f32 tMin = SimdMax(0.0f, Vector3MaxComponent(tNear).x);
-        const f32 tMax = SimdMin(maxFraction, -Vector3MaxComponent(-tFar).x);
+        const f32 tMin = Max(0.0f, Vector3MaxComponent(tNear).x);
+        const f32 tMax = Min(maxFraction, -Vector3MaxComponent(-tFar).x);
         if(tMin > tMax)
             return false;
         outMinFraction = tMin;
@@ -548,136 +525,94 @@ b8 AabbRayCastValues(
     return true;
 }
 
-void PushRayCastChildrenOrdered(
-    mut Array<u32, 256u> stackNodes,
-    mut Array<f32, 256u> stackTMins,
-    mut u32 stackCount,
-    in u32 childA,
-    in b8 hitA,
-    in f32 tA,
-    in u32 childB,
-    in b8 hitB,
-    in f32 tB
-){
-    b8 firstHit = hitA;
-    u32 firstChild = childA;
-    f32 firstT = tA;
-    b8 secondHit = hitB;
-    u32 secondChild = childB;
-    f32 secondT = tB;
-    if(hitB && (!hitA || tB > tA)){
-        firstHit = hitB;
-        firstChild = childB;
-        firstT = tB;
-        secondHit = hitA;
-        secondChild = childA;
-        secondT = tA;
-    }
-    if(stackCount < 256u){
-        if(firstHit && secondHit && stackCount == 255u){
-            stackNodes[stackCount] = secondChild;
-            stackTMins[stackCount] = secondT;
-            ++stackCount;
+class BvhMetricEntry{
+    public u32 nodeIdx = s_NullIndex;
+    public f32 metric = 0.0f;
+}
+
+class BvhSpillStack<T, const usize FixedCap> : NoCopy{
+    private Array<T, FixedCap> m_fixed;
+    private Vector<T> m_overflow;
+    private usize m_fixedCount = 0u;
+    private b8 m_useOverflow = false;
+
+    public void push(in T item){
+        if(!this.m_useOverflow && this.m_fixedCount < FixedCap){
+            this.m_fixed[this.m_fixedCount] = item;
+            ++this.m_fixedCount;
             return;
         }
-        if(firstHit){
-            stackNodes[stackCount] = firstChild;
-            stackTMins[stackCount] = firstT;
-            ++stackCount;
+        if(!this.m_useOverflow){
+            this.m_overflow.reserve(FixedCap * 2u);
+            for(usize i = 0u; i < this.m_fixedCount; ++i)
+                this.m_overflow.push_back(this.m_fixed[i]);
+            this.m_fixedCount = 0u;
+            this.m_useOverflow = true;
         }
-        if(secondHit && stackCount < 256u){
-            stackNodes[stackCount] = secondChild;
-            stackTMins[stackCount] = secondT;
-            ++stackCount;
+        this.m_overflow.push_back(item);
+    }
+
+    public b8 pop(mut T outItem){
+        if(this.m_useOverflow){
+            if(this.m_overflow.empty())
+                return false;
+            outItem = this.m_overflow.back();
+            this.m_overflow.pop_back();
+            return true;
         }
+        if(this.m_fixedCount == 0u)
+            return false;
+        --this.m_fixedCount;
+        outItem = this.m_fixed[this.m_fixedCount];
+        return true;
     }
 }
 
-void PushBvhNodeWithSpill(
-    in u32 nodeIdx,
-    mut Array<u32, 256u> fixedStack,
-    mut u32 fixedCount,
-    mut Vector<u32> overflowStack,
-    mut b8 useOverflow
-){
-    if(!useOverflow && fixedCount < 256u){
-        fixedStack[fixedCount] = nodeIdx;
-        ++fixedCount;
-        return;
-    }
-    if(!useOverflow){
-        overflowStack.reserve(512u);
-        for(u32 si = 0u; si < fixedCount; ++si)
-            overflowStack.push_back(fixedStack[si]);
-        fixedCount = 0u;
-        useOverflow = true;
-    }
-    overflowStack.push_back(nodeIdx);
-}
+class BvhMetricSpillStack<const usize FixedCap> : NoCopy{
+    private BvhSpillStack<BvhMetricEntry, FixedCap> m_stack;
 
-void PushRayCastChildrenOrderedWithSpill(
-    in u32 childA,
-    in b8 hitA,
-    in f32 tA,
-    in u32 childB,
-    in b8 hitB,
-    in f32 tB,
-    mut Array<u32, 256u> stackNodes,
-    mut Array<f32, 256u> stackTMins,
-    mut u32 stackCount,
-    mut Vector<u32> overflowNodes,
-    mut Vector<f32> overflowTMins,
-    mut b8 useOverflow
-){
-    b8 firstHit = hitA;
-    u32 firstChild = childA;
-    f32 firstT = tA;
-    b8 secondHit = hitB;
-    u32 secondChild = childB;
-    f32 secondT = tB;
-    if(hitB && (!hitA || tB > tA)){
-        firstHit = hitB;
-        firstChild = childB;
-        firstT = tB;
-        secondHit = hitA;
-        secondChild = childA;
-        secondT = tA;
+    public void push(in u32 nodeIdx, in f32 metric){
+        BvhMetricEntry entry;
+        entry.nodeIdx = nodeIdx;
+        entry.metric = metric;
+        this.m_stack.push(entry);
     }
-    if(!useOverflow){
-        u32 needed = 0u;
+
+    public void pushOrderedPair(
+        in u32 childA,
+        in b8 hitA,
+        in f32 tA,
+        in u32 childB,
+        in b8 hitB,
+        in f32 tB
+    ){
+        b8 firstHit = hitA;
+        u32 firstChild = childA;
+        f32 firstT = tA;
+        b8 secondHit = hitB;
+        u32 secondChild = childB;
+        f32 secondT = tB;
+        if(hitB && (!hitA || tB > tA)){
+            firstHit = hitB;
+            firstChild = childB;
+            firstT = tB;
+            secondHit = hitA;
+            secondChild = childA;
+            secondT = tA;
+        }
         if(firstHit)
-            ++needed;
+            this.push(firstChild, firstT);
         if(secondHit)
-            ++needed;
-        if(stackCount + needed <= 256u){
-            if(firstHit){
-                stackNodes[stackCount] = firstChild;
-                stackTMins[stackCount] = firstT;
-                ++stackCount;
-            }
-            if(secondHit){
-                stackNodes[stackCount] = secondChild;
-                stackTMins[stackCount] = secondT;
-                ++stackCount;
-            }
-            return;
-        }
-        overflowNodes.reserve(512u);
-        overflowTMins.reserve(512u);
-        for(u32 si = 0u; si < stackCount; ++si){
-            overflowNodes.push_back(stackNodes[si]);
-            overflowTMins.push_back(stackTMins[si]);
-        }
-        stackCount = 0u;
-        useOverflow = true;
+            this.push(secondChild, secondT);
     }
-    if(firstHit){
-        overflowNodes.push_back(firstChild);
-        overflowTMins.push_back(firstT);
-    }
-    if(secondHit){
-        overflowNodes.push_back(secondChild);
-        overflowTMins.push_back(secondT);
+
+    public b8 pop(mut u32 outNodeIdx, mut f32 outMetric){
+        BvhMetricEntry entry;
+        if(!this.m_stack.pop(entry))
+            return false;
+        outNodeIdx = entry.nodeIdx;
+        outMetric = entry.metric;
+        return true;
     }
 }
 

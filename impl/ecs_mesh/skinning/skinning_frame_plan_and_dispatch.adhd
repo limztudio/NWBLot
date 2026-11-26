@@ -22,42 +22,45 @@ class SkinningFramePlanFlags{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EntityID ResolveSkinningSkeletonEntity(in EntityID fallbackEntity, in SkinnedMeshBindingComponent binding, mut World world){
-    if(binding.skeletonEntity.valid())
-        return binding.skeletonEntity;
-    if(binding.skeletonEntityName != s_NameNone){
-        const EntityID resolved = FindSceneEntityByName(fallbackEntity, binding.skeletonEntityName, world);
-        if(resolved.valid()){
-            const Optional<mut SkinnedMeshBindingComponent> borrowed = world.borrowComponent<SkinnedMeshBindingComponent>(fallbackEntity);
-            if(borrowed.has_value())
-                borrowed.value().skeletonEntity = resolved;
-            return resolved;
-        }
-    }
-    return fallbackEntity;
-}
-
-EntityID ResolveFrameSkinningSkeletonEntity(mut MeshSkinningSystem system, in EntityID fallbackEntity, in SkinnedMeshBindingComponent binding){
+EntityID ResolveFrameSkinningSkeletonEntityWithCache(
+    mut World world,
+    mut SceneEntityNameIndex frameSceneNameIndex,
+    mut b8 frameSceneNameIndexBuilt,
+    mut HashSet<SceneEntityNameQueryKey> unresolvedSkeletonQueries,
+    in EntityID fallbackEntity,
+    in SkinnedMeshBindingComponent binding
+){
     if(binding.skeletonEntity.valid())
         return binding.skeletonEntity;
     if(binding.skeletonEntityName == s_NameNone)
         return fallbackEntity;
     const SceneEntityNameQueryKey queryKey(fallbackEntity, binding.skeletonEntityName);
-    if(system.m_unresolvedSkeletonQueries.find(queryKey) != system.m_unresolvedSkeletonQueries.end())
+    if(unresolvedSkeletonQueries.find(queryKey) != unresolvedSkeletonQueries.end())
         return fallbackEntity;
-    if(!system.m_frameSceneNameIndexBuilt){
-        system.m_frameSceneNameIndex.build(system.m_world);
-        system.m_frameSceneNameIndexBuilt = true;
+    if(!frameSceneNameIndexBuilt){
+        frameSceneNameIndex.build(world);
+        frameSceneNameIndexBuilt = true;
     }
-    const EntityID resolved = system.m_frameSceneNameIndex.find(system.m_world, fallbackEntity, binding.skeletonEntityName);
+    const EntityID resolved = frameSceneNameIndex.find(world, fallbackEntity, binding.skeletonEntityName);
     if(resolved.valid()){
-        const Optional<mut SkinnedMeshBindingComponent> borrowed = system.m_world.borrowComponent<SkinnedMeshBindingComponent>(fallbackEntity);
+        const Optional<mut SkinnedMeshBindingComponent> borrowed = world.borrowComponent<SkinnedMeshBindingComponent>(fallbackEntity);
         if(borrowed.has_value())
             borrowed.value().skeletonEntity = resolved;
         return resolved;
     }
-    system.m_unresolvedSkeletonQueries.insert(queryKey);
+    unresolvedSkeletonQueries.insert(queryKey);
     return fallbackEntity;
+}
+
+EntityID ResolveFrameSkinningSkeletonEntity(mut MeshSkinningSystem system, in EntityID fallbackEntity, in SkinnedMeshBindingComponent binding){
+    return ResolveFrameSkinningSkeletonEntityWithCache(
+        system.m_world,
+        system.m_frameSceneNameIndex,
+        system.m_frameSceneNameIndexBuilt,
+        system.m_unresolvedSkeletonQueries,
+        fallbackEntity,
+        binding
+    );
 }
 
 b8 ShouldRepackSkinnedMeshNormals(in b8 hasActiveSkin, in b8 copiesRestStreams, in b8 hasAttributeBuffer){

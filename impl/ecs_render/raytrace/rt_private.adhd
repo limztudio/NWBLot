@@ -86,9 +86,9 @@ static_assert(size_of<NwbBvhNodeGpu>() == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGp
 static_assert(size_of<SceneSwBvhInstanceGpu>() == size_of<f32x3x4>() + size_of<u32>() * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 static_assert(s_BvhSortGroupSize == s_ShaderBvhSortGroupSize);
 static_assert(size_of<BvhSortPushConstants>() == size_of<u32>() * s_ShaderBvhSortPushConstantWordCount, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
-static_assert(offset_of<BvhSortPushConstants>(mode) == 12u);
-static_assert(offset_of<BvhSortPushConstants>(keysHeapSlot) == 16u);
-static_assert(offset_of<BvhSortPushConstants>(payloadHeapSlot) == 20u);
+static_assert(offset_of<BvhSortPushConstants>(mode) == 8u);
+static_assert(offset_of<BvhSortPushConstants>(keysHeapSlot) == 12u);
+static_assert(offset_of<BvhSortPushConstants>(payloadHeapSlot) == 16u);
 static_assert(is_standard_layout<BvhSortPushConstants>());
 static_assert(is_trivially_copyable<BvhSortPushConstants>());
 static_assert(s_BvhBuildModeFull == s_ShaderBvhBuildModeFull);

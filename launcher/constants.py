@@ -29,7 +29,6 @@ PROFILE_LOG_PORT_AUTO = 0
 PROFILE_LOG_PORT_MIN = 0
 PROFILE_LOG_PORT_MAX = 65535
 PROFILE_LOG_DRY_RUN_PORT = 7117
-PROFILE_LOG_CONNECT_TIMEOUT_SECONDS = 0.25
 PROFILE_LOG_READY_POLL_SECONDS = 0.05
 OS_WINDOWS = "nt"
 PRESET_NAME_FORMAT = "{platform_name}-{toolchain}-{arch}"
@@ -151,9 +150,6 @@ MSG_MISSING_EXECUTABLE = f"missing executable: {{executable}}"
 MSG_MISSING_WORKDIR = f"missing working directory: {{working_directory}}"
 MSG_PORT_BUSY = f"profile log port {{port}} is not available: {{exc}}"
 MSG_PORT_RANGE = f"--profile-log-port must be between {PROFILE_LOG_PORT_MIN} and {PROFILE_LOG_PORT_MAX}"
-MSG_LOGSERVER_EXITED = f"logserver exited before port {{port}} became ready (exit {{process.returncode}})"
-MSG_LOGSERVER_TIMEOUT_SUFFIX = ": {last_error}"
-MSG_LOGSERVER_NO_ACCEPT = f"logserver did not accept TCP connections on port {{port}} within {{timeout_seconds:.1f}}s{{suffix}}"
 MSG_POSITIVE_TIMEOUT = "--profile-logserver-timeout must be finite and positive"
 MSG_POSITIVE_RUN_SECONDS = "--run-seconds must be finite and positive"
 MSG_LAUNCHED_LOGSERVER = f"launched {{logserver_executable.name}} pid={{process.pid}} port={{log_port}}"

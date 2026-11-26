@@ -194,7 +194,7 @@ void QueryEdgeAxes(in HullShape hullA, in HullShape hullB, in VectorSingle relPo
 
             const VectorSingle rawCross = Cross(dirA, VectorSingle(bDir[bi]));
             const f32 lenSq = Vector3LengthSq(rawCross).x;
-            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(lenSqA * bDirLenSq[bi], 1.0e-12f);
+            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(lenSqA * bDirLenSq[bi], 1.0e-12f);
             if(lenSq <= normTol)
                 continue;
 
@@ -345,10 +345,37 @@ void QuatToBasisAxes(in VectorSingle q, mut VectorSingle outX, mut VectorSingle 
     outZ = VectorSingle(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
 }
 
-u32 ClipBoxLocalQuadMax(
+void AppendClipBoxLocalIntersection(
+    in ClipBoxLocalVertex prev,
+    in ClipBoxLocalVertex cur,
+    in f32 prevDist,
+    in f32 curDist,
+    in u8 id0,
+    in u8 id1,
+    mut Array<ClipBoxLocalVertex, 8u> outVerts,
+    mut u32 outCount
+){
+    if(outCount >= 8u)
+        return;
+    const f32 denom = prevDist - curDist;
+    f32 t = 0.0f;
+    if(Abs(VectorSingle(denom)).x > 1.0e-12f)
+        t = Clamp(prevDist / denom, 0.0f, 1.0f);
+    ClipBoxLocalVertex interp;
+    interp.u = prev.u + (cur.u - prev.u) * t;
+    interp.v = prev.v + (cur.v - prev.v) * t;
+    interp.s = prev.s + (cur.s - prev.s) * t;
+    interp.id0 = id0;
+    interp.id1 = id1;
+    outVerts[outCount] = interp;
+    ++outCount;
+}
+
+u32 ClipBoxLocalQuadPlane(
     in Array<ClipBoxLocalVertex, 8u> inVerts,
     in u32 inCount,
     in b8 useV,
+    in b8 clipMin,
     in f32 limit,
     in u8 edgeTag,
     mut Array<ClipBoxLocalVertex, 8u> outVerts
@@ -362,122 +389,28 @@ u32 ClipBoxLocalQuadMax(
     if(useV)
         prevCoord = prev.v;
     f32 prevDist = prevCoord - limit;
+    if(clipMin)
+        prevDist = limit - prevCoord;
 
     for(u32 i = 0u; i < inCount; ++i){
         const ClipBoxLocalVertex cur = inVerts[i];
         f32 curCoord = cur.u;
         if(useV)
             curCoord = cur.v;
-        const f32 curDist = curCoord - limit;
+        f32 curDist = curCoord - limit;
+        if(clipMin)
+            curDist = limit - curCoord;
 
         if(curDist <= 0.0f){
-            if(prevDist > 0.0f){
-                const f32 denom = prevDist - curDist;
-                f32 t = 0.0f;
-                if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                    t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-                if(outCount < 8u){
-                    ClipBoxLocalVertex interp;
-                    interp.u = prev.u + (cur.u - prev.u) * t;
-                    interp.v = prev.v + (cur.v - prev.v) * t;
-                    interp.s = prev.s + (cur.s - prev.s) * t;
-                    interp.id0 = edgeTag;
-                    interp.id1 = cur.id1;
-                    outVerts[outCount] = interp;
-                    ++outCount;
-                }
-            }
+            if(prevDist > 0.0f)
+                AppendClipBoxLocalIntersection(prev, cur, prevDist, curDist, edgeTag, cur.id1, outVerts, outCount);
             if(outCount < 8u){
                 outVerts[outCount] = cur;
                 ++outCount;
             }
         }
         else if(prevDist <= 0.0f){
-            const f32 denom = prevDist - curDist;
-            f32 t = 0.0f;
-            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-            if(outCount < 8u){
-                ClipBoxLocalVertex interp;
-                interp.u = prev.u + (cur.u - prev.u) * t;
-                interp.v = prev.v + (cur.v - prev.v) * t;
-                interp.s = prev.s + (cur.s - prev.s) * t;
-                interp.id0 = cur.id0;
-                interp.id1 = edgeTag;
-                outVerts[outCount] = interp;
-                ++outCount;
-            }
-        }
-
-        prev = cur;
-        prevDist = curDist;
-    }
-
-    return outCount;
-}
-
-u32 ClipBoxLocalQuadMin(
-    in Array<ClipBoxLocalVertex, 8u> inVerts,
-    in u32 inCount,
-    in b8 useV,
-    in f32 negLimit,
-    in u8 edgeTag,
-    mut Array<ClipBoxLocalVertex, 8u> outVerts
-){
-    u32 outCount = 0u;
-    if(inCount == 0u)
-        return 0u;
-
-    ClipBoxLocalVertex prev = inVerts[inCount - 1u];
-    f32 prevCoord = prev.u;
-    if(useV)
-        prevCoord = prev.v;
-    f32 prevDist = negLimit - prevCoord;
-
-    for(u32 i = 0u; i < inCount; ++i){
-        const ClipBoxLocalVertex cur = inVerts[i];
-        f32 curCoord = cur.u;
-        if(useV)
-            curCoord = cur.v;
-        const f32 curDist = negLimit - curCoord;
-
-        if(curDist <= 0.0f){
-            if(prevDist > 0.0f){
-                const f32 denom = prevDist - curDist;
-                f32 t = 0.0f;
-                if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                    t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-                if(outCount < 8u){
-                    ClipBoxLocalVertex interp;
-                    interp.u = prev.u + (cur.u - prev.u) * t;
-                    interp.v = prev.v + (cur.v - prev.v) * t;
-                    interp.s = prev.s + (cur.s - prev.s) * t;
-                    interp.id0 = edgeTag;
-                    interp.id1 = cur.id1;
-                    outVerts[outCount] = interp;
-                    ++outCount;
-                }
-            }
-            if(outCount < 8u){
-                outVerts[outCount] = cur;
-                ++outCount;
-            }
-        }
-        else if(prevDist <= 0.0f){
-            const f32 denom = prevDist - curDist;
-            f32 t = 0.0f;
-            if(Abs(VectorSingle(denom)).x > 1.0e-12f)
-                t = SimdClamp(prevDist / denom, 0.0f, 1.0f);
-            if(outCount < 8u){
-                ClipBoxLocalVertex interp;
-                interp.u = prev.u + (cur.u - prev.u) * t;
-                interp.v = prev.v + (cur.v - prev.v) * t;
-                interp.s = prev.s + (cur.s - prev.s) * t;
-                interp.id0 = cur.id0;
-                interp.id1 = edgeTag;
-                outVerts[outCount] = interp;
-                ++outCount;
-            }
+            AppendClipBoxLocalIntersection(prev, cur, prevDist, curDist, cur.id0, edgeTag, outVerts, outCount);
         }
 
         prev = cur;
@@ -514,7 +447,7 @@ b8 EvalBoxSatEdgeRow(
     const VectorSingle aShift1(aI.y, aI.z, aI.x, 0.0f);
     const VectorSingle rbVec = hbShift1 * aShift2 + hbShift2 * aShift1;
     const VectorSingle rawSep = Abs(projVec) - (raVec + rbVec);
-    const f32 skipCeiling = SimdMin(0.0f, SimdMin(bestSep + 5.0e-4f, maxDistance) + totalR);
+    const f32 skipCeiling = Min(0.0f, Min(bestSep + 5.0e-4f, maxDistance) + totalR);
     const b8 needX = (lenSqVec.x >= 1.0e-5f) && (rawSep.x > skipCeiling);
     const b8 needY = (lenSqVec.y >= 1.0e-5f) && (rawSep.y > skipCeiling);
     const b8 needZ = (lenSqVec.z >= 1.0e-5f) && (rawSep.z > skipCeiling);
@@ -936,16 +869,16 @@ Manifold CollideBoxes(
     const f32 limU = refH[uIdx];
     const f32 limV = refH[vIdx];
     u32 polyCount = 4u;
-    polyCount = ClipBoxLocalQuadMax(poly0, polyCount, false, limU, 0u, poly1);
+    polyCount = ClipBoxLocalQuadPlane(poly0, polyCount, false, false, limU, 0u, poly1);
     if(polyCount == 0u)
         return m;
-    polyCount = ClipBoxLocalQuadMin(poly1, polyCount, false, -limU, 1u, poly0);
+    polyCount = ClipBoxLocalQuadPlane(poly1, polyCount, false, true, -limU, 1u, poly0);
     if(polyCount == 0u)
         return m;
-    polyCount = ClipBoxLocalQuadMax(poly0, polyCount, true, limV, 2u, poly1);
+    polyCount = ClipBoxLocalQuadPlane(poly0, polyCount, true, false, limV, 2u, poly1);
     if(polyCount == 0u)
         return m;
-    polyCount = ClipBoxLocalQuadMin(poly1, polyCount, true, -limV, 3u, poly0);
+    polyCount = ClipBoxLocalQuadPlane(poly1, polyCount, true, true, -limV, 3u, poly0);
     if(polyCount == 0u)
         return m;
 
@@ -1031,32 +964,7 @@ Manifold CollideBoxes(
             const f32 a0 = e01u * (vi - v0) - e01v * (ui - u0);
             const f32 a1 = e12u * (vi - v1) - e12v * (ui - u1);
             const f32 a2 = e20u * (vi - v2) - e20v * (ui - u2);
-            const f32 maxAbs = Vector3MaxComponent(Abs(VectorSingle(a0, a1, a2, 0.0f))).x;
-            if(maxAbs > bestFallbackArea){
-                bestFallbackArea = maxAbs;
-                fallbackIdx3 = i;
-            }
-            f32 outsideArea = -1.0f;
-            if(baseSign >= 0.0f){
-                if(a0 < 0.0f && -a0 > outsideArea)
-                    outsideArea = -a0;
-                if(a1 < 0.0f && -a1 > outsideArea)
-                    outsideArea = -a1;
-                if(a2 < 0.0f && -a2 > outsideArea)
-                    outsideArea = -a2;
-            }
-            else{
-                if(a0 > 0.0f && a0 > outsideArea)
-                    outsideArea = a0;
-                if(a1 > 0.0f && a1 > outsideArea)
-                    outsideArea = a1;
-                if(a2 > 0.0f && a2 > outsideArea)
-                    outsideArea = a2;
-            }
-            if(outsideArea > bestOutsideArea){
-                bestOutsideArea = outsideArea;
-                idx3 = i;
-            }
+            UpdateFourthManifoldPointCandidate(a0, a1, a2, baseSign, i, bestFallbackArea, fallbackIdx3, bestOutsideArea, idx3);
         }
         if(bestOutsideArea < 0.0f)
             idx3 = fallbackIdx3;
@@ -1243,21 +1151,10 @@ Manifold CollideHullAndMesh(
     FixedVector<u32, s_MaxHullEdges> hullEdgeIds;
     FixedVector<u32, s_MaxHullEdges> hullEdgeFacePairs;
 
-    Array<u32, 256u> stack;
-    stack[0u] = 0u;
-    u32 stackCount = 1u;
-    Vector<u32> overflowStack;
-    b8 useOverflow = false;
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32 nodeIdx = 0u;
-        if(useOverflow){
-            nodeIdx = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            nodeIdx = stack[stackCount];
-        }
+    BvhSpillStack<u32, 256u> stack;
+    stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
         in MeshBvhNode node = meshB.nodes[nodeIdx];
         if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
             continue;
@@ -1457,7 +1354,7 @@ Manifold CollideHullAndMesh(
                             }
                             const VectorSingle rawCross = Cross(dirA, dirB);
                             const f32 lenSq = Vector3LengthSq(rawCross).x;
-                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(dirBLenSq, 1.0e-12f);
+                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(dirBLenSq, 1.0e-12f);
                             if(lenSq <= normTol)
                                 continue;
 
@@ -1526,7 +1423,7 @@ Manifold CollideHullAndMesh(
                                 continue;
                             const VectorSingle rawCross = Cross(dirA, dirB);
                             const f32 lenSq = Vector3LengthSq(rawCross).x;
-                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(dirALenSq * dirBLenSq, 1.0e-12f);
+                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(dirALenSq * dirBLenSq, 1.0e-12f);
                             if(lenSq <= normTol)
                                 continue;
 
@@ -1770,8 +1667,8 @@ Manifold CollideHullAndMesh(
             }
         }
         else{
-            PushBvhNodeWithSpill(node.leftOrFirst(), stack, stackCount, overflowStack, useOverflow);
-            PushBvhNodeWithSpill(node.rightOrCount(), stack, stackCount, overflowStack, useOverflow);
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
         }
     }
 
@@ -1786,7 +1683,7 @@ Manifold CollideHullAndMesh(
             const VectorSingle supW = TransformPointValues(posA, rotA, supLocalA);
             const VectorSingle closeW = TransformPointValues(posB, rotB, closePt);
             const f32 depth = Vector3Dot(VectorSingle(closeW - supW, 0.0f), worldOut).x;
-            const f32 sep = -(SimdMax(depth, 0.0f) + totalR);
+            const f32 sep = -(Max(depth, 0.0f) + totalR);
             const VectorSingle wA = supW + nAtoB * hullR;
             const VectorSingle wB = closeW - nAtoB * meshR;
             if(candidates.empty() || sep < deepestSep){
@@ -1819,28 +1716,6 @@ void TransformLocalAabbValuesWithAbsAxes(
     const VectorSingle eA = absRotX * eB.x + absRotY * eB.y + absRotZ * eB.z;
     outMin = cA - eA;
     outMax = cA + eA;
-}
-
-void PushMeshPairWithSpill(
-    in u32x2u pair,
-    mut Array<u32x2u, 256u> fixedStack,
-    mut u32 fixedCount,
-    mut Vector<u32x2u> overflowStack,
-    mut b8 useOverflow
-){
-    if(!useOverflow && fixedCount < 256u){
-        fixedStack[fixedCount] = pair;
-        ++fixedCount;
-        return;
-    }
-    if(!useOverflow){
-        overflowStack.reserve(512u);
-        for(u32 i = 0u; i < fixedCount; ++i)
-            overflowStack.push_back(fixedStack[i]);
-        fixedCount = 0u;
-        useOverflow = true;
-    }
-    overflowStack.push_back(pair);
 }
 
 Manifold CollideMeshes(
@@ -1876,22 +1751,11 @@ Manifold CollideMeshes(
     VectorSingle chosenNormal(0.0f, 1.0f, 0.0f, 0.0f);
     f32 deepestSep = s_MaxF32;
 
-    Array<u32x2u, 256u> stack;
-    stack[0u] = u32x2u(0u, 0u);
-    u32 stackCount = 1u;
-    Vector<u32x2u> overflowStack;
-    b8 useOverflow = false;
+    BvhSpillStack<u32x2u, 256u> stack;
+    stack.push(u32x2u(0u, 0u));
 
-    while(stackCount > 0u || (useOverflow && !overflowStack.empty())){
-        u32x2u pair(0u, 0u);
-        if(useOverflow){
-            pair = overflowStack.back();
-            overflowStack.pop_back();
-        }
-        else{
-            --stackCount;
-            pair = stack[stackCount];
-        }
+    u32x2u pair(0u, 0u);
+    while(stack.pop(pair)){
         in MeshBvhNode nodeA = meshA.nodes[pair.x];
         in MeshBvhNode nodeB = meshB.nodes[pair.y];
 
@@ -2056,7 +1920,7 @@ Manifold CollideMeshes(
                             else if(bk == 2u) dirB = be2;
                             const VectorSingle cr = Cross(dirA, dirB);
                             const f32 lenSq = Vector3LengthSq(cr).x;
-                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * SimdMax(Vector3LengthSq(dirA).x * Vector3LengthSq(dirB).x, 1.0e-12f);
+                            const f32 normTol = s_ParallelEdgeTol * s_ParallelEdgeTol * Max(Vector3LengthSq(dirA).x * Vector3LengthSq(dirB).x, 1.0e-12f);
                             if(lenSq <= normTol)
                                 continue;
                             const VectorSingle axis = cr * Rsqrt(VectorSingle(lenSq));
@@ -2238,23 +2102,23 @@ Manifold CollideMeshes(
             }
         }
         else if(nodeA.isLeaf()){
-            PushMeshPairWithSpill(u32x2u(pair.x, nodeB.leftOrFirst()), stack, stackCount, overflowStack, useOverflow);
-            PushMeshPairWithSpill(u32x2u(pair.x, nodeB.rightOrCount()), stack, stackCount, overflowStack, useOverflow);
+            stack.push(u32x2u(pair.x, nodeB.leftOrFirst()));
+            stack.push(u32x2u(pair.x, nodeB.rightOrCount()));
         }
         else if(nodeB.isLeaf()){
-            PushMeshPairWithSpill(u32x2u(nodeA.leftOrFirst(), pair.y), stack, stackCount, overflowStack, useOverflow);
-            PushMeshPairWithSpill(u32x2u(nodeA.rightOrCount(), pair.y), stack, stackCount, overflowStack, useOverflow);
+            stack.push(u32x2u(nodeA.leftOrFirst(), pair.y));
+            stack.push(u32x2u(nodeA.rightOrCount(), pair.y));
         }
         else{
             const f32 areaA = AabbPerimeterValues(VectorSingle(nodeA.aabbMinLeft, 0.0f), VectorSingle(nodeA.aabbMaxRight, 0.0f));
             const f32 areaB = AabbPerimeterValues(VectorSingle(nodeB.aabbMinLeft, 0.0f), VectorSingle(nodeB.aabbMaxRight, 0.0f));
             if(areaA >= areaB){
-                PushMeshPairWithSpill(u32x2u(nodeA.leftOrFirst(), pair.y), stack, stackCount, overflowStack, useOverflow);
-                PushMeshPairWithSpill(u32x2u(nodeA.rightOrCount(), pair.y), stack, stackCount, overflowStack, useOverflow);
+                stack.push(u32x2u(nodeA.leftOrFirst(), pair.y));
+                stack.push(u32x2u(nodeA.rightOrCount(), pair.y));
             }
             else{
-                PushMeshPairWithSpill(u32x2u(pair.x, nodeB.leftOrFirst()), stack, stackCount, overflowStack, useOverflow);
-                PushMeshPairWithSpill(u32x2u(pair.x, nodeB.rightOrCount()), stack, stackCount, overflowStack, useOverflow);
+                stack.push(u32x2u(pair.x, nodeB.leftOrFirst()));
+                stack.push(u32x2u(pair.x, nodeB.rightOrCount()));
             }
         }
     }
@@ -2285,7 +2149,7 @@ Manifold CollideMeshes(
                     const VectorSingle nAtoB = -worldOut;
                     const VectorSingle wProbe = TransformPointValues(posB, rotB, probeB);
                     const VectorSingle wSurf = TransformPointValues(posB, rotB, closePt);
-                    const f32 dist = SqrtFast(Vector3LengthSq(VectorSingle(closePt - probeB, 0.0f)).x);
+                    const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(closePt - probeB, 0.0f)).x);
                     const f32 sep = -(dist + totalR);
                     const VectorSingle wA = wProbe + nAtoB * rA;
                     const VectorSingle wB = wSurf - nAtoB * rB;
@@ -2315,7 +2179,7 @@ Manifold CollideMeshes(
                     const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(closeN, rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle wProbe = TransformPointValues(posA, rotA, probeA);
                     const VectorSingle wSurf = TransformPointValues(posA, rotA, closePt);
-                    const f32 dist = SqrtFast(Vector3LengthSq(VectorSingle(closePt - probeA, 0.0f)).x);
+                    const f32 dist = Sqrt(Vector3LengthSq(VectorSingle(closePt - probeA, 0.0f)).x);
                     const f32 sep = -(dist + totalR);
                     const VectorSingle wA = wSurf + nAtoB * rA;
                     const VectorSingle wB = wProbe - nAtoB * rB;

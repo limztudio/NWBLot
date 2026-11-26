@@ -1,0 +1,99 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ReportStagedFilePairEntries(in StringView toolPrefix, in StagedFilePairPaths paths, in StagedFilePairResult result){
+    for(u32 index = 0u; index < 2u; ++index){
+        Path output = paths.primary;
+        Path temporary = paths.primaryTemporary;
+        Path backup = paths.primaryBackup;
+        if(index != 0u){
+            output = paths.secondary;
+            temporary = paths.secondaryTemporary;
+            backup = paths.secondaryBackup;
+        }
+
+        if(result.succeeded()){
+            if(result.backupCleanupErrors[index].value() != 0)
+                [essential] warning("{}: published pair but could not remove previous backup '{}': {}", toolPrefix, PathToString(backup), ErrorCodeMessage(result.backupCleanupErrors[index]));
+            else if(result.backupCleanupMissing[index])
+                warning("{}: published pair but previous backup was already absent: '{}'", toolPrefix, PathToString(backup));
+            continue;
+        }
+
+        if(result.backedUp[index] && (result.removalErrors[index].value() != 0 || result.restorationErrors[index].value() != 0)){
+            error(
+                "{}: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})"
+                , toolPrefix
+                , PathToString(output)
+                , PathToString(backup)
+                , result.removalErrors[index].value()
+                , result.restorationErrors[index].value()
+            );
+        }
+        else{
+            if(result.removalErrors[index].value() != 0)
+                error("{}: failed to remove newly published output '{}': {}", toolPrefix, PathToString(output), ErrorCodeMessage(result.removalErrors[index]));
+            if(result.restorationErrors[index].value() != 0)
+                error("{}: could not restore previous '{}': {}", toolPrefix, PathToString(output), ErrorCodeMessage(result.restorationErrors[index]));
+        }
+        if(result.temporaryErrors[index].value() != 0)
+            [essential] warning("{}: failed to remove unpublished temporary '{}': {}", toolPrefix, PathToString(temporary), ErrorCodeMessage(result.temporaryErrors[index]));
+    }
+}
+
+void ReportStagedFilePairValidationFailure(
+    in StringView toolPrefix,
+    in StagedFilePairPaths paths,
+    in StagedFilePairResult result,
+    in StringView overwriteOption,
+    in StringView pairedFilesLabel
+){
+    const auto path = FailedStagedFilePairPath(paths, result);
+    const String errorMessage = ErrorCodeMessage(result.error);
+    const StagedFilePairFailureStage stage = result.failureStage;
+    if(stage == StagedFilePairFailureStage::QueryOutput)
+        error("{}: failed to query output path '{}': {}", toolPrefix, PathToString(path), errorMessage);
+    else if(stage == StagedFilePairFailureStage::InspectOutput)
+        error("{}: failed to inspect output path '{}': {}", toolPrefix, PathToString(path), errorMessage);
+    else if(stage == StagedFilePairFailureStage::NonRegularOutput)
+        error("{}: output path is not a regular file: '{}'", toolPrefix, PathToString(path));
+    else if(stage == StagedFilePairFailureStage::IncompleteExistingPair)
+        error("{}: output pair unavailable; pass {} to replace incomplete {}", toolPrefix, overwriteOption, pairedFilesLabel);
+    else if(stage == StagedFilePairFailureStage::OutputAlreadyExists)
+        error("{}: Output already exists: '{}'. Pass {} to replace {}", toolPrefix, PathToString(path), overwriteOption, pairedFilesLabel);
+    else if(stage == StagedFilePairFailureStage::QueryWorkPath)
+        error("{}: publication work path unavailable '{}': {}", toolPrefix, PathToString(path), errorMessage);
+    else if(stage == StagedFilePairFailureStage::WorkPathAlreadyExists)
+        error("{}: publication work path already exists: '{}'", toolPrefix, PathToString(path));
+    else
+        error("{}: output pair validation failed '{}': {}", toolPrefix, PathToString(path), errorMessage);
+}
+
+void ReportStagedFilePairPublishFailure(
+    in StringView toolPrefix,
+    in StagedFilePairPaths paths,
+    in StagedFilePairResult result,
+    in StringView primaryLabel,
+    in StringView secondaryLabel,
+    in StringView overwriteOption,
+    in StringView pairedFilesLabel
+){
+    const String message = ErrorCodeMessage(result.error);
+    const StagedFilePairFailureStage stage = result.failureStage;
+    if(stage == StagedFilePairFailureStage::StagePrimary)
+        error("{}: failed to stage {} '{}': {}", toolPrefix, primaryLabel, PathToString(paths.primaryTemporary), message);
+    else if(stage == StagedFilePairFailureStage::StageSecondary)
+        error("{}: failed to stage {} '{}': {}", toolPrefix, secondaryLabel, PathToString(paths.secondaryTemporary), message);
+    else if(stage == StagedFilePairFailureStage::VerifyPrimary || stage == StagedFilePairFailureStage::VerifySecondary)
+        error("{}: staging or verification failed for '{}'; previous pair remains in place", toolPrefix, PathToString(FailedStagedFilePairPath(paths, result)));
+    else if(stage == StagedFilePairFailureStage::PreserveExistingOutput)
+        error("{}: failed to preserve existing output '{}': {}", toolPrefix, PathToString(FailedStagedFilePairPath(paths, result)), message);
+    else if(stage == StagedFilePairFailureStage::FinalizeOutput)
+        error("{}: failed to finalize output '{}': {}", toolPrefix, PathToString(FailedStagedFilePairPath(paths, result)), message);
+    else
+        ReportStagedFilePairValidationFailure(toolPrefix, paths, result, overwriteOption, pairedFilesLabel);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

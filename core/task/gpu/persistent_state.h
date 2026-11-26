@@ -116,10 +116,6 @@ public:
 
     [[nodiscard]] b8 buildMergedBufferSubset(const CommandListResourceStateHandoff& source, Span<const BufferHandle> buffers, Candidate& candidate)const;
 
-    [[nodiscard]] b8 buildFilteredBufferSubset(const CommandListResourceStateHandoff& source, const Span<const BufferHandle> buffers, Alloc::ScratchArena& scratchArena, Candidate& outCandidate)const{
-        return buildFilteredResourceSubset(source, {}, buffers, scratchArena, outCandidate);
-    }
-
 
 private:
     GraphicsArena& m_arena;

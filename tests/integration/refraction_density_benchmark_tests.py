@@ -153,30 +153,19 @@ class RefractionDensityBenchmarkTests(unittest.TestCase):
         with self.assertRaisesRegex(benchmark.SmokeFailure, "different refraction fixture"):
             benchmark.require_same_fixture_sources({"baseline": files("baseline", "before"), "candidate": files("candidate", "after")})
 
-    def test_frozen_cpp_and_adhd_arms_require_their_own_complete_source_pair(self):
+    def test_frozen_adhd_arms_require_their_own_complete_source_pair(self):
         def identity(arm, paths):
             return {"source": {"files": {f"C:/{arm}/source/{path}": "same" for path in paths}}}
 
-        generations = (
-            ("tests/smoke/refraction_scenes_and_runtime.adhd", "tests/smoke/avboit_timing_render_pass.adhd"),
-            ("tests/smoke/refraction_project.cpp", "tests/smoke/avboit_timing_render_pass.cpp"),
-        )
-        for runtime, timing in generations:
-            with self.subTest(runtime=runtime):
-                baseline = identity("baseline", (runtime, timing))
-                candidate = identity("candidate", (runtime, timing))
-                self.assertEqual(benchmark.require_same_fixture_sources({"baseline": baseline, "candidate": candidate}), {runtime: "same", timing: "same"})
-                incomplete = identity("candidate", (runtime, "tests/smoke/refraction_density_benchmark.py"))
-                with self.assertRaisesRegex(benchmark.SmokeFailure, "avboit_timing_render_pass"):
-                    benchmark.require_same_fixture_sources({"baseline": baseline, "candidate": incomplete})
-
-        current, legacy = generations
+        runtime, timing = benchmark.FIXTURE_SOURCE_FILES
+        baseline = identity("baseline", (runtime, timing))
+        candidate = identity("candidate", (runtime, timing))
+        self.assertEqual(benchmark.require_same_fixture_sources({"baseline": baseline, "candidate": candidate}), {runtime: "same", timing: "same"})
+        incomplete = identity("candidate", (runtime, "tests/smoke/refraction_density_benchmark.py"))
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "avboit_timing_render_pass"):
+            benchmark.require_same_fixture_sources({"baseline": baseline, "candidate": incomplete})
         with self.assertRaisesRegex(benchmark.SmokeFailure, "refraction_scenes_and_runtime"):
-            benchmark.fixture_source_digests(identity("candidate", ("tests/smoke/refraction_project.adhd", current[1])))
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "different refraction fixture"):
-            benchmark.require_same_fixture_sources({"baseline": identity("baseline", legacy), "candidate": identity("candidate", current)})
-        with self.assertRaisesRegex(benchmark.SmokeFailure, r"mixes ADHD and C\+\+"):
-            benchmark.fixture_source_digests(identity("candidate", (current[0], legacy[1])))
+            benchmark.fixture_source_digests(identity("candidate", ("tests/smoke/refraction_project.adhd", timing)))
 
     def test_invalid_sampling_or_duplicate_matrix_selection_is_rejected(self):
         for extra in (("--blocks", "3"), ("--sample-intervals", "11"), ("--timeout", "nan"), ("--stall-threshold-ms", "inf"), ("--coverage", "1", "--coverage", "1"), ("--baseline-scheduling", "automatic")):

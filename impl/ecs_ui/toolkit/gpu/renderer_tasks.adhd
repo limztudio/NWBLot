@@ -343,7 +343,6 @@ b8 ResolvePaintPushConstants(
 ){
     u32 textureSlot = s_ShaderUiInvalidHeapSlot;
     u32 sdfSpreadPixels = 0u;
-    u32 sdfDistanceEncoding = 0u;
     if(draw.material == PaintMaterial::Skin)
         textureSlot = frame.m_skin.deref().m_texture.sampledImageHeapHandle.slot();
     else if(draw.material == PaintMaterial::Glyph || draw.material == PaintMaterial::ColorGlyph){
@@ -357,7 +356,6 @@ b8 ResolvePaintPushConstants(
         in auto page = frame.m_sdfPages[draw.sdfPageIndex];
         textureSlot = page.deref().m_sampledImage.slot();
         sdfSpreadPixels = page.deref().m_page.deref().binding().spreadPixels;
-        sdfDistanceEncoding = page.deref().m_page.deref().binding().distanceEncoding;
     }
     else if(draw.material == PaintMaterial::Image){
         if(draw.textureImageIndex >= frame.m_textureImages.size())
@@ -380,7 +378,7 @@ b8 ResolvePaintPushConstants(
     )
         return false;
     AssignGpuPaintMaterialPushConstants(
-        draw.material, textureSlot, draw.sdfChannel, sdfSpreadPixels, sdfDistanceEncoding,
+        draw.material, textureSlot, draw.sdfChannel, sdfSpreadPixels,
         effectBufferSlot, draw.effectOffset, draw.clipMaskOffset, push
     );
     return true;

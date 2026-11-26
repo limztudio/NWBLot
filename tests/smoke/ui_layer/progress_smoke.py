@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import platform
 import sys
 
 from window_smoke import parse_args
@@ -34,9 +32,9 @@ class ProgressRun(PassiveImageRun):
         return self.capture_checkpoint(name, extent=extent, extra=extra, stage_timeout=CHECKPOINT_STAGE_TIMEOUT_SECONDS, changes=changes)
 
     def write_report(self, passed):
-        report = { "passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages, "failure": self.failure_report, "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
-                if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus", "runtime_limit": "No native Wayland, physical button injection, or live IME qualification.", }
-        (self.args.output_directory / "progress.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        self.write_smoke_report("progress.json", passed, include_failure=True,
+            input_path="Win32 constrained physical cursor with posted pointer/key messages" if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus",
+            runtime_limit="No native Wayland, physical button injection, or live IME qualification.")
 
     def execute(self):
         self.checkpoint("initial_clamped_values_tiny_cap_and_external_clip")

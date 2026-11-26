@@ -189,18 +189,6 @@ b8 CanUseBakedFontAtlasAtPhysicalSize(in u32 bakePpem, in f32 physicalSize){
     return physicalSize >= sizeRange.x && physicalSize <= sizeRange.y;
 }
 
-Rect ResolveSdfGlyphUv(in FontAtlasGlyph record, in u32 atlasWidth, in u32 atlasHeight){
-    const f32 width = cast<f32>(atlasWidth);
-    const f32 height = cast<f32>(atlasHeight);
-    const VectorSingle uv = VectorSingle(cast<f32>(record.x), cast<f32>(record.y), cast<f32>(record.width), cast<f32>(record.height)) / VectorSingle(width, height, width, height);
-    return StoreRect(uv);
-}
-
-Rect ResolveCoverageGlyphUv(in Rect pixels){
-    const VectorSingle uv = LoadRect(pixels) / VectorSingle(cast<f32>(s_GlyphAtlasPageExtent));
-    return StoreRect(uv);
-}
-
 void CopyGlyphBitmapToAtlasPage(
     in u32 placementX,
     in u32 placementY,

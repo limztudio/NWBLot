@@ -76,7 +76,7 @@ class DeferredCompositeGraphTask{
 static_assert(s_DeferredSceneMaxLights == s_ShaderMaxSceneLights);
 static_assert(s_DeferredLightingGroupSize == s_ShaderDeferredLightingGroupSize);
 static_assert(s_DeferredCompositeGroupSize == s_ShaderDeferredCompositeGroupSize);
-static_assert(size_of<DeferredLightingPushConstants>() == size_of<u32>() * 2u);
+static_assert(size_of<DeferredLightingPushConstants>() == size_of<u32>());
 static_assert(size_of<DeferredCompositePushConstants>() == size_of<u32>() * 5u);
 static_assert(size_of<DeferredPresentPushConstants>() == size_of<u32>() * 6u);
 
@@ -219,7 +219,7 @@ b8 RendererDeferredSystem::renderDeferredLighting(mut CommandList commandList, m
     computeState.setPipeline(this.m_deferredState.m_lightingPipeline.deref());
     commandList.setComputeState(computeState);
     this.m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, this.m_deferredState.m_lightingPipeline.deref());
-    const DeferredLightingPushConstants pushConstants = ResolveDeferredLightingPushConstants(resourceSlots.slot(), this.m_graphics.isHDR10OutputActive());
+    const DeferredLightingPushConstants pushConstants = ResolveDeferredLightingPushConstants(resourceSlots.slot());
     commandList.setPushConstants(pushConstants);
 
     const u32 groupCountX = ComputeDeferredDispatchGroupCount(targets.width, s_DeferredLightingGroupSize);

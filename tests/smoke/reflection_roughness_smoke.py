@@ -2,11 +2,8 @@
 
 from reflection_statistics import ReflectionStatistics
 
-import base64
 from dataclasses import asdict, dataclass
-import html
 import json
-from pathlib import Path
 import subprocess
 import sys
 
@@ -15,11 +12,9 @@ from reflection_history_evidence import ReflectionHistoryEvidence, LIT_TEMPORAL,
 from reflection_roughness_image_evidence import ReflectionRoughnessImageEvidence
 from reflection_smoke import capture_environment
 from reflection_roughness_reference import analyze_furnace, analyze_roughness, frame_grid
-from framebuffer_png_encoder import FramebufferPngEncoder
-from window_capture_image import read_bmp_24_rows
+from smoke_capture_suite import build_window_capture_command, run_window_capture_subprocess, write_evidence_gallery_report
+from window_capture_image_codec import Bmp24Codec
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure
-
-LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS = 90
 
 LIT_ROUGH = "rough"
 LIT_MIRROR = "mirror"
@@ -49,7 +44,6 @@ LIT_CAMERA_SETTLED = "camera_settled"
 LIT_DEFORM_BIND = "deform_bind"
 LIT_HARDWARE = "hardware"
 LIT_BMP = ".bmp"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_UTF_8 = "utf-8"
 LIT_NORMALIZED_REFERENCE_ERROR = "normalized_reference_error"
 LIT_LIMITATIONS = "limitations"
@@ -87,25 +81,20 @@ def spec_environment(spec):
 def capture(args, spec):
     output = args.output_directory / (spec.name + LIT_BMP)
     log_output = output.with_suffix(".log")
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")), "--executable", str(args.executable), "--working-directory", str(args.working_directory),
-        "--output", str(output), "--application-capture", "--application-capture-frame-count", "1", "--timeout", str(args.timeout), LIT_EXPECT_LOG_MESSAGE, f"ReflectionSmokeProject: case {spec.case} created",
-        LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: reflection mode hardware", LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: shutdown", LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: hardware",
-        LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEHISTORY, "--log-output", str(log_output), LIT_EXPECT_LOG_MESSAGE if args.require_hardware else "--skip-log-message",
-        "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
-    if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable)]
+    expect_logs = [f"ReflectionSmokeProject: case {spec.case} created", "ReflectionSmokeProject: reflection mode hardware",
+        "ReflectionSmokeProject: shutdown", "Reflection resolve: hardware", LIT_REFLECTIONSMOKEHISTORY]
+    if args.require_hardware:
+        expect_logs.append("ReflectionSmokeProject: hardware available")
+        skip_logs = ()
     else:
-        command.append("--no-logserver")
+        skip_logs = ("ReflectionSmokeProject: hardware unavailable",)
     if spec.case == LIT_ROUGH_GLASS:
-        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
-    command.extend("--application-arg=" + argument for argument in args.application_arg)
+        expect_logs.append("AVBOIT refraction resolve:")
+    command = build_window_capture_command(args, output, frames=1, log_output=log_output, expect_logs=expect_logs, skip_logs=skip_logs)
     print(f"Capturing {spec.name}: r={spec.roughness}, accepted cap={spec.samples}, seed={spec.seed}, temporal={spec.temporal}...", flush=True)
-    result = subprocess.run(command, env=spec_environment(spec), check=False, timeout=args.timeout + LIT_CAPTURE_TIMEOUT_MARGIN_SECONDS)
-    if result.returncode == SKIP_EXIT_CODE:
+    if run_window_capture_subprocess(command, env=spec_environment(spec), timeout=args.timeout, failure_message=f"{spec.name} capture failed with exit {{code}}") is None:
         return None
-    if result.returncode:
-        raise SmokeFailure(f"{spec.name} capture failed with exit {result.returncode}")
-    frame = read_bmp_24_rows(output)
+    frame = Bmp24Codec.read_bmp_24_rows(output)
     ReflectionImageAnalysis.validate_frame(frame)
     if frame[:2] != (960, 720):
         raise SmokeFailure("roughness capture is not the actual 960x720 framebuffer")
@@ -119,7 +108,7 @@ def capture(args, spec):
 
 def analyze_suite(args):
     def frame(name):
-        return read_bmp_24_rows(args.output_directory / (name + LIT_BMP))
+        return Bmp24Codec.read_bmp_24_rows(args.output_directory / (name + LIT_BMP))
     metrics = {}
     if args.suite == LIT_ROUGH:
         for name, roughness in ((LIT_MIRROR, 0), (LIT_ROUGH_02, 0.2), (LIT_ROUGH_04, 0.4), (LIT_ROUGH_04_SEED1, 0.4), (LIT_ROUGH_06, 0.6), (LIT_ROUGH_04_N8, 0.4), (LIT_ROUGH_04_N256, 0.4), (LIT_ROUGH_04_SPATIAL_N8, 0.4)):
@@ -157,19 +146,11 @@ def write_report(args, completed, evidence, metrics=None):
     metadata = {"suite": args.suite, "frame_source": "actual application framebuffer readback", "captures": [asdict(spec) for spec in completed], "evidence": evidence, "metrics": metrics,
         "reference": "Independent rectangular-emitter area quadrature of correlated Smith GGX; no production VNDF sampler.",
         LIT_LIMITATIONS: "Single-bounce opaque GGX with strict static history. Runtime deformation disables history. Clear glass stays smooth. Spatial output is separate from history. Counters and sample counts are completion evidence, not GPU timing."}
-    (args.output_directory / "reflection_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
-    cards = []
-    for spec in completed:
-        bmp = args.output_directory / (spec.name + LIT_BMP)
-        png = FramebufferPngEncoder.encode(read_bmp_24_rows(bmp))
-        bmp.with_suffix(".png").write_bytes(png)
-        name = html.escape(spec.name)
-        cards.append(f'<article><h2>{name}</h2><a href="{name}.bmp">Raw BMP</a> / <a href="{name}.log">Completed-frame log</a>' f'<img alt="Actual {name} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection roughness and history evidence</title>'
-    document += '<style>body{background:#141922;color:#eee;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#88c9ff}pre{white-space:pre-wrap}</style>'
-    document += '<h1>Actual reflection framebuffer captures</h1><p>' + html.escape(metadata[LIT_LIMITATIONS]) + '</p><main>'
-    document += ''.join(cards) + '</main><pre>' + html.escape(json.dumps(metrics, indent=2) if metrics else 'Visual analysis pending.') + '</pre></html>'
-    (args.output_directory / "reflection.html").write_text(document, encoding=LIT_UTF_8)
+    items = [(spec.name, spec.name, spec.name + LIT_BMP, spec.name + ".log", "Completed-frame log", f"Actual {spec.name} framebuffer", None) for spec in completed]
+    style = "body{background:#141922;color:#eee;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#88c9ff}pre{white-space:pre-wrap}"
+    write_evidence_gallery_report(args.output_directory, manifest_name="reflection_manifest.json", html_name="reflection.html",
+        metadata=metadata, title="Reflection roughness and history evidence", heading="Actual reflection framebuffer captures",
+        note=metadata[LIT_LIMITATIONS], items=items, metrics=metrics, pending_message="Visual analysis pending.", style=style)
 
 
 def run_suite(args):

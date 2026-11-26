@@ -280,46 +280,37 @@ class Win32UiaNodeProvider;
 
 static HRESULT MakeNodeFragment(SharedUiaState* shared, u64 nodeId, IRawElementProviderFragment** outFragment)noexcept;
 
-
-class Win32UiaNodeProvider final
-    : public IRawElementProviderSimple
-    , public IRawElementProviderFragment
-    , public IInvokeProvider
-    , public IToggleProvider
-    , public ISelectionItemProvider
-    , public IExpandCollapseProvider
+template<typename Derived, typename PrimaryIface, typename... ExtraIfaces>
+class UiaComObjectBase
+    : public PrimaryIface
+    , public ExtraIfaces...
 {
 public:
-    Win32UiaNodeProvider(SharedUiaState* const shared, const u64 nodeId)noexcept
+    explicit UiaComObjectBase(SharedUiaState* const shared)noexcept
         : m_shared(shared)
-        , m_nodeId(nodeId)
     {
         m_shared->addRef();
     }
-    ~Win32UiaNodeProvider()noexcept{
+
+
+protected:
+    ~UiaComObjectBase()noexcept{
         if(m_shared){
             m_shared->release();
             m_shared = nullptr;
         }
     }
 
+
+public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject)override{
         if(!ppvObject)
             return E_POINTER;
         *ppvObject = nullptr;
-        if(riid == IID_IUnknown || riid == __uuidof(IRawElementProviderSimple))
-            *ppvObject = static_cast<IRawElementProviderSimple*>(this);
-        else if(riid == __uuidof(IRawElementProviderFragment))
-            *ppvObject = static_cast<IRawElementProviderFragment*>(this);
-        else if(riid == __uuidof(IInvokeProvider))
-            *ppvObject = static_cast<IInvokeProvider*>(this);
-        else if(riid == __uuidof(IToggleProvider))
-            *ppvObject = static_cast<IToggleProvider*>(this);
-        else if(riid == __uuidof(ISelectionItemProvider))
-            *ppvObject = static_cast<ISelectionItemProvider*>(this);
-        else if(riid == __uuidof(IExpandCollapseProvider))
-            *ppvObject = static_cast<IExpandCollapseProvider*>(this);
-        else
+        auto* const self = static_cast<Derived*>(this);
+        if(riid == IID_IUnknown)
+            *ppvObject = static_cast<PrimaryIface*>(self);
+        else if(!TryMatchInterface<PrimaryIface, ExtraIfaces...>(riid, self, ppvObject))
             return E_NOINTERFACE;
         AddRef();
         return S_OK;
@@ -332,15 +323,81 @@ public:
     ULONG STDMETHODCALLTYPE Release()override{
         const u32 remaining = m_refCount.fetch_sub(1u, MemoryOrder::acq_rel) - 1u;
         if(remaining == 0u)
-            delete this;
+            delete static_cast<Derived*>(this);
         return remaining;
     }
 
+
+private:
+    template<typename Iface>
+    [[nodiscard]] static b8 TryAssignInterface(REFIID riid, Derived* const self, void** const ppvObject)noexcept{
+        if(riid == __uuidof(Iface)){
+            *ppvObject = static_cast<Iface*>(self);
+            return true;
+        }
+        return false;
+    }
+
+    template<typename FirstIface, typename... RestIfaces>
+    [[nodiscard]] static b8 TryMatchInterface(REFIID riid, Derived* const self, void** const ppvObject)noexcept{
+        if(TryAssignInterface<FirstIface>(riid, self, ppvObject))
+            return true;
+        if constexpr(sizeof...(RestIfaces) > 0u)
+            return TryMatchInterface<RestIfaces...>(riid, self, ppvObject);
+        return false;
+    }
+
+
+protected:
+    SharedUiaState* m_shared = nullptr;
+
+
+private:
+    Atomic<u32> m_refCount{ 1u };
+};
+
+template<typename Fn>
+[[nodiscard]] static HRESULT WithAliveUiaNode(SharedUiaState& shared, const u64 nodeId, Fn&& fn){
+    const FutexGuard lock = AcquireFutex(shared.mutex);
+    if(!shared.alive)
+        return UIA_E_ELEMENTNOTAVAILABLE;
+    const AccessibilityNodeData* const node = FindNodeInSnapshot(shared, nodeId);
+    if(!node)
+        return UIA_E_ELEMENTNOTAVAILABLE;
+    return fn(shared, *node);
+}
+
+[[nodiscard]] static BOOL IsUiaNodeReadOnly(const AccessibilityNodeData& node)noexcept{
+    return ((node.stateBits & AccessibilityStateBits::ReadOnly) != 0u || (node.stateBits & AccessibilityStateBits::Enabled) == 0u) ? TRUE : FALSE;
+}
+
+[[nodiscard]] static HRESULT GetServerSideProviderOptions(enum ProviderOptions* const pRetVal)noexcept{
+    if(!pRetVal)
+        return E_POINTER;
+    *pRetVal = static_cast<enum ProviderOptions>(ProviderOptions_ServerSideProvider | ProviderOptions_UseComThreading);
+    return S_OK;
+}
+
+
+class Win32UiaNodeProvider final
+    : public UiaComObjectBase<
+        Win32UiaNodeProvider,
+        IRawElementProviderSimple,
+        IRawElementProviderFragment,
+        IInvokeProvider,
+        IToggleProvider,
+        ISelectionItemProvider,
+        IExpandCollapseProvider
+    >
+{
+public:
+    Win32UiaNodeProvider(SharedUiaState* const shared, const u64 nodeId)noexcept
+        : UiaComObjectBase(shared)
+        , m_nodeId(nodeId)
+    {}
+
     HRESULT STDMETHODCALLTYPE get_ProviderOptions(enum ProviderOptions* pRetVal)override{
-        if(!pRetVal)
-            return E_POINTER;
-        *pRetVal = static_cast<enum ProviderOptions>(ProviderOptions_ServerSideProvider | ProviderOptions_UseComThreading);
-        return S_OK;
+        return GetServerSideProviderOptions(pRetVal);
     }
 
     HRESULT STDMETHODCALLTYPE GetPatternProvider(PATTERNID patternId, IUnknown** pRetVal)override;
@@ -361,68 +418,63 @@ public:
             }
             return S_OK;
         }
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-
-        switch(propertyId){
-        case UIA_ControlTypePropertyId:
-            pRetVal->vt = VT_I4;
-            pRetVal->lVal = MapUiaControlType(node->role);
-            return S_OK;
-        case UIA_IsEnabledPropertyId:
-            pRetVal->vt = VT_BOOL;
-            pRetVal->boolVal = (node->stateBits & AccessibilityStateBits::Enabled) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
-            return S_OK;
-        case UIA_IsKeyboardFocusablePropertyId:
-            pRetVal->vt = VT_BOOL;
-            pRetVal->boolVal = (node->stateBits & AccessibilityStateBits::Focusable) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
-            return S_OK;
-        case UIA_HasKeyboardFocusPropertyId:
-            pRetVal->vt = VT_BOOL;
-            pRetVal->boolVal = (node->id == m_shared->focusedId || (node->stateBits & AccessibilityStateBits::Focused) != 0u) ? VARIANT_TRUE : VARIANT_FALSE;
-            return S_OK;
-        case UIA_IsOffscreenPropertyId:
-            pRetVal->vt = VT_BOOL;
-            pRetVal->boolVal = (node->stateBits & AccessibilityStateBits::Offscreen) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
-            return S_OK;
-        case UIA_IsPasswordPropertyId:
-            pRetVal->vt = VT_BOOL;
-            pRetVal->boolVal = (node->stateBits & AccessibilityStateBits::Password) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
-            return S_OK;
-        case UIA_LiveSettingPropertyId:
-            pRetVal->vt = VT_I4;
-            pRetVal->lVal = static_cast<LONG>(MapUiaLiveSetting(node->liveMode));
-            return S_OK;
-        case UIA_PositionInSetPropertyId:
-            if(node->positionInSet > 0){
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState& shared, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            switch(propertyId){
+            case UIA_ControlTypePropertyId:
                 pRetVal->vt = VT_I4;
-                pRetVal->lVal = node->positionInSet;
-            }
-            return S_OK;
-        case UIA_SizeOfSetPropertyId:
-            if(node->setSize > 0){
+                pRetVal->lVal = MapUiaControlType(node.role);
+                return S_OK;
+            case UIA_IsEnabledPropertyId:
+                pRetVal->vt = VT_BOOL;
+                pRetVal->boolVal = (node.stateBits & AccessibilityStateBits::Enabled) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
+                return S_OK;
+            case UIA_IsKeyboardFocusablePropertyId:
+                pRetVal->vt = VT_BOOL;
+                pRetVal->boolVal = (node.stateBits & AccessibilityStateBits::Focusable) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
+                return S_OK;
+            case UIA_HasKeyboardFocusPropertyId:
+                pRetVal->vt = VT_BOOL;
+                pRetVal->boolVal = (node.id == shared.focusedId || (node.stateBits & AccessibilityStateBits::Focused) != 0u) ? VARIANT_TRUE : VARIANT_FALSE;
+                return S_OK;
+            case UIA_IsOffscreenPropertyId:
+                pRetVal->vt = VT_BOOL;
+                pRetVal->boolVal = (node.stateBits & AccessibilityStateBits::Offscreen) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
+                return S_OK;
+            case UIA_IsPasswordPropertyId:
+                pRetVal->vt = VT_BOOL;
+                pRetVal->boolVal = (node.stateBits & AccessibilityStateBits::Password) != 0u ? VARIANT_TRUE : VARIANT_FALSE;
+                return S_OK;
+            case UIA_LiveSettingPropertyId:
                 pRetVal->vt = VT_I4;
-                pRetVal->lVal = node->setSize;
+                pRetVal->lVal = static_cast<LONG>(MapUiaLiveSetting(node.liveMode));
+                return S_OK;
+            case UIA_PositionInSetPropertyId:
+                if(node.positionInSet > 0){
+                    pRetVal->vt = VT_I4;
+                    pRetVal->lVal = node.positionInSet;
+                }
+                return S_OK;
+            case UIA_SizeOfSetPropertyId:
+                if(node.setSize > 0){
+                    pRetVal->vt = VT_I4;
+                    pRetVal->lVal = node.setSize;
+                }
+                return S_OK;
+            case UIA_LevelPropertyId:
+                if(node.level > 0){
+                    pRetVal->vt = VT_I4;
+                    pRetVal->lVal = node.level;
+                }
+                return S_OK;
+            case UIA_IsControlElementPropertyId:
+            case UIA_IsContentElementPropertyId:
+                pRetVal->vt = VT_BOOL;
+                pRetVal->boolVal = VARIANT_TRUE;
+                return S_OK;
+            default:
+                return S_OK;
             }
-            return S_OK;
-        case UIA_LevelPropertyId:
-            if(node->level > 0){
-                pRetVal->vt = VT_I4;
-                pRetVal->lVal = node->level;
-            }
-            return S_OK;
-        case UIA_IsControlElementPropertyId:
-        case UIA_IsContentElementPropertyId:
-            pRetVal->vt = VT_BOOL;
-            pRetVal->boolVal = VARIANT_TRUE;
-            return S_OK;
-        default:
-            return S_OK;
-        }
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_HostRawElementProvider(IRawElementProviderSimple** pRetVal)override{
@@ -468,21 +520,18 @@ public:
         f32 y = 0.0f;
         f32 w = 0.0f;
         f32 h = 0.0f;
-        {
-            const FutexGuard lock = AcquireFutex(m_shared->mutex);
-            if(!m_shared->alive)
-                return UIA_E_ELEMENTNOTAVAILABLE;
-            const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-            if(!node)
-                return UIA_E_ELEMENTNOTAVAILABLE;
-            hwnd = m_shared->hwnd;
-            scaleX = m_shared->scaleX;
-            scaleY = m_shared->scaleY;
-            x = node->x;
-            y = node->y;
-            w = node->width;
-            h = node->height;
-        }
+        const HRESULT lookupHr = WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState& shared, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            hwnd = shared.hwnd;
+            scaleX = shared.scaleX;
+            scaleY = shared.scaleY;
+            x = node.x;
+            y = node.y;
+            w = node.width;
+            h = node.height;
+            return S_OK;
+        });
+        if(FAILED(lookupHr))
+            return lookupHr;
         *pRetVal = ComputeScreenUiaRect(hwnd, scaleX, scaleY, x, y, w, h);
         return S_OK;
     }
@@ -511,14 +560,10 @@ public:
     HRESULT STDMETHODCALLTYPE get_ToggleState(enum ToggleState* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = (node->stateBits & AccessibilityStateBits::Checked) != 0u ? ToggleState_On : ToggleState_Off;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = (node.stateBits & AccessibilityStateBits::Checked) != 0u ? ToggleState_On : ToggleState_Off;
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE Select()override{
@@ -536,14 +581,10 @@ public:
     HRESULT STDMETHODCALLTYPE get_IsSelected(BOOL* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = (node->stateBits & AccessibilityStateBits::Selected) != 0u ? TRUE : FALSE;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = (node.stateBits & AccessibilityStateBits::Selected) != 0u ? TRUE : FALSE;
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_SelectionContainer(IRawElementProviderSimple** pRetVal)override{
@@ -551,15 +592,14 @@ public:
             return E_POINTER;
         *pRetVal = nullptr;
         u64 parentId = 0u;
-        {
-            const FutexGuard lock = AcquireFutex(m_shared->mutex);
-            if(!m_shared->alive)
-                return UIA_E_ELEMENTNOTAVAILABLE;
-            const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-            if(!node || node->parentId == 0u)
-                return S_OK;
-            parentId = node->parentId;
-        }
+        const HRESULT lookupHr = WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            parentId = node.parentId;
+            return S_OK;
+        });
+        if(FAILED(lookupHr))
+            return lookupHr;
+        if(parentId == 0u)
+            return S_OK;
         IRawElementProviderFragment* parentFrag = nullptr;
         const HRESULT hr = MakeNodeFragment(m_shared, parentId, &parentFrag);
         if(FAILED(hr) || !parentFrag)
@@ -579,189 +619,99 @@ public:
     HRESULT STDMETHODCALLTYPE get_ExpandCollapseState(enum ExpandCollapseState* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        if((node->stateBits & AccessibilityStateBits::Expanded) != 0u)
-            *pRetVal = ExpandCollapseState_Expanded;
-        else if((node->stateBits & AccessibilityStateBits::Collapsed) != 0u)
-            *pRetVal = ExpandCollapseState_Collapsed;
-        else
-            *pRetVal = ExpandCollapseState_LeafNode;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            if((node.stateBits & AccessibilityStateBits::Expanded) != 0u)
+                *pRetVal = ExpandCollapseState_Expanded;
+            else if((node.stateBits & AccessibilityStateBits::Collapsed) != 0u)
+                *pRetVal = ExpandCollapseState_Collapsed;
+            else
+                *pRetVal = ExpandCollapseState_LeafNode;
+            return S_OK;
+        });
     }
 
     [[nodiscard]] HRESULT enqueueSimpleAction(const AccessibilityActionKind::Enum kind, const f64 numericValue)noexcept;
 
 
 private:
-    SharedUiaState* m_shared = nullptr;
-    Atomic<u32> m_refCount{ 1u };
     u64 m_nodeId = 0u;
 };
 
-class Win32UiaRangeValueTearoff final : public IRangeValueProvider{
+class Win32UiaRangeValueTearoff final : public UiaComObjectBase<Win32UiaRangeValueTearoff, IRangeValueProvider>{
 public:
     Win32UiaRangeValueTearoff(SharedUiaState* const shared, const u64 nodeId)noexcept
-        : m_shared(shared)
+        : UiaComObjectBase(shared)
         , m_nodeId(nodeId)
-    {
-        m_shared->addRef();
-    }
-    ~Win32UiaRangeValueTearoff()noexcept{
-        if(m_shared)
-            m_shared->release();
-    }
-
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject)override{
-        if(!ppvObject)
-            return E_POINTER;
-        *ppvObject = nullptr;
-        if(riid == IID_IUnknown || riid == __uuidof(IRangeValueProvider)){
-            *ppvObject = static_cast<IRangeValueProvider*>(this);
-            AddRef();
-            return S_OK;
-        }
-        return E_NOINTERFACE;
-    }
-
-    ULONG STDMETHODCALLTYPE AddRef()override{
-        return m_refCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
-    }
-
-    ULONG STDMETHODCALLTYPE Release()override{
-        const u32 remaining = m_refCount.fetch_sub(1u, MemoryOrder::acq_rel) - 1u;
-        if(remaining == 0u)
-            delete this;
-        return remaining;
-    }
+    {}
 
     HRESULT STDMETHODCALLTYPE SetValue(double val)override;
 
     HRESULT STDMETHODCALLTYPE get_Value(double* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = node->numericValue;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = node.numericValue;
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_IsReadOnly(BOOL* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = ((node->stateBits & AccessibilityStateBits::ReadOnly) != 0u || (node->stateBits & AccessibilityStateBits::Enabled) == 0u) ? TRUE : FALSE;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = IsUiaNodeReadOnly(node);
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_Maximum(double* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = node->numericMax;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = node.numericMax;
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_Minimum(double* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = node->numericMin;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = node.numericMin;
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_LargeChange(double* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const f64 span = node->numericMax - node->numericMin;
-        *pRetVal = node->numericStep > 0.0 ? node->numericStep * 4.0 : (span > 0.0 ? span * 0.1 : 1.0);
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            const f64 span = node.numericMax - node.numericMin;
+            *pRetVal = node.numericStep > 0.0 ? node.numericStep * 4.0 : (span > 0.0 ? span * 0.1 : 1.0);
+            return S_OK;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_SmallChange(double* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = node->numericStep > 0.0 ? node->numericStep : 1.0;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = node.numericStep > 0.0 ? node.numericStep : 1.0;
+            return S_OK;
+        });
     }
 
 
 private:
-    SharedUiaState* m_shared = nullptr;
-    Atomic<u32> m_refCount{ 1u };
     u64 m_nodeId = 0u;
 };
 
-class Win32UiaValueTearoff final : public IValueProvider{
+class Win32UiaValueTearoff final : public UiaComObjectBase<Win32UiaValueTearoff, IValueProvider>{
 public:
     Win32UiaValueTearoff(SharedUiaState* const shared, const u64 nodeId)noexcept
-        : m_shared(shared)
+        : UiaComObjectBase(shared)
         , m_nodeId(nodeId)
-    {
-        m_shared->addRef();
-    }
-    ~Win32UiaValueTearoff()noexcept{
-        if(m_shared)
-            m_shared->release();
-    }
-
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject)override{
-        if(!ppvObject)
-            return E_POINTER;
-        *ppvObject = nullptr;
-        if(riid == IID_IUnknown || riid == __uuidof(IValueProvider)){
-            *ppvObject = static_cast<IValueProvider*>(this);
-            AddRef();
-            return S_OK;
-        }
-        return E_NOINTERFACE;
-    }
-
-    ULONG STDMETHODCALLTYPE AddRef()override{
-        return m_refCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
-    }
-
-    ULONG STDMETHODCALLTYPE Release()override{
-        const u32 remaining = m_refCount.fetch_sub(1u, MemoryOrder::acq_rel) - 1u;
-        if(remaining == 0u)
-            delete this;
-        return remaining;
-    }
+    {}
 
     HRESULT STDMETHODCALLTYPE SetValue(LPCWSTR val)override{
         if(!val)
@@ -770,21 +720,19 @@ public:
         const f64 parsed = std::wcstod(val, &endPtr);
         if(endPtr == val)
             return UIA_E_NOTSUPPORTED;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive || !m_shared->owner)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        if((node->stateBits & AccessibilityStateBits::Enabled) == 0u || (node->stateBits & AccessibilityStateBits::ReadOnly) != 0u)
-            return UIA_E_ELEMENTNOTENABLED;
-        if((node->actionBits & AccessibilityActionBits::SetValue) == 0u)
-            return UIA_E_NOTSUPPORTED;
-        AccessibilityActionEvent ev;
-        ev.targetId = m_nodeId;
-        ev.kind = AccessibilityActionKind::SetValue;
-        ev.numericValue = parsed;
-        return m_shared->owner->enqueueActionFromProvider(ev) ? S_OK : UIA_E_NOTSUPPORTED;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](SharedUiaState& shared, const AccessibilityNodeData& node) -> HRESULT {
+            if(!shared.owner)
+                return UIA_E_ELEMENTNOTAVAILABLE;
+            if(IsUiaNodeReadOnly(node))
+                return UIA_E_ELEMENTNOTENABLED;
+            if((node.actionBits & AccessibilityActionBits::SetValue) == 0u)
+                return UIA_E_NOTSUPPORTED;
+            AccessibilityActionEvent ev;
+            ev.targetId = m_nodeId;
+            ev.kind = AccessibilityActionKind::SetValue;
+            ev.numericValue = parsed;
+            return shared.owner->enqueueActionFromProvider(ev) ? S_OK : UIA_E_NOTSUPPORTED;
+        });
     }
 
     HRESULT STDMETHODCALLTYPE get_Value(BSTR* pRetVal)override{
@@ -796,73 +744,27 @@ public:
     HRESULT STDMETHODCALLTYPE get_IsReadOnly(BOOL* pRetVal)override{
         if(!pRetVal)
             return E_POINTER;
-        const FutexGuard lock = AcquireFutex(m_shared->mutex);
-        if(!m_shared->alive)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-        if(!node)
-            return UIA_E_ELEMENTNOTAVAILABLE;
-        *pRetVal = ((node->stateBits & AccessibilityStateBits::ReadOnly) != 0u || (node->stateBits & AccessibilityStateBits::Enabled) == 0u) ? TRUE : FALSE;
-        return S_OK;
+        return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+            *pRetVal = IsUiaNodeReadOnly(node);
+            return S_OK;
+        });
     }
 
 
 private:
-    SharedUiaState* m_shared = nullptr;
-    Atomic<u32> m_refCount{ 1u };
     u64 m_nodeId = 0u;
 };
 
 class Win32UiaRootProvider final
-    : public IRawElementProviderSimple
-    , public IRawElementProviderFragment
-    , public IRawElementProviderFragmentRoot
+    : public UiaComObjectBase<Win32UiaRootProvider, IRawElementProviderSimple, IRawElementProviderFragment, IRawElementProviderFragmentRoot>
 {
 public:
     explicit Win32UiaRootProvider(SharedUiaState* const shared)noexcept
-        : m_shared(shared)
-    {
-        m_shared->addRef();
-    }
-    ~Win32UiaRootProvider()noexcept{
-        if(m_shared){
-            m_shared->release();
-            m_shared = nullptr;
-        }
-    }
-
-    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject)override{
-        if(!ppvObject)
-            return E_POINTER;
-        *ppvObject = nullptr;
-        if(riid == IID_IUnknown || riid == __uuidof(IRawElementProviderSimple))
-            *ppvObject = static_cast<IRawElementProviderSimple*>(this);
-        else if(riid == __uuidof(IRawElementProviderFragment))
-            *ppvObject = static_cast<IRawElementProviderFragment*>(this);
-        else if(riid == __uuidof(IRawElementProviderFragmentRoot))
-            *ppvObject = static_cast<IRawElementProviderFragmentRoot*>(this);
-        else
-            return E_NOINTERFACE;
-        AddRef();
-        return S_OK;
-    }
-
-    ULONG STDMETHODCALLTYPE AddRef()override{
-        return m_refCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
-    }
-
-    ULONG STDMETHODCALLTYPE Release()override{
-        const u32 remaining = m_refCount.fetch_sub(1u, MemoryOrder::acq_rel) - 1u;
-        if(remaining == 0u)
-            delete this;
-        return remaining;
-    }
+        : UiaComObjectBase(shared)
+    {}
 
     HRESULT STDMETHODCALLTYPE get_ProviderOptions(enum ProviderOptions* pRetVal)override{
-        if(!pRetVal)
-            return E_POINTER;
-        *pRetVal = static_cast<enum ProviderOptions>(ProviderOptions_ServerSideProvider | ProviderOptions_UseComThreading);
-        return S_OK;
+        return GetServerSideProviderOptions(pRetVal);
     }
 
     HRESULT STDMETHODCALLTYPE GetPatternProvider([[maybe_unused]] PATTERNID patternId, IUnknown** pRetVal)override{
@@ -1034,8 +936,6 @@ public:
 
 
 private:
-    SharedUiaState* m_shared = nullptr;
-    Atomic<u32> m_refCount{ 1u };
 };
 
 static HRESULT MakeNodeFragment(SharedUiaState* const shared, const u64 nodeId, IRawElementProviderFragment** const outFragment)noexcept{
@@ -1050,63 +950,58 @@ HRESULT STDMETHODCALLTYPE Win32UiaNodeProvider::GetPatternProvider(const PATTERN
     if(!pRetVal)
         return E_POINTER;
     *pRetVal = nullptr;
-    const FutexGuard lock = AcquireFutex(m_shared->mutex);
-    if(!m_shared->alive)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-    const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-    if(!node)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-
-    if(patternId == UIA_InvokePatternId && (node->actionBits & AccessibilityActionBits::Invoke) != 0u){
-        *pRetVal = static_cast<IInvokeProvider*>(this);
-        AddRef();
+    return WithAliveUiaNode(*m_shared, m_nodeId, [&](const SharedUiaState&, const AccessibilityNodeData& node)noexcept -> HRESULT {
+        if(patternId == UIA_InvokePatternId && (node.actionBits & AccessibilityActionBits::Invoke) != 0u){
+            *pRetVal = static_cast<IInvokeProvider*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if(patternId == UIA_TogglePatternId
+            && ((node.actionBits & AccessibilityActionBits::Toggle) != 0u || node.role == AccessibilityRole::CheckBox || node.role == AccessibilityRole::ToggleButton)
+        ){
+            *pRetVal = static_cast<IToggleProvider*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if(patternId == UIA_SelectionItemPatternId
+            && ((node.actionBits & AccessibilityActionBits::Select) != 0u
+                || node.role == AccessibilityRole::RadioButton
+                || node.role == AccessibilityRole::ListItem
+                || node.role == AccessibilityRole::TreeItem
+                || node.role == AccessibilityRole::Tab)
+        ){
+            *pRetVal = static_cast<ISelectionItemProvider*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if(patternId == UIA_ExpandCollapsePatternId
+            && ((node.actionBits & (AccessibilityActionBits::Expand | AccessibilityActionBits::Collapse)) != 0u
+                || (node.stateBits & (AccessibilityStateBits::Expanded | AccessibilityStateBits::Collapsed)) != 0u)
+        ){
+            *pRetVal = static_cast<IExpandCollapseProvider*>(this);
+            AddRef();
+            return S_OK;
+        }
+        if(patternId == UIA_RangeValuePatternId
+            && (node.role == AccessibilityRole::Slider || node.role == AccessibilityRole::SpinButton || node.role == AccessibilityRole::ProgressBar)
+        ){
+            Win32UiaRangeValueTearoff* const tearoff = new (std::nothrow) Win32UiaRangeValueTearoff(m_shared, m_nodeId);
+            if(!tearoff)
+                return E_OUTOFMEMORY;
+            *pRetVal = static_cast<IRangeValueProvider*>(tearoff);
+            return S_OK;
+        }
+        if(patternId == UIA_ValuePatternId
+            && (node.role == AccessibilityRole::TextField || node.role == AccessibilityRole::TextArea || node.role == AccessibilityRole::ComboBox)
+        ){
+            Win32UiaValueTearoff* const tearoff = new (std::nothrow) Win32UiaValueTearoff(m_shared, m_nodeId);
+            if(!tearoff)
+                return E_OUTOFMEMORY;
+            *pRetVal = static_cast<IValueProvider*>(tearoff);
+            return S_OK;
+        }
         return S_OK;
-    }
-    if(patternId == UIA_TogglePatternId
-        && ((node->actionBits & AccessibilityActionBits::Toggle) != 0u || node->role == AccessibilityRole::CheckBox || node->role == AccessibilityRole::ToggleButton)
-    ){
-        *pRetVal = static_cast<IToggleProvider*>(this);
-        AddRef();
-        return S_OK;
-    }
-    if(patternId == UIA_SelectionItemPatternId
-        && ((node->actionBits & AccessibilityActionBits::Select) != 0u
-            || node->role == AccessibilityRole::RadioButton
-            || node->role == AccessibilityRole::ListItem
-            || node->role == AccessibilityRole::TreeItem
-            || node->role == AccessibilityRole::Tab)
-    ){
-        *pRetVal = static_cast<ISelectionItemProvider*>(this);
-        AddRef();
-        return S_OK;
-    }
-    if(patternId == UIA_ExpandCollapsePatternId
-        && ((node->actionBits & (AccessibilityActionBits::Expand | AccessibilityActionBits::Collapse)) != 0u
-            || (node->stateBits & (AccessibilityStateBits::Expanded | AccessibilityStateBits::Collapsed)) != 0u)
-    ){
-        *pRetVal = static_cast<IExpandCollapseProvider*>(this);
-        AddRef();
-        return S_OK;
-    }
-    if(patternId == UIA_RangeValuePatternId
-        && (node->role == AccessibilityRole::Slider || node->role == AccessibilityRole::SpinButton || node->role == AccessibilityRole::ProgressBar)
-    ){
-        Win32UiaRangeValueTearoff* const tearoff = new (std::nothrow) Win32UiaRangeValueTearoff(m_shared, m_nodeId);
-        if(!tearoff)
-            return E_OUTOFMEMORY;
-        *pRetVal = static_cast<IRangeValueProvider*>(tearoff);
-        return S_OK;
-    }
-    if(patternId == UIA_ValuePatternId
-        && (node->role == AccessibilityRole::TextField || node->role == AccessibilityRole::TextArea || node->role == AccessibilityRole::ComboBox)
-    ){
-        Win32UiaValueTearoff* const tearoff = new (std::nothrow) Win32UiaValueTearoff(m_shared, m_nodeId);
-        if(!tearoff)
-            return E_OUTOFMEMORY;
-        *pRetVal = static_cast<IValueProvider*>(tearoff);
-        return S_OK;
-    }
-    return S_OK;
+    });
 }
 
 HRESULT STDMETHODCALLTYPE Win32UiaNodeProvider::Navigate(const enum NavigateDirection direction, IRawElementProviderFragment** const pRetVal){
@@ -1178,35 +1073,31 @@ HRESULT STDMETHODCALLTYPE Win32UiaNodeProvider::get_FragmentRoot(IRawElementProv
 }
 
 HRESULT Win32UiaNodeProvider::enqueueSimpleAction(const AccessibilityActionKind::Enum kind, const f64 numericValue)noexcept{
-    const FutexGuard lock = AcquireFutex(m_shared->mutex);
-    if(!m_shared->alive || !m_shared->owner)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-    const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-    if(!node)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-    if((node->stateBits & AccessibilityStateBits::Enabled) == 0u)
-        return UIA_E_ELEMENTNOTENABLED;
-    AccessibilityActionEvent ev;
-    ev.targetId = m_nodeId;
-    ev.kind = kind;
-    ev.numericValue = numericValue;
-    return m_shared->owner->enqueueActionFromProvider(ev) ? S_OK : UIA_E_NOTSUPPORTED;
+    return WithAliveUiaNode(*m_shared, m_nodeId, [&](SharedUiaState& shared, const AccessibilityNodeData& node) -> HRESULT {
+        if(!shared.owner)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        if((node.stateBits & AccessibilityStateBits::Enabled) == 0u)
+            return UIA_E_ELEMENTNOTENABLED;
+        AccessibilityActionEvent ev;
+        ev.targetId = m_nodeId;
+        ev.kind = kind;
+        ev.numericValue = numericValue;
+        return shared.owner->enqueueActionFromProvider(ev) ? S_OK : UIA_E_NOTSUPPORTED;
+    });
 }
 
 HRESULT STDMETHODCALLTYPE Win32UiaRangeValueTearoff::SetValue(const double val){
-    const FutexGuard lock = AcquireFutex(m_shared->mutex);
-    if(!m_shared->alive || !m_shared->owner)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-    const AccessibilityNodeData* const node = FindNodeInSnapshot(*m_shared, m_nodeId);
-    if(!node)
-        return UIA_E_ELEMENTNOTAVAILABLE;
-    if((node->stateBits & AccessibilityStateBits::Enabled) == 0u || (node->stateBits & AccessibilityStateBits::ReadOnly) != 0u)
-        return UIA_E_ELEMENTNOTENABLED;
-    AccessibilityActionEvent ev;
-    ev.targetId = m_nodeId;
-    ev.kind = AccessibilityActionKind::SetValue;
-    ev.numericValue = val;
-    return m_shared->owner->enqueueActionFromProvider(ev) ? S_OK : UIA_E_NOTSUPPORTED;
+    return WithAliveUiaNode(*m_shared, m_nodeId, [&](SharedUiaState& shared, const AccessibilityNodeData& node) -> HRESULT {
+        if(!shared.owner)
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        if(IsUiaNodeReadOnly(node))
+            return UIA_E_ELEMENTNOTENABLED;
+        AccessibilityActionEvent ev;
+        ev.targetId = m_nodeId;
+        ev.kind = AccessibilityActionKind::SetValue;
+        ev.numericValue = val;
+        return shared.owner->enqueueActionFromProvider(ev) ? S_OK : UIA_E_NOTSUPPORTED;
+    });
 }
 
 

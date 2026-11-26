@@ -13,7 +13,6 @@
 #define NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION 1
 #define NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION 2
 #define NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION 3
-#define NWB_AVBOIT_ACCUM_TARGET_COUNT 4
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

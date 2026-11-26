@@ -29,6 +29,58 @@ b8 AreOpaqueCsgComputeEmulationResourcesReady(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 AreOpaqueCsgComputeEmulationTaskResourcesReady(
+    in CsgFrameGpuDataView csgFrameData,
+    in MaterialPassDrawItemsView drawItems,
+    in b8 materialDrawBuffersUploaded,
+    in b8 csgFrameBuffersUploaded,
+    in usize instanceCount,
+    in usize materialTypedByteCount,
+    in MeshFrameBindingSnapshot frameBindings,
+    in CsgGraphResourceSnapshot csgResources,
+    mut RendererMaterialSystem materialSystem
+){
+    const b8 csgResourcesReady = AreOpaqueCsgComputeEmulationResourcesReady(
+        materialDrawBuffersUploaded,
+        frameBindings.frameReady(instanceCount, materialTypedByteCount),
+        csgFrameBuffersUploaded,
+        csgFrameData.hasWork(),
+        csgResources.frameReady(csgFrameData)
+    );
+    return csgResourcesReady && materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems, frameBindings);
+}
+
+void RecordOpaqueCsgComputeEmulationDrawItems(
+    mut CommandList commands,
+    in ViewportState viewportState,
+    in MeshFrameBindingSnapshot frameBindings,
+    in MaterialPipelinePass pass,
+    in b8 materialFrameStatesGraphOwned,
+    in b8 materialGeometryStatesGraphOwned,
+    in CsgGraphResourceSnapshot csgResources,
+    in FramebufferHandle framebuffer,
+    mut RendererMaterialSystem materialSystem,
+    in Span<MaterialPassDrawItem> computeDrawItems
+){
+    MaterialPassDrawContext drawContext(
+        commands,
+        viewportState,
+        frameBindings,
+        pass,
+        materialFrameStatesGraphOwned,
+        materialGeometryStatesGraphOwned,
+        true
+    );
+    if(framebuffer.valid())
+        drawContext.setFramebuffer(framebuffer);
+    drawContext.setCsgResources(csgResources);
+    materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, computeDrawItems);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 b8 OpaqueCsgReceiverComputeEmulationGraphTaskPayload::record(mut CommandList commands, in GpuTaskRecordContext context)const{
     if(!this.plan.captured)
         return false;
@@ -43,29 +95,33 @@ b8 OpaqueCsgReceiverComputeEmulationGraphTaskPayload::record(mut CommandList com
 
     const MaterialPassDrawItemsView drawItems = this.plan.drawItemsView();
     const CsgFrameGpuDataView csgFrameData = this.plan.csgFrameDataView();
-    const b8 csgResourcesReady = AreOpaqueCsgComputeEmulationResourcesReady(
+    if(!AreOpaqueCsgComputeEmulationTaskResourcesReady(
+        csgFrameData,
+        drawItems,
         this.materialDrawBuffersUploaded,
-        this.frameBindings.frameReady(this.instanceCount, this.materialTypedByteCount),
         this.csgFrameBuffersUploaded,
-        csgFrameData.hasWork(),
-        this.csgResources.frameReady(csgFrameData)
-    );
-    if(!csgResourcesReady || !this.materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems, this.frameBindings))
+        this.instanceCount,
+        this.materialTypedByteCount,
+        this.frameBindings,
+        this.csgResources,
+        this.materialSystem
+    ))
         return true;
 
     ViewportState csgViewportState;
     csgViewportState.addViewport(this.targets.framebuffer.deref().getFramebufferInfo().getViewport()).addScissorRect(ToCoreRect(csgFrameData.workRegion.resolveRect(this.targets.width, this.targets.height)));
-    MaterialPassDrawContext drawContext(
+    RecordOpaqueCsgComputeEmulationDrawItems(
         commands,
         csgViewportState,
         this.frameBindings,
         MaterialPipelinePass::CsgReceiverSurface,
         this.materialFrameStatesGraphOwned,
         this.materialGeometryStatesGraphOwned,
-        true
+        this.csgResources,
+        this.targets.framebuffer,
+        this.materialSystem,
+        drawItems.computeDrawItems
     );
-    drawContext.setFramebuffer(this.targets.framebuffer).setCsgResources(this.csgResources);
-    this.materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 
@@ -87,14 +143,17 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(mut CommandList comm
 
     const MaterialPassDrawItemsView drawItems = this.plan.geometry.drawItemsView();
     const CsgFrameGpuDataView csgFrameData = this.plan.csgFrameDataView();
-    const b8 csgResourcesReady = AreOpaqueCsgComputeEmulationResourcesReady(
+    if(!AreOpaqueCsgComputeEmulationTaskResourcesReady(
+        csgFrameData,
+        drawItems,
         this.materialDrawBuffersUploaded,
-        this.frameBindings.frameReady(this.instanceCount, this.materialTypedByteCount),
         this.csgFrameBuffersUploaded,
-        csgFrameData.hasWork(),
-        this.csgResources.frameReady(csgFrameData)
-    );
-    if(!csgResourcesReady || !this.materialSystem.drawRecorder().materialPassDrawResourcesReady(drawItems, this.frameBindings))
+        this.instanceCount,
+        this.materialTypedByteCount,
+        this.frameBindings,
+        this.csgResources,
+        this.materialSystem
+    ))
         return true;
     if(this.opaqueCsgTiming.has_value())
         return false;
@@ -104,17 +163,18 @@ b8 OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(mut CommandList comm
     this.opaqueCsgTiming.emplace(this.graphics.gpuTiming(), s_TimingScopeOpaqueCsg, this.graphics.getDevice(), commands);
     if(!FinishSplitGpuTimingMarker(this.opaqueCsgTiming))
         return false;
-    MaterialPassDrawContext drawContext(
+    RecordOpaqueCsgComputeEmulationDrawItems(
         commands,
         deferredViewportState,
         this.frameBindings,
         MaterialPipelinePass::Opaque,
         this.materialFrameStatesGraphOwned,
         this.materialGeometryStatesGraphOwned,
-        true
+        this.csgResources,
+        FramebufferHandle(),
+        this.materialSystem,
+        drawItems.computeDrawItems
     );
-    drawContext.setCsgResources(this.csgResources);
-    this.materialSystem.drawRecorder().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
 }
 

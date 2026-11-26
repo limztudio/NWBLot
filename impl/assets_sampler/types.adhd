@@ -174,18 +174,6 @@ b8 IsValidSamplerDescriptionParameters(
     ;
 }
 
-b8 ValidateSamplerBinaryHeader(in SamplerBinaryHeader header){
-    if(header.version != s_SamplerBinaryVersion){
-        error("Sampler::loadBinary failed: unsupported sampler version {}; recook required", header.version);
-        return false;
-    }
-    if(!IsValidSamplerBinaryHeader(header)){
-        error("Sampler::loadBinary failed: sampler header contains invalid flags");
-        return false;
-    }
-    return true;
-}
-
 b8 ValidateSamplerDescriptionPayload(
     in Name virtualPath,
     in f32 borderColorR,
@@ -214,27 +202,6 @@ b8 ValidateSamplerDescriptionPayload(
         return true;
 
     error("Sampler::validatePayload failed: sampler '{}' has an invalid description", virtualPath.resolvedText());
-    return false;
-}
-
-b8 ValidateSamplerBinaryHeaderAndDescription(in SamplerBinaryHeader header){
-    if(!ValidateSamplerBinaryHeader(header))
-        return false;
-    if(IsValidSamplerDescriptionParameters(
-        header.borderColorR,
-        header.borderColorG,
-        header.borderColorB,
-        header.borderColorA,
-        header.maxAnisotropy,
-        header.mipBias,
-        header.addressU,
-        header.addressV,
-        header.addressW,
-        header.reductionType
-    ))
-        return true;
-
-    error("Sampler::loadBinary failed: sampler description is invalid");
     return false;
 }
 
@@ -277,22 +244,33 @@ void SerializeSamplerBinaryPayload(
 
 Expected<SamplerBinaryHeader> DeserializeSamplerBinaryHeader(in Span<u8> binary){
     usize cursor = 0u;
-    const Expected<SamplerBinaryHeader> headerResult = ReadPOD<SamplerBinaryHeader>(binary, cursor);
-    if(!headerResult.has_value()){
-        error("Sampler::loadBinary failed: malformed header");
+    const Expected<SamplerBinaryHeader> headerResult = ReadMagicVersionHeaderPayload<SamplerBinaryHeader>(
+        binary, s_SamplerBinaryMagic, s_SamplerBinaryVersion, "Sampler::loadBinary", "sampler", cursor
+    );
+    if(!headerResult.has_value())
         return MakeUnexpected(Failure());
-    }
     const SamplerBinaryHeader header = headerResult.value();
-    if(header.magic != s_SamplerBinaryMagic){
-        error("Sampler::loadBinary failed: invalid sampler asset format; recook required");
+    if(!IsValidSamplerBinaryHeader(header)){
+        error("Sampler::loadBinary failed: sampler header contains invalid flags");
         return MakeUnexpected(Failure());
     }
-    if(!ValidateSamplerBinaryHeaderAndDescription(header))
-        return MakeUnexpected(Failure());
-    if(cursor != binary.size()){
-        error("Sampler::loadBinary failed: trailing bytes detected");
+    if(!IsValidSamplerDescriptionParameters(
+        header.borderColorR,
+        header.borderColorG,
+        header.borderColorB,
+        header.borderColorA,
+        header.maxAnisotropy,
+        header.mipBias,
+        header.addressU,
+        header.addressV,
+        header.addressW,
+        header.reductionType
+    )){
+        error("Sampler::loadBinary failed: sampler description is invalid");
         return MakeUnexpected(Failure());
     }
+    if(!ReadCompletePayload(binary, cursor, "Sampler::loadBinary"))
+        return MakeUnexpected(Failure());
     return header;
 }
 

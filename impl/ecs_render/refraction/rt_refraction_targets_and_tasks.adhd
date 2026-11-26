@@ -149,16 +149,15 @@ RayTracingRefractionGraphResources ResolveRefractionGraphTaskResources(
 b8 RefractionStatisticsReadbackGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
     if(!CanRecordRefractionStatisticsReadback(this.source.valid(), this.destination.valid(), this.reservation.valid()))
         return false;
-    const GpuGraphResourceId source = this.sourceResource;
-    const GpuGraphResourceId destination = this.destinationResource;
-    in GpuTaskRecordContext contextRef = context;
-    if(!CaptureGpuTaskCommandsIfEnabled(contextRef, lambda[in contextRef, in source, in destination](mut GpuCommandIrCapture capture) -> b8{
-        return capture.captureCopyBuffer(contextRef.task, contextRef.packet, contextRef.queue, source, 0u, destination, 0u, s_RefractionReadbackCounterBytes);
-    }))
-        return false;
-    commands.endRenderPass();
-    commands.copyBuffer(this.destination.deref(), 0u, this.source.deref(), 0u, s_RefractionReadbackCounterBytes);
-    return !commands.commandRecordingFailed();
+    return RecordStatisticsReadbackCopy(
+        commands,
+        context,
+        this.source,
+        this.destination,
+        this.sourceResource,
+        this.destinationResource,
+        s_RefractionReadbackCounterBytes
+    );
 }
 
 [cpp_unwind]

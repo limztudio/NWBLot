@@ -51,25 +51,6 @@ namespace __hidden_gpu_command_ir_stream{
     return IntColor(color.r, color.g, color.b, color.a);
 }
 
-[[nodiscard]] static b8 ValidateClearTextureRecord(const GpuCommandIrClearTextureRecord& record)noexcept{
-    constexpr u8 s_AllowedFlags = static_cast<u8>(GpuCommandIrClearTextureFlag::ClearDepth | GpuCommandIrClearTextureFlag::ClearStencil);
-    const u8 clearFlags = static_cast<u8>(record.clearFlags);
-    if(
-        record.destinationSubresources.numMipLevels == 0u
-        || record.destinationSubresources.numArraySlices == 0u
-        || record.clearTextureValueType >= static_cast<u8>(GpuClearTextureTaskValueType::kCount)
-        || (clearFlags & ~s_AllowedFlags) != 0u
-        || record.reserved != 0u
-    )
-        return false;
-
-    return record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil ? clearFlags != GpuCommandIrClearTextureFlag::None : clearFlags == GpuCommandIrClearTextureFlag::None;
-}
-
-[[nodiscard]] static b8 ValidateClearTextureRectUIntRecord(const GpuCommandIrClearTextureRectUIntRecord& record)noexcept{
-    return record.destinationSubresources.numMipLevels != 0u && record.destinationSubresources.numArraySlices != 0u && record.clearRect.maxX > record.clearRect.minX && record.clearRect.maxY > record.clearRect.minY;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,72 +62,35 @@ namespace __hidden_gpu_command_ir_stream{
 
 
 GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)noexcept{
-    GpuCommandIrStreamHeader header;
-    if(!initializeValidatedHeader(bytes, header))
-        return;
-
-    const usize payloadBytes = bytes.size() - sizeof(GpuCommandIrStreamHeader);
-    const usize commandBytes = static_cast<usize>(header.commandBytes);
-    const usize blobBytes = static_cast<usize>(header.blobBytes);
-    if(commandBytes > payloadBytes || blobBytes != payloadBytes - commandBytes){
-        fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
-        return;
-    }
-
-    const BinaryByteView commandView{ bytes.data(), sizeof(GpuCommandIrStreamHeader) + commandBytes };
-    const BinaryByteView blobView = blobBytes != 0u
-        ? BinaryByteView{ bytes.data() + sizeof(GpuCommandIrStreamHeader) + commandBytes, blobBytes }
-        : BinaryByteView{}
-    ;
-    finalizeValidatedHeader(header, commandView, blobView);
+    GpuCommandIrDetail::InitializeStreamCursor(
+        bytes,
+        {},
+        false,
+        m_validation,
+        m_commandBytes,
+        m_blobBytes,
+        m_cursor,
+        m_payloadEnd,
+        m_graphGeneration,
+        m_planGeneration,
+        m_recordCount
+    );
 }
 
 GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView commandBytes, const BinaryByteView blobBytes)noexcept{
-    if(!blobBytes.empty() && !blobBytes.data()){
-        fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
-        return;
-    }
-
-    GpuCommandIrStreamHeader header;
-    if(!initializeValidatedHeader(commandBytes, header))
-        return;
-
-    if(
-        header.commandBytes != static_cast<u64>(commandBytes.size() - sizeof(GpuCommandIrStreamHeader))
-        || header.blobBytes != static_cast<u64>(blobBytes.size())
-    ){
-        fail(GpuCommandIrStreamValidationError::PayloadSizeMismatch, 0u, Limit<u64>::s_Max);
-        return;
-    }
-
-    finalizeValidatedHeader(header, commandBytes, blobBytes);
-}
-
-b8 GpuCommandIrStreamReader::initializeValidatedHeader(const BinaryByteView headerSource, GpuCommandIrStreamHeader& outHeader)noexcept{
-    return GpuCommandIrDetail::InitializeValidatedStreamHeader(headerSource, outHeader, m_validation);
-}
-
-void GpuCommandIrStreamReader::finalizeValidatedHeader(const GpuCommandIrStreamHeader& header, const BinaryByteView commandBytes, const BinaryByteView blobBytes)noexcept{
-    if((header.recordCount == 0u && header.graphGeneration != 0u) || (header.recordCount != 0u && header.graphGeneration == 0u)){
-        fail(GpuCommandIrStreamValidationError::InvalidGraphGeneration, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    if((header.recordCount == 0u && header.planGeneration != 0u) || (header.recordCount != 0u && header.planGeneration == 0u)){
-        fail(GpuCommandIrStreamValidationError::InvalidPlanGeneration, 0u, Limit<u64>::s_Max);
-        return;
-    }
-    if(header.recordCount > header.commandBytes / sizeof(GpuCommandIrHeader)){
-        fail(GpuCommandIrStreamValidationError::InvalidRecordCount, 0u, Limit<u64>::s_Max);
-        return;
-    }
-
-    m_commandBytes = commandBytes;
-    m_blobBytes = blobBytes;
-    m_cursor = sizeof(GpuCommandIrStreamHeader);
-    m_payloadEnd = commandBytes.size();
-    m_graphGeneration = header.graphGeneration;
-    m_planGeneration = header.planGeneration;
-    m_recordCount = header.recordCount;
+    GpuCommandIrDetail::InitializeStreamCursor(
+        commandBytes,
+        blobBytes,
+        true,
+        m_validation,
+        m_commandBytes,
+        m_blobBytes,
+        m_cursor,
+        m_payloadEnd,
+        m_graphGeneration,
+        m_planGeneration,
+        m_recordCount
+    );
 }
 
 namespace GpuCommandIrDetail{
@@ -170,13 +114,17 @@ b8 DecodeAndValidateBuiltinWireRecord(
     using namespace __hidden_gpu_command_ir_stream;
 
     const auto fail = [&](const GpuCommandIrStreamValidationError::Enum error)noexcept{
-        if(!outValidation.failed()){
-            outValidation.error = error;
-            outValidation.byteOffset = recordOffset;
-            outValidation.recordIndex = recordIndex;
-            outValidation.complete = true;
-        }
+        FailValidation(outValidation, error, recordOffset, recordIndex);
         return false;
+    };
+    const auto decodeCommonContext = [&](const GpuCommandIrRecordContext& rawContext)noexcept -> b8{
+        const auto context = DecodeRecordContext(rawContext, graphGeneration, planGeneration);
+        if(!context)
+            return false;
+        outDecoded.task = context->task;
+        outDecoded.packet = context->packet;
+        outDecoded.queue = context->queue;
+        return true;
     };
 
     outDecoded = {};
@@ -184,18 +132,11 @@ b8 DecodeAndValidateBuiltinWireRecord(
     usize nextBlobOffset = inOutNextBlobOffset;
     switch(opcode){
     case GpuCommandIrWireOpcode::CopyBuffer:{
-        GpuCommandIrCopyBufferRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrCopyBufferRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::CopyBuffer;
         const auto sourceResource = DecodeResource(record.sourceResourceIndex, graphGeneration);
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && sourceResource.has_value() && destinationResource.has_value() && record.dataSizeBytes != 0u;
+        decodedRecord = decodeCommonContext(record.context) && sourceResource.has_value() && destinationResource.has_value() && record.dataSizeBytes != 0u;
         if(sourceResource)
             outDecoded.source = *sourceResource;
         if(destinationResource)
@@ -206,18 +147,11 @@ b8 DecodeAndValidateBuiltinWireRecord(
         break;
     }
     case GpuCommandIrWireOpcode::CopyTexture:{
-        GpuCommandIrCopyTextureRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrCopyTextureRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::CopyTexture;
         const auto sourceResource = DecodeResource(record.sourceResourceIndex, graphGeneration);
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && sourceResource.has_value() && destinationResource.has_value();
+        decodedRecord = decodeCommonContext(record.context) && sourceResource.has_value() && destinationResource.has_value();
         if(sourceResource)
             outDecoded.source = *sourceResource;
         if(destinationResource)
@@ -227,34 +161,20 @@ b8 DecodeAndValidateBuiltinWireRecord(
         break;
     }
     case GpuCommandIrWireOpcode::ClearBuffer:{
-        GpuCommandIrClearBufferRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrClearBufferRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::ClearBuffer;
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && destinationResource.has_value();
+        decodedRecord = decodeCommonContext(record.context) && destinationResource.has_value();
         if(destinationResource)
             outDecoded.destination = *destinationResource;
         outDecoded.uintClearValue = UIntColor(record.clearValue);
         break;
     }
     case GpuCommandIrWireOpcode::ClearTexture:{
-        GpuCommandIrClearTextureRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrClearTextureRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::ClearTexture;
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && destinationResource.has_value() && ValidateClearTextureRecord(record);
+        decodedRecord = decodeCommonContext(record.context) && destinationResource.has_value() && ValidateClearTextureWireFields(record);
         if(destinationResource)
             outDecoded.destination = *destinationResource;
         outDecoded.destinationSubresources = DecodeSubresources(record.destinationSubresources);
@@ -269,17 +189,10 @@ b8 DecodeAndValidateBuiltinWireRecord(
         break;
     }
     case GpuCommandIrWireOpcode::ClearTextureRectUInt:{
-        GpuCommandIrClearTextureRectUIntRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrClearTextureRectUIntRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::ClearTextureRectUInt;
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && destinationResource.has_value() && ValidateClearTextureRectUIntRecord(record);
+        decodedRecord = decodeCommonContext(record.context) && destinationResource.has_value() && ValidateClearTextureRectUIntWireFields(record);
         if(destinationResource)
             outDecoded.destination = *destinationResource;
         outDecoded.destinationSubresources = DecodeSubresources(record.destinationSubresources);
@@ -288,17 +201,10 @@ b8 DecodeAndValidateBuiltinWireRecord(
         break;
     }
     case GpuCommandIrWireOpcode::UploadBuffer:{
-        GpuCommandIrUploadBufferRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrUploadBufferRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::UploadBuffer;
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.reserved == 0u;
+        decodedRecord = decodeCommonContext(record.context) && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.reserved == 0u;
         if(destinationResource)
             outDecoded.destination = *destinationResource;
         outDecoded.sourceUploadBlob = GpuUploadBlobId{ .generation = graphGeneration, .index = record.sourceUploadBlobIndex, };
@@ -306,24 +212,15 @@ b8 DecodeAndValidateBuiltinWireRecord(
         outDecoded.blobSizeBytes = record.blobSizeBytes;
         outDecoded.destinationOffsetBytes = record.destinationOffsetBytes;
         outDecoded.finalState = static_cast<ResourceStates::Mask>(record.finalState);
-        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != inOutNextBlobOffset || record.blobSizeBytes > blobBytes.size() - inOutNextBlobOffset))
+        if(decodedRecord && !ValidateUploadBlobRange(blobBytes, record.blobOffsetBytes, record.blobSizeBytes, nextBlobOffset))
             return fail(GpuCommandIrStreamValidationError::InvalidBlobRange);
-        if(decodedRecord)
-            nextBlobOffset += static_cast<usize>(record.blobSizeBytes);
         break;
     }
     case GpuCommandIrWireOpcode::UploadTexture:{
-        GpuCommandIrUploadTextureRecord record;
-        FOUNDATION_MEMCPY(&record, sizeof(record), recordBytes, sizeof(record));
+        const auto record = ReadWirePod<GpuCommandIrUploadTextureRecord>(recordBytes);
         outDecoded.opcode = GpuCommandIrOpcode::UploadTexture;
         const auto destinationResource = DecodeResource(record.destinationResourceIndex, graphGeneration);
-        const auto context = DecodeRecordContext(record.context, graphGeneration, planGeneration);
-        if(context){
-            outDecoded.task = context->task;
-            outDecoded.packet = context->packet;
-            outDecoded.queue = context->queue;
-        }
-        decodedRecord = context.has_value() && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.aspect < TextureUploadAspect::kCount && record.reserved0 == 0u && record.reserved1 == 0u;
+        decodedRecord = decodeCommonContext(record.context) && destinationResource.has_value() && record.sourceUploadBlobIndex != Limit<u32>::s_Max && record.aspect < TextureUploadAspect::kCount && record.reserved0 == 0u && record.reserved1 == 0u;
         if(destinationResource)
             outDecoded.destination = *destinationResource;
         outDecoded.sourceUploadBlob = GpuUploadBlobId{ .generation = graphGeneration, .index = record.sourceUploadBlobIndex, };
@@ -334,10 +231,8 @@ b8 DecodeAndValidateBuiltinWireRecord(
         outDecoded.depthPitch = record.depthPitch;
         outDecoded.finalState = static_cast<ResourceStates::Mask>(record.finalState);
         outDecoded.uploadAspect = static_cast<TextureUploadAspect::Enum>(record.aspect);
-        if(decodedRecord && (record.blobSizeBytes == 0u || record.blobOffsetBytes != inOutNextBlobOffset || record.blobSizeBytes > blobBytes.size() - inOutNextBlobOffset))
+        if(decodedRecord && !ValidateUploadBlobRange(blobBytes, record.blobOffsetBytes, record.blobSizeBytes, nextBlobOffset))
             return fail(GpuCommandIrStreamValidationError::InvalidBlobRange);
-        if(decodedRecord)
-            nextBlobOffset += static_cast<usize>(record.blobSizeBytes);
         break;
     }
     default:
@@ -366,46 +261,18 @@ Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> GpuC
     if(m_validation.failed())
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
 
-    if(m_nextRecordIndex == m_recordCount){
-        if(m_cursor != m_payloadEnd){
-            fail(GpuCommandIrStreamValidationError::TrailingPayload, m_cursor, m_nextRecordIndex);
-            return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-        }
-        if(m_nextBlobOffset != m_blobBytes.size()){
-            fail(GpuCommandIrStreamValidationError::InvalidBlobRange, m_payloadEnd, m_nextRecordIndex);
-            return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-        }
-        m_validation.byteOffset = m_payloadEnd;
-        m_validation.recordIndex = m_nextRecordIndex;
-        m_validation.complete = true;
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::End);
-    }
+    if(m_nextRecordIndex == m_recordCount)
+        return MakeUnexpected(
+            GpuCommandIrDetail::CheckStreamEndOfStream(m_cursor, m_payloadEnd, m_nextBlobOffset, m_blobBytes.size(), m_nextRecordIndex, m_validation)
+                ? GpuCommandIrStreamReadStatus::End
+                : GpuCommandIrStreamReadStatus::Error
+        );
 
     const usize recordOffset = m_cursor;
-    if(m_payloadEnd - recordOffset < sizeof(GpuCommandIrHeader)){
-        fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
     GpuCommandIrHeader header;
-    FOUNDATION_MEMCPY(&header, sizeof(header), m_commandBytes.data() + recordOffset, sizeof(header));
-    if(header.byteSize < sizeof(GpuCommandIrHeader)){
-        fail(GpuCommandIrStreamValidationError::InvalidRecordSize, recordOffset, m_nextRecordIndex);
+    usize expectedByteSize = 0u;
+    if(!GpuCommandIrDetail::ReadValidatedRecordHeader(m_commandBytes, recordOffset, m_payloadEnd, m_nextRecordIndex, false, m_validation, header, expectedByteSize))
         return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
-
-    const usize expectedByteSize = GpuCommandIrDetail::BuiltinRecordWireByteSize(header.opcode);
-    if(expectedByteSize == 0u){
-        fail(GpuCommandIrStreamValidationError::UnsupportedOpcode, recordOffset, m_nextRecordIndex);
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
-    if(header.byteSize != expectedByteSize){
-        fail(GpuCommandIrStreamValidationError::InvalidRecordSize, recordOffset, m_nextRecordIndex);
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
-    if(expectedByteSize > m_payloadEnd - recordOffset){
-        fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
-        return MakeUnexpected(GpuCommandIrStreamReadStatus::Error);
-    }
 
     GpuCommandIrBuiltinTaskRecord decoded;
     if(!GpuCommandIrDetail::DecodeAndValidateBuiltinWireRecord(
@@ -434,13 +301,7 @@ BinaryByteView GpuCommandIrStreamReader::blobBytes()const noexcept{
 }
 
 void GpuCommandIrStreamReader::fail(const GpuCommandIrStreamValidationError::Enum error, const usize byteOffset, const u64 recordIndex)noexcept{
-    if(m_validation.failed())
-        return;
-
-    m_validation.error = error;
-    m_validation.byteOffset = byteOffset;
-    m_validation.recordIndex = recordIndex;
-    m_validation.complete = true;
+    GpuCommandIrDetail::FailValidation(m_validation, error, byteOffset, recordIndex);
 }
 
 

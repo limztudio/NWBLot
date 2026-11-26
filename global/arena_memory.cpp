@@ -480,10 +480,6 @@ ArenaMemoryStats ArenaMemoryTracker::snapshot()const noexcept{
     return stats;
 }
 
-void ArenaMemoryTracker::recordPeakUsedBytes(const u64 usedBytes)noexcept{
-    UpdateAtomicMaxRelaxed(m_peakUsedBytes, usedBytes);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

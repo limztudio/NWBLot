@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import redirect_stderr
 import io
 import sys
 import tempfile

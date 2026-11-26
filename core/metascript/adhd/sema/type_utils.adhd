@@ -83,6 +83,9 @@ extern b8 IsReflectedMapContainerType(in StringView a0);
 [cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsNonCopyableBaseInterfaceName")]
 extern b8 IsNonCopyableBaseInterfaceName(in StringView a0);
 
+[cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsMoveOnlyBaseInterfaceName")]
+extern b8 IsMoveOnlyBaseInterfaceName(in StringView a0);
+
 [cpp_header("<core/metascript/adhd/sema/type_utils.h>"), cpp_name("::NWB::Core::Metascript::Adhd::IsMoveOnlyTypeName")]
 extern b8 IsMoveOnlyTypeName(in StringView a0);
 

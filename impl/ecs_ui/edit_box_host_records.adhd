@@ -74,8 +74,7 @@ class UiEditBoxEntry{
     public TextInputSessionToken rejectedNative;
 }
 
-[move_only]
-class UiEditBoxEvent{
+class UiEditBoxEvent : MoveOnly{
     public UiTextEditOwner owner;
     public TextInputEvent native = TextInputEvent();
     public EditCommandRequest command;

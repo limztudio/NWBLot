@@ -97,15 +97,13 @@ class SceneAsset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class LoadedSceneEntity{
+class LoadedSceneEntity : MoveOnly{
     public Name name = s_NameNone;
     public EntityRef entity;
     public LoadedComponentVector components;
 }
 
-[move_only]
-class LoadedSceneContents{
+class LoadedSceneContents : MoveOnly{
     public SceneRef scene;
     public AssetMap assets;
     public LoadedSubsystemVector subsystems;
@@ -127,8 +125,8 @@ class InstantiatedSceneEntities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular, move_only]
-class ActiveSceneSubsystems{
+[modular]
+class ActiveSceneSubsystems : MoveOnly{
     private LoadedSceneContents m_contents;
 
     public b8 loadProjectStartScene(in AssetManager assetManager, in ProjectRef project);

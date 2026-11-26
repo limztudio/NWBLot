@@ -37,6 +37,7 @@ public:
     [[nodiscard]] b8 isTypeConstructible(const TypeRef& type, b8 requireCopy)const noexcept;
     [[nodiscard]] b8 isTypeAssignable(const TypeRef& type, b8 requireCopy)const noexcept;
     [[nodiscard]] b8 interfaceInheritsNoCopy(const TypeRef& ifaceRef, u32 depth = 0u)const noexcept;
+    [[nodiscard]] b8 classInheritsMoveOnly(const ClassDecl& decl)const noexcept;
     [[nodiscard]] b8 isOrderIndependentFieldType(const TypeRef& type, u32 depth = 0u)const noexcept;
     [[nodiscard]] b8 isOrderIndependentInitExpr(const Expr* expr, u32 depth = 0u)const noexcept;
     [[nodiscard]] b8 requiresDeclarationFieldOrder(const ClassDecl& decl, Span<const FieldDecl* const> fields)const noexcept;
@@ -45,6 +46,7 @@ public:
 private:
     [[nodiscard]] b8 areFieldDeclsAndInitsOrderIndependent(Span<const FieldDecl* const> fields, const ClassDecl* substOwner, const TypeRef* instance, Span<const TypeArg> templateArgs, u32 depth)const noexcept;
     [[nodiscard]] b8 areClassFieldsAndInitsOrderIndependent(const ClassDecl& cls, const TypeRef* instance, Span<const TypeArg> templateArgs, u32 depth)const noexcept;
+    [[nodiscard]] b8 isOrderIndependentDefaultConstructor(const MethodDecl& ctor, u32 depth)const noexcept;
     [[nodiscard]] b8 isOrderIndependentCallInitExpr(const Expr& expr, u32 depth)const noexcept;
     [[nodiscard]] b8 containsOverAlignedPackType(const TypeRef& type, u32 depth = 0u)const noexcept;
     struct ValueTypeVisit{

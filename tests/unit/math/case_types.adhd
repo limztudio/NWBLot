@@ -37,8 +37,7 @@ const u64 s_F64MaxBits = 0x7fefffffffffffffu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class ScopedHeldFloatingPointEnvironment{
+class ScopedHeldFloatingPointEnvironment : NoCopy{
     private Expected<FloatingPointEnvironment> m_original = HoldFloatingPointExceptions();
     private b8 m_active = true;
 

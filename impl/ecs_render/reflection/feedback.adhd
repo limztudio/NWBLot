@@ -120,8 +120,7 @@ class ReflectionFeedbackState : NoCopy{
 
 type ReflectionFeedbackControlHandle = Shared<ReflectionFeedbackState>;
 
-[move_only]
-class ReflectionFeedbackReservation{
+class ReflectionFeedbackReservation : MoveOnly{
     private PlanReservation<ReflectionFeedbackControlHandle, ReflectionFeedbackPlan> m_lease;
 
     public ReflectionFeedbackReservation(){}

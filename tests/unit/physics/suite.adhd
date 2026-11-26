@@ -10825,7 +10825,7 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
 
 void VerifyPhysicsEdgeCases_Wave4ASceneEntityNameSync(){
     EcsTestWorld tw;
-    mut PhysicsSystem physSys = tw.world.addSystem<PhysicsSystem>(tw.world);
+    tw.world.addSystem<PhysicsSystem>(tw.world);
 
     Entity parentScopeA = tw.world.createEntity();
     parentScopeA.addComponent<TransformComponent>().position = f32x4(10.0f, 0.0f, 0.0f, 0.0f);

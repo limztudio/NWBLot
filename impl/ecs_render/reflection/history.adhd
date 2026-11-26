@@ -109,8 +109,7 @@ class ReflectionHistoryState : NoCopy{
 
 type ReflectionHistoryControlHandle = Shared<ReflectionHistoryState>;
 
-[move_only]
-class ReflectionHistoryReservation{
+class ReflectionHistoryReservation : MoveOnly{
     private PlanReservation<ReflectionHistoryControlHandle, ReflectionHistoryPlan> m_lease;
 
     public ReflectionHistoryReservation(in ReflectionHistoryControlHandle control, in ReflectionHistoryPlan plan){

@@ -576,7 +576,7 @@ extern const u32 s_GpuRenderTransformBytes;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsPushConstants{
     public u32 itemCount = 0u;
     public u32 itemOffset = 0u;
@@ -591,7 +591,7 @@ class GpuPhysicsPushConstants{
     public u32x4 slots1(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsBodyState{
     public f32x4 linearVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
@@ -599,14 +599,14 @@ class GpuPhysicsBodyState{
     public f32x4 deltaRotation(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsBodyPose{
     public f32x4 originPad(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 sweepDispFlags(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsBodySim{
     public f32x4 positionInvMass(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
@@ -619,7 +619,7 @@ class GpuPhysicsBodySim{
     public f32x4 invInertiaLocal1(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsShapeProxy{
     public f32x4 localCenterRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localExtentOrP1(0.0f, 0.0f, 0.0f, 0.0f);
@@ -630,12 +630,12 @@ class GpuPhysicsShapeProxy{
     public f32x4 localTransformRot(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsBroadphasePair{
     public u32x4 indices(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsNarrowphaseManifold{
     public u32x4 pairInfo(0u, 0u, 0u, 0u);
     public f32x4 normalPad(0.0f, 1.0f, 0.0f, 0.0f);
@@ -643,13 +643,13 @@ class GpuPhysicsNarrowphaseManifold{
     public Array<f32x4, s_MaxManifoldPoints> anchorBSeparation;
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsContactPoint{
     public f32x4 rABaseSep(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rBRelVel(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsBodyOut{
     public f32x4 positionSleepTime(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
@@ -657,7 +657,7 @@ class GpuPhysicsBodyOut{
     public f32x4 angularVelocityPad(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsContactImpulseOut{
     public f32x4 frictionTwistRollX(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 rollYZMaxApproach(0.0f, 0.0f, 0.0f, 0.0f);
@@ -665,14 +665,14 @@ class GpuPhysicsContactImpulseOut{
     public f32x4 totalNormalImpulses(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsJointImpulseOut{
     public f32x4 linearImpulseMax(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 angularImpulseMax(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 limitImpulses(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsIslandSlice{
     public u32x4 bodyContact(0u, 0u, 0u, 0u);
     public u32x4 jointFlags(0u, 0u, 0u, 0u);
@@ -680,7 +680,7 @@ class GpuPhysicsIslandSlice{
     public u32x4 contactColorCounts1(0u, 0u, 0u, 0u);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsContactConstraint{
     public u32x4 indicesCountFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
     public f32x4 normalFriction(0.0f, 1.0f, 0.0f, 0.0f);
@@ -696,7 +696,7 @@ class GpuPhysicsContactConstraint{
     public Array<GpuPhysicsContactPoint, s_MaxManifoldPoints> points;
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsJointConstraint{
     public u32x4 indicesTypeFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
     public f32x4 params0(0.0f, 0.0f, 0.0f, 0.0f);
@@ -720,27 +720,27 @@ class GpuPhysicsJointConstraint{
     public f32x4 projectionParams(0.1f, 0.1f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsLbvhNode{
     public f32x4 minLeft(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 maxRight(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSpatialQuery{
     public f32x4 originMin(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 dirMax(0.0f, 1.0f, 0.0f, 0.0f);
     public u32x4 params(0u, s_GpuInvalidIndex, 0u, 0u);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSpatialQueryResult{
     public f32x4 hitPointFraction(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 hitNormalDist(0.0f, 1.0f, 0.0f, 0.0f);
     public u32x4 hitIds(0u, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSpatialQueryAux{
     public u32 ignoreBodyId = s_NullIndex;
     public u32 ignoreShapeId = s_NullIndex;
@@ -761,13 +761,13 @@ class PhysicsBatchSpatialQueryPending{
     public b8 valid = false;
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsRenderTransformBinding{
     public u32x4 bodyDestFlags(s_GpuInvalidIndex, 0u, 0u, 0u);
     public f32x4 scalePad(1.0f, 1.0f, 1.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsRenderTransformOut{
     public f32x4 rotation(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 translationFlags(0.0f, 0.0f, 0.0f, 0.0f);
@@ -775,13 +775,13 @@ class GpuPhysicsRenderTransformOut{
     public f32x4 linearVelSleep(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsShapeMaterial{
     public f32x4 fricRestStatRoll(0.6f, 0.0f, 0.6f, 0.0f);
     public f32x4 tanFlagsThreshSlot(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsWarmCacheEntry{
     public u32x4 keyMeta(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
     public u32x4 featureIds(0u, 0u, 0u, 0u);
@@ -789,14 +789,14 @@ class GpuPhysicsWarmCacheEntry{
     public f32x4 fricTwist(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsEvent{
     public u32x4 header(0u, 0u, 0u, 0u);
     public f32x4 pointImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalApproach(0.0f, 1.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSoftParticle{
     public f32x4 posInvMass(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 prevPosFlags(0.0f, 0.0f, 0.0f, 0.0f);
@@ -804,25 +804,25 @@ class GpuPhysicsSoftParticle{
     public f32x4 extForcePad(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSoftDistConstraint{
     public u32x4 indices(0u, 0u, 0u, 0u);
     public f32x4 restCompLambdaPad(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSoftVolConstraint{
     public u32x4 indices(0u, 0u, 0u, 0u);
     public f32x4 restCompLambdaPad(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsSoftBackstop{
     public f32x4 centerMaxDist(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalRadiusIdx(0.0f, 1.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsForceField{
     public f32x4 originOrDirStrength(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 axisRadius(0.0f, 1.0f, 0.0f, 0.0f);
@@ -832,7 +832,7 @@ class GpuPhysicsForceField{
     public f32x4 extraParams(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-[layout(16)]
+[align(16)]
 class GpuPhysicsFluidVolume{
     public f32x4 surfaceNormalOffset(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 boundsMinShape(0.0f, 0.0f, 0.0f, 0.0f);

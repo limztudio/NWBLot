@@ -238,15 +238,17 @@ MString CppHeaderImporter::FormatExternAdhd(const TranslationUnit& unit, MetaAre
         out.append(c->name.data(), c->name.size());
         b8 emittedBase = false;
         const MStringView noCopyName = CppHeaderImportDetail::CppImporterSemantics::s_NoCopyBaseClass;
+        const MStringView moveOnlyName = CppHeaderImportDetail::CppImporterSemantics::s_MoveOnlyBaseClass;
         if(!c->isCopyConstructible){
+            const MStringView ownershipBaseName = (c->isMoveConstructible && c->isMoveAssignable) ? moveOnlyName : noCopyName;
             out.append(" : ");
-            out.append(noCopyName.data(), noCopyName.size());
+            out.append(ownershipBaseName.data(), ownershipBaseName.size());
             emittedBase = true;
         }
         for(const TypeRef* iface : c->implementedInterfaces){
             if(!iface || iface->name.empty())
                 continue;
-            if(!c->isCopyConstructible && iface->name == noCopyName)
+            if(!c->isCopyConstructible && (iface->name == noCopyName || iface->name == moveOnlyName))
                 continue;
             out.append(emittedBase ? ", " : " : ");
             CppHeaderImportDetail::AppendTypeRefExternText(out, *iface, false);

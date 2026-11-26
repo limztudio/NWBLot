@@ -59,8 +59,7 @@ type InstanceGpuDataVector = Vector<InstanceGpuData>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class MeshResources{
+class MeshResources : MoveOnly{
     public RuntimeMeshBuffers buffers;
     public CsgReceiverCpuBounds csgLocalBounds;
     public Name meshName = s_NameNone;

@@ -16,20 +16,20 @@ type AlignedPairRecord = DoubleStorageRecord<f64x2>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(32)]
+[align(32)]
 class DoubleStorageRecord<T>{
     public T value;
     public Array<u64, 4u> gap = Array<u64, 4u>();
 }
 
-[layout(32)]
+[align(32)]
 class UnalignedTripleRecord{
     public u64 prefix = 0u;
     public f64x3u value = f64x3u();
     public Array<u64, 4u> gap = Array<u64, 4u>();
 }
 
-[layout(16)]
+[align(16)]
 class UnalignedMatrixRecord{
     public u32 prefix = 0u;
     public f32x3x3u value = f32x3x3u();
@@ -102,7 +102,7 @@ class DoubleTransformStreamFixture{
     }
 }
 
-[layout(32)]
+[align(32)]
 class ExpectedVectorStorage<T>{
     public u64 prefix = 0u;
     public Array<Expected<T>, 2u> values = Array<Expected<T>, 2u>();

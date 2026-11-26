@@ -85,12 +85,12 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
             }
             matchedAttr = true;
         }
-        if(!matchedAttr && attr.name == KeywordSemantics::s_RecordLayout){
+        if(!matchedAttr && attr.name == KeywordSemantics::s_RecordAlign){
             u64 alignment = 0u;
             if(isExtern || decl->recordAlignment || attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::IntegerLiteral
                 || !LiteralDecoder::TryParseUnsignedIntegerLiteral(attr.arguments[0].text, alignment)
                 || !alignment || (alignment & (alignment - 1u)) || alignment > Limit<usize>::s_Max){
-                m_cursor.error(attr.line, attr.column, "layout requires one power-of-two alignment on an ordinary class");
+                m_cursor.error(attr.line, attr.column, "align requires one power-of-two alignment on an ordinary class");
                 return nullptr;
             }
             decl->recordAlignment = static_cast<usize>(alignment);
@@ -105,7 +105,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
             if(!prohibitedErr.empty())
                 m_cursor.error(attr.line, attr.column, prohibitedErr);
             else
-                m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'layout(alignment)', 'friend(...)', 'move_only', 'serialize', 'reflect', 'arena', 'modular', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
+                m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'modular', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
             return nullptr;
         }
     }
@@ -118,12 +118,8 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
     if(!parseColonTypeList(decl->implementedInterfaces, "expected implemented interface name after ':'", true))
         return nullptr;
 
-    if(decl->isMoveOnly && (isExtern || decl->isArenaOwner || decl->isSerialize || decl->recordAlignment)){
-        m_cursor.error(span.line, span.column, "'[move_only]' requires an ordinary value class");
-        return nullptr;
-    }
     if(decl->recordAlignment && (decl->isArenaOwner || !decl->implementedInterfaces.empty() || !decl->subsystemTypeName.empty() || !decl->assetTypeName.empty() || !decl->componentTypeName.empty() || !decl->systemTypeName.empty())){
-        m_cursor.error(span.line, span.column, "layout is only supported on plain value records");
+        m_cursor.error(span.line, span.column, "align is only supported on plain value records");
         return nullptr;
     }
 

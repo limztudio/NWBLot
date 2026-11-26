@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only, friend(CountPublisher)]
-class OwnedCounts{
+[friend(CountPublisher)]
+class OwnedCounts : MoveOnly{
     private u32 nextCount(in u32 value)const{ return value + 1u; }
     public Vector<u32> values;
     public void replaceWith(mut OwnedCounts source){ MoveInto<OwnedCounts>(this, source); }

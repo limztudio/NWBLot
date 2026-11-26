@@ -371,6 +371,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
             break;
         }
     }
+    const b8 hasMoveOnlyBase = layoutAnalyzer.classInheritsMoveOnly(decl);
 
     b8 hasUserConstructor = false;
     b8 hasUserDestructor = false;
@@ -432,7 +433,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
 
         const b8 nothrowDefaultCtor = layoutAnalyzer.isClassNothrowDefaultConstructible(decl, orderedFields);
 
-        if(!hasUserConstructor || canCopy || canMove || hasNoCopyBase || ((canCopyAssign || canMoveAssign) && !hasUserAssignOp)){
+        if(!hasUserConstructor || canCopy || canMove || hasNoCopyBase || hasMoveOnlyBase || ((canCopyAssign || canMoveAssign) && !hasUserAssignOp)){
             out.append("public:\r\n");
             if(!hasUserConstructor){
                 out.append("    explicit ");
@@ -528,7 +529,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 if(canMove)
                     emitRebindCtor(true);
             }
-            else if(hasNoCopyBase || decl.isMoveOnly){
+            else if(hasNoCopyBase || hasMoveOnlyBase){
                 emitDeletedSpecialMembers(true, true, false);
             }
             if((canCopyAssign || canMoveAssign) && !hasUserAssignOp){
@@ -590,7 +591,7 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 else
                     emitDeletedSpecialMembers(false, true, true);
             }
-            else if((hasNoCopyBase || decl.isMoveOnly) && !hasUserAssignOp){
+            else if((hasNoCopyBase || hasMoveOnlyBase) && !hasUserAssignOp){
                 emitDeletedSpecialMembers(true, true, true);
             }
             if(!decl.methods.empty())
@@ -620,14 +621,14 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
                 out.append("\r\n");
         }
     }
-    else if(hasNoCopyBase || decl.isMoveOnly){
+    else if(hasNoCopyBase || hasMoveOnlyBase){
         out.append("public:\r\n");
         if(!hasUserConstructor && decl.systemTypeName.empty()){
             out.append("    ");
             out.append(decl.name.data(), decl.name.size());
             out.append("() = default;\r\n");
         }
-        const b8 canMove = decl.isMoveOnly && layoutAnalyzer.isClassMoveConstructible(decl, orderedFields);
+        const b8 canMove = hasMoveOnlyBase && layoutAnalyzer.isClassMoveConstructible(decl, orderedFields);
         emitDeletedSpecialMembers(true, !canMove, false);
         if(canMove)
             out.append("    ").append(decl.name).append("(").append(decl.name).append("&&)noexcept = default;\r\n");

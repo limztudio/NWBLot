@@ -11,8 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only]
-class EditBoxView{
+class EditBoxView : MoveOnly{
     private String m_display;
     private Vector<EditCaretMapping> m_mapping;
     private EditCaretGeometry m_geometry;

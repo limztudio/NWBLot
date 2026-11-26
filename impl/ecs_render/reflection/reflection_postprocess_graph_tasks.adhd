@@ -70,8 +70,7 @@ class ReflectionFinalizeTask{
     }
 }
 
-[move_only]
-class ReflectionTemporalTask{
+class ReflectionTemporalTask : MoveOnly{
     private mut GraphicsRuntime m_graphics;
     private ReflectionPostprocessSnapshot m_snapshot;
     public ReflectionHistoryReservation reservation;
@@ -112,8 +111,7 @@ class ReflectionTemporalTask{
     public void discarded(){ this.reservation.discard(); }
 }
 
-[move_only]
-class ReflectionStatisticsReadbackTask{
+class ReflectionStatisticsReadbackTask : MoveOnly{
     private BufferHandle m_source;
     public BufferHandle destination;
     public GpuGraphResourceId sourceResource;

@@ -42,13 +42,12 @@ type TickAdmissionResult = Expected<void, CpuTaskAdmissionError>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(32)]
+[align(32)]
 class OverAlignedComponent{
     public Array<u8, 32u> value;
 }
 
-[move_only]
-class MoveOnlyMessage{
+class MoveOnlyMessage : MoveOnly{
     public u32 value;
     public MoveOnlyMessage(in u32 initial){ this.value = initial; }
 }

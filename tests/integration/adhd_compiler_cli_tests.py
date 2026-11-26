@@ -35,9 +35,9 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         "class Slot{ private u32 value = 0u; [cpp_explicit_bool] public b8 ready()const{ return this.value != 0u; } "
         "[cpp_take_assignment] public void take(mut u32 incoming){ this.value = incoming; incoming = 0u; } }\n"
         "class CounterRef{ private mut u32 count; public CounterRef(mut u32 count){ this.count = count; } }\n"
-        "[ordered] class Owner{ private u8 first = 0u; private u32 count = 0u; private CounterRef last; "
+        "class Owner{ private u8 first = 0u; private u32 count = 0u; private CounterRef last; "
         "public Owner(){ this.last = CounterRef(this.count); } }\n"
-        "[layout(8)] class WirePair<T, U>{ public T tag; public U value; }\n"
+        "[align(8)] class WirePair<T, U>{ public T tag; public U value; }\n"
         "static_assert(offset_of<WirePair<u8, u32>>(value) == 4u);\n"
         "static_assert(align_of<WirePair<u8, u32>>() == 8u);\n"
         "static_assert(offset_of<Entry<u32, f32>>(key) == 0u);\n"
@@ -100,8 +100,11 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         ("[cpp_type_alias(Value, u32)] class Item{ public u32 Value; }", "distinct member name"),
         ("class A{} class B{ public B(in A a){} } class Retains{ private in B b; public Retains(in B value){ this.b = value; } } "
          "void Bad(in A a){ Retains dangling(a); }", "a retained reference cannot bind to a temporary created by an implicit class conversion"),
-        ("[layout(3)] class Item{}", "power-of-two"),
-        ("[layout(0)] class Item{}", "power-of-two"),
+        ("[align(3)] class Item{}", "power-of-two"),
+        ("[align(0)] class Item{}", "power-of-two"),
+        ("[layout(8)] class Item{}", "prohibited"),
+        ("[ordered] class Item{}", "prohibited"),
+        ("[move_only] class Item{}", "prohibited"),
         ("namespace_wrapper NWB;", "reserved"),
         ("namespace_wrapper A; namespace_wrapper B;", "one namespace_wrapper"),
         ("class Item{ private i32 hidden; } static_assert(offset_of<Item>(hidden) == 0u);", "accessible instance field"),

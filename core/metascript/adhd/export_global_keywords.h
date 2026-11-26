@@ -52,7 +52,7 @@ NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("inline",   "'inline' and 'noinlin
 NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("noinline", "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler")
 
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(OwnerResult, "owner_result")
-NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RecordLayout, "layout")
+NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RecordAlign, "align")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Friend, "friend")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CppUnwind, "cpp_unwind")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CppExplicitBool, "cpp_explicit_bool")
@@ -67,7 +67,8 @@ NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CopyParam, "copy")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Borrow, "borrow")
 
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("serialize", isSerialize)
-NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("move_only", isMoveOnly)
+NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE("move_only", "'move_only' attribute is prohibited in adhd; inherit from 'MoveOnly' instead")
+NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE("layout", "'layout' attribute is prohibited in adhd; use '[align(alignment)]' instead")
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("extensible", isExtensible)
 NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE("ordered", "'ordered' attribute is prohibited in adhd; member reordering is decided automatically by the adhd compiler")
 NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE("reflect",   isReflect)

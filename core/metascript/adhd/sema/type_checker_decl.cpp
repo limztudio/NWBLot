@@ -206,6 +206,10 @@ b8 TypeChecker::checkInterfaceDecl(InterfaceDecl& iface, MVector<ParseError>& er
                 m_symbols.collectAllInterfaceMethods(*baseType, inheritedMethods);
         }
         else if(IsNonCopyableBaseInterfaceName(baseName)){
+            if(IsMoveOnlyBaseInterfaceName(baseName)){
+                reportError(errors, iface.span, "'MoveOnly' cannot be used as a base of an 'interface'; use 'NoCopy'");
+                ok = false;
+            }
         }
         else{
             reportError(errors, iface.span, "unknown base interface name");
@@ -604,8 +608,10 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     }
 
     b8 ok = checkTemplateParamBounds(classDecl.templateParams, &classDecl, nullptr, errors);
+    const TypeLayoutAnalyzer layoutAnalyzer(m_symbols);
+    const b8 hasMoveOnlyBase = layoutAnalyzer.classInheritsMoveOnly(classDecl);
     if((classDecl.isExtensible || classDecl.concreteBase) && (classDecl.isExtern || !classDecl.templateParams.empty() || classDecl.isSerialize
-        || classDecl.isReflect || classDecl.recordAlignment || classDecl.isMoveOnly || !classDecl.assetTypeName.empty()
+        || classDecl.isReflect || classDecl.recordAlignment || hasMoveOnlyBase || !classDecl.assetTypeName.empty()
         || !classDecl.subsystemTypeName.empty() || !classDecl.componentTypeName.empty() || !classDecl.systemTypeName.empty())){
         reportError(errors, classDecl.span, "authored concrete bases require ordinary non-template classes");
         return false;
@@ -663,6 +669,20 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
     if(classDecl.isModular && !classDecl.templateParams.empty()){
         reportError(errors, classDecl.span, "'[modular]' class cannot be a template");
         ok = false;
+    }
+    if(!classDecl.isExtern && hasMoveOnlyBase){
+        if(classDecl.isArenaOwner || classDecl.isSerialize || classDecl.recordAlignment || !classDecl.assetTypeName.empty()
+            || !classDecl.systemTypeName.empty() || !classDecl.subsystemTypeName.empty() || !classDecl.componentTypeName.empty()){
+            reportError(errors, classDecl.span, "'MoveOnly' requires an ordinary value class");
+            ok = false;
+        }
+        for(const TypeRef* iface : classDecl.implementedInterfaces){
+            if(iface && layoutAnalyzer.interfaceInheritsNoCopy(*iface)){
+                reportError(errors, classDecl.span, "class cannot inherit from both 'NoCopy' and 'MoveOnly'");
+                ok = false;
+                break;
+            }
+        }
     }
 
     if(!classDecl.assetTypeName.empty()){

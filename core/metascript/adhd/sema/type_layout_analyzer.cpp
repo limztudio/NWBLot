@@ -84,8 +84,9 @@ b8 TypeLayoutAnalyzer::isFixedArrayNeedingArenaDefaultInit(const TypeRef& type)c
 b8 TypeLayoutAnalyzer::interfaceInheritsNoCopy(const TypeRef& ifaceRef, const u32 depth)const noexcept{
     if(depth >= 8u)
         return false;
-    if(IsNonCopyableBaseInterfaceName(ifaceRef.name))
-        return true;
+    const MStringView baseName = m_symbols.resolveBaseTypeName(ifaceRef.name);
+    if(IsNonCopyableBaseInterfaceName(baseName))
+        return !IsMoveOnlyBaseInterfaceName(baseName);
     if(const ClassDecl* cls = m_symbols.findClass(ifaceRef.name); cls && cls->isExtern && !cls->isCopyConstructible)
         return true;
     if(!m_symbols.hasTypeSymbol(ifaceRef.name)){
@@ -97,6 +98,14 @@ b8 TypeLayoutAnalyzer::interfaceInheritsNoCopy(const TypeRef& ifaceRef, const u3
             if(baseRef && interfaceInheritsNoCopy(*baseRef, depth + 1u))
                 return true;
         }
+    }
+    return false;
+}
+
+b8 TypeLayoutAnalyzer::classInheritsMoveOnly(const ClassDecl& decl)const noexcept{
+    for(const TypeRef* iface : decl.implementedInterfaces){
+        if(iface && IsMoveOnlyBaseInterfaceName(m_symbols.resolveBaseTypeName(iface->name)))
+            return true;
     }
     return false;
 }
@@ -130,10 +139,11 @@ b8 TypeLayoutAnalyzer::supportsTypeOperation(const TypeRef& type, const b8 requi
 }
 
 b8 TypeLayoutAnalyzer::supportsClassOperation(const ClassDecl& decl, const Span<const FieldDecl* const> fields, const TypeRef* const instance, const b8 requireCopy, const b8 assign, const ValueTypeVisit* const active)const noexcept{
-    if(decl.isExtensible || decl.concreteBase || (requireCopy && decl.isMoveOnly) || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
+    const b8 isMoveOnly = classInheritsMoveOnly(decl);
+    if(decl.isExtensible || decl.concreteBase || (requireCopy && isMoveOnly) || !decl.subsystemTypeName.empty() || !decl.systemTypeName.empty() || decl.isAbstract)
         return false;
     for(const TypeRef* iface : decl.implementedInterfaces){
-        if(iface && interfaceInheritsNoCopy(*iface) && (requireCopy || assign || !decl.isMoveOnly || !IsNonCopyableBaseInterfaceName(iface->name)))
+        if(iface && interfaceInheritsNoCopy(*iface))
             return false;
     }
     if(decl.isExtern){
@@ -399,16 +409,30 @@ b8 TypeLayoutAnalyzer::areFieldDeclsAndInitsOrderIndependent(const Span<const Fi
         if(field->defaultExpr && !isOrderIndependentInitExpr(field->defaultExpr, childDepth))
             return false;
         if(field->hasCtorInit){
-            const TypeRef* unwrappedFieldType = m_symbols.unwrapTypeAlias(subType);
-            if(unwrappedFieldType){
-                if(const ClassDecl* fieldCls = m_symbols.findClass(unwrappedFieldType->name); fieldCls && !fieldCls->isExtern && __hidden_adhd_type_layout_analyzer::HasAnyUserConstructor(*fieldCls))
-                    return false;
+            if(!field->ctorArgs.empty()){
+                const TypeRef* unwrappedFieldType = m_symbols.unwrapTypeAlias(subType);
+                if(unwrappedFieldType){
+                    if(const ClassDecl* fieldCls = m_symbols.findClass(unwrappedFieldType->name); fieldCls && !fieldCls->isExtern && __hidden_adhd_type_layout_analyzer::HasAnyUserConstructor(*fieldCls))
+                        return false;
+                }
             }
             for(const Expr* arg : field->ctorArgs){
                 if(!isOrderIndependentInitExpr(arg, childDepth))
                     return false;
             }
         }
+    }
+    return true;
+}
+
+b8 TypeLayoutAnalyzer::isOrderIndependentDefaultConstructor(const MethodDecl& ctor, const u32 depth)const noexcept{
+    if(depth >= 16u || !ctor.hasBody || !ctor.params.empty())
+        return false;
+    for(const Stmt* stmt : ctor.body){
+        if(!stmt || !IsThisMemberSimpleAssignStmt(*stmt))
+            return false;
+        if(!isOrderIndependentInitExpr(stmt->expr->rhs, depth + 1u))
+            return false;
     }
     return true;
 }
@@ -435,7 +459,9 @@ b8 TypeLayoutAnalyzer::areClassFieldsAndInitsOrderIndependent(const ClassDecl& c
     for(const MethodDecl* method : cls.methods){
         if(!method)
             continue;
-        if(method->isDestructor || (method->isConstructor && method->minArgCount == 0u))
+        if(method->isDestructor)
+            return false;
+        if(method->isConstructor && method->minArgCount == 0u && !isOrderIndependentDefaultConstructor(*method, depth + 1u))
             return false;
     }
     if(!cls.templateParams.empty() && !instance && templateArgs.empty())
@@ -500,7 +526,7 @@ b8 TypeLayoutAnalyzer::isOrderIndependentCallInitExpr(const Expr& expr, const u3
         validTypeCtor = typeArgs.empty();
     }
     else if(const ClassDecl* cls = m_symbols.findClass(callee)){
-        validTypeCtor = (cls->isExtern || !__hidden_adhd_type_layout_analyzer::HasAnyUserConstructor(*cls))
+        validTypeCtor = (cls->isExtern || expr.arguments.empty() || !__hidden_adhd_type_layout_analyzer::HasAnyUserConstructor(*cls))
             && areClassFieldsAndInitsOrderIndependent(*cls, nullptr, typeArgs, depth + 1u);
     }
     else if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(callee)){
@@ -508,7 +534,7 @@ b8 TypeLayoutAnalyzer::isOrderIndependentCallInitExpr(const Expr& expr, const u3
             const TypeRef* unwrapped = m_symbols.unwrapTypeAlias(aliasDecl->aliasedType);
             if(unwrapped && isOrderIndependentFieldType(*unwrapped, depth + 1u)){
                 const ClassDecl* aliasedCls = m_symbols.findClass(unwrapped->name);
-                validTypeCtor = !aliasedCls || aliasedCls->isExtern || !__hidden_adhd_type_layout_analyzer::HasAnyUserConstructor(*aliasedCls);
+                validTypeCtor = !aliasedCls || aliasedCls->isExtern || expr.arguments.empty() || !__hidden_adhd_type_layout_analyzer::HasAnyUserConstructor(*aliasedCls);
             }
         }
     }
@@ -549,7 +575,7 @@ b8 TypeLayoutAnalyzer::isOrderIndependentInitExpr(const Expr* const expr, const 
         return true;
     switch(expr->kind){
     case ExprKind::Identifier:
-        return expr->isBuiltinConstant || m_symbols.findGlobalConstant(expr->text) != nullptr;
+        return expr->isBuiltinConstant || m_symbols.findGlobalConstant(expr->text) != nullptr || FindBuiltinGlobalConstant(expr->text) != nullptr;
     case ExprKind::Unary:
         return !OperatorSemantics::IsIncrementOrDecrementOperatorToken(expr->op)
             && isOrderIndependentInitExpr(expr->lhs, depth + 1u);
@@ -561,7 +587,12 @@ b8 TypeLayoutAnalyzer::isOrderIndependentInitExpr(const Expr* const expr, const 
     }
     case ExprKind::Cast:
     case ExprKind::BitCast:
+        return isOrderIndependentInitExpr(expr->lhs, depth + 1u);
     case ExprKind::MemberAccess:
+        if(expr->lhs && expr->lhs->kind == ExprKind::Identifier && expr->lhs->callTemplateArgs.empty()
+            && BuiltinTypeSemantics::IsNumericScalarType(m_symbols.resolveBaseTypeName(expr->lhs->text))
+            && BuiltinTypeSemantics::TryMapScalarLimitMember(expr->text))
+            return true;
         return isOrderIndependentInitExpr(expr->lhs, depth + 1u);
     case ExprKind::Call:
         return isOrderIndependentCallInitExpr(*expr, depth);

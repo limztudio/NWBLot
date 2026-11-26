@@ -11,8 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[modular, move_only]
-class RefractionStatisticsReadbackGraphTask{
+[modular]
+class RefractionStatisticsReadbackGraphTask : MoveOnly{
     public BufferHandle source;
     public BufferHandle destination;
     public GpuGraphResourceId sourceResource;

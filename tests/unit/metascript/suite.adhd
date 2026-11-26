@@ -400,10 +400,10 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "[arena, component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'[cpp_unwind]' cannot change a registered class construction or destruction contract");
     ExpectCompileFailsWithMessage(arena, "[friend(Writer)] class Vault{ private u32 key = 1u; } class Reader{ public u32 read(in Vault vault)const{ return vault.key; } }", "impl/bad_friend_access.adhd", "cannot access 'private' or 'protected' field outside of its declaring class");
     ExpectCompileFailsWithMessage(arena, "[friend(Box)] class Vault{} class Box<T>{}", "impl/bad_friend_template.adhd", "a friend must name a non-template peer class");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Secret{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
-    ExpectCompileFailsWithMessage(arena, "[move_only] class Payload{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
+    ExpectCompileFailsWithMessage(arena, "class Secret : MoveOnly{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
+    ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
+    ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
+    ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
     ExpectCompileFailsWithMessage(arena, "interface Receiver{ void record(); } class Task : Receiver{ [cpp_unwind] public void record()override{} }", "impl/bad_unwind_interface.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing interface contract");
     ExpectCompileFailsWithMessage(arena, "interface Base{ void record(); } interface Sub : Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_derived_interface.adhd", "'[cpp_unwind]' cannot weaken an inherited nonthrowing interface contract");
     ExpectCompileFailsWithMessage(arena, "void Call(); [cpp_unwind] void Call(){}", "impl/bad_unwind_decl.adhd", "free function declarations must agree on '[cpp_unwind]'");
@@ -1569,6 +1569,20 @@ void VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldO
         "impl/test_bad_ordered.adhd",
         "'ordered' attribute is prohibited in adhd; member reordering is decided automatically by the adhd compiler"
     );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[layout(8)]\r\nclass BadLayout {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_layout.adhd",
+        "'layout' attribute is prohibited in adhd; use '[align(alignment)]' instead"
+    );
+
+    const StringView alignedRecordSource = "[align(16)]\r\nclass AlignedRecord {\r\n    public u8 tag = 0u;\r\n    public u32 value = 0u;\r\n}\r\n";
+    CompileResult alignedRecordResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(alignedRecordSource, "impl/aligned_record.adhd", arena.arena, alignedRecordResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(alignedRecordResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(alignedRecordResult, 0u, 0u), "tag");
+    EXPECT_EQ(UnitClassOrderedFieldName(alignedRecordResult, 0u, 1u), "value");
+    EXPECT_NE(GeneratedHeaderView(alignedRecordResult).find("class alignas(16) AlignedRecord final{"), usize.max);
 
     const StringView pureArenaFieldsSource = "class PureContainerRecord {\r\n    public u8 small = 1u;\r\n    public String label = \"ok\";\r\n    public u32 medium = 2u;\r\n    public Vector<u32> items;\r\n    public u64 wide = 3u;\r\n}\r\n";
     CompileResult pureResult = CompileResult(arena.arena);
@@ -1613,6 +1627,93 @@ void VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldO
     EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 0u), "flag");
     EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 1u), "owner");
     EXPECT_EQ(UnitClassOrderedFieldName(noCopyResult, 0u, 2u), "id");
+
+    const StringView pureDefaultCtorSource = "class PureDefaultCtorBox {\r\n    public f32x4 v;\r\n    public u32 mask = u32.max;\r\n    public PureDefaultCtorBox(){ this.v = f32x4(0.0f, 0.0f, 0.0f, 1.0f); }\r\n}\r\nclass Holder {\r\n    public u8 small = 0u;\r\n    public PureDefaultCtorBox box;\r\n    public u64 wide = 0u;\r\n}\r\n";
+    CompileResult pureDefaultCtorResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(pureDefaultCtorSource, "impl/pure_default_ctor_holder.adhd", arena.arena, pureDefaultCtorResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(pureDefaultCtorResult, 1u), 3u);
+    EXPECT_EQ(UnitClassOrderedFieldName(pureDefaultCtorResult, 1u, 0u), "box");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureDefaultCtorResult, 1u, 1u), "wide");
+    EXPECT_EQ(UnitClassOrderedFieldName(pureDefaultCtorResult, 1u, 2u), "small");
+
+    const StringView sideEffectDefaultCtorSource = "u32 NextSeed(){ return 7u; }\r\nclass SideEffectDefaultCtorBox {\r\n    public u32 id;\r\n    public SideEffectDefaultCtorBox(){ this.id = NextSeed(); }\r\n}\r\nclass Holder {\r\n    public u8 first = 0u;\r\n    public SideEffectDefaultCtorBox box;\r\n    public u64 second = 0u;\r\n}\r\n";
+    CompileResult sideEffectDefaultCtorResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(sideEffectDefaultCtorSource, "impl/side_effect_default_ctor_holder.adhd", arena.arena, sideEffectDefaultCtorResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(sideEffectDefaultCtorResult, 1u), 3u);
+    EXPECT_EQ(UnitClassOrderedFieldName(sideEffectDefaultCtorResult, 1u, 0u), "first");
+    EXPECT_EQ(UnitClassOrderedFieldName(sideEffectDefaultCtorResult, 1u, 1u), "box");
+    EXPECT_EQ(UnitClassOrderedFieldName(sideEffectDefaultCtorResult, 1u, 2u), "second");
+}
+
+void VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[move_only]\r\nclass BadAttr : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_move_only_attr.adhd",
+        "'move_only' attribute is prohibited in adhd; inherit from 'MoveOnly' instead"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "class BadBoth : NoCopy, MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_both_nocopy_moveonly.adhd",
+        "class cannot inherit from both 'NoCopy' and 'MoveOnly'"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "interface IBad : MoveOnly {\r\n    void ping();\r\n}\r\n",
+        "impl/test_bad_iface_moveonly.adhd",
+        "'MoveOnly' cannot be used as a base of an 'interface'; use 'NoCopy'"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[arena]\r\nclass BadArenaMoveOnly : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_arena_moveonly.adhd",
+        "'MoveOnly' requires an ordinary value class"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[serialize]\r\nclass BadSerializeMoveOnly : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_serialize_moveonly.adhd",
+        "'MoveOnly' requires an ordinary value class"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[extensible]\r\nclass BadExtensibleMoveOnly : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
+        "impl/test_bad_extensible_moveonly.adhd",
+        "authored concrete bases require ordinary non-template classes"
+    );
+    ExpectCompileFailsWithMessage(
+        arena,
+        "[cpp_name(\"::MyNs::ExtMoveOnly\"), cpp_header(\"<my_ns/types.h>\")]\r\nextern class ExtMoveOnly : MoveOnly {\r\n    ExtMoveOnly();\r\n};\r\nvoid BadExtCopy(in ExtMoveOnly src) {\r\n    ExtMoveOnly copy = src;\r\n}\r\n",
+        "impl/test_bad_extern_moveonly_copy.adhd",
+        "cannot copy a non-copyable type"
+    );
+
+    const StringView plainMoveOnlySource = "class Payload : MoveOnly {\r\n    public u8 small = 1u;\r\n    public u64 wide = 2u;\r\n}\r\n";
+    CompileResult plainResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(plainMoveOnlySource, "impl/plain_move_only.adhd", arena.arena, plainResult));
+    ASSERT_EQ(UnitClassOrderedFieldCount(plainResult, 0u), 2u);
+    EXPECT_EQ(UnitClassOrderedFieldName(plainResult, 0u, 0u), "wide");
+    EXPECT_EQ(UnitClassOrderedFieldName(plainResult, 0u, 1u), "small");
+    const StringView plainHdr = GeneratedHeaderView(plainResult);
+    EXPECT_NE(plainHdr.find("class Payload final : public ::MoveOnly{"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload(const Payload&) = delete;"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload(Payload&&)noexcept = default;"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload& operator=(const Payload&) = delete;"), usize.max);
+    EXPECT_NE(plainHdr.find("Payload& operator=(Payload&&)noexcept = default;"), usize.max);
+
+    const StringView arenaMoveOnlySource = "class ArenaPayload : MoveOnly {\r\n    public String label = \"seed\";\r\n}\r\nvoid Transfer(mut ArenaPayload dst, mut ArenaPayload src) {\r\n    MoveInto<ArenaPayload>(dst, src);\r\n}\r\n";
+    CompileResult arenaResult = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(arenaMoveOnlySource, "impl/arena_move_only.adhd", arena.arena, arenaResult));
+    const StringView arenaHdr = GeneratedHeaderView(arenaResult);
+    EXPECT_NE(arenaHdr.find("class ArenaPayload final : public ::MoveOnly{"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload(const ArenaPayload&) = delete;"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload(ArenaPayload&&)noexcept = default;"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload(::ArenaBase& __adhd_mother_arena, ArenaPayload&& __adhd_rhs)"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload& operator=(const ArenaPayload&) = delete;"), usize.max);
+    EXPECT_NE(arenaHdr.find("ArenaPayload& operator=(ArenaPayload&& __adhd_rhs)"), usize.max);
 }
 
 NWB_ADHD_GTEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes, VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes)
@@ -1696,6 +1797,8 @@ NWB_ADHD_GTEST(AdhdCompiler, CompilesModularClassEdgeCases, VerifyAdhdCompiler_C
 NWB_ADHD_GTEST(AdhdCompiler, ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder, VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder)
 
 NWB_ADHD_GTEST(AdhdCompiler, ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder, VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder)
+
+NWB_ADHD_GTEST(AdhdCompiler, ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass, VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

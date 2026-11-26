@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[move_only, friend(Builder)]
-class RadioGroupLabel{
+[friend(Builder)]
+class RadioGroupLabel : MoveOnly{
     private SharedTextLayout m_text;
     private Rect m_bounds;
 
@@ -20,8 +20,8 @@ class RadioGroupLabel{
     }
 }
 
-[move_only, friend(Builder)]
-class RadioGroupFrame : NoCopy{
+[friend(Builder)]
+class RadioGroupFrame : MoveOnly{
     private in IListDataSource m_source;
     private mut RadioGroupState m_state;
     private Vector<RadioGroupLabel> m_labels;

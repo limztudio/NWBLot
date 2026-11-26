@@ -10,7 +10,7 @@ NWB_ADHD_EXPORT_GENERIC_TYPE("ComponentPool", "::NWB::Core::ECS::ComponentPool",
 NWB_ADHD_EXPORT_GENERIC_TYPE("TypedAsset", "::NWB::Core::Assets::TypedAsset", SingleType, None, 0u, 8u, false, false, false, false, false, false, false, false, false, false, None, false, false, false, false, false, "<core/assets/module.h>")
 NWB_ADHD_EXPORT_GENERIC_TYPE("AssetCodec", "::NWB::Core::Assets::AssetCodec", SingleType, None, 8u, 8u, false, true, false, false, false, false, false, false, false, false, None, false, false, false, false, false, "<core/assets/module.h>")
 
-NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("Core::Assets::IAsset", "Core::Assets::IAsset")
+NWB_ADHD_EXPORT_NON_COPYABLE_BASE_INTERFACE("Core::Assets::IAsset", "Core::Assets::IAsset", false)
 
 NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("AssetRef",   true, false)
 NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("TypedAsset", true, false)

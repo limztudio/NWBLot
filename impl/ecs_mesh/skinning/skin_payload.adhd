@@ -24,7 +24,7 @@ extern const u32 s_ShaderSkinnedMeshSkinWeightByteOffset;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[layout(8)]
+[align(8)]
 class MeshSkinningInfluenceGpu{
     public Array<u32, 2u> packedJoint;
     public f32x4u weight;

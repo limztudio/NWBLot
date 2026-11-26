@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <linux/joystick.h>
 #include <sys/inotify.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 
@@ -118,6 +119,32 @@ static void EmitAxisIfChanged(
         cachedAxes[idx] = nextValue;
         input.gamepadAxisUpdate(slotIndex, axisIndex, nextValue);
     }
+}
+
+static b8 IsGamepadButtonCode(const u16 code)noexcept{
+    return (code >= BTN_JOYSTICK && code < BTN_DIGI)
+        || (code >= BTN_WHEEL && code < KEY_OK)
+        || (code >= BTN_DPAD_UP && code <= BTN_GRIPR2)
+        || (code >= BTN_TRIGGER_HAPPY1 && code <= BTN_TRIGGER_HAPPY40);
+}
+
+static b8 IsGamepadDevice(const i32 fd)noexcept{
+    u8 buttonCount = 0u;
+    if(::ioctl(fd, JSIOCGBUTTONS, &buttonCount) < 0 || buttonCount == 0u)
+        return false;
+
+    Array<u16, KEY_MAX - BTN_MISC + 1> buttonMap{};
+    if(::ioctl(fd, JSIOCGBTNMAP, buttonMap.data()) < 0)
+        return false;
+
+    const u32 clampedCount = static_cast<u32>(buttonCount) < static_cast<u32>(buttonMap.size())
+        ? static_cast<u32>(buttonCount)
+        : static_cast<u32>(buttonMap.size());
+    for(u32 idx = 0u; idx < clampedCount; ++idx){
+        if(IsGamepadButtonCode(buttonMap[idx]))
+            return true;
+    }
+    return false;
 }
 
 
@@ -235,6 +262,10 @@ void LinuxGamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
             const i32 fd = ::open(s_JoystickPaths[i], O_RDONLY | O_NONBLOCK);
             if(fd < 0)
                 continue;
+            if(!IsGamepadDevice(fd)){
+                ::close(fd);
+                continue;
+            }
             slot.fd = fd;
             slot.connected = true;
             slot.buttons = 0u;

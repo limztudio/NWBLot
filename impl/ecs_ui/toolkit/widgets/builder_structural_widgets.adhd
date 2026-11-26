@@ -585,7 +585,7 @@ NumericEditBoxResult Builder::integerSpinBox(in StringView stableKey, mut Intege
                 if(rounded >= cast<f64>(s_NumericEditMaxI64))
                     magInt = s_NumericEditMaxI64;
                 else
-                    magInt = Max(1ll, cast<i64>(rounded));
+                    magInt = Max(cast<i64>(1), cast<i64>(rounded));
                 if(rawSteps < 0.0)
                     deltaSteps = -magInt;
                 else

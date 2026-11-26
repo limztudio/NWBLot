@@ -1107,12 +1107,16 @@ void UiWindowSmokeScene::paintMarkers(mut UiPaintContext context, in WindowMetri
     for(usize index = 0u; index < values.size(); ++index)
         context.paint.fillRect(Rect(cast<f32>(index) * 20.0f + 12.0f, markerY, 14.0f, 12.0f), EncodeSmokeColor(values[index]));
     const VectorSingle anchors = VectorSingle(bounds.x, bounds.y, bounds.y, 0.0f) + VectorSingle(bounds.width, 4.0f, metrics.titleHeight, 0.0f) + VectorSingle(-14.0f, 0.0f, 4.0f, 0.0f);
+    const b8 overlayStarted = context.paint.beginOverlay(1u);
+    [essential] assert(overlayStarted, "UI window smoke marker overlay must begin");
     context.paint.pushClip(ResolveVisibleWindowBounds(this.m_window, metrics));
     context.paint.fillRect(Rect(anchors.x, anchors.y, 10.0f, 10.0f), Color(0.70f, 0.02f, 0.35f, 1.0f));
     if(!this.m_window.collapsed)
         context.paint.fillRect(Rect(anchors.x, anchors.z, 10.0f, 10.0f), Color(0.02f, 0.30f, 0.75f, 1.0f));
     const b8 popped = context.paint.popClip();
     [essential] assert(popped, "UI window smoke marker clip pop must succeed");
+    const b8 overlayEnded = context.paint.endOverlay();
+    [essential] assert(overlayEnded, "UI window smoke marker overlay must end");
 }
 
 

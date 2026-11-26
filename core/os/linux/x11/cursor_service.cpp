@@ -6,7 +6,7 @@
 
 #if defined(FOUNDATION_PLATFORM_LINUX)
 
-#include <X11/Xlib.h>
+#include "x11_lib.h"
 #include <X11/cursorfont.h>
 
 

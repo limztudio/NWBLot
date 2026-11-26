@@ -110,7 +110,7 @@ if(TARGET nwb_loader AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         add_custom_target(nwb_testbed_smoke_assets DEPENDS "${_nwb_testbed_smoke_asset_stamp}")
         add_dependencies(testbed nwb_testbed_smoke_assets)
         nwb_add_window_capture_smoke(nwb_testbed_window_capture_smoke testbed_window_capture.bmp "$<TARGET_FILE:testbed>" "${_nwb_testbed_smoke_runtime_root}" "NWB Testbed"
-            "--graceful-exit-timeout" "30" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
+            "--timeout" "120" "--graceful-exit-timeout" "30" "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>" "--expect-log-message" "ProjectTestbed: startup scene created" "--expect-log-message" "ProjectTestbed: shutdown")
         unset(_nwb_testbed_smoke_asset_stamp)
         unset(_nwb_testbed_smoke_asset_inputs)
         unset(_nwb_testbed_smoke_runtime_root)

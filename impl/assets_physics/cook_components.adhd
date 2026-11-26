@@ -817,7 +817,7 @@ b8 ValidateCookColliderGeometryFields(
             error("{} '{}': invalid heightfield thickness", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }
-        if(!MakeHeightfieldShape(heightfieldCols, heightfieldRows, heightfieldHeights, heightfieldScale, center).has_value()){
+        if(!ValidateHeightfieldParameters(heightfieldCols, heightfieldRows, heightfieldHeights, heightfieldScale, center)){
             error("{} '{}': invalid heightfield geometry", s_ColliderComponentDiagnosticPrefix, PathToString(file));
             return false;
         }

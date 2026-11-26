@@ -97,7 +97,7 @@ class TableResult{
 class TableState : NoCopy{
     public ListMeasureKey m_measureKey;
     public Vector<u64> m_columnKeys;
-    public Vector<f32> m_columnWidths;
+    public HashMap<u64, f32> m_columnWidthByKey;
     public u64 m_sortColumnKey = 0u;
     public TableSortDirection m_sortDirection = TableSortDirection::None;
     public Vector<u64> m_sortedOrder;
@@ -109,6 +109,8 @@ class TableState : NoCopy{
     public ScrollPlacement m_placement;
     public ScrollViewportPlacement m_scrollbars;
     public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_reconciledInputGeneration = 0u;
+    public u64 m_reconciledSortRevision = 0u;
     public u64 m_selected = 0u;
     public u64 m_cursor = 0u;
     public u64 m_anchor = 0u;
@@ -152,24 +154,22 @@ class TableState : NoCopy{
     }
 
     public f32 columnWidth(in u64 columnKey, in f32 defaultWidth)const{
-        for(usize idx = 0u; idx < this.m_columnKeys.size(); ++idx){
-            if(this.m_columnKeys[idx] == columnKey)
-                return this.m_columnWidths[idx];
-        }
+        const auto found = this.m_columnWidthByKey.find(columnKey);
+        if(found != this.m_columnWidthByKey.end())
+            return found.value();
         return defaultWidth;
     }
 
     public void setColumnWidth(in u64 columnKey, in f32 width){
         if(columnKey == 0u || !IsFinite(VectorSingle(width)) || width <= 0.0f)
             return;
-        for(usize idx = 0u; idx < this.m_columnKeys.size(); ++idx){
-            if(this.m_columnKeys[idx] == columnKey){
-                this.m_columnWidths[idx] = width;
-                return;
-            }
+        const auto found = this.m_columnWidthByKey.find(columnKey);
+        if(found != this.m_columnWidthByKey.end()){
+            found.value() = width;
+            return;
         }
         this.m_columnKeys.push_back(columnKey);
-        this.m_columnWidths.push_back(width);
+        this.m_columnWidthByKey.try_emplace(columnKey, width);
     }
 
     public b8 setSort(in u64 columnKey, in TableSortDirection direction){
@@ -305,26 +305,43 @@ b8 MatchesTableSource(in ITableDataSource source, in u64 generation, in u64 revi
     return source.instanceGeneration() == generation && source.revision() == revision;
 }
 
-b8 SyncTableColumnsAndSort(in Span<TableColumn> columns, in ITableDataSource source, mut TableState state){
+b8 SyncTableColumnsAndSortValidated(in Span<TableColumn> columns, in ITableDataSource source, mut TableState state){
     const u64 generation = source.instanceGeneration();
     const u64 revision = source.revision();
-    if(generation == 0u || revision == 0u || !IsValidTableColumns(columns))
+    if(generation == 0u || revision == 0u)
         return false;
-    Vector<u64> syncedKeys;
-    Vector<f32> syncedWidths;
-    syncedKeys.reserve(columns.size());
-    syncedWidths.reserve(columns.size());
-    for(in TableColumn col : columns){
-        syncedKeys.push_back(col.key);
-        syncedWidths.push_back(ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth));
+    b8 columnsMatch = state.m_columnKeys.size() == columns.size();
+    if(columnsMatch){
+        for(usize idx = 0u; idx < columns.size(); ++idx){
+            if(state.m_columnKeys[idx] != columns[idx].key){
+                columnsMatch = false;
+                break;
+            }
+        }
     }
-    state.m_columnKeys.clear();
-    state.m_columnWidths.clear();
-    state.m_columnKeys.reserve(syncedKeys.size());
-    state.m_columnWidths.reserve(syncedWidths.size());
-    for(usize idx = 0u; idx < syncedKeys.size(); ++idx){
-        state.m_columnKeys.push_back(syncedKeys[idx]);
-        state.m_columnWidths.push_back(syncedWidths[idx]);
+    if(columnsMatch){
+        for(in TableColumn col : columns){
+            const auto found = state.m_columnWidthByKey.find(col.key);
+            if(found != state.m_columnWidthByKey.end())
+                found.value() = ClampTableColumnWidth(found.value(), col.minWidth, col.maxWidth);
+            else
+                state.m_columnWidthByKey.try_emplace(col.key, ClampTableColumnWidth(col.width, col.minWidth, col.maxWidth));
+        }
+    }
+    else{
+        Vector<u64> syncedKeys;
+        Vector<f32> syncedWidths;
+        syncedKeys.reserve(columns.size());
+        syncedWidths.reserve(columns.size());
+        for(in TableColumn col : columns){
+            syncedKeys.push_back(col.key);
+            syncedWidths.push_back(ClampTableColumnWidth(state.columnWidth(col.key, col.width), col.minWidth, col.maxWidth));
+        }
+        TransferVector<u64>(state.m_columnKeys, syncedKeys);
+        state.m_columnWidthByKey.clear();
+        state.m_columnWidthByKey.reserve(columns.size());
+        for(usize idx = 0u; idx < columns.size(); ++idx)
+            state.m_columnWidthByKey.try_emplace(state.m_columnKeys[idx], syncedWidths[idx]);
     }
     if(state.m_sortColumnKey != 0u){
         b8 sortColValid = false;
@@ -413,24 +430,28 @@ b8 SyncTableColumnsAndSort(in Span<TableColumn> columns, in ITableDataSource sou
     }
     if(!MatchesTableSource(source, generation, revision))
         return false;
-    state.m_sortedOrder.clear();
-    state.m_sortedOrder.reserve(order.size());
+    TransferVector<u64>(state.m_sortedOrder, order);
     state.m_displayIndexByKey.clear();
-    state.m_displayIndexByKey.reserve(order.size());
-    for(usize displayIdx = 0u; displayIdx < order.size(); ++displayIdx){
-        const u64 srcIdx = order[displayIdx];
-        state.m_sortedOrder.push_back(srcIdx);
+    state.m_displayIndexByKey.reserve(state.m_sortedOrder.size());
+    for(usize displayIdx = 0u; displayIdx < state.m_sortedOrder.size(); ++displayIdx){
+        const u64 srcIdx = state.m_sortedOrder[displayIdx];
         state.m_displayIndexByKey.try_emplace(rowKeys[cast<usize>(srcIdx)], cast<u64>(displayIdx));
     }
     state.m_cachedSortRevision = state.m_sortRevision;
     return true;
 }
 
-b8 ReconcileTableState(mut TableState state, in Span<TableColumn> columns, in ITableDataSource source){
+b8 SyncTableColumnsAndSort(in Span<TableColumn> columns, in ITableDataSource source, mut TableState state){
+    if(!IsValidTableColumns(columns))
+        return false;
+    return SyncTableColumnsAndSortValidated(columns, source, state);
+}
+
+b8 ReconcileTableStateValidated(mut TableState state, in Span<TableColumn> columns, in ITableDataSource source){
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
     const u64 revision = source.revision();
-    if(generation == 0u || revision == 0u || !IsValidTableColumns(columns))
+    if(generation == 0u || revision == 0u)
         return false;
     const b8 replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
     if(replacement){
@@ -445,8 +466,19 @@ b8 ReconcileTableState(mut TableState state, in Span<TableColumn> columns, in IT
         if(!state.m_scroll.setOffset(0.0) || !state.m_scrollX.setOffset(0.0))
             return false;
     }
-    if(!SyncTableColumnsAndSort(columns, source, state) || state.m_inputGeneration != inputGeneration)
+    if(!SyncTableColumnsAndSortValidated(columns, source, state) || state.m_inputGeneration != inputGeneration)
         return false;
+    if(
+        !replacement
+        && state.m_sourceGeneration == generation
+        && state.m_sourceRevision == revision
+        && state.m_reconciledInputGeneration == inputGeneration
+        && state.m_reconciledSortRevision == state.m_sortRevision
+    ){
+        if(!MatchesTableSource(source, generation, revision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        return true;
+    }
     u64 selected = 0u;
     u64 cursor = 0u;
     u64 anchor = 0u;
@@ -508,7 +540,15 @@ b8 ReconcileTableState(mut TableState state, in Span<TableColumn> columns, in IT
     state.m_ensureCursor = state.m_cursor != 0u && (state.m_ensureCursor || changed);
     state.m_sourceGeneration = generation;
     state.m_sourceRevision = revision;
+    state.m_reconciledInputGeneration = inputGeneration;
+    state.m_reconciledSortRevision = state.m_sortRevision;
     return true;
+}
+
+b8 ReconcileTableState(mut TableState state, in Span<TableColumn> columns, in ITableDataSource source){
+    if(!IsValidTableColumns(columns))
+        return false;
+    return ReconcileTableStateValidated(state, columns, source);
 }
 
 Expected<u64> FindEnabledTableRowKey(in TableState state, in ITableDataSource source, in u64 startDisplayIdx, in b8 reverse){
@@ -653,7 +693,7 @@ b8 ApplyTableControlAction(
                 state.m_sortDirection = nextDir;
             }
             AdvanceNonWrappingRevision(state.m_sortRevision);
-            if(!ReconcileTableState(state, columns, source) || state.m_inputGeneration != inputGeneration)
+            if(!ReconcileTableStateValidated(state, columns, source) || state.m_inputGeneration != inputGeneration)
                 return false;
             result.sortChanged = true;
             result.sortColumnKey = state.m_sortColumnKey;

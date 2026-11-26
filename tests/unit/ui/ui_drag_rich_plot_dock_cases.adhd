@@ -219,6 +219,26 @@ class PlotAndCanvasTests : WidgetFixture{
 
         return this.finishPanel() && this.m_context.commitFrame(generation);
     }
+
+    public b8 renderDenseDecimatedPlot(in u64 generation, in Span<f32> denseValues){
+        if(!this.panel(generation, "panel", Rect(10.0f, 10.0f, 440.0f, 380.0f)))
+            return false;
+
+        Array<PlotSeries, 2u> denseSeries;
+        denseSeries[0u].values = denseValues;
+        denseSeries[0u].color = Color(0.25f, 0.75f, 0.98f, 1.0f);
+        denseSeries[0u].kind = PlotKind::Line;
+        denseSeries[1u].values = denseValues;
+        denseSeries[1u].color = Color(0.35f, 0.85f, 0.55f, 1.0f);
+        denseSeries[1u].kind = PlotKind::Area;
+
+        PlotOptions denseOpts;
+        denseOpts.width = LayoutSize(LayoutSizePolicy::Fixed, 240.0f);
+        denseOpts.height = LayoutSize(LayoutSizePolicy::Fixed, 100.0f);
+        this.m_plotResult = this.m_builder.plot("dense_plot", Span<PlotSeries>(denseSeries.data(), 2u), denseOpts);
+
+        return this.finishPanel() && this.m_context.commitFrame(generation);
+    }
 }
 
 class DockSpaceTests : WidgetFixture{
@@ -523,6 +543,19 @@ void VerifyPlotAndCanvas_SimdRangeCrosshairPainterAndInput(mut PlotAndCanvasTest
     ASSERT_TRUE(self.renderCanvas(7u, true));
     EXPECT_FALSE(self.m_canvasResult.dragging);
     EXPECT_GT(Abs(VectorSingle(cast<f32>(self.m_canvasResult.wheelDelta))).x, 0.5f);
+
+    Vector<f32> denseValues;
+    denseValues.resize(2000u, 0.0f);
+    for(usize di = 0u; di < denseValues.size(); ++di)
+        denseValues[di] = cast<f32>(di & 7u);
+    denseValues[10u] = qnan;
+    denseValues[333u] = 100.0f;
+    denseValues[777u] = -100.0f;
+    denseValues[1001u] = pinf;
+    ASSERT_TRUE(self.renderDenseDecimatedPlot(8u, Span<f32>(denseValues)));
+    EXPECT_TRUE(self.m_plotResult.valid);
+    EXPECT_NEAR(self.m_plotResult.computedMinY, -100.0f, 0.001f);
+    EXPECT_NEAR(self.m_plotResult.computedMaxY, 100.0f, 0.001f);
 }
 
 void VerifyDockSpace_StateTreeAndDropZones(mut DockSpaceTests self){

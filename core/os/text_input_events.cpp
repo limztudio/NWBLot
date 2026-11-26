@@ -53,13 +53,23 @@ b8 QueuedTextInputService::cancelSession(const TextInputSessionToken token, cons
     invalidateSession();
     clearEvents();
     m_cancelledToken = token;
-    TextInputEvent& event = m_events.emplace_back(m_arena);
+    TextInputEvent& event = m_events.empty() ? m_events.emplace_back(m_arena) : m_events[0u];
+    event.text.clear();
+    event.preeditClauses.clear();
     event.token = token;
     event.sequence = m_nextSequence;
     AdvanceNonWrappingRevision(m_nextSequence);
     event.surroundingRevision = revision;
     event.kind = TextInputEventKind::Cancelled;
+    event.anchorByte = 0u;
+    event.caretByte = 0u;
+    event.deleteBeforeBytes = 0u;
+    event.deleteAfterBytes = 0u;
+    event.caretVisible = true;
     event.cancelReason = reason;
+    event.deletionBasis = TextInputDeletionBasis::Caret;
+    m_eventHead = 0u;
+    m_eventCount = 1u;
     const b8 wasTransitioning = m_transitioning;
     m_transitioning = true;
     ScopeExit finishTransition([this, wasTransitioning]()noexcept{ m_transitioning = wasTransitioning; });
@@ -107,17 +117,24 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     else if(kind == TextInputEventKind::Commit && text.empty())
         return TextInputAdmission::Accepted;
 
-    const b8 replace = kind == TextInputEventKind::Preedit && !m_events.empty() && m_events.back().kind == TextInputEventKind::Preedit;
-    const usize oldBytes = replace ? m_events.back().text.size() : 0u;
-    if((!replace && m_events.size() >= s_TextInputMaxEvents) || text.size() > s_TextInputMaxQueuedTextBytes - (m_queuedTextBytes - oldBytes)){
+    const usize backIdx = m_eventCount > 0u ? (m_eventHead + m_eventCount - 1u) % s_TextInputMaxEvents : 0u;
+    const b8 replace = kind == TextInputEventKind::Preedit && m_eventCount > 0u && m_events[backIdx].kind == TextInputEventKind::Preedit;
+    const usize oldBytes = replace ? m_events[backIdx].text.size() : 0u;
+    if((!replace && m_eventCount >= s_TextInputMaxEvents) || text.size() > s_TextInputMaxQueuedTextBytes - (m_queuedTextBytes - oldBytes)){
         if(!cancelSession(token, TextInputCancelReason::Overflow))
             TerminateInvariant();
         return TextInputAdmission::QueueFull;
     }
-    TextInputEvent& event = replace ? m_events.back() : m_events.emplace_back(m_arena);
-    ScopeExit rollback([this, replace]()noexcept{
-        if(!replace)
+    const usize targetIdx = replace ? backIdx : (m_eventHead + m_eventCount) % s_TextInputMaxEvents;
+    const b8 pushedNewSlot = !replace && targetIdx == m_events.size();
+    TextInputEvent& event = pushedNewSlot ? m_events.emplace_back(m_arena) : m_events[targetIdx];
+    ScopeExit rollback([this, &event, replace, pushedNewSlot]()noexcept{
+        if(pushedNewSlot)
             m_events.pop_back();
+        else if(!replace){
+            event.text.clear();
+            event.preeditClauses.clear();
+        }
     });
     if(kind == TextInputEventKind::Preedit && !clauses.empty())
         event.preeditClauses.reserve(clauses.size());
@@ -140,12 +157,20 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     event.cancelReason = TextInputCancelReason::NativeCancelled;
     event.deletionBasis = basis;
     m_queuedTextBytes = m_queuedTextBytes - oldBytes + text.size();
+    if(!replace)
+        ++m_eventCount;
     rollback.release();
     return TextInputAdmission::Accepted;
 }
 
 void QueuedTextInputService::clearEvents()noexcept{
-    m_events.clear();
+    for(usize offset = 0u; offset < m_eventCount; ++offset){
+        TextInputEvent& entry = m_events[(m_eventHead + offset) % s_TextInputMaxEvents];
+        entry.text.clear();
+        entry.preeditClauses.clear();
+    }
+    m_eventHead = 0u;
+    m_eventCount = 0u;
     m_queuedTextBytes = 0u;
 }
 

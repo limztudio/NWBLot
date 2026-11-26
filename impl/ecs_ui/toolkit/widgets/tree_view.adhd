@@ -93,6 +93,7 @@ class TreeState : NoCopy{
     public ScrollPlacement m_placement;
     public ScrollViewportPlacement m_scrollbars;
     public u64 m_inputGeneration = AllocateServiceIdentity();
+    public u64 m_reconciledInputGeneration = 0u;
     public u64 m_selected = 0u;
     public u64 m_cursor = 0u;
     public u64 m_anchor = 0u;
@@ -288,14 +289,11 @@ b8 RebuildTreeVisibleNodes(
     }
     if(!MatchesTreeSource(source, generation, revision))
         return false;
-    outNodes.clear();
-    outNodes.reserve(nodes.size());
+    TransferVector<TreeVisibleNode>(outNodes, nodes);
     outIndexByKey.clear();
-    outIndexByKey.reserve(nodes.size());
-    for(usize idx = 0u; idx < nodes.size(); ++idx){
-        outNodes.push_back(nodes[idx]);
-        outIndexByKey.try_emplace(nodes[idx].key, cast<u64>(idx));
-    }
+    outIndexByKey.reserve(outNodes.size());
+    for(usize idx = 0u; idx < outNodes.size(); ++idx)
+        outIndexByKey.try_emplace(outNodes[idx].key, cast<u64>(idx));
     return true;
 }
 
@@ -310,6 +308,11 @@ b8 ReconcileTreeState(mut TreeState state, in ITreeDataSource source, in u64 col
         || state.m_sourceGeneration != generation
         || state.m_sourceRevision != revision
         || state.m_cachedExpandRevision != state.m_expandRevision;
+    if(!needRebuild && collapsedAnchorKey == 0u && state.m_reconciledInputGeneration == inputGeneration){
+        if(!MatchesTreeSource(source, generation, revision) || state.m_inputGeneration != inputGeneration)
+            return false;
+        return true;
+    }
     if(replacement){
         state.m_expandedKeys.clear();
         state.m_visibleNodes.clear();
@@ -411,6 +414,7 @@ b8 ReconcileTreeState(mut TreeState state, in ITreeDataSource source, in u64 col
     state.m_sourceGeneration = generation;
     state.m_sourceRevision = revision;
     state.m_cachedExpandRevision = state.m_expandRevision;
+    state.m_reconciledInputGeneration = inputGeneration;
     return true;
 }
 

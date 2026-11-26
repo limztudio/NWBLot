@@ -138,6 +138,36 @@ class FontFace : NoCopy{
     public b8 hasColor()const{ return this.m_hasColor; }
     public in SharedBakedFontAtlas bakedAtlas()const{ return this.m_bakedAtlas; }
 
+    public b8 supportsClusterUtf8(in StringView clusterUtf8)const{
+        if(!this.m_ready || clusterUtf8.empty())
+            return false;
+        usize offset = 0u;
+        b8 checkedAny = false;
+        while(offset < clusterUtf8.size()){
+            u32 cp = 0u;
+            usize bytes = 0u;
+            if(!TryDecodeUtf8Scalar(clusterUtf8.substr(offset), cp, bytes) || bytes == 0u)
+                return false;
+            offset += bytes;
+            if(cp == 0x200Cu || cp == 0x200Du || IsUiTextVariationSelector(cp))
+                continue;
+            checkedAny = true;
+            if(offset < clusterUtf8.size()){
+                u32 nextCp = 0u;
+                usize nextBytes = 0u;
+                if(TryDecodeUtf8Scalar(clusterUtf8.substr(offset), nextCp, nextBytes) && nextBytes != 0u && IsUiTextVariationSelector(nextCp)){
+                    offset += nextBytes;
+                    if(!this.m_hbFont.hasVariationGlyph(cp, nextCp) && !this.m_hbFont.hasNominalGlyph(cp))
+                        return false;
+                    continue;
+                }
+            }
+            if(!this.m_hbFont.hasNominalGlyph(cp))
+                return false;
+        }
+        return checkedAny;
+    }
+
     public Expected<FontMetrics> metrics(in f32 fontSize){
         if(!this.m_ready)
             return MakeUnexpected(Failure());
@@ -164,6 +194,10 @@ class FontFace : NoCopy{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+b8 IsUiTextVariationSelector(in u32 cp){
+    return (cp >= 0xFE00u && cp <= 0xFE0Fu) || (cp >= 0xE0100u && cp <= 0xE01EFu);
+}
 
 b8 IsValidTextRasterPixelSize(in u32 pixelSize){
     return pixelSize != 0u && pixelSize <= s_TextMaxRasterPpem;

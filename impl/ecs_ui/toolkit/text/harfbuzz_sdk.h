@@ -88,6 +88,14 @@ public:
     void setScale(const i32 x, const i32 y)noexcept{ hb_font_set_scale(m_font, x, y); }
     [[nodiscard]] b8 horizontalExtents(hb_font_extents_t& extents)const noexcept{ return hb_font_get_h_extents(m_font, &extents); }
     [[nodiscard]] b8 glyphExtents(const u32 glyph, hb_glyph_extents_t& extents)const noexcept{ return hb_font_get_glyph_extents(m_font, glyph, &extents); }
+    [[nodiscard]] b8 hasNominalGlyph(const u32 codepoint)const noexcept{
+        hb_codepoint_t glyph = 0u;
+        return hb_font_get_nominal_glyph(m_font, codepoint, &glyph) != 0 && glyph != 0u;
+    }
+    [[nodiscard]] b8 hasVariationGlyph(const u32 codepoint, const u32 variationSelector)const noexcept{
+        hb_codepoint_t glyph = 0u;
+        return hb_font_get_variation_glyph(m_font, codepoint, variationSelector, &glyph) != 0 && glyph != 0u;
+    }
 
 
 private:
@@ -163,3 +171,4 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -25,13 +25,13 @@ f32 ComputeDockSplitRatioFromGesture(in PointerGesture gesture, in DockSplitDire
     return (gesture.position.y - gesture.referenceRectangle.y) / gesture.referenceRectangle.height;
 }
 
-f32 ComputeDockTabWidth(in DockNode node, in u64 panelKey, in Vector<DockPanelTitleEntry> titles, in DockSpaceStyle style, in b8 allowClose){
+f32 ComputeDockTabWidth(in DockNode node, in u64 panelKey, in Vector<DockPanelTitleEntry> titles, in HashMap<u64, usize> titleIndex, in DockSpaceStyle style, in b8 allowClose){
     f32 textW = 48.0f;
-    for(in DockPanelTitleEntry entry : titles){
-        if(entry.key == panelKey){
-            textW = UiSimdMax(16.0f, entry.titleBounds.width);
-            break;
-        }
+    const auto found = titleIndex.find(panelKey);
+    if(found != titleIndex.end()){
+        const usize idx = found.value();
+        if(idx < titles.size() && titles[idx].key == panelKey)
+            textW = UiSimdMax(16.0f, titles[idx].titleBounds.width);
     }
     f32 closeW = 0.0f;
     if(allowClose)
@@ -42,12 +42,14 @@ f32 ComputeDockTabWidth(in DockNode node, in u64 panelKey, in Vector<DockPanelTi
     return UiSimdMin(desired, maxPerTab);
 }
 
-b8 FindDockTitleLayout(in u64 panelKey, in Vector<DockPanelTitleEntry> titles, mut SharedTextLayout outLayout, mut Rect outBounds){
-    for(in DockPanelTitleEntry entry : titles){
-        if(entry.key == panelKey){
-            outLayout = entry.title;
-            outBounds = entry.titleBounds;
-            return entry.title.valid();
+b8 FindDockTitleLayout(in u64 panelKey, in Vector<DockPanelTitleEntry> titles, in HashMap<u64, usize> titleIndex, mut SharedTextLayout outLayout, mut Rect outBounds){
+    const auto found = titleIndex.find(panelKey);
+    if(found != titleIndex.end()){
+        const usize idx = found.value();
+        if(idx < titles.size() && titles[idx].key == panelKey){
+            outLayout = titles[idx].title;
+            outBounds = titles[idx].titleBounds;
+            return titles[idx].title.valid();
         }
     }
     return false;
@@ -105,25 +107,25 @@ b8 Builder::beginDockSpace(in StringView stableKey, mut DockSpaceState state, in
         state.m_hoverDropZone = DockDropZone::None;
     }
     else{
-        if(options.allowSplitResize){
-            Vector<u32> branchIds;
-            Vector<DockSplitDirection> branchDirs;
+        if(options.allowSplitResize && state.m_nodes.size() > 1u){
+            state.m_branchIdsScratch.clear();
+            state.m_branchDirsScratch.clear();
             for(in DockNode n : state.m_nodes){
                 if(!n.isLeaf()){
-                    branchIds.push_back(n.id);
-                    branchDirs.push_back(n.splitDirection);
+                    state.m_branchIdsScratch.push_back(n.id);
+                    state.m_branchDirsScratch.push_back(n.splitDirection);
                 }
             }
-            for(usize bi = 0u; bi < branchIds.size(); ++bi){
-                const Expected<WidgetId> splitPartId = TryMakeWidgetPartId(splitRoot.value(), cast<u64>(branchIds[bi]));
+            for(usize bi = 0u; bi < state.m_branchIdsScratch.size(); ++bi){
+                const Expected<WidgetId> splitPartId = TryMakeWidgetPartId(splitRoot.value(), cast<u64>(state.m_branchIdsScratch[bi]));
                 if(!splitPartId.has_value())
                     continue;
                 while(true){
                     const auto g = this.m_context.takePartPointerGesture(widget.value(), splitPartId.value(), true);
                     if(!g.has_value())
                         break;
-                    const f32 nextRatio = ComputeDockSplitRatioFromGesture(g.value(), branchDirs[bi]);
-                    state.setSplitRatio(branchIds[bi], nextRatio);
+                    const f32 nextRatio = ComputeDockSplitRatioFromGesture(g.value(), state.m_branchDirsScratch[bi]);
+                    state.setSplitRatio(state.m_branchIdsScratch[bi], nextRatio);
                 }
             }
         }
@@ -149,14 +151,15 @@ b8 Builder::beginDockSpace(in StringView stableKey, mut DockSpaceState state, in
         }
 
         if(options.allowDragDock){
-            Vector<u64> panelKeys;
+            state.m_panelKeysScratch.clear();
             for(in DockNode n : state.m_nodes){
                 if(!n.isLeaf())
                     continue;
                 for(in u64 pk : n.panelKeys)
-                    panelKeys.push_back(pk);
+                    state.m_panelKeysScratch.push_back(pk);
             }
-            for(in u64 pk : panelKeys){
+            for(usize pki = 0u; pki < state.m_panelKeysScratch.size(); ++pki){
+                const u64 pk = state.m_panelKeysScratch[pki];
                 const Expected<WidgetId> tabPart = TryMakeWidgetPartId(tabRoot.value(), pk);
                 if(!tabPart.has_value())
                     continue;
@@ -249,7 +252,7 @@ b8 Builder::beginDockSpace(in StringView stableKey, mut DockSpaceState state, in
     item.node = admittedNode.value();
     item.dockSpace = dockIndex;
 
-    this.m_scope.value().m_dockSpaces.push_back(frame);
+    AppendOwned<BuilderDockSpaceFrame>(this.m_scope.value().m_dockSpaces, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     this.m_scope.value().m_stack.push_back(admittedNode.value());
     this.m_scope.value().m_scrollAreaStack.push_back(s_LayoutNoParent);
@@ -296,7 +299,14 @@ b8 Builder::beginDockedPanel(in StringView stableKey, in u64 panelKey, in String
     titleEntry.key = panelKey;
     titleEntry.title = measured.value().layout;
     titleEntry.titleBounds = measured.value().bounds;
-    frame.panelTitles.push_back(titleEntry);
+    const auto existingTitleIt = frame.panelTitleIndex.find(panelKey);
+    if(existingTitleIt != frame.panelTitleIndex.end())
+        frame.panelTitles[existingTitleIt.value()] = titleEntry;
+    else{
+        const usize titleIdx = frame.panelTitles.size();
+        frame.panelTitles.push_back(titleEntry);
+        frame.panelTitleIndex.try_emplace(panelKey, titleIdx);
+    }
 
     if(!state.isKnownPanel(panelKey)){
         if(state.autoDockPanel(panelKey)){
@@ -463,7 +473,7 @@ b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
             this.m_paint.fillRect(node.tabBarRect, style.tabBarBgColor);
             f32 curX = node.tabBarRect.x;
             for(in u64 pk : node.panelKeys){
-                const f32 tabW = ComputeDockTabWidth(node, pk, frame.panelTitles, style, frame.options.allowTabClose);
+                const f32 tabW = ComputeDockTabWidth(node, pk, frame.panelTitles, frame.panelTitleIndex, style, frame.options.allowTabClose);
                 const Rect tabRect(curX, node.tabBarRect.y, tabW, node.tabBarRect.height);
                 curX += tabW;
                 const Expected<WidgetId> tabId = TryMakeWidgetPartId(tabRoot.value(), pk);
@@ -498,7 +508,7 @@ b8 Builder::paintDockSpace(in BuilderItem item, in LayoutBox box){
 
                 SharedTextLayout titleLayout;
                 Rect titleBounds;
-                if(FindDockTitleLayout(pk, frame.panelTitles, titleLayout, titleBounds) && labelMaxW > 0.0f){
+                if(FindDockTitleLayout(pk, frame.panelTitles, frame.panelTitleIndex, titleLayout, titleBounds) && labelMaxW > 0.0f){
                     Color textCol = style.inactiveTextColor;
                     if(isActive && item.enabled)
                         textCol = style.textColor;

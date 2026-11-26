@@ -158,25 +158,64 @@ float4 nwbUiEvaluateGradient(const float2 pos, const uint bufferSlot, const uint
 
     const float t = nwbUiApplySpread(spread, rawT);
     const uint stopsBase = effectOffset + NWB_UI_GRADIENT_HEADER_BYTES;
-    float4 color = asfloat(buf.Load4(stopsBase));
-    float prevOffset = asfloat(buf.Load4(stopsBase + 16u)).x;
-    if(t > prevOffset){
-        for(uint i = 1u; i < stopCount; ++i){
-            const uint stopOffset = stopsBase + i * NWB_UI_GRADIENT_STOP_BYTES;
-            const float4 nextColor = asfloat(buf.Load4(stopOffset));
-            const float4 nextMeta = asfloat(buf.Load4(stopOffset + 16u));
-            const float nextOffset = nextMeta.x;
-            if(t <= nextOffset){
-                const float invSpan = 1.0 / max(nextOffset - prevOffset, 1.0e-6);
-                const float factor = clamp((t - prevOffset) * invSpan, 0.0, 1.0);
-                color = lerp(color, nextColor, factor);
-                return color * vertexColor.a;
+    const uint offsetGroups = (stopCount + 3u) >> 2u;
+    const uint colorsBase = stopsBase + offsetGroups * NWB_UI_GRADIENT_OFFSET_GROUP_BYTES;
+    float prevOffset = 0.0;
+    float nextOffset = 0.0;
+    uint hi = stopCount;
+    for(uint g = 0u; g < offsetGroups; ++g){
+        const uint baseIdx = g * 4u;
+        const float4 grp = asfloat(buf.Load4(stopsBase + g * NWB_UI_GRADIENT_OFFSET_GROUP_BYTES));
+        if(baseIdx < stopCount){
+            if(baseIdx == 0u){
+                if(t <= grp.x){
+                    hi = 0u;
+                    break;
+                }
+                prevOffset = grp.x;
             }
-            color = nextColor;
-            prevOffset = nextOffset;
+            else if(t <= grp.x){
+                nextOffset = grp.x;
+                hi = baseIdx;
+                break;
+            }
+            else
+                prevOffset = grp.x;
+        }
+        if(baseIdx + 1u < stopCount){
+            if(t <= grp.y){
+                nextOffset = grp.y;
+                hi = baseIdx + 1u;
+                break;
+            }
+            prevOffset = grp.y;
+        }
+        if(baseIdx + 2u < stopCount){
+            if(t <= grp.z){
+                nextOffset = grp.z;
+                hi = baseIdx + 2u;
+                break;
+            }
+            prevOffset = grp.z;
+        }
+        if(baseIdx + 3u < stopCount){
+            if(t <= grp.w){
+                nextOffset = grp.w;
+                hi = baseIdx + 3u;
+                break;
+            }
+            prevOffset = grp.w;
         }
     }
-    return color * vertexColor.a;
+    if(hi == 0u)
+        return asfloat(buf.Load4(colorsBase)) * vertexColor.a;
+    if(hi >= stopCount)
+        return asfloat(buf.Load4(colorsBase + (stopCount - 1u) * NWB_UI_GRADIENT_COLOR_BYTES)) * vertexColor.a;
+    const float4 c0 = asfloat(buf.Load4(colorsBase + (hi - 1u) * NWB_UI_GRADIENT_COLOR_BYTES));
+    const float4 c1 = asfloat(buf.Load4(colorsBase + hi * NWB_UI_GRADIENT_COLOR_BYTES));
+    const float invSpan = 1.0 / max(nextOffset - prevOffset, 1.0e-6);
+    const float factor = clamp((t - prevOffset) * invSpan, 0.0, 1.0);
+    return lerp(c0, c1, factor) * vertexColor.a;
 }
 
 float4 nwbUiEvaluateDropShadow(const float2 pos, const uint bufferSlot, const uint effectOffset, const float4 vertexColor){
@@ -190,6 +229,7 @@ float4 nwbUiEvaluateDropShadow(const float2 pos, const uint bufferSlot, const ui
     const float corner = min(rec1.x, min(halfSize.x, halfSize.y));
     const float sigma = rec1.y;
     const bool isInset = rec1.z > 0.5;
+    const float invSqrt2Sigma = rec1.w;
 
     float coverage = 0.0;
     if(sigma <= 1.0e-3){
@@ -197,32 +237,57 @@ float4 nwbUiEvaluateDropShadow(const float2 pos, const uint bufferSlot, const ui
         coverage = clamp(0.5 - sd / max(fwidth(sd), 1.0e-4), 0.0, 1.0);
     }
     else{
-        const float invSqrt2Sigma = 1.0 / (sigma * 1.41421356237);
-        const float yMin = max(-halfSize.y - p.y, -3.5 * sigma);
-        const float yMax = min(halfSize.y - p.y, 3.5 * sigma);
-        if(yMax > yMin){
-            const float stepY = (yMax - yMin) * 0.125;
-            const float innerHalfH = max(halfSize.y - corner, 0.0);
-            const float innerHalfW = max(halfSize.x - corner, 0.0);
-            float prevErfY = nwbUiErf(yMin * invSqrt2Sigma);
-            for(uint i = 0u; i < 8u; ++i){
-                const float yNextOffset = yMin + float(i + 1u) * stepY;
-                const float yMidRelBox = p.y + (yMin + (float(i) + 0.5) * stepY);
-                const float nextErfY = nwbUiErf(yNextOffset * invSqrt2Sigma);
-                const float weightY = 0.5 * (nextErfY - prevErfY);
-                prevErfY = nextErfY;
+        const float range = 3.5 * sigma;
+        const float fullRange = 4.0 * sigma;
+        const float absPx = abs(p.x);
+        const float absPy = abs(p.y);
+        const float innerHalfH = max(halfSize.y - corner, 0.0);
+        const float innerHalfW = max(halfSize.x - corner, 0.0);
+        if(absPx >= halfSize.x + range || absPy >= halfSize.y + range){
+            coverage = 0.0;
+        }
+        else if(
+            absPx + fullRange <= halfSize.x
+            && absPy + fullRange <= halfSize.y
+            && (corner <= 1.0e-4 || nwbUiSdRoundedBox(p, halfSize, corner) <= -fullRange)
+        ){
+            coverage = 1.0;
+        }
+        else{
+            const float yMin = max(-halfSize.y - p.y, -range);
+            const float yMax = min(halfSize.y - p.y, range);
+            if(yMax > yMin){
+                if(corner <= 1.0e-4 || absPy + range <= innerHalfH || absPx + fullRange <= innerHalfW){
+                    const float yCover = 0.5 * (nwbUiErf(yMax * invSqrt2Sigma) - nwbUiErf(yMin * invSqrt2Sigma));
+                    const float xCover = 0.5 * (
+                        nwbUiErf((p.x + halfSize.x) * invSqrt2Sigma)
+                        - nwbUiErf((p.x - halfSize.x) * invSqrt2Sigma)
+                    );
+                    coverage = clamp(xCover * yCover, 0.0, 1.0);
+                }
+                else{
+                    const float stepY = (yMax - yMin) * 0.125;
+                    float prevErfY = nwbUiErf(yMin * invSqrt2Sigma);
+                    for(uint i = 0u; i < 8u; ++i){
+                        const float yNextOffset = yMin + float(i + 1u) * stepY;
+                        const float yMidRelBox = p.y + (yMin + (float(i) + 0.5) * stepY);
+                        const float nextErfY = nwbUiErf(yNextOffset * invSqrt2Sigma);
+                        const float weightY = 0.5 * (nextErfY - prevErfY);
+                        prevErfY = nextErfY;
 
-                const float dy = max(abs(yMidRelBox) - innerHalfH, 0.0);
-                float rowHalfWidth = halfSize.x;
-                if(dy > 0.0 && corner > 0.0)
-                    rowHalfWidth = innerHalfW + sqrt(max(corner * corner - dy * dy, 0.0));
-                const float xCover = 0.5 * (
-                    nwbUiErf((p.x + rowHalfWidth) * invSqrt2Sigma)
-                    - nwbUiErf((p.x - rowHalfWidth) * invSqrt2Sigma)
-                );
-                coverage += weightY * xCover;
+                        const float dy = max(abs(yMidRelBox) - innerHalfH, 0.0);
+                        float rowHalfWidth = halfSize.x;
+                        if(dy > 0.0 && corner > 0.0)
+                            rowHalfWidth = innerHalfW + sqrt(max(corner * corner - dy * dy, 0.0));
+                        const float xCover = 0.5 * (
+                            nwbUiErf((p.x + rowHalfWidth) * invSqrt2Sigma)
+                            - nwbUiErf((p.x - rowHalfWidth) * invSqrt2Sigma)
+                        );
+                        coverage += weightY * xCover;
+                    }
+                    coverage = clamp(coverage, 0.0, 1.0);
+                }
             }
-            coverage = clamp(coverage, 0.0, 1.0);
         }
     }
     if(isInset)
@@ -236,29 +301,30 @@ float4 nwbUiEvaluateBlur(const float2 uv, const uint textureSlot, const uint sam
     const Texture2D<float4> tex = nwbHeapSampledImage2D(textureSlot);
     const SamplerState samp = nwbHeapSampler(samplerSlot);
     const ByteAddressBuffer buf = nwbHeapRawBufferUniform(bufferSlot);
-    const float4 rec0 = asfloat(buf.Load4(effectOffset));
+    const uint4 raw0 = buf.Load4(effectOffset);
+    const float2 texelStep = asfloat(raw0.xy);
+    const float centerWeight = asfloat(raw0.z);
+    const uint pairCount = min(raw0.w, NWB_UI_MAX_BLUR_TAP_PAIRS);
     const float4 uvClamp = asfloat(buf.Load4(effectOffset + 16u));
 
-    uint texW = 0u;
-    uint texH = 0u;
-    tex.GetDimensions(texW, texH);
-    const float2 texelStep = rec0.xy / max(float2(float(texW), float(texH)), float2(1.0, 1.0));
-    const float sigma = max(rec0.z, 0.25);
-    const float invTwoSigmaSq = 0.5 / (sigma * sigma);
-    const int radius = clamp(int(ceil(2.5 * sigma)), 1, int(NWB_UI_MAX_BLUR_TAP_RADIUS));
-
-    float4 accum = tex.SampleLevel(samp, clamp(uv, uvClamp.xy, uvClamp.zw), 0.0);
-    float weightSum = 1.0;
-    for(int tap = 1; tap <= radius; ++tap){
-        const float fTap = float(tap);
-        const float weight = exp(-fTap * fTap * invTwoSigmaSq);
-        const float2 delta = texelStep * fTap;
-        const float4 sPos = tex.SampleLevel(samp, clamp(uv + delta, uvClamp.xy, uvClamp.zw), 0.0);
-        const float4 sNeg = tex.SampleLevel(samp, clamp(uv - delta, uvClamp.xy, uvClamp.zw), 0.0);
-        accum += (sPos + sNeg) * weight;
-        weightSum += 2.0 * weight;
+    float4 accum = tex.SampleLevel(samp, clamp(uv, uvClamp.xy, uvClamp.zw), 0.0) * centerWeight;
+    const uint pairsBase = effectOffset + NWB_UI_BLUR_HEADER_BYTES;
+    for(uint p = 0u; p < pairCount; p += 2u){
+        const float4 packed = asfloat(buf.Load4(pairsBase + (p >> 1u) * NWB_UI_BLUR_PAIR_GROUP_BYTES));
+        const float2 delta0 = texelStep * packed.x;
+        accum += (
+            tex.SampleLevel(samp, clamp(uv + delta0, uvClamp.xy, uvClamp.zw), 0.0)
+            + tex.SampleLevel(samp, clamp(uv - delta0, uvClamp.xy, uvClamp.zw), 0.0)
+        ) * packed.y;
+        if(p + 1u < pairCount){
+            const float2 delta1 = texelStep * packed.z;
+            accum += (
+                tex.SampleLevel(samp, clamp(uv + delta1, uvClamp.xy, uvClamp.zw), 0.0)
+                + tex.SampleLevel(samp, clamp(uv - delta1, uvClamp.xy, uvClamp.zw), 0.0)
+            ) * packed.w;
+        }
     }
-    return accum / weightSum;
+    return accum;
 }
 
 

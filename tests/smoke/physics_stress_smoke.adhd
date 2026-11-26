@@ -2302,6 +2302,7 @@ b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
             mut SoftBodyComponent sbComp = sbEnt.getComponent<SoftBodyComponent>();
             sbComp.softBody.particles[4u].position.y += 1.5f;
             sbComp.softBody.particles[4u].prevPosition = sbComp.softBody.particles[4u].position;
+            ++sbComp.softBody.deformVersion;
             sbOk = softBodyMeshSystem.prepareResources(fb);
             if(sbOk)
                 softBodyMeshSystem.render(fb);

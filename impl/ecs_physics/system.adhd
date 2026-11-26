@@ -2514,7 +2514,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             1.0f,
             this.m_hasAnyPhysicsParents,
             this.m_world,
-            this.m_syncScratch.writeBackPoseCache
+            this.m_syncScratch
         );
         WriteBackEcsVehicleWheelPoses(
             this.m_physicsWorld,
@@ -2526,7 +2526,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             true,
             this.m_hasAnyPhysicsParents,
             this.m_world,
-            this.m_syncScratch.writeBackPoseCache
+            this.m_syncScratch
         );
         WriteBackEcsArticulationPoses(
             this.m_physicsWorld,
@@ -3117,7 +3117,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                     this.m_interpolationAlpha,
                     hasAnyPhysicsParents,
                     world,
-                    this.m_syncScratch.writeBackPoseCache
+                    this.m_syncScratch
                 );
                 WriteBackEcsVehicleWheelPoses(
                     this.m_physicsWorld,
@@ -3129,7 +3129,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                     true,
                     hasAnyPhysicsParents,
                     world,
-                    this.m_syncScratch.writeBackPoseCache
+                    this.m_syncScratch
                 );
                 WriteBackEcsArticulationPoses(
                     this.m_physicsWorld,
@@ -3171,7 +3171,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                     this.m_interpolationAlpha,
                     hasAnyPhysicsParents,
                     world,
-                    this.m_syncScratch.writeBackPoseCache
+                    this.m_syncScratch
                 );
                 WriteBackEcsVehicleWheelPoses(
                     this.m_physicsWorld,
@@ -3183,7 +3183,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                     false,
                     hasAnyPhysicsParents,
                     world,
-                    this.m_syncScratch.writeBackPoseCache
+                    this.m_syncScratch
                 );
                 WriteBackEcsArticulationPoses(
                     this.m_physicsWorld,

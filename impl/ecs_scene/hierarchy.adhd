@@ -58,6 +58,23 @@ void ComposeSceneWorldTransform(
     outWorld.scale = f32x4(pScale * VectorSingle(local.scale), 0.0f);
 }
 
+void ComposeSceneWorldTransformNormalizedParent(
+    in TransformComponent parentWorld,
+    in LocalTransformComponent local,
+    in b8 inheritScale,
+    mut TransformComponent outWorld
+){
+    VectorSingle pScale = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
+    if(inheritScale)
+        pScale = VectorSingle(parentWorld.scale);
+    const VectorSingle pRot(parentWorld.rotation);
+    const VectorSingle cRot = SafeNormalizeSceneQuaternion(VectorSingle(local.rotation));
+    const VectorSingle scaledLocalPos = VectorSetW(VectorSingle(local.position) * pScale, 0.0f);
+    outWorld.position = f32x4(VectorSingle(parentWorld.position) + RotateSceneVector3(scaledLocalPos, pRot), 0.0f);
+    outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(QuaternionMultiply(pRot, cRot)));
+    outWorld.scale = f32x4(pScale * VectorSingle(local.scale), 0.0f);
+}
+
 void DecomposeWorldToSceneLocalTransform(
     in TransformComponent parentWorld,
     in TransformComponent childWorld,
@@ -81,13 +98,134 @@ void DecomposeWorldToSceneLocalTransform(
     outLocal.scale = f32x4(localScale, 0.0f);
 }
 
+class SceneScopedNameKey{
+    public u32 scopeId;
+    public Name name;
+
+    public SceneScopedNameKey(){
+        this.scopeId = 0u;
+        this.name = s_NameNone;
+    }
+
+    public SceneScopedNameKey(in u32 inScopeId, in Name inName){
+        this.scopeId = inScopeId;
+        this.name = inName;
+    }
+
+    public b8 operator==(in SceneScopedNameKey other)const{
+        return this.scopeId == other.scopeId && this.name == other.name;
+    }
+
+    public usize hash()const{
+        return HashCombineValue(HashValue(this.scopeId), HashValue(this.name));
+    }
+}
+
+class SceneEntityNameQueryKey{
+    public EntityID entity;
+    public Name name;
+
+    public SceneEntityNameQueryKey(){
+        this.entity = s_InvalidEntityId;
+        this.name = s_NameNone;
+    }
+
+    public SceneEntityNameQueryKey(in EntityID inEntity, in Name inName){
+        this.entity = inEntity;
+        this.name = inName;
+    }
+
+    public b8 operator==(in SceneEntityNameQueryKey other)const{
+        return this.entity == other.entity && this.name == other.name;
+    }
+
+    public usize hash()const{
+        return HashCombineValue(HashValue(this.entity.id), HashValue(this.name));
+    }
+}
+
+class SceneEntityNameIndex{
+    public HashMap<SceneScopedNameKey, EntityID> scoped;
+    public HashMap<Name, EntityID> fallback;
+
+    public void clear(){
+        this.scoped.clear();
+        this.fallback.clear();
+    }
+
+    private void addEntry(in World world, in EntityID entity, in SceneEntityNameComponent entry){
+        if(entry.name == s_NameNone || !world.alive(entity))
+            return;
+        this.fallback.try_emplace(entry.name, entity);
+        if(entry.scopeId != 0u)
+            this.scoped.try_emplace(SceneScopedNameKey(entry.scopeId, entry.name), entity);
+    }
+
+    public void build(mut World world){
+        this.clear();
+        auto nameView = world.view<SceneEntityNameComponent>();
+        const usize candidateCount = nameView.candidateCount();
+        if(candidateCount == 0u)
+            return;
+        this.fallback.reserve(candidateCount);
+        this.scoped.reserve(candidateCount);
+        for(in auto row : nameView)
+            this.addEntry(world, Get<0>(row), Get<1>(row));
+    }
+
+    public EntityID findWithScope(in u32 requesterScopeId, in Name targetName)const{
+        if(targetName == s_NameNone)
+            return s_InvalidEntityId;
+        if(requesterScopeId != 0u){
+            const auto scopedIt = this.scoped.find(SceneScopedNameKey(requesterScopeId, targetName));
+            if(scopedIt != this.scoped.end())
+                return scopedIt.value();
+        }
+        const auto fallbackIt = this.fallback.find(targetName);
+        if(fallbackIt != this.fallback.end())
+            return fallbackIt.value();
+        return s_InvalidEntityId;
+    }
+
+    public EntityID find(mut World world, in EntityID requester, in Name targetName)const{
+        if(targetName == s_NameNone)
+            return s_InvalidEntityId;
+        u32 requesterScopeId = 0u;
+        if(requester.valid() && world.alive(requester)){
+            const Optional<mut SceneEntityNameComponent> borrowed = world.borrowComponent<SceneEntityNameComponent>(requester);
+            if(borrowed.has_value())
+                requesterScopeId = borrowed.value().scopeId;
+        }
+        return this.findWithScope(requesterScopeId, targetName);
+    }
+}
+
+class SceneHierarchyScratch{
+    public SceneEntityNameIndex nameIndex;
+    public Vector<EntityID> pendingNameEntities;
+    public HashSet<SceneEntityNameQueryKey> unresolvedParentQueries;
+    public u64 lastNamePoolVersion = 0u;
+    public Vector<EntityID> entities;
+    public Vector<EntityID> parentIds;
+    public Vector<u8> inheritScales;
+    public Vector<u32> depths;
+    public Vector<u8> visitState;
+    public HashMap<EntityID, u32> entityToIndex;
+    public Vector<u32> visitStack;
+    public Array<Vector<u32>, 33u> depthBuckets;
+    public Vector<u32> directCycleIndices;
+}
+
 EntityID FindSceneEntityByName(in EntityID requester, in Name targetName, mut World world){
     if(targetName == s_NameNone)
         return s_InvalidEntityId;
 
     u32 requesterScopeId = 0u;
-    if(requester.valid() && world.alive(requester) && world.hasComponent<SceneEntityNameComponent>(requester))
-        requesterScopeId = world.getComponent<SceneEntityNameComponent>(requester).scopeId;
+    if(requester.valid() && world.alive(requester)){
+        const Optional<mut SceneEntityNameComponent> borrowed = world.borrowComponent<SceneEntityNameComponent>(requester);
+        if(borrowed.has_value())
+            requesterScopeId = borrowed.value().scopeId;
+    }
 
     EntityID scopedMatch = s_InvalidEntityId;
     EntityID fallbackMatch = s_InvalidEntityId;
@@ -96,7 +234,7 @@ EntityID FindSceneEntityByName(in EntityID requester, in Name targetName, mut Wo
         in EntityID entity,
         in SceneEntityNameComponent entry
     ) -> void{
-        if(scopedMatch.valid() || entry.name != targetName || !worldMut.alive(entity))
+        if(scopedMatch.valid() || entry.name == s_NameNone || entry.name != targetName || !worldMut.alive(entity))
             return;
         if(requesterScopeId != 0u && entry.scopeId == requesterScopeId){
             scopedMatch = entity;
@@ -122,131 +260,233 @@ u32 AllocateSceneNameScopeId(mut World world){
     return maxScope + 1u;
 }
 
-void ResolveSceneParentNames(mut World world){
+void ResolveSceneParentNamesWithScratch(mut World world, in b8 useUnresolvedCache, mut SceneHierarchyScratch scratch){
     if(world.view<SceneParentComponent>().candidateCount() == 0u)
         return;
 
+    if(useUnresolvedCache){
+        const u64 curNameVer = world.componentMutationVersion<SceneEntityNameComponent>();
+        if(curNameVer != scratch.lastNamePoolVersion){
+            scratch.unresolvedParentQueries.clear();
+            scratch.lastNamePoolVersion = curNameVer;
+        }
+    }
+
+    scratch.pendingNameEntities.clear();
     mut World worldMut = world;
-    world.view<SceneParentComponent>().each(lambda[mut worldMut](in EntityID entity, mut SceneParentComponent sp) -> void{
+    mut Vector<EntityID> pending = scratch.pendingNameEntities;
+    in HashSet<SceneEntityNameQueryKey> unresolved = scratch.unresolvedParentQueries;
+    world.view<SceneParentComponent>().each(lambda[mut worldMut, mut pending, in unresolved, in useUnresolvedCache](in EntityID entity, mut SceneParentComponent sp) -> void{
         if(sp.parentEntityName != s_NameNone){
             b8 needsResolve = !sp.parent.valid() || sp.parent == entity || !worldMut.alive(sp.parent);
-            if(!needsResolve && worldMut.hasComponent<SceneEntityNameComponent>(sp.parent)){
-                if(worldMut.getComponent<SceneEntityNameComponent>(sp.parent).name != sp.parentEntityName)
+            if(!needsResolve){
+                const Optional<mut SceneEntityNameComponent> parentName = worldMut.borrowComponent<SceneEntityNameComponent>(sp.parent);
+                if(parentName.has_value() && parentName.value().name != sp.parentEntityName)
                     needsResolve = true;
             }
             if(needsResolve){
-                const EntityID resolved = FindSceneEntityByName(entity, sp.parentEntityName, worldMut);
-                if(resolved != entity)
-                    sp.parent = resolved;
-                else
-                    sp.parent = s_InvalidEntityId;
+                sp.parent = s_InvalidEntityId;
+                if(!useUnresolvedCache || unresolved.find(SceneEntityNameQueryKey(entity, sp.parentEntityName)) == unresolved.end())
+                    pending.push_back(entity);
             }
         }
         else if(sp.parent.valid() && (!worldMut.alive(sp.parent) || sp.parent == entity))
             sp.parent = s_InvalidEntityId;
     });
-}
 
-u32 ComputeSceneHierarchyDepthChecked(in World world, in EntityID entity, mut b8 outDirectCycle){
-    outDirectCycle = false;
-    FixedVector<EntityID, 33u> visited;
-    visited.push_back(entity);
+    if(scratch.pendingNameEntities.empty())
+        return;
 
-    EntityID cur = entity;
-    u32 depth = 0u;
-    for(u32 step = 0u; step < s_SceneHierarchyMaxDepth; ++step){
-        if(!world.hasComponent<SceneParentComponent>(cur))
-            break;
-        const EntityID parent = world.getComponent<SceneParentComponent>(cur).parent;
-        if(!parent.valid() || !world.alive(parent) || parent == cur)
-            break;
-        b8 seen = false;
-        for(usize k = 0u; k < visited.size(); ++k){
-            if(visited[k] == parent){
-                seen = true;
-                break;
-            }
+    scratch.nameIndex.build(world);
+    for(in EntityID entity : scratch.pendingNameEntities){
+        const Optional<mut SceneParentComponent> spOpt = world.borrowComponent<SceneParentComponent>(entity);
+        if(!spOpt.has_value())
+            continue;
+        mut SceneParentComponent sp = spOpt.value();
+        const EntityID resolved = scratch.nameIndex.find(world, entity, sp.parentEntityName);
+        if(resolved.valid() && resolved != entity)
+            sp.parent = resolved;
+        else{
+            sp.parent = s_InvalidEntityId;
+            if(useUnresolvedCache)
+                scratch.unresolvedParentQueries.insert(SceneEntityNameQueryKey(entity, sp.parentEntityName));
         }
-        if(seen){
-            if(parent == entity){
-                outDirectCycle = true;
-                return 0u;
-            }
-            break;
-        }
-        if(!world.hasComponent<SceneParentComponent>(parent) || !world.hasComponent<LocalTransformComponent>(parent))
-            break;
-        ++depth;
-        if(depth >= s_SceneHierarchyMaxDepth)
-            return s_SceneHierarchyMaxDepth;
-        visited.push_back(parent);
-        cur = parent;
     }
-    return depth;
 }
 
-void PropagateSceneHierarchyTransforms(mut World world){
-    ResolveSceneParentNames(world);
-    if(world.view<SceneParentComponent>().candidateCount() == 0u || world.view<LocalTransformComponent>().candidateCount() == 0u)
+void ResolveSceneParentNames(mut World world){
+    SceneHierarchyScratch localScratch;
+    ResolveSceneParentNamesWithScratch(world, false, localScratch);
+}
+
+void AppendSceneHierarchyNode(mut SceneHierarchyScratch scratch, in EntityID entity, in SceneParentComponent sp){
+    const u32 idx = cast<u32>(scratch.entities.size());
+    scratch.entities.push_back(entity);
+    scratch.parentIds.push_back(sp.parent);
+    u8 inheritByte = 0u;
+    if(sp.inheritScale)
+        inheritByte = 1u;
+    scratch.inheritScales.push_back(inheritByte);
+    scratch.entityToIndex.try_emplace(entity, idx);
+}
+
+void PropagateSceneHierarchyTransformsWithScratch(mut World world, in b8 useUnresolvedCache, mut SceneHierarchyScratch scratch){
+    ResolveSceneParentNamesWithScratch(world, useUnresolvedCache, scratch);
+    const usize parentCandidates = world.view<SceneParentComponent>().candidateCount();
+    const usize localCandidates = world.view<LocalTransformComponent>().candidateCount();
+    if(parentCandidates == 0u || localCandidates == 0u)
         return;
 
-    Vector<EntityID> entities = Vector<EntityID>();
-    world.view<SceneParentComponent, LocalTransformComponent>().each(lambda[mut entities](
-        in EntityID entity,
-        in SceneParentComponent sp,
-        in LocalTransformComponent local
-    ) -> void{
-        entities.push_back(entity);
-    });
-    if(entities.empty())
+    const usize reserveCount = Min(parentCandidates, localCandidates);
+    scratch.entities.clear();
+    scratch.entities.reserve(reserveCount);
+    scratch.parentIds.clear();
+    scratch.parentIds.reserve(reserveCount);
+    scratch.inheritScales.clear();
+    scratch.inheritScales.reserve(reserveCount);
+    scratch.entityToIndex.clear();
+    scratch.entityToIndex.reserve(reserveCount);
+
+    for(in auto row : world.view<SceneParentComponent, LocalTransformComponent>())
+        AppendSceneHierarchyNode(scratch, Get<0>(row), Get<1>(row));
+
+    const usize entityCount = scratch.entities.size();
+    if(entityCount == 0u)
         return;
 
-    for(in EntityID entity : entities){
+    for(in EntityID entity : scratch.entities){
         if(!world.hasComponent<TransformComponent>(entity))
             world.entity(entity).addComponent<TransformComponent>();
     }
 
-    Array<Vector<EntityID>, 33u> depthBuckets = Array<Vector<EntityID>, 33u>();
-    Vector<EntityID> directCycleEntities = Vector<EntityID>();
-    u32 maxDepth = 0u;
-    for(in EntityID entity : entities){
-        b8 directCycle = false;
-        const u32 depth = ComputeSceneHierarchyDepthChecked(world, entity, directCycle);
-        if(directCycle)
-            directCycleEntities.push_back(entity);
+    scratch.depths.clear();
+    scratch.depths.resize(entityCount, 0u);
+    scratch.visitState.clear();
+    scratch.visitState.resize(entityCount, 0u);
+    scratch.directCycleIndices.clear();
+    for(usize bucketIdx = 0u; bucketIdx <= cast<usize>(s_SceneHierarchyMaxDepth); ++bucketIdx)
+        scratch.depthBuckets[bucketIdx].clear();
+
+    for(usize startIdx = 0u; startIdx < entityCount; ++startIdx){
+        if(scratch.visitState[startIdx] != 0u)
+            continue;
+        scratch.visitStack.clear();
+        u32 curIdx = cast<u32>(startIdx);
+        b8 hitExisting = false;
+        while(scratch.visitState[curIdx] == 0u){
+            scratch.visitState[curIdx] = 1u;
+            scratch.visitStack.push_back(curIdx);
+            const EntityID p = scratch.parentIds[curIdx];
+            if(!p.valid() || p == scratch.entities[curIdx] || !world.alive(p))
+                break;
+            const auto foundParent = scratch.entityToIndex.find(p);
+            if(foundParent == scratch.entityToIndex.end())
+                break;
+            curIdx = foundParent.value();
+            if(scratch.visitState[curIdx] != 0u){
+                hitExisting = true;
+                break;
+            }
+        }
+
+        if(hitExisting && scratch.visitState[curIdx] == 1u){
+            usize cycleStartPos = 0u;
+            while(cycleStartPos < scratch.visitStack.size() && scratch.visitStack[cycleStartPos] != curIdx)
+                ++cycleStartPos;
+            for(usize k = cycleStartPos; k < scratch.visitStack.size(); ++k){
+                const u32 cycIdx = scratch.visitStack[k];
+                scratch.visitState[cycIdx] = 3u;
+                scratch.depths[cycIdx] = 0u;
+            }
+            u32 tailDepth = 0u;
+            for(usize k = cycleStartPos; k > 0u; --k){
+                tailDepth = Min(s_SceneHierarchyMaxDepth, tailDepth + 1u);
+                const u32 tailIdx = scratch.visitStack[k - 1u];
+                scratch.depths[tailIdx] = tailDepth;
+                scratch.visitState[tailIdx] = 2u;
+            }
+        }
+        else if(hitExisting){
+            u32 baseDepth = 0u;
+            if(scratch.visitState[curIdx] == 2u)
+                baseDepth = scratch.depths[curIdx];
+            for(usize k = scratch.visitStack.size(); k > 0u; --k){
+                baseDepth = Min(s_SceneHierarchyMaxDepth, baseDepth + 1u);
+                const u32 u = scratch.visitStack[k - 1u];
+                scratch.depths[u] = baseDepth;
+                scratch.visitState[u] = 2u;
+            }
+        }
         else{
-            depthBuckets[depth].push_back(entity);
-            if(depth > maxDepth)
-                maxDepth = depth;
+            u32 d = 0u;
+            for(usize k = scratch.visitStack.size(); k > 0u; --k){
+                const u32 u = scratch.visitStack[k - 1u];
+                scratch.depths[u] = d;
+                scratch.visitState[u] = 2u;
+                d = Min(s_SceneHierarchyMaxDepth, d + 1u);
+            }
         }
     }
 
-    for(in EntityID entity : directCycleEntities){
-        const LocalTransformComponent localXf = world.getComponent<LocalTransformComponent>(entity);
-        mut TransformComponent outWorld = world.getComponent<TransformComponent>(entity);
+    u32 maxDepth = 0u;
+    for(usize i = 0u; i < entityCount; ++i){
+        const u32 idx = cast<u32>(i);
+        if(scratch.visitState[i] == 3u)
+            scratch.directCycleIndices.push_back(idx);
+        else{
+            const u32 d = scratch.depths[i];
+            scratch.depthBuckets[d].push_back(idx);
+            if(d > maxDepth)
+                maxDepth = d;
+        }
+    }
+
+    for(in u32 idx : scratch.directCycleIndices){
+        const EntityID entity = scratch.entities[idx];
+        const Optional<mut LocalTransformComponent> localOpt = world.borrowComponent<LocalTransformComponent>(entity);
+        const Optional<mut TransformComponent> worldOpt = world.borrowComponent<TransformComponent>(entity);
+        if(!localOpt.has_value() || !worldOpt.has_value())
+            continue;
+        in LocalTransformComponent localXf = localOpt.value();
+        mut TransformComponent outWorld = worldOpt.value();
         outWorld.position = localXf.position;
         outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(localXf.rotation)));
         outWorld.scale = localXf.scale;
     }
 
     for(u32 depth = 0u; depth <= maxDepth; ++depth){
-        in Vector<EntityID> bucket = depthBuckets[depth];
-        for(in EntityID entity : bucket){
-            const SceneParentComponent sp = world.getComponent<SceneParentComponent>(entity);
-            const LocalTransformComponent localXf = world.getComponent<LocalTransformComponent>(entity);
-            if(sp.parent.valid() && sp.parent != entity && world.alive(sp.parent) && world.hasComponent<TransformComponent>(sp.parent)){
-                const TransformComponent parentXf = world.getComponent<TransformComponent>(sp.parent);
-                mut TransformComponent outWorld = world.getComponent<TransformComponent>(entity);
-                ComposeSceneWorldTransform(parentXf, localXf, sp.inheritScale, outWorld);
+        in Vector<u32> bucket = scratch.depthBuckets[depth];
+        const b8 parentNormalized = depth > 0u && depth < s_SceneHierarchyMaxDepth;
+        for(in u32 idx : bucket){
+            const EntityID entity = scratch.entities[idx];
+            const EntityID parent = scratch.parentIds[idx];
+            const b8 inheritScale = scratch.inheritScales[idx] != 0u;
+            const Optional<mut LocalTransformComponent> localOpt = world.borrowComponent<LocalTransformComponent>(entity);
+            const Optional<mut TransformComponent> worldOpt = world.borrowComponent<TransformComponent>(entity);
+            if(!localOpt.has_value() || !worldOpt.has_value())
+                continue;
+            in LocalTransformComponent localXf = localOpt.value();
+            mut TransformComponent outWorld = worldOpt.value();
+            if(parent.valid() && parent != entity && world.alive(parent)){
+                const Optional<mut TransformComponent> parentOpt = world.borrowComponent<TransformComponent>(parent);
+                if(parentOpt.has_value()){
+                    if(parentNormalized)
+                        ComposeSceneWorldTransformNormalizedParent(parentOpt.value(), localXf, inheritScale, outWorld);
+                    else
+                        ComposeSceneWorldTransform(parentOpt.value(), localXf, inheritScale, outWorld);
+                    continue;
+                }
             }
-            else{
-                mut TransformComponent outWorld = world.getComponent<TransformComponent>(entity);
-                outWorld.position = localXf.position;
-                outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(localXf.rotation)));
-                outWorld.scale = localXf.scale;
-            }
+            outWorld.position = localXf.position;
+            outWorld.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(localXf.rotation)));
+            outWorld.scale = localXf.scale;
         }
     }
+}
+
+void PropagateSceneHierarchyTransforms(mut World world){
+    SceneHierarchyScratch localScratch;
+    PropagateSceneHierarchyTransformsWithScratch(world, false, localScratch);
 }
 
 
@@ -255,6 +495,8 @@ void PropagateSceneHierarchyTransforms(mut World world){
 
 [arena, system("scene_hierarchy")]
 class SceneHierarchySystem{
+    private SceneHierarchyScratch m_scratch;
+
     public SceneHierarchySystem(){
         this.readAccess<SceneEntityNameComponent>();
         this.readAccess<LocalTransformComponent>();
@@ -263,7 +505,7 @@ class SceneHierarchySystem{
     }
 
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
-        PropagateSceneHierarchyTransforms(world);
+        PropagateSceneHierarchyTransformsWithScratch(world, true, this.m_scratch);
         return Expected<void, CpuTaskAdmissionError>();
     }
 }

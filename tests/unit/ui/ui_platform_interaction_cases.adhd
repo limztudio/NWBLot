@@ -337,6 +337,22 @@ void VerifyUiPlatformInteraction_AccessibilityHierarchyPasswordToastAndActions(m
     EXPECT_EQ(tree.announcementCount(), 1u);
     EXPECT_EQ(tree.announcementAt(0u).liveMode, AccessibilityLiveMode::Assertive);
     EXPECT_TRUE(tree.hitTest(self.targetCenter(actionId)) == actionId);
+
+    ToastOptions bulkOpts = toastOpts;
+    bulkOpts.maxVisible = 140u;
+    for(u64 frameIdx = 3u; frameIdx <= 5u; ++frameIdx){
+        for(u32 ti = 0u; ti < 45u; ++ti)
+            ASSERT_NE(self.m_toasts.push("Notice", "Queued entry", ToastSeverity::Info, 10.0f), 0u);
+        ASSERT_TRUE(self.panel(frameIdx, "panel", Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+        ASSERT_TRUE(self.m_builder.toastStack("toasts", self.m_toasts, bulkOpts).valid);
+        ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(frameIdx));
+        EXPECT_EQ(tree.announcementCount(), 45u);
+    }
+
+    ASSERT_TRUE(self.panel(6u, "panel", Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+    ASSERT_TRUE(self.m_builder.toastStack("toasts", self.m_toasts, bulkOpts).valid);
+    ASSERT_TRUE(self.finishPanel() && self.m_context.commitFrame(6u));
+    EXPECT_EQ(tree.announcementCount(), 0u);
 }
 
 

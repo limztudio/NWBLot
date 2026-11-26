@@ -69,6 +69,10 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
     public RuntimeSkinPayloadScratch m_framePayloadScratch;
     public Vector<SkeletonJointMatrix> m_frameCachedPoseJoints;
     public HashMap<EntityID, CachedSkinningSkeletonPoseEntry> m_frameCachedPoses;
+    public SceneEntityNameIndex m_frameSceneNameIndex;
+    public b8 m_frameSceneNameIndexBuilt = false;
+    public u64 m_lastSceneNamePoolVersion = 0u;
+    public HashSet<SceneEntityNameQueryKey> m_unresolvedSkeletonQueries;
     private Vector<GpuTaskId> m_frameUploadTasks;
     private b8 m_runtimeSetupReady = false;
     private u64 m_runtimeTopologyGeneration = 1u;
@@ -220,6 +224,8 @@ class MeshSkinningSystem : IRenderPass, IRuntimeMeshProvider{
         this.m_framePayloadScratch.reset(cast<u32>(SkeletonSkinningMode::LinearBlend));
         this.m_frameCachedPoseJoints.clear();
         this.m_frameCachedPoses.clear();
+        this.m_frameSceneNameIndex.clear();
+        this.m_frameSceneNameIndexBuilt = false;
         this.m_frameResourceUsesScratch.clear();
         this.m_frameLiveBufferIndex.clear();
     }

@@ -65,24 +65,29 @@ static constexpr Array<ButtonMapping, 14u> s_ButtonMappings = {{
     { XINPUT_GAMEPAD_DPAD_LEFT, GamepadButton::DPadLeft },
 }};
 
-static constexpr f32 s_ReconnectScanIntervalSeconds = 0.5f;
+static constexpr f32 s_ReconnectScanIntervalSeconds = 2.0f;
 static constexpr f32 s_AxisChangeEpsilon = 1e-4f;
 static constexpr f32 s_NegThumbScale = 1.0f / 32768.0f;
 static constexpr f32 s_PosThumbScale = 1.0f / 32767.0f;
 static constexpr f32 s_TriggerScale = 1.0f / 255.0f;
 
 
-static void EmitAxisIfChanged(
+static void EmitAxisMask(
     InputDispatcher& input,
     const u32 slotIndex,
-    const i32 axisIndex,
-    const f32 nextValue,
+    const u32 mask,
+    const i32 baseAxis,
+    const u32 laneCount,
+    const SIMDVectorSingle values,
     Array<f32, static_cast<usize>(GamepadAxis::kCount)>& cachedAxes
 ){
-    const usize idx = static_cast<usize>(axisIndex);
-    const f32 delta = VectorGetX(VectorAbs(VectorSubtract(VectorReplicate(nextValue), VectorReplicate(cachedAxes[idx]))));
-    if(delta > s_AxisChangeEpsilon){
-        cachedAxes[idx] = nextValue;
+    const Array<f32, 4u> laneValues = {{ VectorGetX(values), VectorGetY(values), VectorGetZ(values), VectorGetW(values) }};
+    for(u32 lane = 0u; lane < laneCount; ++lane){
+        if((mask & (1u << lane)) == 0u)
+            continue;
+        const i32 axisIndex = baseAxis + static_cast<i32>(lane);
+        const f32 nextValue = laneValues[lane];
+        cachedAxes[static_cast<usize>(axisIndex)] = nextValue;
         input.gamepadAxisUpdate(slotIndex, axisIndex, nextValue);
     }
 }
@@ -161,34 +166,53 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
 
     const XInputGetStateFn getState = reinterpret_cast<XInputGetStateFn>(m_getStateProc);
     const f32 safeDelta = delta > 0.0f ? delta : 0.0f;
+    const b8 scanAllDisconnected = m_topologyDirty;
+    b8 scanOneFallback = false;
+    if(scanAllDisconnected){
+        m_topologyDirty = false;
+        m_fallbackScanCooldown = s_ReconnectScanIntervalSeconds;
+    }
+    else{
+        m_fallbackScanCooldown = VectorGetX(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(m_fallbackScanCooldown), VectorReplicate(safeDelta))));
+        if(m_fallbackScanCooldown <= 0.0f){
+            scanOneFallback = true;
+            m_fallbackScanCooldown = s_ReconnectScanIntervalSeconds;
+        }
+    }
+    const u32 fallbackSlot = m_fallbackScanSlot;
+    if(scanOneFallback)
+        m_fallbackScanSlot = (m_fallbackScanSlot + 1u) % s_MaxGamepadCount;
+
+    const SIMDVectorSingle epsVec = VectorReplicate(s_AxisChangeEpsilon);
 
     for(u32 i = 0u; i < s_MaxGamepadCount; ++i){
         SlotState& slot = m_slots[i];
+        XINPUT_STATE state = {};
         if(!slot.connected){
-            slot.reconnectCooldown = VectorGetX(VectorMax(VectorZero(), VectorSubtract(VectorReplicate(slot.reconnectCooldown), VectorReplicate(safeDelta))));
-            if(slot.reconnectCooldown > 0.0f)
+            if(!scanAllDisconnected && (!scanOneFallback || i != fallbackSlot))
                 continue;
-
-            XINPUT_STATE probeState = {};
-            if(getState(i, &probeState) != ERROR_SUCCESS){
-                slot.reconnectCooldown = s_ReconnectScanIntervalSeconds;
+            if(getState(i, &state) != ERROR_SUCCESS)
                 continue;
-            }
             slot.connected = true;
-            slot.reconnectCooldown = 0.0f;
             slot.buttons = 0u;
+            slot.lastPacketNumber = 0u;
+            slot.hasPacketNumber = false;
             slot.axes.fill(0.0f);
             input.gamepadConnectionUpdate(i, true);
         }
-
-        XINPUT_STATE state = {};
-        if(getState(i, &state) != ERROR_SUCCESS){
+        else if(getState(i, &state) != ERROR_SUCCESS){
             ZeroSlotInputs(input, i, slot.buttons, slot.axes);
             slot.connected = false;
-            slot.reconnectCooldown = s_ReconnectScanIntervalSeconds;
+            slot.lastPacketNumber = 0u;
+            slot.hasPacketNumber = false;
             input.gamepadConnectionUpdate(i, false);
             continue;
         }
+
+        if(slot.hasPacketNumber && state.dwPacketNumber == slot.lastPacketNumber)
+            continue;
+        slot.lastPacketNumber = state.dwPacketNumber;
+        slot.hasPacketNumber = true;
 
         const XINPUT_GAMEPAD& gp = state.Gamepad;
         for(const ButtonMapping& mapping : s_ButtonMappings){
@@ -215,15 +239,22 @@ void Win32GamepadPoller::poll(InputDispatcher& input, const f32 delta, const b8 
         );
         const SIMDVectorSingle stickScales = VectorSelect(VectorReplicate(s_PosThumbScale), VectorReplicate(s_NegThumbScale), VectorLess(rawSticks, VectorZero()));
         const SIMDVectorSingle sticks = VectorClamp(VectorMultiply(rawSticks, stickScales), VectorReplicate(-1.0f), VectorSplatOne());
-        EmitAxisIfChanged(input, i, GamepadAxis::LeftX, VectorGetX(sticks), slot.axes);
-        EmitAxisIfChanged(input, i, GamepadAxis::LeftY, VectorGetY(sticks), slot.axes);
-        EmitAxisIfChanged(input, i, GamepadAxis::RightX, VectorGetZ(sticks), slot.axes);
-        EmitAxisIfChanged(input, i, GamepadAxis::RightY, VectorGetW(sticks), slot.axes);
+        const SIMDVectorSingle prevSticks = VectorSet(
+            slot.axes[GamepadAxis::LeftX],
+            slot.axes[GamepadAxis::LeftY],
+            slot.axes[GamepadAxis::RightX],
+            slot.axes[GamepadAxis::RightY]
+        );
+        const u32 stickMask = VectorMoveMask(VectorGreater(VectorAbs(VectorSubtract(sticks, prevSticks)), epsVec));
+        if(stickMask != 0u)
+            EmitAxisMask(input, i, stickMask, GamepadAxis::LeftX, 4u, sticks, slot.axes);
 
         const SIMDVectorSingle rawTriggers = VectorSet(static_cast<f32>(gp.bLeftTrigger), static_cast<f32>(gp.bRightTrigger), 0.0f, 0.0f);
         const SIMDVectorSingle triggers = VectorClamp(VectorScale(rawTriggers, s_TriggerScale), VectorZero(), VectorSplatOne());
-        EmitAxisIfChanged(input, i, GamepadAxis::LeftTrigger, VectorGetX(triggers), slot.axes);
-        EmitAxisIfChanged(input, i, GamepadAxis::RightTrigger, VectorGetY(triggers), slot.axes);
+        const SIMDVectorSingle prevTriggers = VectorSet(slot.axes[GamepadAxis::LeftTrigger], slot.axes[GamepadAxis::RightTrigger], 0.0f, 0.0f);
+        const u32 triggerMask = VectorMoveMask(VectorGreater(VectorAbs(VectorSubtract(triggers, prevTriggers)), epsVec)) & 0x3u;
+        if(triggerMask != 0u)
+            EmitAxisMask(input, i, triggerMask, GamepadAxis::LeftTrigger, 2u, triggers, slot.axes);
     }
 }
 
@@ -232,8 +263,10 @@ void Win32GamepadPoller::releaseAll(InputDispatcher& input){
 
     for(u32 i = 0u; i < s_MaxGamepadCount; ++i){
         SlotState& slot = m_slots[i];
-        if(slot.connected)
+        if(slot.connected){
             ZeroSlotInputs(input, i, slot.buttons, slot.axes);
+            slot.hasPacketNumber = false;
+        }
     }
 }
 

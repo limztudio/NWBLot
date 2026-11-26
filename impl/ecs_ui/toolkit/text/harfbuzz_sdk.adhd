@@ -76,6 +76,8 @@ extern class HarfBuzzFont{
     void setScale(in i32 x, in i32 y);
     b8 horizontalExtents(mut HarfBuzzFontExtents extents)const;
     b8 glyphExtents(in u32 glyph, mut HarfBuzzGlyphExtents extents)const;
+    b8 hasNominalGlyph(in u32 codepoint)const;
+    b8 hasVariationGlyph(in u32 codepoint, in u32 variationSelector)const;
 };
 
 [cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiOpenTypeFeature"), cpp_flags(self_defaulted)]

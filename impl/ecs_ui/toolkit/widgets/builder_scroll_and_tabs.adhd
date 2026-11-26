@@ -514,7 +514,7 @@ TabBarResult Builder::tabBar(in StringView stableKey, in Span<TabBarItem> tabs, 
     const LayoutNodeDesc description = BuildSizedLeafNodeDesc(options.width, options.height, frame.metrics.contentSize, options.layout);
     if(!this.addItemNode(description, item))
         return TabBarResult();
-    this.m_scope.value().m_tabBars.push_back(frame);
+    AppendOwned<BuilderTabBarFrame>(this.m_scope.value().m_tabBars, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     result.valid = true;
     return result;

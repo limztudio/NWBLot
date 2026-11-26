@@ -15,9 +15,11 @@
 #include <miniz.h>
 #pragma pop_macro("interface")
 
+#include <charconv>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,15 +105,30 @@ namespace __hidden_physics_cook_io{
     const char* tokStart = cur;
     while(cur < end && !IsAsciiSpace(*cur))
         ++cur;
-    const usize len = static_cast<usize>(cur - tokStart);
+    const char* tokEnd = cur;
+    const usize len = static_cast<usize>(tokEnd - tokStart);
     if(len == 0u || len >= 128u)
         return false;
-    char buf[128];
-    std::memcpy(buf, tokStart, len);
-    buf[len] = '\0';
-    char* parseEnd = nullptr;
-    const f32 v = std::strtof(buf, &parseEnd);
-    if(parseEnd != buf + len || !std::isfinite(v))
+    const char* parseStart = tokStart;
+    if(*parseStart == '+'){
+        if(len == 1u || parseStart[1] == '-' || parseStart[1] == '+')
+            return false;
+        ++parseStart;
+    }
+    f32 v = 0.0f;
+    const std::from_chars_result res = std::from_chars(parseStart, tokEnd, v);
+    if(res.ec == std::errc::result_out_of_range && res.ptr == tokEnd){
+        char buf[128];
+        std::memcpy(buf, tokStart, len);
+        buf[len] = '\0';
+        char* parseEnd = nullptr;
+        v = std::strtof(buf, &parseEnd);
+        if(parseEnd != buf + len || !std::isfinite(v))
+            return false;
+        outVal = v;
+        return true;
+    }
+    if(res.ec != std::errc{} || res.ptr != tokEnd || !std::isfinite(v))
         return false;
     outVal = v;
     return true;
@@ -123,14 +140,16 @@ namespace __hidden_physics_cook_io{
     const usize len = static_cast<usize>(tokEnd - tokStart);
     if(len >= 64u)
         return false;
-    char buf[64];
-    std::memcpy(buf, tokStart, len);
-    buf[len] = '\0';
-    char* parseEnd = nullptr;
-    const long long parsed = std::strtoll(buf, &parseEnd, 10);
-    if(parseEnd != buf + len)
+    if(*tokStart == '+'){
+        if(len == 1u || tokStart[1] == '-' || tokStart[1] == '+')
+            return false;
+        ++tokStart;
+    }
+    i64 parsed = 0;
+    const std::from_chars_result res = std::from_chars(tokStart, tokEnd, parsed, 10);
+    if(res.ec != std::errc{} || res.ptr != tokEnd)
         return false;
-    outVal = static_cast<i64>(parsed);
+    outVal = parsed;
     return true;
 }
 
@@ -138,8 +157,10 @@ namespace __hidden_physics_cook_io{
     const AStringView filePathUtf8,
     Core::Alloc::ScratchArena& scratch,
     void* user,
-    void(*pushVert)(void*, f32, f32, f32),
-    void(*pushIdx)(void*, u32)
+    void(*reserveVerts)(void*, usize),
+    Float4*(*allocVerts)(void*, usize),
+    void(*reserveIdx)(void*, usize),
+    u32*(*allocIdx)(void*, usize)
 )noexcept{
     Vector<u8, Core::Alloc::ScratchArena> bytes(scratch);
     if(!ReadBytesUtf8(filePathUtf8, scratch, bytes) || bytes.empty())
@@ -147,8 +168,10 @@ namespace __hidden_physics_cook_io{
 
     const char* data = reinterpret_cast<const char*>(bytes.data());
     const char* end = data + bytes.size();
-    usize vertexCount = 0u;
-    usize indexCount = 0u;
+    Vector<Float4, Core::Alloc::ScratchArena> objVerts(scratch);
+    Vector<u32, Core::Alloc::ScratchArena> objIndices(scratch);
+    objVerts.reserve(bytes.size() / 48u + 16u);
+    objIndices.reserve(bytes.size() / 24u + 16u);
     Vector<u32, Core::Alloc::ScratchArena> faceVerts(scratch);
 
     const char* cur = data;
@@ -168,10 +191,9 @@ namespace __hidden_physics_cook_io{
             f32 z = 0.0f;
             if(!ParseAsciiFloatToken(p, lineEnd, x) || !ParseAsciiFloatToken(p, lineEnd, y) || !ParseAsciiFloatToken(p, lineEnd, z))
                 return false;
-            if(vertexCount >= static_cast<usize>(Limit<u32>::s_Max))
+            if(objVerts.size() >= static_cast<usize>(Limit<u32>::s_Max))
                 return false;
-            pushVert(user, x, y, z);
-            ++vertexCount;
+            objVerts.push_back(Float4(x, y, z, 0.0f));
         }
         else if(p + 2 <= lineEnd && p[0] == 'f' && IsAsciiSpace(p[1])){
             p += 2;
@@ -194,8 +216,8 @@ namespace __hidden_physics_cook_io{
                 if(rawIdx > 0)
                     resolved = rawIdx - 1;
                 else
-                    resolved = static_cast<i64>(vertexCount) + rawIdx;
-                if(resolved < 0 || resolved >= static_cast<i64>(vertexCount))
+                    resolved = static_cast<i64>(objVerts.size()) + rawIdx;
+                if(resolved < 0 || resolved >= static_cast<i64>(objVerts.size()))
                     return false;
                 faceVerts.push_back(static_cast<u32>(resolved));
                 p = tokEnd;
@@ -203,10 +225,9 @@ namespace __hidden_physics_cook_io{
             if(faceVerts.size() < 3u)
                 return false;
             for(usize k = 1u; k + 1u < faceVerts.size(); ++k){
-                pushIdx(user, faceVerts[0u]);
-                pushIdx(user, faceVerts[k]);
-                pushIdx(user, faceVerts[k + 1u]);
-                indexCount += 3u;
+                objIndices.push_back(faceVerts[0u]);
+                objIndices.push_back(faceVerts[k]);
+                objIndices.push_back(faceVerts[k + 1u]);
             }
         }
 
@@ -215,7 +236,21 @@ namespace __hidden_physics_cook_io{
             ++cur;
     }
 
-    return vertexCount > 0u && indexCount >= 3u;
+    if(objVerts.empty() || objIndices.size() < 3u)
+        return false;
+
+    reserveVerts(user, objVerts.size());
+    Float4* dstVerts = allocVerts(user, objVerts.size());
+    if(!dstVerts)
+        return false;
+    std::memcpy(dstVerts, objVerts.data(), objVerts.size() * sizeof(Float4));
+
+    reserveIdx(user, objIndices.size());
+    u32* dstIndices = allocIdx(user, objIndices.size());
+    if(!dstIndices)
+        return false;
+    std::memcpy(dstIndices, objIndices.data(), objIndices.size() * sizeof(u32));
+    return true;
 }
 
 [[nodiscard]] b8 LoadFbxMesh(
@@ -223,9 +258,9 @@ namespace __hidden_physics_cook_io{
     Core::Alloc::ScratchArena& scratch,
     void* user,
     void(*reserveVerts)(void*, usize),
-    void(*pushVert)(void*, f32, f32, f32),
+    Float4*(*allocVerts)(void*, usize),
     void(*reserveIdx)(void*, usize),
-    void(*pushIdx)(void*, u32)
+    u32*(*allocIdx)(void*, usize)
 )noexcept{
     ufbx_load_opts opts = {};
     ufbx_error ufbxErr = {};
@@ -236,6 +271,7 @@ namespace __hidden_physics_cook_io{
     usize totalVerts = 0u;
     usize totalIndices = 0u;
     Vector<u32, Core::Alloc::ScratchArena> triBuf(scratch);
+    Vector<u32, Core::Alloc::ScratchArena> meshIndices(scratch);
     b8 ok = true;
 
     usize estVerts = 0u;
@@ -262,6 +298,11 @@ namespace __hidden_physics_cook_io{
             break;
         }
         const u32 baseVertex = static_cast<u32>(totalVerts);
+        Float4* dstVerts = allocVerts(user, mesh->num_vertices);
+        if(!dstVerts){
+            ok = false;
+            break;
+        }
         for(usize vi = 0u; vi < mesh->num_vertices; ++vi){
             const ufbx_vec3 p = ufbx_transform_position(&node->geometry_to_world, mesh->vertices.data[vi]);
             const f32 x = static_cast<f32>(p.x);
@@ -271,15 +312,17 @@ namespace __hidden_physics_cook_io{
                 ok = false;
                 break;
             }
-            pushVert(user, x, y, z);
-            ++totalVerts;
+            dstVerts[vi] = Float4(x, y, z, 0.0f);
         }
+        totalVerts += mesh->num_vertices;
         if(!ok)
             break;
 
         const usize needTriBuf = mesh->max_face_triangles * 3u;
         if(triBuf.size() < needTriBuf)
             triBuf.resize(needTriBuf);
+        meshIndices.clear();
+        meshIndices.reserve(mesh->num_triangles * 3u);
 
         for(usize fi = 0u; fi < mesh->num_faces; ++fi){
             if(mesh->face_hole.count > fi && mesh->face_hole.data[fi])
@@ -300,11 +343,19 @@ namespace __hidden_physics_cook_io{
                     ok = false;
                     break;
                 }
-                pushIdx(user, baseVertex + logicalVert);
-                ++totalIndices;
+                meshIndices.push_back(baseVertex + logicalVert);
             }
             if(!ok)
                 break;
+        }
+        if(ok && !meshIndices.empty()){
+            u32* dstIdx = allocIdx(user, meshIndices.size());
+            if(!dstIdx){
+                ok = false;
+                break;
+            }
+            std::memcpy(dstIdx, meshIndices.data(), meshIndices.size() * sizeof(u32));
+            totalIndices += meshIndices.size();
         }
     }
 
@@ -476,14 +527,77 @@ namespace __hidden_physics_cook_io{
     return true;
 }
 
+void CountGltfMeshGeometry(
+    const nlohmann::json& doc,
+    const usize meshIndex,
+    usize& inOutVerts,
+    usize& inOutIndices
+)noexcept{
+    if(!doc.contains("meshes") || !doc["meshes"].is_array() || meshIndex >= doc["meshes"].size())
+        return;
+    if(!doc.contains("accessors") || !doc["accessors"].is_array())
+        return;
+    const nlohmann::json& accessors = doc["accessors"];
+    const nlohmann::json& mesh = doc["meshes"][meshIndex];
+    if(!mesh.is_object() || !mesh.contains("primitives") || !mesh["primitives"].is_array())
+        return;
+    for(const nlohmann::json& prim : mesh["primitives"]){
+        if(!prim.is_object())
+            continue;
+        if(prim.contains("mode") && (!prim["mode"].is_number_integer() || prim["mode"].get<i64>() != 4))
+            continue;
+        if(!prim.contains("attributes") || !prim["attributes"].is_object())
+            continue;
+        const nlohmann::json& attrs = prim["attributes"];
+        if(!attrs.contains("POSITION") || !attrs["POSITION"].is_number_unsigned())
+            continue;
+        const usize posAccIndex = attrs["POSITION"].get<usize>();
+        if(posAccIndex >= accessors.size() || !accessors[posAccIndex].is_object() || !accessors[posAccIndex].contains("count") || !accessors[posAccIndex]["count"].is_number_unsigned())
+            continue;
+        const usize posCount = accessors[posAccIndex]["count"].get<usize>();
+        inOutVerts += posCount;
+        if(prim.contains("indices") && prim["indices"].is_number_unsigned()){
+            const usize idxAccIndex = prim["indices"].get<usize>();
+            if(idxAccIndex < accessors.size() && accessors[idxAccIndex].is_object() && accessors[idxAccIndex].contains("count") && accessors[idxAccIndex]["count"].is_number_unsigned())
+                inOutIndices += accessors[idxAccIndex]["count"].get<usize>();
+        }
+        else{
+            inOutIndices += posCount;
+        }
+    }
+}
+
+void CountGltfNodeGeometry(
+    const nlohmann::json& doc,
+    const usize nodeIndex,
+    Vector<u8, Core::Alloc::ScratchArena>& visited,
+    usize& inOutVerts,
+    usize& inOutIndices
+)noexcept{
+    if(nodeIndex >= visited.size() || visited[nodeIndex] != 0u)
+        return;
+    visited[nodeIndex] = 1u;
+    const nlohmann::json& nodeJson = doc["nodes"][nodeIndex];
+    if(!nodeJson.is_object())
+        return;
+    if(nodeJson.contains("mesh") && nodeJson["mesh"].is_number_unsigned())
+        CountGltfMeshGeometry(doc, nodeJson["mesh"].get<usize>(), inOutVerts, inOutIndices);
+    if(nodeJson.contains("children") && nodeJson["children"].is_array()){
+        for(const nlohmann::json& childVal : nodeJson["children"]){
+            if(childVal.is_number_unsigned())
+                CountGltfNodeGeometry(doc, childVal.get<usize>(), visited, inOutVerts, inOutIndices);
+        }
+    }
+}
+
 [[nodiscard]] b8 AppendGltfMesh(
     const nlohmann::json& doc,
     const Vector<Span<const u8>, Core::Alloc::ScratchArena>& bufferSpans,
     const usize meshIndex,
     const SIMDMatrix& worldMatrix,
     void* user,
-    void(*pushVert)(void*, f32, f32, f32),
-    void(*pushIdx)(void*, u32),
+    Float4*(*allocVerts)(void*, usize),
+    u32*(*allocIdx)(void*, usize),
     usize& inOutVertCount,
     usize& inOutIdxCount
 )noexcept{
@@ -522,6 +636,9 @@ namespace __hidden_physics_cook_io{
             return false;
 
         const u32 baseVertex = static_cast<u32>(inOutVertCount);
+        Float4* dstVerts = allocVerts(user, posCount);
+        if(!dstVerts)
+            return false;
         for(usize vi = 0u; vi < posCount; ++vi){
             const u8* vp = posBuf.data() + posOffset + vi * posStride;
             const f32 lx = ReadFloat32(vp + 0u, false);
@@ -535,9 +652,9 @@ namespace __hidden_physics_cook_io{
             const f32 wz = VectorGetZ(worldPt);
             if(!std::isfinite(wx) || !std::isfinite(wy) || !std::isfinite(wz))
                 return false;
-            pushVert(user, wx, wy, wz);
-            ++inOutVertCount;
+            dstVerts[vi] = Float4(wx, wy, wz, 0.0f);
         }
+        inOutVertCount += posCount;
 
         if(prim.contains("indices")){
             if(!prim["indices"].is_number_unsigned())
@@ -568,28 +685,47 @@ namespace __hidden_physics_cook_io{
                 return false;
             if((idxCount % 3u) != 0u)
                 return false;
-            for(usize ii = 0u; ii < idxCount; ++ii){
-                const u8* ip = idxBuf.data() + idxOffset + ii * idxStride;
-                u32 vIdx = 0u;
-                if(compType == 5121u)
-                    vIdx = static_cast<u32>(ip[0]);
-                else if(compType == 5123u)
-                    vIdx = static_cast<u32>(ReadLe16(ip));
-                else
-                    vIdx = ReadLe32(ip);
-                if(static_cast<usize>(vIdx) >= posCount)
+            if(idxCount > 0u){
+                u32* dstIdx = allocIdx(user, idxCount);
+                if(!dstIdx)
                     return false;
-                pushIdx(user, baseVertex + vIdx);
-                ++inOutIdxCount;
+                const u8* ip = idxBuf.data() + idxOffset;
+                if(compType == 5121u){
+                    for(usize ii = 0u; ii < idxCount; ++ii, ip += idxStride){
+                        const u32 vIdx = static_cast<u32>(ip[0]);
+                        if(static_cast<usize>(vIdx) >= posCount)
+                            return false;
+                        dstIdx[ii] = baseVertex + vIdx;
+                    }
+                }
+                else if(compType == 5123u){
+                    for(usize ii = 0u; ii < idxCount; ++ii, ip += idxStride){
+                        const u32 vIdx = static_cast<u32>(ReadLe16(ip));
+                        if(static_cast<usize>(vIdx) >= posCount)
+                            return false;
+                        dstIdx[ii] = baseVertex + vIdx;
+                    }
+                }
+                else{
+                    for(usize ii = 0u; ii < idxCount; ++ii, ip += idxStride){
+                        const u32 vIdx = ReadLe32(ip);
+                        if(static_cast<usize>(vIdx) >= posCount)
+                            return false;
+                        dstIdx[ii] = baseVertex + vIdx;
+                    }
+                }
+                inOutIdxCount += idxCount;
             }
         }
         else{
             if((posCount % 3u) != 0u)
                 return false;
-            for(usize ii = 0u; ii < posCount; ++ii){
-                pushIdx(user, baseVertex + static_cast<u32>(ii));
-                ++inOutIdxCount;
-            }
+            u32* dstIdx = allocIdx(user, posCount);
+            if(!dstIdx)
+                return false;
+            for(usize ii = 0u; ii < posCount; ++ii)
+                dstIdx[ii] = baseVertex + static_cast<u32>(ii);
+            inOutIdxCount += posCount;
         }
     }
     return true;
@@ -602,8 +738,8 @@ namespace __hidden_physics_cook_io{
     const SIMDMatrix& parentWorld,
     Vector<u8, Core::Alloc::ScratchArena>& visited,
     void* user,
-    void(*pushVert)(void*, f32, f32, f32),
-    void(*pushIdx)(void*, u32),
+    Float4*(*allocVerts)(void*, usize),
+    u32*(*allocIdx)(void*, usize),
     usize& inOutVertCount,
     usize& inOutIdxCount
 )noexcept{
@@ -622,7 +758,7 @@ namespace __hidden_physics_cook_io{
     if(nodeJson.contains("mesh")){
         if(!nodeJson["mesh"].is_number_unsigned())
             return false;
-        if(!AppendGltfMesh(doc, bufferSpans, nodeJson["mesh"].get<usize>(), worldMat, user, pushVert, pushIdx, inOutVertCount, inOutIdxCount))
+        if(!AppendGltfMesh(doc, bufferSpans, nodeJson["mesh"].get<usize>(), worldMat, user, allocVerts, allocIdx, inOutVertCount, inOutIdxCount))
             return false;
     }
 
@@ -632,7 +768,7 @@ namespace __hidden_physics_cook_io{
         for(const nlohmann::json& childVal : nodeJson["children"]){
             if(!childVal.is_number_unsigned())
                 return false;
-            if(!TraverseGltfNode(doc, bufferSpans, childVal.get<usize>(), worldMat, visited, user, pushVert, pushIdx, inOutVertCount, inOutIdxCount))
+            if(!TraverseGltfNode(doc, bufferSpans, childVal.get<usize>(), worldMat, visited, user, allocVerts, allocIdx, inOutVertCount, inOutIdxCount))
                 return false;
         }
     }
@@ -645,8 +781,10 @@ namespace __hidden_physics_cook_io{
     const AStringView filePathUtf8,
     Core::Alloc::ScratchArena& scratch,
     void* user,
-    void(*pushVert)(void*, f32, f32, f32),
-    void(*pushIdx)(void*, u32)
+    void(*reserveVerts)(void*, usize),
+    Float4*(*allocVerts)(void*, usize),
+    void(*reserveIdx)(void*, usize),
+    u32*(*allocIdx)(void*, usize)
 )noexcept{
     Vector<u8, Core::Alloc::ScratchArena> fileBytes(scratch);
     if(!ReadBytesUtf8(filePathUtf8, scratch, fileBytes) || fileBytes.size() < 4u)
@@ -739,6 +877,7 @@ namespace __hidden_physics_cook_io{
     if(doc.contains("nodes") && doc["nodes"].is_array() && !doc["nodes"].empty()){
         const nlohmann::json& nodes = doc["nodes"];
         Vector<u8, Core::Alloc::ScratchArena> visited(nodes.size(), 0u, scratch);
+        Vector<u32, Core::Alloc::ScratchArena> rootNodes(scratch);
         b8 traversedFromScene = false;
         if(doc.contains("scenes") && doc["scenes"].is_array() && !doc["scenes"].empty()){
             const usize sceneIdx = doc.value("scene", usize(0u));
@@ -750,8 +889,7 @@ namespace __hidden_physics_cook_io{
                 for(const nlohmann::json& rootVal : sc["nodes"]){
                     if(!rootVal.is_number_unsigned())
                         return false;
-                    if(!TraverseGltfNode(doc, bufferSpans, rootVal.get<usize>(), MatrixIdentity(), visited, user, pushVert, pushIdx, vertCount, idxCount))
-                        return false;
+                    rootNodes.push_back(rootVal.get<u32>());
                 }
             }
         }
@@ -766,16 +904,34 @@ namespace __hidden_physics_cook_io{
                 }
             }
             for(usize ni = 0u; ni < nodes.size(); ++ni){
-                if(hasParent[ni] == 0u){
-                    if(!TraverseGltfNode(doc, bufferSpans, ni, MatrixIdentity(), visited, user, pushVert, pushIdx, vertCount, idxCount))
-                        return false;
-                }
+                if(hasParent[ni] == 0u)
+                    rootNodes.push_back(static_cast<u32>(ni));
             }
+        }
+
+        usize estVerts = 0u;
+        usize estIndices = 0u;
+        Vector<u8, Core::Alloc::ScratchArena> countVisited(nodes.size(), 0u, scratch);
+        for(const u32 rootIdx : rootNodes)
+            CountGltfNodeGeometry(doc, rootIdx, countVisited, estVerts, estIndices);
+        reserveVerts(user, estVerts);
+        reserveIdx(user, estIndices);
+
+        for(const u32 rootIdx : rootNodes){
+            if(!TraverseGltfNode(doc, bufferSpans, rootIdx, MatrixIdentity(), visited, user, allocVerts, allocIdx, vertCount, idxCount))
+                return false;
         }
     }
     else{
+        usize estVerts = 0u;
+        usize estIndices = 0u;
+        for(usize mi = 0u; mi < doc["meshes"].size(); ++mi)
+            CountGltfMeshGeometry(doc, mi, estVerts, estIndices);
+        reserveVerts(user, estVerts);
+        reserveIdx(user, estIndices);
+
         for(usize mi = 0u; mi < doc["meshes"].size(); ++mi){
-            if(!AppendGltfMesh(doc, bufferSpans, mi, MatrixIdentity(), user, pushVert, pushIdx, vertCount, idxCount))
+            if(!AppendGltfMesh(doc, bufferSpans, mi, MatrixIdentity(), user, allocVerts, allocIdx, vertCount, idxCount))
                 return false;
         }
     }
@@ -804,16 +960,107 @@ namespace __hidden_physics_cook_io{
     return cByte;
 }
 
-[[nodiscard]] b8 TryLoadPng16(
-    const Span<const u8> bytes,
-    Core::Alloc::ScratchArena& scratch,
-    u32& outWidth,
-    u32& outHeight,
-    u32& outChannels,
-    Vector<f32, Core::Alloc::ScratchArena>& outRgba,
-    b8& outHandledAsPng16
+enum class Png16SniffResult : u8{
+    OpenFailed,
+    NotPng16,
+    IsPng16,
+};
+
+[[nodiscard]] Png16SniffResult SniffPng16Header(
+    const AStringView filePathUtf8,
+    Core::Alloc::ScratchArena& scratch
 )noexcept{
-    outHandledAsPng16 = false;
+    const ::Path<Core::Alloc::ScratchArena> path(scratch, filePathUtf8);
+    InputFileStream stream(path, InputFileStream::binary);
+    if(!stream.is_open())
+        return Png16SniffResult::OpenFailed;
+    u8 hdr[33] = {};
+    stream.read(reinterpret_cast<char*>(hdr), 33);
+    if(stream.gcount() != 33)
+        return Png16SniffResult::NotPng16;
+    static constexpr u8 s_PngSig[8] = { 0x89u, 0x50u, 0x4Eu, 0x47u, 0x0Du, 0x0Au, 0x1Au, 0x0Au };
+    if(std::memcmp(hdr, s_PngSig, 8u) != 0)
+        return Png16SniffResult::NotPng16;
+    if(ReadBe32(hdr + 8u) != 13u || std::memcmp(hdr + 12u, "IHDR", 4u) != 0)
+        return Png16SniffResult::NotPng16;
+    if(hdr[24u] != 16u)
+        return Png16SniffResult::NotPng16;
+    return Png16SniffResult::IsPng16;
+}
+
+[[nodiscard]] b8 UnfilterPng16Scanline(
+    const u8 filterType,
+    const u8* inRow,
+    const u8* prevRow,
+    u8* currRow,
+    const usize rowBytes,
+    const usize step
+)noexcept{
+    if(filterType == 0u){
+        std::memcpy(currRow, inRow, rowBytes);
+        return true;
+    }
+    if(filterType == 1u){
+        for(usize xByte = 0u; xByte < rowBytes; ++xByte){
+            u8 left = 0u;
+            if(xByte >= step)
+                left = currRow[xByte - step];
+            currRow[xByte] = static_cast<u8>(inRow[xByte] + left);
+        }
+        return true;
+    }
+    if(filterType == 2u){
+        for(usize xByte = 0u; xByte < rowBytes; ++xByte)
+            currRow[xByte] = static_cast<u8>(inRow[xByte] + prevRow[xByte]);
+        return true;
+    }
+    if(filterType == 3u){
+        for(usize xByte = 0u; xByte < rowBytes; ++xByte){
+            u8 left = 0u;
+            if(xByte >= step)
+                left = currRow[xByte - step];
+            const u8 up = prevRow[xByte];
+            const u32 avg = (static_cast<u32>(left) + static_cast<u32>(up)) >> 1u;
+            currRow[xByte] = static_cast<u8>(inRow[xByte] + avg);
+        }
+        return true;
+    }
+    if(filterType == 4u){
+        for(usize xByte = 0u; xByte < rowBytes; ++xByte){
+            u8 left = 0u;
+            u8 upLeft = 0u;
+            if(xByte >= step){
+                left = currRow[xByte - step];
+                upLeft = prevRow[xByte - step];
+            }
+            const u8 up = prevRow[xByte];
+            currRow[xByte] = static_cast<u8>(inRow[xByte] + PaethPredictor(left, up, upLeft));
+        }
+        return true;
+    }
+    return false;
+}
+
+struct ParsedPng16{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 channels = 0u;
+    void* decompressed = nullptr;
+
+    ~ParsedPng16(){
+        if(decompressed)
+            mz_free(decompressed);
+    }
+};
+
+[[nodiscard]] b8 ParseAndDecompressPng16(
+    const AStringView filePathUtf8,
+    Core::Alloc::ScratchArena& scratch,
+    ParsedPng16& outPng
+)noexcept{
+    Vector<u8, Core::Alloc::ScratchArena> bytes(scratch);
+    if(!ReadBytesUtf8(filePathUtf8, scratch, bytes))
+        return false;
     static constexpr u8 s_PngSig[8] = { 0x89u, 0x50u, 0x4Eu, 0x47u, 0x0Du, 0x0Au, 0x1Au, 0x0Au };
     if(bytes.size() < 33u || std::memcmp(bytes.data(), s_PngSig, 8u) != 0)
         return false;
@@ -829,6 +1076,7 @@ namespace __hidden_physics_cook_io{
     u8 filterMethod = 0u;
     u8 interlaceMethod = 0u;
     Vector<u8, Core::Alloc::ScratchArena> idatBytes(scratch);
+    idatBytes.reserve(bytes.size());
 
     while(cursor + 12u <= bytes.size()){
         const u32 chunkLen = ReadBe32(bytes.data() + cursor);
@@ -852,7 +1100,6 @@ namespace __hidden_physics_cook_io{
             seenIhdr = true;
             if(bitDepth != 16u)
                 return false;
-            outHandledAsPng16 = true;
         }
         else if(std::memcmp(typePtr, "IDAT", 4) == 0){
             if(!seenIhdr)
@@ -868,7 +1115,7 @@ namespace __hidden_physics_cook_io{
         }
     }
 
-    if(!outHandledAsPng16 || !seenIend || width == 0u || height == 0u)
+    if(!seenIhdr || !seenIend || width == 0u || height == 0u)
         return false;
     if(compMethod != 0u || filterMethod != 0u || interlaceMethod != 0u || idatBytes.empty())
         return false;
@@ -895,150 +1142,177 @@ namespace __hidden_physics_cook_io{
     void* decompressed = tinfl_decompress_mem_to_heap(idatBytes.data(), idatBytes.size(), &decompressedLen, TINFL_FLAG_PARSE_ZLIB_HEADER);
     if(!decompressed)
         return false;
-
-    b8 ok = (decompressedLen == expectedRawSize);
-    if(ok){
-        const u8* src = static_cast<const u8*>(decompressed);
-        const usize rowBytes = static_cast<usize>(width) * static_cast<usize>(bpp);
-        Vector<u8, Core::Alloc::ScratchArena> prevRow(rowBytes, 0u, scratch);
-        Vector<u8, Core::Alloc::ScratchArena> currRow(rowBytes, 0u, scratch);
-        outRgba.resize(static_cast<usize>(width) * static_cast<usize>(height) * 4u, 0.0f);
-
-        for(u32 y = 0u; y < height; ++y){
-            const u8* rowSrc = src + static_cast<usize>(y) * (1u + rowBytes);
-            const u8 filterType = rowSrc[0];
-            const u8* inRow = rowSrc + 1u;
-            const usize step = static_cast<usize>(bpp);
-
-            if(filterType == 0u){
-                std::memcpy(currRow.data(), inRow, rowBytes);
-            }
-            else if(filterType == 1u){
-                for(usize xByte = 0u; xByte < rowBytes; ++xByte){
-                    u8 left = 0u;
-                    if(xByte >= step)
-                        left = currRow[xByte - step];
-                    currRow[xByte] = static_cast<u8>(inRow[xByte] + left);
-                }
-            }
-            else if(filterType == 2u){
-                for(usize xByte = 0u; xByte < rowBytes; ++xByte)
-                    currRow[xByte] = static_cast<u8>(inRow[xByte] + prevRow[xByte]);
-            }
-            else if(filterType == 3u){
-                for(usize xByte = 0u; xByte < rowBytes; ++xByte){
-                    u8 left = 0u;
-                    if(xByte >= step)
-                        left = currRow[xByte - step];
-                    const u8 up = prevRow[xByte];
-                    const u32 avg = (static_cast<u32>(left) + static_cast<u32>(up)) >> 1u;
-                    currRow[xByte] = static_cast<u8>(inRow[xByte] + avg);
-                }
-            }
-            else if(filterType == 4u){
-                for(usize xByte = 0u; xByte < rowBytes; ++xByte){
-                    u8 left = 0u;
-                    u8 upLeft = 0u;
-                    if(xByte >= step){
-                        left = currRow[xByte - step];
-                        upLeft = prevRow[xByte - step];
-                    }
-                    const u8 up = prevRow[xByte];
-                    currRow[xByte] = static_cast<u8>(inRow[xByte] + PaethPredictor(left, up, upLeft));
-                }
-            }
-            else{
-                ok = false;
-                break;
-            }
-
-            const f32 invMax = 1.0f / 65535.0f;
-            for(u32 x = 0u; x < width; ++x){
-                const u8* px = currRow.data() + static_cast<usize>(x) * step;
-                f32 r = static_cast<f32>(ReadBe16(px + 0u)) * invMax;
-                f32 g = r;
-                f32 b = r;
-                f32 a = 1.0f;
-                if(channels == 2u){
-                    a = static_cast<f32>(ReadBe16(px + 2u)) * invMax;
-                }
-                else if(channels >= 3u){
-                    g = static_cast<f32>(ReadBe16(px + 2u)) * invMax;
-                    b = static_cast<f32>(ReadBe16(px + 4u)) * invMax;
-                    if(channels == 4u)
-                        a = static_cast<f32>(ReadBe16(px + 6u)) * invMax;
-                }
-                const usize dstIdx = (static_cast<usize>(y) * static_cast<usize>(width) + static_cast<usize>(x)) * 4u;
-                outRgba[dstIdx + 0u] = r;
-                outRgba[dstIdx + 1u] = g;
-                outRgba[dstIdx + 2u] = b;
-                outRgba[dstIdx + 3u] = a;
-            }
-            std::memcpy(prevRow.data(), currRow.data(), rowBytes);
-        }
+    if(decompressedLen != expectedRawSize){
+        mz_free(decompressed);
+        return false;
     }
 
-    mz_free(decompressed);
-    if(ok){
-        outWidth = width;
-        outHeight = height;
-        outChannels = channels;
-    }
-    return ok;
+    outPng.width = width;
+    outPng.height = height;
+    outPng.channels = channels;
+    outPng.decompressed = decompressed;
+    return true;
 }
 
-[[nodiscard]] b8 LoadNormalizedRgbaImage(
-    const AStringView filePathUtf8,
-    Core::Alloc::ScratchArena& scratch,
-    u32& outWidth,
-    u32& outHeight,
-    Vector<f32, Core::Alloc::ScratchArena>& outRgba
+template<u32 Channels, u32 Mode>
+void DecodePng16RowToHeights(
+    const u8* currRow,
+    const u32 width,
+    const f32 heightMin,
+    const f32 scale
+    , f32* dstRow
 )noexcept{
-    Vector<u8, Core::Alloc::ScratchArena> fileBytes(scratch);
-    if(!ReadBytesUtf8(filePathUtf8, scratch, fileBytes))
-        return false;
-
-    u32 channels = 0u;
-    b8 handledAsPng16 = false;
-    if(TryLoadPng16(Span<const u8>(fileBytes.data(), fileBytes.size()), scratch, outWidth, outHeight, channels, outRgba, handledAsPng16))
-        return true;
-    if(handledAsPng16)
-        return false;
-
-    AString<Core::Alloc::ScratchArena> nullTermPath(scratch);
-    nullTermPath.assign(filePathUtf8.data(), filePathUtf8.size());
-    basisu::imagef hdrImg;
-    if(!basisu::load_image_hdr(nullTermPath.c_str(), hdrImg, false))
-        return false;
-    if(hdrImg.get_width() == 0u || hdrImg.get_height() == 0u)
-        return false;
-
-    outWidth = hdrImg.get_width();
-    outHeight = hdrImg.get_height();
-    outRgba.resize(static_cast<usize>(outWidth) * static_cast<usize>(outHeight) * 4u, 0.0f);
-    for(u32 y = 0u; y < outHeight; ++y){
-        for(u32 x = 0u; x < outWidth; ++x){
-            const basisu::vec4F& p = hdrImg(x, y);
-            const usize dstIdx = (static_cast<usize>(y) * static_cast<usize>(outWidth) + static_cast<usize>(x)) * 4u;
-            outRgba[dstIdx + 0u] = p[0];
-            outRgba[dstIdx + 1u] = p[1];
-            outRgba[dstIdx + 2u] = p[2];
-            outRgba[dstIdx + 3u] = p[3];
+    constexpr f32 s_InvMax = 1.0f / 65535.0f;
+    constexpr usize s_Step = static_cast<usize>(Channels) * 2u;
+    for(u32 x = 0u; x < width; ++x){
+        const u8* px = currRow + static_cast<usize>(x) * s_Step;
+        f32 sample = 0.0f;
+        if constexpr(Mode == 0u){
+            sample = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
         }
+        else if constexpr(Mode == 1u){
+            const usize chOff = (Channels >= 3u) ? 2u : 0u;
+            sample = static_cast<f32>(ReadBe16(px + chOff)) * s_InvMax;
+        }
+        else if constexpr(Mode == 2u){
+            const usize chOff = (Channels >= 3u) ? 4u : 0u;
+            sample = static_cast<f32>(ReadBe16(px + chOff)) * s_InvMax;
+        }
+        else if constexpr(Mode == 3u){
+            if constexpr(Channels == 2u)
+                sample = static_cast<f32>(ReadBe16(px + 2u)) * s_InvMax;
+            else if constexpr(Channels == 4u)
+                sample = static_cast<f32>(ReadBe16(px + 6u)) * s_InvMax;
+            else
+                sample = 1.0f;
+        }
+        else{
+            if constexpr(Channels < 3u){
+                sample = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
+            }
+            else{
+                const f32 r = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
+                const f32 g = static_cast<f32>(ReadBe16(px + 2u)) * s_InvMax;
+                const f32 b = static_cast<f32>(ReadBe16(px + 4u)) * s_InvMax;
+                sample = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+            }
+        }
+        dstRow[x] = heightMin + sample * scale;
+    }
+}
+
+template<u32 Mode>
+void DispatchPng16HeightRowByChannels(
+    const u32 channels,
+    const u8* currRow,
+    const u32 width,
+    const f32 heightMin,
+    const f32 range,
+    f32* dstRow
+)noexcept{
+    if(channels == 1u)
+        DecodePng16RowToHeights<1u, Mode>(currRow, width, heightMin, range, dstRow);
+    else if(channels == 2u)
+        DecodePng16RowToHeights<2u, Mode>(currRow, width, heightMin, range, dstRow);
+    else if(channels == 3u)
+        DecodePng16RowToHeights<3u, Mode>(currRow, width, heightMin, range, dstRow);
+    else
+        DecodePng16RowToHeights<4u, Mode>(currRow, width, heightMin, range, dstRow);
+}
+
+[[nodiscard]] b8 WriteScaledSamplesFromHdrRow(
+    const basisu::vec4F* rowSrc,
+    const u32 width,
+    const u32 channelMode,
+    const f32 heightMin,
+    const f32 range,
+    f32* dstRow
+)noexcept{
+    const SIMDVectorSingle vMin = VectorReplicate(heightMin);
+    const SIMDVectorSingle vRange = VectorReplicate(range);
+    u32 x = 0u;
+    if(channelMode < 4u){
+        for(; x + 4u <= width; x += 4u){
+            const SIMDVectorSingle sVec = VectorSet(rowSrc[x + 0u][channelMode], rowSrc[x + 1u][channelMode], rowSrc[x + 2u][channelMode], rowSrc[x + 3u][channelMode]);
+            if(!VectorIsFinite(sVec, VectorComponentMask::s_XYZW))
+                return false;
+            Float4U outVals;
+            StoreFloat(VectorMultiplyAdd(sVec, vRange, vMin), outVals);
+            std::memcpy(dstRow + x, &outVals, sizeof(outVals));
+        }
+        for(; x < width; ++x){
+            const f32 s = rowSrc[x][channelMode];
+            if(!std::isfinite(s))
+                return false;
+            dstRow[x] = heightMin + s * range;
+        }
+        return true;
+    }
+    for(; x + 4u <= width; x += 4u){
+        const SIMDVectorSingle rVec = VectorSet(rowSrc[x + 0u][0], rowSrc[x + 1u][0], rowSrc[x + 2u][0], rowSrc[x + 3u][0]);
+        const SIMDVectorSingle gVec = VectorSet(rowSrc[x + 0u][1], rowSrc[x + 1u][1], rowSrc[x + 2u][1], rowSrc[x + 3u][1]);
+        const SIMDVectorSingle bVec = VectorSet(rowSrc[x + 0u][2], rowSrc[x + 1u][2], rowSrc[x + 2u][2], rowSrc[x + 3u][2]);
+        const SIMDVectorSingle lum = VectorMultiplyAdd(
+            rVec, VectorReplicate(0.2126f),
+            VectorMultiplyAdd(gVec, VectorReplicate(0.7152f), VectorMultiply(bVec, VectorReplicate(0.0722f)))
+        );
+        if(!VectorIsFinite(lum, VectorComponentMask::s_XYZW))
+            return false;
+        Float4U outVals;
+        StoreFloat(VectorMultiplyAdd(lum, vRange, vMin), outVals);
+        std::memcpy(dstRow + x, &outVals, sizeof(outVals));
+    }
+    for(; x < width; ++x){
+        const basisu::vec4F& p = rowSrc[x];
+        const f32 lum = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        if(!std::isfinite(lum))
+            return false;
+        dstRow[x] = heightMin + lum * range;
     }
     return true;
 }
 
-[[nodiscard]] f32 SampleImageChannel(const f32* rgba, const u32 channelMode)noexcept{
-    if(channelMode == 0u)
-        return rgba[0];
-    if(channelMode == 1u)
-        return rgba[1];
-    if(channelMode == 2u)
-        return rgba[2];
-    if(channelMode == 3u)
-        return rgba[3];
-    return 0.2126f * rgba[0] + 0.7152f * rgba[1] + 0.0722f * rgba[2];
+template<u32 Channels>
+void DecodePng16RowToMaskBits(
+    const u8* currRow,
+    const u32 cz,
+    const u32 cellCols,
+    const f32 threshold,
+    u8* dst
+)noexcept{
+    constexpr f32 s_InvMax = 1.0f / 65535.0f;
+    constexpr usize s_Step = static_cast<usize>(Channels) * 2u;
+    const usize rowBase = static_cast<usize>(cz) * static_cast<usize>(cellCols);
+    for(u32 cx = 0u; cx < cellCols; ++cx){
+        const u8* px = currRow + static_cast<usize>(cx) * s_Step;
+        f32 maskVal = 0.0f;
+        if constexpr(Channels == 1u){
+            maskVal = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
+        }
+        else if constexpr(Channels == 2u){
+            const f32 lum = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
+            const f32 alpha = static_cast<f32>(ReadBe16(px + 2u)) * s_InvMax;
+            maskVal = (alpha < lum) ? alpha : lum;
+        }
+        else if constexpr(Channels == 3u){
+            const f32 r = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
+            const f32 g = static_cast<f32>(ReadBe16(px + 2u)) * s_InvMax;
+            const f32 b = static_cast<f32>(ReadBe16(px + 4u)) * s_InvMax;
+            maskVal = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+        }
+        else{
+            const f32 r = static_cast<f32>(ReadBe16(px + 0u)) * s_InvMax;
+            const f32 g = static_cast<f32>(ReadBe16(px + 2u)) * s_InvMax;
+            const f32 b = static_cast<f32>(ReadBe16(px + 4u)) * s_InvMax;
+            const f32 lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+            const f32 alpha = static_cast<f32>(ReadBe16(px + 6u)) * s_InvMax;
+            maskVal = (alpha < lum) ? alpha : lum;
+        }
+        if(maskVal < threshold){
+            const usize cellIdx = rowBase + static_cast<usize>(cx);
+            dst[cellIdx >> 3u] = static_cast<u8>(dst[cellIdx >> 3u] | static_cast<u8>(1u << (cellIdx & 7u)));
+        }
+    }
 }
 
 
@@ -1052,19 +1326,19 @@ b8 LoadExternalMeshFileRaw(
     const AStringView filePathUtf8,
     void* const user,
     void(* const reserveVerts)(void*, usize),
-    void(* const pushVert)(void*, f32, f32, f32),
+    Float4*(* const allocVerts)(void*, usize),
     void(* const reserveIdx)(void*, usize),
-    void(* const pushIdx)(void*, u32)
+    u32*(* const allocIdx)(void*, usize)
 )noexcept{
     Core::Alloc::ScratchArena scratch(Name("physics_cook/load_mesh"));
     const AString<Core::Alloc::ScratchArena> ext = __hidden_physics_cook_io::LowercaseExtension(filePathUtf8, scratch);
     const AStringView extView(ext.data(), ext.size());
     if(extView == ".obj")
-        return __hidden_physics_cook_io::LoadObjMesh(filePathUtf8, scratch, user, pushVert, pushIdx);
+        return __hidden_physics_cook_io::LoadObjMesh(filePathUtf8, scratch, user, reserveVerts, allocVerts, reserveIdx, allocIdx);
     if(extView == ".fbx")
-        return __hidden_physics_cook_io::LoadFbxMesh(filePathUtf8, scratch, user, reserveVerts, pushVert, reserveIdx, pushIdx);
+        return __hidden_physics_cook_io::LoadFbxMesh(filePathUtf8, scratch, user, reserveVerts, allocVerts, reserveIdx, allocIdx);
     if(extView == ".gltf" || extView == ".glb")
-        return __hidden_physics_cook_io::LoadGltfOrGlbMesh(filePathUtf8, scratch, user, pushVert, pushIdx);
+        return __hidden_physics_cook_io::LoadGltfOrGlbMesh(filePathUtf8, scratch, user, reserveVerts, allocVerts, reserveIdx, allocIdx);
     return false;
 }
 
@@ -1081,23 +1355,71 @@ b8 LoadHeightmapImageRaw(
     if(channelMode > 4u || !std::isfinite(heightMin) || !std::isfinite(heightMax))
         return false;
     Core::Alloc::ScratchArena scratch(Name("physics_cook/load_hf_img"));
-    u32 width = 0u;
-    u32 height = 0u;
-    Vector<f32, Core::Alloc::ScratchArena> rgba(scratch);
-    if(!__hidden_physics_cook_io::LoadNormalizedRgbaImage(filePathUtf8, scratch, width, height, rgba))
+    const auto sniff = __hidden_physics_cook_io::SniffPng16Header(filePathUtf8, scratch);
+    if(sniff == __hidden_physics_cook_io::Png16SniffResult::OpenFailed)
         return false;
+
+    const f32 range = heightMax - heightMin;
+    if(sniff == __hidden_physics_cook_io::Png16SniffResult::IsPng16){
+        __hidden_physics_cook_io::ParsedPng16 png;
+        if(!__hidden_physics_cook_io::ParseAndDecompressPng16(filePathUtf8, scratch, png))
+            return false;
+        if(png.width < 2u || png.height < 2u)
+            return false;
+        const usize count = static_cast<usize>(png.width) * static_cast<usize>(png.height);
+        f32* dst = allocHeights(user, count);
+        if(!dst)
+            return false;
+
+        const usize step = static_cast<usize>(png.channels) * 2u;
+        const usize rowBytes = static_cast<usize>(png.width) * step;
+        Vector<u8, Core::Alloc::ScratchArena> rowA(rowBytes, 0u, scratch);
+        Vector<u8, Core::Alloc::ScratchArena> rowB(rowBytes, 0u, scratch);
+        u8* prevPtr = rowA.data();
+        u8* currPtr = rowB.data();
+        const u8* src = static_cast<const u8*>(png.decompressed);
+
+        for(u32 y = 0u; y < png.height; ++y){
+            const u8* rowSrc = src + static_cast<usize>(y) * (1u + rowBytes);
+            if(!__hidden_physics_cook_io::UnfilterPng16Scanline(rowSrc[0], rowSrc + 1u, prevPtr, currPtr, rowBytes, step))
+                return false;
+            f32* dstRow = dst + static_cast<usize>(y) * static_cast<usize>(png.width);
+            if(channelMode == 0u)
+                __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<0u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
+            else if(channelMode == 1u)
+                __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<1u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
+            else if(channelMode == 2u)
+                __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<2u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
+            else if(channelMode == 3u)
+                __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<3u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
+            else
+                __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<4u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
+            std::swap(prevPtr, currPtr);
+        }
+        outCols = png.width;
+        outRows = png.height;
+        return true;
+    }
+
+    AString<Core::Alloc::ScratchArena> nullTermPath(scratch);
+    nullTermPath.assign(filePathUtf8.data(), filePathUtf8.size());
+    basisu::imagef hdrImg;
+    if(!basisu::load_image_hdr(nullTermPath.c_str(), hdrImg, false))
+        return false;
+    const u32 width = hdrImg.get_width();
+    const u32 height = hdrImg.get_height();
     if(width < 2u || height < 2u)
         return false;
     const usize count = static_cast<usize>(width) * static_cast<usize>(height);
     f32* dst = allocHeights(user, count);
     if(!dst)
         return false;
-    const f32 range = heightMax - heightMin;
-    for(usize i = 0u; i < count; ++i){
-        const f32 sample = __hidden_physics_cook_io::SampleImageChannel(rgba.data() + i * 4u, channelMode);
-        if(!std::isfinite(sample))
+
+    for(u32 y = 0u; y < height; ++y){
+        const basisu::vec4F* rowSrc = &hdrImg(0u, y);
+        f32* dstRow = dst + static_cast<usize>(y) * static_cast<usize>(width);
+        if(!__hidden_physics_cook_io::WriteScaledSamplesFromHdrRow(rowSrc, width, channelMode, heightMin, range, dstRow))
             return false;
-        dst[i] = heightMin + sample * range;
     }
     outCols = width;
     outRows = height;
@@ -1133,48 +1455,135 @@ b8 LoadHeightmapRawBinaryRaw(
     if(fileBytes.size() != static_cast<usize>(sampleCount * byteStride))
         return false;
 
-    f32* dst = allocHeights(user, static_cast<usize>(sampleCount));
+    const usize count = static_cast<usize>(sampleCount);
+    f32* dst = allocHeights(user, count);
     if(!dst)
         return false;
 
     const f32 range = heightMax - heightMin;
+    const SIMDVectorSingle vMin = VectorReplicate(heightMin);
+    const SIMDVectorSingle vRange = VectorReplicate(range);
+    const u8* rawBytes = fileBytes.data();
+
     if(bitsPerSample == 8u){
-        constexpr f32 invMax8 = 1.0f / 255.0f;
-        for(usize i = 0u; i < static_cast<usize>(sampleCount); ++i)
-            dst[i] = heightMin + (static_cast<f32>(fileBytes[i]) * invMax8) * range;
+        constexpr f32 s_InvMax8 = 1.0f / 255.0f;
+        const f32 scale8 = s_InvMax8 * range;
+        const SIMDVectorSingle vScale8 = VectorReplicate(scale8);
+        usize i = 0u;
+        for(; i + 4u <= count; i += 4u){
+            const SIMDVectorSingle rawVec = VectorSet(
+                static_cast<f32>(rawBytes[i + 0u]),
+                static_cast<f32>(rawBytes[i + 1u]),
+                static_cast<f32>(rawBytes[i + 2u]),
+                static_cast<f32>(rawBytes[i + 3u])
+            );
+            Float4U outVals;
+            StoreFloat(VectorMultiplyAdd(rawVec, vScale8, vMin), outVals);
+            std::memcpy(dst + i, &outVals, sizeof(outVals));
+        }
+        for(; i < count; ++i)
+            dst[i] = heightMin + static_cast<f32>(rawBytes[i]) * scale8;
         return true;
     }
     if(bitsPerSample == 16u){
-        const f32 invMax = 1.0f / 65535.0f;
-        for(usize i = 0u; i < static_cast<usize>(sampleCount); ++i){
-            const u8* p = fileBytes.data() + i * 2u;
-            u16 raw = 0u;
-            if(bigEndian)
-                raw = __hidden_physics_cook_io::ReadBe16(p);
-            else
-                raw = __hidden_physics_cook_io::ReadLe16(p);
-            dst[i] = heightMin + (static_cast<f32>(raw) * invMax) * range;
+        constexpr f32 s_InvMax16 = 1.0f / 65535.0f;
+        const f32 scale16 = s_InvMax16 * range;
+        const SIMDVectorSingle vScale16 = VectorReplicate(scale16);
+        usize i = 0u;
+        if(bigEndian){
+            for(; i + 4u <= count; i += 4u){
+                const u8* p = rawBytes + i * 2u;
+                const SIMDVectorSingle rawVec = VectorSet(
+                    static_cast<f32>(__hidden_physics_cook_io::ReadBe16(p + 0u)),
+                    static_cast<f32>(__hidden_physics_cook_io::ReadBe16(p + 2u)),
+                    static_cast<f32>(__hidden_physics_cook_io::ReadBe16(p + 4u)),
+                    static_cast<f32>(__hidden_physics_cook_io::ReadBe16(p + 6u))
+                );
+                Float4U outVals;
+                StoreFloat(VectorMultiplyAdd(rawVec, vScale16, vMin), outVals);
+                std::memcpy(dst + i, &outVals, sizeof(outVals));
+            }
+            for(; i < count; ++i)
+                dst[i] = heightMin + static_cast<f32>(__hidden_physics_cook_io::ReadBe16(rawBytes + i * 2u)) * scale16;
+        }
+        else{
+            for(; i + 4u <= count; i += 4u){
+                const u8* p = rawBytes + i * 2u;
+                const SIMDVectorSingle rawVec = VectorSet(
+                    static_cast<f32>(__hidden_physics_cook_io::ReadLe16(p + 0u)),
+                    static_cast<f32>(__hidden_physics_cook_io::ReadLe16(p + 2u)),
+                    static_cast<f32>(__hidden_physics_cook_io::ReadLe16(p + 4u)),
+                    static_cast<f32>(__hidden_physics_cook_io::ReadLe16(p + 6u))
+                );
+                Float4U outVals;
+                StoreFloat(VectorMultiplyAdd(rawVec, vScale16, vMin), outVals);
+                std::memcpy(dst + i, &outVals, sizeof(outVals));
+            }
+            for(; i < count; ++i)
+                dst[i] = heightMin + static_cast<f32>(__hidden_physics_cook_io::ReadLe16(rawBytes + i * 2u)) * scale16;
         }
         return true;
     }
     if(!isFloat){
-        constexpr f64 invMax32 = 1.0 / 4294967295.0;
-        for(usize i = 0u; i < static_cast<usize>(sampleCount); ++i){
-            const u8* p = fileBytes.data() + i * 4u;
-            u32 raw = 0u;
-            if(bigEndian)
-                raw = __hidden_physics_cook_io::ReadBe32(p);
-            else
-                raw = __hidden_physics_cook_io::ReadLe32(p);
-            const f32 norm = static_cast<f32>(static_cast<double>(raw) * invMax32);
-            dst[i] = heightMin + norm * range;
+        constexpr f64 s_InvMax32 = 1.0 / 4294967295.0;
+        if(bigEndian){
+            for(usize i = 0u; i < count; ++i){
+                const u32 raw = __hidden_physics_cook_io::ReadBe32(rawBytes + i * 4u);
+                const f32 norm = static_cast<f32>(static_cast<f64>(raw) * s_InvMax32);
+                dst[i] = heightMin + norm * range;
+            }
+        }
+        else{
+            for(usize i = 0u; i < count; ++i){
+                const u32 raw = __hidden_physics_cook_io::ReadLe32(rawBytes + i * 4u);
+                const f32 norm = static_cast<f32>(static_cast<f64>(raw) * s_InvMax32);
+                dst[i] = heightMin + norm * range;
+            }
         }
         return true;
     }
 
-    for(usize i = 0u; i < static_cast<usize>(sampleCount); ++i){
-        const u8* p = fileBytes.data() + i * 4u;
-        const f32 v = __hidden_physics_cook_io::ReadFloat32(p, bigEndian);
+    usize i = 0u;
+    if(bigEndian){
+        for(; i < count; ++i){
+            const f32 v = __hidden_physics_cook_io::ReadFloat32(rawBytes + i * 4u, true);
+            if(!std::isfinite(v)){
+                if(v == v)
+                    return false;
+                dst[i] = v;
+            }
+            else{
+                dst[i] = heightMin + v * range;
+            }
+        }
+        return true;
+    }
+
+    for(; i + 4u <= count; i += 4u){
+        Float4U inVals;
+        std::memcpy(&inVals, rawBytes + i * 4u, sizeof(inVals));
+        const SIMDVectorSingle v = LoadFloat(inVals);
+        if(VectorIsFinite(v, VectorComponentMask::s_XYZW)){
+            Float4U outVals;
+            StoreFloat(VectorMultiplyAdd(v, vRange, vMin), outVals);
+            std::memcpy(dst + i, &outVals, sizeof(outVals));
+        }
+        else{
+            for(usize lane = 0u; lane < 4u; ++lane){
+                const f32 fv = inVals.raw[lane];
+                if(!std::isfinite(fv)){
+                    if(fv == fv)
+                        return false;
+                    dst[i + lane] = fv;
+                }
+                else{
+                    dst[i + lane] = heightMin + fv * range;
+                }
+            }
+        }
+    }
+    for(; i < count; ++i){
+        const f32 v = __hidden_physics_cook_io::ReadFloat32(rawBytes + i * 4u, false);
         if(!std::isfinite(v)){
             if(v == v)
                 return false;
@@ -1199,35 +1608,78 @@ b8 LoadHeightmapHoleMaskRaw(
         return false;
 
     Core::Alloc::ScratchArena scratch(Name("physics_cook/load_hf_mask"));
-    u32 width = 0u;
-    u32 height = 0u;
-    Vector<f32, Core::Alloc::ScratchArena> rgba(scratch);
-    if(!__hidden_physics_cook_io::LoadNormalizedRgbaImage(filePathUtf8, scratch, width, height, rgba))
+    const auto sniff = __hidden_physics_cook_io::SniffPng16Header(filePathUtf8, scratch);
+    if(sniff == __hidden_physics_cook_io::Png16SniffResult::OpenFailed)
         return false;
 
     const u32 cellCols = expectedCols - 1u;
     const u32 cellRows = expectedRows - 1u;
+    const usize cellCount = static_cast<usize>(cellCols) * static_cast<usize>(cellRows);
+    const usize byteCount = (cellCount + 7u) / 8u;
+
+    if(sniff == __hidden_physics_cook_io::Png16SniffResult::IsPng16){
+        __hidden_physics_cook_io::ParsedPng16 png;
+        if(!__hidden_physics_cook_io::ParseAndDecompressPng16(filePathUtf8, scratch, png))
+            return false;
+        const b8 matchesCells = (png.width == cellCols && png.height == cellRows);
+        const b8 matchesVerts = (png.width == expectedCols && png.height == expectedRows);
+        if(!matchesCells && !matchesVerts)
+            return false;
+        u8* dst = allocHoleBytes(user, byteCount);
+        if(!dst)
+            return false;
+
+        const usize step = static_cast<usize>(png.channels) * 2u;
+        const usize rowBytes = static_cast<usize>(png.width) * step;
+        Vector<u8, Core::Alloc::ScratchArena> rowA(rowBytes, 0u, scratch);
+        Vector<u8, Core::Alloc::ScratchArena> rowB(rowBytes, 0u, scratch);
+        u8* prevPtr = rowA.data();
+        u8* currPtr = rowB.data();
+        const u8* src = static_cast<const u8*>(png.decompressed);
+
+        for(u32 cz = 0u; cz < cellRows; ++cz){
+            const u8* rowSrc = src + static_cast<usize>(cz) * (1u + rowBytes);
+            if(!__hidden_physics_cook_io::UnfilterPng16Scanline(rowSrc[0], rowSrc + 1u, prevPtr, currPtr, rowBytes, step))
+                return false;
+            if(png.channels == 1u)
+                __hidden_physics_cook_io::DecodePng16RowToMaskBits<1u>(currPtr, cz, cellCols, threshold, dst);
+            else if(png.channels == 2u)
+                __hidden_physics_cook_io::DecodePng16RowToMaskBits<2u>(currPtr, cz, cellCols, threshold, dst);
+            else if(png.channels == 3u)
+                __hidden_physics_cook_io::DecodePng16RowToMaskBits<3u>(currPtr, cz, cellCols, threshold, dst);
+            else
+                __hidden_physics_cook_io::DecodePng16RowToMaskBits<4u>(currPtr, cz, cellCols, threshold, dst);
+            std::swap(prevPtr, currPtr);
+        }
+        return true;
+    }
+
+    AString<Core::Alloc::ScratchArena> nullTermPath(scratch);
+    nullTermPath.assign(filePathUtf8.data(), filePathUtf8.size());
+    basisu::imagef hdrImg;
+    if(!basisu::load_image_hdr(nullTermPath.c_str(), hdrImg, false))
+        return false;
+    const u32 width = hdrImg.get_width();
+    const u32 height = hdrImg.get_height();
     const b8 matchesCells = (width == cellCols && height == cellRows);
     const b8 matchesVerts = (width == expectedCols && height == expectedRows);
     if(!matchesCells && !matchesVerts)
         return false;
 
-    const usize cellCount = static_cast<usize>(cellCols) * static_cast<usize>(cellRows);
-    const usize byteCount = (cellCount + 7u) / 8u;
     u8* dst = allocHoleBytes(user, byteCount);
     if(!dst)
         return false;
 
     for(u32 cz = 0u; cz < cellRows; ++cz){
+        const basisu::vec4F* rowSrc = &hdrImg(0u, cz);
+        const usize rowBase = static_cast<usize>(cz) * static_cast<usize>(cellCols);
         for(u32 cx = 0u; cx < cellCols; ++cx){
-            const usize pxIdx = (static_cast<usize>(cz) * static_cast<usize>(width) + static_cast<usize>(cx)) * 4u;
-            const f32 lum = __hidden_physics_cook_io::SampleImageChannel(rgba.data() + pxIdx, 4u);
-            const f32 alpha = rgba[pxIdx + 3u];
-            f32 maskVal = lum;
-            if(alpha < maskVal)
-                maskVal = alpha;
+            const basisu::vec4F& p = rowSrc[cx];
+            const f32 lum = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+            const f32 alpha = p[3];
+            const f32 maskVal = (alpha < lum) ? alpha : lum;
             if(maskVal < threshold){
-                const usize cellIdx = static_cast<usize>(cz) * static_cast<usize>(cellCols) + static_cast<usize>(cx);
+                const usize cellIdx = rowBase + static_cast<usize>(cx);
                 dst[cellIdx >> 3u] = static_cast<u8>(dst[cellIdx >> 3u] | static_cast<u8>(1u << (cellIdx & 7u)));
             }
         }
@@ -1244,3 +1696,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -386,6 +386,36 @@ extern const u32 s_GpuResidentModeSyncPoses;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_APPLY_BULLET_TOI")]
 extern const u32 s_GpuResidentModeApplyBulletToi;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_BUILD_TOI_BODY_SIMS")]
+extern const u32 s_GpuResidentModeBuildToiBodySims;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_EMIT_BULLET_TOI_PAIRS")]
+extern const u32 s_GpuResidentModeEmitBulletToiPairs;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_FINALIZE_TOI_INDIRECT")]
+extern const u32 s_GpuResidentModeFinalizeToiIndirect;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_FUSED_COLORS")]
+extern const u32 s_GpuSolverFlagFusedColors;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_WIDE_COLOR_COUNT")]
+extern const u32 s_GpuResWideColorCount;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_FUSED_SLOT")]
+extern const u32 s_GpuResIndirectFusedSlot;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_ALL_SLOT")]
+extern const u32 s_GpuResIndirectAllSlot;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_BUILD_SLOT")]
+extern const u32 s_GpuResIndirectBuildSlot;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_UINT_COUNT")]
+extern const u32 s_GpuResIndirectUintCount;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_COLOR_META_UINT_COUNT")]
+extern const u32 s_GpuResColorMetaUintCount;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_PREP_MODE_CLEAR")]
 extern const u32 s_GpuResPrepModeClear;
 

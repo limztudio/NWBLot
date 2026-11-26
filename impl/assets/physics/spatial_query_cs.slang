@@ -4,6 +4,10 @@
 
 #include "physics_common.slangi"
 
+#ifndef NWB_PHYSICS_QUERY_HAS_MESH
+#define NWB_PHYSICS_QUERY_HAS_MESH 1
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -355,6 +359,160 @@ bool nwbPhysicsQueryRayTriangleParity(
     return t >= 0.0f && t <= 1.0e20f;
 }
 
+void nwbPhysicsQueryRayOpenCylinder(
+    const float3 origin,
+    const float3 dir,
+    const float3 ea,
+    const float3 eb,
+    const float radius,
+    inout float bestT,
+    inout bool anyHit,
+    inout float3 bestN
+){
+    const float3 d = eb - ea;
+    const float dLenSq = dot(d, d);
+    if(dLenSq <= 1.0e-12f)
+        return;
+
+    const float dLen = sqrt(dLenSq);
+    const float3 axis = d / dLen;
+    const float3 m = origin - ea;
+    const float mDotA = dot(m, axis);
+    const float dirDotA = dot(dir, axis);
+    const float3 mPerp = m - axis * mDotA;
+    const float3 dirPerp = dir - axis * dirDotA;
+    const float a = dot(dirPerp, dirPerp);
+    if(a <= 1.0e-12f)
+        return;
+
+    const float b = dot(mPerp, dirPerp);
+    const float c = dot(mPerp, mPerp) - radius * radius;
+    const float disc = b * b - a * c;
+    if(disc < 0.0f)
+        return;
+
+    const float t = (-b - sqrt(disc)) / a;
+    if(t < 0.0f || t > bestT)
+        return;
+
+    const float s = mDotA + t * dirDotA;
+    if(s < 0.0f || s > dLen)
+        return;
+
+    const float3 hitP = origin + dir * t;
+    const float3 axisPt = ea + axis * s;
+    anyHit = true;
+    bestT = t;
+    bestN = nwbPhysicsQuerySafeNormal(hitP - axisPt, float3(0.0f, 1.0f, 0.0f));
+}
+
+bool nwbPhysicsQuerySweptSphereTriangle(
+    const float3 origin,
+    const float3 dir,
+    const float radius,
+    const float3 v0,
+    const float3 v1,
+    const float3 v2,
+    const bool cullBackfaces,
+    const float maxT,
+    out float outT,
+    out float3 outNormal,
+    out float outRawDist
+){
+    outT = 0.0f;
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    outRawDist = 0.0f;
+    if(radius <= 1.0e-6f)
+        return nwbPhysicsQueryRayTriangle(origin, dir, v0, v1, v2, cullBackfaces, maxT, outT, outNormal);
+
+    const float3 e1 = v1 - v0;
+    const float3 e2 = v2 - v0;
+    const float3 faceCross = cross(e1, e2);
+    const float faceCrossLenSq = dot(faceCross, faceCross);
+    if(cullBackfaces && dot(faceCross, dir) > 0.0f)
+        return false;
+
+    const float3 cp0 = nwbPhysicsQueryClosestPtTriangle(origin, v0, v1, v2);
+    const float3 d0 = origin - cp0;
+    const float d0Sq = dot(d0, d0);
+    const float dirLenSq = dot(dir, dir);
+    const float3 triN = (faceCrossLenSq > 1.0e-12f) ? (faceCross * rsqrt(faceCrossLenSq)) : float3(0.0f, 1.0f, 0.0f);
+    if(d0Sq <= radius * radius){
+        outT = 0.0f;
+        outRawDist = sqrt(max(d0Sq, 0.0f));
+        if(d0Sq > 1.0e-12f)
+            outNormal = d0 * rsqrt(d0Sq);
+        else if(dirLenSq > 1.0e-12f)
+            outNormal = nwbPhysicsQuerySafeNormal(-dir, triN);
+        else
+            outNormal = triN;
+        return true;
+    }
+
+    if(dirLenSq <= 1.0e-12f)
+        return false;
+
+    if(faceCrossLenSq > 1.0e-12f){
+        const float signed0 = dot(triN, origin - v0);
+        const float nDotD = dot(triN, dir);
+        float tPlane = -1.0f;
+        float3 faceHitN = triN;
+        if(signed0 > radius && nDotD < -1.0e-12f){
+            tPlane = (radius - signed0) / nDotD;
+            faceHitN = triN;
+        }
+        else if(!cullBackfaces && signed0 < -radius && nDotD > 1.0e-12f){
+            tPlane = (-radius - signed0) / nDotD;
+            faceHitN = -triN;
+        }
+        if(tPlane >= 0.0f && tPlane <= maxT){
+            const float3 planePt = (origin + dir * tPlane) - faceHitN * radius;
+            const float edgeTol = -1.0e-5f * faceCrossLenSq;
+            if(
+                dot(cross(v1 - v0, planePt - v0), faceCross) >= edgeTol
+                && dot(cross(v2 - v1, planePt - v1), faceCross) >= edgeTol
+                && dot(cross(v0 - v2, planePt - v2), faceCross) >= edgeTol
+            ){
+                outT = tPlane;
+                outNormal = faceHitN;
+                outRawDist = radius;
+                return true;
+            }
+        }
+    }
+
+    bool anyHit = false;
+    float bestT = maxT;
+    float3 bestN = float3(0.0f, 1.0f, 0.0f);
+    float tCand = 0.0f;
+    float3 nCand = float3(0.0f, 1.0f, 0.0f);
+    if(nwbPhysicsQueryRaySphere(origin, dir, bestT, v0, radius, tCand, nCand)){
+        anyHit = true;
+        bestT = tCand;
+        bestN = nCand;
+    }
+    if(nwbPhysicsQueryRaySphere(origin, dir, bestT, v1, radius, tCand, nCand)){
+        anyHit = true;
+        bestT = tCand;
+        bestN = nCand;
+    }
+    if(nwbPhysicsQueryRaySphere(origin, dir, bestT, v2, radius, tCand, nCand)){
+        anyHit = true;
+        bestT = tCand;
+        bestN = nCand;
+    }
+    nwbPhysicsQueryRayOpenCylinder(origin, dir, v0, v1, radius, bestT, anyHit, bestN);
+    nwbPhysicsQueryRayOpenCylinder(origin, dir, v1, v2, radius, bestT, anyHit, bestN);
+    nwbPhysicsQueryRayOpenCylinder(origin, dir, v2, v0, radius, bestT, anyHit, bestN);
+
+    if(!anyHit)
+        return false;
+    outT = bestT;
+    outNormal = bestN;
+    outRawDist = radius;
+    return true;
+}
+
 bool nwbPhysicsQueryRaySegmentZero(
     const float3 origin,
     const float3 dir,
@@ -616,6 +774,7 @@ bool nwbPhysicsQueryRayHull(
     return false;
 }
 
+#if NWB_PHYSICS_QUERY_HAS_MESH
 bool nwbPhysicsQueryIsInsideClosedMesh(
     const uint nodeBase,
     const uint triBase,
@@ -929,6 +1088,168 @@ bool nwbPhysicsQueryRayMesh(
     return true;
 }
 
+bool nwbPhysicsQuerySphereCastMesh(
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const NwbPhysicsGpuShapeProxy spProxy,
+    const float3 shapeOrig,
+    const float4 shapeRot,
+    const uint qFlags,
+    const float3 localOrig,
+    const float3 localDir,
+    const float maxFrac,
+    const float castRadius,
+    out float outT,
+    out float3 outPoint,
+    out float3 outNormal,
+    out bool outNeedsFallback,
+    inout uint stack[64],
+    inout float stackMetric[64]
+){
+    outT = maxFrac;
+    outPoint = float3(0.0f, 0.0f, 0.0f);
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    outNeedsFallback = false;
+
+    const uint nodeBase = spProxy.filterData.w;
+    const uint triBase = asuint(spProxy.localRotationOrMeta.x);
+    if(meshNodeSlot == NWB_PHYSICS_INVALID_INDEX || meshTriSlot == NWB_PHYSICS_INVALID_INDEX || nodeBase == NWB_PHYSICS_INVALID_INDEX || triBase == NWB_PHYSICS_INVALID_INDEX){
+        outNeedsFallback = true;
+        return false;
+    }
+
+    const float skinR = max(spProxy.localCenterRadius.w, 0.0f);
+    const float totalR = max(castRadius + skinR, 0.0f);
+    const float3 padVec = float3(totalR, totalR, totalR);
+    const float4 firstTri1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triBase * 3u + 1u];
+    const uint meshFlags = asuint(firstTri1.w);
+    const bool closedMesh = (meshFlags & NWB_PHYSICS_MESH_FLAG_CLOSED) != 0u;
+    const bool cullBackfaces = ((meshFlags & NWB_PHYSICS_MESH_FLAG_CULL_BACKFACES) != 0u) || ((qFlags & NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES) != 0u);
+    if(closedMesh){
+        bool insideOverflow = false;
+        if(nwbPhysicsQueryIsInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, localOrig, insideOverflow, stack)){
+            float3 closeNLocal = float3(0.0f, 1.0f, 0.0f);
+            bool closeOverflow = false;
+            const bool foundClosest = nwbPhysicsQueryMeshClosestOutwardNormal(nodeBase, triBase, meshNodeSlot, meshTriSlot, localOrig, closeNLocal, closeOverflow, stack, stackMetric);
+            if(closeOverflow){
+                outNeedsFallback = true;
+                return false;
+            }
+            outT = 0.0f;
+            outPoint = shapeOrig + nwbPhysicsQuatRotate(localOrig, shapeRot);
+            const float3 worldDir = nwbPhysicsQuatRotate(localDir, shapeRot);
+            const float3 closeNW = foundClosest
+                ? nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(closeNLocal, shapeRot), float3(0.0f, 1.0f, 0.0f))
+                : nwbPhysicsQuerySafeNormal(-worldDir, float3(0.0f, 1.0f, 0.0f));
+            outNormal = (castRadius > 0.0f && dot(localDir, localDir) > 1.0e-12f)
+                ? nwbPhysicsQuerySafeNormal(-worldDir, closeNW)
+                : closeNW;
+            return true;
+        }
+        if(insideOverflow){
+            outNeedsFallback = true;
+            return false;
+        }
+    }
+
+    const float3 localInvDir = float3(
+        abs(localDir.x) > 1.0e-12f ? (1.0f / localDir.x) : 1.0e30f,
+        abs(localDir.y) > 1.0e-12f ? (1.0f / localDir.y) : 1.0e30f,
+        abs(localDir.z) > 1.0e-12f ? (1.0f / localDir.z) : 1.0e30f
+    );
+    uint sp = 0u;
+    const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+    const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+    float rootT = 0.0f;
+    if(nwbPhysicsQueryRayAabbFast(localOrig, localInvDir, rootN0.xyz - padVec, rootN1.xyz + padVec, maxFrac, rootT)){
+        stack[0] = 0u;
+        stackMetric[0] = rootT;
+        sp = 1u;
+    }
+
+    bool anyHit = false;
+    float bestT = maxFrac;
+    float3 bestLocalN = float3(0.0f, 1.0f, 0.0f);
+    float bestRawDist = totalR;
+
+    while(sp > 0u){
+        --sp;
+        if(stackMetric[sp] > bestT)
+            continue;
+        const uint ni = stack[sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 1u];
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint triIdx = triBase + firstTri + ti;
+                const float3 tv0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 tv1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 tv2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                const float3 triMin = min(tv0, min(tv1, tv2)) - padVec;
+                const float3 triMax = max(tv0, max(tv1, tv2)) + padVec;
+                float triBoxT = 0.0f;
+                if(!nwbPhysicsQueryRayAabbFast(localOrig, localInvDir, triMin, triMax, bestT, triBoxT))
+                    continue;
+                float tTri = 0.0f;
+                float3 nTri = float3(0.0f, 1.0f, 0.0f);
+                float rawDistTri = 0.0f;
+                if(nwbPhysicsQuerySweptSphereTriangle(localOrig, localDir, totalR, tv0, tv1, tv2, cullBackfaces, bestT, tTri, nTri, rawDistTri)){
+                    if(!anyHit || tTri < bestT || (tTri == 0.0f && bestT == 0.0f && rawDistTri < bestRawDist)){
+                        anyHit = true;
+                        bestT = tTri;
+                        bestLocalN = nTri;
+                        bestRawDist = rawDistTri;
+                    }
+                }
+            }
+        }
+        else{
+            const uint lIdx = asuint(n0.w);
+            const uint rIdx = meta & 0x7fffffffu;
+            const float4 ln0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 0u];
+            const float4 ln1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 1u];
+            const float4 rn0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 0u];
+            const float4 rn1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 1u];
+            float tL = 0.0f;
+            float tR = 0.0f;
+            const bool hitL = nwbPhysicsQueryRayAabbFast(localOrig, localInvDir, ln0.xyz - padVec, ln1.xyz + padVec, bestT, tL);
+            const bool hitR = nwbPhysicsQueryRayAabbFast(localOrig, localInvDir, rn0.xyz - padVec, rn1.xyz + padVec, bestT, tR);
+            if((hitL ? 1u : 0u) + (hitR ? 1u : 0u) + sp > 64u){
+                outNeedsFallback = true;
+                return false;
+            }
+            if(hitL && hitR){
+                if(tL < tR){
+                    stack[sp] = rIdx; stackMetric[sp] = tR; ++sp;
+                    stack[sp] = lIdx; stackMetric[sp] = tL; ++sp;
+                }
+                else{
+                    stack[sp] = lIdx; stackMetric[sp] = tL; ++sp;
+                    stack[sp] = rIdx; stackMetric[sp] = tR; ++sp;
+                }
+            }
+            else if(hitL){
+                stack[sp] = lIdx; stackMetric[sp] = tL; ++sp;
+            }
+            else if(hitR){
+                stack[sp] = rIdx; stackMetric[sp] = tR; ++sp;
+            }
+        }
+    }
+
+    if(!anyHit)
+        return false;
+    outT = bestT;
+    const float surfDist = max(bestRawDist - skinR, 0.0f);
+    const float3 hitPtLocal = (localOrig + localDir * bestT) - bestLocalN * min(surfDist, castRadius);
+    outPoint = shapeOrig + nwbPhysicsQuatRotate(hitPtLocal, shapeRot);
+    outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(bestLocalN, shapeRot), float3(0.0f, 1.0f, 0.0f));
+    return true;
+}
+
 float nwbPhysicsQueryMeshPointDistSq(
     const uint meshNodeSlot,
     const uint meshTriSlot,
@@ -1055,6 +1376,7 @@ float nwbPhysicsQueryMeshPointDistSq(
     const float d = max(sqrt(minDistSq) - skinR, 0.0f);
     return d * d;
 }
+#endif
 
 bool nwbPhysicsQueryRayTaperedCapsule(
     const float3 origin,
@@ -1734,6 +2056,272 @@ bool nwbPhysicsQueryRayHeightfield(
     return true;
 }
 
+void nwbPhysicsQuerySphereCastHfCell(
+    const uint hullVertexSlot,
+    const uint hfBase,
+    const uint cols,
+    const uint rows,
+    const float3 hfOrigin,
+    const float sx,
+    const float sz,
+    const float sy,
+    const uint hfFlags,
+    const bool flipDiag,
+    const bool cullBackfaces,
+    const float hfMinY,
+    const float hfMaxY,
+    const int cx,
+    const int cz,
+    const float3 localOrig,
+    const float3 localDir,
+    const float3 localInvDir,
+    const float totalR,
+    inout bool anyHit,
+    inout float bestT,
+    inout float3 bestLocalN,
+    inout float bestRawDist
+){
+    if(cx < 0 || cx >= int(cols - 1u) || cz < 0 || cz >= int(rows - 1u))
+        return;
+
+    const float cellX0 = hfOrigin.x + float(cx) * sx;
+    const float cellZ0 = hfOrigin.z + float(cz) * sz;
+    const float3 padVec = float3(totalR, totalR, totalR);
+    float boxT = 0.0f;
+    if(!nwbPhysicsQueryRayAabbFast(localOrig, localInvDir, float3(cellX0, hfMinY, cellZ0) - padVec, float3(cellX0 + sx, hfMaxY, cellZ0 + sz) + padVec, bestT, boxT))
+        return;
+
+    const float3 zeroVec = float3(0.0f, 0.0f, 0.0f);
+    float3 v00 = zeroVec;
+    float3 v10 = zeroVec;
+    float3 v01 = zeroVec;
+    float3 v11 = zeroVec;
+    if(!nwbPhysicsHfLoadCellVertices(hullVertexSlot, hfBase, cols, rows, hfOrigin, sx, sz, sy, hfFlags, uint(cx), uint(cz), v00, v10, v01, v11))
+        return;
+
+    const float cellMinY = min(min(v00.y, v10.y), min(v01.y, v11.y));
+    const float cellMaxY = max(max(v00.y, v10.y), max(v01.y, v11.y));
+    if(!nwbPhysicsQueryRayAabbFast(localOrig, localInvDir, float3(cellX0, cellMinY, cellZ0) - padVec, float3(cellX0 + sx, cellMaxY, cellZ0 + sz) + padVec, bestT, boxT))
+        return;
+
+    [loop]
+    for(uint ti = 0u; ti < 2u; ++ti){
+        float3 tv0 = zeroVec;
+        float3 tv1 = zeroVec;
+        float3 tv2 = zeroVec;
+        nwbPhysicsHfExtractTriangle(flipDiag, ti, v00, v10, v01, v11, tv0, tv1, tv2);
+        float triT = 0.0f;
+        float3 triN = float3(0.0f, 1.0f, 0.0f);
+        float rawDistTri = 0.0f;
+        if(nwbPhysicsQuerySweptSphereTriangle(localOrig, localDir, totalR, tv0, tv1, tv2, cullBackfaces, bestT, triT, triN, rawDistTri)){
+            if(!anyHit || triT < bestT || (triT == 0.0f && bestT == 0.0f && rawDistTri < bestRawDist)){
+                anyHit = true;
+                bestT = triT;
+                bestLocalN = triN;
+                bestRawDist = rawDistTri;
+            }
+        }
+    }
+}
+
+bool nwbPhysicsQuerySphereCastHeightfield(
+    const uint hullVertexSlot,
+    const NwbPhysicsGpuShapeProxy spProxy,
+    const float3 shapeOrig,
+    const float4 shapeRot,
+    const uint qFlags,
+    const float3 localOrig,
+    const float3 localDir,
+    const float maxFrac,
+    const float castRadius,
+    out float outT,
+    out float3 outPoint,
+    out float3 outNormal,
+    out bool outNeedsFallback
+){
+    outT = maxFrac;
+    outPoint = float3(0.0f, 0.0f, 0.0f);
+    outNormal = float3(0.0f, 1.0f, 0.0f);
+    outNeedsFallback = false;
+
+    const uint hfBase = spProxy.filterData.w;
+    if(hullVertexSlot == NWB_PHYSICS_INVALID_INDEX || hfBase == NWB_PHYSICS_INVALID_INDEX){
+        outNeedsFallback = true;
+        return false;
+    }
+    const float4 hdr0 = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 0u];
+    const float4 hdr1 = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 1u];
+    const float4 hdr2 = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 2u];
+    const float3 hfOrigin = hdr0.xyz;
+    const float hfMaxY = hdr0.w;
+    const float sx = hdr1.x;
+    const float sy = hdr1.y;
+    const float sz = hdr1.z;
+    const float hfMinY = hdr1.w;
+    const uint cols = asuint(hdr2.x);
+    const uint rows = asuint(hdr2.y);
+    const uint hfFlags = asuint(hdr2.z);
+    const float hfThickness = hdr2.w;
+    if(cols < 2u || rows < 2u || sx <= 0.0f || sz <= 0.0f){
+        outNeedsFallback = true;
+        return false;
+    }
+
+    const float totalR = max(castRadius + hfThickness, 0.0f);
+    const float3 gridMin = float3(hfOrigin.x - totalR, hfMinY - totalR, hfOrigin.z - totalR);
+    const float3 gridMax = float3(hfOrigin.x + float(cols - 1u) * sx + totalR, hfMaxY + totalR, hfOrigin.z + float(rows - 1u) * sz + totalR);
+    const float3 localInvDir = float3(
+        abs(localDir.x) > 1.0e-12f ? (1.0f / localDir.x) : 1.0e30f,
+        abs(localDir.y) > 1.0e-12f ? (1.0f / localDir.y) : 1.0e30f,
+        abs(localDir.z) > 1.0e-12f ? (1.0f / localDir.z) : 1.0e30f
+    );
+    const float3 t0Vec = (gridMin - localOrig) * localInvDir;
+    const float3 t1Vec = (gridMax - localOrig) * localInvDir;
+    const float3 tSmall = min(t0Vec, t1Vec);
+    const float3 tLarge = max(t0Vec, t1Vec);
+    const float tEnter = max(0.0f, max(tSmall.x, max(tSmall.y, tSmall.z)));
+    const float tExit = min(maxFrac, min(tLarge.x, min(tLarge.y, tLarge.z)));
+    if(tExit < tEnter)
+        return false;
+
+    const int maxCellX = int(cols - 2u);
+    const int maxCellZ = int(rows - 2u);
+    const float3 startPt = localOrig + localDir * tEnter;
+    const float3 endPt = localOrig + localDir * tExit;
+    const float2 sweepMinXZ = min(startPt.xz, endPt.xz) - float2(totalR, totalR);
+    const float2 sweepMaxXZ = max(startPt.xz, endPt.xz) + float2(totalR, totalR);
+    const int rawCx0 = int(floor((sweepMinXZ.x - hfOrigin.x) / sx));
+    const int rawCx1 = int(floor((sweepMaxXZ.x - hfOrigin.x) / sx));
+    const int rawCz0 = int(floor((sweepMinXZ.y - hfOrigin.z) / sz));
+    const int rawCz1 = int(floor((sweepMaxXZ.y - hfOrigin.z) / sz));
+    if(rawCx1 < 0 || rawCx0 > maxCellX || rawCz1 < 0 || rawCz0 > maxCellZ)
+        return false;
+
+    const int cx0 = max(rawCx0, 0);
+    const int cx1 = min(rawCx1, maxCellX);
+    const int cz0 = max(rawCz0, 0);
+    const int cz1 = min(rawCz1, maxCellZ);
+    const bool flipDiag = (hfFlags & NWB_PHYSICS_HF_FLAG_FLIP_DIAGONAL) != 0u;
+    const bool cullBackfaces = (qFlags & NWB_PHYSICS_QUERY_FLAG_CULL_BACKFACES) != 0u;
+    float bestT = maxFrac;
+    float3 bestLocalN = float3(0.0f, 1.0f, 0.0f);
+    float bestRawDist = totalR;
+    bool anyHit = false;
+
+    const uint cellSpan = uint(cx1 - cx0 + 1) * uint(cz1 - cz0 + 1);
+    if(cellSpan <= 256u){
+        [loop]
+        for(int cz = cz0; cz <= cz1; ++cz){
+            [loop]
+            for(int cx = cx0; cx <= cx1; ++cx)
+                nwbPhysicsQuerySphereCastHfCell(hullVertexSlot, hfBase, cols, rows, hfOrigin, sx, sz, sy, hfFlags, flipDiag, cullBackfaces, hfMinY, hfMaxY, cx, cz, localOrig, localDir, localInvDir, totalR, anyHit, bestT, bestLocalN, bestRawDist);
+        }
+    }
+    else{
+        const int haloX = int(ceil(totalR / sx));
+        const int haloZ = int(ceil(totalR / sz));
+        if(haloX > 2 || haloZ > 2){
+            outNeedsFallback = true;
+            return false;
+        }
+
+        int cx = int(floor((startPt.x - hfOrigin.x) / sx));
+        int cz = int(floor((startPt.z - hfOrigin.z) / sz));
+        if(haloX == 0)
+            cx = clamp(cx, 0, maxCellX);
+        if(haloZ == 0)
+            cz = clamp(cz, 0, maxCellZ);
+
+        const int stepX = (localDir.x > 1.0e-12f) ? 1 : ((localDir.x < -1.0e-12f) ? -1 : 0);
+        const int stepZ = (localDir.z > 1.0e-12f) ? 1 : ((localDir.z < -1.0e-12f) ? -1 : 0);
+        const float tDeltaX = (stepX != 0) ? (sx / abs(localDir.x)) : 1.0e30f;
+        const float tDeltaZ = (stepZ != 0) ? (sz / abs(localDir.z)) : 1.0e30f;
+        float tMaxX = 1.0e30f;
+        if(stepX > 0){
+            const float nextX = hfOrigin.x + float(cx + 1) * sx;
+            tMaxX = (nextX - localOrig.x) / localDir.x;
+        }
+        else if(stepX < 0){
+            const float nextX = hfOrigin.x + float(cx) * sx;
+            tMaxX = (nextX - localOrig.x) / localDir.x;
+        }
+        float tMaxZ = 1.0e30f;
+        if(stepZ > 0){
+            const float nextZ = hfOrigin.z + float(cz + 1) * sz;
+            tMaxZ = (nextZ - localOrig.z) / localDir.z;
+        }
+        else if(stepZ < 0){
+            const float nextZ = hfOrigin.z + float(cz) * sz;
+            tMaxZ = (nextZ - localOrig.z) / localDir.z;
+        }
+
+        float curT = tEnter;
+        bool finishedTraversal = false;
+        [loop]
+        for(uint step = 0u; step < 256u; ++step){
+            if(curT > bestT || curT > tExit){
+                finishedTraversal = true;
+                break;
+            }
+            if(
+                (stepX > 0 && cx - haloX > maxCellX)
+                || (stepX < 0 && cx + haloX < 0)
+                || (stepZ > 0 && cz - haloZ > maxCellZ)
+                || (stepZ < 0 && cz + haloZ < 0)
+            ){
+                finishedTraversal = true;
+                break;
+            }
+
+            [loop]
+            for(int dz = -haloZ; dz <= haloZ; ++dz){
+                const int testZ = cz + dz;
+                if(testZ < 0 || testZ > maxCellZ)
+                    continue;
+                [loop]
+                for(int dx = -haloX; dx <= haloX; ++dx){
+                    const int testX = cx + dx;
+                    if(testX < 0 || testX > maxCellX)
+                        continue;
+                    nwbPhysicsQuerySphereCastHfCell(hullVertexSlot, hfBase, cols, rows, hfOrigin, sx, sz, sy, hfFlags, flipDiag, cullBackfaces, hfMinY, hfMaxY, testX, testZ, localOrig, localDir, localInvDir, totalR, anyHit, bestT, bestLocalN, bestRawDist);
+                }
+            }
+
+            if(tMaxX <= tMaxZ){
+                if(stepX == 0 || tMaxX > min(bestT, tExit)){
+                    finishedTraversal = true;
+                    break;
+                }
+                curT = tMaxX;
+                tMaxX += tDeltaX;
+                cx += stepX;
+            }
+            else{
+                if(stepZ == 0 || tMaxZ > min(bestT, tExit)){
+                    finishedTraversal = true;
+                    break;
+                }
+                curT = tMaxZ;
+                tMaxZ += tDeltaZ;
+                cz += stepZ;
+            }
+        }
+        if(!finishedTraversal && (!anyHit || bestT >= curT)){
+            outNeedsFallback = true;
+            return false;
+        }
+    }
+
+    if(!anyHit)
+        return false;
+    outT = bestT;
+    const float surfDist = max(bestRawDist - hfThickness, 0.0f);
+    const float3 hitPtLocal = (localOrig + localDir * bestT) - bestLocalN * min(surfDist, castRadius);
+    outPoint = shapeOrig + nwbPhysicsQuatRotate(hitPtLocal, shapeRot);
+    outNormal = nwbPhysicsQuerySafeNormal(nwbPhysicsQuatRotate(bestLocalN, shapeRot), float3(0.0f, 1.0f, 0.0f));
+    return true;
+}
+
 float nwbPhysicsQueryPointHeightfieldDistSq(
     const uint hullVertexSlot,
     const NwbPhysicsGpuShapeProxy spProxy,
@@ -1848,18 +2436,14 @@ float nwbPhysicsQueryPointHeightfieldDistSq(
     return effDist * effDist;
 }
 
-float nwbPhysicsShapePointDistSq(
+float nwbPhysicsPrimitivePointDistSq(
     const float3 p,
     const NwbPhysicsGpuBodyPose pose,
     const NwbPhysicsGpuShapeProxy sp,
     const uint hullVertexSlot,
-    const uint meshNodeSlot,
-    const uint meshTriSlot,
     const float maxQueryDist,
     out float3 outNormal,
-    inout bool outNeedsFallback,
-    inout uint meshStack[64],
-    inout float meshStackMetric[64]
+    inout bool outNeedsFallback
 ){
     const uint shapeType = sp.bodyIndexTypeShape.y;
     const uint shapeFlags = sp.bodyIndexTypeShape.w;
@@ -2129,28 +2713,6 @@ float nwbPhysicsShapePointDistSq(
         }
     }
 
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH){
-        const uint nodeBase = sp.filterData.w;
-        const uint triBase = asuint(sp.localRotationOrMeta.x);
-        if(meshNodeSlot != NWB_PHYSICS_INVALID_INDEX && meshTriSlot != NWB_PHYSICS_INVALID_INDEX && nodeBase != NWB_PHYSICS_INVALID_INDEX && triBase != NWB_PHYSICS_INVALID_INDEX){
-            const float3 localP = nwbPhysicsQuatInvRotate(p - origin, q);
-            bool meshOverflow = false;
-            const float dSq = nwbPhysicsQueryMeshPointDistSq(meshNodeSlot, meshTriSlot, sp, q, localP, maxQueryDist, outNormal, meshOverflow, meshStack, meshStackMetric);
-            if(meshOverflow)
-                outNeedsFallback = true;
-            return dSq;
-        }
-    }
-
-    if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD){
-        const float3 localP = nwbPhysicsQuatInvRotate(p - origin, q);
-        bool hfFallback = false;
-        const float dSq = nwbPhysicsQueryPointHeightfieldDistSq(hullVertexSlot, sp, q, localP, maxQueryDist, outNormal, hfFallback);
-        if(hfFallback)
-            outNeedsFallback = true;
-        return dSq;
-    }
-
     outNeedsFallback = true;
     outNormal = float3(0.0f, 1.0f, 0.0f);
     return 1.0e30f;
@@ -2160,8 +2722,6 @@ bool nwbPhysicsQuerySphereMarchShape(
     const NwbPhysicsGpuShapeProxy spProxy,
     const NwbPhysicsGpuBodyPose pose,
     const uint hullVertexSlot,
-    const uint meshNodeSlot,
-    const uint meshTriSlot,
     const float3 rayOrig,
     const float3 rayDir,
     const float3 rayInvDir,
@@ -2172,9 +2732,7 @@ bool nwbPhysicsQuerySphereMarchShape(
     out float outT,
     out float3 outPoint,
     out float3 outNormal,
-    out bool outNeedsFallback,
-    inout uint meshStack[64],
-    inout float meshStackMetric[64]
+    out bool outNeedsFallback
 ){
     outT = maxFrac;
     outPoint = float3(0.0f, 0.0f, 0.0f);
@@ -2204,7 +2762,7 @@ bool nwbPhysicsQuerySphereMarchShape(
         const float remainDist = zeroDir ? (castRadius + 0.01f) : max((tExit - t) * dirLen + castRadius + 0.01f, 0.01f);
         float3 nOut = float3(0.0f, 1.0f, 0.0f);
         bool ptFallback = false;
-        const float dSq = nwbPhysicsShapePointDistSq(sampleP, pose, spProxy, hullVertexSlot, meshNodeSlot, meshTriSlot, remainDist, nOut, ptFallback, meshStack, meshStackMetric);
+        const float dSq = nwbPhysicsPrimitivePointDistSq(sampleP, pose, spProxy, hullVertexSlot, remainDist, nOut, ptFallback);
         if(ptFallback){
             outNeedsFallback = true;
             return false;
@@ -2236,8 +2794,10 @@ void nwbPhysicsTestSpatialQueryShape(
     const uint shapeSlot,
     const uint bodyPoseSlot,
     const uint hullVertexSlot,
+#if NWB_PHYSICS_QUERY_HAS_MESH
     const uint meshNodeSlot,
     const uint meshTriSlot,
+#endif
     const uint queryType,
     const uint qCat,
     const uint qMask,
@@ -2266,9 +2826,12 @@ void nwbPhysicsTestSpatialQueryShape(
     inout uint hitCount,
     inout uint writtenHits,
     inout bool hasHit,
-    inout bool needsCpuFallback,
+    inout bool needsCpuFallback
+#if NWB_PHYSICS_QUERY_HAS_MESH
+    ,
     inout uint meshStack[64],
     inout float meshStackMetric[64]
+#endif
 ){
     const uint4 meta = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdx].bodyIndexTypeShape;
     if((qFlags & NWB_PHYSICS_QUERY_FLAG_HAS_AUX) != 0u){
@@ -2322,6 +2885,7 @@ void nwbPhysicsTestSpatialQueryShape(
             }
         }
         else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH){
+#if NWB_PHYSICS_QUERY_HAS_MESH
             if(
                 meshNodeSlot == NWB_PHYSICS_INVALID_INDEX
                 || meshTriSlot == NWB_PHYSICS_INVALID_INDEX
@@ -2331,6 +2895,10 @@ void nwbPhysicsTestSpatialQueryShape(
                 needsCpuFallback = true;
                 return;
             }
+#else
+            needsCpuFallback = true;
+            return;
+#endif
         }
         else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD){
             if(hullVertexSlot == NWB_PHYSICS_INVALID_INDEX || filter.w == NWB_PHYSICS_INVALID_INDEX){
@@ -2454,36 +3022,82 @@ void nwbPhysicsTestSpatialQueryShape(
                 else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD){
                     const uint hfBase = spProxy.filterData.w;
                     const float hfThickness = g_NwbPhysicsFloat4Buffers[hullVertexSlot][hfBase + 2u].w;
+                    float3 shapeOrig = pose.originPad.xyz;
+                    float4 shapeRot = pose.rotation;
+                    nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
+                    const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - shapeOrig, shapeRot);
+                    const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, shapeRot);
+                    bool hfFallback = false;
                     if(hfThickness > 1.0e-5f){
-                        useSphereMarch = true;
+                        hitShape = nwbPhysicsQuerySphereCastHeightfield(hullVertexSlot, spProxy, shapeOrig, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, 0.0f, tHit, hitPtOverride, nHit, hfFallback);
+                        hasPtOverride = true;
                     }
                     else{
-                        float3 shapeOrig = pose.originPad.xyz;
-                        float4 shapeRot = pose.rotation;
-                        nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
-                        const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - shapeOrig, shapeRot);
-                        const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, shapeRot);
-                        bool hfFallback = false;
                         hitShape = nwbPhysicsQueryRayHeightfield(hullVertexSlot, spProxy, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, tHit, nHit, hfFallback);
-                        if(hfFallback)
-                            needsCpuFallback = true;
                     }
+                    if(hfFallback)
+                        needsCpuFallback = true;
                 }
                 else{
+#if NWB_PHYSICS_QUERY_HAS_MESH
                     float3 shapeOrig = pose.originPad.xyz;
                     float4 shapeRot = pose.rotation;
                     nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
                     const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - shapeOrig, shapeRot);
                     const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, shapeRot);
                     bool meshFallback = false;
-                    hitShape = nwbPhysicsQueryRayMesh(meshNodeSlot, meshTriSlot, spProxy, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, tHit, nHit, meshFallback, meshStack, meshStackMetric);
+                    if(skinR > 1.0e-5f){
+                        hitShape = nwbPhysicsQuerySphereCastMesh(meshNodeSlot, meshTriSlot, spProxy, shapeOrig, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, 0.0f, tHit, hitPtOverride, nHit, meshFallback, meshStack, meshStackMetric);
+                        hasPtOverride = true;
+                    }
+                    else{
+                        hitShape = nwbPhysicsQueryRayMesh(meshNodeSlot, meshTriSlot, spProxy, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, tHit, nHit, meshFallback, meshStack, meshStackMetric);
+                    }
                     if(meshFallback)
                         needsCpuFallback = true;
+#else
+                    needsCpuFallback = true;
+#endif
                 }
+            }
+            else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD){
+                useSphereMarch = false;
+                float3 shapeOrig = pose.originPad.xyz;
+                float4 shapeRot = pose.rotation;
+                nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
+                const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - shapeOrig, shapeRot);
+                const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, shapeRot);
+                bool hfFallback = false;
+                hitShape = nwbPhysicsQuerySphereCastHeightfield(hullVertexSlot, spProxy, shapeOrig, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, castRadius, tHit, hitPtOverride, nHit, hfFallback);
+                hasPtOverride = true;
+                if(hfFallback){
+                    needsCpuFallback = true;
+                    return;
+                }
+            }
+            else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH){
+                useSphereMarch = false;
+#if NWB_PHYSICS_QUERY_HAS_MESH
+                float3 shapeOrig = pose.originPad.xyz;
+                float4 shapeRot = pose.rotation;
+                nwbPhysicsResolveShapeWorldPose(spProxy, pose.originPad.xyz, pose.rotation, shapeOrig, shapeRot);
+                const float3 localOrig = nwbPhysicsQuatInvRotate(rayOrig - shapeOrig, shapeRot);
+                const float3 localDir = nwbPhysicsQuatInvRotate(rayDir, shapeRot);
+                bool meshFallback = false;
+                hitShape = nwbPhysicsQuerySphereCastMesh(meshNodeSlot, meshTriSlot, spProxy, shapeOrig, shapeRot, qFlags, localOrig, localDir, evalMaxFrac, castRadius, tHit, hitPtOverride, nHit, meshFallback, meshStack, meshStackMetric);
+                hasPtOverride = true;
+                if(meshFallback){
+                    needsCpuFallback = true;
+                    return;
+                }
+#else
+                needsCpuFallback = true;
+                return;
+#endif
             }
             if(useSphereMarch){
                 bool marchFallback = false;
-                hitShape = nwbPhysicsQuerySphereMarchShape(spProxy, pose, hullVertexSlot, meshNodeSlot, meshTriSlot, rayOrig, rayDir, rayInvDir, evalMaxFrac, aMin, aMax, marchRadius, tHit, hitPtOverride, nHit, marchFallback, meshStack, meshStackMetric);
+                hitShape = nwbPhysicsQuerySphereMarchShape(spProxy, pose, hullVertexSlot, rayOrig, rayDir, rayInvDir, evalMaxFrac, aMin, aMax, marchRadius, tHit, hitPtOverride, nHit, marchFallback);
                 hasPtOverride = true;
                 if(marchFallback){
                     needsCpuFallback = true;
@@ -2512,7 +3126,22 @@ void nwbPhysicsTestSpatialQueryShape(
 
             float3 nOut = float3(0.0f, 1.0f, 0.0f);
             bool overlapFallback = false;
-            const float dSq = nwbPhysicsShapePointDistSq(sphereCenter, pose, spProxy, hullVertexSlot, meshNodeSlot, meshTriSlot, evalDist, nOut, overlapFallback, meshStack, meshStackMetric);
+            float dSq = 1.0e30f;
+            if(shapeType == NWB_PHYSICS_SHAPE_TYPE_MESH){
+#if NWB_PHYSICS_QUERY_HAS_MESH
+                const float3 localP = nwbPhysicsQuatInvRotate(sphereCenter - pose.originPad.xyz, pose.rotation);
+                dSq = nwbPhysicsQueryMeshPointDistSq(meshNodeSlot, meshTriSlot, spProxy, pose.rotation, localP, evalDist, nOut, overlapFallback, meshStack, meshStackMetric);
+#else
+                overlapFallback = true;
+#endif
+            }
+            else if(shapeType == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD){
+                const float3 localP = nwbPhysicsQuatInvRotate(sphereCenter - pose.originPad.xyz, pose.rotation);
+                dSq = nwbPhysicsQueryPointHeightfieldDistSq(hullVertexSlot, spProxy, pose.rotation, localP, evalDist, nOut, overlapFallback);
+            }
+            else{
+                dSq = nwbPhysicsPrimitivePointDistSq(sphereCenter, pose, spProxy, hullVertexSlot, evalDist, nOut, overlapFallback);
+            }
             if(overlapFallback){
                 needsCpuFallback = true;
                 return;
@@ -2581,8 +3210,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint querySlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint resultSlot = g_NwbPhysicsPushConstants.slots1.y;
     const uint hullVertexSlot = g_NwbPhysicsPushConstants.slots1.z;
+#if NWB_PHYSICS_QUERY_HAS_MESH
     const uint meshNodeSlot = g_NwbPhysicsPushConstants.slots1.w;
     const uint meshTriSlot = g_NwbPhysicsPushConstants.flags;
+#endif
     const uint auxSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
     const uint multiHitSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.y);
     const uint maxHitsPerQuery = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.z);
@@ -2658,8 +3289,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(shapeCount > 0u){
         uint stack[64];
         float stackT[64];
+#if NWB_PHYSICS_QUERY_HAS_MESH
         uint meshStack[64];
         float meshStackMetric[64];
+#endif
         stack[0] = 0u;
         stackT[0] = 0.0f;
         uint sp = 0u;
@@ -2800,8 +3433,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     shapeSlot,
                     bodyPoseSlot,
                     hullVertexSlot,
+#if NWB_PHYSICS_QUERY_HAS_MESH
                     meshNodeSlot,
                     meshTriSlot,
+#endif
                     queryType,
                     qCat,
                     qMask,
@@ -2830,9 +3465,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     hitCount,
                     writtenHits,
                     hasHit,
-                    needsCpuFallback,
+                    needsCpuFallback
+#if NWB_PHYSICS_QUERY_HAS_MESH
+                    ,
                     meshStack,
                     meshStackMetric
+#endif
                 );
             }
         }

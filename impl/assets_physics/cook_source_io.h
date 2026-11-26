@@ -26,9 +26,9 @@ namespace PhysicsCookIO{
     AStringView filePathUtf8,
     void* user,
     void(*reserveVerts)(void*, usize),
-    void(*pushVert)(void*, f32, f32, f32),
+    Float4*(*allocVerts)(void*, usize),
     void(*reserveIdx)(void*, usize),
-    void(*pushIdx)(void*, u32)
+    u32*(*allocIdx)(void*, usize)
 )noexcept;
 
 [[nodiscard]] b8 LoadHeightmapImageRaw(
@@ -105,9 +105,23 @@ template<typename PathArenaT, typename VertArenaT, typename IdxArenaT>
         GenericNativeTextView(filePath.native(), pathText),
         &ctx,
         [](void* user, const usize n){ static_cast<MeshOutContext*>(user)->verts->reserve(n); },
-        [](void* user, const f32 x, const f32 y, const f32 z){ static_cast<MeshOutContext*>(user)->verts->push_back(Float4(x, y, z, 0.0f)); },
+        [](void* user, const usize count) -> Float4*{
+            if(count == 0u)
+                return nullptr;
+            auto* vec = static_cast<MeshOutContext*>(user)->verts;
+            const usize oldSize = vec->size();
+            vec->resize(oldSize + count, Float4(0.0f, 0.0f, 0.0f, 0.0f));
+            return vec->data() + oldSize;
+        },
         [](void* user, const usize n){ static_cast<MeshOutContext*>(user)->indices->reserve(n); },
-        [](void* user, const u32 idx){ static_cast<MeshOutContext*>(user)->indices->push_back(idx); }
+        [](void* user, const usize count) -> u32*{
+            if(count == 0u)
+                return nullptr;
+            auto* vec = static_cast<MeshOutContext*>(user)->indices;
+            const usize oldSize = vec->size();
+            vec->resize(oldSize + count, 0u);
+            return vec->data() + oldSize;
+        }
     );
     if(!ok){
         outVertices.clear();
@@ -238,3 +252,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

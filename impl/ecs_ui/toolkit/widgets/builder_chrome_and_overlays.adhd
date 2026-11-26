@@ -193,27 +193,30 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
     }
     input.fenceControl(frame.widget.id, frame.widget.declarationGeneration, frame.token);
 
-    Vector<u64> menuKeys;
-    Vector<u8> menuEnabled;
-    menuKeys.reserve(menus.size());
-    menuEnabled.reserve(menus.size());
-    for(usize idx = 0u; idx < menus.size(); ++idx){
-        menuKeys.push_back(menus[idx].key);
-        u8 enabledByte = 0u;
-        if(frame.options.enabled && menus[idx].enabled)
-            enabledByte = 1u;
-        menuEnabled.push_back(enabledByte);
-    }
-
     if(!frame.options.enabled){
         state.close();
         input.invalidateTarget(frame.widget.id);
     }
     else{
+        b8 menuKeysPrepared = false;
         while(true){
             const auto action = this.m_context.takeControlAction(frame.widget, true, frame.token);
             if(!action.has_value())
                 break;
+            if(!menuKeysPrepared){
+                this.m_menuBarKeysScratch.clear();
+                this.m_menuBarEnabledScratch.clear();
+                this.m_menuBarKeysScratch.reserve(menus.size());
+                this.m_menuBarEnabledScratch.reserve(menus.size());
+                for(usize idx = 0u; idx < menus.size(); ++idx){
+                    this.m_menuBarKeysScratch.push_back(menus[idx].key);
+                    u8 enabledByte = 0u;
+                    if(frame.options.enabled && menus[idx].enabled)
+                        enabledByte = 1u;
+                    this.m_menuBarEnabledScratch.push_back(enabledByte);
+                }
+                menuKeysPrepared = true;
+            }
             in ControlAction act = action.value();
             b8 rotationNeeded = false;
             if(act.kind == ControlActionKind::Activate){
@@ -225,7 +228,7 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
                     if(state.m_focusedMenuKey != 0u)
                         targetKey = state.m_focusedMenuKey;
                     else
-                        targetKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, true);
+                        targetKey = FindAdjacentEnabledMenuKey(Span<u64>(this.m_menuBarKeysScratch), Span<u8>(this.m_menuBarEnabledScratch), 0u, true);
                 }
                 const Expected<usize> foundIdx = FindMenuBarIndexByKey(menus, targetKey);
                 if(foundIdx.has_value() && menus[foundIdx.value()].enabled){
@@ -258,15 +261,15 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
             ){
                 u64 nextKey = 0u;
                 if(act.kind == ControlActionKind::Home)
-                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, true);
+                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(this.m_menuBarKeysScratch), Span<u8>(this.m_menuBarEnabledScratch), 0u, true);
                 else if(act.kind == ControlActionKind::End)
-                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, false);
+                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(this.m_menuBarKeysScratch), Span<u8>(this.m_menuBarEnabledScratch), 0u, false);
                 else{
                     const b8 forward = act.kind == ControlActionKind::Right;
                     u64 anchorKey = state.m_focusedMenuKey;
                     if(state.isOpen())
                         anchorKey = state.openMenuKey();
-                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), anchorKey, forward);
+                    nextKey = FindAdjacentEnabledMenuKey(Span<u64>(this.m_menuBarKeysScratch), Span<u8>(this.m_menuBarEnabledScratch), anchorKey, forward);
                 }
                 if(nextKey != 0u){
                     state.m_focusedMenuKey = nextKey;
@@ -286,7 +289,7 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
             else if(act.kind == ControlActionKind::Down){
                 u64 targetKey = state.m_focusedMenuKey;
                 if(targetKey == 0u)
-                    targetKey = FindAdjacentEnabledMenuKey(Span<u64>(menuKeys), Span<u8>(menuEnabled), 0u, true);
+                    targetKey = FindAdjacentEnabledMenuKey(Span<u64>(this.m_menuBarKeysScratch), Span<u8>(this.m_menuBarEnabledScratch), 0u, true);
                 const Expected<usize> foundTarget = FindMenuBarIndexByKey(menus, targetKey);
                 if(foundTarget.has_value() && menus[foundTarget.value()].enabled && menus[foundTarget.value()].items.has_value()){
                     state.openMenu(targetKey);
@@ -431,7 +434,7 @@ MenuBarResult Builder::menuBar(in StringView stableKey, in Span<MenuBarMenu> men
     );
     if(!this.addItemNode(description, item))
         return MenuBarResult();
-    this.m_scope.value().m_menuBars.push_back(frame);
+    AppendOwned<BuilderMenuBarFrame>(this.m_scope.value().m_menuBars, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
     result.valid = true;
     result.openMenuKey = state.openMenuKey();
@@ -879,7 +882,7 @@ ToastResult Builder::toastStack(in StringView stableKey, mut ToastState state, i
     }
 
     frame.revision = state.revision();
-    this.m_scope.value().m_toasts.push_back(frame);
+    AppendOwned<BuilderToastFrame>(this.m_scope.value().m_toasts, frame);
     result.valid = true;
     result.activeCount = cast<u32>(state.count());
     return result;
@@ -922,10 +925,10 @@ b8 Builder::paintToasts(){
         if(fromBottom)
             cursorY = display.logicalHeight - frame.style.margin;
 
-        Vector<Rect> cardRects;
-        Vector<Rect> closeRects;
-        cardRects.reserve(frame.entries.size());
-        closeRects.reserve(frame.entries.size());
+        state.m_visibleRects.reserve(frame.entries.size());
+        state.m_visibleIds.reserve(frame.entries.size());
+        state.m_closeRectsScratch.clear();
+        state.m_closeRectsScratch.reserve(frame.entries.size());
         f32 unionMinX = display.logicalWidth;
         f32 unionMinY = display.logicalHeight;
         f32 unionMaxX = 0.0f;
@@ -943,7 +946,6 @@ b8 Builder::paintToasts(){
                 cursorY += entry.cardHeight + frame.style.gap;
 
             const Rect cardRect(cardX, cardY, cardW, entry.cardHeight);
-            cardRects.push_back(cardRect);
             state.m_visibleRects.push_back(cardRect);
             state.m_visibleIds.push_back(entry.id);
             unionMinX = UiSimdMin(unionMinX, cardRect.x);
@@ -957,7 +959,7 @@ b8 Builder::paintToasts(){
                 frame.style.closeButtonSize,
                 frame.style.closeButtonSize
             );
-            closeRects.push_back(closeRect);
+            state.m_closeRectsScratch.push_back(closeRect);
 
             this.m_paint.pushClip(cardRect);
             this.m_paint.fillRoundedRect(cardRect, frame.style.cornerRadius, frame.style.backgroundColor);
@@ -1014,15 +1016,10 @@ b8 Builder::paintToasts(){
         );
         for(usize idx = 0u; idx < frame.entries.size(); ++idx){
             in ToastPaintEntry entry = frame.entries[idx];
-            in Rect cardRect = cardRects[idx];
-            String toastText;
-            if(entry.title.valid())
-                toastText.append(entry.title.deref().utf8());
-            if(entry.message.valid()){
-                if(!toastText.empty())
-                    toastText.append(": ");
-                toastText.append(entry.message.deref().utf8());
-            }
+            in Rect cardRect = state.m_visibleRects[idx];
+            StringView toastText = StringView();
+            if(idx < state.m_items.size() && state.m_items[idx].id == entry.id)
+                toastText = StringView(state.m_items[idx].accessibleText);
             AccessibilityRole toastRole = AccessibilityRole::Status;
             AccessibilityLiveMode liveMode = AccessibilityLiveMode::Polite;
             if(entry.severity == ToastSeverity::Error){
@@ -1040,14 +1037,12 @@ b8 Builder::paintToasts(){
                 toastDesc.liveMode = liveMode;
                 toastDesc.stateBits = ResolveAccessibleVisibilityStateBits(frame.options.enabled, cardRect);
                 toastDesc.bounds = cardRect;
-                toastDesc.name = StringView(toastText);
+                toastDesc.name = toastText;
                 this.m_context.addAccessibleNode(toastDesc);
             }
-            if(!toastText.empty() && this.m_announcedToastIds.find(entry.id) == this.m_announcedToastIds.end()){
-                if(this.m_announcedToastIds.size() > 128u)
-                    this.m_announcedToastIds.clear();
-                this.m_announcedToastIds.insert(entry.id);
-                this.m_context.announce(StringView(toastText), liveMode);
+            if(!toastText.empty() && idx < state.m_items.size() && state.m_items[idx].id == entry.id && !state.m_items[idx].announced){
+                state.m_items[idx].announced = true;
+                this.m_context.announce(toastText, liveMode);
             }
         }
 
@@ -1061,7 +1056,7 @@ b8 Builder::paintToasts(){
                 const Expected<WidgetId> closeId = TryMakeWidgetPartId(closeRoot.value(), frame.entries[idx].id);
                 if(!closeId.has_value())
                     return false;
-                const HitTarget closeTarget = targets.makeToastCloseHitTarget(closeRects[idx], cardRects[idx], true, frame.token, frame.entries[idx].id);
+                const HitTarget closeTarget = targets.makeToastCloseHitTarget(state.m_closeRectsScratch[idx], state.m_visibleRects[idx], true, frame.token, frame.entries[idx].id);
                 if(!this.m_context.addPartTarget(frame.widget, closeId.value(), closeTarget))
                     return false;
             }
@@ -1174,16 +1169,62 @@ ColorPickerResult Builder::colorPicker(in StringView stableKey, mut ColorPickerS
     frame.revision = state.revision();
 
     if(options.showHexLabel){
-        String hexStr;
-        FormatColorHex(frame.color, options.showAlpha, hexStr);
-        const ShapeRequest hexReq = this.textShapeRequest(StringView(hexStr), frame.widgetStyle.fontSize);
-        const auto measuredHex = this.m_text.layoutAndMeasureShared(hexReq, this.m_paint.displayMetrics());
-        if(!measuredHex.has_value()){
-            this.m_context.fail();
-            return ColorPickerResult();
+        in DisplayMetrics display = this.m_paint.displayMetrics();
+        const u32 fontSizeBits = bit_cast<u32>(frame.widgetStyle.fontSize);
+        const u32 scaleXBits = bit_cast<u32>(display.pixelScaleX);
+        const u32 scaleYBits = bit_cast<u32>(display.pixelScaleY);
+        const u64 textIdentity = this.m_text.identity();
+        const u64 textGeneration = this.m_text.generation();
+        const u64 atlasIdentity = this.m_text.atlasIdentity();
+        const usize atlasGlyphCount = this.m_text.atlasGlyphCount();
+        const b8 cacheHit =
+            state.m_cachedHexLayout.valid()
+            && state.m_cachedHexRevision == frame.revision
+            && state.m_cachedHexShowAlpha == options.showAlpha
+            && state.m_cachedHexFont == this.m_style.font
+            && state.m_cachedHexFontSizeBits == fontSizeBits
+            && state.m_cachedHexScaleXBits == scaleXBits
+            && state.m_cachedHexScaleYBits == scaleYBits
+            && state.m_cachedHexTextIdentity == textIdentity
+            && state.m_cachedHexTextGeneration == textGeneration
+            && state.m_cachedHexAtlasIdentity == atlasIdentity
+            && state.m_cachedHexAtlasGlyphCount == atlasGlyphCount
+            && state.m_cachedHexScriptTag == this.m_textScriptTag
+            && state.m_cachedHexDirection == this.m_textDirection
+            && state.m_cachedHexBidiMode == this.m_textBidiMode
+            && StringView(state.m_cachedHexLanguage) == StringView(this.m_textLanguage);
+        if(cacheHit){
+            frame.hexText = state.m_cachedHexLayout;
+            frame.hexBounds = state.m_cachedHexBounds;
         }
-        frame.hexText = measuredHex.value().layout;
-        frame.hexBounds = measuredHex.value().bounds;
+        else{
+            String hexStr;
+            FormatColorHex(frame.color, options.showAlpha, hexStr);
+            const ShapeRequest hexReq = this.textShapeRequest(StringView(hexStr), frame.widgetStyle.fontSize);
+            const auto measuredHex = this.m_text.layoutAndMeasureShared(hexReq, display);
+            if(!measuredHex.has_value()){
+                this.m_context.fail();
+                return ColorPickerResult();
+            }
+            frame.hexText = measuredHex.value().layout;
+            frame.hexBounds = measuredHex.value().bounds;
+            state.m_cachedHexLayout = frame.hexText;
+            state.m_cachedHexBounds = frame.hexBounds;
+            state.m_cachedHexRevision = frame.revision;
+            state.m_cachedHexShowAlpha = options.showAlpha;
+            state.m_cachedHexFont = this.m_style.font;
+            state.m_cachedHexFontSizeBits = fontSizeBits;
+            state.m_cachedHexScaleXBits = scaleXBits;
+            state.m_cachedHexScaleYBits = scaleYBits;
+            state.m_cachedHexTextIdentity = textIdentity;
+            state.m_cachedHexTextGeneration = textGeneration;
+            state.m_cachedHexAtlasIdentity = atlasIdentity;
+            state.m_cachedHexAtlasGlyphCount = atlasGlyphCount;
+            state.m_cachedHexScriptTag = this.m_textScriptTag;
+            state.m_cachedHexDirection = this.m_textDirection;
+            state.m_cachedHexBidiMode = this.m_textBidiMode;
+            state.m_cachedHexLanguage.assign(StringView(this.m_textLanguage));
+        }
     }
 
     const f32 intrinsicH = ComputeColorPickerIntrinsicHeight(options, frame.style);
@@ -1199,7 +1240,7 @@ ColorPickerResult Builder::colorPicker(in StringView stableKey, mut ColorPickerS
     );
     if(!this.addItemNode(description, item))
         return ColorPickerResult();
-    this.m_scope.value().m_colorPickers.push_back(frame);
+    AppendOwned<BuilderColorPickerFrame>(this.m_scope.value().m_colorPickers, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
 
     result.valid = true;
@@ -1298,21 +1339,20 @@ b8 Builder::paintColorPicker(in BuilderItem item, in LayoutBox box){
 
     if(frame.options.showAlpha){
         this.m_paint.pushClip(alphaRect);
+        this.m_paint.fillRect(alphaRect, style.checkerDark);
         const f32 cell = s_ColorPickerCheckerCellSize;
         f32 cy = alphaRect.y;
         u32 row = 0u;
-        while(cy < alphaRect.y + alphaRect.height){
-            f32 cx = alphaRect.x;
-            u32 col = 0u;
-            const f32 ch = UiSimdMin(cell, alphaRect.y + alphaRect.height - cy);
-            while(cx < alphaRect.x + alphaRect.width){
-                const f32 cw = UiSimdMin(cell, alphaRect.x + alphaRect.width - cx);
-                Color checker = style.checkerDark;
-                if(((row + col) & 1u) == 0u)
-                    checker = style.checkerLight;
-                this.m_paint.fillRect(Rect(cx, cy, cw, ch), checker);
-                cx += cell;
-                ++col;
+        const f32 alphaRight = alphaRect.x + alphaRect.width;
+        const f32 alphaBottom = alphaRect.y + alphaRect.height;
+        const f32 stepX = cell * 2.0f;
+        while(cy < alphaBottom){
+            const f32 ch = UiSimdMin(cell, alphaBottom - cy);
+            f32 cx = alphaRect.x + cast<f32>(row & 1u) * cell;
+            while(cx < alphaRight){
+                const f32 cw = UiSimdMin(cell, alphaRight - cx);
+                this.m_paint.fillRect(Rect(cx, cy, cw, ch), style.checkerLight);
+                cx += stepX;
             }
             cy += cell;
             ++row;

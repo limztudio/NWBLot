@@ -283,6 +283,8 @@ void MeshSkinningSystem::invalidateResources(){
         this.releaseRuntimeResourceBindlessHeapHandles(it.value());
     this.m_runtimeResources.clear();
     this.m_runtimeMeshCache.clear();
+    this.m_unresolvedSkeletonQueries.clear();
+    this.m_lastSceneNamePoolVersion = 0u;
     this.resetFrameScratchResources();
     this.resetPipelineResources();
 }

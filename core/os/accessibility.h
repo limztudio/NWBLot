@@ -198,6 +198,7 @@ public:
         f32 scaleX,
         f32 scaleY
     ) = 0;
+    [[nodiscard]] virtual b8 updateFocus(u64 focusedId) = 0;
     [[nodiscard]] virtual b8 announce(AStringView text, AccessibilityLiveMode::Enum politeness) = 0;
     [[nodiscard]] virtual b8 pollAction(AccessibilityActionEvent& outEvent)noexcept = 0;
     [[nodiscard]] virtual u64 publishedVersion()const noexcept = 0;

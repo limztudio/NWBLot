@@ -21,10 +21,13 @@
 #define NWB_UI_MAX_ANALYTIC_CLIP_DEPTH 8u
 #define NWB_UI_MAX_BLUR_TAP_RADIUS 24u
 #define NWB_UI_GRADIENT_HEADER_BYTES 48u
-#define NWB_UI_GRADIENT_STOP_BYTES 32u
+#define NWB_UI_GRADIENT_OFFSET_GROUP_BYTES 16u
+#define NWB_UI_GRADIENT_COLOR_BYTES 16u
 #define NWB_UI_DROP_SHADOW_RECORD_BYTES 32u
 #define NWB_UI_CLIP_MASK_RECORD_BYTES 48u
-#define NWB_UI_BLUR_RECORD_BYTES 32u
+#define NWB_UI_MAX_BLUR_TAP_PAIRS 12u
+#define NWB_UI_BLUR_HEADER_BYTES 32u
+#define NWB_UI_BLUR_PAIR_GROUP_BYTES 16u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,3 +37,4 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -9,6 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 TextSliceContainsTab(in StringView text, in usize byteBegin, in usize byteEnd){
+    for(usize i = byteBegin; i < byteEnd; ++i){
+        if(text[i] == '\t')
+            return true;
+    }
+    return false;
+}
+
 void ResolveNextTextLineRange(
     in StringView text,
     in usize byteBegin,
@@ -159,13 +167,13 @@ class ShapedBidiLineRun<TFace>{
     public TextDirection direction = TextDirection::LeftToRight;
 }
 
-TextLayoutStatus PlaceShapedLineInto<TFace>(
+TextLayoutStatus PlaceValidatedShapedLineInto<TFace>(
     in usize byteBegin,
     in usize byteEnd,
     in usize breakEnd,
+    in usize glyphByteOrigin,
     in FontMetrics runMetrics,
     in Span<ShapedGlyphRecord<TFace>> runGlyphs,
-    in StringView lineText,
     in TextDirection direction,
     in f32 lineHeightMultiplier,
     in f32 lineHeightOverride,
@@ -176,8 +184,6 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
     mut VectorDouble inOutInkBounds,
     mut b8 inOutHasInk
 ){
-    if(!ValidateShapedRun(runMetrics, runGlyphs, lineText, direction))
-        return TextLayoutStatus::FontFailure;
     const Expected<TextLine> lineResult = TryBuildInitialTextLine(
         byteBegin,
         byteEnd,
@@ -193,6 +199,7 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
     if(!lineResult.has_value())
         return TextLayoutStatus::InvalidParameters;
     TextLine line = lineResult.value();
+    const u32 originByte = cast<u32>(glyphByteOrigin);
     usize first = 0u;
     f32 pen = 0.0f;
     while(first < runGlyphs.size()){
@@ -218,15 +225,15 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
             PlacedGlyphRecord<TFace> placed;
             placed.face = glyph.face;
             placed.glyphId = glyph.glyphId;
-            placed.byteBegin = line.byteBegin + glyph.byteBegin;
-            placed.byteEnd = line.byteBegin + glyph.byteEnd;
+            placed.byteBegin = originByte + glyph.byteBegin;
+            placed.byteEnd = originByte + glyph.byteEnd;
             placed.position = position.value();
             placed.ink = glyph.ink;
             placed.coverage = glyph.coverage;
             inOutGlyphs.push_back(placed);
         }
         inOutClusters.push_back(MakeTextCluster(
-            line.byteBegin,
+            originByte,
             runGlyphs[first].byteBegin,
             runGlyphs[first].byteEnd,
             firstGlyph,
@@ -246,6 +253,44 @@ TextLayoutStatus PlaceShapedLineInto<TFace>(
     inOutLines.push_back(line);
     inOutMeasure = Point(UiSimdMax(inOutMeasure.x, pen), nextHeight);
     return TextLayoutStatus::Success;
+}
+
+TextLayoutStatus PlaceShapedLineInto<TFace>(
+    in usize byteBegin,
+    in usize byteEnd,
+    in usize breakEnd,
+    in FontMetrics runMetrics,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    in StringView lineText,
+    in TextDirection direction,
+    in f32 lineHeightMultiplier,
+    in f32 lineHeightOverride,
+    mut Vector<PlacedGlyphRecord<TFace>> inOutGlyphs,
+    mut Vector<TextCluster> inOutClusters,
+    mut Vector<TextLine> inOutLines,
+    mut Point inOutMeasure,
+    mut VectorDouble inOutInkBounds,
+    mut b8 inOutHasInk
+){
+    if(!ValidateShapedRun(runMetrics, runGlyphs, lineText, direction))
+        return TextLayoutStatus::FontFailure;
+    return PlaceValidatedShapedLineInto<TFace>(
+        byteBegin,
+        byteEnd,
+        breakEnd,
+        byteBegin,
+        runMetrics,
+        runGlyphs,
+        direction,
+        lineHeightMultiplier,
+        lineHeightOverride,
+        inOutGlyphs,
+        inOutClusters,
+        inOutLines,
+        inOutMeasure,
+        inOutInkBounds,
+        inOutHasInk
+    );
 }
 
 TextLayoutStatus PlaceShapedBidiLineInto<TFace>(
@@ -454,6 +499,226 @@ b8 TryResolveNextWrappedTextSegment<TFace>(
     else
         outBreakEnd = nextBegin;
     return outVisualEnd < lineEnd;
+}
+
+void ResolveNextWrappedSliceLtr<TFace>(
+    in StringView fullText,
+    in usize hardLineBegin,
+    in usize segBegin,
+    in usize lineEnd,
+    in usize hardBreakEnd,
+    in ShapeRequest request,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    mut usize inOutGlyphCursor,
+    mut usize outLineGlyphBegin,
+    mut usize outLineGlyphEnd,
+    mut usize outVisualEnd,
+    mut usize outBreakEnd,
+    mut usize outNextSegBegin
+){
+    const usize startCursor = inOutGlyphCursor;
+    outLineGlyphBegin = startCursor;
+    outLineGlyphEnd = runGlyphs.size();
+    outVisualEnd = lineEnd;
+    outBreakEnd = hardBreakEnd;
+    outNextSegBegin = lineEnd;
+    if(startCursor >= runGlyphs.size() || segBegin >= lineEnd)
+        return;
+
+    f32 accumWidth = 0.0f;
+    usize firstClusterEnd = 0u;
+    usize firstClusterGlyphEnd = startCursor;
+    usize fitEnd = 0u;
+    usize fitGlyphEnd = startCursor;
+    usize wordEnd = 0u;
+    usize wordGlyphEnd = startCursor;
+    b8 overflowed = false;
+    usize cursor = startCursor;
+    while(cursor < runGlyphs.size()){
+        const usize cFirst = cursor;
+        usize cLast = cursor + 1u;
+        while(cLast < runGlyphs.size() && runGlyphs[cLast].byteBegin == runGlyphs[cFirst].byteBegin)
+            ++cLast;
+        const usize absEnd = hardLineBegin + cast<usize>(runGlyphs[cFirst].byteEnd);
+        const usize relEnd = absEnd - segBegin;
+        if(firstClusterEnd == 0u){
+            firstClusterEnd = relEnd;
+            firstClusterGlyphEnd = cLast;
+        }
+        accumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
+        if(accumWidth <= request.maxWidth){
+            fitEnd = relEnd;
+            fitGlyphEnd = cLast;
+            if(request.wrapMode == TextWrapMode::Word){
+                const u8 lastByte = cast<u8>(fullText[absEnd - 1u]);
+                if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-')){
+                    wordEnd = relEnd;
+                    wordGlyphEnd = cLast;
+                }
+            }
+        }
+        else{
+            overflowed = true;
+            break;
+        }
+        cursor = cLast;
+    }
+
+    if(!overflowed){
+        inOutGlyphCursor = runGlyphs.size();
+        return;
+    }
+
+    if(firstClusterEnd == 0u){
+        firstClusterEnd = lineEnd - segBegin;
+        firstClusterGlyphEnd = runGlyphs.size();
+    }
+    usize chosenEnd = firstClusterEnd;
+    usize chosenGlyphEnd = firstClusterGlyphEnd;
+    if(request.wrapMode == TextWrapMode::Word && wordEnd > 0u){
+        chosenEnd = wordEnd;
+        chosenGlyphEnd = wordGlyphEnd;
+    }
+    else if(fitEnd > 0u){
+        chosenEnd = fitEnd;
+        chosenGlyphEnd = fitGlyphEnd;
+    }
+
+    usize visualEnd = segBegin + chosenEnd;
+    usize nextBegin = visualEnd;
+    usize lineGlyphEnd = chosenGlyphEnd;
+    usize nextCursor = chosenGlyphEnd;
+    if(request.wrapMode == TextWrapMode::Word && !request.preserveWrapSpaces){
+        while(visualEnd > segBegin && fullText[visualEnd - 1u] == ' ')
+            --visualEnd;
+        while(lineGlyphEnd > startCursor && hardLineBegin + cast<usize>(runGlyphs[lineGlyphEnd - 1u].byteEnd) > visualEnd)
+            --lineGlyphEnd;
+        while(nextBegin < lineEnd && fullText[nextBegin] == ' ')
+            ++nextBegin;
+        while(nextCursor < runGlyphs.size() && hardLineBegin + cast<usize>(runGlyphs[nextCursor].byteBegin) < nextBegin)
+            ++nextCursor;
+    }
+
+    inOutGlyphCursor = nextCursor;
+    outLineGlyphEnd = lineGlyphEnd;
+    outVisualEnd = visualEnd;
+    outNextSegBegin = nextBegin;
+    if(nextBegin >= lineEnd){
+        outNextSegBegin = lineEnd;
+        outBreakEnd = hardBreakEnd;
+    }
+    else
+        outBreakEnd = nextBegin;
+}
+
+void ResolveNextWrappedRangeRtl<TFace>(
+    in StringView fullText,
+    in usize hardLineBegin,
+    in usize segBegin,
+    in usize lineEnd,
+    in usize hardBreakEnd,
+    in ShapeRequest request,
+    in Span<ShapedGlyphRecord<TFace>> runGlyphs,
+    mut usize inOutGlyphCursor,
+    mut usize outVisualEnd,
+    mut usize outBreakEnd,
+    mut usize outNextSegBegin
+){
+    outVisualEnd = lineEnd;
+    outBreakEnd = hardBreakEnd;
+    outNextSegBegin = lineEnd;
+    if(inOutGlyphCursor == 0u || segBegin >= lineEnd){
+        inOutGlyphCursor = 0u;
+        return;
+    }
+
+    f32 accumWidth = 0.0f;
+    usize firstClusterEnd = 0u;
+    usize firstClusterGlyphNext = inOutGlyphCursor;
+    usize fitEnd = 0u;
+    usize fitGlyphNext = inOutGlyphCursor;
+    usize wordEnd = 0u;
+    usize wordGlyphNext = inOutGlyphCursor;
+    b8 overflowed = false;
+    usize cursor = inOutGlyphCursor;
+    while(cursor > 0u){
+        const usize cLast = cursor;
+        usize cFirst = cLast - 1u;
+        while(cFirst > 0u && runGlyphs[cFirst - 1u].byteBegin == runGlyphs[cLast - 1u].byteBegin)
+            --cFirst;
+        const usize absEnd = hardLineBegin + cast<usize>(runGlyphs[cFirst].byteEnd);
+        const usize relEnd = absEnd - segBegin;
+        if(firstClusterEnd == 0u){
+            firstClusterEnd = relEnd;
+            firstClusterGlyphNext = cFirst;
+        }
+        accumWidth += SumShapedGlyphRangeWidth<TFace>(runGlyphs, cFirst, cLast);
+        if(accumWidth <= request.maxWidth){
+            fitEnd = relEnd;
+            fitGlyphNext = cFirst;
+            if(request.wrapMode == TextWrapMode::Word){
+                const u8 lastByte = cast<u8>(fullText[absEnd - 1u]);
+                if(lastByte == cast<u8>(' ') || lastByte == cast<u8>('\t') || lastByte == cast<u8>('-')){
+                    wordEnd = relEnd;
+                    wordGlyphNext = cFirst;
+                }
+            }
+        }
+        else{
+            overflowed = true;
+            break;
+        }
+        cursor = cFirst;
+    }
+
+    if(!overflowed){
+        inOutGlyphCursor = 0u;
+        return;
+    }
+
+    if(firstClusterEnd == 0u){
+        firstClusterEnd = lineEnd - segBegin;
+        firstClusterGlyphNext = 0u;
+    }
+    usize chosenEnd = firstClusterEnd;
+    usize chosenGlyphNext = firstClusterGlyphNext;
+    if(request.wrapMode == TextWrapMode::Word && wordEnd > 0u){
+        chosenEnd = wordEnd;
+        chosenGlyphNext = wordGlyphNext;
+    }
+    else if(fitEnd > 0u){
+        chosenEnd = fitEnd;
+        chosenGlyphNext = fitGlyphNext;
+    }
+
+    usize visualEnd = segBegin + chosenEnd;
+    usize nextBegin = visualEnd;
+    usize nextCursor = chosenGlyphNext;
+    if(request.wrapMode == TextWrapMode::Word && !request.preserveWrapSpaces){
+        while(visualEnd > segBegin && fullText[visualEnd - 1u] == ' ')
+            --visualEnd;
+        while(nextBegin < lineEnd && fullText[nextBegin] == ' ')
+            ++nextBegin;
+        while(nextCursor > 0u){
+            usize ncFirst = nextCursor - 1u;
+            while(ncFirst > 0u && runGlyphs[ncFirst - 1u].byteBegin == runGlyphs[nextCursor - 1u].byteBegin)
+                --ncFirst;
+            if(hardLineBegin + cast<usize>(runGlyphs[ncFirst].byteBegin) < nextBegin)
+                nextCursor = ncFirst;
+            else
+                break;
+        }
+    }
+
+    inOutGlyphCursor = nextCursor;
+    outVisualEnd = visualEnd;
+    outNextSegBegin = nextBegin;
+    if(nextBegin >= lineEnd){
+        outNextSegBegin = lineEnd;
+        outBreakEnd = hardBreakEnd;
+    }
+    else
+        outBreakEnd = nextBegin;
 }
 
 void ApplyTextLayoutAlignment<TFace>(

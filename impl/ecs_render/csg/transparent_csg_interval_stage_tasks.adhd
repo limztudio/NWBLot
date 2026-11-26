@@ -347,19 +347,6 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
                 warning("RendererSystem: could not declare transparent CSG material instance upload");
                 return MakeUnexpected(Failure());
             }
-            if(!AppendInstanceTransformPatch(
-                inputs.instanceTransformPatchContributor,
-                instanceValues,
-                inputs.resources.materialInstances,
-                inputs.frameBindings,
-                Name("render.avboit.transparent_csg.physics_patch"),
-                true,
-                this.m_graph,
-                result.uploadTask
-            )){
-                warning("RendererSystem: could not declare transparent CSG physics transform patch");
-                return MakeUnexpected(Failure());
-            }
             if(!AppendImmutableBufferUpload(this.m_graph, material.value(), inputs.resources.materialTyped,
                 s_RenderNameRenderAvboitTransparentCsgMaterialTypedUpload, "Transparent CSG Material Typed Upload", result.uploadTask, true)){
                 warning("RendererSystem: could not declare transparent CSG material typed upload");
@@ -383,6 +370,19 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
             if(!AppendImmutableBufferUpload(this.m_graph, interval.value(), inputs.resources.csgIntervalSampleState,
                 s_RenderNameRenderAvboitTransparentCsgIntervalSampleStateUpload, "Transparent CSG Interval State Upload", result.uploadTask, true)){
                 warning("RendererSystem: could not declare transparent CSG interval-state upload");
+                return MakeUnexpected(Failure());
+            }
+            if(!AppendInstanceTransformPatch(
+                inputs.instanceTransformPatchContributor,
+                instanceValues,
+                inputs.resources.materialInstances,
+                inputs.frameBindings,
+                Name("render.avboit.transparent_csg.physics_patch"),
+                true,
+                this.m_graph,
+                result.uploadTask
+            )){
+                warning("RendererSystem: could not declare transparent CSG physics transform patch");
                 return MakeUnexpected(Failure());
             }
 

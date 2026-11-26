@@ -126,8 +126,11 @@ extern const u32 s_ShaderUiMaxAnalyticClipDepth;
 [cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_GRADIENT_HEADER_BYTES")]
 extern const u32 s_ShaderUiGradientHeaderBytes;
 
-[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_GRADIENT_STOP_BYTES")]
-extern const u32 s_ShaderUiGradientStopBytes;
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_GRADIENT_OFFSET_GROUP_BYTES")]
+extern const u32 s_ShaderUiGradientOffsetGroupBytes;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_GRADIENT_COLOR_BYTES")]
+extern const u32 s_ShaderUiGradientColorBytes;
 
 [cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_DROP_SHADOW_RECORD_BYTES")]
 extern const u32 s_ShaderUiDropShadowRecordBytes;
@@ -135,8 +138,14 @@ extern const u32 s_ShaderUiDropShadowRecordBytes;
 [cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_CLIP_MASK_RECORD_BYTES")]
 extern const u32 s_ShaderUiClipMaskRecordBytes;
 
-[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_BLUR_RECORD_BYTES")]
-extern const u32 s_ShaderUiBlurRecordBytes;
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_MAX_BLUR_TAP_PAIRS")]
+extern const u32 s_ShaderUiMaxBlurTapPairs;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_BLUR_HEADER_BYTES")]
+extern const u32 s_ShaderUiBlurHeaderBytes;
+
+[cpp_header("<impl/assets/graphics/ui/effect_records.h>"), cpp_name("NWB_UI_BLUR_PAIR_GROUP_BYTES")]
+extern const u32 s_ShaderUiBlurPairGroupBytes;
 
 [cpp_header("<impl/assets/graphics/ui/output_push_constants.h>"), cpp_name("NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE")]
 extern const u32 s_ShaderUiOutputPushConstantsByteSize;

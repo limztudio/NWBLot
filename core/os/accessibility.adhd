@@ -128,6 +128,7 @@ extern class IAccessibilityService{
     AccessibilityCapabilities capabilities()const;
     b8 isOwnerThread()const;
     [cpp_flags(unwind)] b8 publishTree(in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY);
+    [cpp_flags(unwind)] b8 updateFocus(in u64 focusedId);
     [cpp_flags(unwind)] b8 announce(in StringView text, in AccessibilityLiveMode politeness);
     b8 pollAction(mut AccessibilityActionEvent outEvent);
     u64 publishedVersion()const;

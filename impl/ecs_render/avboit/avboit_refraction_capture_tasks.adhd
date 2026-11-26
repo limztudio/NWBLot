@@ -443,8 +443,7 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     const Span<InstanceGpuData> instanceSpan = instances;
     const Span<u8> materialBytes = typedBytes;
     if(!AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureInstancesUpload, materialInstances, graph.copyUploadElements<InstanceGpuData>(instanceSpan))
-        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureMaterialUpload, materialTyped, graph.copyUploadBytes<u32>(materialBytes))
-        || !AppendInstanceTransformPatch(instanceTransformPatchContributor, instanceSpan, materialInstances, frameBindings, Name("render.avboit.refraction_capture.physics_patch"), true, graph, dependency))
+        || !AppendRefractionCaptureUpload(graph, dependency, s_RenderIdentityRenderRefractionCaptureMaterialUpload, materialTyped, graph.copyUploadBytes<u32>(materialBytes)))
         return MakeUnexpected(Failure());
 
     Vector<GpuTaskResourceUse> commonUses;
@@ -456,6 +455,8 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
 
     Vector<GpuTaskResourceUse> csgUses;
     if(hasCsg && !AppendRefractionCaptureCsg(graph, dependency, csgSystem, targets, csgFrameData, csgResources, frameBindings, csgUses))
+        return MakeUnexpected(Failure());
+    if(!AppendInstanceTransformPatch(instanceTransformPatchContributor, instanceSpan, materialInstances, frameBindings, Name("render.avboit.refraction_capture.physics_patch"), true, graph, dependency))
         return MakeUnexpected(Failure());
     uploadedStreams.markMaterialUploaded(streamToken);
     if(hasCsg){

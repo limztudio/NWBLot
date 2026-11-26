@@ -35,10 +35,11 @@ public:
         f32 scaleX,
         f32 scaleY
     )override final;
+    [[nodiscard]] virtual b8 updateFocus(u64 focusedId)override final;
     [[nodiscard]] virtual b8 announce(AStringView text, AccessibilityLiveMode::Enum politeness)override final;
     [[nodiscard]] virtual b8 pollAction(AccessibilityActionEvent& outEvent)noexcept override final;
     [[nodiscard]] virtual u64 publishedVersion()const noexcept override final{ return m_publishedVersion; }
-    [[nodiscard]] virtual usize publishedNodeCount()const noexcept override final{ return m_nodes.size(); }
+    [[nodiscard]] virtual usize publishedNodeCount()const noexcept override final{ return m_publishedNodeCount; }
     [[nodiscard]] virtual u64 publishedFocusedId()const noexcept override final{ return m_publishedFocusedId; }
     [[nodiscard]] virtual usize announcementCount()const noexcept override final{ return m_announcementCount; }
 
@@ -53,18 +54,20 @@ protected:
         f32 scaleX,
         f32 scaleY
     );
+    virtual void onFocusUpdated(u64 focusedId);
     virtual void onAnnouncement(AStringView text, AccessibilityLiveMode::Enum politeness);
 
 
 private:
-    Alloc::GlobalArena& m_arena;
-    Vector<AccessibilityNodeData, Alloc::GlobalArena> m_nodes;
-    AString<Alloc::GlobalArena> m_textStorage;
-    Vector<AccessibilityActionEvent, Alloc::GlobalArena> m_actions;
+    Array<AccessibilityActionEvent, s_AccessibilityMaxActions> m_actions{};
     Futex m_actionMutex;
+    Atomic<usize> m_pendingActionCount{ 0u };
+    usize m_actionHead = 0u;
+    usize m_actionCount = 0u;
     const ThreadId m_ownerThread;
     u64 m_publishedVersion = 0u;
     u64 m_publishedFocusedId = 0u;
+    usize m_publishedNodeCount = 0u;
     usize m_announcementCount = 0u;
     f32 m_scaleX = 1.0f;
     f32 m_scaleY = 1.0f;

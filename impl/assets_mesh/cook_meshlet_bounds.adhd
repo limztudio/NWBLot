@@ -12,12 +12,14 @@ VectorSingle MeshletFaceNormal(in VectorSingle p0, in VectorSingle p1, in Vector
     return Cross((p1 - p0).xyz, (p2 - p0).xyz);
 }
 
-MeshletBounds BuildMeshletBounds(
+MeshletBounds BuildMeshletBoundsWithAabb(
     in Span<f32x3u> meshPositions,
     in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
     in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
     in Span<u8> meshletPrimitiveIndices,
-    in MeshletDesc meshlet
+    in MeshletDesc meshlet,
+    mut VectorSingle outMinBounds,
+    mut VectorSingle outMaxBounds
 ){
     const u32 positionCount = MeshletPositionCount(meshlet);
     const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
@@ -33,6 +35,12 @@ MeshletBounds BuildMeshletBounds(
         minBounds = Min(minBounds, pos);
         maxBounds = Max(maxBounds, pos);
     }
+    if(positionCount == 0u){
+        minBounds = VectorSingle(0.0f, 0.0f, 0.0f, 0.0f);
+        maxBounds = minBounds;
+    }
+    outMinBounds = minBounds;
+    outMaxBounds = maxBounds;
 
     const VectorSingle center = (minBounds + maxBounds) * 0.5f;
     VectorSingle radiusSquaredLanes(0.0f, 0.0f, 0.0f, 0.0f);
@@ -83,6 +91,26 @@ MeshletBounds BuildMeshletBounds(
     bounds.sphere = f32x4u(center, inflatedRadius.x);
     bounds.conePacked = PackMeshletCone(coneAxis, coneCutoff);
     return bounds;
+}
+
+MeshletBounds BuildMeshletBounds(
+    in Span<f32x3u> meshPositions,
+    in Span<MeshletPositionStreamRef> meshletPositionStreamRefs,
+    in Span<MeshletLocalVertexRef> meshletLocalVertexRefs,
+    in Span<u8> meshletPrimitiveIndices,
+    in MeshletDesc meshlet
+){
+    VectorSingle minBounds(0.0f);
+    VectorSingle maxBounds(0.0f);
+    return BuildMeshletBoundsWithAabb(
+        meshPositions,
+        meshletPositionStreamRefs,
+        meshletLocalVertexRefs,
+        meshletPrimitiveIndices,
+        meshlet,
+        minBounds,
+        maxBounds
+    );
 }
 
 [cpp_unwind]

@@ -55,7 +55,12 @@ protected:
         f32 scaleX,
         f32 scaleY
     )override;
+    virtual void onFocusUpdated(u64 focusedId)override;
     virtual void onAnnouncement(AStringView text, AccessibilityLiveMode::Enum politeness)override;
+
+
+private:
+    void raiseFocusChangedEvent(u64 previousFocus, u64 focusedId)noexcept;
 
 
 private:
@@ -70,6 +75,7 @@ private:
     void* m_raiseStructureChangedEventProc = nullptr;
     void* m_raiseNotificationEventProc = nullptr;
     void* m_disconnectProviderProc = nullptr;
+    wchar* m_notificationActivityBstr = nullptr;
     u64 m_lastFocusId = 0u;
     usize m_lastNodeCount = 0u;
     b8 m_uiaAvailable = false;

@@ -38,13 +38,15 @@ public:
 public:
     void poll(InputDispatcher& input, f32 delta, b8 allowInput);
     void releaseAll(InputDispatcher& input);
+    void notifyDeviceChange()noexcept{ m_topologyDirty = true; }
 
 
 private:
     struct SlotState{
         Array<f32, static_cast<usize>(GamepadAxis::kCount)> axes{};
         u32 buttons = 0u;
-        f32 reconnectCooldown = 0.0f;
+        u32 lastPacketNumber = 0u;
+        b8 hasPacketNumber = false;
         b8 connected = false;
     };
 
@@ -57,7 +59,10 @@ private:
     Array<SlotState, s_MaxGamepadCount> m_slots{};
     void* m_xinputLibrary = nullptr;
     void* m_getStateProc = nullptr;
+    f32 m_fallbackScanCooldown = 2.0f;
+    u32 m_fallbackScanSlot = 0u;
     b8 m_loadAttempted = false;
+    b8 m_topologyDirty = true;
 };
 
 

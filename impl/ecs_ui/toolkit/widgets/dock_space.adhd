@@ -113,18 +113,44 @@ class DockSpaceState : NoCopy{
     public u64 m_lastUndockedPanelKey = 0u;
     public Rect m_lastBounds;
     public Vector<u64> m_knownPanelKeys;
+    public HashMap<u32, usize> m_nodeIndexById;
+    public HashSet<u64> m_knownPanelKeySet;
+    public HashMap<u64, u32> m_panelLeafByKey;
+    public Vector<u32> m_branchIdsScratch;
+    public Vector<DockSplitDirection> m_branchDirsScratch;
+    public Vector<u64> m_panelKeysScratch;
+    public Rect m_arrangedBounds;
+    public u64 m_arrangedRevision = 0u;
+    public f32 m_arrangedTabBarHeight = 0.0f;
+    public f32 m_arrangedSplitterThickness = 0.0f;
+    public f32 m_arrangedMinPaneExtent = 0.0f;
+    public b8 m_arrangedValid = false;
+
+    private void setNodeIndex(in u32 nodeId, in usize index){
+        const auto found = this.m_nodeIndexById.find(nodeId);
+        if(found != this.m_nodeIndexById.end())
+            found.value() = index;
+        else
+            this.m_nodeIndexById.try_emplace(nodeId, index);
+    }
+
+    private void setPanelLeaf(in u64 panelKey, in u32 leafId){
+        const auto found = this.m_panelLeafByKey.find(panelKey);
+        if(found != this.m_panelLeafByKey.end())
+            found.value() = leafId;
+        else
+            this.m_panelLeafByKey.try_emplace(panelKey, leafId);
+    }
 
     public b8 isKnownPanel(in u64 panelKey)const{
-        for(in u64 k : this.m_knownPanelKeys){
-            if(k == panelKey)
-                return true;
-        }
-        return false;
+        return this.m_knownPanelKeySet.find(panelKey) != this.m_knownPanelKeySet.end();
     }
 
     public void markKnownPanel(in u64 panelKey){
-        if(panelKey != 0u && !this.isKnownPanel(panelKey))
+        if(panelKey != 0u && this.m_knownPanelKeySet.find(panelKey) == this.m_knownPanelKeySet.end()){
+            this.m_knownPanelKeySet.insert(panelKey);
             this.m_knownPanelKeys.push_back(panelKey);
+        }
     }
 
     public u64 instanceGeneration()const{ return this.m_instanceGeneration; }
@@ -139,20 +165,26 @@ class DockSpaceState : NoCopy{
         if(this.m_rootNodeId != 0u && this.findNodeIndex(this.m_rootNodeId).has_value())
             return this.m_rootNodeId;
         this.m_nodes.clear();
+        this.m_nodeIndexById.clear();
+        this.m_panelLeafByKey.clear();
+        this.m_arrangedValid = false;
         this.m_nextNodeId = 1u;
         DockNode root;
         root.id = this.m_nextNodeId;
         ++this.m_nextNodeId;
         this.m_rootNodeId = root.id;
-        this.m_nodes.push_back(root);
+        AppendOwned<DockNode>(this.m_nodes, root);
+        this.setNodeIndex(this.m_rootNodeId, 0u);
         return this.m_rootNodeId;
     }
 
     public Optional<usize> findNodeIndex(in u32 nodeId)const{
         if(nodeId == 0u)
             return Optional<usize>();
-        for(usize idx = 0u; idx < this.m_nodes.size(); ++idx){
-            if(this.m_nodes[idx].id == nodeId)
+        const auto found = this.m_nodeIndexById.find(nodeId);
+        if(found != this.m_nodeIndexById.end()){
+            const usize idx = found.value();
+            if(idx < this.m_nodes.size() && this.m_nodes[idx].id == nodeId)
                 return Optional<usize>(idx);
         }
         return Optional<usize>();
@@ -161,14 +193,9 @@ class DockSpaceState : NoCopy{
     public u32 findPanelNodeId(in u64 panelKey)const{
         if(panelKey == 0u)
             return 0u;
-        for(in DockNode node : this.m_nodes){
-            if(!node.isLeaf())
-                continue;
-            for(in u64 key : node.panelKeys){
-                if(key == panelKey)
-                    return node.id;
-            }
-        }
+        const auto found = this.m_panelLeafByKey.find(panelKey);
+        if(found != this.m_panelLeafByKey.end())
+            return found.value();
         return 0u;
     }
 
@@ -177,9 +204,26 @@ class DockSpaceState : NoCopy{
         if(!idxOpt.has_value())
             return;
         const usize idx = idxOpt.value();
-        for(usize mv = idx + 1u; mv < this.m_nodes.size(); ++mv)
-            this.m_nodes[mv - 1u] = this.m_nodes[mv];
+        const usize lastIdx = this.m_nodes.size() - 1u;
+        if(idx != lastIdx){
+            mut DockNode dst = this.m_nodes[idx];
+            mut DockNode src = this.m_nodes[lastIdx];
+            dst.id = src.id;
+            dst.parentId = src.parentId;
+            dst.splitDirection = src.splitDirection;
+            dst.splitRatio = src.splitRatio;
+            dst.firstChildId = src.firstChildId;
+            dst.secondChildId = src.secondChildId;
+            TransferVector<u64>(dst.panelKeys, src.panelKeys);
+            dst.activePanelKey = src.activePanelKey;
+            dst.computedRect = src.computedRect;
+            dst.tabBarRect = src.tabBarRect;
+            dst.contentRect = src.contentRect;
+            dst.splitterRect = src.splitterRect;
+            this.setNodeIndex(dst.id, idx);
+        }
         this.m_nodes.pop_back();
+        this.m_nodeIndexById.erase(nodeId);
     }
 
     public b8 selectTab(in u32 nodeId, in u64 panelKey){
@@ -241,6 +285,7 @@ class DockSpaceState : NoCopy{
         }
         if(!removed)
             return false;
+        this.m_panelLeafByKey.erase(panelKey);
         if(leaf.activePanelKey == panelKey){
             if(leaf.panelKeys.empty())
                 leaf.activePanelKey = 0u;
@@ -308,6 +353,7 @@ class DockSpaceState : NoCopy{
         if(!foundLeaf)
             return false;
         this.m_nodes[leafIdx].panelKeys.push_back(panelKey);
+        this.setPanelLeaf(panelKey, this.m_nodes[leafIdx].id);
         if(this.m_nodes[leafIdx].activePanelKey == 0u)
             this.m_nodes[leafIdx].activePanelKey = panelKey;
         AdvanceNonWrappingRevision(this.m_revision);
@@ -339,6 +385,7 @@ class DockSpaceState : NoCopy{
         const usize targetIdx = targetIdxOpt.value();
         if(zone == DockDropZone::Center || this.m_nodes[targetIdx].panelKeys.empty()){
             this.m_nodes[targetIdx].panelKeys.push_back(panelKey);
+            this.setPanelLeaf(panelKey, resolvedTarget);
             this.m_nodes[targetIdx].activePanelKey = panelKey;
             AdvanceNonWrappingRevision(this.m_revision);
             return true;
@@ -368,58 +415,69 @@ class DockSpaceState : NoCopy{
         const u32 child2Id = this.m_nextNodeId;
         ++this.m_nextNodeId;
 
+        u32 newChildId = child2Id;
+        u32 existingChildId = child1Id;
+        if(newFirst){
+            newChildId = child1Id;
+            existingChildId = child2Id;
+        }
+
         DockNode existingLeafCopy;
-        existingLeafCopy.panelKeys = this.m_nodes[targetIdx].panelKeys;
+        TransferVector<u64>(existingLeafCopy.panelKeys, this.m_nodes[targetIdx].panelKeys);
         existingLeafCopy.activePanelKey = this.m_nodes[targetIdx].activePanelKey;
+        existingLeafCopy.id = existingChildId;
+        existingLeafCopy.parentId = resolvedTarget;
 
         DockNode newLeaf;
         newLeaf.panelKeys.push_back(panelKey);
         newLeaf.activePanelKey = panelKey;
-
-        DockNode firstChild;
-        DockNode secondChild;
-        if(newFirst){
-            firstChild = newLeaf;
-            secondChild = existingLeafCopy;
-        }
-        else{
-            firstChild = existingLeafCopy;
-            secondChild = newLeaf;
-        }
-        firstChild.id = child1Id;
-        firstChild.parentId = resolvedTarget;
-        secondChild.id = child2Id;
-        secondChild.parentId = resolvedTarget;
+        newLeaf.id = newChildId;
+        newLeaf.parentId = resolvedTarget;
 
         this.m_nodes[targetIdx].splitDirection = splitDir;
         this.m_nodes[targetIdx].splitRatio = UiSimdClamp(splitRatio, 0.1f, 0.9f);
         this.m_nodes[targetIdx].firstChildId = child1Id;
         this.m_nodes[targetIdx].secondChildId = child2Id;
-        this.m_nodes[targetIdx].panelKeys.clear();
         this.m_nodes[targetIdx].activePanelKey = 0u;
-        this.m_nodes.push_back(firstChild);
-        this.m_nodes.push_back(secondChild);
+
+        for(in u64 movedKey : existingLeafCopy.panelKeys)
+            this.setPanelLeaf(movedKey, existingChildId);
+        this.setPanelLeaf(panelKey, newChildId);
+
+        const usize baseIdx = this.m_nodes.size();
+        if(newFirst){
+            AppendOwned<DockNode>(this.m_nodes, newLeaf);
+            AppendOwned<DockNode>(this.m_nodes, existingLeafCopy);
+            this.setNodeIndex(newChildId, baseIdx);
+            this.setNodeIndex(existingChildId, baseIdx + 1u);
+        }
+        else{
+            AppendOwned<DockNode>(this.m_nodes, existingLeafCopy);
+            AppendOwned<DockNode>(this.m_nodes, newLeaf);
+            this.setNodeIndex(existingChildId, baseIdx);
+            this.setNodeIndex(newChildId, baseIdx + 1u);
+        }
         AdvanceNonWrappingRevision(this.m_revision);
         return true;
     }
 
     public b8 isPanelVisible(in u64 panelKey)const{
-        if(panelKey == 0u)
+        const u32 leafId = this.findPanelNodeId(panelKey);
+        const Optional<usize> idxOpt = this.findNodeIndex(leafId);
+        if(!idxOpt.has_value())
             return false;
-        for(in DockNode node : this.m_nodes){
-            if(node.isLeaf() && node.activePanelKey == panelKey && node.contentRect.width > 0.0f && node.contentRect.height > 0.0f)
-                return true;
-        }
-        return false;
+        in DockNode node = this.m_nodes[idxOpt.value()];
+        return node.isLeaf() && node.activePanelKey == panelKey && node.contentRect.width > 0.0f && node.contentRect.height > 0.0f;
     }
 
     public Rect panelContentRect(in u64 panelKey)const{
-        if(panelKey == 0u)
+        const u32 leafId = this.findPanelNodeId(panelKey);
+        const Optional<usize> idxOpt = this.findNodeIndex(leafId);
+        if(!idxOpt.has_value())
             return Rect();
-        for(in DockNode node : this.m_nodes){
-            if(node.isLeaf() && node.activePanelKey == panelKey)
-                return node.contentRect;
-        }
+        in DockNode node = this.m_nodes[idxOpt.value()];
+        if(node.isLeaf() && node.activePanelKey == panelKey)
+            return node.contentRect;
         return Rect();
     }
 
@@ -477,40 +535,74 @@ class DockSpaceState : NoCopy{
     public void arrange(in Rect bounds, in DockSpaceStyle style){
         this.ensureRoot();
         this.m_lastBounds = bounds;
+        if(
+            this.m_arrangedValid
+            && this.m_arrangedRevision == this.m_revision
+            && this.m_arrangedBounds.x == bounds.x
+            && this.m_arrangedBounds.y == bounds.y
+            && this.m_arrangedBounds.width == bounds.width
+            && this.m_arrangedBounds.height == bounds.height
+            && this.m_arrangedTabBarHeight == style.tabBarHeight
+            && this.m_arrangedSplitterThickness == style.splitterThickness
+            && this.m_arrangedMinPaneExtent == style.minPaneExtent
+        )
+            return;
         this.arrangeSubtree(this.m_rootNodeId, bounds, style);
+        this.m_arrangedBounds = bounds;
+        this.m_arrangedRevision = this.m_revision;
+        this.m_arrangedTabBarHeight = style.tabBarHeight;
+        this.m_arrangedSplitterThickness = style.splitterThickness;
+        this.m_arrangedMinPaneExtent = style.minPaneExtent;
+        this.m_arrangedValid = true;
     }
 
     public b8 hitTestDropZone(in Point pt, in f32 edgeFraction, mut u32 outNodeId, mut DockDropZone outZone)const{
         outNodeId = 0u;
         outZone = DockDropZone::None;
-        for(in DockNode node : this.m_nodes){
-            if(!node.isLeaf() || !(node.computedRect.width > 0.0f) || !(node.computedRect.height > 0.0f))
+        u32 curId = this.m_rootNodeId;
+        while(curId != 0u){
+            const Optional<usize> idxOpt = this.findNodeIndex(curId);
+            if(!idxOpt.has_value())
+                return false;
+            in DockNode node = this.m_nodes[idxOpt.value()];
+            if(!(node.computedRect.width > 0.0f) || !(node.computedRect.height > 0.0f) || !UiRectContainsPoint(node.computedRect, pt))
+                return false;
+            if(node.isLeaf()){
+                outNodeId = node.id;
+                const f32 nx = (pt.x - node.computedRect.x) / node.computedRect.width;
+                const f32 ny = (pt.y - node.computedRect.y) / node.computedRect.height;
+                f32 bestDist = edgeFraction;
+                DockDropZone bestZone = DockDropZone::Center;
+                if(nx < bestDist){
+                    bestDist = nx;
+                    bestZone = DockDropZone::Left;
+                }
+                if(1.0f - nx < bestDist){
+                    bestDist = 1.0f - nx;
+                    bestZone = DockDropZone::Right;
+                }
+                if(ny < bestDist){
+                    bestDist = ny;
+                    bestZone = DockDropZone::Top;
+                }
+                if(1.0f - ny < bestDist){
+                    bestDist = 1.0f - ny;
+                    bestZone = DockDropZone::Bottom;
+                }
+                outZone = bestZone;
+                return true;
+            }
+            const Optional<usize> firstOpt = this.findNodeIndex(node.firstChildId);
+            if(firstOpt.has_value() && UiRectContainsPoint(this.m_nodes[firstOpt.value()].computedRect, pt)){
+                curId = node.firstChildId;
                 continue;
-            if(!UiRectContainsPoint(node.computedRect, pt))
+            }
+            const Optional<usize> secondOpt = this.findNodeIndex(node.secondChildId);
+            if(secondOpt.has_value() && UiRectContainsPoint(this.m_nodes[secondOpt.value()].computedRect, pt)){
+                curId = node.secondChildId;
                 continue;
-            outNodeId = node.id;
-            const f32 nx = (pt.x - node.computedRect.x) / node.computedRect.width;
-            const f32 ny = (pt.y - node.computedRect.y) / node.computedRect.height;
-            f32 bestDist = edgeFraction;
-            DockDropZone bestZone = DockDropZone::Center;
-            if(nx < bestDist){
-                bestDist = nx;
-                bestZone = DockDropZone::Left;
             }
-            if(1.0f - nx < bestDist){
-                bestDist = 1.0f - nx;
-                bestZone = DockDropZone::Right;
-            }
-            if(ny < bestDist){
-                bestDist = ny;
-                bestZone = DockDropZone::Top;
-            }
-            if(1.0f - ny < bestDist){
-                bestDist = 1.0f - ny;
-                bestZone = DockDropZone::Bottom;
-            }
-            outZone = bestZone;
-            return true;
+            return false;
         }
         return false;
     }

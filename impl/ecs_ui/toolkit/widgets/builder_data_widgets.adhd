@@ -77,6 +77,43 @@ f32 ResolveAlignedCellTextInsetX(in TextAlignment alignment, in f32 colWidth, in
     return cellPadding.left;
 }
 
+void ResolveVisibleTableColumnRange(
+    in Span<f32> colOffsets,
+    in f32 startX,
+    in f32 viewLeft,
+    in f32 viewRight,
+    mut usize outBeginCol,
+    mut usize outEndCol
+){
+    outBeginCol = 0u;
+    outEndCol = 0u;
+    if(colOffsets.size() < 2u || viewRight <= viewLeft)
+        return;
+    const usize colCount = colOffsets.size() - 1u;
+    const f32 relLeft = viewLeft - startX;
+    const f32 relRight = viewRight - startX;
+    usize low = 0u;
+    usize high = colCount;
+    while(low < high){
+        const usize mid = low + (high - low) / 2u;
+        if(colOffsets[mid + 1u] <= relLeft)
+            low = mid + 1u;
+        else
+            high = mid;
+    }
+    outBeginCol = low;
+    usize endLow = low;
+    usize endHigh = colCount;
+    while(endLow < endHigh){
+        const usize mid = endLow + (endHigh - endLow) / 2u;
+        if(colOffsets[mid] < relRight)
+            endLow = mid + 1u;
+        else
+            endHigh = mid;
+    }
+    outEndCol = endLow;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -545,7 +582,7 @@ b8 Builder::paintTreeView(in BuilderItem item, in LayoutBox box){
         req.scriptTag = frame.measureKey.scriptTag;
         req.direction = frame.measureKey.direction;
         const auto measured = this.m_text.layoutAndMeasureShared(req, this.m_paint.displayMetrics());
-        if(!measured.has_value() || !this.treeMatches(frame))
+        if(!measured.has_value())
             return false;
         const f32 textX = indentX + frame.style.toggleExtent + frame.style.toggleGap;
         const Rect textContent = InsetUiRectBounds(rowRect, rowPad);
@@ -653,7 +690,7 @@ TableResult Builder::dataTable(
         this.m_context.fail();
         return result;
     }
-    if(!ReconcileTableState(state, columns, source)){
+    if(!ReconcileTableStateValidated(state, columns, source)){
         this.m_context.fail();
         return result;
     }
@@ -888,7 +925,7 @@ TableResult Builder::dataTable(
         frame.columns.push_back(storedCol);
         String titleCopy;
         titleCopy.assign(col.title);
-        frame.columnTitles.push_back(titleCopy);
+        AppendOwned<String>(frame.columnTitles, titleCopy);
     }
     AppendOwned<BuilderTableFrame>(this.m_scope.value().m_dataTables, frame);
     AppendOwned<BuilderItem>(this.m_scope.value().m_items, item);
@@ -1032,17 +1069,35 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         Rect(headerOuter.x, headerOuter.y, placement.viewport.width, headerOuter.height),
         clip
     );
+    const usize colCount = frame.columns.size();
+    this.m_tableColOffsetsScratch.clear();
+    this.m_tableColOffsetsScratch.reserve(colCount + 1u);
+    this.m_tableColOffsetsScratch.push_back(0.0f);
+    f32 accumColX = 0.0f;
+    for(usize colIdx = 0u; colIdx < colCount; ++colIdx){
+        accumColX += frame.columns[colIdx].width;
+        this.m_tableColOffsetsScratch.push_back(accumColX);
+    }
+    const Span<f32> colOffsets(this.m_tableColOffsetsScratch);
+    const f32 scrollXOffset = cast<f32>(scrollbars.horizontal.offset);
+    const f32 headerStartX = headerOuter.x - scrollXOffset;
+    usize headerBeginCol = 0u;
+    usize headerEndCol = 0u;
+    if(frame.options.showHeader && viewportHeaderClip.width > 0.0f && viewportHeaderClip.height > 0.0f){
+        ResolveVisibleTableColumnRange(
+            colOffsets,
+            headerStartX,
+            viewportHeaderClip.x,
+            viewportHeaderClip.x + viewportHeaderClip.width,
+            headerBeginCol,
+            headerEndCol
+        );
+    }
     if(frame.options.showHeader && viewportHeaderClip.width > 0.0f && viewportHeaderClip.height > 0.0f){
         this.m_paint.pushClip(viewportHeaderClip);
-        f32 colX = headerOuter.x - cast<f32>(scrollbars.horizontal.offset);
-        const f32 viewLeft = viewportHeaderClip.x;
-        const f32 viewRight = viewportHeaderClip.x + viewportHeaderClip.width;
-        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+        for(usize colIdx = headerBeginCol; colIdx < headerEndCol; ++colIdx){
             in TableColumn col = frame.columns[colIdx];
-            const Rect cellRect(colX, headerOuter.y, col.width, headerOuter.height);
-            colX += col.width;
-            if(cellRect.x + cellRect.width <= viewLeft || cellRect.x >= viewRight)
-                continue;
+            const Rect cellRect(headerStartX + colOffsets[colIdx], headerOuter.y, col.width, headerOuter.height);
             const auto headerId = TryMakeWidgetPartId(headerRoot.value(), col.key);
             if(!headerId.has_value())
                 return false;
@@ -1171,18 +1226,22 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
             this.m_paint.fillRect(rowRect, frame.style.alternatingRowColor);
         if(rEnabled && rowFocused)
             this.m_paint.tryDrawRegion(rowStyle.focus, rowRect);
-        f32 cellX = rowRect.x - cast<f32>(scrollbars.horizontal.offset);
-        const f32 viewLeft = rowClip.x;
-        const f32 viewRight = rowClip.x + rowClip.width;
-        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+        const f32 rowStartX = rowRect.x - scrollXOffset;
+        usize bodyBeginCol = 0u;
+        usize bodyEndCol = 0u;
+        ResolveVisibleTableColumnRange(colOffsets, rowStartX, rowClip.x, rowClip.x + rowClip.width, bodyBeginCol, bodyEndCol);
+        StringView rowName = StringView();
+        b8 hasRowName = false;
+        for(usize colIdx = bodyBeginCol; colIdx < bodyEndCol; ++colIdx){
             in TableColumn col = frame.columns[colIdx];
-            const Rect cellRect(cellX, rowRect.y, col.width, rowRect.height);
-            cellX += col.width;
-            if(cellRect.x + cellRect.width <= viewLeft || cellRect.x >= viewRight)
-                continue;
+            const Rect cellRect(rowStartX + colOffsets[colIdx], rowRect.y, col.width, rowRect.height);
             const StringView cellStr = source.cellText(srcIdx, col.key);
             if(!this.tableMatches(frame))
                 return false;
+            if(colIdx == 0u){
+                rowName = cellStr;
+                hasRowName = true;
+            }
             if(!cellStr.empty()){
                 ShapeRequest cellReq;
                 cellReq.text = cellStr;
@@ -1191,7 +1250,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
                 cellReq.scriptTag = frame.measureKey.scriptTag;
                 cellReq.direction = frame.measureKey.direction;
                 const auto cellMeasured = this.m_text.layoutAndMeasureShared(cellReq, this.m_paint.displayMetrics());
-                if(!cellMeasured.has_value() || !this.tableMatches(frame))
+                if(!cellMeasured.has_value())
                     return false;
                 const f32 insetX = ResolveAlignedCellTextInsetX(col.alignment, col.width, frame.style.cellPadding, cellMeasured.value().bounds);
                 const Point origin = ResolveCenteredTextOrigin(cellRect, insetX, cellMeasured.value().bounds);
@@ -1226,8 +1285,7 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         u32 rowState = ResolveAccessibleVisibilityStateBits(rEnabled, rowClip) | s_AccessibilityStateFocusable;
         if(rowSelected)
             rowState |= s_AccessibilityStateSelected;
-        StringView rowName = StringView();
-        if(!frame.columns.empty())
+        if(!hasRowName && !frame.columns.empty())
             rowName = source.cellText(srcIdx, frame.columns[0u].key);
         this.emitAccessiblePartNode(
             rowPartId.value(),
@@ -1243,15 +1301,9 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
         );
     }
     if(frame.options.showHeader && viewportHeaderClip.width > 0.0f && viewportHeaderClip.height > 0.0f){
-        const f32 viewLeft = viewportHeaderClip.x;
-        const f32 viewRight = viewportHeaderClip.x + viewportHeaderClip.width;
-        f32 colX = headerOuter.x - cast<f32>(scrollbars.horizontal.offset);
-        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+        for(usize colIdx = headerBeginCol; colIdx < headerEndCol; ++colIdx){
             in TableColumn col = frame.columns[colIdx];
-            const Rect cellRect(colX, headerOuter.y, col.width, headerOuter.height);
-            colX += col.width;
-            if(cellRect.x + cellRect.width <= viewLeft || cellRect.x >= viewRight)
-                continue;
+            const Rect cellRect(headerStartX + colOffsets[colIdx], headerOuter.y, col.width, headerOuter.height);
             const auto headerId = TryMakeWidgetPartId(headerRoot.value(), col.key);
             if(!headerId.has_value())
                 return false;
@@ -1279,14 +1331,24 @@ b8 Builder::paintDataTable(in BuilderItem item, in LayoutBox box){
                 );
             }
         }
-        colX = headerOuter.x - cast<f32>(scrollbars.horizontal.offset);
         const f32 resizeW = frame.style.resizeHandleWidth;
         const f32 resizeHalfW = resizeW * s_RectCenterFraction;
-        for(usize colIdx = 0u; colIdx < frame.columns.size(); ++colIdx){
+        const f32 resizeMargin = UiSimdMax(resizeHalfW, 0.0f);
+        usize resizeBeginCol = 0u;
+        usize resizeEndCol = 0u;
+        ResolveVisibleTableColumnRange(
+            colOffsets,
+            headerStartX,
+            viewportHeaderClip.x - resizeMargin,
+            (viewportHeaderClip.x + viewportHeaderClip.width) + resizeMargin,
+            resizeBeginCol,
+            resizeEndCol
+        );
+        for(usize colIdx = resizeBeginCol; colIdx < resizeEndCol; ++colIdx){
             in TableColumn col = frame.columns[colIdx];
-            const Rect cellRect(colX, headerOuter.y, col.width, headerOuter.height);
-            const f32 rightEdge = colX + col.width;
-            colX = rightEdge;
+            const f32 colStartX = headerStartX + colOffsets[colIdx];
+            const Rect cellRect(colStartX, headerOuter.y, col.width, headerOuter.height);
+            const f32 rightEdge = colStartX + col.width;
             if(!col.resizable)
                 continue;
             const Rect resizeRect = IntersectUiRectsBounds(Rect(rightEdge - resizeHalfW, headerOuter.y, resizeW, headerOuter.height), viewportHeaderClip);

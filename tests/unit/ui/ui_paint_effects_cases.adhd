@@ -56,7 +56,8 @@ void VerifyPaintEffects_PathTriangulationConcaveAndHoles(mut PaintEffectsTests s
     Vector<Point> triVerts;
     Vector<u32> triIndices;
     Vector<PaintPathSubpath> triFringe;
-    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::NonZero, triVerts, triIndices, triFringe);
+    PaintTriangulationScratch triScratch;
+    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::NonZero, triScratch, triVerts, triIndices, triFringe);
     EXPECT_EQ(triFringe.size(), 1u);
     EXPECT_EQ(triIndices.size(), 12u);
     EXPECT_NEAR(ComputeTriangulatedArea(Span<Point>(triVerts), Span<u32>(triIndices)), 5100.0f, 0.5f);
@@ -70,7 +71,7 @@ void VerifyPaintEffects_PathTriangulationConcaveAndHoles(mut PaintEffectsTests s
     nonZeroHolePath.close();
 
     FlattenPaintPath(nonZeroHolePath, false, PaintTransformIdentity(), 1.0f, flatPoints, subpaths);
-    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::NonZero, triVerts, triIndices, triFringe);
+    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::NonZero, triScratch, triVerts, triIndices, triFringe);
     EXPECT_EQ(triFringe.size(), 2u);
     EXPECT_NEAR(ComputeTriangulatedArea(Span<Point>(triVerts), Span<u32>(triIndices)), 8400.0f, 0.5f);
     for(usize i = 0u; i + 2u < triIndices.size(); i += 3u){
@@ -87,7 +88,7 @@ void VerifyPaintEffects_PathTriangulationConcaveAndHoles(mut PaintEffectsTests s
     evenOddHolePath.addRect(Rect(0.0f, 0.0f, 100.0f, 100.0f));
     evenOddHolePath.addRect(Rect(30.0f, 30.0f, 40.0f, 40.0f));
     FlattenPaintPath(evenOddHolePath, false, PaintTransformIdentity(), 1.0f, flatPoints, subpaths);
-    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::EvenOdd, triVerts, triIndices, triFringe);
+    TriangulatePaintPolygons(Span<Point>(flatPoints), Span<PaintPathSubpath>(subpaths), PaintFillRule::EvenOdd, triScratch, triVerts, triIndices, triFringe);
     EXPECT_EQ(triFringe.size(), 2u);
     EXPECT_NEAR(ComputeTriangulatedArea(Span<Point>(triVerts), Span<u32>(triIndices)), 8400.0f, 0.5f);
 
@@ -159,7 +160,7 @@ void VerifyPaintEffects_GradientsAndDropShadowsEncoding(mut PaintEffectsTests se
     insetShadow.inset = true;
     ASSERT_TRUE(self.m_builder.drawDropShadow(Rect(120.0f, 160.0f, 80.0f, 50.0f), 8.0f, insetShadow));
 
-    const DrawSnapshot snapshot = self.m_builder.freeze();
+    DrawSnapshot snapshot = self.m_builder.freeze();
     ASSERT_GE(snapshot.commands().size(), 6u);
     EXPECT_TRUE(ValidateGpuSnapshotImages(snapshot));
 
@@ -171,10 +172,12 @@ void VerifyPaintEffects_GradientsAndDropShadowsEncoding(mut PaintEffectsTests se
     EXPECT_EQ(words[baseWord + 0u], cast<u32>(PaintGradientKind::Linear));
     EXPECT_EQ(words[baseWord + 1u], cast<u32>(PaintGradientSpread::Repeat));
     EXPECT_EQ(words[baseWord + 2u], 3u);
-    const usize stop1Word = baseWord + cast<usize>(s_ShaderUiGradientHeaderBytes >> 2u) + cast<usize>(s_ShaderUiGradientStopBytes >> 2u);
-    EXPECT_NEAR(bit_cast<f32>(words[stop1Word + 0u]), 0.4f, 1.0e-5f);
-    EXPECT_NEAR(bit_cast<f32>(words[stop1Word + 3u]), 0.5f, 1.0e-5f);
-    EXPECT_NEAR(bit_cast<f32>(words[stop1Word + 4u]), 0.5f, 1.0e-5f);
+    const usize offsetsWord = baseWord + cast<usize>(s_ShaderUiGradientHeaderBytes >> 2u);
+    const usize offsetGroupCount = cast<usize>((3u + 3u) >> 2u);
+    const usize stop1ColorWord = offsetsWord + offsetGroupCount * cast<usize>(s_ShaderUiGradientOffsetGroupBytes >> 2u) + cast<usize>(s_ShaderUiGradientColorBytes >> 2u);
+    EXPECT_NEAR(bit_cast<f32>(words[offsetsWord + 1u]), 0.5f, 1.0e-5f);
+    EXPECT_NEAR(bit_cast<f32>(words[stop1ColorWord + 0u]), 0.4f, 1.0e-5f);
+    EXPECT_NEAR(bit_cast<f32>(words[stop1ColorWord + 3u]), 0.5f, 1.0e-5f);
 
     in DrawCommand outerCmd = snapshot.commands()[4u];
     in DrawCommand insetCmd = snapshot.commands()[5u];
@@ -182,6 +185,18 @@ void VerifyPaintEffects_GradientsAndDropShadowsEncoding(mut PaintEffectsTests se
     EXPECT_EQ(insetCmd.material, PaintMaterial::DropShadow);
     EXPECT_EQ(outerCmd.clipMaskOffset, u32.max);
     EXPECT_NE(insetCmd.clipMaskOffset, u32.max);
+    const usize outerShadowWord = cast<usize>(outerCmd.effectOffset >> 2u);
+    EXPECT_NEAR(bit_cast<f32>(words[outerShadowWord + 7u]), 1.0f / (6.0f * 1.41421356237f), 1.0e-5f);
+
+    self.m_builder.recycle(snapshot);
+    self.m_builder.begin(DisplayMetrics(400.0f, 300.0f, 1.0f, 1.0f), 9u, 3u, MakeUiFixtureAssetRef<UiSkin>(s_PaintTextSkinPath), self.m_skin);
+    self.m_builder.reserve(8u);
+    ASSERT_TRUE(self.m_builder.fillRectGradient(Rect(1000.0f, 1000.0f, 40.0f, 40.0f), linear));
+    ASSERT_TRUE(self.m_builder.drawDropShadow(Rect(1000.0f, 1000.0f, 40.0f, 40.0f), 4.0f, outerShadow));
+    ASSERT_TRUE(self.m_builder.drawDropShadow(Rect(1000.0f, 1000.0f, 40.0f, 40.0f), 4.0f, insetShadow));
+    const DrawSnapshot culledSnapshot = self.m_builder.freeze();
+    EXPECT_TRUE(culledSnapshot.commands().empty());
+    EXPECT_TRUE(culledSnapshot.effectWords().empty());
 }
 
 void VerifyPaintEffects_AnalyticClipsBlendModesAndOpacityStack(mut PaintEffectsTests self){
@@ -269,6 +284,20 @@ void VerifyPaintEffects_IsolatedEffectLayerAndBlur(mut PaintEffectsTests self){
     EXPECT_NEAR(layer.blurRadius, 6.0f, 1.0e-5f);
     EXPECT_NE(layer.blurHorizontalOffset, u32.max);
     EXPECT_NE(layer.blurVerticalOffset, u32.max);
+
+    const usize blurHWord = cast<usize>(layer.blurHorizontalOffset >> 2u);
+    in Vector<u32> blurWords = snapshot.effectWords();
+    EXPECT_NEAR(bit_cast<f32>(blurWords[blurHWord + 0u]), 1.0f / 400.0f, 1.0e-6f);
+    EXPECT_NEAR(bit_cast<f32>(blurWords[blurHWord + 1u]), 0.0f, 1.0e-6f);
+    const u32 pairCount = blurWords[blurHWord + 3u];
+    ASSERT_GE(pairCount, 1u);
+    ASSERT_LE(pairCount, s_ShaderUiMaxBlurTapPairs);
+    f32 blurWeightSum = bit_cast<f32>(blurWords[blurHWord + 2u]);
+    for(u32 p = 0u; p < pairCount; ++p){
+        const usize gw = blurHWord + cast<usize>(s_ShaderUiBlurHeaderBytes >> 2u) + cast<usize>(p >> 1u) * cast<usize>(s_ShaderUiBlurPairGroupBytes >> 2u);
+        blurWeightSum += 2.0f * bit_cast<f32>(blurWords[gw + cast<usize>((p & 1u) * 2u + 1u)]);
+    }
+    EXPECT_NEAR(blurWeightSum, 1.0f, 1.0e-5f);
 
     in DrawCommand compositeCmd = snapshot.commands()[0u];
     EXPECT_EQ(compositeCmd.material, PaintMaterial::EffectLayerComposite);

@@ -131,10 +131,10 @@ class CompoundHullHeaderBinary{
 
 [serialize]
 class CollisionMeshTriangleBinary{
-    public f32x4 v0Zero(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 v1Zero(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 v2Zero(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 normalZero(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x3u v0(0.0f, 0.0f, 0.0f);
+    public f32x3u v1(0.0f, 0.0f, 0.0f);
+    public f32x3u v2(0.0f, 0.0f, 0.0f);
+    public f32x3u normal(0.0f, 1.0f, 0.0f);
 }
 
 [serialize]
@@ -687,7 +687,16 @@ class PhysicsAssetBinaryCodec{
         )
             return false;
 
-        static_assert(size_of<MeshBvhNode>() == size_of<CollisionMeshBvhNodeBinary>() && offset_of<MeshBvhNode>(aabbMinLeft) == offset_of<CollisionMeshBvhNodeBinary>(aabbMinLeft) && offset_of<MeshBvhNode>(aabbMaxRight) == offset_of<CollisionMeshBvhNodeBinary>(aabbMaxRight));
+        static_assert(
+            size_of<CollisionMeshTriangleBinary>() == size_of<MeshTriangle>()
+            && offset_of<CollisionMeshTriangleBinary>(v0) == offset_of<MeshTriangle>(v0)
+            && offset_of<CollisionMeshTriangleBinary>(v1) == offset_of<MeshTriangle>(v1)
+            && offset_of<CollisionMeshTriangleBinary>(v2) == offset_of<MeshTriangle>(v2)
+            && offset_of<CollisionMeshTriangleBinary>(normal) == offset_of<MeshTriangle>(normal)
+            && size_of<MeshBvhNode>() == size_of<CollisionMeshBvhNodeBinary>()
+            && offset_of<MeshBvhNode>(aabbMinLeft) == offset_of<CollisionMeshBvhNodeBinary>(aabbMinLeft)
+            && offset_of<MeshBvhNode>(aabbMaxRight) == offset_of<CollisionMeshBvhNodeBinary>(aabbMaxRight)
+        );
         static_assert(size_of<CollisionMeshU16Binary>() == size_of<u16>() && size_of<CollisionMeshU32Binary>() == size_of<u32>());
 
         const usize totalBytes =
@@ -712,15 +721,8 @@ class PhysicsAssetBinaryCodec{
         hdr.localAabbMaxMeta = mesh.localAabbMaxMeta;
         AppendPOD(outBinary, hdr);
 
-        for(usize i = 0u; i < mesh.triangles.size(); ++i){
-            in MeshTriangle tri = mesh.triangles[i];
-            CollisionMeshTriangleBinary tb;
-            tb.v0Zero = f32x4(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
-            tb.v1Zero = f32x4(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
-            tb.v2Zero = f32x4(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
-            tb.normalZero = f32x4(tri.normal.x, tri.normal.y, tri.normal.z, 0.0f);
-            AppendPOD(outBinary, tb);
-        }
+        if(!AppendBinaryVectorPayload(outBinary, mesh.triangles).has_value())
+            return false;
         if(!AppendBinaryVectorPayload(outBinary, mesh.nodes).has_value())
             return false;
         for(usize i = 0u; i < mesh.materials.size(); ++i)
@@ -763,20 +765,8 @@ class PhysicsAssetBinaryCodec{
         mesh.localAabbMinRadius = hdr.localAabbMinRadius;
         mesh.localAabbMaxMeta = hdr.localAabbMaxMeta;
 
-        mesh.triangles.resize(hdr.triangleCount);
-        for(u32 i = 0u; i < hdr.triangleCount; ++i){
-            const Expected<CollisionMeshTriangleBinary> tbRes = ReadPOD<CollisionMeshTriangleBinary>(binary, cursor);
-            if(!tbRes.has_value())
-                return MakeUnexpected(Failure());
-            in CollisionMeshTriangleBinary tb = tbRes.value();
-            if(tb.v0Zero.w != 0.0f || tb.v1Zero.w != 0.0f || tb.v2Zero.w != 0.0f || tb.normalZero.w != 0.0f)
-                return MakeUnexpected(Failure());
-            mut MeshTriangle tri = mesh.triangles[i];
-            tri.v0 = f32x3u(tb.v0Zero.x, tb.v0Zero.y, tb.v0Zero.z);
-            tri.v1 = f32x3u(tb.v1Zero.x, tb.v1Zero.y, tb.v1Zero.z);
-            tri.v2 = f32x3u(tb.v2Zero.x, tb.v2Zero.y, tb.v2Zero.z);
-            tri.normal = f32x3u(tb.normalZero.x, tb.normalZero.y, tb.normalZero.z);
-        }
+        if(!ReadBinaryVectorPayload(binary, hdr.triangleCount, cursor, mesh.triangles).has_value())
+            return MakeUnexpected(Failure());
 
         static_assert(size_of<MeshBvhNode>() == size_of<CollisionMeshBvhNodeBinary>() && offset_of<MeshBvhNode>(aabbMinLeft) == offset_of<CollisionMeshBvhNodeBinary>(aabbMinLeft) && offset_of<MeshBvhNode>(aabbMaxRight) == offset_of<CollisionMeshBvhNodeBinary>(aabbMaxRight));
         if(!ReadBinaryVectorPayload(binary, hdr.nodeCount, cursor, mesh.nodes).has_value())
@@ -836,16 +826,10 @@ class PhysicsAssetBinaryCodec{
             return false;
         if(!IsValidPositionVec3(hf.origin()))
             return false;
-        for(usize i = 0u; i < hf.heights.size(); ++i){
-            const f32 h = hf.heights[i];
-            if(!IsFinite(VectorSingle(h))){
-                if(h == h)
-                    return false;
-            }
-            else if(Abs(VectorSingle(hf.originMaxY.y + h * hf.scaleMinMaxY.y)).x > s_HugeCoordinate){
-                return false;
-            }
-        }
+        f32 minY = 0.0f;
+        f32 maxY = 0.0f;
+        if(!ValidateAndComputeHeightfieldRange(Span<f32>(hf.heights.data(), hf.heights.size()), hf.originMaxY.y, hf.scaleMinMaxY.y, minY, maxY))
+            return false;
         for(usize i = 0u; i < hf.materials.size(); ++i){
             if(!this.validSurfaceMaterial(hf.materials[i]))
                 return false;
@@ -985,44 +969,18 @@ class PhysicsAssetBinaryCodec{
         if(!ReadBinaryVectorPayload(binary, hdr.cellHoleByteCount, cursor, hf.cellHoles).has_value())
             return MakeUnexpected(Failure());
 
-        f32 loY = s_MaxF32;
-        f32 hiY = -s_MaxF32;
-        b8 anyFinite = false;
-        const b8 validOrigin = IsValidPositionVec3(hf.origin());
-        for(usize i = 0u; i < hf.heights.size(); ++i){
-            const f32 h = hf.heights[i];
-            if(!IsFinite(VectorSingle(h))){
-                if(h == h){
-                    error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
-                    return MakeUnexpected(Failure());
-                }
-                continue;
-            }
-            const f32 y = hf.originMaxY.y + h * hf.scaleMinMaxY.y;
-            if(Abs(VectorSingle(y)).x > s_HugeCoordinate){
-                error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
-                return MakeUnexpected(Failure());
-            }
-            if(!anyFinite){
-                loY = y;
-                hiY = y;
-                anyFinite = true;
-            }
-            else{
-                loY = SimdMin(loY, y);
-                hiY = SimdMax(hiY, y);
-            }
-        }
-        if(!anyFinite){
-            loY = hf.originMaxY.y;
-            hiY = hf.originMaxY.y;
-        }
-        hf.scaleMinMaxY.w = loY;
-        hf.originMaxY.w = hiY;
-        if(!hf.isValid() || !validOrigin || !this.validHeightfieldCellMaterialIndices(hf) || !this.validHeightfieldCellHoles(hf)){
+        if(!hf.isValid() || !IsValidPositionVec3(hf.origin()) || !this.validHeightfieldCellMaterialIndices(hf) || !this.validHeightfieldCellHoles(hf)){
             error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
             return MakeUnexpected(Failure());
         }
+        f32 loY = hf.originMaxY.y;
+        f32 hiY = hf.originMaxY.y;
+        if(!ValidateAndComputeHeightfieldRange(Span<f32>(hf.heights.data(), hf.heights.size()), hf.originMaxY.y, hf.scaleMinMaxY.y, loY, hiY)){
+            error("HeightfieldAsset::loadBinary failed: invalid heightfield payload data");
+            return MakeUnexpected(Failure());
+        }
+        hf.scaleMinMaxY.w = loY;
+        hf.originMaxY.w = hiY;
         hf.buildHierarchy();
         return hf;
     }

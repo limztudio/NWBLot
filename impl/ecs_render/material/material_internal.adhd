@@ -32,7 +32,6 @@ class MaterialTypedStager : NoCopy{
         this.m_mutableRanges.reserve(capacity);
     }
 
-    [cpp_unwind]
     public Expected<MaterialTypedByteRange> constant(in MaterialSurfaceInfo material){
         MaterialTypedByteRangeKey key;
         key.materialName = material.materialName;
@@ -49,7 +48,6 @@ class MaterialTypedStager : NoCopy{
         return cache.constantRange;
     }
 
-    [cpp_unwind]
     private Expected<MaterialTypedByteRange> defaultMutable(in MaterialSurfaceInfo material){
         MaterialTypedByteRangeKey key;
         key.materialName = material.materialName;
@@ -66,7 +64,6 @@ class MaterialTypedStager : NoCopy{
         return cache.defaultMutableRange;
     }
 
-    [cpp_unwind]
     public Expected<MaterialTypedByteRange> mutableInstance(in EntityID entity, in MaterialSurfaceInfo material){
         const Optional<mut MaterialInstanceComponent> borrowedInstance = this.m_world.borrowComponent<MaterialInstanceComponent>(entity);
         if(!borrowedInstance.has_value() || borrowedInstance.value().overrides.empty())

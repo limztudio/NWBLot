@@ -13,12 +13,12 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_FUNCTION_EX
-#define NWB_ADHD_EXPORT_FUNCTION_EX(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule)
+#define NWB_ADHD_EXPORT_FUNCTION_EX(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_EX_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_FUNCTION_CALL
-#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
+#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF
 #endif
 
@@ -53,17 +53,17 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_MEMBER_METHOD
-#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, returnRule, returnTypeName)
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, allowsCppUnwind, returnRule, returnTypeName)
 #define NWB_ADHD_EXPORT_MEMBER_METHOD_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef)
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef, allowsCppUnwind)
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_AUTO_UNDEF
 #endif
 
 #ifndef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating)
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating, allowsCppUnwind)
 #define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT_AUTO_UNDEF
 #endif
 

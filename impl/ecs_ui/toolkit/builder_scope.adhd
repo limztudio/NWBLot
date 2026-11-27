@@ -663,7 +663,6 @@ class BuilderScopeFrame : NoCopy{
     private b8 m_windowActive = false;
     private b8 m_hasNonZeroZIndex = false;
 
-    [cpp_unwind]
     public BuilderScopeFrame(){
         this.m_items.reserve(cast<usize>(s_LayoutInitialReserve));
         this.m_radioGroups.reserve(s_WidgetFrameReserve);
@@ -703,7 +702,6 @@ class BuilderScopeFrame : NoCopy{
         return frame.state.has_value() && this.popupStateTokenMatches(context, frame.state.value().inputGeneration(), frame.token.instanceGeneration);
     }
 
-    [cpp_unwind]
     private b8 listMatches(in Context context, in BuilderListFrame frame)const{
         return frame.source.has_value() && this.listStateMatches(context, frame)
             && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.listStateMatches(context, frame)
@@ -716,7 +714,6 @@ class BuilderScopeFrame : NoCopy{
         return frame.state.has_value() && this.popupStateTokenMatches(context, frame.state.value().inputGeneration(), frame.token.instanceGeneration);
     }
 
-    [cpp_unwind]
     private b8 treeMatches(in Context context, in BuilderTreeFrame frame)const{
         return frame.source.has_value() && this.treeStateMatches(context, frame)
             && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.treeStateMatches(context, frame)
@@ -728,7 +725,6 @@ class BuilderScopeFrame : NoCopy{
         return frame.state.has_value() && this.popupStateTokenMatches(context, frame.state.value().inputGeneration(), frame.token.instanceGeneration);
     }
 
-    [cpp_unwind]
     private b8 tableMatches(in Context context, in BuilderTableFrame frame)const{
         return frame.source.has_value() && this.tableStateMatches(context, frame)
             && frame.source.value().instanceGeneration() == frame.token.contentGeneration && this.tableStateMatches(context, frame)

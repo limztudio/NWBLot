@@ -19,7 +19,6 @@ class PipelineAssetRoot{
     }
 }
 
-[cpp_unwind]
 Expected<Path> ResolvePipelineRepoRoot(in Path requested, in StringView tool){
     Path root = requested;
     if(root.empty())
@@ -32,12 +31,10 @@ Expected<Path> ResolvePipelineRepoRoot(in Path requested, in StringView tool){
     return resolved.value().lexicallyNormal();
 }
 
-[cpp_unwind]
 Expected<Path> ResolvePipelineRepoRoot(in StringView requested, in StringView tool){
     return ResolvePipelineRepoRoot(Path(requested), tool);
 }
 
-[cpp_unwind]
 Expected<Vector<PipelineAssetRoot>> ResolvePipelineRootSources(in Path repo, in Vector<String> sources, in b8 infer, in AssetRootDuplicatePolicy policy, in StringView tool, in StringView emptyError){
     const auto roots = ResolveCookRootEntries<PipelineAssetRoot>(repo, sources, infer, policy, lambda[in tool](in StringView input, in b8 inspect) -> void{
         if(inspect)
@@ -54,7 +51,6 @@ Expected<Vector<PipelineAssetRoot>> ResolvePipelineRootSources(in Path repo, in 
     return roots.value();
 }
 
-[cpp_unwind]
 Expected<Vector<PipelineAssetRoot>> ResolvePipelineAssetRoots(in Path repo, in Vector<String> inputs, in Vector<String> roots, in AssetRootDuplicatePolicy policy, in StringView tool, in StringView emptyError){
     if(roots.empty())
         return ResolvePipelineRootSources(repo, inputs, true, policy, tool, emptyError);

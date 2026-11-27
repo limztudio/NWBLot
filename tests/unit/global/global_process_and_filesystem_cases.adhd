@@ -22,7 +22,6 @@ class ThrowingCaptureOutput{
 
     public usize size()const{ return this.m_text.size(); }
 
-    [cpp_unwind]
     public void append(in StringView text){
         if(text.size() > 64u - this.m_text.size())
             ThrowCaptureError("child PID output exceeded the bounded fixture buffer");

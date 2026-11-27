@@ -83,7 +83,7 @@ void CommitEditModelBuffersAndComposition(
     );
 }
 
-[cpp_unwind] void CommitEditModelSetText(
+void CommitEditModelSetText(
     in StringView value,
     in Span<usize> newBoundaries,
     mut String inOutText,
@@ -138,7 +138,7 @@ void CommitEditModelBuffersAndComposition(
 
 
 
-[cpp_unwind] void FinalizeEditModelCommit(
+void FinalizeEditModelCommit(
     in StringView candidate,
     in Span<usize> newBoundaries,
     in usize anchor,
@@ -201,7 +201,7 @@ void CommitEditModelBuffersAndComposition(
         ++inOutRevision;
 }
 
-[cpp_unwind] b8 CommitEditModelEraseAroundSelection(
+b8 CommitEditModelEraseAroundSelection(
     in StringView candidate,
     in Span<usize> newBoundaries,
     in usize beforeBytes,
@@ -277,7 +277,7 @@ void CommitEditModelBuffersAndComposition(
     return true;
 }
 
-[cpp_unwind] void CommitEditModelReplaceRange(
+void CommitEditModelReplaceRange(
     in StringView candidate,
     in Span<usize> newBoundaries,
     in usize begin,
@@ -356,13 +356,13 @@ void CommitEditModelBuffersAndComposition(
 
 
 
-[cpp_unwind] b8 TryBuildEditModelBoundaries(in StringView value, in EditTextMode textMode, mut Vector<usize> outBoundaries){
+b8 TryBuildEditModelBoundaries(in StringView value, in EditTextMode textMode, mut Vector<usize> outBoundaries){
     if(textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
         return false;
     return TryBuildGraphemeBoundariesInto(value, textMode == EditTextMode::SingleLine, outBoundaries);
 }
 
-[cpp_unwind] b8 ApplyEditModelSetText(
+b8 ApplyEditModelSetText(
     in StringView value,
     in usize maxBytes,
     in EditTextMode textMode,
@@ -413,7 +413,7 @@ void CommitEditModelBuffersAndComposition(
     return true;
 }
 
-[cpp_unwind] b8 ApplyEditModelEraseAroundSelection(
+b8 ApplyEditModelEraseAroundSelection(
     in usize beforeBytes,
     in usize afterBytes,
     in EditTextMode textMode,
@@ -475,7 +475,7 @@ void CommitEditModelBuffersAndComposition(
     );
 }
 
-[cpp_unwind] b8 ApplyEditModelReplaceRange(
+b8 ApplyEditModelReplaceRange(
     in usize begin,
     in usize end,
     in StringView replacement,

@@ -49,7 +49,6 @@ class RendererCsgSystem : NoCopy{
         this.m_csgState.invalidateResources();
     }
 
-    [cpp_unwind]
     public CsgFrameState buildFrameState(mut IMaterialSurfaceLookup materialSurfaceLookup);
     public b8 createCsgClipResources();
     public b8 createCsgPeelTargets(mut DeferredFrameTargets targets);

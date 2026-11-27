@@ -19,6 +19,7 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
     output = root / "layout_output"
     source.write_text(
         "namespace_wrapper EXAMPLE_LAYOUT;\n"
+        '[cpp_header("<tests/common/probe_opaque.h>"), cpp_name("::ProbeOpaque")] extern void ProbeOpaque();\n'
         "class Entry<T, U>{ public T key; public U value; }\n"
         "class Catalog{ private Vector<u8> bytes; [owner_result] public Vector<u8> snapshot()const{ return this.bytes; } }\n"
         "class Item{ [owner_result] public Vector<u8> read()const{ return Vector<u8>(); } }\n"
@@ -27,11 +28,11 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         "void Observe(in Converted v){} void Keep(in borrow ConvertedAlias v){} void KeepBase(in borrow IBacking v){} "
         "void KeepStable(in Backing owner, in ConvertedAlias view){ Observe(owner); Keep(view); KeepBase(owner); }\n"
         "class OutputProbe : IGpuTaskGraphOutputLayerContributor{ "
-        "[cpp_unwind] public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame)override{ return frame.valid(); } "
+        "public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame)override{ ProbeOpaque(); return frame.valid(); } "
         "public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override; }\n"
         "void OutputProbe::acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token){}\n"
         "class Consumer{ [cpp_rvalue_overload] public b8 consume(mut u32 value){ ++value; return true; } }\n"
-        "class Guard : NoCopy{ [cpp_unwind] public Guard(){} [cpp_unwind] public ~Guard(){} }\n"
+        "class Guard : NoCopy{ public Guard(){ ProbeOpaque(); } public ~Guard(){ ProbeOpaque(); } }\n"
         "class Slot{ private u32 value = 0u; [cpp_explicit_bool] public b8 ready()const{ return this.value != 0u; } "
         "[cpp_take_assignment] public void take(mut u32 incoming){ this.value = incoming; incoming = 0u; } }\n"
         "class CounterRef{ private mut u32 count; public CounterRef(mut u32 count){ this.count = count; } }\n"
@@ -69,7 +70,7 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
     generated = (output / "layout.adhd.cpp").read_text(encoding="utf-8")
     if "snapshot()const" not in header or "__adhd_caller_arena = (*this->__adhd_arena)" not in header + generated:
         raise AssertionError("owner_result did not use the declaring object's arena")
-    if "    Guard(){" not in header or "~Guard()noexcept(false){" not in header:
+    if "    Guard();" not in header or "~Guard()noexcept(false);" not in header:
         raise AssertionError("ordinary constructors and destructors did not retain their exception contracts")
     if "explicit Item(::ArenaBase&" not in header or "read()const" not in header:
         raise AssertionError("owner_result did not retain an arena on the fieldless owner")
@@ -93,7 +94,8 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         ("class Item{ [cpp_take_assignment] public void take(in u32 input){} }", "one mutable value"),
         ("class Item{ [cpp_take_assignment] public void take(mut Item item){} }", "another type"),
         ("class Item{ [cpp_explicit_bool] public b8 ready()const{ return true; } [cpp_explicit_bool] public b8 valid()const{ return true; } }", "already exports"),
-        ("class X : IGpuTaskGraphOutputLayerContributor{ [cpp_unwind] public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{} }", "nonthrowing SDK override contract"),
+        ("[cpp_unwind] void BadUnwind(){}", "prohibited"),
+        ("class X : IGpuTaskGraphOutputLayerContributor{ public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{} } [cpp_unwind] void Y(){}", "prohibited"),
         ("void Read(in cpp_ref u32 value){}", "requires an 'in' parameter on an extern"),
         ("class Item{ [cpp_rvalue_overload] public b8 read(in u32 value){ return true; } }", "one mutable value"),
         ("[cpp_type_alias(Item, u32)] class Item{}", "distinct member name"),

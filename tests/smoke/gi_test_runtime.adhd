@@ -332,7 +332,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB GI Test");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateSmokeRenderWorld(GiTestProjectName(), context);
     if(!world.has_value())

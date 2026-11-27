@@ -126,7 +126,6 @@ b8 IsGraphicsPrefixOpaqueCsgResourcesValid(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<u64> GraphicsPrefixGraphCoordinator::declareDeferredGraphicsPrefixTasks(
     in GraphicsPrefixGraphContext context,
     in GpuTaskId shadowPrepareTask,

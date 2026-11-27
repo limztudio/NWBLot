@@ -59,7 +59,6 @@ class RefractionStatisticsReadback : NoCopy{
         this.m_readback.resetReadbackBuffers();
     }
 
-    [cpp_unwind]
     public b8 prepareResources(){
         if(IsRefractionStatisticsResourcesReady(this.m_counters.valid(), this.m_counterDescriptor.valid(), this.m_readback.buffers[0u].valid()))
             return true;
@@ -86,7 +85,6 @@ class RefractionStatisticsReadback : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public void pollCompleted(){
         this.m_readback.pollCompleted("Refraction statistics: failed to map a completed readback");
     }

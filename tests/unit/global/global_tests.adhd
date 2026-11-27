@@ -40,37 +40,31 @@ void RecordTestDiagnostic(in borrow DiagnosticEventRecord event){
     CaptureDiagnosticMessage("recursive", "ignored");
 }
 
-[cpp_unwind]
 b8 FailDirectionalMatch(in u64 index){
     ThrowTestException<RuntimeException>(RuntimeException("directional predicate failure"));
     return false;
 }
 
-[cpp_unwind]
 u64 FailDirectionalCount(){
     ThrowTestException<RuntimeException>(RuntimeException("directional count failure"));
     return 0u;
 }
 
-[cpp_unwind]
 b8 FailValidityCheck(in u32 value){
     ThrowTestException<RuntimeException>(RuntimeException("validity predicate failure"));
     return false;
 }
 
-[cpp_unwind]
 b8 FailDedupKey(in StableDedupValue lhs, in StableDedupValue rhs){
     ThrowTestException<RuntimeException>(RuntimeException("deduplication predicate failure"));
     return false;
 }
 
-[cpp_unwind]
 b8 FailIntervalEligibility(in IntervalProbe interval){
     ThrowTestException<RuntimeException>(RuntimeException("interval predicate failure"));
     return false;
 }
 
-[cpp_unwind]
 void FailIntervalVisit(in IntervalProbe interval){
     ThrowTestException<RuntimeException>(RuntimeException("interval visitor failure"));
 }

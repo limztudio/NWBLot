@@ -25,7 +25,6 @@ Path GraphicsRepoPath(){
     return Path(s_CookTestRepoRoot).lexicallyNormal();
 }
 
-[cpp_unwind]
 b8 BuildGraphicsRoots(in Path root, in Path output, in Span<Path> assetRoots, in u32 workers){
     CpuTaskScheduler scheduler(workers);
     AssetBuildOptions options(scheduler);
@@ -60,7 +59,6 @@ b8 BuildGraphicsRoots(in Path root, in Path output, in Span<Path> assetRoots, in
     return BuildAssets(options);
 }
 
-[cpp_unwind]
 b8 CookGraphicsRoots(in Path root, in Path output, in Span<Path> assetRoots, in u32 workers){
     const Path built = root / "built";
     if(!BuildGraphicsRoots(root, built, assetRoots, workers))

@@ -366,7 +366,6 @@ b8 DecodeHdrTextureSlice(
     return format != Format::RGBA16_FLOAT || MergeHdrAlpha(asset, mip, slice, offset, count, output, blockRowBegin, blockRowEnd, allowStripParallel);
 }
 
-[cpp_unwind]
 b8 DecodeTextureMipSlice(
     in b8 isHdr,
     in Texture asset,
@@ -386,7 +385,6 @@ b8 DecodeTextureMipSlice(
     return DecodeLdrTextureSlice(asset, mip, mipLevel, slice, format, offset, count, output, blockRowBegin, blockRowEnd, allowStripParallel);
 }
 
-[cpp_unwind]
 b8 DecodeTextureMipSlices(
     in b8 isHdr,
     in Texture asset,
@@ -414,7 +412,6 @@ b8 DecodeTextureMipSlices(
     return true;
 }
 
-[cpp_unwind]
 Expected<TextureDecodedMipUpload> DecodeTextureMip(
     in b8 isHdr,
     in Texture asset,
@@ -447,17 +444,14 @@ Expected<TextureDecodedMipUpload> DecodeTextureMip(
     return upload;
 }
 
-[cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeLdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
     return DecodeTextureMip(false, asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
 
-[cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decodeHdr(in Texture asset, in TextureMipLevel mip, in u32 mipLevel, in Format format){
     return DecodeTextureMip(true, asset, mip, mipLevel, format, mip.sliceCount == 1u);
 }
 
-[cpp_unwind]
 Expected<QueueSubmissionToken, TextureUploadFailure> TextureMipDecoder::decodeAndUploadStaticTextureMips(
     in Texture asset,
     in Format format,

@@ -137,7 +137,6 @@ class PaintBuilder : NoCopy{
     private b8 m_effectLayerSavedOrdered = true;
     private b8 m_effectLayerSavedDescending = true;
 
-    [cpp_unwind]
     public void begin(in DisplayMetrics metrics, in u64 generation, in u64 skinGeneration, in AssetRef<UiSkin> skinRef, in UiSkin skin){
         this.m_snapshot.m_ownerIdentity = this.m_ownerIdentity;
         this.m_snapshot.m_skinBinding = MakePaintSkinBinding<UiSkin, Texture>(skinRef, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity());
@@ -180,13 +179,10 @@ class PaintBuilder : NoCopy{
         );
     }
     public u64 regionsCacheStamp()const{ return this.m_regionsCacheStamp; }
-    [cpp_unwind]
     public void reserve(in usize quadCount){ this.reserve(quadCount, s_PaintDefaultClipDepth); }
-    [cpp_unwind]
     public void reserve(in usize quadCount, in usize clipDepth){
         ReservePaintSnapshot(quadCount, clipDepth, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_clips);
     }
-    [cpp_unwind]
     public void pushClip(in Rect clip){
         if(this.m_hasActiveTransform){
             const Rect xfClip = ComputeTransformedPaintRectBounds(this.m_transforms[this.m_transformDepth - 1u].xf, clip);
@@ -248,11 +244,9 @@ class PaintBuilder : NoCopy{
         );
         ++this.m_analyticClipDepth;
     }
-    [cpp_unwind]
     public void pushRoundedClip(in Rect clip, in f32 cornerRadius){
         this.pushAnalyticClip(PaintClipShapeKind::RoundedRect, clip, cornerRadius);
     }
-    [cpp_unwind]
     public void pushEllipseClip(in Rect clip){
         this.pushAnalyticClip(PaintClipShapeKind::Ellipse, clip, 0.0f);
     }
@@ -319,7 +313,6 @@ class PaintBuilder : NoCopy{
         return entry.cachedScale;
     }
 
-    [cpp_unwind]
     public void pushTransform(in PaintTransform2D transform){
         assert(this.m_recording);
         if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
@@ -353,7 +346,6 @@ class PaintBuilder : NoCopy{
         ++this.m_transformDepth;
         this.m_hasActiveTransform = entry.active;
     }
-    [cpp_unwind]
     public void pushTranslate(in f32 dx, in f32 dy){
         assert(this.m_recording);
         if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
@@ -386,7 +378,6 @@ class PaintBuilder : NoCopy{
         ++this.m_transformDepth;
         this.m_hasActiveTransform = entry.active;
     }
-    [cpp_unwind]
     public void pushRotate(in f32 radians){
         assert(this.m_recording);
         if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
@@ -423,7 +414,6 @@ class PaintBuilder : NoCopy{
         ++this.m_transformDepth;
         this.m_hasActiveTransform = entry.active;
     }
-    [cpp_unwind]
     public void pushScale(in f32 sx, in f32 sy){
         assert(this.m_recording);
         if(!this.m_recording || this.m_transformDepth >= s_PaintMaxTransformDepth){
@@ -497,7 +487,6 @@ class PaintBuilder : NoCopy{
         return this.m_cachedAaWidth;
     }
 
-    [cpp_unwind]
     public b8 beginOverlay(in u32 layer){
         if(this.m_zOrderActive || this.m_effectLayerActive || !BeginPaintOverlay(this.m_recording, layer, this.m_snapshot.m_displayMetrics, this.m_overlays, this.m_overlayDepth, this.m_layer, this.m_clips))
             return false;
@@ -578,17 +567,14 @@ class PaintBuilder : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public void fillRect(in Rect rectangle){
         assert(this.m_recording);
         this.fillRect(rectangle, Color());
     }
-    [cpp_unwind]
     public void fillRect(in Rect rectangle, in Color color){
         assert(this.m_recording);
         this.emitQuad(rectangle, Rect(0.0f, 0.0f, 0.0f, 0.0f), color, PaintMaterial::Solid, u32.max, u32.max, 0u, u32.max);
     }
-    [cpp_unwind]
     public void drawLine(in Point start, in Point end, in f32 thickness, in Color color){
         assert(this.m_recording);
         const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
@@ -621,7 +607,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void drawLine(in Point start, in Point end, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
@@ -663,7 +648,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void drawLineBatch(in Span<PaintLineSegment> lines, in f32 thickness){
         assert(this.m_recording);
         Span<PaintLineSegment> batch = lines;
@@ -691,7 +675,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void drawPolyline(in Span<Point> points, in b8 closed, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);
@@ -713,14 +696,12 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void strokeRect(in Rect rectangle, in f32 thickness, in Color color){
         PaintLineStyle style;
         style.thickness = thickness;
         style.join = PaintLineJoin::Miter;
         this.strokeRect(rectangle, style, color);
     }
-    [cpp_unwind]
     public void strokeRect(in Rect rectangle, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || !(rectangle.width > 0.0f) || !(rectangle.height > 0.0f))
@@ -904,7 +885,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void fillRoundedRect(in Rect rectangle, in f32 radius, in Color color){
         assert(this.m_recording);
         if(!this.m_recording)
@@ -916,7 +896,6 @@ class PaintBuilder : NoCopy{
         }
         this.emitFilledScratchPolygonDirect(ApplyPaintOpacity(color, this.m_currentOpacity));
     }
-    [cpp_unwind]
     public void strokeRoundedRect(in Rect rectangle, in f32 radius, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording)
@@ -927,29 +906,24 @@ class PaintBuilder : NoCopy{
         }
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), true, style, color);
     }
-    [cpp_unwind]
     public void fillCircle(in Point center, in f32 radius, in Color color){
         this.fillEllipse(center, radius, radius, color);
     }
-    [cpp_unwind]
     public void strokeCircle(in Point center, in f32 radius, in PaintLineStyle style, in Color color){
         this.strokeEllipse(center, radius, radius, style, color);
     }
-    [cpp_unwind]
     public void fillEllipse(in Point center, in f32 radiusX, in f32 radiusY, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY, true))
             return;
         this.emitFilledScratchPolygonDirect(ApplyPaintOpacity(color, this.m_currentOpacity));
     }
-    [cpp_unwind]
     public void strokeEllipse(in Point center, in f32 radiusX, in f32 radiusY, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || !this.buildEllipsePoints(center, radiusX, radiusY, false))
             return;
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), true, style, color);
     }
-    [cpp_unwind]
     public void drawArc(in Point center, in f32 radius, in f32 startAngleRadians, in f32 sweepAngleRadians, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || !IsFinite(VectorSingle(center.x, center.y, radius, startAngleRadians)) || !IsFinite(VectorSingle(sweepAngleRadians)))
@@ -985,7 +959,6 @@ class PaintBuilder : NoCopy{
         }
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), closed, style, color);
     }
-    [cpp_unwind]
     public void fillConvexPolygon(in Span<Point> points, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || points.size() < 3u)
@@ -1009,7 +982,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void drawQuadraticBezier(in Point p0, in Point p1, in Point p2, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || !IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)) || !IsFinite(VectorSingle(p2.x, p2.y, 0.0f, 0.0f).xy))
@@ -1018,7 +990,6 @@ class PaintBuilder : NoCopy{
         SamplePaintQuadraticBezier(p0, p1, p2, this.currentTransformScale(), false, 0u, this.m_polyScratch);
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
     }
-    [cpp_unwind]
     public void drawCubicBezier(in Point p0, in Point p1, in Point p2, in Point p3, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || !IsFinite(VectorSingle(p0.x, p0.y, p1.x, p1.y)) || !IsFinite(VectorSingle(p2.x, p2.y, p3.x, p3.y)))
@@ -1027,7 +998,6 @@ class PaintBuilder : NoCopy{
         SamplePaintCubicBezier(p0, p1, p2, p3, this.currentTransformScale(), false, 0u, this.m_polyScratch);
         this.drawPolyline(Span<Point>(this.m_polyScratch.data(), this.m_polyScratch.size()), false, style, color);
     }
-    [cpp_unwind]
     public void fillRectGradient(in Rect rectangle, in Color topLeftColor, in Color topRightColor, in Color bottomRightColor, in Color bottomLeftColor){
         assert(this.m_recording);
         const Color tl = ApplyPaintOpacity(topLeftColor, this.m_currentOpacity);
@@ -1049,7 +1019,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     private void emitSkinRegionDirect(in UiSkinRegion region, in Rect rectangle, in Color tint){
         const Color modulated = ApplyPaintOpacity(tint, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
@@ -1069,7 +1038,6 @@ class PaintBuilder : NoCopy{
             this.m_layer, this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     private void emitSkinRegionSubRectDirect(in UiSkinRegion region, in Rect rectangle, in Rect uvSubRect, in Color tint){
         const Color modulated = ApplyPaintOpacity(tint, this.m_currentOpacity);
         if(this.m_hasActiveTransform){
@@ -1100,21 +1068,16 @@ class PaintBuilder : NoCopy{
         }
         return Optional<usize>();
     }
-    [cpp_unwind]
     public void drawRegionByIndex(in usize regionIndex, in Rect rectangle){ this.drawRegionByIndex(regionIndex, rectangle, Color()); }
-    [cpp_unwind]
     public void drawRegionByIndex(in usize regionIndex, in Rect rectangle, in Color tint){
         assert(this.m_recording && regionIndex < this.m_regions.size());
         this.emitSkinRegionDirect(this.m_regions[regionIndex], rectangle, tint);
     }
-    [cpp_unwind]
     public b8 drawRegion(in Name regionName, in Rect rectangle){ return this.drawRegion(regionName, rectangle, Color()); }
-    [cpp_unwind]
     public b8 drawRegion(in Name regionName, in Rect rectangle, in Color tint){
         assert(this.m_recording);
         return this.tryDrawRegion(regionName, rectangle, tint);
     }
-    [cpp_unwind]
     public b8 drawRegion(in Name regionName, in Rect rectangle, in Rect uvSubRect, in Color tint){
         assert(this.m_recording);
         if(!IsValidPaintUvRect(uvSubRect))
@@ -1127,9 +1090,7 @@ class PaintBuilder : NoCopy{
         this.emitSkinRegionSubRectDirect(this.m_regions[found.value()], rectangle, uvSubRect, tint);
         return true;
     }
-    [cpp_unwind]
     public b8 tryDrawRegion(in Name regionName, in Rect rectangle){ return this.tryDrawRegion(regionName, rectangle, Color()); }
-    [cpp_unwind]
     public b8 tryDrawRegion(in Name regionName, in Rect rectangle, in Color tint){
         assert(this.m_recording);
         const auto found = this.m_regionLookup.find(regionName);
@@ -1138,11 +1099,9 @@ class PaintBuilder : NoCopy{
         this.emitSkinRegionDirect(this.m_regions[found.value()], rectangle, tint);
         return true;
     }
-    [cpp_unwind]
     public b8 drawRegionWithFallback(in Name regionName, in Name fallbackRegionName, in Rect rectangle){
         return this.drawRegionWithFallback(regionName, fallbackRegionName, rectangle, Color());
     }
-    [cpp_unwind]
     public b8 drawRegionWithFallback(in Name regionName, in Name fallbackRegionName, in Rect rectangle, in Color tint){
         assert(this.m_recording);
         const auto found = this.m_regionLookup.find(regionName);
@@ -1160,18 +1119,13 @@ class PaintBuilder : NoCopy{
         return false;
     }
 
-    [cpp_unwind]
     public b8 prepareGlyphPages(in Span<SharedGlyphPage> pages){ return this.prepareImages(pages, Span<SharedSdfAtlasPage>(), Span<SharedImageSource>()); }
-    [cpp_unwind]
     public b8 prepareSdfPages(in Span<SharedSdfAtlasPage> pages){ return this.prepareImages(Span<SharedGlyphPage>(), pages, Span<SharedImageSource>()); }
-    [cpp_unwind]
     public b8 prepareTextureImages(in Span<SharedImageSource> images){ return this.prepareImages(Span<SharedGlyphPage>(), Span<SharedSdfAtlasPage>(), images); }
-    [cpp_unwind]
     public b8 prepareImages(in Span<SharedGlyphPage> glyphPages, in Span<SharedSdfAtlasPage> sdfPages, in Span<SharedImageSource> textureImages){
         assert(this.m_recording);
         return this.m_snapshot.m_images.prepare(glyphPages, sdfPages, textureImages);
     }
-    [cpp_unwind]
     public b8 prepareAndResolveTextImages(
         in Span<SharedGlyphPage> glyphPages,
         in Span<SharedSdfAtlasPage> sdfPages,
@@ -1182,7 +1136,6 @@ class PaintBuilder : NoCopy{
         return this.m_snapshot.m_images.prepareAndResolveGlyphs(glyphPages, sdfPages, outGlyphIndices, outSdfIndices);
     }
 
-    [cpp_unwind]
     public b8 drawResolvedGlyphBatch(in Span<ResolvedGlyphDraw> glyphs, in Color tint){
         assert(this.m_recording);
         const Color modulated = ApplyPaintOpacity(tint, this.m_currentOpacity);
@@ -1203,9 +1156,7 @@ class PaintBuilder : NoCopy{
         );
     }
 
-    [cpp_unwind]
     public b8 drawGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv){ return this.drawGlyph(page, rectangle, uv, Color()); }
-    [cpp_unwind]
     public b8 drawGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv, in Color tint){
         assert(this.m_recording);
         if(!page.valid() || page.deref().binding().channelCount != 1u || !IsValidPaintUvRect(uv))
@@ -1216,9 +1167,7 @@ class PaintBuilder : NoCopy{
         this.emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index.value(), u32.max, 0u, u32.max);
         return true;
     }
-    [cpp_unwind]
     public b8 drawColorGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv){ return this.drawColorGlyph(page, rectangle, uv, Color()); }
-    [cpp_unwind]
     public b8 drawColorGlyph(in SharedGlyphPage page, in Rect rectangle, in Rect uv, in Color tint){
         assert(this.m_recording);
         if(!page.valid() || page.deref().binding().channelCount != 4u || !IsValidPaintUvRect(uv))
@@ -1229,7 +1178,6 @@ class PaintBuilder : NoCopy{
         this.emitQuad(rectangle, uv, tint, PaintMaterial::ColorGlyph, index.value(), u32.max, 0u, u32.max);
         return true;
     }
-    [cpp_unwind]
     public b8 drawSdfGlyph(in SharedSdfAtlasPage page, in u32 channel, in Rect rectangle, in Rect uv, in Color tint){
         assert(this.m_recording);
         if(!page.valid() || !IsValidPaintSdfGlyphRequest(channel, page.deref().binding().channelCount, uv))
@@ -1240,11 +1188,8 @@ class PaintBuilder : NoCopy{
         this.emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, u32.max, index.value(), channel, u32.max);
         return true;
     }
-    [cpp_unwind]
     public b8 drawImage(in SharedImageSource source, in Rect rectangle){ return this.drawImage(source, rectangle, Rect(0.0f, 0.0f, 1.0f, 1.0f), Color()); }
-    [cpp_unwind]
     public b8 drawImage(in SharedImageSource source, in Rect rectangle, in Rect uv){ return this.drawImage(source, rectangle, uv, Color()); }
-    [cpp_unwind]
     public b8 drawImage(in SharedImageSource source, in Rect rectangle, in Rect uv, in Color tint){
         assert(this.m_recording);
         if(!source.valid() || !IsValidPaintImageDrawRequest(rectangle, uv, tint))
@@ -1261,11 +1206,9 @@ class PaintBuilder : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public void fillPath(in PaintPath path, in Color color){
         this.fillPath(path, color, PaintFillRule::NonZero);
     }
-    [cpp_unwind]
     public void fillPath(in PaintPath path, in Color color, in PaintFillRule fillRule){
         assert(this.m_recording);
         if(!this.m_recording || path.empty())
@@ -1285,7 +1228,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public void strokePath(in PaintPath path, in PaintLineStyle style, in Color color){
         assert(this.m_recording);
         if(!this.m_recording || path.empty())
@@ -1297,11 +1239,9 @@ class PaintBuilder : NoCopy{
                 this.drawPolyline(Span<Point>(this.m_pathFlatPoints.data() + sub.pointBegin, count), sub.closed, style, color);
         }
     }
-    [cpp_unwind]
     public b8 fillPathGradient(in PaintPath path, in PaintGradient gradient){
         return this.fillPathGradient(path, gradient, PaintFillRule::NonZero);
     }
-    [cpp_unwind]
     public b8 fillPathGradient(in PaintPath path, in PaintGradient gradient, in PaintFillRule fillRule){
         assert(this.m_recording);
         if(!this.m_recording || path.empty() || !IsValidPaintGradient(gradient))
@@ -1326,7 +1266,6 @@ class PaintBuilder : NoCopy{
         );
         return true;
     }
-    [cpp_unwind]
     private void emitPolyScratchGradientFan(in PaintGradient gradient){
         const usize count = this.m_polyScratch.size();
         if(count < 3u)
@@ -1358,7 +1297,6 @@ class PaintBuilder : NoCopy{
             this.m_snapshot.m_vertices, this.m_snapshot.m_indices, this.m_snapshot.m_commands, this.m_commandsOrdered, this.m_commandsStrictlyDescending
         );
     }
-    [cpp_unwind]
     public b8 fillRectGradient(in Rect rectangle, in PaintGradient gradient){
         assert(this.m_recording);
         if(!this.m_recording || !IsValidPaintGradient(gradient))
@@ -1409,7 +1347,6 @@ class PaintBuilder : NoCopy{
         );
         return true;
     }
-    [cpp_unwind]
     public b8 fillRoundedRectGradient(in Rect rectangle, in f32 radius, in PaintGradient gradient){
         assert(this.m_recording);
         if(!this.m_recording || !IsValidPaintGradient(gradient))
@@ -1421,11 +1358,9 @@ class PaintBuilder : NoCopy{
         this.emitPolyScratchGradientFan(gradient);
         return true;
     }
-    [cpp_unwind]
     public b8 fillCircleGradient(in Point center, in f32 radius, in PaintGradient gradient){
         return this.fillEllipseGradient(center, radius, radius, gradient);
     }
-    [cpp_unwind]
     public b8 fillEllipseGradient(in Point center, in f32 radiusX, in f32 radiusY, in PaintGradient gradient){
         assert(this.m_recording);
         if(!this.m_recording || !IsValidPaintGradient(gradient) || !this.buildEllipsePoints(center, radiusX, radiusY, true))
@@ -1435,7 +1370,6 @@ class PaintBuilder : NoCopy{
         this.emitPolyScratchGradientFan(gradient);
         return true;
     }
-    [cpp_unwind]
     public b8 drawDropShadow(in Rect rectangle, in f32 cornerRadius, in PaintShadowStyle style){
         assert(this.m_recording);
         if(!this.m_recording)
@@ -1474,11 +1408,9 @@ class PaintBuilder : NoCopy{
         this.emitDropShadowQuad(drawRect, rectangle, cornerRadius, boxCenter, halfSize, clampedRadius, sigma, false, modulated);
         return true;
     }
-    [cpp_unwind]
     public b8 beginEffectLayer(in Rect bounds, in f32 opacity, in f32 blurRadius){
         return this.beginEffectLayer(bounds, opacity, blurRadius, this.m_currentBlendMode);
     }
-    [cpp_unwind]
     public b8 beginEffectLayer(in Rect bounds, in f32 opacity, in f32 blurRadius, in PaintBlendMode blendMode){
         if(!this.m_recording || this.m_effectLayerActive || this.m_overlayDepth != 0u || this.m_zOrderActive)
             return false;
@@ -1550,7 +1482,6 @@ class PaintBuilder : NoCopy{
         this.m_effectLayerActive = true;
         return true;
     }
-    [cpp_unwind]
     public b8 endEffectLayer(){
         if(
             !this.m_recording
@@ -1655,7 +1586,7 @@ class PaintBuilder : NoCopy{
         return true;
     }
 
-    [owner_result, cpp_unwind]
+    [owner_result]
     public DrawSnapshot freeze(){
         [essential] assert(this.m_transformDepth == 0u && this.m_opacityDepth == 0u && this.m_blendModeDepth == 0u && !this.m_effectLayerActive);
         FinalizePaintBuilderRecording(this.m_commandsOrdered, this.m_commandsStrictlyDescending, this.m_overlayDepth, this.m_zOrderActive, this.m_snapshot.m_commands, this.m_clips, this.m_sortScratch, this.m_recording);
@@ -1675,7 +1606,6 @@ class PaintBuilder : NoCopy{
         return this.m_clips.back().rect;
     }
 
-    [cpp_unwind]
     private void emitDropShadowQuad(
         in Rect quadRect,
         in Rect clipSourceRect,
@@ -1756,7 +1686,6 @@ class PaintBuilder : NoCopy{
             this.popClip();
     }
 
-    [cpp_unwind]
     private void emitQuad(in Rect rectangle, in Rect uv, in Color color, in PaintMaterial material, in u32 glyphPageIndex, in u32 sdfPageIndex, in u32 sdfChannel, in u32 textureImageIndex){
         assert(this.m_recording);
         const Color modulated = ApplyPaintOpacity(color, this.m_currentOpacity);

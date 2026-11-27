@@ -80,7 +80,6 @@ class GpuFrameData : MoveOnly{
         }
     }
 
-    [cpp_unwind]
     public b8 prefixComplete(mut Device device)const{
         if(
             !GpuTokenComplete(device, this.m_vertexUpload)
@@ -97,7 +96,6 @@ class GpuFrameData : MoveOnly{
         return true;
     }
 
-    [cpp_unwind]
     public b8 recyclable(mut Device device)const{
         if(!GpuTokenComplete(device, this.m_finalConsumer) || !this.prefixComplete(device))
             return false;
@@ -120,7 +118,6 @@ class GpuFrameData : MoveOnly{
         return true;
     }
 
-    [cpp_unwind]
     public b8 complete(mut Device device)const{
         return this.m_finalConsumer.valid() && this.recyclable(device);
     }

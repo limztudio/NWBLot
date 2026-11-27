@@ -54,7 +54,6 @@ class OpticalProbeTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         in OpticalProbeScenario data = this.data;
         const Array<Span<u32>, 4u> uploads(Span<u32>(data.source), Span<u32>(data.inputs), Span<u32>(data.local), Span<u32>(data.invalidLocal));
@@ -199,7 +198,6 @@ Expected<void> BuildOpticalProbeScenario(mut OpticalProbeScenario data){
     return Expected<void>();
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareOpticalProbe(in OpticalProbeTask payload, mut GpuTaskGraph graph){
     Array<GpuTaskResourceUse, 6u> uses;
     for(u32 i = 0u; i < uses.size(); ++i){
@@ -222,7 +220,6 @@ Expected<GpuTaskId> DeclareOpticalProbe(in OpticalProbeTask payload, mut GpuTask
     return task;
 }
 
-[cpp_unwind]
 b8 RunOpticalBoundsProbe(in ActiveSceneSubsystems scene, mut ProjectRuntimeContext context){
     mut GraphicsRuntime graphics = context.graphics;
     mut Device device = graphics.getDevice();

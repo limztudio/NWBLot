@@ -53,7 +53,6 @@ class FrameGraphAvboitPassUploadChain : NoCopy{
         this.m_materialSystem = materials;
         this.m_csgSystem = csg;
     }
-    [cpp_unwind]
     public Expected<FrameGraphAvboitMaterialUploadResult> declare(
         in FrameGraphAvboitStageInputs inputs,
         in FramebufferHandle framebuffer,

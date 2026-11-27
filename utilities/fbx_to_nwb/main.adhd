@@ -17,7 +17,6 @@ b8 ShouldPauseAfterPromptedRun(in b8 prompted, in i32 exitResult){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 i32 RunConsole(in ConsoleArguments arguments){
     b8 prompted = false;
     const i32 result = RunFbxCommand(arguments, prompted);

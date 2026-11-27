@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RendererMeshSystem::pruneRuntimeMeshResources(){
     if(this.m_meshState.m_runtimeMeshCount == 0u || this.m_meshState.m_meshes.empty())
         return;

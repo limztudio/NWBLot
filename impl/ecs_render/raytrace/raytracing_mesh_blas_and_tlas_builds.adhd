@@ -244,7 +244,6 @@ b8 RecordPreparedMeshBlasBuild(in PreparedMeshBlasBuild build, in b8 meshBlasGeo
     return true;
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     if(!this.m_preparedMeshBlasBuildsReady)
         return;
@@ -300,7 +299,6 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     this.clearPreparedMeshBlasBuilds();
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::preparePendingMeshBlasResources(){
     if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
         return false;
@@ -328,7 +326,6 @@ b8 RendererRayTracingSystem::preparePendingMeshBlasResources(){
     return allResourcesReady;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
     this.clearPreparedMeshBlasBuilds();
     if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct))
@@ -352,7 +349,6 @@ b8 RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::recordPreparedMeshBlasBuilds(mut CommandList commandList, in b8 meshBlasGeometryBuildInputStatesGraphOwned){
     if(!this.m_preparedMeshBlasBuildsReady || this.m_preparedMeshBlasBuilds.empty())
         return false;
@@ -378,7 +374,6 @@ void RendererRayTracingSystem::clearPreparedMeshBlasBuilds(){
     this.m_preparedMeshBlasBuildsReady = false;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareMeshBlasResources(mut MeshRayTracingResourceSnapshot meshResources){
     if(!meshResources.positionBuffer.valid() || !meshResources.triangleIndexBuffer.valid())
         return false;

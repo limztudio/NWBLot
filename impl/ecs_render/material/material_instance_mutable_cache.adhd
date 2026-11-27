@@ -25,7 +25,6 @@ class MaterialInstanceMutableCache : NoCopy{
             surface.materialName, surface.materialInterface, surface.typedLayoutHash, instance);
     }
 
-    [cpp_unwind]
     public Expected<Span<u8>> prepare(mut World world, in EntityID entity, in MaterialSurfaceInfo surface, in Optional<in MaterialInstanceComponent> instance){
         this.prune(world);
         if(!instance.has_value() || instance.value().overrides.empty())

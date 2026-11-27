@@ -72,9 +72,7 @@ class FrameGraphAvboitStage : NoCopy{
         this.m_avboitSystem = avboit;
         this.m_timingFeedback = timing;
     }
-    [cpp_unwind]
     public Expected<GpuTaskId> declare(in FrameGraphAvboitStageInputs inputs, in FrameGraphAvboitStageTiming timing, mut ObjectGeometryCacheGraph objectGeometry);
-    [cpp_unwind]
     private b8 declareExtinction(
         in FrameGraphAvboitStageInputs inputs,
         in FrameGraphAvboitStageTiming timing,
@@ -85,7 +83,6 @@ class FrameGraphAvboitStage : NoCopy{
         mut AvboitUploadedStreamState uploadedStreams,
         mut AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder
     );
-    [cpp_unwind]
     private b8 declareAccumulation(
         in FrameGraphAvboitStageInputs inputs,
         in FrameGraphAvboitStageTiming timing,

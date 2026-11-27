@@ -25,12 +25,10 @@ b8 HasCompleteMeshRawBoundsBuffer(in b8 heapInitialized, in u64 bufferByteSize, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererMeshSystem::prepareComputeEmulationResources(mut MeshResources mesh){
     return MeshEmulationResources().prepare(this.m_graphics, mesh);
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::prepareMeshFrameBindings(in MaterialPassBufferSnapshot materialBuffers){
     return this.m_meshState.m_frameBindings.prepare(this.m_graphics, materialBuffers, this.m_meshState.m_meshViewBuffer);
 }
@@ -49,7 +47,6 @@ void RendererMeshSystem::populateMeshGeometryHeapSlots(in MeshResources mesh, mu
     });
 }
 
-[cpp_unwind]
 void RendererMeshSystem::releaseMeshGeometryHeapHandles(mut MeshResources mesh){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     const b8 initialized = heap.isInitialized();
@@ -71,12 +68,10 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(mut MeshResources mesh){
     mesh.objectGeometryCache.acceptedContent = false;
 }
 
-[cpp_unwind]
 void RendererMeshSystem::releaseMeshFrameHeapHandles(){
     this.m_meshState.m_frameBindings.release(this.m_graphics);
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::createMeshRenderBindings(mut MeshResources mesh){
     if(!this.createMeshGeometryHeapHandles(mesh))
         return false;
@@ -129,7 +124,6 @@ b8 RendererMeshSystem::meshRenderBindingsReady(in MeshResources mesh)const{
     return true;
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::createMeshGeometryHeapHandles(mut MeshResources mesh){
     if(GeometryHeapHandlesReady(mesh.geometryHeapHandles))
         return true;
@@ -178,12 +172,10 @@ b8 RendererMeshSystem::createMeshGeometryHeapHandles(mut MeshResources mesh){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(mut MeshResources mesh){
     return MeshSoftwareBvhBindings().ensure(this.m_graphics, mesh);
 }
 
-[cpp_unwind]
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){
     for(auto it = this.m_meshState.m_meshes.begin(); it != this.m_meshState.m_meshes.end(); ++it)
         this.releaseMeshGeometryHeapHandles(it.value());

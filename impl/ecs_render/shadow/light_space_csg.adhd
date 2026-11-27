@@ -100,7 +100,6 @@ u64 BuildLightSpaceCsgCaptureIdentityWithMaterialHash(
     return identity;
 }
 
-[cpp_unwind]
 void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in usize capacity, in b8 hardware){
     state.gathering = HasCsgFrameCandidates(world);
     state.hardware = hardware;
@@ -129,7 +128,6 @@ void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in 
     state.solidTriangleMasks.reserve(capacity);
 }
 
-[cpp_unwind]
 void AppendLightSpaceCsgReceiverWithBounds(
     mut LightSpaceCsgState state,
     in EntityID entity,
@@ -214,7 +212,6 @@ void AppendLightSpaceCsgReceiverWithBounds(
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
 
-[cpp_unwind]
 void AppendLightSpaceCsgReceiver(
     mut LightSpaceCsgState state,
     in EntityID entity,
@@ -228,7 +225,6 @@ void AppendLightSpaceCsgReceiver(
     AppendLightSpaceCsgReceiverWithBounds(state, entity, transparent, objectToWorld, worldToObject, localMin, localMax, false, VectorZero(), VectorZero(), mesh);
 }
 
-[cpp_unwind]
 b8 FinishLightSpaceCsgGather(in CsgShapeRegistry registry, mut LightSpaceCsgState state, mut World world){
     if(!state.gathering)
         return true;

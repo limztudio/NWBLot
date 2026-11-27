@@ -123,6 +123,7 @@ private:
     mutable Span<const FieldDecl* const> m_activeOrderedFields{};
     mutable b8 m_inFieldInitializer = false;
     mutable b8 m_allowsCppUnwind = false;
+    mutable b8 m_inNoexceptLike = false;
     mutable b8 m_emittingScalarSimd = false;
     [[nodiscard]] b8 instantiatedStatementsNeedScratchArena(Span<const Stmt* const> statements)const;
     [[nodiscard]] b8 instantiatedExprNeedsScratchArena(const Expr* expr)const;

@@ -333,7 +333,6 @@ void VerifyGlobal_NumericSharedHelpersPreserveEdgeCases(){
     EXPECT_EQ(bit_cast<u32>(RoundF64ToF32Bound(aboveOneHalfUlp, true)), 0x3f800001u);
 }
 
-[cpp_unwind]
 void VerifyGlobal_CollectionSharedHelpersPreserveEdgeCases(){
     EXPECT_FALSE(UnsignedRangesOverlap(1u, 0u, u64.max, 2u));
     EXPECT_TRUE(UnsignedRangesOverlap(u64.max, 2u, 0u, 1u));

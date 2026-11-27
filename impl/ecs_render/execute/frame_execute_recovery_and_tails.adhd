@@ -39,7 +39,6 @@ class FrameHistoryCopyAcceptance{
         this.surfelStateCandidate = surfelStateCandidate;
     }
 
-    [cpp_unwind]
     public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
         if(!finalState.has_value())
             return false;
@@ -85,7 +84,6 @@ class SurfelCounterReadbackAcceptance{
         this.buffers = buffers;
     }
 
-    [cpp_unwind]
     public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
         if(this.buffers.empty())
             return false;
@@ -210,7 +208,6 @@ void FrameExecuteRecovery::failFrameRenderRecovery(){
     renderer.m_graphics.requestDeviceRecreation();
 }
 
-[cpp_unwind]
 b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysicalQueueInfo> readbackQueue, in Span<BufferHandle> counterBuffers){
     mut RendererFramePipeline renderer = this.m_renderer;
     if(!renderer.m_surfelGiGraph.m_deferredSurfelGiCounterReadbackTask.valid())
@@ -265,7 +262,6 @@ b8 FrameExecutePresentTails::executeSurfelCounterReadback(in Optional<GpuPhysica
     return true;
 }
 
-[cpp_unwind]
 void FrameExecutePresentTails::executeLaggedLightingHistoryCapture(mut DeferredFrameTargets targets, in Optional<GpuPhysicalQueueInfo> historyQueue, in b8 requestsCapture, in b8 captureDeclared, in b8 laggedAsyncLightingSchedule){
     mut RendererFramePipeline renderer = this.m_renderer;
     if(requestsCapture && !captureDeclared){

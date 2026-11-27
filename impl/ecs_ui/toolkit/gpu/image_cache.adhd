@@ -23,7 +23,6 @@ class GpuImageCache : NoCopy{
         return this.m_useTick;
     }
 
-    [cpp_unwind]
     public void reserve(){
         this.m_glyphCache.reserve(s_PaintMaxImages);
         this.m_sdfCache.reserve(s_PaintMaxImages);
@@ -35,7 +34,6 @@ class GpuImageCache : NoCopy{
         this.m_textureCache.clear();
         this.m_useTick = 0u;
     }
-    [cpp_unwind]
     public void trim(in DrawSnapshot snapshot){
         in Vector<SharedGlyphPage> glyphPages = snapshot.glyphPages();
         in Vector<SharedSdfAtlasPage> sdfPages = snapshot.sdfPages();

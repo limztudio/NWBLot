@@ -46,7 +46,6 @@ Expected<Texture> CookDecodedTexture(in Path sourcePath, in MetascriptDocument d
     return BuildTextureAsset(entry.value());
 }
 
-[cpp_unwind]
 b8 Decode(in StringView source, in StringView destination, in StringView mipText){
     const Expected<u32> mipIndexResult = ParseMipIndex(mipText);
     if(!mipIndexResult.has_value())
@@ -114,7 +113,6 @@ b8 Decode(in StringView source, in StringView destination, in StringView mipText
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 i32 RunConsole(in ConsoleArguments args){
     if(args.count != 4 || !Decode(args.text(1), args.text(2), args.text(3))){
         error("tex_conv_prepared_decode: expected valid texture metadata with its paired raw sidecar, output filename, and mip index.");

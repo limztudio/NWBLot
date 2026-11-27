@@ -68,7 +68,6 @@ void FillIdentityRemap(mut Vector<u32> remap){
         remap[index] = cast<u32>(index);
 }
 
-[cpp_unwind]
 CanonicalStreamResult<Value> DeduplicateCanonicalStream<Value>(in Span<Value> sourceStream, in b8 preserveIndices){
     CanonicalStreamResult<Value> outResult;
     outResult.remap.resize(sourceStream.size(), 0u);
@@ -134,7 +133,6 @@ usize TakeCanonicalStream<Value>(mut CanonicalStreamResult<Value> stream, mut Ve
     return output.size();
 }
 
-[cpp_unwind]
 Expected<CanonicalizeMeshStreamsResult> CanonicalizeMeshStreams(
     in Span<Vec3> positions,
     in Span<Vec3> normals,

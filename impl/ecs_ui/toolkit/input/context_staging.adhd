@@ -183,7 +183,6 @@ b8 TryBeginContextFrame(
     return true;
 }
 
-[cpp_unwind]
 b8 TryBeginContextRoot(
     in b8 failed,
     in u64 frameGeneration,

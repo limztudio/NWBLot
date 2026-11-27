@@ -202,7 +202,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB Flicker Test");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateSmokeSkinnedRenderWorld(s_FlickerProjectName, SmokeRenderQualitySettings(), context);
     if(!world.has_value())

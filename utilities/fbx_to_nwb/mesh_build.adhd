@@ -26,7 +26,6 @@ b8 ShouldImportMeshTangents(in NormalMode normalMode, in b8 hasVertexTangent){
     return normalMode == NormalMode::Imported && hasVertexTangent;
 }
 
-[cpp_unwind]
 b8 VisitTriangulatedMeshTriangles<Visitor>(in UfbxMesh mesh, in b8 flipWinding, mut forward Visitor visitTriangle, mut Vector<u32> inOutTriangleIndices){
     if(!EnsureTriangleIndexScratchCapacityCount(mesh.maxFaceTriangles(), inOutTriangleIndices))
         return false;
@@ -116,7 +115,6 @@ b8 LoadCornerOutputTangentVector(in UfbxMesh mesh, in UfbxMatrix geometryToWorld
     return true;
 }
 
-[cpp_unwind]
 Expected<PositionNormalMap> BuildSmoothPositionNormals(in UfbxMesh mesh, in UfbxNode node, in ImportOptions options, in b8 wantsSkinning, mut Vector<u32> inOutTriangleIndices){
     HashMap<PositionKey, PositionNormalRecord> outNormals;
     outNormals.reserve(mesh.vertexCount());
@@ -155,7 +153,6 @@ Expected<PositionNormalMap> BuildSmoothPositionNormals(in UfbxMesh mesh, in Ufbx
     return outNormals;
 }
 
-[cpp_unwind]
 b8 AppendInstanceMesh(in MeshInstance instance, in ImportOptions options, in b8 wantsSkinning, in NormalMode normalMode, in Vec4 defaultColor, mut Vector<u32> inOutTriangleIndices, mut SourceMeshBuildContext inOutMesh, mut FbxSkinExportContext inOutSkinContext, mut b8 inOutSawVertexColors, mut b8 inOutSawVertexUvs, mut b8 inOutUsedDefaultUvs){
     const UfbxMesh mesh = instance.mesh;
     const UfbxNode node = instance.node;
@@ -302,7 +299,6 @@ b8 AppendInstanceMesh(in MeshInstance instance, in ImportOptions options, in b8 
     }, inOutTriangleIndices);
 }
 
-[cpp_unwind]
 Expected<usize> EstimateSelectedTriangleCorners(in Span<MeshInstance> instances, in Span<usize> selection){
     usize outTriangleCorners = 0u;
     for(in usize instanceIndex : selection){
@@ -322,7 +318,6 @@ Expected<usize> EstimateSelectedTriangleCorners(in Span<MeshInstance> instances,
     return outTriangleCorners;
 }
 
-[cpp_unwind]
 Expected<MeshBuildResult> BuildMesh(in Span<MeshInstance> instances, in Span<usize> selection, in ImportOptions options, in b8 wantsSkinning, in Vec4 defaultColor){
 
     MeshBuildResult result;

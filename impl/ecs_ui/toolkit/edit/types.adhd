@@ -316,7 +316,7 @@ void ClearEditModelSnapshotValues(
     expectedExternalRevision = 0u;
 }
 
-[cpp_unwind] void CaptureEditModelSnapshotSurroundingValues(
+void CaptureEditModelSnapshotSurroundingValues(
     in StringView text,
     in TextAreaModelStamp stamp,
     mut String expectedText,
@@ -334,7 +334,7 @@ void ClearEditModelSnapshotValues(
     expectedExternalRevision = stamp.externalRevision;
 }
 
-[cpp_unwind] void CaptureEditModelSnapshotValues(
+void CaptureEditModelSnapshotValues(
     in StringView text,
     in TextAreaModelStamp stamp,
     in EditCompositionView composition,

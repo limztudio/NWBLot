@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 ProjectFrameClientSize QueryProjectFrameClientSize(){
     const ProjectFrameClientSize size = ProjectFrameClientSize();
     return size;
@@ -27,7 +26,6 @@ b8 ConfigureProjectRuntime(mut ProjectStartupContext context){
     return configured;
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateInitialProjectWorld(context);
     if(!world.has_value())

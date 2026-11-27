@@ -16,7 +16,6 @@ type SharedTextLayout = Shared<TextLayout>;
 
 
 interface ITextRunShaperSink : NoCopy{
-    [cpp_unwind]
     TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun);
 }
 
@@ -27,7 +26,6 @@ class InterfaceTextRunShaperSink : ITextRunShaperSink{
         this.m_shaper = shaper;
     }
 
-    [cpp_unwind]
     public TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun)override{
         Expected<ShapedRun, TextLayoutStatus> shaped = this.m_shaper.shape(request);
         if(!shaped.has_value())
@@ -45,7 +43,6 @@ class DirectTextRunShaperSink : ITextRunShaperSink{
         this.m_shaper = shaper;
     }
 
-    [cpp_unwind]
     public TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun)override{
         return this.m_shaper.shapeInto(request, outRun);
     }
@@ -241,7 +238,6 @@ class TextLayout : MoveOnly{
         return TryResolveTextCaretRect(Span<TextLine>(this.m_lines), Span<TextCluster>(this.m_clusters), this.m_direction, this.m_hasBidiRuns, byteOffset, edge);
     }
 
-    [cpp_unwind]
     private TextLayoutStatus placeBidiVisualSegment(
         in ShapeRequest request,
         in BidiParagraph bidiPara,
@@ -332,7 +328,6 @@ class TextLayout : MoveOnly{
         );
     }
 
-    [cpp_unwind]
     private TextLayoutStatus shapeBidiLogicalRuns(
         in ShapeRequest request,
         in BidiParagraph bidiPara,
@@ -358,7 +353,6 @@ class TextLayout : MoveOnly{
         return TextLayoutStatus::Success;
     }
 
-    [cpp_unwind]
     private TextLayoutStatus shapeBidiInto(in ShapeRequest request, mut ITextRunShaperSink shaper){
         BidiScratch bidiScratch;
         BidiParagraph bidiPara;
@@ -445,7 +439,6 @@ class TextLayout : MoveOnly{
         return TextLayoutStatus::Success;
     }
 
-    [cpp_unwind]
     private TextLayoutStatus shapeHardLinesNonBidi(in ShapeRequest request, mut ITextRunShaperSink shaper){
         b8 hasInk = false;
         VectorDouble inkBounds = VectorDoubleZero();
@@ -619,7 +612,6 @@ class TextLayout : MoveOnly{
         return TextLayoutStatus::Success;
     }
 
-    [cpp_unwind]
     private TextLayoutStatus shapeIntoWithSink(in ShapeRequest request, mut ITextRunShaperSink sink){
         const TextLayoutStatus validation = ValidateTextRequest(request, true);
         if(validation != TextLayoutStatus::Success)
@@ -641,19 +633,17 @@ class TextLayout : MoveOnly{
         return this.shapeHardLinesNonBidi(request, sink);
     }
 
-    [cpp_unwind]
     public TextLayoutStatus shapeInto(in ShapeRequest request, mut ITextShaper shaper){
         InterfaceTextRunShaperSink sink(shaper);
         return this.shapeIntoWithSink(request, sink);
     }
 
-    [cpp_unwind]
     public TextLayoutStatus shapeIntoDirect(in ShapeRequest request, mut TextShaper shaper){
         DirectTextRunShaperSink sink(shaper);
         return this.shapeIntoWithSink(request, sink);
     }
 
-    [cpp_unwind, owner_result]
+    [owner_result]
     public Expected<TextLayout, TextLayoutStatus> shape(in ShapeRequest request, mut ITextShaper shaper)const{
         TextLayout result;
         const TextLayoutStatus status = result.shapeInto(request, shaper);
@@ -670,7 +660,7 @@ class TextLayoutBuilder : NoCopy{
         this.m_shaper = shaper;
     }
 
-    [cpp_unwind, owner_result]
+    [owner_result]
     public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
         TextLayout target;
         const TextLayoutStatus status = target.shapeInto(request, this.m_shaper);

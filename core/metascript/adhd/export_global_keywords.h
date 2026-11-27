@@ -48,13 +48,13 @@ NWB_ADHD_EXPORT_LAYOUT_QUERY("is_nothrow_call",        NothrowCall,       "", ""
 
 NWB_ADHD_EXPORT_CALLABLE_ATTRIBUTE("reflect",  isReflect)
 
-NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("inline",   "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler")
-NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("noinline", "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler")
+NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("inline",     "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler")
+NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("noinline",   "'inline' and 'noinline' attributes are prohibited in adhd; inlining is decided automatically by the adhd compiler")
+NWB_ADHD_EXPORT_PROHIBITED_CALLABLE_ATTRIBUTE("cpp_unwind", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler")
 
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(OwnerResult, "owner_result")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(RecordAlign, "align")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(Friend, "friend")
-NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CppUnwind, "cpp_unwind")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CppExplicitBool, "cpp_explicit_bool")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CppTypeAlias, "cpp_type_alias")
 NWB_ADHD_EXPORT_GRAMMAR_KEYWORD(CppRvalueOverload, "cpp_rvalue_overload")
@@ -188,6 +188,7 @@ NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(PlatformLiteralArg0, "platform_literal_arg0
 NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(ByteViewArg0,   "byte_view_arg0")
 NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(ByteViewArg1,   "byte_view_arg1")
 NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(Unwind,         "unwind")
+NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(Nothrow,        "nothrow")
 
 NWB_ADHD_EXPORT_PROHIBITED_POSTFIX_KEYWORD("as", "Rust-style 'as' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'")
 

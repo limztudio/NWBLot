@@ -290,12 +290,10 @@ b8 CausticsGraphCoordinator::declareDeferredSoftwareCausticsTask(
     return true;
 }
 
-[cpp_unwind]
 Expected<CausticsStageTargets> CausticsResolveChainBuilder::importStageTargets(in DeferredFrameTargets targets, in b8 hardwareCaustics){
     return ImportCausticsStageTargets(targets, hardwareCaustics, this.m_graph);
 }
 
-[cpp_unwind]
 Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTasks(in CausticsStagePrefixInputs inputs){
     CausticsStagePrefixResult result;
 
@@ -412,7 +410,6 @@ Expected<CausticsStagePrefixResult> CausticsResolveChainBuilder::declarePrefixTa
     return result;
 }
 
-[cpp_unwind]
 Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareGeometryAndResolve(in CausticsGeometryAndResolveInputs inputs){
     const Array<GpuTaskResourceUse, 3u> geometryResourceUses(
         ReadTextureUse(inputs.worldPosition, s_FramebufferSubresources, ResourceStates::ShaderResource),
@@ -507,7 +504,6 @@ Expected<CausticsGeometryAndResolveResult> CausticsResolveChainBuilder::declareG
     return result;
 }
 
-[cpp_unwind]
 Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(in CausticsResolveChainInputs inputs, in CausticsResolveChainNaming naming){
     CausticsResolveChainResult result;
     if(!inputs.geometryTask.valid())
@@ -590,7 +586,6 @@ Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(in Cau
     return result;
 }
 
-[cpp_unwind]
 Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareHardware(in CausticsResolveChainInputs inputs){
     CausticsResolveChainNaming naming;
     naming.prepare = CausticsResolveStageNaming(Name(s_CausticsNameRenderHardwareCausticsResolvePrepare), "Hardware Caustics Resolve Prepare", "RendererSystem: could not declare hardware-caustics resolve-prepare graph task");
@@ -604,7 +599,6 @@ Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareHardwar
     return this.declare(inputs, naming);
 }
 
-[cpp_unwind]
 Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declareSoftware(in CausticsResolveChainInputs inputs){
     CausticsResolveChainNaming naming;
     naming.prepare = CausticsResolveStageNaming(Name(s_CausticsNameRenderSoftwareCausticsResolvePrepare), "Software Caustics Resolve Prepare", "RendererSystem: could not declare deferred software-caustics resolve-prepare graph task");

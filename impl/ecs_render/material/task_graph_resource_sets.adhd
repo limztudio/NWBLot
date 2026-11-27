@@ -67,7 +67,6 @@ Expected<usize> AccumulateMaterialGeometrySourceDrawCount(
     return TryAccumulateMaterialDrawCount(afterMesh.value(), computeDrawCount, maxDrawItemCount);
 }
 
-[cpp_unwind]
 b8 AppendMaterialGeometrySources(
     in Span<MaterialPassDrawItem> items,
     in b8 deduplicate,
@@ -84,7 +83,6 @@ b8 AppendMaterialGeometrySources(
     return true;
 }
 
-[cpp_unwind]
 Expected<Vector<GpuTaskResourceUse>> GatherPreparedMaterialGeometryUses(in Span<MaterialPassDrawItemsView> drawItemSets, mut GpuTaskGraph graph){
     Vector<GpuTaskResourceUse> uses;
     const usize maxDrawCount = usize.max / cast<usize>(s_MeshInstanceGeometrySlotCount);
@@ -153,7 +151,6 @@ Expected<Vector<GpuTaskResourceUse>> GatherPreparedMaterialGeometryUses(in Span<
     return uses;
 }
 
-[cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
     in Span<MaterialPassDrawItemsView> drawItemSets,
     in Name identity,
@@ -172,14 +169,12 @@ Expected<GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
     return graph.importResourceSet(desc);
 }
 
-[cpp_unwind]
 Expected<GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(mut GpuTaskGraph graph, in RegularSharedComputeEmulationGraphPlan plan, in StringView label){
     if(!plan.captured || !plan.outputBuffer.valid())
         return MakeUnexpected(Failure());
     return FindOrImportBuffer(graph, plan.outputBuffer, label);
 }
 
-[cpp_unwind]
 Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterialSampledTextureResources(
     in Span<TextureHandle> textures,
     in StringView markerLabel,
@@ -213,7 +208,6 @@ Expected<Vector<GpuGraphResourceId>, SampledTextureImportFailure> ImportMaterial
     return resources;
 }
 
-[cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
     in RendererMaterialSystem materialSystem,
     in Span<MaterialPassDrawItemsView> drawItemSets,

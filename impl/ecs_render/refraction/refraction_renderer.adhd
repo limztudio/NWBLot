@@ -21,16 +21,12 @@ class RefractionRenderer : NoCopy{
     }
 
     public void setRefractionDiagnosticsEnabled(in b8 enabled){ this.m_diagnosticsEnabled = enabled; }
-    [cpp_unwind]
     public void pollRefractionStatistics(){ this.m_statistics.pollCompleted(); }
     public Expected<RefractionStatistics> tryGetLatestRefractionStatistics()const{ return this.m_statistics.latestStatistics(); }
     public void invalidateResources(){ this.m_statistics.invalidateResources(); }
-    [cpp_unwind]
     public b8 prepareRefractionResources();
     public RayTracingRefractionGraphResources snapshotRefractionGraphResources(in u32 width, in u32 height, in u32 frameIndex)const;
-    [cpp_unwind]
     public b8 recordRefractionTileClassification(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const;
-    [cpp_unwind]
     public b8 recordRefractionResolve(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const;
 }
 

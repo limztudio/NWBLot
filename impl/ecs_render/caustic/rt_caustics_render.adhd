@@ -93,7 +93,6 @@ in CausticResolveStageState CausticWaveletStage(in borrow CausticResolveState re
     return resolve.m_wavelet;
 }
 
-[cpp_unwind]
 void EnableCausticResolveBarriers(mut CommandList commandList, mut DeferredFrameTargets targets){
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.deref(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.deref(), true);
@@ -101,7 +100,6 @@ void EnableCausticResolveBarriers(mut CommandList commandList, mut DeferredFrame
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.deref(), true);
 }
 
-[cpp_unwind]
 void DispatchCausticResolvePass(
     mut CommandList commandList,
     mut GpuDescriptorHeap heap,
@@ -187,13 +185,11 @@ CausticPhotonPushConstants MakeCausticPhotonPushConstants(
     );
 }
 
-[cpp_unwind]
 void StartCausticPhotonTiming(mut GraphicsRuntime graphics, mut CommandList commands, in Optional<mut Optional<GpuTimingMeasure>> retained, mut Optional<GpuTimingMeasure> local){
     if(!retained.has_value() || !retained.value().has_value())
         local.emplace(graphics.gpuTiming(), s_TimingScopeCausticPhotons, graphics.getDevice(), commands);
 }
 
-[cpp_unwind]
 void FinishCausticPhotonTiming(mut CommandList commands, in Optional<mut Optional<GpuTimingMeasure>> retained, mut Optional<GpuTimingMeasure> local){
     if(local.has_value())
         local.reset();
@@ -215,7 +211,6 @@ b8 RendererRayTracingSystem::setCausticQualitySettings(in CausticQualitySettings
     return true;
 }
 
-[cpp_unwind]
 Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const{
     outHash = 0u;
     outByteSize = 0u;
@@ -274,7 +269,6 @@ void RendererRayTracingSystem::confirmPreparedCausticEmissionTargetUpload(in u64
     this.m_rayTracingState.caustics.m_acceptedCausticEmissionTargetsValid = true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::dispatchCausticAccumulatorDecay(mut CommandList commandList, mut DeferredFrameTargets targets){
     if(!targets.causticAccumulator.valid() || !targets.bindless.causticAccumulatorStorage.valid() || !this.m_rayTracingState.caustics.m_causticAccumulatorDecayPipeline.valid())
         return false;
@@ -313,7 +307,6 @@ b8 RendererRayTracingSystem::hasCausticWork(in MeshViewBufferSnapshot meshView)c
     ;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::renderGpuBvhCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming){
     if(!this.hasCausticWork(meshView))
         return false;
@@ -355,7 +348,6 @@ b8 RendererRayTracingSystem::renderGpuBvhCaustics(mut CommandList commandList, i
     return true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming){
     if(!this.hasHwCausticWork(meshView))
         return false;
@@ -465,7 +457,6 @@ b8 RendererRayTracingSystem::renderHwCaustics(mut CommandList commandList, in Me
     return true;
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::dispatchCausticGeometryDownsample(mut CommandList commandList, mut DeferredFrameTargets targets){
     assert(targets.bindless.valid());
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -495,7 +486,6 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(mut CommandList
     commandList.dispatch(groups.x, groups.y, 1u);
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::dispatchCausticResolvePrepare(mut CommandList commandList, mut DeferredFrameTargets targets){
     assert(targets.bindless.valid());
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -522,7 +512,6 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(mut CommandList com
     );
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(mut CommandList commandList, mut DeferredFrameTargets targets, in u32 passIndex){
     assert(passIndex < cast<u32>(s_CausticResolvePassCount));
     assert(targets.bindless.valid());
@@ -555,7 +544,6 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(mut CommandList
     );
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::dispatchCausticResolveUpsample(mut CommandList commandList, mut DeferredFrameTargets targets){
     assert(targets.bindless.valid());
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -591,7 +579,6 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(mut CommandList co
     );
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareCausticEmissionTargetResources(){
     this.m_preparedCausticEmissionTargetBytes.clear();
     this.m_rayTracingState.caustics.m_causticRefractiveInstanceCount = 0u;

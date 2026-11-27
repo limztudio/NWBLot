@@ -23,7 +23,6 @@ class GpuFrameTimingEndTask{
         return commands;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return this.m_transaction.recordEnd(commands);
     }
@@ -81,7 +80,6 @@ Expected<Name> MakeGpuIndexedTaskName(in Name prefix, in usize index){
     return DeriveName(prefix, suffix.view());
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> ImportGpuScratchTarget(
     mut GpuTaskGraph graph,
     in GpuVersion<GpuTargetVersion> target,
@@ -111,7 +109,6 @@ Expected<GpuTaskId> ImportGpuScratchTarget(
     return GpuTaskId();
 }
 
-[cpp_unwind]
 Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph graph, in b8 allowEmptySceneLayer){
     mut GraphicsRuntime graphics = this.m_graphics;
     GpuTaskGraphOutputLayer layer;
@@ -656,7 +653,6 @@ Expected<GpuTaskGraphOutputLayer> GpuRendererState::declare(mut GpuTaskGraph gra
     return layer;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> GpuRendererState::declareStandalone(mut GpuTaskGraph graph, mut GpuTimingFrameTransaction frameTimingTransaction){
     mut GraphicsRuntime graphics = this.m_graphics;
     if(!IsGpuPendingFrameReadyToDeclare(this.m_pending.valid(), this.m_pending.valid() && this.m_pending.deref().m_prepared, this.m_readyToDeclare))
@@ -785,7 +781,6 @@ void GpuRendererState::acceptOutputLayer(in u64 frameGeneration, in QueueSubmiss
     this.m_readyToDeclare = false;
 }
 
-[cpp_unwind]
 b8 GpuRendererState::renderStandalone(in AcquiredPresentationFrame frame){
     mut GraphicsRuntime graphics = this.m_graphics;
     if(!MatchesGpuAcquiredPresentationFrame(graphics.acquiredPresentationFrame(), frame))

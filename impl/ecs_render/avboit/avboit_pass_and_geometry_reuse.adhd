@@ -338,7 +338,6 @@ b8 FrameBindingsMatch(in MeshFrameBindingSnapshot left, in MeshFrameBindingSnaps
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 EligibleAvboitReuseGroup(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot bindings, in MaterialPipelinePass pass){
     if(!IsEligibleAvboitReuseGroupHeader(MaterialPipelinePassUsesRendererAvboit(pass), draws.regular.computeDrawItems.empty(),
         draws.regular.meshDrawItems.empty(), draws.csg.empty(), draws.csgReceiverSurface.empty(), bindings.bindingValid(), bindings.instanceBufferCapacity, instances.size()))

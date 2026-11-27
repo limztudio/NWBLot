@@ -42,7 +42,6 @@ class TextureGpuResource : NoCopy{
 
 
 class TextureMipDecoder : NoCopy{
-    [cpp_unwind]
     public Expected<TextureDecodedMipUpload> decode(
         in Texture textureAsset,
         in TextureMipLevel mip,
@@ -50,7 +49,6 @@ class TextureMipDecoder : NoCopy{
         in Format format
     );
 
-    [cpp_unwind]
     public Expected<QueueSubmissionToken, TextureUploadFailure> decodeAndUploadStaticTextureMips(
         in Texture textureAsset,
         in Format format,
@@ -58,7 +56,6 @@ class TextureMipDecoder : NoCopy{
         in TextureHandle texture
     );
 
-    [cpp_unwind]
     private Expected<TextureDecodedMipUpload> decodeLdr(
         in Texture textureAsset,
         in TextureMipLevel mip,
@@ -66,7 +63,6 @@ class TextureMipDecoder : NoCopy{
         in Format format
     );
 
-    [cpp_unwind]
     private Expected<TextureDecodedMipUpload> decodeHdr(
         in Texture textureAsset,
         in TextureMipLevel mip,
@@ -75,7 +71,6 @@ class TextureMipDecoder : NoCopy{
     );
 };
 
-[cpp_unwind]
 Expected<TextureDecodedMipUpload> TextureMipDecoder::decode(
     in Texture textureAsset,
     in TextureMipLevel mip,
@@ -232,7 +227,6 @@ GpuDescriptorClass ToSampledImageDescriptorClass(in TexturePayloadDimension dime
     }
 }
 
-[cpp_unwind]
 b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in StringView ownerName, mut GraphicsRuntime graphics, mut TextureGpuResource outResource){
     assert(!outResource.valid());
     if(HasPartiallyInitializedTextureGpuResource(outResource.texture.valid(), outResource.sampledImageHeapHandle.valid(), outResource.format != Format::UNKNOWN)){
@@ -310,7 +304,6 @@ b8 CreateTextureGpuResource(in Texture textureAsset, in Name debugName, in Strin
     return true;
 }
 
-[cpp_unwind]
 b8 LoadTextureGpuResource(in AssetRef<Texture> textureAsset, in Name debugName, in StringView ownerName, mut GraphicsRuntime graphics, in AssetManager assetManager, mut TextureGpuResource outResource){
     if(!CheckAssetLoaderEnter(textureAsset, outResource, ownerName))
         return outResource.valid();

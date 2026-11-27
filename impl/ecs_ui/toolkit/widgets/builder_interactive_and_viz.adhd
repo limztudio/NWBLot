@@ -87,7 +87,6 @@ void EmitMeasuredRichTextRun(
     inOutCursorX += advW;
 }
 
-[cpp_unwind]
 void AppendRichTextHardLine(
     in StringView lineText,
     in RichTextSpan sp,

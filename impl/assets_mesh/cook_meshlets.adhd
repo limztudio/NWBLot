@@ -140,7 +140,6 @@ Expected<u32> TryFindNextUnvisitedMeshletTriangle(in Span<u8> visitedTriangles, 
     return MakeUnexpected(Failure());
 }
 
-[cpp_unwind]
 void BuildMeshletPositionTriangleOffsets(
     in Span<u32> indices,
     in Span<MeshVertexRef> vertexRefs,
@@ -192,7 +191,6 @@ void ComputeMeshletTriangleDataAndCalculation(
     }
 }
 
-[cpp_unwind]
 void PrecomputeMeshletTriangleStreams(
     in Span<u32> indices,
     in Span<MeshVertexRef> vertexRefs,
@@ -244,7 +242,6 @@ void PrecomputeMeshletTriangleStreams(
     }
 }
 
-[cpp_unwind]
 b8 ValidateAndPrecomputeMeshletTriangleStreams(
     in StringView metaKind,
     in StringView filePathText,
@@ -290,7 +287,6 @@ void RemoveMeshletFrontierCandidate(in usize frontierOffset, mut Vector<u32> inO
     inOutFrontier.pop_back();
 }
 
-[cpp_unwind]
 void AddMeshletTriangleNeighborsToFrontier(
     in Span<MeshletTriangleData> triangles,
     in Span<u32> positionTriangleOffsets,

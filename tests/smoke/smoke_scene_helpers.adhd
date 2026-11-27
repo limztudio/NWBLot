@@ -689,7 +689,6 @@ mut RendererSystem AddSmokeRenderSystems(mut World world, mut ProjectRuntimeCont
     return SmokeRendererSystemRef(world);
 }
 
-[cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateSmokeRenderWorld(in StringView projectName, mut ProjectRuntimeContext context){
     auto created = CreateSmokeWorld(projectName, context);
     if(!created.has_value())

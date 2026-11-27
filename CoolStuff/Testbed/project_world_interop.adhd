@@ -270,7 +270,6 @@ void AttachProjectUiPaintEntity(mut NotNullUniquePtr<World> worldHandle, mut IPr
     customUi.paint.setCallback(paintFn);
 }
 
-[cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateInitialProjectWorld(mut ProjectRuntimeContext context){
     if(!cast<b8>(context.shaderPathResolver)){
         error("CreateInitialProjectWorld failed: shader path resolver callback is null");

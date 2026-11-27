@@ -17,12 +17,12 @@ extern class CookEntryPathHashSet{
 
 [cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryRegistry"), cpp_flags(no_copy, no_assign)]
 extern class CookEntryRegistry{
-    b8 has(...)const;
+    [cpp_flags(nothrow)] b8 has(...)const;
     [cpp_flags(unwind)] b8 parseDocument(...);
     [cpp_flags(unwind)] b8 parseValue(...);
-    usize bucketCount(...)const;
+    [cpp_flags(nothrow)] usize bucketCount(...)const;
     b8 writeBucket(...);
-    u64 entryCount(...)const;
+    [cpp_flags(nothrow)] u64 entryCount(...)const;
 };
 
 [cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntrySourceLocation"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]

@@ -405,7 +405,6 @@ void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(in QueueSubm
     this.m_rayTracingState.surfelGi.m_surfelCountReadbackSubmissionToken = submissionToken;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::createSurfelTargets(mut DeferredFrameTargets targets){
     const u32 factor = targets.surfelResolveFactor;
     const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, factor);
@@ -441,7 +440,6 @@ b8 RendererRayTracingSystem::createSurfelTargets(mut DeferredFrameTargets target
     return true;
 }
 
-[cpp_unwind]
 Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(mut GpuTaskGraph graph, in DeferredFrameTargets targets)const{
     if(!this.hasSurfelWork())
         return Optional<GpuUploadBlobId>();
@@ -465,7 +463,6 @@ Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedSurf
     return Optional<GpuUploadBlobId>(blob.value());
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     RetireDescriptor(heap, this.m_rayTracingState.surfelGi.m_surfelConstantsHeapHandle);
@@ -490,7 +487,6 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
     FinalizeSurfelResourceInitializationLifecycle(this.m_rayTracingState.surfelGi.m_surfelResourcesClearPending, this.m_rayTracingState.surfelGi.m_surfelResourcesNeedClear);
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::ensureSurfelResources(){
     if(!this.hasSurfelWork())
         return true;
@@ -566,7 +562,6 @@ b8 RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const{
         this.m_rayTracingState.surfelGi.m_surfelCountReadbackSubmissionToken.valid(), this.m_rayTracingState.surfelGi.m_surfelFrameIndex);
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareSurfelResources(mut DeferredFrameTargets targets){
     if(!this.hasSurfelWork())
         return true;

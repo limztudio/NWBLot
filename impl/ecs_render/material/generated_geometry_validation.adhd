@@ -24,7 +24,6 @@ class AliasFreeComputeEmulationGraphPlan{
         this.captured = false;
     }
 
-    [cpp_unwind]
     public b8 capture(in MaterialPassDrawItemsView source, in b8 requireCsg){
         this.reset();
         const usize count = source.computeDrawItems.size();

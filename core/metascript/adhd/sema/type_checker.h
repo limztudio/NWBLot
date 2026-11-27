@@ -54,6 +54,7 @@ class TypeChecker final{
     friend class BinaryExpressionChecker;
     friend class LocalVariableChecker;
     friend class ReturnStatementChecker;
+    friend class ExceptionSpecAnalyzer;
 
 private:
     [[nodiscard]] static const ScopedVarInfo* FindScopedVar(Span<const ScopedVarInfo> scope, MStringView name, usize* outIndex = nullptr)noexcept;

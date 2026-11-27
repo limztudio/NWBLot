@@ -116,7 +116,6 @@ ShadowTemporalResourceUseKind ResolveTransparentTemporalHistoryUseKind(in b8 tra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 AppendShadowTemporalTexture(mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> uses, in TextureHandle texture, in Name identity, in StringView label, in ShadowTemporalResourceUseKind kind){
     if(!texture.valid())
         return true;
@@ -140,7 +139,6 @@ b8 AppendShadowTemporalTexture(mut GpuTaskGraph graph, mut Vector<GpuTaskResourc
     return true;
 }
 
-[cpp_unwind]
 b8 AppendShadowOptionalReadWriteBuffer(mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> uses, in BufferHandle buffer, in Name identity, in StringView label, in ResourceStates state){
     if(!buffer.valid())
         return true;
@@ -151,7 +149,6 @@ b8 AppendShadowOptionalReadWriteBuffer(mut GpuTaskGraph graph, mut Vector<GpuTas
     return true;
 }
 
-[cpp_unwind]
 b8 ShadowVisibilityGraphCoordinator::declareDeferredShadowVisibilityTask(
     in ShadowVisibilityGraphContext context,
     in DeferredLightingGraphResources deferredLightingResources,
@@ -422,7 +419,6 @@ void ShadowVisibilityMergeValidator::validate(in GpuCompiledGraphReadView compil
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 ShadowVisibilityResourcePlanner::prepare(in ShadowVisibilityResourceInputs inputs, mut ShadowVisibilityResourcePlan result){
     const auto worldPosition = inputs.worldPosition;
     const auto normal = inputs.normal;

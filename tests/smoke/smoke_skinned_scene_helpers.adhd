@@ -199,7 +199,6 @@ void AnimateSkinningBenchmarkPoses(mut World world, in Span<EntityID> entities, 
     }
 }
 
-[cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateSmokeSkinnedRenderWorld(in StringView projectName, in SmokeRenderQualitySettings baseSettings, mut ProjectRuntimeContext context){
     auto created = CreateSmokeWorld(projectName, context);
     if(!created.has_value())
@@ -209,7 +208,6 @@ Expected<NotNullUniquePtr<World>> CreateSmokeSkinnedRenderWorld(in StringView pr
     return TakeSmokeWorld(world);
 }
 
-[cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateSmokeSkinnedRenderWorld(in StringView projectName, mut ProjectRuntimeContext context){
     return CreateSmokeSkinnedRenderWorld(projectName, SmokeRenderQualitySettings(), context);
 }

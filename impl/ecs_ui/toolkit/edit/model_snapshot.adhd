@@ -35,7 +35,7 @@ class EditModelSnapshot{
         return MatchesEditModelSnapshotValues(model.text(), model.stamp(), model.composition(), StringView(this.m_expectedText), StringView(this.m_expectedPreedit), this.m_expectedComposition, this.m_expectedStamp);
     }
 
-    [cpp_unwind] public void captureSurrounding(in EditModel model){
+    public void captureSurrounding(in EditModel model){
         this.m_hasCompositionSnapshot = false;
         const TextAreaModelStamp current = model.stamp();
         if(
@@ -52,7 +52,7 @@ class EditModelSnapshot{
         CaptureEditModelSnapshotSurroundingValues(model.text(), current, this.m_expectedText, this.m_expectedStamp, this.m_expectedRevision, this.m_expectedExternalRevision);
     }
 
-    [cpp_unwind] public void capture(in EditModel model){
+    public void capture(in EditModel model){
         const TextAreaModelStamp current = model.stamp();
         if(this.m_hasCompositionSnapshot && this.m_expectedStamp == current)
             return;

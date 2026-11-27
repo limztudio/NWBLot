@@ -43,7 +43,6 @@ usize ComputeOpaqueGbufferResourceUseCapacity(
     return count;
 }
 
-[cpp_unwind]
 void AppendOpaqueGbufferResourceUses(in DeferredGraphResourceImportResult resources, in OpaqueGbufferResourceUseInputs inputs, mut Vector<GpuTaskResourceUse> uses){
     uses.reserve(ComputeOpaqueGbufferResourceUseCapacity(
         inputs.hasOpaqueDrawItems,

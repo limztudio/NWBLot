@@ -40,7 +40,6 @@ class GpuRendererState : NoCopy{
     public b8 m_claimed = false;
     public b8 m_readyToDeclare = false;
 
-    [cpp_unwind]
     public GpuRendererState(mut GraphicsRuntime graphics, mut AssetManager assets, in ShaderArchivePathResolver resolver){
         this.m_graphics = graphics;
         this.m_assets = assets;
@@ -48,7 +47,6 @@ class GpuRendererState : NoCopy{
         this.m_imageCache.reserve();
     }
 
-    [cpp_unwind]
     private b8 loadShader<TShader : IShader>(in AssetRef<TShader> reference, in Name identity, mut ShaderHandle outShader){
         return reference.valid() && Load<TShader, ShaderArchivePathResolver>(reference.name(), s_DefaultVariant, identity, s_GpuRendererContext, this.m_graphics, this.m_assets, this.m_resolver, Optional<Name>(), outShader);
     }
@@ -57,7 +55,6 @@ class GpuRendererState : NoCopy{
     [owner_result]
     private GpuFrameData emptyFrame()const{ return GpuFrameData(); }
 
-    [cpp_unwind]
     public Expected<GpuFrame> makeFrame(){
         auto rasterCapture = this.m_versions.make<GpuCommandIrCapture>(this.m_graphics.allocator());
         auto outputCapture = this.m_versions.make<GpuCommandIrCapture>(this.m_graphics.allocator());
@@ -68,19 +65,12 @@ class GpuRendererState : NoCopy{
         prepared.m_outputCommandIrCapture = outputCapture.value();
         return this.m_versions.makePrepared<GpuFrameData>(prepared);
     }
-    [cpp_unwind]
     public b8 createResources();
-    [cpp_unwind]
     public b8 prepareOutputPipeline(in FramebufferInfo info);
-    [cpp_unwind]
     public b8 prepareBuffers(mut GpuFrameSlot slot, in DrawSnapshot snapshot);
-    [cpp_unwind]
     public b8 prepare(in AcquiredPresentationFrame acquired);
-    [cpp_unwind]
     public Expected<GpuTaskGraphOutputLayer> declare(mut GpuTaskGraph graph, in b8 allowEmptySceneLayer);
-    [cpp_unwind]
     public Expected<GpuTaskId> declareStandalone(mut GpuTaskGraph graph, mut GpuTimingFrameTransaction frameTimingTransaction);
-    [cpp_unwind]
     public b8 renderStandalone(in AcquiredPresentationFrame frame);
     public void acceptOutputLayer(in u64 generation, in QueueSubmissionToken token);
 }

@@ -27,7 +27,7 @@ class UiTextEditSession : NoCopy{
             TerminateInvariant();
     }
 
-    [cpp_unwind] public TextInputAdmission begin(in UiTextEditOwner owner, in TextInputRect caret, mut EditModel model){
+    public TextInputAdmission begin(in UiTextEditOwner owner, in TextInputRect caret, mut EditModel model){
         if(!this.m_service.isOwnerThread())
             return TextInputAdmission::WrongThread;
         if(!owner.valid() || model.composition().active)
@@ -54,11 +54,11 @@ class UiTextEditSession : NoCopy{
         return TextInputAdmission::Accepted;
     }
 
-    [cpp_unwind] public TextInputAdmission refresh(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
+    public TextInputAdmission refresh(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret){
         return this.syncSession(owner, model, caret, TextInputChangeCause::InputMethod, false);
     }
 
-    [cpp_unwind] public UiTextEditResult drain(in UiTextEditOwner owner, mut EditModel model){
+    public UiTextEditResult drain(in UiTextEditOwner owner, mut EditModel model){
         UiTextEditResult result;
         if(!this.m_service.isOwnerThread()){
             result.status = UiTextEditStatus::WrongThread;
@@ -122,7 +122,7 @@ class UiTextEditSession : NoCopy{
         return this.m_service.poll(this.m_token, event);
     }
 
-    [cpp_unwind] public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause){
+    public TextInputAdmission adoptLocal(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause){
         return this.syncSession(owner, model, caret, cause, true);
     }
 
@@ -166,7 +166,7 @@ class UiTextEditSession : NoCopy{
         return this.m_token.valid() && this.m_owner == owner && this.m_expectedModel.matches(model) && this.m_publishedModel.matchesSurrounding(model);
     }
 
-    [cpp_unwind] private TextInputAdmission syncSession(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause, in b8 adoptExpected){
+    private TextInputAdmission syncSession(in UiTextEditOwner owner, in EditModel model, in TextInputRect caret, in TextInputChangeCause cause, in b8 adoptExpected){
         if(!this.m_service.isOwnerThread())
             return TextInputAdmission::WrongThread;
         b8 sessionValid = false;
@@ -189,7 +189,7 @@ class UiTextEditSession : NoCopy{
         return TextInputAdmission::Accepted;
     }
 
-    [cpp_unwind] private TextInputAdmission publishSurrounding(in EditModel model, in TextInputChangeCause cause){
+    private TextInputAdmission publishSurrounding(in EditModel model, in TextInputChangeCause cause){
         const TextInputAdmission admission = this.m_service.updateSurrounding(this.m_token, model.text(), model.anchor(), model.caret(), cause);
         if(admission != TextInputAdmission::Accepted)
             return admission;
@@ -198,7 +198,7 @@ class UiTextEditSession : NoCopy{
         return TextInputAdmission::Accepted;
     }
 
-    [cpp_unwind] private TextInputAdmission publishSurrounding(in EditModel model){
+    private TextInputAdmission publishSurrounding(in EditModel model){
         return this.publishSurrounding(model, TextInputChangeCause::InputMethod);
     }
 }
@@ -229,7 +229,7 @@ b8 IsStaleUiTextEditSurroundingRevision(
     return expectedSurroundingRevision == 0u || eventSurroundingRevision != expectedSurroundingRevision || !matchesPublishedModel;
 }
 
-[cpp_unwind] UiTextEditStatus ApplyUiTextEditEvent(
+UiTextEditStatus ApplyUiTextEditEvent(
     mut EditModel model,
     in TextInputEvent event,
     in u64 expectedSurroundingRevision,

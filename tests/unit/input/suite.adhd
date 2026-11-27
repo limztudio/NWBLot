@@ -186,7 +186,7 @@ class ThrowingHandler : IInputEventHandler{
         this.m_nestedDispatch = nestedDispatch;
     }
 
-    [cpp_unwind] public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
+    public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers)override{
         ++this.m_keyUpdates;
         if(this.m_nestedDispatch)
             this.m_dispatcher.pointerLeave();
@@ -194,7 +194,7 @@ class ThrowingHandler : IInputEventHandler{
         return KeyboardInputResult(false, false);
     }
 
-    [cpp_unwind] public void pointerLeave()override{ ThrowTestException<u32>(s_DispatchFailure); }
+    public void pointerLeave()override{ ThrowTestException<u32>(s_DispatchFailure); }
 }
 
 
@@ -540,7 +540,6 @@ void VerifyInputDispatcher_RemovingTheConsumingHandlerPreservesOnlyItsQueuedChar
     EXPECT_EQ(scene.m_textPolicyQueries, 1u);
 }
 
-[cpp_unwind]
 void VerifyInputDispatcher_HandlerExceptionsRestoreDirectAndNestedDispatchDepth(){
     Array<b8, 2> modes = Array<b8, 2>();
     modes[0u] = false;

@@ -8,22 +8,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void AppendMeshComponent(in f32 value, mut String out){
     StringAppendFormat(out, "{:.9g}", CleanFloat(value));
 }
 
-[cpp_unwind]
 void AppendMeshComponent(in u32 value, mut String out){
     AppendUnsignedU64Text(out, cast<u64>(value));
 }
 
-[cpp_unwind]
 void AppendMeshComponent(in u16 value, mut String out){
     AppendUnsignedU64Text(out, cast<u64>(value));
 }
 
-[cpp_unwind]
 void AppendMeshTuple<Value>(in Span<Value> components, mut String out){
     out.append("[");
     for(usize index = 0u; index < components.size(); ++index){
@@ -34,31 +30,26 @@ void AppendMeshTuple<Value>(in Span<Value> components, mut String out){
     out.append("]");
 }
 
-[cpp_unwind]
 void AppendMeshValueText(in Vec2 value, mut String out){
     const Array<f32, 2u> components(value.x, value.y);
     AppendMeshTuple<f32>(components, out);
 }
 
-[cpp_unwind]
 void AppendMeshValueText(in Vec3 value, mut String out){
     const Array<f32, 3u> components(value.x, value.y, value.z);
     AppendMeshTuple<f32>(components, out);
 }
 
-[cpp_unwind]
 void AppendMeshValueText(in Vec4 value, mut String out){
     const Array<f32, 4u> components(value.x, value.y, value.z, value.w);
     AppendMeshTuple<f32>(components, out);
 }
 
-[cpp_unwind]
 void AppendMeshValueText(in SourceVertexRef ref, mut String out){
     const Array<u32, 5u> components(ref.position, ref.normal, ref.tangent, ref.uv0, ref.color);
     AppendMeshTuple<u32>(components, out);
 }
 
-[cpp_unwind]
 void AppendMeshRows<Value>(in Span<Value> values, in StringView indent, mut String out){
     for(in Value value : values){
         out.append(indent);
@@ -68,7 +59,6 @@ void AppendMeshRows<Value>(in Span<Value> values, in StringView indent, mut Stri
     }
 }
 
-[cpp_unwind]
 void AppendMeshTriangleRows(in Span<u32> indices, in StringView indent, mut String out){
     for(usize i = 0u; i < indices.size(); i += cast<usize>(s_MeshletTriangleIndexCount)){
         out.append(indent);

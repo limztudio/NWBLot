@@ -47,7 +47,6 @@ class FramebufferReadbackTask{
         return commands;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.source.valid() || !this.destination.valid() || !this.completion.valid() || context.hasCommandIrCapture())
             return false;
@@ -513,7 +512,6 @@ class SmokeCaptureFactory{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 StartNewSmokeFramebufferCapture(in StringView outputPath, in u32 count, mut ProjectRuntimeContext context, in FramebufferCaptureOptions options, mut UniquePtr<FramebufferCapture> outCapture){
     auto capture = MakeUnique<FramebufferCapture>(context.graphics, outputPath, count, context, options);
     if(!capture.valid() || !capture.deref().start())

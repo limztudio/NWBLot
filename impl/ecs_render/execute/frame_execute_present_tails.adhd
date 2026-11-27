@@ -21,9 +21,7 @@ class FrameExecutePresentTails : NoCopy{
         this.m_finalPresentationSubmissionToken = finalPresentationSubmissionToken;
     }
 
-    [cpp_unwind]
     public b8 executeSurfelCounterReadback(in Optional<GpuPhysicalQueueInfo> readbackQueue, in Span<BufferHandle> counterBuffers);
-    [cpp_unwind]
     public void executeLaggedLightingHistoryCapture(mut DeferredFrameTargets targets, in Optional<GpuPhysicalQueueInfo> historyQueue, in b8 requestsCapture, in b8 captureDeclared, in b8 laggedAsyncLightingSchedule);
 }
 

@@ -23,7 +23,7 @@ NWB_BEGIN
 namespace Tests{
 
 template<typename T>
-[[nodiscard]] T& TestProcessValue(){
+[[nodiscard]] T& TestProcessValue()noexcept{
     static T s_Value{};
     return s_Value;
 }

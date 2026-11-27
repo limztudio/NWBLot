@@ -14,16 +14,12 @@
 
 
 interface IEditBoxHost : NoCopy{
-    [cpp_unwind]
     EditBoxResult edit(in WidgetState widget, in EditBoxOptions options, mut EditModel model);
 
-    [cpp_unwind]
     EditBoxResult editInPopup(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model);
 
-    [cpp_unwind]
     EditBoxResult editActions(in WidgetState widget, in EditBoxOptions options, in PopupToken popup, mut EditModel model, mut IEditActionSink actions);
 
-    [cpp_unwind]
     EditBoxResult editNavigated(
         in WidgetState widget,
         in EditBoxOptions options,
@@ -34,7 +30,6 @@ interface IEditBoxHost : NoCopy{
         mut IEditActionSink actions
     );
 
-    [cpp_unwind]
     b8 publish(in WidgetState widget, in EditBoxView view, in EditBoxPlacement placement, in EditBoxOptions options);
 }
 

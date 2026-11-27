@@ -13,7 +13,6 @@ class PopupEndResult{
     public u32 layer = 0u;
 }
 
-[cpp_unwind]
 Expected<PopupToken> TryRegisterContextPopupScope(
     in WidgetState state,
     in PopupToken currentPopup,

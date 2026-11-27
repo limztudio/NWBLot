@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 TryExtractSoftBodySourceTriangles(in Mesh sourceMesh, in StringView callerName, mut Vector<u32> outIndices){
     outIndices.clear();
     if(sourceMesh.positionStream().empty() || sourceMesh.meshlets().empty()){
@@ -26,7 +25,6 @@ b8 TryExtractSoftBodySourceTriangles(in Mesh sourceMesh, in StringView callerNam
     return true;
 }
 
-[cpp_unwind]
 Expected<SoftBody> CreateSoftBodyFromMesh(
     in Mesh sourceMesh,
     in SoftBodyMeshCreateParams params,
@@ -51,13 +49,11 @@ Expected<SoftBody> CreateSoftBodyFromMesh(
     return sb;
 }
 
-[cpp_unwind]
 Expected<SoftBody> CreateSoftBodyFromMesh(in Mesh sourceMesh, in SoftBodyMeshCreateParams params){
     Vector<u32> unusedMap;
     return CreateSoftBodyFromMesh(sourceMesh, params, unusedMap);
 }
 
-[cpp_unwind]
 Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(
     in Mesh sourceMesh,
     in f32 cellSize,
@@ -84,7 +80,6 @@ Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(
     return sb;
 }
 
-[cpp_unwind]
 Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(in Mesh sourceMesh, in f32 cellSize, in SoftBodyMeshCreateParams params){
     SoftBodyCageBinding unusedBinding;
     return CreateTetrahedralSoftBodyAssetFromMesh(sourceMesh, cellSize, params, unusedBinding);

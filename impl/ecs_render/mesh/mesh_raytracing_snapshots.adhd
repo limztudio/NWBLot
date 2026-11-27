@@ -96,7 +96,6 @@ Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::findRenderableRayTr
     return CaptureRenderableRayTracingResourceSnapshot(found.value(), desc, this.meshRenderBindingsReady(found.value()));
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::commitRayTracingResourceSnapshot(in MeshRayTracingResourceSnapshot expected, mut MeshRayTracingResourceSnapshot desired){
     const auto found = this.m_meshState.m_meshes.find(expected.meshName);
     const b8 currentMatches = found != this.m_meshState.m_meshes.end() && MeshRayTracingSnapshotPolicy().matches(found.value(), expected);
@@ -191,7 +190,6 @@ b8 RendererMeshSystem::commitRayTracingResourceSnapshot(in MeshRayTracingResourc
     return true;
 }
 
-[cpp_unwind]
 Expected<MeshRayTracingResourceSnapshot> RendererMeshSystem::ensureRayTracingInputHeapHandles(in MeshRayTracingResourceSnapshot expected){
     const auto found = this.m_meshState.m_meshes.find(expected.meshName);
     if(found == this.m_meshState.m_meshes.end() || !MeshRayTracingSnapshotPolicy().matches(found.value(), expected) || !this.ensureMeshSwBvhInputHeapHandles(found.value()))
@@ -219,7 +217,6 @@ void RendererMeshSystem::discardRayTracingBuildState(){
     }
 }
 
-[cpp_unwind]
 Expected<MeshSoftwareBvhParentBuildStateVector> RendererMeshSystem::collectSoftwareBvhParentBuildStates()const{
     MeshSoftwareBvhParentBuildStateVector states;
     states.reserve(this.m_meshState.m_meshes.size());

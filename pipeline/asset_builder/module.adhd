@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 i32 RunPipelineOptions(mut PipelineOptions options){
     CpuTaskScheduler scheduler(QueryAssetBuilderWorkerCoreCount());
     AssetBuildOptions build(scheduler);
@@ -35,7 +34,6 @@ i32 RunPipelineOptions(mut PipelineOptions options){
     return s_PipelineExitFailure;
 }
 
-[cpp_unwind]
 i32 Run(in ConsoleArguments args){
     return RunPipelineTool(args, PipelineTool::AssetBuilder, RunPipelineOptions);
 }

@@ -83,7 +83,6 @@ GpuTaskTimingMetadata BuildAvboitComputeStageTimingMetadata(in AvboitFrameTarget
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 DeclareAvboitRasterRecordPhase(
     mut GpuTaskGraph graph,
     mut GraphicsRuntime graphics,
@@ -324,7 +323,6 @@ b8 DeclareAvboitRasterRecordPhase(
     return true;
 }
 
-[cpp_unwind]
 b8 DeclareAvboitOccupancyRecord(
     mut GpuTaskGraph graph,
     mut GraphicsRuntime graphics,
@@ -382,7 +380,6 @@ b8 DeclareAvboitOccupancyRecord(
             stage.m_occupancySharedComputeEmulationTaskCount, stage.m_occupancyTask));
 }
 
-[cpp_unwind]
 b8 DeclareAvboitExtinctionRecord(
     mut GpuTaskGraph graph,
     mut GraphicsRuntime graphics,
@@ -443,7 +440,6 @@ b8 DeclareAvboitExtinctionRecord(
             stage.m_extinctionSharedComputeEmulationTaskCount, stage.m_extinctionTask));
 }
 
-[cpp_unwind]
 b8 DeclareAvboitAccumulationRecord(
     mut GpuTaskGraph graph,
     mut GraphicsRuntime graphics,

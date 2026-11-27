@@ -26,7 +26,6 @@ class SkinningPlansTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         if(this.m_plans.empty())
             return false;
@@ -287,7 +286,6 @@ class MeshSkinningFramePlanBuilder : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RetainSkinningBuffer(in BufferHandle buffer, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
     if(!buffer.valid())
         return;
@@ -308,7 +306,6 @@ void RetainSkinningBuffer(in BufferHandle buffer, mut Vector<BufferHandle> buffe
         buffers.push_back(buffer);
 }
 
-[cpp_unwind]
 void CollectSkinningInstanceStateBuffers(in MeshSkinningRuntimeInstance instance, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
     if(!instance.valid())
         return;
@@ -316,7 +313,6 @@ void CollectSkinningInstanceStateBuffers(in MeshSkinningRuntimeInstance instance
         RetainSkinningBuffer(buffer, buffers, index);
 }
 
-[cpp_unwind]
 void CollectSkinningResourceStateBuffers(in MeshSkinningRuntimeInstance instance, in MeshSkinningRuntimeResources resources, mut Vector<BufferHandle> buffers, mut HashSet<BufferHandle> index){
     if(!instance.valid() || resources.editRevision != instance.editRevision)
         return;
@@ -348,7 +344,6 @@ b8 IsSkinningShaderResource(in GpuTaskRecordContext context, mut CommandList com
     return buffer.has_value() && commands.getBufferState(buffer.value()) == ResourceStates::ShaderResource;
 }
 
-[cpp_unwind]
 Expected<Vector<u32>> TryBuildMeshSkinningTraceIndices(in MeshSkinningRuntimeInstance instance){
     const usize indexCount = instance.meshletPrimitiveIndices.size();
     const Expected<Vector<u32>> triangleIndices = BuildMeshletTriangleIndices(
@@ -367,7 +362,6 @@ Expected<Vector<u32>> TryBuildMeshSkinningTraceIndices(in MeshSkinningRuntimeIns
     return triangleIndices.value();
 }
 
-[cpp_unwind]
 Expected<Vector<AttribGpu>> TryBuildMeshSkinningTraceAttributes(in MeshSkinningRuntimeInstance instance){
     const Expected<Vector<AttribGpu>> triangleAttributes = BuildMeshletTriangleAttributes(
         instance.meshlets,

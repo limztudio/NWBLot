@@ -62,7 +62,6 @@ class RefractionCaptureCapTask{
         this.targets = targets;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         if(!CanRecordRefractionCaptureCapTask(this.csgResources.refractionCapFillPipeline.valid(), this.csgResources.bindingValid(),
             this.targets.avboit.refractionFramebuffer.valid(), this.targets.bindless.slotsBufferDescriptor.valid(), this.receiverIndices.empty()))
@@ -89,7 +88,6 @@ class RefractionCaptureDrawTask{
 
     public RefractionCaptureDrawTask(mut RendererMaterialSystem materialSystem){ this.materialSystem = materialSystem; }
     public GpuTaskCommandRequirements commandRequirements()const{ return SharedComputeEmulationCommandRequirements(this.generate); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const RefractionCaptureValidationPolicy validationPolicy();
         if(!validationPolicy.canRecordCaptureDraw(
@@ -171,7 +169,6 @@ class RefractionCaptureAttachments{
         uses.push_back(ReadWriteUse(this.instance, ResourceStates::RenderTarget));
         uses.push_back(ReadWriteUse(this.specularRoughness, ResourceStates::RenderTarget));
     }
-    [cpp_unwind]
     public Expected<GpuTaskId> finalize(mut GpuTaskGraph graph, in borrow GpuTaskId dependency)const{
         const Array<GpuTaskResourceUse, 5u> uses(ReadUse(this.depth), ReadUse(this.normalIor), ReadUse(this.tintCoverage), ReadUse(this.instance), ReadUse(this.specularRoughness));
         GpuTaskDesc desc = TaskDesc(s_RenderIdentityRenderRefractionCaptureFinalize, s_RefractionCaptureFinalizeLabel, dependency);
@@ -217,7 +214,6 @@ Expected<Name> FormatRefractionCaptureDrawIdentity(in usize drawTaskIndex){
     return ParseName(text.view());
 }
 
-[cpp_unwind]
 b8 AppendRefractionCaptureUpload(
     mut GpuTaskGraph graph,
     mut GpuTaskId dependency,
@@ -241,7 +237,6 @@ b8 AppendRefractionCaptureUpload(
     return true;
 }
 
-[cpp_unwind]
 b8 AppendRefractionCaptureCsg(
     mut GpuTaskGraph graph,
     mut GpuTaskId dependency,
@@ -282,7 +277,6 @@ b8 AppendRefractionCaptureCsg(
         && appendIntervalRead(targets.csgRemovedIntervalData) && appendIntervalRead(targets.csgRemovedIntervalCount);
 }
 
-[cpp_unwind]
 b8 AppendRefractionCaptureClear(mut GpuTaskGraph graph, mut GpuTaskId dependency, in Name identity, in GpuGraphResourceId destination, in b8 isDepth, in Color color){
     GpuTaskDesc desc = TaskDesc(identity, s_RefractionCaptureClearLabel, dependency);
     GpuClearTextureTaskDesc clear;
@@ -303,7 +297,6 @@ b8 AppendRefractionCaptureClear(mut GpuTaskGraph graph, mut GpuTaskId dependency
     return true;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareRefractionCaptureCaps(
     mut GpuTaskGraph graph,
     mut RendererCsgSystem csgSystem,
@@ -341,7 +334,6 @@ Expected<GpuTaskId> DeclareRefractionCaptureCaps(
     return graph.addPreparedPayloadTask(desc, payload);
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     mut GpuTaskGraph graph,
     mut RendererMaterialSystem materialSystem,

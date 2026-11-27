@@ -17,7 +17,6 @@ b8 ReachedSkinInfluenceJointLimit(in u32 writtenInfluenceCount){
 }
 
 
-[cpp_unwind]
 Expected<Vector<u16>> BuildClusterJointMap(in MeshInstance instance, in ImportOptions options, in UfbxSkin skin, mut FbxSkinExportContext inOutContext){
     Vector<u16> outClusterJoints;
     const Expected<usize> reservedJointCountResult = ValidateFbxSkinClusterCount(skin.clusterCount(), inOutContext.joints.size());
@@ -90,7 +89,6 @@ Expected<Vector<u16>> BuildClusterJointMap(in MeshInstance instance, in ImportOp
     return outClusterJoints;
 }
 
-[cpp_unwind]
 Expected<MeshSkinInfluence> LoadInfluence(in UfbxSkin skin, in Span<u16> clusterJoints, in u32 logicalVertex){
     MeshSkinInfluence result;
     if(!ValidateFbxSkinLogicalVertex(logicalVertex, skin.vertexCount()))

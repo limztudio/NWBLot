@@ -791,7 +791,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB Refraction Smoke");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateRefractionSmokeWorld(context);
     if(!world.has_value())

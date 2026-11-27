@@ -81,7 +81,6 @@ Expected<String> ResolveCsgProjectEvaluatorModuleInclude(in CsgShapeRegistry reg
     return module;
 }
 
-[cpp_unwind]
 Expected<mut MaterialPipelineResources> RendererMaterialSystem::createRendererPipeline(in MaterialSurfaceInfo materialInfo, in MaterialPipelineKey pipelineKey, mut Framebuffer framebuffer){
     const Name materialKey = materialInfo.materialName;
     const MaterialPipelinePass pass = pipelineKey.pass;
@@ -270,7 +269,6 @@ void RendererMaterialSystem::invalidateRendererPipelines(){
     this.m_materialState.m_objectGeometryInputLayout.reset();
 }
 
-[cpp_unwind]
 void RendererMaterialSystem::logMaterialRenderPathDecision(in Name materialKey, in RenderPath renderPath, in b8 meshSupported){
     const auto entry = this.m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!entry.second){

@@ -94,7 +94,6 @@ Expected<MeshletRefChannelWidths> TryPrepareMeshletRefEncoding(
     return widths;
 }
 
-[cpp_unwind]
 b8 BuildZippedMeshletRefsFixed(
     in StringView metaKind,
     in StringView filePathText,

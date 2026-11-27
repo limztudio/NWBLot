@@ -39,7 +39,6 @@ void LogAssetsGathered(in u64 fileCount, in StringView outputDirectory){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<Vector<String>> CollectGatherInputFiles(in AssetGatherOptions options){
     Vector<String> files;
     files.reserve(options.inputs.size());
@@ -89,7 +88,6 @@ Expected<Vector<String>> CollectGatherInputFiles(in AssetGatherOptions options){
     return files;
 }
 
-[cpp_unwind]
 b8 GatherAssets(in AssetGatherOptions options){
     if(!ValidateAssetGathererOutputDirectory(!options.outputDirectory.empty()))
         return false;

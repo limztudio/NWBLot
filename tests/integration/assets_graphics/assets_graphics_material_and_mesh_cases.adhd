@@ -131,7 +131,6 @@ void VerifyAssetsGraphics_MaterialKeyHashPreservesHighBytesAndPathSeparators(){
     EXPECT_EQ(packed.w, 3u);
 }
 
-[cpp_unwind]
 void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialMutation(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
@@ -152,7 +151,6 @@ void VerifyAssetsGraphics_DuplicateMaterialBindIdentityIsRejectedBeforeMaterialM
     EXPECT_EQ(materialEntries[0u].typedBlockBytes[0u], 0x2Au);
 }
 
-[cpp_unwind]
 void VerifyAssetsGraphics_MaterialBindSchemaValidation(){
     Array<StringView, 8u> expectedSymbols = Array<StringView, 8u>();
     expectedSymbols[0u] = "NWB_MATERIAL_BIND_INTERFACE_HASH_0";
@@ -1098,7 +1096,6 @@ void VerifyAssetsGraphics_ObjectGeometryMetadataRejectsRetiredVertexSourceSelect
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void VerifyAssetsGraphics_FindOrBuildMaterialBindTypedLayoutUnwindsAtomicallyOnAllocationFailure(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);

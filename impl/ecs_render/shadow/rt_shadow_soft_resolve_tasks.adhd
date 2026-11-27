@@ -46,7 +46,6 @@ class ShadowVisibilityOpaqueGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -138,7 +137,6 @@ class ShadowVisibilityOpaqueFirstWaveletGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -194,7 +192,6 @@ class ShadowVisibilityOpaqueResolveTailGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -239,7 +236,6 @@ class ShadowTransparentSoftTraceGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -298,7 +294,6 @@ class ShadowTransparentSoftTemporalMergeGraphTask{
         return this.m_raytracingSystem.renderSoftOpaqueShadowResolvePhase(commandList, this.m_context.targets, this.m_context.deferredLightingResources, this.m_context.opaqueFrameIndex, this.m_hardwareShadowSupported, true, SoftShadowOpaqueResolvePhase::TemporalOnly);
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -356,7 +351,6 @@ class ShadowTransparentSoftFirstWaveletGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -421,7 +415,6 @@ class ShadowTransparentSoftFoldGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_context.deferredLightingResources.valid())
             return false;
@@ -506,7 +499,6 @@ class ShadowVisibilityGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_deferredLightingResources.valid())
             return false;

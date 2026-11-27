@@ -47,7 +47,6 @@ b8 ValidateRawBufferLogicalByteCount(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 CreateUploadedMeshBuffer(
     mut GraphicsRuntime graphics,
     in Name meshName,
@@ -69,7 +68,6 @@ b8 CreateUploadedMeshBuffer(
     return true;
 }
 
-[cpp_unwind]
 b8 UploadMeshStream<T>(mut GraphicsRuntime graphics, in Name meshName, in StringView suffix, in Span<T> payload, in StringView label, mut BufferHandle destination, in b8 rawViews, in b8 buildInput){
     const Span<T> payloadRef = payload;
     const BufferFlags flags(false, rawViews, buildInput, ResourceQueueSharing::GraphicsAndAsyncCompute, false);
@@ -86,7 +84,6 @@ b8 UploadMeshStream<T>(mut GraphicsRuntime graphics, in Name meshName, in String
     );
 }
 
-[cpp_unwind]
 b8 UploadMeshBytes(mut GraphicsRuntime graphics, in Name meshName, in StringView suffix, in Span<u8> payload, in StringView label, mut BufferHandle destination){
     const Span<u8> payloadRef = payload;
     const BufferFlags flags(false, true, false, ResourceQueueSharing::GraphicsAndAsyncCompute, false);
@@ -121,7 +118,6 @@ void RefreshRuntimeMeshContent(mut MeshResources mesh, in RuntimeMeshDesc desc){
     RefreshRuntimeMeshCsgBounds(VectorSingle(desc.localBounds.minBounds), VectorSingle(desc.localBounds.maxBounds), desc.localBounds.finite(), mesh.csgLocalBounds);
 }
 
-[cpp_unwind]
 Expected<mut MeshResources> RendererMeshSystem::createMeshResources(in AssetRef<Mesh> meshAsset){
     const Name meshPath = meshAsset.name();
     if(meshPath == s_NameNone){
@@ -257,7 +253,6 @@ Expected<mut MeshResources> RendererMeshSystem::findMeshResources(in Name meshKe
     return Expected<mut MeshResources>(stored);
 }
 
-[cpp_unwind]
 Expected<mut MeshResources> RendererMeshSystem::createRuntimeMeshResources(in RuntimeMeshDesc desc){
     assert(desc.valid());
 

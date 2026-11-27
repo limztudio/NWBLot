@@ -41,7 +41,6 @@ class ClampObserverFailure{}
 class ThrowingClampLogger : Utf8LogSink{
     public u32 clampCount = 0u;
 
-    [cpp_unwind]
     public void receive(in StringView text, in LogType kind)override{
         if(text.find("Frame Win32 client size clamped") == usize.max)
             return;
@@ -217,7 +216,6 @@ void VerifyFrameWindowDimensions_LogicalDimensionsRemainPositiveAtLargestNativeS
     EXPECT_EQ(LogicalDimensionForPixels(5u, 0), 5);
 }
 
-[cpp_unwind]
 void VerifyFrameWin32Lifecycle_ThrowingClampObserverReleasesNativeClassBeforeLaterInitialization(){
     CpuTaskSchedulerConfig cpuTasks = CpuTaskSchedulerConfig();
     cpuTasks.workerCount = 1u;

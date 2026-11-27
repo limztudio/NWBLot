@@ -32,7 +32,7 @@ class UiEditClipboardPolicy{
         return reads;
     }
 
-    [cpp_unwind] public UiEditClipboardStatus prepareInsertText(
+    public UiEditClipboardStatus prepareInsertText(
         in EditClipboardAction action,
         in b8 readOnly,
         in EditTextMode textMode,

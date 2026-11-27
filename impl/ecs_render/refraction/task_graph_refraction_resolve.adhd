@@ -33,7 +33,6 @@ class RefractionStatisticsReadbackGraphTask : MoveOnly{
         requirements.requiresPrimaryGraphicsQueue = true;
         return requirements;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
     public void accepted(in QueueSubmissionToken token){ this.reservation.acceptReservation(token, this.m_hardwareEnabled && this.m_hardwareReady); }
     public void discarded(){ this.reservation.discard(); }
@@ -51,7 +50,6 @@ class RefractionClassifyTilesGraphTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return this.m_renderer.recordRefractionTileClassification(commands, this.m_targets, this.m_resources);
     }
@@ -90,9 +88,7 @@ class RefractionResolveGraphTask{
         requirements.requiresPrimaryGraphicsQueue = this.m_diagnostics;
         return requirements;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
-    [cpp_unwind]
     public void accepted(in QueueSubmissionToken token);
 }
 
@@ -155,7 +151,6 @@ class FrameGraphRefractionResolve : NoCopy{
         this.m_graphics = graphics;
         this.m_raytracingSystem = system;
     }
-    [cpp_unwind]
     public Expected<GpuTaskId> declare(in FrameGraphRefractionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads);
 }
 
@@ -171,7 +166,6 @@ class RefractionClearTileArgumentsGraphTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const GpuGraphResourceId resource = this.m_resource;
         in GpuTaskRecordContext contextRef = context;
@@ -201,7 +195,6 @@ class RefractionClearStatisticsGraphTask{
         commands.requiresPrimaryGraphicsQueue = true;
         return commands;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_destination.valid())
             return false;

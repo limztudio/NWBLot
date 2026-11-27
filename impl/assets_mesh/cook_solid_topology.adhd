@@ -89,7 +89,6 @@ void JoinMeshTopologyComponents(
         ++inOutRanks[cast<usize>(firstRoot)];
 }
 
-[cpp_unwind]
 b8 PrepareMeshTopologyEdges(
     in Span<f32x3u> positions,
     in Span<u32> triangleIndices,
@@ -159,7 +158,6 @@ void CompressMeshTopologyParents(mut Vector<u32> inOutParents){
     }
 }
 
-[cpp_unwind]
 void FinalizeMeshSolidTriangleWords(
     in Span<f32x3u> positions,
     in Span<u32> triangleIndices,
@@ -226,7 +224,6 @@ void FinalizeMeshSolidTriangleWords(
     }
 }
 
-[cpp_unwind]
 void RadixSortTriangleEdges(mut Vector<TriangleEdge> inOutEdges, in u64 xorDiff){
     const usize count = inOutEdges.size();
     Vector<TriangleEdge> scratch;
@@ -271,7 +268,6 @@ void RadixSortTriangleEdges(mut Vector<TriangleEdge> inOutEdges, in u64 xorDiff)
         AssignTriviallyCopyableVector(inOutEdges, Span<TriangleEdge>(scratch));
 }
 
-[cpp_unwind]
 void SortTriangleEdgesByPositions(mut Vector<TriangleEdge> inOutEdges){
     const usize count = inOutEdges.size();
     if(count < 256u){
@@ -291,7 +287,6 @@ void SortTriangleEdgesByPositions(mut Vector<TriangleEdge> inOutEdges){
     RadixSortTriangleEdges(inOutEdges, xorDiff);
 }
 
-[cpp_unwind]
 b8 BuildSolidTriangleWordsInto(
     in Span<f32x3u> positions,
     in Span<u32> triangleIndices,

@@ -114,7 +114,6 @@ class ShadowPrepareGraphTask{
         return commands;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
         this.m_outcome.ready = false;
@@ -187,7 +186,6 @@ class ShadowPrepareSoftwareBvhBuildGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope timingRecording(this.m_timingTicket);
         return this.m_raytracingSystem.recordPreparedMeshSwBvhBuildAfterGraphClears(commandList, this.m_build);
@@ -257,7 +255,6 @@ b8 HasAccelStructBuildStatesGraphOwned(in b8 sceneTlasBuildGraphOwned, in b8 mes
     return sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
 }
 
-[cpp_unwind]
 b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint scheduling, mut GpuTaskId firstTask, mut GpuTaskId dependency, in Expected<Name> identity, in StringView label, in GpuGraphResourceId destination, in u32 clearValue){
     if(!identity.has_value())
         return false;
@@ -279,7 +276,6 @@ b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint
     return true;
 }
 
-[cpp_unwind]
 b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     in ShadowPrepareGraphContext context,
     in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
@@ -567,7 +563,6 @@ void ShadowPrepareGraphCoordinator::resetShadowPrepareTaskState(){
     this.resetShadowPrepareUploadTaskState();
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> ShadowAccelerationFinalizeBuilder::declare(
     in b8 sceneTlasBuildGraphOwned,
     in GpuGraphResourceId sceneTlas,
@@ -656,7 +651,6 @@ void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiled
     ;
 }
 
-[cpp_unwind]
 b8 ShadowSoftwareBvhBuildChain::declare(
     in Span<PreparedMeshSwBvhGraphResources> pureSoftwareMeshSwBvhGraphResources,
     mut GpuTimingSubmissionTicket timingTicket,

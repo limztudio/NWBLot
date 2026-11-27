@@ -123,7 +123,6 @@ class SoftwareSceneRefitResources : NoCopy{
         descriptor = GpuDescriptorHandleInvalid();
     }
 
-    [cpp_unwind]
     private b8 ensureU32StorageBuffer(in usize byteSize, in Name debugName, mut BufferHandle inOutBuffer, mut GpuDescriptorHandle inOutDescriptor){
         mut Device device = this.m_graphics.getDevice();
         mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -150,7 +149,6 @@ class SoftwareSceneRefitResources : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public void invalidate(){
         this.m_snapshots.clear();
         mut Device device = this.m_graphics.getDevice();
@@ -166,7 +164,6 @@ class SoftwareSceneRefitResources : NoCopy{
         this.m_bindingLayout.reset();
     }
 
-    [cpp_unwind]
     public Expected<SoftwareSceneRefitHandle> prepare(
         in Span<SoftwareSceneRefitInstanceGpu> inputs,
         in Span<BufferHandle> meshNodes,
@@ -271,7 +268,6 @@ class SoftwareSceneRefitResources : NoCopy{
         return snapshot;
     }
 
-    [cpp_unwind]
     private b8 ensurePipeline(mut RendererShaderSystem shaderSystem){
         return EnsurePushConstantComputePipeline<BvhSubsystem>(
             this.m_graphics.getDevice(), shaderSystem, lambda[](in BvhSubsystem subsystem) -> AssetRef<ComputeShader>{ return subsystem.sceneRefitCs; }, s_DefaultVariant, Name(s_RenderNameSoftwareSceneRefit),
@@ -292,7 +288,6 @@ class SoftwareSceneRefitTask{
         return commands;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_snapshot.valid() || context.commandIrCapture)
             return false;
@@ -349,7 +344,6 @@ SoftwareSceneRefitPushConstants MakeSoftwareSceneBvhRefitPushConstantsWrapper(in
     );
 }
 
-[cpp_unwind]
 Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(
     in SoftwareSceneRefitHandle snapshot,
     in GpuGraphResourceId sceneNodes,

@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
     in Name materialName,
     in StringView instanceName,
@@ -59,7 +58,6 @@ Expected<u32x4u> TryBuildMaterialTypedLayoutDefaultValue(
 
 
 
-[cpp_unwind]
 b8 TryAppendMaterialBindTypedLayoutField(
     in StringView interfacePath,
     in Name contextName,
@@ -143,7 +141,6 @@ b8 TryAppendMaterialBindTypedLayoutField(
     return true;
 }
 
-[cpp_unwind]
 b8 TryFinalizeMaterialBindTypedLayoutBlock(
     in StringView interfacePath,
     in Name contextName,
@@ -197,7 +194,6 @@ Expected<MaterialBlockClass> ParseMaterialBindBlockClass(in MaterialBindStruct b
     return MakeUnexpected(Failure());
 }
 
-[cpp_unwind]
 b8 BuildSortedMaterialBindInstanceIndices(
     in StringView interfaceVirtualPath,
     in Name contextName,
@@ -253,7 +249,6 @@ b8 AccumulateMaterialBindStructLayoutReserve(
     return true;
 }
 
-[cpp_unwind]
 b8 ReserveMaterialBindTypedLayoutStorage(
     in StringView interfaceVirtualPath,
     in Name contextName,
@@ -290,7 +285,6 @@ b8 ReserveMaterialBindTypedLayoutStorage(
 
 
 
-[cpp_unwind]
 b8 AppendMaterialBindInstanceTypedLayoutBlock(
     in StringView interfaceVirtualPath,
     in Name contextName,
@@ -366,7 +360,6 @@ b8 AppendMaterialBindInstanceTypedLayoutBlock(
     );
 }
 
-[cpp_unwind]
 Expected<u64> BuildMaterialBindTypedLayoutData(
     in StringView interfaceVirtualPath,
     in Name contextName,

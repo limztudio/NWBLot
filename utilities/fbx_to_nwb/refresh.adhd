@@ -32,7 +32,6 @@ class MeshRefreshDocument : NoCopy{
         this.m_source = source;
     }
 
-    [cpp_unwind]
     public b8 refreshDeclaration(in StringView typeName, in StringView variable);
 }
 
@@ -53,7 +52,6 @@ b8 ValidateRefreshMeshFields(in Path file, in StringView variable, in Metascript
     });
 }
 
-[cpp_unwind]
 Expected<SourceMeshStreams> ParseRefreshMesh(in Path file, in StringView variable, in MetascriptValue asset){
     SourceMeshStreams mesh;
     if(!ValidateRefreshMeshFields(file, variable, asset)
@@ -127,7 +125,6 @@ Expected<AssignmentRange> FindListAssignmentRange(in StringView source, in Strin
     return range;
 }
 
-[cpp_unwind]
 b8 AddMeshReplacement(in StringView source, in StringView variableName, in StringView field, in String text, mut Vector<MeshTextReplacement> replacements){
     const auto range = FindListAssignmentRange(source, variableName, field);
     if(!range.has_value()){
@@ -142,7 +139,6 @@ b8 AddMeshReplacement(in StringView source, in StringView variableName, in Strin
     return true;
 }
 
-[cpp_unwind]
 b8 AppendMeshReplacements(in StringView source, in StringView variable, in SourceMeshStreamCounts before, in SourceMeshStreams after, mut Vector<MeshTextReplacement> replacements){
     if(before.positions != after.positions.size() && !AddMeshReplacement(source, variable, s_MeshPositionsFieldNameView, FormatMeshRefreshList<Vec3>(after.positions, 40u), replacements))
         return false;
@@ -182,7 +178,6 @@ Expected<Optional<StringView>> FindMeshSkin(in MetascriptDocument document, in S
     return found;
 }
 
-[cpp_unwind]
 Expected<CanonicalizeMeshStreamsResult> CanonicalizeRefreshMesh(in Path path, in MetascriptDocument document, in StringView variable, mut SourceMeshStreams mesh){
     const auto linked = FindMeshSkin(document, variable);
     if(!linked.has_value())
@@ -198,7 +193,6 @@ Expected<CanonicalizeMeshStreamsResult> CanonicalizeRefreshMesh(in Path path, in
     return CanonicalizeMeshStreams(mesh.positions, mesh.normals, mesh.tangents, mesh.uv0, mesh.colors, mesh.skin, mesh.indices.size(), mesh.vertexRefs, PositionSkinRemap::Deduplicate);
 }
 
-[cpp_unwind]
 b8 MeshRefreshDocument::refreshDeclaration(in StringView typeName, in StringView variable){
     if(!IsMeshRefreshDeclarationType(typeName))
         return true;
@@ -221,7 +215,6 @@ b8 MeshRefreshDocument::refreshDeclaration(in StringView typeName, in StringView
     return true;
 }
 
-[cpp_unwind]
 Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(in Path inputPath, in Path outputPath){
     String source;
     const auto read = ReadTextFile(inputPath, source);

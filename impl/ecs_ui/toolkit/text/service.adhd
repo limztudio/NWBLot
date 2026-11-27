@@ -139,7 +139,6 @@ class TextService : NoCopy{
     public u64 atlasIdentity()const{ return this.m_atlas.identity(); }
     public usize atlasGlyphCount()const{ return this.m_atlas.glyphCount(); }
 
-    [cpp_unwind]
     public b8 setFonts(in Span<FontSource> sources){
         if(this.m_generation == u64.max || !this.m_shaper.setFonts(sources))
             return false;
@@ -153,7 +152,6 @@ class TextService : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public b8 registerFont(in FontSource source){
         if(this.m_generation == u64.max || !this.m_shaper.registerFont(source))
             return false;
@@ -177,7 +175,7 @@ class TextService : NoCopy{
     public usize fontCount()const{ return this.m_shaper.fontCount(); }
     public Optional<SharedFontFace> resolveFace(in FontDescriptor descriptor)const{ return this.m_shaper.resolveFace(descriptor); }
 
-    [cpp_unwind, owner_result]
+    [owner_result]
     public Expected<TextLayout, TextLayoutStatus> layout(in ShapeRequest request){
         TextLayout target;
         const TextLayoutStatus status = target.shapeIntoDirect(request, this.m_shaper);
@@ -186,7 +184,6 @@ class TextService : NoCopy{
         return target;
     }
 
-    [cpp_unwind]
     private Expected<SharedTextLayout, TextLayoutStatus> layoutSharedUncached(in ShapeRequest request){
         Expected<SharedTextLayout> created = this.m_layoutPool.make<TextLayout>();
         if(!created.has_value())
@@ -197,7 +194,6 @@ class TextService : NoCopy{
         return created.value();
     }
 
-    [cpp_unwind]
     private Expected<usize, TextLayoutStatus> resolveCachedLayoutEntry(in ShapeRequest request){
         const usize hash = ComputeTextLayoutCacheHash(request);
         const auto headIt = this.m_layoutCacheHead.find(hash);
@@ -252,7 +248,6 @@ class TextService : NoCopy{
         return cast<usize>(newIndex);
     }
 
-    [cpp_unwind]
     public Expected<SharedTextLayout, TextLayoutStatus> layoutShared(in ShapeRequest request){
         if(request.text.size() > s_TextLayoutCacheMaxTextBytes)
             return this.layoutSharedUncached(request);
@@ -262,7 +257,6 @@ class TextService : NoCopy{
         return this.m_layoutCacheEntries[entryIndex.value()].layout;
     }
 
-    [cpp_unwind]
     public Expected<CachedMeasuredText> layoutAndMeasureShared(in ShapeRequest request, in DisplayMetrics display){
         if(request.text.size() > s_TextLayoutCacheMaxTextBytes){
             Expected<SharedTextLayout, TextLayoutStatus> shaped = this.layoutSharedUncached(request);
@@ -309,7 +303,6 @@ class TextService : NoCopy{
         return result;
     }
 
-    [cpp_unwind]
     private b8 loadSdfSupportCached(in PlacedGlyph placed, in BakedFontAtlas atlas, in f32 fontSize, in DisplayMetrics display, mut VectorDouble outBounds){
         VectorDouble rectangle(0.0);
         if(!LoadAtlasRectangle(placed, atlas, fontSize, Point(), rectangle))
@@ -334,7 +327,6 @@ class TextService : NoCopy{
         return ResolveSdfGlyphSupportBounds(rectangle, offset.value(), outBounds);
     }
 
-    [cpp_unwind]
     public Expected<Rect> measureTracked(in TextLayout layout, in DisplayMetrics display, mut b8 outMissingCoverageAtlasEntry){
         outMissingCoverageAtlasEntry = false;
         if(layout.lines().empty())
@@ -373,13 +365,11 @@ class TextService : NoCopy{
         return TryMakeMeasuredTextRect(bounds.x, bounds.y, bounds.z, bounds.w);
     }
 
-    [cpp_unwind]
     public Expected<Rect> measure(in TextLayout layout, in DisplayMetrics display){
         b8 missingCoverage = false;
         return this.measureTracked(layout, display, missingCoverage);
     }
 
-    [cpp_unwind]
     public b8 paint(mut PaintBuilder paint, in TextLayout layout, in Point topLeft, in Color color){
         const DisplayMetrics display = paint.displayMetrics();
         const Expected<TextRasterMetrics> baseRasterMetrics = TryResolveTextRasterMetrics(layout.fontSize(), display);

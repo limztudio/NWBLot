@@ -399,7 +399,6 @@ b8 AppendGeneratedShaderEntries(in Vector<GeneratedMaterialPixelShader> list, mu
     return true;
 }
 
-[cpp_unwind]
 b8 PrepareGraphicsMaterials(mut CookVolumePrepareContext context, mut GraphicsVolumeMetadata metadata, mut Span<MaterialCookEntry> materials){
     if(!ValidateMaterialCookRequiresShaderEntries(metadata.shaderEntries.size(), materials.size()) || !ValidateMaterialCookInterfaces(metadata.materialBindEntries, materials))
         return false;

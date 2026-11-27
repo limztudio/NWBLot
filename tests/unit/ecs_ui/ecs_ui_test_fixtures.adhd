@@ -140,12 +140,10 @@ class FakeAccessibility : TrackedAccessibilityService{
         return this.enqueueAction(ev);
     }
 
-    [cpp_unwind]
     public void onTreePublished(in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY)override{
         RecordEcsUiFakeA11yTree(this, nodes, textStorage, focusedId, version, scaleX, scaleY);
     }
 
-    [cpp_unwind]
     public void onAnnouncement(in StringView text, in AccessibilityLiveMode politeness)override{
         RecordEcsUiFakeA11yAnnouncement(this, text, politeness);
     }
@@ -283,7 +281,6 @@ void StartEcsUiFakeClipboardRequest(mut FakeClipboard self, in ClipboardRequestT
     }
 }
 
-[cpp_unwind]
 void RecordEcsUiFakeA11yTree(mut FakeAccessibility self, in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY){
     self.lastVersion = version;
     self.lastFocusedId = focusedId;
@@ -296,7 +293,6 @@ void RecordEcsUiFakeA11yTree(mut FakeAccessibility self, in Span<AccessibilityNo
     self.publishedText.assign(textStorage);
 }
 
-[cpp_unwind]
 void RecordEcsUiFakeA11yAnnouncement(mut FakeAccessibility self, in StringView text, in AccessibilityLiveMode politeness){
     String msg;
     msg.assign(text);

@@ -691,7 +691,6 @@ void VerifyScratchArenaReuse_ColdAlignmentBucketsAllocateOnceAndReleaseAllBackin
     EXPECT_EQ(released.reservedBytes, expectedReserved);
 }
 
-[cpp_unwind]
 void VerifyScratchArenaReuse_InvalidRuntimeAlignmentDoesNotConsumeExistingBucket(){
     ScratchStorage testArena(s_AllocCaseScratchReuseInvalidAlignment, 256u);
     {
@@ -1000,7 +999,6 @@ void VerifyScratchArenaReuse_LargeSmallLargeRequestsDoNotRecreateUndersizedCache
     EXPECT_EQ(afterHeap.deallocationCount, beforeHeap.deallocationCount);
 }
 
-[cpp_unwind]
 void VerifyScratchArenaReuse_NestedContainerDestructionAndCallerUnwindPreserveEarlierStorage(){
     ScratchStorage testArena(s_AllocCaseScratchReuseNestedContainers, 256u);
     {

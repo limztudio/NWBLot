@@ -214,7 +214,6 @@ class GamepadNavigationAdapter{
         return this.m_config.deviceBaseId + cast<u64>(gamepadIndex);
     }
 
-    [cpp_unwind]
     private b8 queueCommand(
         in u64 deviceId,
         in u64 controlId,
@@ -234,7 +233,6 @@ class GamepadNavigationAdapter{
         return queued.has_value();
     }
 
-    [cpp_unwind]
     public void onConnection(in u32 gamepadIndex, in b8 connected, mut InputRouter router){
         if(gamepadIndex >= s_MaxGamepadCount)
             return;
@@ -246,13 +244,11 @@ class GamepadNavigationAdapter{
             router.cancelDeviceInput(deviceId);
     }
 
-    [cpp_unwind]
     public void reset(mut InputRouter router){
         for(u32 index = 0u; index < s_MaxGamepadCount; ++index)
             this.onConnection(index, false, router);
     }
 
-    [cpp_unwind]
     public b8 onButton(in u32 gamepadIndex, in i32 button, in i32 action, mut InputRouter router){
         if(gamepadIndex >= s_MaxGamepadCount || button < 0 || button >= cast<i32>(GamepadButton::kCount))
             return false;
@@ -340,7 +336,6 @@ class GamepadNavigationAdapter{
         return nextDir != previous;
     }
 
-    [cpp_unwind]
     public b8 commitAxisTransition(
         in u32 gamepadIndex,
         in GamepadStickDirection previous,
@@ -378,7 +373,6 @@ class GamepadNavigationAdapter{
         return router.process().commandConsumed;
     }
 
-    [cpp_unwind]
     public b8 onAxis(in u32 gamepadIndex, in i32 axis, in f32 value, mut InputRouter router){
         GamepadStickDirection previous = GamepadStickDirection::None;
         GamepadStickDirection nextDir = GamepadStickDirection::None;
@@ -387,7 +381,6 @@ class GamepadNavigationAdapter{
         return this.commitAxisTransition(gamepadIndex, previous, nextDir, router);
     }
 
-    [cpp_unwind]
     public b8 tick(in f32 deltaSeconds, mut InputRouter router){
         if(!IsFinite(VectorSingle(deltaSeconds)) || deltaSeconds <= 0.0f)
             return false;

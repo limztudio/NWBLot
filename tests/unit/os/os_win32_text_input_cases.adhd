@@ -139,7 +139,6 @@ void VerifyWin32TextInputFixture_RepeatedExplicitContextReleasePreservesActiveNa
     EXPECT_EQ(out.event.text, "R");
 }
 
-[cpp_unwind]
 void VerifyWin32TextInputFixture_ContextScopeUnwindPreservesOriginalThrownMarkerAndNativeSession(mut Win32TextInputFixture self){
     b8 hasNativeContext = false;
     b8 caughtOriginal = false;

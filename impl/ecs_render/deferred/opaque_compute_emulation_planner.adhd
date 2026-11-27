@@ -34,7 +34,6 @@ class OpaqueComputeEmulationPlanner : NoCopy{
         this.m_csgPayload = OpaqueCsgReceiverComputeEmulationGraphTaskPayload(materials, targets, ticket, meshReady, shadingReady);
     }
 
-    [cpp_unwind]
     public void capture(
         mut GpuTaskGraph graph,
         in MaterialPassDrawItemPartitions opaqueDrawItems,

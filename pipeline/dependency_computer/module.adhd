@@ -10,7 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 i32 RunPipelineOptions(mut PipelineOptions options){
     AssetDependencyOptions dependencies;
     dependencies.inputs = options.inputs;
@@ -22,7 +21,6 @@ i32 RunPipelineOptions(mut PipelineOptions options){
     return s_PipelineExitFailure;
 }
 
-[cpp_unwind]
 i32 Run(in ConsoleArguments args){
     return RunPipelineTool(args, PipelineTool::DependencyComputer, RunPipelineOptions);
 }

@@ -137,7 +137,6 @@ void VerifyCpuTaskRangeTests_InvalidBatchOptionsPublishNoTasks(){
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskRangeTests_InlineFailureRetiresSubmittedDescendantsBeforeTerminalHandling(){
     Atomic<u32> retirements(0u);
     u32 callbacks = 0u;
@@ -810,7 +809,6 @@ void VerifyCpuTaskSchedulerTests_MainThreadTasksSubmittedByWorkersExecuteOnlyOnT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void VerifyCpuTaskSubmissionTests_CallableConstructionFailurePublishesNoSchedulerOrScopeWork(){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
@@ -885,7 +883,6 @@ void VerifyCpuTaskSubmissionTests_ExpectedAdmissionErrorsPreservePublicationAndC
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
-[cpp_unwind]
 void ExecuteWorkerCallbackFailureDeath(in u32 workerCount, in u32 exceptionCode){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     i32 result = 0;
@@ -913,7 +910,6 @@ void VerifyCpuTaskSubmissionTests_WorkerCallbackFailureTerminatesWithoutDeferred
     EXPECT_DEATH(ExecuteWorkerCallbackFailureDeath(workerCount, exceptionCode), "");
 }
 
-[cpp_unwind]
 void ExecuteParallelRangeWorkerFailureDeath(in u32 workerCount, in usize itemCount, in u32 exceptionCode){
     DeadlineGuard deadline(true, s_TestTimeoutMS);
     i32 result = 0;
@@ -946,7 +942,6 @@ void VerifyCpuTaskSubmissionTests_ParallelRangeWorkerFailureTerminatesWithoutDef
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller(){
     u32 callbacks = 0u;
     DeadlineGuard deadline(false, s_WaitWatchdogTimeoutMS);
@@ -968,7 +963,6 @@ void VerifyCpuTaskWaitTests_ScopeRejectsAnIndependentTaskDependingOnTheCaller(){
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor(){
     DeadlineGuard deadline(false, s_WaitWatchdogTimeoutMS);
     CpuTaskScheduler scheduler(0u);
@@ -995,7 +989,6 @@ void VerifyCpuTaskWaitTests_ScopeRejectsTransitiveDependentsOfTheCallersAncestor
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskWaitTests_ScopeRechecksDependenciesPublishedByCooperativeWork(){
     u32 callbacks = 0u;
     DeadlineGuard deadline(false, s_WaitWatchdogTimeoutMS);

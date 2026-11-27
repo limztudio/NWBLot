@@ -49,7 +49,6 @@ b8 IsAvboitComputeEmulationFrameReady(in b8 planMatches, in b8 materialDrawBuffe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<AvboitPassUploadResult> GatherAvboitPassUpload(
     mut RendererMaterialSystem materials,
     in FrameGraphAvboitStageInputs inputs,
@@ -231,7 +230,6 @@ Expected<FrameGraphAvboitMaterialUploadResult> FrameGraphAvboitPassUploadChain::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<AvboitGeometryPreparationResult> PrepareAvboitMaterialGeometry(mut GpuTaskGraph graph, mut RendererMaterialSystem materialSystem, in AvboitGeometryPreparationInputs inputs){
     AvboitGeometryPreparationResult result;
     if(inputs.drawItemSets.empty())
@@ -272,7 +270,6 @@ Name ResolveAvboitPhysicsTransformPatchPrefix(in AvboitGeometryPhase phase){
     }
 }
 
-[cpp_unwind]
 Expected<b8> DeclareAvboitMaterialUploads(
     mut GpuTaskGraph graph,
     mut RendererCsgSystem csgSystem,
@@ -371,7 +368,6 @@ Expected<b8> DeclareAvboitMaterialUploads(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void CaptureAvboitEmulationPlans(
     in MaterialPassDrawItemPartitionsView drawItems,
     in CsgFrameGpuDataView frame,
@@ -413,7 +409,6 @@ void CaptureAvboitEmulationPlans(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 PrepareAvboitEmulationOutputs(
     mut GpuTaskGraph graph,
     in FrameGraphAvboitMaterialUploadResult upload,

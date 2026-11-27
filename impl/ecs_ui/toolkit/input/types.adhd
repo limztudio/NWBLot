@@ -212,7 +212,6 @@ class IndexedPointerEntryTable<T> : NoCopy{
         return MakeUnexpected(Failure());
     }
 
-    [cpp_unwind]
     public void pushBack(in T entry){
         const usize newIndex = this.m_entries.size();
         this.m_entries.push_back(entry);
@@ -299,7 +298,7 @@ class PointerSourceTable : NoCopy{
     public Span<PointerSource> span()const{ return this.m_table.span(); }
     public in PointerSource at(in usize index)const{ return this.m_table.at(index); }
     public Expected<usize> findIndex(in InputSource source, in PointerIntent intent)const{ return this.m_table.findIndex(source, intent); }
-    [cpp_unwind] public void pushBack(in PointerSource entry){ this.m_table.pushBack(entry); }
+    public void pushBack(in PointerSource entry){ this.m_table.pushBack(entry); }
     public void eraseAt(in usize index){ this.m_table.eraseAt(index); }
     public void retainSourceNotEqual(in InputSource source){ this.m_table.retainSourceNotEqual(source); }
     public void retainDeviceNotEqual(in u64 device){ this.m_table.retainDeviceNotEqual(device); }
@@ -378,7 +377,7 @@ class PointerBindingTable : NoCopy{
     public void reserve(in usize capacity){ this.m_table.reserve(capacity); }
     public usize size()const{ return this.m_table.size(); }
     public in PointerBinding at(in usize index)const{ return this.m_table.at(index); }
-    [cpp_unwind] public void pushBack(in PointerBinding entry){ this.m_table.pushBack(entry); }
+    public void pushBack(in PointerBinding entry){ this.m_table.pushBack(entry); }
     public void eraseAt(in usize index){ this.m_table.eraseAt(index); }
     public void retainSourceNotEqual(in InputSource source){ this.m_table.retainSourceNotEqual(source); }
     public void retainDeviceNotEqual(in u64 device){ this.m_table.retainDeviceNotEqual(device); }

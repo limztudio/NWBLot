@@ -77,7 +77,7 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     return ValidateGraphemeText(text, true);
 }
 
-[cpp_unwind] Expected<usize, EditTextStatus> NormalizeEditTextInto(in StringView source, in usize maxBytes, in b8 multiline, mut String outCandidate){
+Expected<usize, EditTextStatus> NormalizeEditTextInto(in StringView source, in usize maxBytes, in b8 multiline, mut String outCandidate){
     if(!ValidateGraphemeText(source, false))
         return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
@@ -111,7 +111,7 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     return normalizedBytes;
 }
 
-[cpp_unwind] void BuildReplacedEditString(in StringView currentText, in usize begin, in usize end, in StringView replacement, mut String outCandidate){
+void BuildReplacedEditString(in StringView currentText, in usize begin, in usize end, in StringView replacement, mut String outCandidate){
     const usize retainedBytes = currentText.size() - (end - begin);
     outCandidate.reserve(retainedBytes + replacement.size());
     outCandidate.clear();
@@ -121,7 +121,7 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     outCandidate.append(currentText.substr(end, currentText.size() - end));
 }
 
-[cpp_unwind] void BuildErasedAroundSelectionEditString(in StringView currentText, in usize beforeBytes, in usize afterBytes, in usize start, in usize end, mut String outCandidate){
+void BuildErasedAroundSelectionEditString(in StringView currentText, in usize beforeBytes, in usize afterBytes, in usize start, in usize end, mut String outCandidate){
     const usize prefixEnd = start - beforeBytes;
     const usize suffixStart = end + afterBytes;
     outCandidate.reserve(currentText.size() - beforeBytes - afterBytes);
@@ -131,7 +131,7 @@ b8 ValidateEditTextForMode(in StringView text, in EditTextMode textMode){
     outCandidate.append(currentText.substr(suffixStart, currentText.size() - suffixStart));
 }
 
-[cpp_unwind] b8 TryBuildGraphemeBoundariesInto(in StringView text, in b8 singleLine, mut Vector<usize> outBoundaries){
+b8 TryBuildGraphemeBoundariesInto(in StringView text, in b8 singleLine, mut Vector<usize> outBoundaries){
     if(!ValidateGraphemeText(text, singleLine) || text.size() == usize.max)
         return false;
     outBoundaries.reserve(text.size() + 1u);

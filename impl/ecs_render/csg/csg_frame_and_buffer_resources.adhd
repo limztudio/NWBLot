@@ -356,7 +356,6 @@ void CacheCsgFrameState(
     }
 }
 
-[cpp_unwind]
 CsgFrameState RendererCsgSystem::buildFrameState(mut IMaterialSurfaceLookup materialSurfaceLookup){
     const Optional<mut MeshSystem> meshSystem = this.m_world.borrowSystem<MeshSystem>();
     Expected<CsgFrameStateCacheSignature> signature = MakeUnexpected(Failure());

@@ -98,7 +98,6 @@ b8 ValidateFontAtlasGlyphRecord(
 }
 
 
-[cpp_unwind]
 b8 ValidateFontAtlasGroupGuardedOverlap(
     in Span<FontAtlasGlyph> glyphs,
     in u32 groupIndex,

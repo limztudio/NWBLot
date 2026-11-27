@@ -151,7 +151,6 @@ class CsgFrameReceiverLookup : NoCopy{
         ResolveCsgCutterWorldTransforms(this.m_world, cutterRef.entity, cutterRef.cutter, outWorldToShape, outShapeToWorld);
     }
 
-    [cpp_unwind]
     public void precomputeCutters(in CsgShapeRegistry shapeRegistry){
         this.m_precomputedCutters.clear();
         this.m_cuttersPrecomputed = true;

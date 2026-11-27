@@ -54,7 +54,6 @@ class NumericEditActions : IEditActionSink{
         return this.m_float.value().revision();
     }
 
-    [cpp_unwind]
     public b8 apply(mut EditModel draft, in EditAction action, in b8 readOnly)override{
         if(this.m_context.failed() || !SameAddress(draft, this.m_draft) || this.currentRevision() != this.m_revision){
             this.m_result.valid = false;

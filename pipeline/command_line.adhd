@@ -55,7 +55,6 @@ b8 ValidPipelineInputs(in Vector<String> values){
     return true;
 }
 
-[cpp_unwind]
 Optional<i32> ParsePipelineOptions(in ConsoleArguments arguments, in PipelineTool tool, mut PipelineOptions options){
     String inputList;
     String configuration;
@@ -110,7 +109,6 @@ Optional<i32> ParsePipelineOptions(in ConsoleArguments arguments, in PipelineToo
     return Optional<i32>();
 }
 
-[cpp_unwind]
 i32 RunPipelineTool<Runner>(in ConsoleArguments arguments, in PipelineTool tool, in Runner run){
     PipelineOptions options;
     const auto status = ParsePipelineOptions(arguments, tool, options);

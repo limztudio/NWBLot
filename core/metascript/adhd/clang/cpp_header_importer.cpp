@@ -412,6 +412,8 @@ struct HeaderImportCache{
     dst->returnsReference = src.returnsReference;
     dst->isImported = src.isImported;
     dst->isExtern = src.isExtern;
+    dst->isNothrowExtern = src.isNothrowExtern;
+    dst->allowsCppUnwind = src.allowsCppUnwind;
     return dst;
 }
 

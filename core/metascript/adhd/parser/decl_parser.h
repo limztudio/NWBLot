@@ -20,16 +20,6 @@ NWB_ADHD_BEGIN
 
 
 class DeclParser final{
-private:
-    struct DeferredCallableBody{
-        MethodDecl* method = nullptr;
-        ParserCursor::Checkpoint bodyCheckpoint;
-        usize startOffset = 0u;
-        usize endOffset = 0u;
-        b8 hasAngleBracket = false;
-    };
-
-
 public:
     explicit DeclParser(ParserCursor& cursor, const MStringView activeSource = {}, const Preprocessor* preprocessor = nullptr)noexcept
         : m_cursor(cursor)
@@ -62,7 +52,6 @@ private:
     [[nodiscard]] ClassDecl* parseClassDecl(SourceSpan span, Span<const ParsedAttribute> attributes, b8 isExtern = false, b8 isImported = false);
     void parseClassMethodQualifiers(MethodDecl& method);
     [[nodiscard]] b8 parseClassMemberCallableBody(const ClassDecl& ownerClass, MethodDecl& method, MStringView missingTerminatorMessage);
-    [[nodiscard]] b8 trySkipImportedCallableBody(MethodDecl& method, b8 allowSkip, b8& outSkipped);
     [[nodiscard]] b8 parseDestructorEmptyParams(MStringView missingLeftParenMessage);
     [[nodiscard]] b8 parseConstructorParamsAndRejectInitList(MethodDecl& method);
     [[nodiscard]] b8 parseMethodParamsAndValidateArity(MethodDecl& method, SourceSpan span);
@@ -108,7 +97,6 @@ private:
     StmtParser m_stmtParser;
     MStringView m_activeSource;
     const Preprocessor* m_preprocessor = nullptr;
-    MVector<DeferredCallableBody>* m_deferredBodies = nullptr;
 };
 
 

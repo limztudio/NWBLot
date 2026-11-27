@@ -38,7 +38,6 @@ class ShadowOccluderMaterialGather{
         this.m_contentComplete = contentComplete;
     }
 
-    [cpp_unwind]
     public b8 resolve(
         in EntityID entity,
         in AssetRef<Material> material,

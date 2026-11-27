@@ -93,7 +93,6 @@ GpuGraphResourceSetId SelectFrameTraceGeometrySet(in FrameGraphTraceGeometryResu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RendererFramePipeline::buildDeferredLightingTaskGraph(
     in RendererFrameGraphFeatures features,
     in CsgFrameState csgFrameState,

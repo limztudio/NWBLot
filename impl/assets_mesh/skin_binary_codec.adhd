@@ -40,7 +40,6 @@ class SkinBinaryCodec{
         return false;
     }
 
-    [cpp_unwind]
     public b8 serialize(
         in NameHash meshNameHash,
         in NameHash skeletonNameHash,
@@ -75,7 +74,6 @@ class SkinBinaryCodec{
         return true;
     }
 
-    [cpp_unwind]
     public Expected<SkinBinaryReferences> deserialize(in Span<u8> binary, mut Vector<SkinInfluence4> outInfluences, mut Vector<SkeletonJointMatrix> outInverseBindMatrices)const{
         usize cursor = 0u;
         const Expected<SkinHeaderBinary> headerResult = ReadMagicHeaderPayload<SkinHeaderBinary>(binary, s_SkinBinaryMagic, "Skin::loadBinary", "skin", cursor);

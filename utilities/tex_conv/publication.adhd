@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 ValidateOutputPaths(in TexConvOutputPaths outputPaths, in b8 force){
     StagedFilePairPaths paths(outputPaths.data, outputPaths.metadata);
     const auto validation = ValidateStagedFilePairPaths(paths, force, false);
@@ -38,7 +37,6 @@ Expected<String> BuildMetadata(in PreparedTexture payload){
     );
 }
 
-[cpp_unwind]
 b8 WriteOutputs(in TexConvOutputPaths outputPaths, in PreparedTexture payload, in b8 force){
     if(payload.bytes.empty()){
         error("tex_conv: cannot write an empty prepared texture.");

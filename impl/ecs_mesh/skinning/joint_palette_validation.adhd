@@ -124,7 +124,6 @@ Expected<SkeletonJointMatrix> TryBuildSkinJointPaletteEntryValidated(
     return storedJointMatrix.value();
 }
 
-[cpp_unwind]
 b8 BuildSkinJointPaletteToGlobalVectorValidated(
     in u64 handleValue,
     in u32 skeletonJointCount,

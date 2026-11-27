@@ -13,9 +13,9 @@ class FontAtlas{
     private FontAtlasPayload m_payload;
     private b8 m_payloadValidated = false;
 
-    [cpp_unwind] public b8 loadBinary(in Span<u8> binary);
-    [cpp_unwind] public b8 validatePayload()const;
-    [cpp_unwind] public void setPayload(in FontAtlasPayload payload){
+    public b8 loadBinary(in Span<u8> binary);
+    public b8 validatePayload()const;
+    public void setPayload(in FontAtlasPayload payload){
         this.m_payload = payload;
         this.m_payloadValidated = false;
     }

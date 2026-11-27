@@ -71,7 +71,6 @@ class MaterialSampledTextureCollector : NoCopy{
         }
         return false;
     }
-    [cpp_unwind]
     private void promote(){
         this.m_index.reserve(s_PromotedInlineIndexCapacity);
         for(in MaterialTextureIdentity key : this.m_inline)
@@ -79,7 +78,6 @@ class MaterialSampledTextureCollector : NoCopy{
         this.m_promoted = true;
     }
 
-    [cpp_unwind]
     public void indexExisting(){
         for(in TextureHandle texture : this.m_textures){
             const MaterialTextureIdentity key(texture);
@@ -97,7 +95,6 @@ class MaterialSampledTextureCollector : NoCopy{
         }
     }
 
-    [cpp_unwind]
     public void append(in borrow TextureHandle texture){
         const MaterialTextureIdentity key(texture);
         if(!this.m_promoted){
@@ -132,13 +129,11 @@ b8 EqualEmulationOutputIdentity(in Name left, in Name right){
     return left == right;
 }
 
-[cpp_unwind]
 void AppendPreparedTextureResource(in TextureGpuResource resource, mut MaterialSampledTextureCollector collector){
     assert(resource.valid() && resource.sampledImageHeapHandle.descriptorClass() == GpuDescriptorClass::SampledImage);
     collector.append(resource.texture);
 }
 
-[cpp_unwind]
 b8 AppendPreparedMaterialSurfaceSampledTextures(in MaterialSurfaceInfo materialInfo, in RendererMaterialResourceState resources, mut MaterialSampledTextureCollector collector){
     if(!materialInfo.resourceReferencesResolved)
         return false;
@@ -161,7 +156,6 @@ b8 AppendPreparedMaterialSurfaceSampledTextures(in MaterialSurfaceInfo materialI
     return true;
 }
 
-[cpp_unwind]
 b8 AppendPreparedDrawSampledTextures(
     in HashMap<Name, MaterialSurfaceInfo> materials,
     in RendererMaterialResourceState resources,
@@ -179,7 +173,6 @@ b8 AppendPreparedDrawSampledTextures(
     return true;
 }
 
-[cpp_unwind]
 Expected<Vector<TextureHandle>> GatherPreparedMaterialPassSampledTextures(
     in HashMap<Name, MaterialSurfaceInfo> materials,
     in RendererMaterialResourceState resources,

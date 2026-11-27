@@ -30,14 +30,10 @@ class RendererReflectionFeedback : NoCopy{
     private u16 m_deviceGeneration = 0u;
 
     public RendererReflectionFeedback(mut GraphicsRuntime graphics){ this.m_graphics = graphics; }
-    [cpp_unwind]
     public void invalidateResources();
-    [cpp_unwind]
     public b8 prepareResources(in u32 width, in u32 height, in ReflectionSettings settings, in b8 enabled);
     public ReflectionFeedbackSnapshot snapshot(in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in b8 enabled, in u64 graphicsFrameIndex)const;
-    [cpp_unwind]
     private void releaseBuffers();
-    [cpp_unwind]
     private Expected<ReflectionFeedbackBinding> prepareBank(in u32 byteCount, in Name name);
 }
 

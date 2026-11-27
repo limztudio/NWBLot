@@ -24,10 +24,10 @@ class Mesh{
     private Vector<u8> m_meshletPrimitiveIndices;
     private Vector<u32> m_solidTriangleWords;
 
-    [cpp_unwind] public b8 loadBinary(in Span<u8> binary);
+    public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
-    [cpp_unwind] public void setPayload(
+    public void setPayload(
         in Vector<f32x3u> positions,
         in Vector<f16x4u> normals,
         in Vector<f16x4u> tangents,

@@ -40,31 +40,24 @@ class RendererMeshSystem : NoCopy{
         this.m_meshState.m_meshViewGpuDataValid = false;
     }
 
-    [cpp_unwind]
     public void invalidateResources();
 
-    [cpp_unwind]
     public Expected<mut MeshResources> createMeshResources(in AssetRef<Mesh> meshAsset);
 
     public Expected<mut MeshResources> findMeshResources(in Name meshKey);
 
-    [cpp_unwind]
     public Expected<mut MeshResources> createRuntimeMeshResources(in RuntimeMeshDesc desc);
 
     public Expected<mut MeshResources> findRuntimeMeshResources(in RuntimeMeshDesc desc);
 
-    [cpp_unwind]
     public b8 prepareComputeEmulationResources(mut MeshResources mesh);
 
-    [cpp_unwind]
     public b8 prepareObjectGeometryCache(mut MeshResources mesh, in ComputePipelineHandle decoderPipeline);
 
     public b8 confirmObjectGeometryCache(in Name meshKey, in RuntimeMeshBuffers sourceBuffers, in ObjectGeometryCacheSnapshot expected, in b8 runtimeMesh);
 
-    [cpp_unwind]
     public void pruneRuntimeMeshResources();
 
-    [cpp_unwind]
     public void collectRayTracingResourceSnapshots(mut MeshRayTracingResourceSnapshotVector outSnapshots)const{
         outSnapshots.clear();
         outSnapshots.reserve(this.m_meshState.m_meshes.size());
@@ -74,7 +67,6 @@ class RendererMeshSystem : NoCopy{
         }
     }
 
-    [cpp_unwind]
     public void collectPendingBlasRayTracingSnapshots(mut MeshRayTracingResourceSnapshotVector outSnapshots, mut u64 outStaticSkippedCount)const{
         outSnapshots.clear();
         outStaticSkippedCount = 0u;
@@ -90,7 +82,6 @@ class RendererMeshSystem : NoCopy{
         }
     }
 
-    [cpp_unwind]
     public void collectPendingSwBvhRayTracingSnapshots(mut MeshRayTracingResourceSnapshotVector outSnapshots)const{
         outSnapshots.clear();
         const MeshAccelerationStatePolicy policy();
@@ -105,18 +96,14 @@ class RendererMeshSystem : NoCopy{
 
     public Expected<MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(in RenderableMeshDesc desc)const;
 
-    [cpp_unwind]
     public b8 commitRayTracingResourceSnapshot(in MeshRayTracingResourceSnapshot expected, mut MeshRayTracingResourceSnapshot desired);
 
-    [cpp_unwind]
     public Expected<MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(in MeshRayTracingResourceSnapshot expected);
 
     public void discardRayTracingBuildState();
 
-    [cpp_unwind]
     public Expected<MeshSoftwareBvhParentBuildStateVector> collectSoftwareBvhParentBuildStates()const;
 
-    [cpp_unwind]
     public void collectRetainedAccelerationStateBuffers(mut MeshRetainedAccelerationStateBufferVector outBuffers)const{
         outBuffers.clear();
         outBuffers.reserve(this.m_meshState.m_meshes.size() * s_RetainedAccelerationBuffersPerMesh);
@@ -132,7 +119,6 @@ class RendererMeshSystem : NoCopy{
         }
     }
 
-    [cpp_unwind]
     public void collectBlasGraphStates(mut MeshBlasGraphStateVector outStates)const{
         outStates.clear();
         outStates.reserve(this.m_meshState.m_meshes.size());
@@ -145,7 +131,6 @@ class RendererMeshSystem : NoCopy{
         }
     }
 
-    [cpp_unwind]
     public b8 createMeshViewBuffer();
 
     public MeshViewBufferSnapshot meshViewBufferSnapshot()const;
@@ -158,31 +143,24 @@ class RendererMeshSystem : NoCopy{
 
     public void confirmMeshViewBufferUpload(in MeshViewGpuData viewState);
 
-    [cpp_unwind]
     public b8 prepareMeshFrameBindings(in MaterialPassBufferSnapshot materialBuffers);
 
     public MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
 
     public void populateMeshGeometryHeapSlots(in MeshResources mesh, mut InstanceGpuData outInstance)const;
 
-    [cpp_unwind]
     public void releaseMeshGeometryHeapHandles(mut MeshResources mesh);
 
-    [cpp_unwind]
     private void releaseMeshFrameHeapHandles();
 
-    [cpp_unwind]
     private b8 createMeshRenderBindings(mut MeshResources mesh);
 
     private b8 meshRenderBindingsReady(in MeshResources mesh)const;
 
-    [cpp_unwind]
     private b8 createMeshGeometryHeapHandles(mut MeshResources mesh);
 
-    [cpp_unwind]
     private b8 ensureMeshSwBvhInputHeapHandles(mut MeshResources mesh);
 
-    [cpp_unwind]
     private void releaseAllMeshGeometryHeapHandles();
 }
 

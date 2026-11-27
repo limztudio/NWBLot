@@ -99,13 +99,11 @@ class FrameExecuteTimingState : NoCopy{
         this.graphicsPrefixTimingTickets = this.graphicsPrefixOwnedTimingTickets;
     }
 
-    [cpp_unwind]
     public void discardGraphicsPrefixTickets(){
         for(in GraphicsPrefixTimingTicket timingTicket : this.graphicsPrefixOwnedTimingTickets)
             timingTicket.value().discard();
     }
 
-    [cpp_unwind]
     public void discardTickets(){
         this.shadowPrepareTimingTicket.discard();
         this.discardGraphicsPrefixTickets();
@@ -123,7 +121,6 @@ class FrameExecuteTimingState : NoCopy{
         this.deferredPresentTimingTicket.discard();
     }
 
-    [cpp_unwind]
     public void discardAll(){
         DiscardGpuTimingMeasure(this.asyncPrefixTiming);
         DiscardGpuTimingMeasure(this.deferredClearTiming);
@@ -140,7 +137,6 @@ class FrameExecuteTimingState : NoCopy{
         this.discardTickets();
     }
 
-    [cpp_unwind]
     public Expected<usize> bindNormalTimingTickets(
         in RendererFramePipeline renderer,
         in GpuCompiledGraphReadView compiledPlan,

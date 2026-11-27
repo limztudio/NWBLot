@@ -915,12 +915,10 @@ void SetMaterialBindEntryVirtualPath(mut MaterialBindEntry entry, in StringView 
     entry.virtualPath = virtualPath;
 }
 
-[cpp_unwind]
 b8 CanBuildMaterialBindIncludeSource(in MaterialBindEntry entry, mut TestArena testArena, mut GraphicsScratchArena scratch){
     return BuildMaterialBindIncludeSource(entry).has_value();
 }
 
-[cpp_unwind]
 b8 CanFindOrBuildMaterialBindTypedLayout(in Name cacheInterface, in MaterialBindEntry entry, mut GraphicsScratchArena scratch, mut MaterialBindTypedLayoutCache layoutCache){
     return FindOrBuildMaterialBindTypedLayout(cacheInterface, entry, layoutCache).has_value();
 }
@@ -971,7 +969,6 @@ b8 CookMinimalMeshWithMaterialBind(in StringView bindText, in CookCase cookCase,
     return CookSingleAssetRoot(testArena, cookCase.root, cookCase.outputDirectory, assetRoot);
 }
 
-[cpp_unwind]
 b8 CanEmitDuplicateMaterialBindIncludePath(mut TestArena testArena, in CookCase cookCase){
     Vector<MaterialBindEntry> entries;
     const Array<StringView, 2u> directories("first", "second");
@@ -1210,7 +1207,6 @@ usize TestArenaUsedBytes(in TestArena testArena){
     return cast<usize>(testArena.arena.memoryStats().usedBytes);
 }
 
-[cpp_unwind]
 b8 CanDecodeFirstTextureMip(mut TextureMipDecoder decoder, in TextureAsset texture, in FormatEnum format, mut GraphicsScratchArena scratch){
     return decoder.decode(texture, texture.mipLevels().front(), 0u, format).has_value();
 }

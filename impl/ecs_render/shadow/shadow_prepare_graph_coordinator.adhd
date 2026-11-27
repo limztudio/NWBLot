@@ -57,7 +57,6 @@ class ShadowPrepareGraphCoordinator : NoCopy{
     private GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     private ShadowPreparationOutcome m_shadowPreparationOutcome;
 
-    [cpp_unwind]
     public b8 declareDeferredShadowPrepareTask(
         in ShadowPrepareGraphContext context,
         in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,

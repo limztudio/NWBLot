@@ -16,7 +16,7 @@ NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ProjectFrameClientSize QueryProjectFrameClientSize(){
+ProjectFrameClientSize QueryProjectFrameClientSize()noexcept{
     return ::@entry_namespace@::GetProjectFrameClientSize();
 }
 

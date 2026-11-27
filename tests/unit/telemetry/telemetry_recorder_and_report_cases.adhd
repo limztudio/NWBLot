@@ -557,7 +557,6 @@ TimingScopeId RecorderReport_MakeTimingScopeId(in u32 index, in u32 generation){
     return scope;
 }
 
-[cpp_unwind]
 void VerifyTelemetry_GenericScopeHelpersPreserveBorrowedPointerValuesAndImplicitNameFailures(){
     GenericScopeRecord record = GenericScopeRecord();
     record.name = s_TelemetryCasePerfGenericScope;
@@ -1062,7 +1061,6 @@ void VerifyTelemetry_RecorderPublicationUsesCaptureOptionsAtBuilderCompletion(){
     EXPECT_EQ(recorder.eventCount(), 1u);
 }
 
-[cpp_unwind]
 void VerifyTelemetry_RecorderFailedAndThrowingBuildersRecycleWithoutAllocations(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);
@@ -1235,7 +1233,6 @@ void VerifyTelemetry_RecorderBuilderForeignMovesKeepOwnershipWithinEachArena(){
     EXPECT_EQ(testArena.arena.memoryStats().usedBytes, initial.usedBytes);
 }
 
-[cpp_unwind]
 void VerifyTelemetry_RecorderExplicitForeignBuilderStorageIsCopiedOrReleasedOnEveryExit(){
     TelemetryTestArena testArena = TelemetryTestArena();
     const ArenaMemoryStats initial = testArena.arena.memoryStats();

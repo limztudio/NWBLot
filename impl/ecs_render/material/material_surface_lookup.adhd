@@ -10,7 +10,6 @@
 
 
 interface IMaterialSurfaceLookup{
-    [cpp_unwind]
     Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset);
 }
 

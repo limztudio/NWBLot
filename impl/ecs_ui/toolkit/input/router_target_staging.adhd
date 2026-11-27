@@ -234,7 +234,6 @@ b8 EraseInvalidatedRouterTargets(in WidgetId id, in Span<TargetLookup> lookup, m
     return true;
 }
 
-[cpp_unwind]
 b8 EraseInvalidatedRouterTargetsBatch(
     in Span<WidgetId> ids,
     in Span<TargetLookup> lookup,

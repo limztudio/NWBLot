@@ -287,7 +287,6 @@ Expected<CsgReceiverRangeGpuData> RendererCsgSystem::appendCsgReceiverClipData(
         Optional<in MeshViewGpuData>(csgWorkRegionMeshViewState), csgFrameData);
 }
 
-[cpp_unwind]
 Expected<Optional<GpuUploadBlobId>> RendererRayTracingSystem::retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const{
     outHash = 0u;
     outByteSize = 0u;
@@ -334,7 +333,6 @@ void RendererRayTracingSystem::confirmPreparedCsgTraceContextUpload(in u64 hash,
     this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextValid = true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareCausticOpticalReadTracking(in MeshViewBufferSnapshot meshView){
     b8 admitted = false;
     if(this.m_shadowVisibilityHardwareSupported)
@@ -357,7 +355,6 @@ void RendererRayTracingSystem::confirmRayTraceContextReadSubmission(in QueueSubm
         previous = token;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::ensureRayTraceContextReadTracking(in b8 opticalCausticReader){
     mut Vector<QueueSubmissionToken> readTokens = this.m_rayTracingState.shadow.m_rayTraceContextReadSubmissionTokens;
     const b8 readerAdmitted = this.m_lightSpaceShadow.m_csg.snapshot.hasCsg || opticalCausticReader;
@@ -397,7 +394,6 @@ b8 RendererRayTracingSystem::ensureRayTraceContextReadTracking(in b8 opticalCaus
     return true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     if(!this.ensureRayTraceContextReadTracking(false))
         return false;

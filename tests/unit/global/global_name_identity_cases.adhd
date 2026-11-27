@@ -25,7 +25,6 @@ class NameCallbackProbe{
     public b8 nestedAccepted = false;
     public b8 fillResolver = false;
 
-    [cpp_unwind]
     public void record(){
         ++this.recordCount;
         if(this.throws)
@@ -36,7 +35,6 @@ class NameCallbackProbe{
         }
     }
 
-    [cpp_unwind]
     public b8 resolve(mut MutableSymbolText output){
         ++this.resolveCount;
         if(this.throws)

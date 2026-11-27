@@ -98,7 +98,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB AVBOIT Depth Warp Probe");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     return MakeUnique<DepthWarpProbeProject>(context);
 }

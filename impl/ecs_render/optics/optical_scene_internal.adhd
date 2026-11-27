@@ -47,7 +47,6 @@ class OpticalBoundsFinalizeTask{
         return commands;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const auto inputs = context.declarations.uploadBlobData(this.m_inputUpload);
         if(!this.m_finalize.valid() || !inputs.has_value())

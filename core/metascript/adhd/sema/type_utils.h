@@ -280,6 +280,7 @@ struct BuiltinMemberMethodInfo{
     b8 firstArgIsMut;
     b8 adaptsFirstArgToElement;
     b8 adaptsSecondArgToElement;
+    b8 allowsCppUnwind;
 };
 
 struct BuiltinReceiverMethodInfo{
@@ -293,6 +294,7 @@ struct BuiltinReceiverMethodInfo{
     b8 isMutating;
     b8 returnsReference;
     ParamPassingMode::Enum returnTypeArgRefMode = ParamPassingMode::None;
+    b8 allowsCppUnwind = false;
 };
 
 struct BuiltinReceiverSignatureInfo{
@@ -349,6 +351,7 @@ struct BuiltinFunctionInfo{
     b8 returnsBorrowedView;
     b8 rejectsSimdStorage;
     b8 returnsReference;
+    b8 allowsCppUnwind = false;
     Array<BuiltinFunctionArgRule::Enum, 20> argRules;
     u32 retainedArgMask = 0u;
     u32 explicitTypeParamMask = 0u;

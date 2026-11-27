@@ -139,7 +139,7 @@ public:
 };
 
 
-ProjectFrameClientSize QueryProjectFrameClientSize();
+ProjectFrameClientSize QueryProjectFrameClientSize()noexcept;
 TStringView QueryProjectWindowTitle()noexcept;
 b8 ConfigureProjectRuntime(ProjectStartupContext& context)noexcept;
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
@@ -152,3 +152,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

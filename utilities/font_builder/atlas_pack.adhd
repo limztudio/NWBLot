@@ -42,7 +42,6 @@ void SiftDownDrawableGlyphOrder(in Span<FontAtlasGlyph> glyphs, in usize rootInd
     }
 }
 
-[cpp_unwind]
 Vector<u32> BuildSortedDrawableGlyphOrder(in Span<FontAtlasGlyph> glyphs){
     Vector<u32> order;
     order.reserve(glyphs.size());

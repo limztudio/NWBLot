@@ -73,7 +73,6 @@ class PrefixSceneUploadBuilder : NoCopy{
         this.m_graphics = graphics;
     }
 
-    [cpp_unwind]
     public Expected<PrefixSceneUploadResult> declare(mut PrefixSceneUploadInputs inputs){
         if(!HasValidPrefixSceneUploadInputs(inputs.meshView.valid(), inputs.lights.valid(), inputs.sceneShading.valid(), inputs.shadowPrepareTask.valid()))
             return MakeUnexpected(Failure());

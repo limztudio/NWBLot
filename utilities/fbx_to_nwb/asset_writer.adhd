@@ -20,7 +20,6 @@ StringView ResolveEffectiveVirtualRoot(in StringView trimmedVirtualRoot){
     return trimmedVirtualRoot;
 }
 
-[cpp_unwind]
 String BuildFbxVirtualBasePath(in StringView genericNoExtPath, in StringView filenameNoExt, in StringView virtualRoot){
     const StringView trimmedVirtualRoot = TrimView(virtualRoot);
     String relativeText;
@@ -68,7 +67,6 @@ String BuildFbxVirtualBasePath(in StringView genericNoExtPath, in StringView fil
     return virtualPath;
 }
 
-[cpp_unwind]
 String BuildFbxSplitAssetName(in StringView virtualBase, in StringView suffix){
     String name;
     name.reserve(virtualBase.size() + suffix.size());
@@ -77,7 +75,6 @@ String BuildFbxSplitAssetName(in StringView virtualBase, in StringView suffix){
     return name;
 }
 
-[cpp_unwind]
 b8 WriteNwbTextFile(in Path outputPath, in StringView assetKind, in StringView text){
     const Path parentPath = outputPath.parentPath();
     if(!parentPath.empty()){
@@ -100,7 +97,6 @@ b8 WriteNwbTextFile(in Path outputPath, in StringView assetKind, in StringView t
     return true;
 }
 
-[cpp_unwind]
 b8 AppendSkeletonBodyToString(in StringView variableName, in Span<UfbxNode> joints, in Span<JointMatrix> bindPoseMatrices, mut String out){
     out.append(variableName);
     out.append(".joints = [\n");
@@ -130,7 +126,6 @@ b8 AppendSkeletonBodyToString(in StringView variableName, in Span<UfbxNode> join
     return true;
 }
 
-[cpp_unwind]
 void AppendSkinBodyToString(in StringView variableName, in StringView meshName, in StringView skeletonName, in Span<MeshSkinInfluence> influences, in Span<JointMatrix> inverseBindMatrices, in b8 quoteReferences, mut String out){
     AppendSkinAssetHeaderAndInfluencesText(variableName, meshName, skeletonName, influences, quoteReferences, out);
     for(in JointMatrix matrix : inverseBindMatrices){
@@ -142,7 +137,6 @@ void AppendSkinBodyToString(in StringView variableName, in StringView meshName, 
     out.append(s_FormatListCloseText);
 }
 
-[cpp_unwind]
 b8 WriteMeshAsset(in Path outputPath, in SourceMeshStreams mesh){
     if(!ValidatePlainMeshSourceSkin(CountSourceMeshStreams(mesh), mesh.vertexRefs, mesh.indices))
         return false;
@@ -159,7 +153,6 @@ b8 WriteMeshAsset(in Path outputPath, in SourceMeshStreams mesh){
     return WriteNwbTextFile(outputPath, s_MeshAssetTypeText, doc);
 }
 
-[cpp_unwind]
 b8 WriteSkeletonAsset(in Path outputPath, in Span<UfbxNode> joints, in Span<JointMatrix> bindPoseMatrices){
     String doc;
     doc.reserve(256u + joints.size() * 192u);
@@ -169,7 +162,6 @@ b8 WriteSkeletonAsset(in Path outputPath, in Span<UfbxNode> joints, in Span<Join
     return WriteNwbTextFile(outputPath, s_SkeletonAssetTypeText, doc);
 }
 
-[cpp_unwind]
 b8 WriteSkinAsset(in Path outputPath, in StringView meshName, in StringView skeletonName, in Span<MeshSkinInfluence> influences, in Span<JointMatrix> inverseBindMatrices){
     if(influences.empty()){
         error("Failed to write NWB skin: no skin influences were produced");
@@ -183,7 +175,6 @@ b8 WriteSkinAsset(in Path outputPath, in StringView meshName, in StringView skel
     return WriteNwbTextFile(outputPath, s_SkinAssetTypeText, doc);
 }
 
-[cpp_unwind]
 b8 WriteModelAsset(in Path outputPath, in StringView meshName, in Optional<StringView> skinName, in Optional<StringView> skeletonName){
     const b8 hasSkeletonAndSkin = skinName.has_value() && skeletonName.has_value();
     StringView skin = "";
@@ -201,7 +192,6 @@ b8 WriteModelAsset(in Path outputPath, in StringView meshName, in Optional<Strin
     return WriteNwbTextFile(outputPath, s_ModelAssetTypeText, doc);
 }
 
-[cpp_unwind]
 b8 WriteAssetBunch(in Path outputPath, in SourceMeshStreams mesh, in Optional<StringView> skinName, in Optional<StringView> skeletonName, in Span<UfbxNode> skeletonJoints, in Span<JointMatrix> skeletonBindPoseMatrices, in Span<MeshSkinInfluence> skinInfluences, in Span<JointMatrix> inverseBindMatrices){
     String doc;
     doc.reserve(1024u + mesh.vertexRefs.size() * 48u + mesh.indices.size() * 8u);
@@ -235,7 +225,6 @@ b8 WriteAssetBunch(in Path outputPath, in SourceMeshStreams mesh, in Optional<St
     return WriteNwbTextFile(outputPath, s_AssetBunchDisplayName, doc);
 }
 
-[cpp_unwind]
 String BuildVirtualBasePath(in Path outputPath, in StringView virtualRoot){
     Path noExtension = outputPath;
     noExtension.replaceExtension();
@@ -244,7 +233,6 @@ String BuildVirtualBasePath(in Path outputPath, in StringView virtualRoot){
     return BuildFbxVirtualBasePath(path, filename, virtualRoot);
 }
 
-[cpp_unwind]
 b8 WriteNwbAsset(in Path outputPath, in SourceMeshStreams mesh, in StringView assetTypeText, in StringView virtualRoot, in b8 separateAssets, in Span<UfbxNode> skeletonJoints, in Span<JointMatrix> skeletonBindPoseMatrices, in Span<JointMatrix> inverseBindMatrices){
 
     const auto assetTypeResult = ParseAssetTypeText(assetTypeText);

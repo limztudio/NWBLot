@@ -136,7 +136,6 @@ class TextBakedTests{
         TestMoveAssign<TextLayout>(this.m_layout, layout.value());
         return true;
     }
-    [cpp_unwind]
     public b8 corruptPayloadFontHash(){
         const auto binary = SerializeFontAtlasPayload(this.m_atlas.payload());
         if(!binary.has_value())
@@ -148,7 +147,6 @@ class TextBakedTests{
         this.m_atlas.setPayload(payload.value());
         return true;
     }
-    [cpp_unwind]
     public b8 rebindPayloadFont(in StringView path){
         const auto binary = SerializeFontAtlasPayload(this.m_atlas.payload());
         if(!binary.has_value())
@@ -160,7 +158,6 @@ class TextBakedTests{
         this.m_atlas.setPayload(payload.value());
         return true;
     }
-    [cpp_unwind]
     public b8 replaceWithUnbakedFontAndClearAtlas(){
         const Array<FontSource, 1u> sources(FontSource(AssetRef<Font>(s_TestLatinFontPath), this.m_font, 2u));
         if(!this.m_text.setFonts(sources))

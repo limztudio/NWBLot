@@ -557,7 +557,6 @@ PlatformStringView GetProjectWindowTitle(){
 #endif
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateStressTestWorld(context);
     if(!world.has_value())

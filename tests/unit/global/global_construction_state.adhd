@@ -20,7 +20,6 @@ class ConstructionState{
     public usize memberDestructors = 0u;
     public b8 aligned = true;
 
-    [cpp_unwind]
     public usize construct(in b8 aligned){
         ++this.constructors;
         this.aligned = this.aligned && aligned;

@@ -443,7 +443,6 @@ void VerifyMetadataExtensionOwnership_RequireRefillsAnExplicitlyMovedOutOwner(){
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstructedMembers(){
     const Name name = Name(s_ConstructorUnwindMetadataName);
     HeapStorage arena(name);
@@ -465,7 +464,6 @@ void VerifyMetadataExtensionOwnership_ConstructorUnwindReleasesStorageAndConstru
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyMetadataExtensionOwnership_CallerUnwindDestroysPublishedExtensions(){
     const Name name = Name(s_CallerUnwindMetadataName);
     HeapStorage arena(name);
@@ -502,7 +500,6 @@ void VerifyMetadataExtensionOwnership_ReentrantInsertionReturnsTheActualStoredVa
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyMetadataExtensionOwnership_InsertionUnwindDestroysThePendingErasedOwner(){
     HeapStorage mapArena(s_AssetCaseTestsMetadataExtensionInsertionMap);
     HeapStorage ownerArena(s_AssetCaseTestsMetadataExtensionInsertionOwner);

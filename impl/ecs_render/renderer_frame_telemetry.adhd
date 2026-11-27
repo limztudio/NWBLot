@@ -36,7 +36,6 @@ FrameGraphNodeHandle AppendRendererTelemetryPass(mut FrameGraphBuilder builder, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererFramePipeline::appendFrameGraph(mut FrameGraphBuilder builder){
     if(!this.m_frameTargets.valid())
         return false;

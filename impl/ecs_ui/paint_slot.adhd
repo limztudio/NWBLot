@@ -25,7 +25,6 @@ class UiPaintLease : NoCopy{
             this.m_running.peer().takeFrom(this.m_running);
     }
 
-    [cpp_unwind]
     public void invoke(mut UiPaintContext context){
         this.m_running.value()(context);
     }
@@ -53,7 +52,6 @@ class UiPaintSlot{
         this.m_slot.resetValue();
     }
 
-    [cpp_unwind]
     public void invoke(mut UiPaintContext context){
         if(!this.callable() || this.m_slot.linked())
             TerminateInvariant();

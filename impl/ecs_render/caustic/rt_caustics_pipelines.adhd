@@ -366,7 +366,6 @@ void CausticActivityResources::releaseCausticResolveActivity(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     this.m_rayTracingState.caustics.m_causticEmissionTargets.releaseDescriptor(this.m_graphics);
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
@@ -374,7 +373,6 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     RetireDescriptor(heap, this.m_rayTracingState.caustics.m_hwCausticDeferredArgsHeapHandle);
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::createCausticTargets(mut DeferredFrameTargets targets){
     targets.causticIrradianceFormat = Format::RGBA16_FLOAT;
     targets.causticAccumulatorFormat = Format::R32_UINT;
@@ -450,7 +448,6 @@ b8 RendererRayTracingSystem::createCausticTargets(mut DeferredFrameTargets targe
     return true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(mut DeferredFrameTargets targets){
     if(this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) && this.m_graphics.queryFeatureSupport(Feature::RayQuery))
         return true;
@@ -461,7 +458,6 @@ b8 RendererRayTracingSystem::prepareGpuBvhCausticResources(mut DeferredFrameTarg
     return this.prepareCausticResources(meshView, false, targets);
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareHwCausticResources(mut DeferredFrameTargets targets){
     if(!this.m_graphics.queryFeatureSupport(Feature::RayTracingAccelStruct) || !this.m_graphics.queryFeatureSupport(Feature::RayQuery))
         return true;
@@ -499,7 +495,6 @@ b8 RendererRayTracingSystem::hasHwCausticWork(in MeshViewBufferSnapshot meshView
     ;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareCausticResources(in MeshViewBufferSnapshot meshView, in b8 hardware, mut DeferredFrameTargets targets){
     if(!targets.causticAccumulator.valid() || !targets.causticIrradiance.valid() || !meshView.buffer.valid() || !meshView.heapHandle.valid() || !this.m_rayTracingState.caustics.m_causticEmissionTargets.heapHandle.valid())
         return true;

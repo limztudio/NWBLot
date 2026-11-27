@@ -30,7 +30,6 @@ class AlignedExtension{
     private mut MetadataExtensionState m_state;
     public usize identity;
 
-    [cpp_unwind]
     public AlignedExtension(mut MetadataExtensionState state, in b8 fail){
         this.m_member = ExtensionMember(state);
         this.m_state = state;
@@ -72,7 +71,6 @@ class ReentrantExtension{
 
 class ThrowingExtensionHasher{
     public b8 fail = false;
-    [cpp_unwind]
     public usize hash(in Name key){
         if(this.fail)
             ThrowTestException(ExtensionInsertionFailure());

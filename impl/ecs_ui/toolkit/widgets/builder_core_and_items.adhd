@@ -1310,7 +1310,6 @@ b8 Builder::paintItem(in BuilderItem item, in LayoutBox box){
     return true;
 }
 
-[cpp_unwind]
 b8 TryMeasureEllipsisCandidate(
     mut TextService textService,
     in DisplayMetrics display,

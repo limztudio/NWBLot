@@ -48,11 +48,13 @@ extern const NullableFormat s_NullFormat;
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CapturedField")]
 extern class CapturedField{
+    [cpp_flags(nothrow)]
     void assign(in StringView text);
+    [cpp_flags(nothrow)]
     StringView view()const;
 };
 
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::HasTextAddress")]
+[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::HasTextAddress"), cpp_flags(nothrow)]
 extern b8 HasTextAddress(in StringView text);
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ThrowingAssignment")]

@@ -87,7 +87,6 @@ class MaterialPassDrawSnapshotCache : NoCopy{
     private HashMap<MaterialPassMeshSnapshotKey, Shared<MaterialPassMeshResourceSnapshot>> m_meshes;
     private HashMap<MaterialPipelineKey, Shared<MaterialPassPipelineResourceSnapshot>> m_pipelines;
 
-    [cpp_unwind]
     public Expected<Shared<MaterialPassMeshResourceSnapshot>> mesh(in SharedPool pool, in MeshResources meshResources){
         const MaterialPassMeshSnapshotKey key = MakeMaterialPassMeshSnapshotKey(meshResources);
         const auto found = this.m_meshes.find(key);
@@ -102,7 +101,6 @@ class MaterialPassDrawSnapshotCache : NoCopy{
         return inserted.first.value();
     }
 
-    [cpp_unwind]
     public Expected<Shared<MaterialPassPipelineResourceSnapshot>> pipeline(in SharedPool pool, in MaterialPipelineKey key, in MaterialPipelineResources pipelineResources){
         const auto found = this.m_pipelines.find(key);
         if(found != this.m_pipelines.end())
@@ -163,7 +161,6 @@ class MaterialDrawGather{
         this.m_typedStager = typedStager;
     }
 
-    [cpp_unwind]
     private Expected<MaterialInstanceAppend> appendInstance(in EntityID entity, in MaterialSurfaceInfo material, in MeshResources mesh, in Optional<in TransformComponent> transform, in b8 hasReceiverLookup){
         const auto appended = AppendMaterialPassInstance(
             this.m_typedStager,
@@ -182,19 +179,16 @@ class MaterialDrawGather{
         return appended;
     }
 
-    [cpp_unwind]
     private b8 prepareGeometry(mut MeshResources mesh, in MaterialPipelineResources resources){
         return PrepareMaterialPassGeometry(this.m_meshes, this.m_lookupMode, mesh, resources);
     }
 
-    [cpp_unwind]
     private Expected<mut MaterialPipelineResources> pipeline(in MaterialSurfaceInfo material, in MaterialPipelineKey key){
         if(this.m_lookupMode == RendererResourceLookupMode::CreateMissing)
             return this.m_system.createRendererPipeline(material, key, this.m_framebuffer);
         return this.m_system.findRendererPipeline(key);
     }
 
-    [cpp_unwind]
     private b8 appendDraw(in EntityID entity, mut MaterialSurfaceInfo material, mut MeshResources mesh, in CsgReceiverDrawState receiver, in Optional<in CsgFrameReceiverLookup> lookup){
         assert(mesh.valid() && GeometryHeapHandlesReady(mesh.geometryHeapHandles));
         assert(material.transparent == this.m_transparent);
@@ -307,7 +301,6 @@ class MaterialDrawGather{
         return true;
     }
 
-    [cpp_unwind]
     private void gatherRow(in MeshSystem ecsMeshes, in CsgReceiverPass receiverPass, in Optional<in CsgFrameReceiverLookup> lookup, in EntityID entity, in RendererComponent renderer){
         if(!renderer.visible || this.m_opticalVolumes.isSuppressed(entity))
             return;
@@ -348,7 +341,6 @@ class MaterialDrawGather{
             return;
     }
 
-    [cpp_unwind]
     public void gather(in MeshSystem ecsMeshes, in CsgReceiverPass receiverPass, in Optional<in CsgFrameReceiverLookup> lookup){
         for(in auto row : this.m_world.view<RendererComponent>())
             this.gatherRow(ecsMeshes, receiverPass, lookup, Get<0>(row), Get<1>(row));
@@ -416,7 +408,6 @@ class TransparentBatchGatherState : NoCopy{
         this.fallbackPass = fallbackPass;
     }
 
-    [cpp_unwind]
     public void gatherRow(in EntityID entity, in RendererComponent renderer, in Optional<in CsgFrameReceiverLookup> lookup){
         if(!renderer.visible || this.opticalVolumes.isSuppressed(entity))
             return;
@@ -766,21 +757,18 @@ b8 EqualCsgFrameState(in CsgFrameState lhs, in CsgFrameState rhs){
         && lhs.hasTransparentSkinnedWork == rhs.hasTransparentSkinnedWork;
 }
 
-[cpp_unwind]
 void CopyPreparedDrawItems(in MaterialPassDrawItems source, mut MaterialPassDrawItems destination){
     AssignVector(destination.meshDrawItems, source.meshDrawItems);
     AssignVector(destination.indexedDrawItems, source.indexedDrawItems);
     AssignVector(destination.computeDrawItems, source.computeDrawItems);
 }
 
-[cpp_unwind]
 void CopyPreparedDrawItemPartitions(in MaterialPassDrawItemPartitions source, mut MaterialPassDrawItemPartitions destination){
     CopyPreparedDrawItems(source.regular, destination.regular);
     CopyPreparedDrawItems(source.csg, destination.csg);
     CopyPreparedDrawItems(source.csgReceiverSurface, destination.csgReceiverSurface);
 }
 
-[cpp_unwind]
 void CopyPreparedCsgFrameData(in CsgFrameGpuData source, mut CsgFrameGpuData destination){
     AssignVector(destination.receiverRanges, source.receiverRanges);
     AssignVector(destination.cutters, source.cutters);
@@ -830,7 +818,6 @@ void StampPreparedPassCacheSlot(
     slot.valid = true;
 }
 
-[cpp_unwind]
 void AssignPreparedPassCacheOutputs(in PreparedMaterialPassCacheSlot slot, in PreparedMaterialStreamCache streams, in MaterialPassGatherOutputs outputs){
     CopyPreparedDrawItemPartitions(slot.drawItems, outputs.drawItems);
     CopyPreparedCsgFrameData(slot.csgFrameData, outputs.csgFrameData);
@@ -857,7 +844,6 @@ void AppendMaterialDrawItem(in RenderPath path, mut MaterialPassDrawItem item, m
     }
 }
 
-[cpp_unwind]
 void RendererMaterialSystem::gatherDraws(
     in FramebufferHandle framebuffer,
     in MaterialPipelinePass pass,
@@ -931,27 +917,22 @@ void RendererMaterialSystem::gatherDraws(
     SortMaterialPassDrawItemPartitions(outputs.drawItems);
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState){
     return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, false, Optional<in MeshViewGpuData>());
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState){
     return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, false, csgWorkRegionMeshViewState);
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets){
     return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, avboitTargets.valid(), Optional<in MeshViewGpuData>());
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState){
     return this.prepareMaterialPassResourcesImpl(framebuffer, pass, transparent, csgFrameState, avboitTargets.valid(), csgWorkRegionMeshViewState);
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMaterialPassResourcesImpl(
     in FramebufferHandle framebuffer,
     in MaterialPipelinePass pass,
@@ -994,7 +975,6 @@ b8 RendererMaterialSystem::prepareMaterialPassResourcesImpl(
     return drawBuffersReady && regularDrawResourcesReady && csgDrawResourcesReady && csgReceiverSurfaceDrawResourcesReady;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareTransparentMaterialPasses(
     in Span<TransparentPassPrepareDesc> passes,
     in CsgFrameState csgFrameState,
@@ -1036,7 +1016,6 @@ b8 RendererMaterialSystem::prepareTransparentMaterialPasses(
     return this.prepareTransparentMaterialPassesImpl(this.m_world, meshes.value(), passes, csgFrameState, csgWorkRegionMeshViewState, Optional<in CsgFrameReceiverLookup>());
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareTransparentMaterialPassesImpl(
     mut World world,
     in borrow MeshSystem ecsMeshes,
@@ -1163,7 +1142,6 @@ b8 RendererMaterialSystem::prepareTransparentMaterialPassesImpl(
     return allReady;
 }
 
-[cpp_unwind]
 Expected<BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
     if(!EnsurePushConstantBindingLayout(this.m_graphics.getDevice(), sizeof(TransparentDrawPushConstants), ShaderTypeMask::All, this.m_materialState.m_materialPassBindingLayout)){
         error("RendererSystem: failed to create the shared material-pass push-constant layout");
@@ -1172,7 +1150,6 @@ Expected<BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBinding
     return this.m_materialState.m_materialPassBindingLayout;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     if(!EnsurePushConstantBindingLayout(this.m_graphics.getDevice(), sizeof(MeshComputePushConstants), ShaderTypeMask::Compute, this.m_materialState.m_computeBindingLayout)){
         error("RendererSystem: failed to create compute-emulation binding layout");
@@ -1182,7 +1159,6 @@ b8 RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::createComputeEmulationResources(){
     if(!this.prepareMeshComputeBindingLayout())
         return false;
@@ -1216,7 +1192,6 @@ b8 RendererMaterialSystem::createComputeEmulationResources(){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::reserveInstanceBufferCapacity(in usize instanceCount){
     if(instanceCount == 0)
         return true;
@@ -1249,7 +1224,6 @@ b8 RendererMaterialSystem::reserveInstanceBufferCapacity(in usize instanceCount)
     return true;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(in usize byteCount){
     usize requiredByteCount = 0u;
     if(s_RuntimeAssertionsEnabled){
@@ -1284,7 +1258,6 @@ b8 RendererMaterialSystem::reserveMaterialTypedBufferCapacity(in usize byteCount
     return true;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareMaterialPassDrawBuffers(in Span<InstanceGpuData> instanceData, in Span<u8> materialTypedBytes){
     const usize uploadBytes = ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 

@@ -68,7 +68,6 @@ class ReflectionStatisticsReadback : NoCopy{
 
     public void resetReadbackBuffers(){ this.m_readback.resetReadbackBuffers(); }
 
-    [cpp_unwind]
     public b8 prepareResources(){
         if(this.m_readback.buffers[0u].valid())
             return true;
@@ -79,7 +78,6 @@ class ReflectionStatisticsReadback : NoCopy{
         return this.m_readback.prepare(names, "Reflection statistics: failed to allocate readback control");
     }
 
-    [cpp_unwind]
     public void pollCompleted(){
         this.m_readback.pollCompleted("Reflection statistics: failed to map a completed readback");
     }

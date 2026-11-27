@@ -25,7 +25,6 @@ class CsgRayProbeTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         commands.setBufferState(this.output.deref(), ResourceStates::UnorderedAccess);
         commands.commitBarriers();
@@ -45,7 +44,6 @@ class CsgRayProbeTask{
     }
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareCsgRayProbe(in CsgRayProbeTask payload, mut GpuTaskGraph graph){
     const Array<BufferHandle, 2u> buffers(payload.output, payload.readback);
     Array<GpuTaskResourceUse, 2u> uses;
@@ -65,7 +63,6 @@ Expected<GpuTaskId> DeclareCsgRayProbe(in CsgRayProbeTask payload, mut GpuTaskGr
     return task;
 }
 
-[cpp_unwind]
 Expected<void> RunCsgRayRuntimeProbe(mut ProjectRuntimeContext context){
     mut GraphicsRuntime graphics = context.graphics;
     mut Device device = graphics.getDevice();

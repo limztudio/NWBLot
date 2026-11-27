@@ -18,7 +18,6 @@ class PositionAlignedSkinnedMeshStreamsResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Vector<SourceVertexRef> CompactSourceVertexRefsWithoutTangents(
     in Span<SourceVertexRef> sourceVertexRefs,
     mut Span<u32> inOutIndices
@@ -61,7 +60,6 @@ Expected<usize> TryComputeTriangleIndexScratchCapacity(in usize maxFaceTriangles
     return maxFaceTriangles * cast<usize>(s_MeshletTriangleIndexCount);
 }
 
-[cpp_unwind]
 b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut Vector<u32> inOutTriangleIndices){
     const Expected<usize> triangleIndexCapacity = TryComputeTriangleIndexScratchCapacity(maxFaceTriangles);
     if(!triangleIndexCapacity.has_value())
@@ -71,7 +69,6 @@ b8 EnsureTriangleIndexScratchCapacityCount(in usize maxFaceTriangles, mut Vector
     return true;
 }
 
-[cpp_unwind]
 Expected<PositionAlignedSkinnedMeshStreamsResult> BuildPositionAlignedSkinnedMeshStreams(
     in Span<Vec3> sourcePositions,
     in Span<MeshSkinInfluence> sourceSkin,

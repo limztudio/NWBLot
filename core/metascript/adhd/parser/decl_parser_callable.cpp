@@ -78,10 +78,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
                 if(!initializeDestructorDecl(*decl, maybeClass, "expected '(' in out-of-line destructor", &parsedOwnerTemplateParams, &parsedOwnerTemplateParamDecls))
                     return nullptr;
                 decl->hasBody = true;
-                b8 skipped = false;
-                if(!trySkipImportedCallableBody(*decl, decl->ownerTemplateParams.empty(), skipped))
-                    return nullptr;
-                if(!skipped && !m_stmtParser.parseBlockStatements(decl->body))
+                if(!m_stmtParser.parseBlockStatements(decl->body))
                     return nullptr;
                 return decl;
             }
@@ -162,7 +159,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
 
     const b8 hasExceptionProbe = m_cursor.matchIdentifier(KeywordSemantics::s_NoexceptLike);
     if(hasExceptionProbe){
-        if(decl->isExtern || !decl->ownerClassName.empty() || decl->templateParams.empty() || decl->allowsCppUnwind){
+        if(decl->isExtern || !decl->ownerClassName.empty() || decl->templateParams.empty()){
             m_cursor.error("'noexcept_like' requires a generic free function definition with no other exception specification");
             return nullptr;
         }
@@ -187,11 +184,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
             return nullptr;
         }
         decl->hasBody = true;
-        const b8 allowSkip = !hasExceptionProbe && decl->templateParams.empty() && decl->ownerTemplateParams.empty() && !decl->isConstructor;
-        b8 skipped = false;
-        if(!trySkipImportedCallableBody(*decl, allowSkip, skipped))
-            return nullptr;
-        if(!skipped && !m_stmtParser.parseBlockStatements(decl->body))
+        if(!m_stmtParser.parseBlockStatements(decl->body))
             return nullptr;
         if(hasExceptionProbe && decl->exceptionProbes.empty()){
             if(decl->body.size() != 1u || decl->body.front()->kind != StmtKind::Return || !decl->body.front()->expr){
@@ -241,6 +234,7 @@ b8 DeclParser::tryParseExternCallableAttribute(const ParsedAttribute& attr, Meth
         }
         switch(flagKind){
         case ExternCallableFlagKind::Unwind:       outMethod.allowsCppUnwind = true; break;
+        case ExternCallableFlagKind::Nothrow:      outMethod.isNothrowExtern = true; break;
         case ExternCallableFlagKind::ScratchArena: outMethod.injectsCallerArena = true; break;
         case ExternCallableFlagKind::BorrowView:   outMethod.returnsBorrowedView = true; break;
         case ExternCallableFlagKind::PlatformLiteralArg0:
@@ -347,14 +341,6 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
                 return false;
             }
             decl.exportsRvalueOverload = true;
-            matchedAttr = true;
-        }
-        if(attr.name == KeywordSemantics::s_CppUnwind){
-            if(decl.allowsCppUnwind || !attr.arguments.empty() || decl.isExtern){
-                m_cursor.error(attr.line, attr.column, "'[cpp_unwind]' takes no arguments and may appear once on an ADHD function or method");
-                return false;
-            }
-            decl.allowsCppUnwind = true;
             matchedAttr = true;
         }
         if(attr.name == KeywordSemantics::s_OwnerResult){

@@ -569,7 +569,9 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
         ParallelStatementEmitter(*this).emitTaskSchedulerPrologue(out, indent);
 
     const b8 prevUnwind = m_allowsCppUnwind;
+    const b8 prevNoexceptLike = m_inNoexceptLike;
     m_allowsCppUnwind = method.allowsCppUnwind || !method.exceptionProbes.empty();
+    m_inNoexceptLike = !method.exceptionProbes.empty();
     const b8 prevScalarSimd = m_emittingScalarSimd;
     m_emittingScalarSimd = true;
     const TypeRef* prevCallerReturnType = m_activeCallerArenaReturnType;
@@ -593,6 +595,7 @@ void SourceEmitter::emitMethodBodyBlock(MString& out, const MethodDecl& method, 
     m_parallelWorkerDepth = prevParallelWorkerDepth;
     m_activeCallerArenaReturnType = prevCallerReturnType;
     m_emittingScalarSimd = prevScalarSimd;
+    m_inNoexceptLike = prevNoexceptLike;
     m_allowsCppUnwind = prevUnwind;
     m_skippedCtorAssignExprs = nullptr;
 }

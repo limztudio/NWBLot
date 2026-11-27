@@ -22,7 +22,6 @@ class MeshletAttributeSkinFailure{
     public u32 conflictingSkin = s_MeshMissingStreamIndex;
 }
 
-[cpp_unwind]
 Expected<void, MeshletAttributeSkinFailure> ResolveMeshletAttributeSkins(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletPositionStreamRef> positionRefs,

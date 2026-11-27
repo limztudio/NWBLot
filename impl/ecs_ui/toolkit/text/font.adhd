@@ -77,7 +77,6 @@ class FontFace : NoCopy{
     private b8 m_coverageInkReliable = false;
     private b8 m_hasColor = false;
 
-    [cpp_unwind]
     public void initialize(in SharedPool pool, in FontSource source){
         if(this.m_started)
             return;
@@ -106,7 +105,6 @@ class FontFace : NoCopy{
             this.installBakedAtlas(pool, source.font, source.atlas.value());
     }
 
-    [cpp_unwind]
     private void installBakedAtlas(in SharedPool pool, in Font font, in FontAtlas atlas){
         in FontAtlasPayload payload = atlas.payload();
         if(!atlas.validatePayload() || payload.font != this.m_identity || !ValidateFontAtlasSourceMatch(payload, font)
@@ -172,19 +170,16 @@ class FontFace : NoCopy{
             return MakeUnexpected(Failure());
         return MeasureShapingFont(this.m_hbFont, fontSize, this.m_lastHbScale);
     }
-    [cpp_unwind]
     public b8 shape(in ShapeRequest request, in u32 byteBegin, in u32 byteEnd, mut Vector<RawShapedGlyph> output){
         if(!this.m_ready)
             return false;
         return ShapeFontGlyphRun(this.m_hbFont, this.m_lastHbScale, this.m_shapeBuffer, request, byteBegin, byteEnd, this.m_freeType.view(), this.m_allowOutlineBounds, this.m_coverageInkReliable, this.m_glyphExtentsCache, output);
     }
-    [cpp_unwind]
     public Expected<Rect> rasterBounds(in u32 glyphId, in u32 pixelSize){
         if(!this.m_ready)
             return MakeUnexpected(Failure());
         return MeasureRasterFontGlyph(this.m_freeType.view(), this.m_hasColor, glyphId, pixelSize, this.m_lastRasterPixelSize);
     }
-    [cpp_unwind]
     public b8 rasterize(in u32 glyphId, in u32 pixelSize, mut GlyphBitmap output){
         return this.m_ready && RasterizeFontGlyph(this.m_freeType.view(), this.m_hasColor, glyphId, pixelSize, this.m_lastRasterPixelSize, output);
     }
@@ -244,7 +239,6 @@ u32 ResolveShapedClusterByteEnd(
     return previousBegin;
 }
 
-[cpp_unwind]
 GlyphCoverageBounds MeasureFontOutlineCoverage(mut FreeTypeFaceView face, in b8 allowOutlineBounds, in b8 coverageInkReliable, in u32 glyph, in f32 fontSize, mut b8 outCacheable){
     outCacheable = true;
     if(!allowOutlineBounds || coverageInkReliable)
@@ -334,7 +328,6 @@ b8 LoadRasterFontGlyph(
     return face.loadGlyph(glyph, loadFlags) == 0;
 }
 
-[cpp_unwind]
 Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in b8 hasColor, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize){
     if(!IsValidTextRasterPixelSize(pixelSize))
         return MakeUnexpected(Failure());
@@ -360,7 +353,6 @@ Expected<Rect> MeasureRasterFontGlyph(mut FreeTypeFaceView face, in b8 hasColor,
     return bounds;
 }
 
-[cpp_unwind]
 b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in b8 hasColor, in u32 glyph, in u32 pixelSize, mut u32 inOutLastPixelSize, mut GlyphBitmap output){
     if(!IsValidTextRasterPixelSize(pixelSize))
         return false;
@@ -417,7 +409,6 @@ b8 RasterizeFontGlyph(mut FreeTypeFaceView face, in b8 hasColor, in u32 glyph, i
     return true;
 }
 
-[cpp_unwind]
 b8 OpenUiFontFace(mut UiFreeTypeFace face, in Span<u8> bytes, in u32 index){
     if(face.createLibrary() != 0){
         error("UI FreeType initialization failed");
@@ -458,7 +449,6 @@ Expected<FontMetrics> MeasureShapingFont(mut HarfBuzzFont font, in f32 fontSize,
     return TryResolveFontExtentsMetrics(extents.ascender, extents.descender, extents.line_gap);
 }
 
-[cpp_unwind]
 b8 ShapeFontGlyphRun(
     mut HarfBuzzFont font,
     mut i32 inOutLastHbScale,
@@ -586,7 +576,6 @@ void ReportUiFontCloseError(in StringView message){
     CaptureDiagnosticEventAtCallSite(record);
 }
 
-[cpp_unwind]
 Expected<SharedFontFace> MakeFontFace(in SharedPool pool, in FontSource source){
     Expected<SharedFontFace> face = pool.make<FontFace>();
     if(face.has_value())

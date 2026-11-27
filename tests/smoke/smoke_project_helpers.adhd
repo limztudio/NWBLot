@@ -110,7 +110,6 @@ class YawSpinController{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateSmokeWorld(in StringView projectName, mut ProjectRuntimeContext context){
     auto world = MakeUnique<World>(context.objectArena, context.cpuTasks);
     if(!world.valid()){

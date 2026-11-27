@@ -11,7 +11,6 @@
 class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
     private ArenaObjectSlot<GpuRendererState> m_state = ArenaObjectSlot<GpuRendererState>();
 
-    [cpp_unwind]
     public GpuRenderer(mut GraphicsRuntime graphics, mut AssetManager assetManager, in ShaderArchivePathResolver shaderPathResolver){
         if(!this.m_state.tryEmplace(graphics, assetManager, shaderPathResolver))
             TerminateInvariant();
@@ -20,7 +19,6 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){ this.m_state.value().m_activeSceneSubsystems = subsystems; }
 
-    [cpp_unwind]
     public b8 validateResources(in u32 width, in u32 height){
         mut GpuRendererState state = this.m_state.value();
         if(!IsValidGpuRendererExtent(width, height))
@@ -84,7 +82,6 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
         state.m_presentationContributor.reset();
     }
 
-    [cpp_unwind]
     public b8 setSkin(in AssetRef<UiSkin> identity, in UiSkin skin, in u64 skinGeneration){
         mut GpuRendererState state = this.m_state.value();
         if(!CanAcceptGpuSkinInput(identity.valid(), skinGeneration, state.m_resources.valid()) || !skin.validatePayload())
@@ -162,11 +159,8 @@ class GpuRenderer : IGpuTaskGraphOutputLayerContributor, NoCopy{
         return state.m_graphics.lastPresentationReceipt().status(state.m_lastAcceptedAcquired.backBuffer);
     }
 
-    [cpp_unwind]
     public b8 renderStandalone(in AcquiredPresentationFrame frame){ return this.m_state.value().renderStandalone(frame); }
-    [cpp_unwind]
     public b8 prepareTaskGraphOutputLayer(in AcquiredPresentationFrame frame)override{ return this.m_state.value().prepare(frame); }
-    [cpp_unwind]
     public Expected<GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(mut GpuTaskGraph graph)override{ return this.m_state.value().declare(graph, true); }
     public void acceptTaskGraphOutputLayer(in u64 frameGeneration, in QueueSubmissionToken submissionToken)override{
         this.m_state.value().acceptOutputLayer(frameGeneration, submissionToken);

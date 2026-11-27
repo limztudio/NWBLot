@@ -36,7 +36,6 @@ class RendererTaskTimingFeedback : NoCopy{
     private GpuTimingSampleSubscription m_subscription;
     private b8 m_active = false;
 
-    [cpp_unwind]
     public RendererTaskTimingFeedback(mut GraphicsRuntime graphics, in Span<Name> feedbackCollectionScopes){
         this.m_graphics = graphics;
         assert(!feedbackCollectionScopes.empty());
@@ -46,7 +45,6 @@ class RendererTaskTimingFeedback : NoCopy{
     }
     public ~RendererTaskTimingFeedback(){ this.deactivate(); }
 
-    [cpp_unwind]
     public void activate(){
         const FutexGuard lifecycleLock = AcquireFutex(this.m_lifecycleMutex);
         b8 feedbackCollectionEnabled = false;
@@ -90,7 +88,6 @@ class RendererTaskTimingFeedback : NoCopy{
         this.reset();
     }
 
-    [cpp_unwind]
     public Expected<GpuTimingSampleAttribution> beginSample(
         in Name scopeName,
         in GpuTaskTimingKey key,
@@ -123,7 +120,6 @@ class RendererTaskTimingFeedback : NoCopy{
         this.m_state.discardRecording(attribution);
     }
 
-    [cpp_unwind]
     public void configureCompileOptions(mut GpuTaskGraphCompileOptions options, in u64 frameIndex){
         options.queueAssignmentOptions.clearTimingHistory();
         options.queueAssignmentOptions.timingFeedbackPolicy = GpuTaskTimingFeedbackPolicy();
@@ -162,7 +158,6 @@ class RendererTaskTimingFeedback : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<GpuTimingSampleAttribution> BeginTaskTimingSample(
     mut RendererTaskTimingFeedback feedback,
     in GpuTimingScopeDefinition scope,

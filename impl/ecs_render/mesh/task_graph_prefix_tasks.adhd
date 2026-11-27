@@ -28,7 +28,6 @@ class MeshViewSetupGraphTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const;
 }
 

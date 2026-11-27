@@ -45,7 +45,6 @@ b8 ValidateSkinCookInverseBindMatricesNonEmpty(in usize matrixCount, in StringVi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 ParseSkinInfluenceMetadataEntry(
     in Path nwbFilePath,
     in MetascriptValue influenceValue,
@@ -155,7 +154,6 @@ b8 ParseSkinInfluenceMetadataEntry(
     return true;
 }
 
-[cpp_unwind]
 b8 ParseSkinInfluenceMetadataInto(
     in Path nwbFilePath,
     in MetascriptValue skinAsset,

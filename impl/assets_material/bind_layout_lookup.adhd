@@ -9,7 +9,6 @@
 
 
 class MaterialBindLayoutLookupBuilder{
-    [cpp_unwind]
     public b8 buildMaterialBindTypedLayoutBlockLookup(
         in StringView contextLabel,
         in Span<MaterialTypedLayoutBlock> typedLayoutBlocks,
@@ -48,7 +47,6 @@ class MaterialBindLayoutLookupBuilder{
         return true;
     }
 
-    [cpp_unwind]
     public b8 tryInsertMaterialBindTypedLayoutParameterLookupEntry(
         in StringView interfacePath,
         in StringView contextLabel,
@@ -95,7 +93,6 @@ class MaterialBindLayoutLookupBuilder{
         return true;
     }
 
-    [cpp_unwind]
     public b8 insertMaterialBindInstanceParameterLookupEntries(
         in StringView interfaceVirtualPath,
         in StringView contextLabel,
@@ -135,7 +132,6 @@ class MaterialBindLayoutLookupBuilder{
         return true;
     }
 
-    [cpp_unwind]
     public b8 buildMaterialBindTypedLayoutParameterLookup(
         in StringView interfaceVirtualPath,
         in StringView contextLabel,

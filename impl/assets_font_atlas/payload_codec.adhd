@@ -76,7 +76,6 @@ Expected<Sha256Digest> ReadFontAtlasSha256Digest(in Span<u8> bytes, mut usize cu
     return digest;
 }
 
-[cpp_unwind]
 b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         in FontAtlasGroup group = payload.groups[groupIndex];
@@ -93,7 +92,6 @@ b8 CheckFontAtlasGuardedOverlap(in FontAtlasPayload payload){
     return true;
 }
 
-[cpp_unwind]
 b8 ValidateFontAtlasPayloadWithOptions(in FontAtlasPayload payload, in b8 verifyPixelDigests){
     if(!ValidateFontAtlasIdentityAndFace(payload.font.valid(), IsFontAtlasDigestNonZero(payload.fontSha256.bytes), payload.faceIndex))
         return false;
@@ -155,7 +153,6 @@ b8 ValidateFontAtlasPayloadWithOptions(in FontAtlasPayload payload, in b8 verify
     return true;
 }
 
-[cpp_unwind]
 b8 ValidateFontAtlasPayload(in FontAtlasPayload payload){
     return ValidateFontAtlasPayloadWithOptions(payload, true);
 }
@@ -197,7 +194,6 @@ b8 ValidateFontAtlasSourceMatch(in FontAtlasPayload payload, in Font font){
     return ValidateFontAtlasMatchedPositioningTableCount(matched, payload.positioningTables.size());
 }
 
-[cpp_unwind]
 Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Span<u8> fontBytes, in u32 faceIndex, in u32 sourceGlyphCount){
     if(faceIndex != 0u)
         return MakeUnexpected(Failure());
@@ -227,7 +223,6 @@ Expected<Vector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(in Sp
     return tables;
 }
 
-[cpp_unwind]
 b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPayload){
     usize cursor = 0u;
     const Expected<Array<u64, s_FontAtlasIdentityLaneCount>> identityQwords = TryReadFontAtlasBinaryPreambleAndIdentity(bytes, cursor);
@@ -304,7 +299,6 @@ b8 DeserializeFontAtlasBinaryInto(in Span<u8> bytes, mut FontAtlasPayload outPay
     return HasConsumedExactFontAtlasBinaryPayload(cursor, bytes.size()) && ValidateFontAtlasPayload(outPayload);
 }
 
-[cpp_unwind]
 b8 SerializeFontAtlasPayloadValidatedInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     usize size = ComputeFontAtlasInitialBinaryBytes(s_FontAtlasBinaryHeaderBytes, s_FontAtlasBinaryGlyphBytes, payload.glyphs.size());
     for(in FontAtlasGroup group : payload.groups)
@@ -344,14 +338,12 @@ b8 SerializeFontAtlasPayloadValidatedInto(in FontAtlasPayload payload, mut Vecto
     return true;
 }
 
-[cpp_unwind]
 b8 SerializeFontAtlasPayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     if(!ValidateFontAtlasPayload(payload))
         return false;
     return SerializeFontAtlasPayloadValidatedInto(payload, outBinary);
 }
 
-[cpp_unwind]
 Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){
     Vector<u8> binary = Vector<u8>();
     if(!SerializeFontAtlasPayloadInto(payload, binary))
@@ -359,7 +351,6 @@ Expected<Vector<u8>> SerializeFontAtlasPayload(in FontAtlasPayload payload){
     return binary;
 }
 
-[cpp_unwind]
 Expected<FontAtlasPayload> DeserializeFontAtlasPayload(in Span<u8> binary){
     FontAtlasPayload payload = FontAtlasPayload();
     if(!DeserializeFontAtlasBinaryInto(binary, payload)){

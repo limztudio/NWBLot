@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 AppendTypedInstanceTransformPatch(
     in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor,
     in Span<u32> instanceEntityIds,
@@ -50,7 +49,6 @@ b8 AppendTypedInstanceTransformPatch(
     return true;
 }
 
-[cpp_unwind]
 b8 AppendInstanceTransformPatch(
     in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor,
     in Span<InstanceGpuData> instances,

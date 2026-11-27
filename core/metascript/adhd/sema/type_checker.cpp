@@ -13,6 +13,7 @@
 #include "asset_type_analyzer.h"
 #include "borrow_lifetime_analyzer.h"
 #include "callable_declaration_linker.h"
+#include "exception_spec_analyzer.h"
 #include "type_layout_analyzer.h"
 
 
@@ -476,6 +477,8 @@ b8 TypeChecker::checkTranslationUnit(TranslationUnit& unit, MVector<ParseError>&
             ok = false;
         fn->isInline = __hidden_adhd_type_checker::ShouldAutoInlineCallable(*fn);
     }
+
+    ExceptionSpecAnalyzer(m_arena, *this, m_symbols).analyze(unit);
 
     m_recordGlobalHeaders = true;
     for(const AssetRegistration& registration : unit.assetRegistrations){

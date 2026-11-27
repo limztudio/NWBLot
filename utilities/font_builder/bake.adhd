@@ -22,7 +22,6 @@ StringView ResolveBakeFontAtlasRasterModeText(in FontAtlasRasterMode mode){
     return s_FontAtlasRasterModeOutline;
 }
 
-[cpp_unwind]
 void CompactAtlasGroups(mut FontAtlasPayload payload){
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         mut FontAtlasGroup group = payload.groups[groupIndex];
@@ -47,7 +46,6 @@ void CompactAtlasGroups(mut FontAtlasPayload payload){
     }
 }
 
-[cpp_unwind]
 void BuildFontMetadata(in FontAtlasPayload payload, mut String outText){
     outText.assign("font face;\r\n\r\nfont_atlas atlas;\r\natlas.font = face;\r\n");
     StringAppendFormat(outText, "atlas.bake_ppem = {};\r\n", payload.bakePpem);
@@ -87,7 +85,6 @@ b8 ValidateOptions(in BakeOptions options){
     return ValidateBakeOptionsFields(options.ppem, options.spread, options.extent, options.maxGroups, options.source, options.output);
 }
 
-[cpp_unwind]
 Expected<Vector<u8>, StringView> ReadFontSourceInput(in Path path){
     if(IsPreparedFontSourcePath(path)){
         auto prepared = ReadPreparedFontSource(path, false);
@@ -120,7 +117,6 @@ Expected<Vector<u8>, StringView> ReadFontSourceInput(in Path path){
     return bytes;
 }
 
-[cpp_unwind]
 b8 PackGlyphs(in BakeOptions options, in Span<RasterGlyph> glyphs, mut FontAtlasPayload outPayload){
     outPayload.glyphs.reserve(glyphs.size());
     for(in RasterGlyph glyph : glyphs)
@@ -157,7 +153,6 @@ b8 PackGlyphs(in BakeOptions options, in Span<RasterGlyph> glyphs, mut FontAtlas
     return true;
 }
 
-[cpp_unwind]
 Expected<FontAtlasPayload> Bake(in BakeOptions options, mut Vector<u8> outSourceFontBytes){
     auto source = ReadFontSourceInput(options.source);
     if(!source.has_value()){
@@ -178,7 +173,6 @@ Expected<FontAtlasPayload> Bake(in BakeOptions options, mut Vector<u8> outSource
     return candidate;
 }
 
-[cpp_unwind]
 Expected<Vector<u8>, StringView> BuildPreparedFont(in Span<u8> sourceFontBytes, in FontAtlasPayload atlas){
     if(ComputeSha256(sourceFontBytes) != atlas.fontSha256){
         error("font_builder: source changed during bake");
@@ -195,7 +189,6 @@ Expected<Vector<u8>, StringView> BuildPreparedFont(in Span<u8> sourceFontBytes, 
     return binary;
 }
 
-[cpp_unwind]
 b8 WriteOutputs(in BakeOptions options, in Span<u8> sourceFontBytes, in FontAtlasPayload payload){
     const auto binary = BuildPreparedFont(sourceFontBytes, payload);
     if(!binary.has_value()){

@@ -44,7 +44,6 @@ void LogIncompatibleTexture2dDimension(in Name assetPath){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<u32> ResolveTextureAssetSlot(mut RendererMaterialResourceState resources, in AssetRef<Texture> asset, mut GraphicsRuntime graphics, in AssetManager assetManager){
     assert(asset.valid());
     const Name path = asset.name();
@@ -72,7 +71,6 @@ Expected<u32> ResolveTextureAssetSlot(mut RendererMaterialResourceState resource
     return resource.sampledImageHeapHandle.slot();
 }
 
-[cpp_unwind]
 Expected<u32> ResolveSamplerAssetSlot(mut RendererMaterialResourceState resources, in AssetRef<Sampler> asset, mut GraphicsRuntime graphics, in AssetManager assetManager){
     assert(asset.valid());
     const Name path = asset.name();
@@ -96,7 +94,6 @@ Expected<u32> ResolveSamplerAssetSlot(mut RendererMaterialResourceState resource
     return resource.samplerHeapHandle.slot();
 }
 
-[cpp_unwind]
 b8 ResolveMaterialResourceReferences(mut MaterialSurfaceInfo materialInfo, mut RendererMaterialResourceState resources, mut GraphicsRuntime graphicsModule, in AssetManager assetManager){
     if(materialInfo.resourceReferencesResolved)
         return true;
@@ -142,7 +139,6 @@ b8 ResolveMaterialResourceReferences(mut MaterialSurfaceInfo materialInfo, mut R
     return true;
 }
 
-[cpp_unwind]
 Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::createMaterialSurfaceInfo(in AssetRef<Material> materialAsset){
     const Name materialPath = materialAsset.name();
     if(materialPath == s_NameNone){
@@ -239,7 +235,6 @@ Expected<mut MaterialSurfaceInfo> RendererMaterialSystem::findMaterialSurfaceInf
     return Expected<mut MaterialSurfaceInfo>(surface);
 }
 
-[cpp_unwind]
 void PrepareVisibleMaterialInstanceMutableCacheRow(
     mut RendererMaterialSystem system,
     in EntityID entity,
@@ -255,7 +250,6 @@ void PrepareVisibleMaterialInstanceMutableCacheRow(
         return;
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     b8 transparent = false;
     b8 refractive = false;
@@ -284,14 +278,12 @@ b8 RendererMaterialSystem::hasNoVisibleRefractiveRenderers()const{
         && this.m_materialState.m_visibleRefractiveSurfaceCount == this.m_materialState.m_surfaceInfos.size();
 }
 
-[cpp_unwind]
 void RendererMaterialSystem::prepareVisibleMaterialInstanceMutableCache(){
     this.m_materialState.m_instanceMutableCache.prune(this.m_world);
     for(in auto row : this.m_world.view<RendererComponent, MaterialInstanceComponent>())
         PrepareVisibleMaterialInstanceMutableCacheRow(this, Get<0>(row), Get<1>(row), Get<2>(row));
 }
 
-[cpp_unwind]
 b8 RendererMaterialSystem::hasTransparentRenderers(in RendererResourceLookupMode lookupMode){
     for(in auto row : this.m_world.view<RendererComponent>()){
         if(!Get<1>(row).visible)
@@ -307,7 +299,6 @@ b8 RendererMaterialSystem::hasTransparentRenderers(in RendererResourceLookupMode
     return false;
 }
 
-[cpp_unwind]
 Expected<Span<u8>> RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(in EntityID entity, in MaterialSurfaceInfo materialInfo, in Optional<in MaterialInstanceComponent> materialInstance){
     return this.m_materialState.m_instanceMutableCache.prepare(this.m_world, entity, materialInfo, materialInstance);
 }
@@ -316,7 +307,6 @@ Expected<Span<u8>> RendererMaterialSystem::findPreparedMaterialInstanceMutableTy
     return this.m_materialState.m_instanceMutableCache.find(entity, materialInfo, materialInstance);
 }
 
-[cpp_unwind]
 void RendererMaterialSystem::releaseMaterialResourceReferences(){
     mut RendererMaterialResourceState resources = this.m_materialState.m_resourceState;
     for(auto it = resources.textureAssetCache.begin(); it != resources.textureAssetCache.end(); ++it){

@@ -302,7 +302,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB Soft Shadow Test");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateSmokeSkinnedRenderWorld(s_SoftShadowProjectName, SmokeRenderQualitySettings(), context);
     if(!world.has_value())

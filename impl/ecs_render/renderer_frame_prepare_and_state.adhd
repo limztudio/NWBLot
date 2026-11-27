@@ -57,7 +57,6 @@ Expected<void, CpuTaskAdmissionError> RendererSystem::update(mut World world, in
     return Expected<void, CpuTaskAdmissionError>();
 }
 
-[cpp_unwind]
 b8 RendererSystem::prepareResources(in FramebufferPtr framebuffer){
     return this.m_pipeline.prepareResources(framebuffer);
 }
@@ -138,7 +137,6 @@ GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStatistics
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 sampleCount){
     this.m_raytracingSystem.logCapabilityOnce();
     if(width == 0 || height == 0)
@@ -222,7 +220,6 @@ b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 
     return true;
 }
 
-[cpp_unwind]
 void RendererFramePipeline::invalidateResources(){
     this.m_opticalVolumes.reset();
     this.m_deferredTaskTimingFeedback.reset();
@@ -255,7 +252,6 @@ void RendererFramePipeline::invalidateResources(){
 
 void RendererFramePipeline::update(mut World world, in f32 delta){}
 
-[cpp_unwind]
 b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
     this.m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = false;
     this.m_shadowPrepareGraph.m_shadowPreparationOutcome.ready = false;
@@ -440,7 +436,6 @@ void RendererFramePipeline::setFrameLaggedAsyncLightingEnabled(in b8 enabled){
     this.resetLaggedLightingHistoryReadTracking();
 }
 
-[cpp_unwind]
 void RendererFramePipeline::commitFrameTargets(mut DeferredFrameTargets targets){
     this.m_frameTargets = targets;
 
@@ -476,13 +471,11 @@ void RendererFramePipeline::commitFrameTargets(mut DeferredFrameTargets targets)
     );
 }
 
-[cpp_unwind]
 void RendererFramePipeline::resetFrameTargets(){
     this.m_avboitSystem.resetAvboitFrameTargets(this.m_frameTargets.avboit);
     this.m_deferredSystem.resetDeferredFrameTargets(this.m_frameTargets);
 }
 
-[cpp_unwind]
 void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     {
         GpuCompiledGraphReadView planAccess(this.m_deferredLightingCompiledGraph);
@@ -505,7 +498,6 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     this.m_deferredLightingTaskGraphScheduled = false;
 }
 
-[cpp_unwind]
 void RendererFramePipeline::resetFrameTaskState(){
     this.resetDeferredFrameTaskIdsAndFlags();
     this.resetDeferredTaskGraphRuntime();
@@ -597,7 +589,6 @@ void RendererFramePipeline::resetLaggedLightingHistoryTracking(){
     this.invalidateLaggedLightingHistoryWriterDrain();
 }
 
-[cpp_unwind]
 void RendererFramePipeline::reportLaggedLightingTransition(in LaggedLightingReport report, in u64 targetGeneration){
     DeferredFrameDiagnostics diagnostics;
     diagnostics.reportLaggedLightingTransitionIfNeeded(report, targetGeneration, this.m_laggedLightingReport, this.m_laggedLightingReportGeneration);

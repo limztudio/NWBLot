@@ -9,7 +9,6 @@
 
 
 class FixtureShaper : ITextShaper{
-    [cpp_unwind]
     public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
         ShapedRun run;
         if(!PopulateFixtureShapedRun(request, run))

@@ -24,12 +24,12 @@ class Skin{
     private InfluenceVector m_influences;
     private InverseBindMatrixVector m_inverseBindMatrices;
 
-    [cpp_unwind] public b8 loadBinary(in Span<u8> binary);
+    public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setMesh(in AssetRef<Mesh> mesh){ this.m_mesh = mesh; }
     public void setSkeleton(in AssetRef<Skeleton> skeleton){ this.m_skeleton = skeleton; }
-    [cpp_unwind] public void setPayload(in InfluenceVector influences, in InverseBindMatrixVector inverseBindMatrices){
+    public void setPayload(in InfluenceVector influences, in InverseBindMatrixVector inverseBindMatrices){
         this.m_influences = influences;
         this.m_inverseBindMatrices = inverseBindMatrices;
     }

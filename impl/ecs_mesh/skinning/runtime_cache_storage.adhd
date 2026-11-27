@@ -28,7 +28,6 @@ enum<u8> ExistingRuntimeMeshDisposition{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 BuildRuntimeZippedPayload(in Mesh mesh, in Span<SkinInfluence4> skinStream, mut MeshSkinningRuntimeInstance instance){
     const Expected<MeshletRefTotalCounts> totalCounts = TrySumRuntimeMeshletRefCounts(mesh.meshlets());
     if(!totalCounts.has_value())
@@ -250,7 +249,6 @@ void ResetSkinningRuntimeUploadBuffers(mut MeshSkinningRuntimeInstance instance)
     instance.localBoundsBuffer.reset();
 }
 
-[cpp_unwind]
 void MeshSkinningRuntimeCache::prepareResources(mut World world){
     auto view = world.view<SkinnedMeshBindingComponent>();
     const usize count = view.candidateCount();
@@ -278,7 +276,6 @@ void MeshSkinningRuntimeCache::prepareResources(mut World world){
     }
 }
 
-[cpp_unwind]
 b8 MeshSkinningRuntimeCache::ensureSourceLoaded(in AssetRef<Skin> ref){
     assert(ref.valid());
     if(this.m_sources.contains(ref.name()))
@@ -302,7 +299,6 @@ b8 MeshSkinningRuntimeCache::ensureSourceLoaded(in AssetRef<Skin> ref){
     return true;
 }
 
-[cpp_unwind]
 b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(in EntityID entity, mut SkinnedMeshBindingComponent component){
     const Name sourceName = component.skin.name();
     if(!component.skin.valid()){
@@ -377,7 +373,6 @@ b8 MeshSkinningRuntimeCache::ensureRuntimeMesh(in EntityID entity, mut SkinnedMe
     return true;
 }
 
-[cpp_unwind]
 b8 MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeInstance instance){
     if(!ValidateRuntimeMeshUploadPayload(instance))
         return false;

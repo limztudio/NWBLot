@@ -64,7 +64,6 @@ class MeshSkinningRuntimeCache : NoCopy{
         this.m_assets = assets;
     }
 
-    [cpp_unwind]
     public void prepareResources(mut World world);
     public void clear(){
         if(!this.m_instances.empty())
@@ -92,11 +91,8 @@ class MeshSkinningRuntimeCache : NoCopy{
         return Optional<in MeshSkinningRuntimeInstance>();
     }
 
-    [cpp_unwind]
     private b8 ensureRuntimeMesh(in EntityID entity, mut SkinnedMeshBindingComponent component);
-    [cpp_unwind]
     private b8 ensureSourceLoaded(in AssetRef<Skin> ref);
-    [cpp_unwind]
     private b8 uploadRuntimeMeshBuffers(mut MeshSkinningRuntimeInstance instance);
     [owner_result]
     private MeshSkinningRuntimeInstance emptyInstance()const{ return MeshSkinningRuntimeInstance(); }

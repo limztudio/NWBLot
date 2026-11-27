@@ -269,7 +269,6 @@ class SoftShadowSplitResourceUseBuilder : NoCopy{
         this.m_graph = graph;
     }
 
-    [cpp_unwind]
     public b8 build(in SoftShadowSplitResourceInputs inputs, mut SoftShadowSplitResourceUses uses);
 }
 
@@ -284,13 +283,10 @@ class SoftShadowSplitTaskChainBuilder : NoCopy{
         this.m_raytracingSystem = raytracingSystem;
     }
 
-    [cpp_unwind]
     public b8 declare(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses, mut SoftShadowSplitTasks tasks);
 
-    [cpp_unwind]
     private Expected<SoftShadowLightSpaceMaps> declareLightSpaceShadowMaps(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses);
 
-    [cpp_unwind]
     private b8 declareOpaqueTasks(
         in SoftShadowSplitTaskChainInputs inputs,
         in SoftShadowSplitResourceUses uses,
@@ -299,7 +295,6 @@ class SoftShadowSplitTaskChainBuilder : NoCopy{
         mut SoftShadowSplitTasks tasks
     );
 
-    [cpp_unwind]
     private b8 declareTransparentTasks(
         in SoftShadowSplitTaskChainInputs inputs,
         in SoftShadowSplitResourceUses uses,
@@ -318,7 +313,6 @@ class ShadowVisibilityResourcePlanner : NoCopy{
         this.m_raytracingSystem = raytracingSystem;
     }
 
-    [cpp_unwind]
     public b8 prepare(in ShadowVisibilityResourceInputs inputs, mut ShadowVisibilityResourcePlan result);
 }
 

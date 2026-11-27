@@ -59,12 +59,10 @@ class FakeTrackedAccessibility : TrackedAccessibilityService{
         return this.enqueueAction(ev);
     }
 
-    [cpp_unwind]
     public void onTreePublished(in Span<AccessibilityNodeData> nodes, in StringView textStorage, in u64 focusedId, in u64 version, in f32 scaleX, in f32 scaleY)override{
         ++this.callbackTrees;
     }
 
-    [cpp_unwind]
     public void onAnnouncement(in StringView text, in AccessibilityLiveMode politeness)override{
         ++this.callbackAnnouncements;
     }

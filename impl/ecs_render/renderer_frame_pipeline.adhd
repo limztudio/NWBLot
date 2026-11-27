@@ -146,7 +146,6 @@ class RendererFramePipeline : NoCopy{
     private GpuRecordedGraph m_deferredLightingRecordedGraph;
     private GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
 
-    [cpp_unwind]
     public RendererFramePipeline(mut World world, mut GraphicsRuntime graphics, mut AssetManager assetManager, in RendererShaderPathResolveCallback shaderPathResolver){
         this.m_world = world;
         this.m_graphics = graphics;
@@ -187,21 +186,16 @@ class RendererFramePipeline : NoCopy{
         this.m_deferredTaskTimingFeedback.deactivate();
     }
 
-    [cpp_unwind]
     public b8 validateResources(in u32 width, in u32 height, in u32 sampleCount);
 
-    [cpp_unwind]
     public void invalidateResources();
 
     public void update(mut World world, in f32 delta);
 
-    [cpp_unwind]
     public b8 prepareResources(in FramebufferPtr framebuffer);
 
-    [cpp_unwind]
     public void render(in FramebufferPtr framebuffer);
 
-    [cpp_unwind]
     public b8 appendFrameGraph(mut FrameGraphBuilder builder);
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems);
@@ -250,25 +244,18 @@ class RendererFramePipeline : NoCopy{
 
     public GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const;
 
-    [cpp_unwind]
     private b8 prepareDeferredGraphPacketEnvelopeMetrics(in GpuTaskGraphDeclarationReadView graph, in GpuCompiledGraphReadView compiledGraph);
 
-    [cpp_unwind]
     private b8 declareFrameTimingBeginTask(mut GpuTimingFrameTransaction frameTimingTransaction);
 
-    [cpp_unwind]
     private b8 scheduleDeferredLightingTaskGraphForExecution();
 
-    [cpp_unwind]
     private void commitFrameTargets(mut DeferredFrameTargets targets);
 
-    [cpp_unwind]
     private void resetFrameTargets();
 
-    [cpp_unwind]
     private void resetDeferredTaskGraphRuntime();
 
-    [cpp_unwind]
     private void resetFrameTaskState();
 
     private void resetDeferredFrameTaskIdsAndFlags();
@@ -287,7 +274,6 @@ class RendererFramePipeline : NoCopy{
 
     private void resetLaggedLightingHistoryTracking();
 
-    [cpp_unwind]
     private void buildDeferredLightingTaskGraph(
         in RendererFrameGraphFeatures features,
         in CsgFrameState csgFrameState,
@@ -342,7 +328,6 @@ class RendererFramePipeline : NoCopy{
         mut GpuTimingSubmissionTicket presentTimingTicket
     );
 
-    [cpp_unwind]
     private void reportLaggedLightingTransition(in LaggedLightingReport report, in u64 targetGeneration);
 }
 

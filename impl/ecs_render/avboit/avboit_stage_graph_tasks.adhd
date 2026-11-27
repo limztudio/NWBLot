@@ -348,7 +348,6 @@ GpuTaskDesc AvboitClearTaskDesc(in GpuTaskSchedulingHint scheduling, in Name ide
     return desc;
 }
 
-[cpp_unwind]
 Expected<AvboitClearChainResult> DeclareAvboitClearChain(mut GpuTaskGraph graph, mut RendererAvboitTaskGraphStageState stageState, in AvboitClearChainInputs inputs, mut GraphClearTimingRecordState clearTimingState){
     AvboitClearChainResult result;
     if(!inputs.uploadTask.valid()){

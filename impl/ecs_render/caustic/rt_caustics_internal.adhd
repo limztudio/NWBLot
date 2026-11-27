@@ -145,17 +145,11 @@ class CausticsResolveChainBuilder : NoCopy{
         this.m_graph = graph;
         this.m_raytracingSystem = system;
     }
-    [cpp_unwind]
     public Expected<CausticsStageTargets> importStageTargets(in DeferredFrameTargets targets, in b8 hardwareCaustics);
-    [cpp_unwind]
     public Expected<CausticsStagePrefixResult> declarePrefixTasks(in CausticsStagePrefixInputs inputs);
-    [cpp_unwind]
     public Expected<CausticsGeometryAndResolveResult> declareGeometryAndResolve(in CausticsGeometryAndResolveInputs inputs);
-    [cpp_unwind]
     public Expected<CausticsResolveChainResult> declare(in CausticsResolveChainInputs inputs, in CausticsResolveChainNaming naming);
-    [cpp_unwind]
     public Expected<CausticsResolveChainResult> declareHardware(in CausticsResolveChainInputs inputs);
-    [cpp_unwind]
     public Expected<CausticsResolveChainResult> declareSoftware(in CausticsResolveChainInputs inputs);
 }
 

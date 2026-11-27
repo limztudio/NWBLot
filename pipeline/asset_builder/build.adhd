@@ -52,7 +52,6 @@ Optional<usize> TryClampManifestHashReserveCount(in u64 plannedFileCount){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 ResolveCookPaths(in AssetBuildOptions options, mut CookFileCatalog catalog){
     if(!ValidateAssetBuilderPathInputs(!options.assetRoots.empty(), !options.outputDirectory.empty()))
         return false;
@@ -89,7 +88,6 @@ b8 ResolveCookPaths(in AssetBuildOptions options, mut CookFileCatalog catalog){
     return true;
 }
 
-[cpp_unwind]
 b8 SelectBuildInputs(in AssetBuildOptions options, mut CookFileCatalog catalog){
     if(options.inputs.empty()){
         catalog.files.clear();
@@ -103,7 +101,6 @@ b8 SelectBuildInputs(in AssetBuildOptions options, mut CookFileCatalog catalog){
     return true;
 }
 
-[cpp_unwind]
 b8 BuildAssets(in AssetBuildOptions options){
     if(!ValidateAssetBuildType(options.assetType.view(), s_CookAssetVolumeName))
         return false;

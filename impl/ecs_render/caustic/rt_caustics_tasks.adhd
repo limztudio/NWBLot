@@ -41,7 +41,6 @@ class CausticAccumulatorDecayGraphTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_shadowVisibilityPrepared)
             return true;
@@ -108,7 +107,6 @@ class CausticProducerGraphTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute | GpuQueueCapability::Transfer); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         this.m_causticProducerDispatched = false;
         if(!this.m_deferredLightingResources.valid())
@@ -174,7 +172,6 @@ class CausticGeometryDownsampleGraphTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         DiscardGpuTimingMeasure(this.m_causticResolveTiming);
         if(!this.m_causticProducerDispatched)
@@ -216,7 +213,6 @@ class CausticResolvePhaseGraphTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_activity.matches(this.m_raytracingSystem.causticResolveActivitySnapshot(this.m_targets)))
             return false;
@@ -250,7 +246,6 @@ class CausticResolveGraphTask{
     public GpuTaskCommandRequirements commandRequirements()const{
         return GpuTaskCommandRequirements();
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_causticProducerDispatched){
             DiscardGpuTimingMeasure(this.m_causticResolveTiming);
@@ -437,7 +432,6 @@ Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(in H
     return result;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -451,7 +445,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareCausticAccumulatorDecayTask
     return graph.addPayloadTask(desc, CausticAccumulatorDecayGraphTask(this, this.m_graphics, targets, meshView, shadowVisibilityPrepared, timingTicket, causticPhotonTiming, hardwareCaustics));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -467,7 +460,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareSoftwareCausticsTask(
     return graph.addPayloadTask(desc, CausticProducerGraphTask(this, targets, deferredLightingResources, meshView, timingTicket, shadowVisibilityPrepared, causticPhotonTiming, graphOwnsAccumulatorBootstrapClear, causticProducerDispatched, false));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -483,7 +475,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareHardwareCausticsTask(
     return graph.addPayloadTask(desc, CausticProducerGraphTask(this, targets, deferredLightingResources, meshView, timingTicket, shadowVisibilityPrepared, causticPhotonTiming, graphOwnsAccumulatorBootstrapClear, causticProducerDispatched, true));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -495,7 +486,6 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareCausticGeometryDownsampleTa
     return graph.addPayloadTask(desc, CausticGeometryDownsampleGraphTask(this, this.m_graphics, targets, timingTicket, causticProducerDispatched, causticResolveTiming));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,
@@ -506,17 +496,14 @@ Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveTask(
     return graph.addPayloadTask(desc, CausticResolveGraphTask(timingTicket, causticProducerDispatched, causticResolveTiming));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolvePrepareTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets){
     return graph.addPayloadTask(desc, CausticResolvePhaseGraphTask(this, targets, causticProducerDispatched, this.causticResolveActivitySnapshot(targets), CausticResolveStage::PrepareDownsample, 0u));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveWaveletTask(in GpuTaskDesc desc, in u32 passIndex, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets){
     return graph.addPayloadTask(desc, CausticResolvePhaseGraphTask(this, targets, causticProducerDispatched, this.causticResolveActivitySnapshot(targets), CausticResolveStage::Wavelet, passIndex));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> RendererRayTracingSystem::declareCausticResolveUpsampleTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets){
     return graph.addPayloadTask(desc, CausticResolvePhaseGraphTask(this, targets, causticProducerDispatched, this.causticResolveActivitySnapshot(targets), CausticResolveStage::Upsample, 0u));
 }

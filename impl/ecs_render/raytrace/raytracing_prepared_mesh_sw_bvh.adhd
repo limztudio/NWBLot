@@ -215,7 +215,6 @@ PreparedMeshSwBvhBuild CapturePreparedMeshSwBvhBuild(in MeshRayTracingResourceSn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(mut CommandList commandList, in PreparedMeshSwBvhBuild build){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
     if(!this.preparedMeshSwBvhBuildMatchesCurrent(build)){
@@ -236,7 +235,6 @@ b8 RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(mut Co
     return recorded;
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
     if(!this.m_preparedMeshSwBvhBuildsReady)
         return;
@@ -276,7 +274,6 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
     this.clearPreparedMeshSwBvhBuilds();
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
     this.clearPreparedMeshSwBvhBuilds();
@@ -347,7 +344,6 @@ void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds(){
     this.m_preparedMeshSwBvhBuildPlanFrozen = false;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
     b8 allResourcesReady = true;

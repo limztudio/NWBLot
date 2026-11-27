@@ -135,84 +135,50 @@ class UiLayerSystem : IRenderPass, IInputEventHandler{
 
     public CpuTaskOptions taskOptions()const override;
     public void prepare(mut World world)override;
-    [cpp_unwind]
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override;
-    [cpp_unwind]
     public b8 validateResources(in u32 width, in u32 height, in u32 sampleCount)override;
     public void invalidateResources()override;
     public b8 prepareResources(in FramebufferPtr framebuffer)override;
     public void render(in FramebufferPtr framebuffer)override;
     public void displayScaleChanged(in f32 scaleX, in f32 scaleY)override;
 
-    [cpp_unwind]
     public b8 setInputBindings(in Span<UiInputKeyBinding> bindings);
-    [cpp_unwind]
     public b8 dispatchInputEvent(in UiInputEvent event, mut b8 outBlockText);
-    [cpp_unwind]
     public b8 dispatchPointerInput(in UiPointerInput input, mut b8 outConsumed);
-    [cpp_unwind]
     public void cancelPointerDevice(in u64 device);
-    [cpp_unwind]
     public KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods)override;
-    [cpp_unwind]
     public b8 keyboardCharInput(in u32 unicode, in i32 mods)override;
-    [cpp_unwind]
     public b8 mousePosUpdate(in f64 xpos, in f64 ypos)override;
-    [cpp_unwind]
     public b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 mods)override;
-    [cpp_unwind]
     public b8 mouseScrollUpdate(in f64 xoffset, in f64 yoffset)override;
-    [cpp_unwind]
     public void windowFocusUpdate(in b8 focused)override;
-    [cpp_unwind]
     public void pointerLeave()override;
-    [cpp_unwind]
     public void pointerCaptureLost()override;
-    [cpp_unwind]
     public void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected)override;
-    [cpp_unwind]
     public b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action)override;
-    [cpp_unwind]
     public b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value)override;
     public b8 wantsKeyboard()const;
     public b8 wantsPointer()const;
 
-    [cpp_unwind]
     private void collectRoots();
-    [cpp_unwind]
     private void commitAcceptedFrameIfReady();
-    [cpp_unwind]
     private void synchronizeInput();
     private void synchronizeCursor();
     private void synchronizeCursorForRouter(in PointerCursor routerCursor);
-    [cpp_unwind]
     private void synchronizeAccessibility();
-    [cpp_unwind]
     private void synchronizeGamepadOutputs(in b8 consumed, in WidgetId prevFocus, in WidgetId prevHover, in WidgetId prevCapture);
-    [cpp_unwind]
     private void pollAccessibilityActions();
-    [cpp_unwind]
     private void routeInput(in UiInputEvent event);
-    [cpp_unwind]
     private b8 routeInput(in UiInputEvent event, mut b8 outBlockText);
-    [cpp_unwind]
     private void routePointerInput(in UiPointerInput input);
-    [cpp_unwind]
     private b8 routePointerInput(in UiPointerInput input, mut b8 outConsumed);
-    [cpp_unwind]
     private b8 routeInputCore(in WidgetId previousCapture, in Expected<InputEvent> normalized, in b8 pointerMode, mut b8 outBlockText, mut b8 outConsumed);
-    [cpp_unwind]
     private void synchronizeNativeInput();
-    [cpp_unwind]
     private void abandonPendingFrame();
-    [cpp_unwind]
     private void abandonPendingFrame(in b8 resetUi);
     private void resetNormalizedInput();
-    [cpp_unwind]
     private void resetNativeInputState();
-    [cpp_unwind]
     private b8 loadFonts();
-    [cpp_unwind]
     private b8 tryBindSkin(in AssetRef<UiSkin> ref);
     private AssetRef<UiSkin> basicSkin()const;
     private AssetRef<UiSkin> resolveSkin(in AssetRef<UiSkin> ref)const;
@@ -296,12 +262,10 @@ CpuTaskOptions UiLayerSystem::taskOptions()const{
 void UiLayerSystem::prepare(mut World world){
 }
 
-[cpp_unwind]
 void UiLayerSystem::abandonPendingFrame(){
     this.abandonPendingFrame(false);
 }
 
-[cpp_unwind]
 void UiLayerSystem::abandonPendingFrame(in b8 resetUi){
     this.m_blockCommandChars = false;
     this.m_context.abandonFrame();
@@ -316,7 +280,6 @@ void UiLayerSystem::resetNormalizedInput(){
     this.m_editHost.reset();
 }
 
-[cpp_unwind]
 void UiLayerSystem::resetNativeInputState(){
     this.m_context.input().cancelDeviceInput(0u);
     this.m_gamepad.reset(this.m_context.input());
@@ -342,13 +305,11 @@ void UiLayerSystem::displayScaleChanged(in f32 scaleX, in f32 scaleY){
     this.m_display.pixelScaleY = scaleY;
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::setInputBindings(in Span<UiInputKeyBinding> bindings){
     this.synchronizeNativeInput();
     return this.m_context.input().setBindings(bindings);
 }
 
-[cpp_unwind]
 KeyboardInputResult UiLayerSystem::keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 mods){
     if(!IsValidInputKeyCode(key) || action < s_InputActionReleaseBase || action > s_InputActionRepeat)
         return KeyboardInputResult();
@@ -387,7 +348,6 @@ KeyboardInputResult UiLayerSystem::keyboardUpdate(in i32 key, in i32 scancode, i
     return result;
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::keyboardCharInput(in u32 unicode, in i32 mods){
     this.synchronizeNativeInput();
     this.m_editHost.collectNative();
@@ -401,7 +361,6 @@ b8 UiLayerSystem::keyboardCharInput(in u32 unicode, in i32 mods){
     return false;
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::mousePosUpdate(in f64 xpos, in f64 ypos){
     if(!ValidUiMouseCoordinate(xpos, ypos))
         return false;
@@ -423,7 +382,6 @@ b8 UiLayerSystem::mousePosUpdate(in f64 xpos, in f64 ypos){
     return consumed || (this.m_pressedButtons != 0u && this.m_pointerOwner == cast<u8>(UiInputOwner::Custom));
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::mouseButtonUpdate(in i32 button, in i32 action, in i32 mods){
     if(button < cast<i32>(MouseButton::Left) || button > cast<i32>(MouseButton::Button8) || (action != s_InputActionPress && action != s_InputActionReleaseBase))
         return false;
@@ -486,7 +444,6 @@ b8 UiLayerSystem::mouseButtonUpdate(in i32 button, in i32 action, in i32 mods){
     return owner != cast<u8>(UiInputOwner::Scene);
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::mouseScrollUpdate(in f64 xoffset, in f64 yoffset){
     if(!ValidUiMouseScroll(xoffset, yoffset))
         return false;
@@ -505,7 +462,6 @@ b8 UiLayerSystem::mouseScrollUpdate(in f64 xoffset, in f64 yoffset){
     return consumed || this.m_pointerOwner == cast<u8>(UiInputOwner::Custom);
 }
 
-[cpp_unwind]
 void UiLayerSystem::windowFocusUpdate(in b8 focused){
     InputEvent event;
     if(focused)
@@ -517,7 +473,6 @@ void UiLayerSystem::windowFocusUpdate(in b8 focused){
         this.resetNativeInputState();
 }
 
-[cpp_unwind]
 void UiLayerSystem::pointerLeave(){
     PointerInput event;
     event.source = s_NativePointerSource;
@@ -527,7 +482,6 @@ void UiLayerSystem::pointerLeave(){
     this.routePointerInput(event);
 }
 
-[cpp_unwind]
 void UiLayerSystem::pointerCaptureLost(){
     if(this.m_pressedButtons == 0u)
         return;
@@ -541,7 +495,6 @@ void UiLayerSystem::pointerCaptureLost(){
     this.m_pointerOwner = cast<u8>(UiInputOwner::Scene);
 }
 
-[cpp_unwind]
 void UiLayerSystem::gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected){
     this.synchronizeNativeInput();
     this.m_gamepad.onConnection(gamepadIndex, connected, this.m_context.input());
@@ -549,7 +502,6 @@ void UiLayerSystem::gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected
     this.synchronizeAccessibility();
 }
 
-[cpp_unwind]
 void UiLayerSystem::synchronizeGamepadOutputs(in b8 consumed, in WidgetId prevFocus, in WidgetId prevHover, in WidgetId prevCapture){
     if(
         consumed
@@ -562,7 +514,6 @@ void UiLayerSystem::synchronizeGamepadOutputs(in b8 consumed, in WidgetId prevFo
     }
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action){
     this.synchronizeNativeInput();
     const WidgetId prevFocus = this.m_context.input().focus();
@@ -573,7 +524,6 @@ b8 UiLayerSystem::gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32
     return consumed;
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value){
     GamepadStickDirection prevDir = GamepadStickDirection::None;
     GamepadStickDirection nextDir = GamepadStickDirection::None;
@@ -598,19 +548,16 @@ b8 UiLayerSystem::wantsPointer()const{
     return this.m_resourcesReady && this.m_context.input().wantsPointer();
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::dispatchInputEvent(in UiInputEvent event, mut b8 outBlockText){
     this.synchronizeNativeInput();
     return this.routeInput(event, outBlockText);
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::dispatchPointerInput(in UiPointerInput input, mut b8 outConsumed){
     this.synchronizeNativeInput();
     return this.routePointerInput(input, outConsumed);
 }
 
-[cpp_unwind]
 void UiLayerSystem::cancelPointerDevice(in u64 device){
     this.synchronizeNativeInput();
     this.m_context.input().cancelDeviceInput(device);
@@ -620,7 +567,6 @@ void UiLayerSystem::cancelPointerDevice(in u64 device){
     }
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::routeInputCore(in WidgetId previousCapture, in Expected<InputEvent> normalized, in b8 pointerMode, mut b8 outBlockText, mut b8 outConsumed){
     outBlockText = false;
     outConsumed = false;
@@ -650,13 +596,11 @@ b8 UiLayerSystem::routeInputCore(in WidgetId previousCapture, in Expected<InputE
     return true;
 }
 
-[cpp_unwind]
 void UiLayerSystem::routeInput(in UiInputEvent event){
     b8 unusedBlockText = false;
     this.routeInput(event, unusedBlockText);
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::routeInput(in UiInputEvent event, mut b8 outBlockText){
     this.m_editHost.collectNative();
     const WidgetId previousCapture = this.m_context.input().capture();
@@ -664,13 +608,11 @@ b8 UiLayerSystem::routeInput(in UiInputEvent event, mut b8 outBlockText){
     return this.routeInputCore(previousCapture, this.m_context.input().queue(event), false, outBlockText, unusedConsumed);
 }
 
-[cpp_unwind]
 void UiLayerSystem::routePointerInput(in UiPointerInput input){
     b8 unusedConsumed = false;
     this.routePointerInput(input, unusedConsumed);
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::routePointerInput(in UiPointerInput input, mut b8 outConsumed){
     this.m_editHost.collectNative();
     const WidgetId previousCapture = this.m_context.input().capture();
@@ -678,13 +620,11 @@ b8 UiLayerSystem::routePointerInput(in UiPointerInput input, mut b8 outConsumed)
     return this.routeInputCore(previousCapture, this.m_context.input().queuePointer(input), true, unusedBlockText, outConsumed);
 }
 
-[cpp_unwind]
 void UiLayerSystem::synchronizeNativeInput(){
     this.m_world.taskScope().wait();
     this.synchronizeInput();
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::tryBindSkin(in AssetRef<UiSkin> ref){
     const AssetRef<UiSkin> resolved = this.resolveSkin(ref);
     if(ref == this.m_skinSelection.selected && this.m_skinAsset.valid()){
@@ -701,7 +641,6 @@ b8 UiLayerSystem::tryBindSkin(in AssetRef<UiSkin> ref){
     return true;
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::validateResources(in u32 width, in u32 height, in u32 sampleCount){
     this.m_resourcesReady = false;
     this.m_width = width;
@@ -770,7 +709,6 @@ void UiLayerSystem::render(in FramebufferPtr framebuffer){
     }
 }
 
-[cpp_unwind]
 b8 UiLayerSystem::loadFonts(){
     if(this.m_fontsReady)
         return true;
@@ -822,7 +760,6 @@ AssetRef<UiSkin> UiLayerSystem::resolveSkin(in AssetRef<UiSkin> ref)const{
     return this.m_activeSceneSubsystems.value().findSceneAsset<UiSkin>(ref.name());
 }
 
-[cpp_unwind]
 Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in f32 delta){
     this.m_frameDelta.add(delta);
     this.synchronizeInput();
@@ -885,7 +822,6 @@ Expected<void, CpuTaskAdmissionError> UiLayerSystem::update(mut World world, in 
     return Expected<void, CpuTaskAdmissionError>();
 }
 
-[cpp_unwind]
 void UiLayerSystem::collectRoots(){
     this.m_liveRoots.clear();
     this.m_rootIdentities.clear();

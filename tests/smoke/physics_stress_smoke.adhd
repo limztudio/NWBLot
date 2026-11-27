@@ -1508,7 +1508,6 @@ b8 RunGpuParityZeroReadbackResidentSubtest(mut PhysicsGpuDispatcher gpuDispatche
     return true;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareSmokePhysicsExportTask(
     mut PhysicsGpuDispatcher gpuDispatcher,
     in PhysicsWorld world,
@@ -2844,7 +2843,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB Physics Stress Smoke");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     return MakeUnique<PhysicsStressProject>(context);
 }

@@ -30,7 +30,6 @@ class SourceMeshBuildContext{
     }
 }
 
-[cpp_unwind]
 Expected<u32> InternSourceKey<T, K>(in T value, in K key, in StringView streamName, mut Vector<T> stream, mut HashMap<K, u32> lookup){
     if(lookup.contains(key))
         return lookup[key];
@@ -44,12 +43,10 @@ Expected<u32> InternSourceKey<T, K>(in T value, in K key, in StringView streamNa
     return index;
 }
 
-[cpp_unwind]
 Expected<u32> InternSourceValue<T>(in T value, in StringView streamName, mut Vector<T> stream, mut HashMap<T, u32> lookup){
     return InternSourceKey<T, T>(value, value, streamName, stream, lookup);
 }
 
-[cpp_unwind]
 void ReserveSourceMeshBuildContext(in usize estimatedTriangleCorners, in b8 wantsSkinning, mut SourceMeshBuildContext inOutContext){
     inOutContext.positions.reserve(estimatedTriangleCorners);
     inOutContext.normals.reserve(estimatedTriangleCorners);
@@ -61,18 +58,15 @@ void ReserveSourceMeshBuildContext(in usize estimatedTriangleCorners, in b8 want
     inOutContext.vertexRefs.reserve(estimatedTriangleCorners);
 }
 
-[cpp_unwind]
 void DropSourceMeshTangents(mut SourceMeshStreams inOutMesh){
     inOutMesh.tangents.clear();
     inOutMesh.vertexRefs = CompactSourceVertexRefsWithoutTangents(inOutMesh.vertexRefs, inOutMesh.indices);
 }
 
-[cpp_unwind]
 Expected<TangentFrameRebuildResult> RebuildFbxTangents(in Span<u32> indices, mut Span<TangentFrameRebuildVertex> vertices, in f64 epsilon){
     return RebuildTangentFrames(indices, vertices, epsilon);
 }
 
-[cpp_unwind]
 Expected<SourceTangentReport> GenerateSourceMeshTangents(in b8 usedDefaultUvs, in f64 triangleAreaLengthSquaredEpsilon, mut SourceMeshStreams inOutMesh){
 
     SourceTangentReport outTangentReport;
@@ -153,7 +147,6 @@ Expected<SourceTangentReport> GenerateSourceMeshTangents(in b8 usedDefaultUvs, i
     return outTangentReport;
 }
 
-[cpp_unwind]
 Expected<u32> InternSourceCorner(in SourceTriangleCorner corner, in b8 wantsSkinning, mut SourceMeshBuildContext inOutContext){
     SourceVertexRef ref;
     const auto positionIndex = InternSourceValue<Vec3>(corner.position, s_VertexRefPositionName, inOutContext.mesh.positions, inOutContext.positions);

@@ -209,6 +209,12 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     decl->isImported = true;
     decl->isExtern = true;
     decl->requiredHeader = resolveRequiredHeader(cursor);
+    const int excSpec = ::clang_getCursorExceptionSpecificationType(cursor);
+    const b8 isNothrow = (excSpec == CXCursor_ExceptionSpecificationKind_BasicNoexcept)
+        || (excSpec == CXCursor_ExceptionSpecificationKind_DynamicNone)
+        || (excSpec == CXCursor_ExceptionSpecificationKind_NoThrow);
+    decl->isNothrowExtern = isNothrow;
+    decl->allowsCppUnwind = !isNothrow;
 
     if(!isCtor){
         const CXType resultType = ::clang_getCursorResultType(cursor);

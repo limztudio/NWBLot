@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<Vector<AttribGpu>> BuildMeshletTriangleAttributes(
     in Span<MeshletDesc> meshlets,
     in Span<MeshletLocalVertexRef> localVertexRefs,
@@ -25,7 +24,6 @@ Expected<Vector<AttribGpu>> BuildMeshletTriangleAttributes(
     return outAttributes;
 }
 
-[cpp_unwind]
 Expected<Vector<AttribGpu>> BuildMeshletTriangleAttributes(in Mesh payload){
     return BuildMeshletTriangleAttributes(
         payload.meshlets(),

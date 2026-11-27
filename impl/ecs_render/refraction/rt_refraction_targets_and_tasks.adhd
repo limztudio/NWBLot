@@ -145,7 +145,6 @@ RayTracingRefractionGraphResources ResolveRefractionGraphTaskResources(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RefractionStatisticsReadbackGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
     if(!CanRecordRefractionStatisticsReadback(this.source.valid(), this.destination.valid(), this.reservation.valid()))
         return false;
@@ -160,13 +159,11 @@ b8 RefractionStatisticsReadbackGraphTask::record(mut CommandList commands, in Gp
     );
 }
 
-[cpp_unwind]
 b8 RefractionResolveGraphTask::record(mut CommandList commands, in GpuTaskRecordContext context)const{
     const auto resources = ResolveRefractionGraphTaskResources(this.m_resources, true, this.m_hardwareReady);
     return this.m_raytracingSystem.refraction().recordRefractionResolve(commands, this.m_targets, resources);
 }
 
-[cpp_unwind]
 void RefractionResolveGraphTask::accepted(in QueueSubmissionToken token){
     const b8 usedHardware = this.m_resources.usesHardwareTrace && this.m_hardwareReady;
     if(usedHardware){
@@ -177,7 +174,6 @@ void RefractionResolveGraphTask::accepted(in QueueSubmissionToken token){
         LogAcceptedRefractionResolveIfNeeded(false, this.m_screenLogged);
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> FrameGraphRefractionResolve::declare(in FrameGraphRefractionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads){
     mut DeferredFrameTargets deferredTargets = inputs.targets;
     in RayTracingSceneGraphResources sceneResources = inputs.sceneResources;

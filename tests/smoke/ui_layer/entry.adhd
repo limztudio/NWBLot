@@ -98,7 +98,6 @@ b8 ConfigureProject(mut ProjectStartupContext context){
         && context.graphics.setSwapChainReadbackEnabled(true);
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateUiLayerSmokeWorld(context);
     if(!world.has_value())

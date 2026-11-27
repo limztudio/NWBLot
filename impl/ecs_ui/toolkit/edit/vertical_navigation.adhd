@@ -9,7 +9,6 @@
 
 
 interface IEditNavigationResolver{
-    [cpp_unwind]
     Expected<EditNavigationResult> resolve(in EditModel model, in EditNavigationDirection direction, in EditNavigationSnapshot preferred, in f32 viewportHeight);
 }
 

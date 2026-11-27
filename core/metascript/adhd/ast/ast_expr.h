@@ -193,6 +193,7 @@ struct Expr{
     b8 lambdaUsesScratchArena = false;
     b8 lambdaUsesTaskScope = false;
     b8 lambdaInjectsCallerArena = false;
+    b8 lambdaAllowsUnwind = false;
     b8 useAdhdAssign = false;
     b8 useAdhdWrappedClassAssign = false;
     b8 useAdhdWrappedScratchAssign = false;

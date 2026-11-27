@@ -36,7 +36,6 @@ class GpuRasterTask{
         requirements.requiresPrimaryGraphicsQueue = false;
         return requirements;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return RecordGpuRaster(this, commands, context);
     }
@@ -75,7 +74,6 @@ class GpuOutputTask{
         requirements.requiresPrimaryGraphicsQueue = true;
         return requirements;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return RecordGpuOutput(this, commands, context);
     }
@@ -156,7 +154,6 @@ in DrawCommand BorrowGpuPassDrawCommand(in GpuRasterTask payload, in DrawSnapsho
     return snapshot.commands()[payload.commandBegin + offset];
 }
 
-[cpp_unwind]
 b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture capture, mut CommandList commands){
     if(capture.recordCount() == 0u)
         return !commands.commandRecordingFailed();
@@ -164,7 +161,6 @@ b8 ReplayCaptured(in GpuTaskRecordContext context, in GpuCommandIrCapture captur
     return replay.valid() && !commands.commandRecordingFailed();
 }
 
-[cpp_unwind]
 b8 CaptureOutputState(
     in GpuOutputTask payload,
     in GpuTaskRecordContext context,
@@ -184,7 +180,6 @@ b8 CaptureOutputState(
     return capture.captureBindGraphicsHeap(heap, context.task, context.packet, context.queue, payload.graphPipeline, payload.pipeline, descriptorOwner);
 }
 
-[cpp_unwind]
 b8 RecordRasterCommandIr(
     in GpuRasterTask payload,
     in GpuTaskRecordContext context,
@@ -295,7 +290,6 @@ b8 RecordRasterCommandIr(
     return true;
 }
 
-[cpp_unwind]
 b8 RecordOutputCommandIr(in GpuOutputTask payload, in GpuTaskRecordContext context, mut CommandList commands){
     if(context.hasCommandIrCapture())
         return false;
@@ -384,7 +378,6 @@ b8 ResolvePaintPushConstants(
     return true;
 }
 
-[cpp_unwind]
 b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTaskRecordContext context){
     in GpuFrame frame = payload.frame;
     if(!frame.valid() || !frame.deref().m_prepared || !frame.deref().m_target.valid() || !frame.deref().m_resources.valid())
@@ -527,7 +520,6 @@ b8 RecordGpuRaster(in GpuRasterTask payload, mut CommandList commands, in GpuTas
     return true;
 }
 
-[cpp_unwind]
 b8 RecordGpuOutput(in GpuOutputTask payload, mut CommandList commands, in GpuTaskRecordContext context){
     in GpuFrame frame = payload.frame;
     if(

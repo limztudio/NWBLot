@@ -52,7 +52,6 @@ class EditBoxSnapshotBuilder{
         return item;
     }
 
-    [cpp_unwind]
     private b8 appendMaskedCluster(
         in StringView source,
         in usize clusterStart,
@@ -69,7 +68,6 @@ class EditBoxSnapshotBuilder{
         return true;
     }
 
-    [cpp_unwind]
     private Expected<usize> buildInto(
         in StringView committed,
         in Span<usize> graphemeBoundaries,
@@ -104,7 +102,6 @@ class EditBoxSnapshotBuilder{
         return sizes.value().preeditBytes;
     }
 
-    [cpp_unwind]
     private b8 buildMaskedInto(
         in StringView committed,
         in Span<usize> graphemeBoundaries,
@@ -262,7 +259,6 @@ class EditBoxSnapshotBuilder{
         }
     }
 
-    [cpp_unwind]
     public b8 commit(
         in StringView committed,
         in Span<usize> graphemeBoundaries,

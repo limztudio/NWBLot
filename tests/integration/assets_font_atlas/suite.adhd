@@ -58,7 +58,7 @@ class InvalidFieldCase{
 };
 
 class AtlasBuilder : NoCopy{
-    [cpp_unwind, owner_result]
+    [owner_result]
     public Expected<FontAtlas> build(in FontAtlasCookEntry entry){
         return BuildFontAtlasAsset(entry);
     }
@@ -68,7 +68,6 @@ class AtlasBuilder : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 FontAtlasPayload MakePayload(){
     FontAtlasPayload payload;
     payload.font = AssetRef<Font>(Name(s_BodyFontPath));
@@ -122,17 +121,14 @@ FontAtlasPayload MakePayload(){
     return payload;
 }
 
-[cpp_unwind]
 b8 SerializePayloadInto(in FontAtlasPayload payload, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(payload, outBinary);
 }
 
-[cpp_unwind]
 b8 CanSerializePayload(in FontAtlasPayload payload){
     return SerializeFontAtlasPayload(payload).has_value();
 }
 
-[cpp_unwind]
 b8 DeserializePayloadInto(in Vector<u8> binary, mut FontAtlasPayload outPayload){
     Expected<FontAtlasPayload> result = DeserializeFontAtlasPayload(binary);
     if(!result.has_value())
@@ -141,7 +137,6 @@ b8 DeserializePayloadInto(in Vector<u8> binary, mut FontAtlasPayload outPayload)
     return true;
 }
 
-[cpp_unwind]
 b8 CanDeserializePayload(in Vector<u8> binary){
     return DeserializeFontAtlasPayload(binary).has_value();
 }
@@ -1001,7 +996,6 @@ void VerifyAssetsFontAtlas_PlaneBoundsPreserveMultiplyAddContraction(){
     EXPECT_EQ(BitCast<u32>(glyph.planeBottom), BitCast<u32>(expected));
 }
 
-[cpp_unwind]
 void VerifyAssetsFontAtlas_AllocationFailureUnwindsWithoutTerminatingOrClobberingExistingAtlas(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);

@@ -61,7 +61,6 @@ class RendererDeferredSystem : NoCopy{
     public b8 createDeferredPresentPipeline(mut Framebuffer presentationFramebuffer);
     public void resetDeferredFrameTargets(mut DeferredFrameTargets targets);
     public Expected<GpuTaskId> declareDeferredCompositeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in ReflectionCompositeInputs reflectionInputs, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket);
-    [cpp_unwind]
     public Expected<Optional<GpuTaskId>> declareDeferredDebugLinesTasks(mut GpuTaskGraph graph, mut DeferredFrameTargets targets, in GpuGraphResourceId compositeColor, in GpuGraphResourceId depth, in GpuTaskId compositeTask, in MatrixSingle viewProj, mut IDebugLineProvider provider);
     public b8 renderDeferredComposite(mut CommandList commandList, mut DeferredFrameTargets targets, in ReflectionCompositeInputs reflectionInputs);
     public b8 renderDeferredDebugLines(mut CommandList commandList, mut DeferredFrameTargets targets, in MatrixSingle viewProj, in u32 depthVertexCount, in u32 overlayVertexCount);

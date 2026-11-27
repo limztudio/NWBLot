@@ -50,7 +50,6 @@ class DeferredLightingStageBuilder : NoCopy{
         this.m_deferredSystem = deferredSystem;
     }
 
-    [cpp_unwind]
     public Expected<DeferredLightingStageResult> declare(mut DeferredLightingStageInputs inputs, mut GpuTimingSubmissionTicket timingTicket){
         DeferredLightingStageResult result;
         if(

@@ -82,7 +82,6 @@ Expected<u32> ResolveRayTraceStorageSlot(in BufferHandle buffer, in GpuDescripto
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareSceneQueryResources(){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(!RayTraceSceneQueryReadinessPolicy().canPrepareSceneQuery(
@@ -123,7 +122,6 @@ RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResour
     return resources;
 }
 
-[cpp_unwind]
 Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
     if(!this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsBuffer.valid() || !this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || this.m_rayTracingState.sceneBvh.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != GpuDescriptorClass::UniformBuffer)

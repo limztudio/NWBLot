@@ -236,7 +236,6 @@ void VerifyAssetBunchOwnership_ValuesOutliveTheirSourceDocumentWhileItsArenaRema
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
 }
 
-[cpp_unwind]
 void VerifyAssetBunchOwnership_CallerUnwindDestroysEveryPublishedResolvedValue(){
     BunchFixture fixture = BunchFixture();
     ASSERT_TRUE(fixture.document.parse(s_BunchOwnershipMetadata));

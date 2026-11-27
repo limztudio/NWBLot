@@ -52,7 +52,6 @@ class ShadowVisibilityGraphCoordinator : NoCopy{
     private b8 m_deferredShadowCombinedWavelet = false;
     private b8 m_deferredShadowCombinedTemporal = false;
 
-    [cpp_unwind]
     public b8 declareDeferredShadowVisibilityTask(
         in ShadowVisibilityGraphContext context,
         in DeferredLightingGraphResources deferredLightingResources,

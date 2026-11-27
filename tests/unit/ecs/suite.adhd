@@ -54,7 +54,6 @@ class MoveOnlyMessage : MoveOnly{
 
 class ThrowingConstructionComponent{
     public u32 value;
-    [cpp_unwind]
     public ThrowingConstructionComponent(in b8 reject, in u32 initial){
         this.value = initial;
         if(reject)
@@ -215,13 +214,10 @@ Array<usize, 64u> RegisterPoolSlotTypes64(){
     );
 }
 
-[cpp_unwind]
 void ThrowDuringSingleVisit(in EntityID entity, mut PositionComponent position){ ThrowTestException<u32>(43u); }
 
-[cpp_unwind]
 void ThrowDuringMultipleVisit(mut EntityID entity, mut PositionComponent position, mut VelocityComponent velocity){ ThrowTestException<u32>(47u); }
 
-[cpp_unwind]
 void ThrowDuringMessageVisit(in u32 value){ ThrowTestException<u32>(53u); }
 
 b8 HasTryPositionComponent(mut World world, in EntityID entityId){
@@ -950,7 +946,6 @@ void VerifyEcs_FailedEntityDestructionRetainsRemainingMembershipForRetry(){
     EXPECT_EQ(testWorld.world.view<ThrowingMoveAssignmentComponent>().candidateCount(), 0u);
 }
 
-[cpp_unwind]
 void FailWithPendingMessage(mut b8 rejectMove, mut u32 moveAttempts, mut u32 destructions){
     EcsTestWorld testWorld = EcsTestWorld();
     testWorld.world.emplaceMessage<ThrowingMoveMessage>(rejectMove, moveAttempts, destructions);
@@ -958,7 +953,6 @@ void FailWithPendingMessage(mut b8 rejectMove, mut u32 moveAttempts, mut u32 des
     ThrowTestException<i32>(-79);
 }
 
-[cpp_unwind]
 void FailDuringWorldWait(mut SystemLifetimeState state){
     EcsTestWorld testWorld = EcsTestWorld();
     testWorld.world.addSystem<LifetimeSystem>(state, true);

@@ -19,7 +19,6 @@ class TransparentMaterialPassGraphSnapshot{
     public usize materialTypedByteCount = 0u;
     public b8 captured = false;
 
-    [cpp_unwind]
     public void capture(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
         CaptureGraphDrawItems(draws.regular, this.regular);
         CaptureGraphDrawItems(draws.csg, this.csg);
@@ -30,7 +29,6 @@ class TransparentMaterialPassGraphSnapshot{
         this.materialTypedByteCount = typedByteCount;
         this.captured = true;
     }
-    [cpp_unwind]
     public void captureRegularAndFrame(in MaterialPassDrawItemsView regularDraws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
         CaptureGraphDrawItems(regularDraws, this.regular);
         this.csg.meshDrawItems.clear();
@@ -56,13 +54,11 @@ class OpaqueMaterialPassGraphSnapshot{
     private MaterialPassDrawItems m_receivers;
     public b8 hasCsgDraws = false;
 
-    [cpp_unwind]
     public void capture(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
         this.passes.capture(draws, frame, instanceCount, typedByteCount);
         CaptureGraphDrawItems(draws.csgReceiverSurface, this.m_receivers);
         this.hasCsgDraws = !draws.csg.empty();
     }
-    [cpp_unwind]
     public void captureGbuffer(in MaterialPassDrawItemPartitionsView draws, in CsgFrameGpuDataView frame, in usize instanceCount, in usize typedByteCount){
         this.passes.captureRegularAndFrame(draws.regular, frame, instanceCount, typedByteCount);
         CaptureGraphDrawItems(draws.csgReceiverSurface, this.m_receivers);
@@ -87,7 +83,6 @@ class OpaqueCsgIntervalFrameSnapshot{
     public b8 csgReceiverSurfaceDrawResourcesReady = false;
     public b8 captured = false;
 
-    [cpp_unwind]
     public void capture(
         in CsgFrameGpuDataView frame,
         in usize instanceCount,
@@ -116,7 +111,6 @@ class OpaqueCsgIntervalFrameSnapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void CaptureGraphDrawItems(in MaterialPassDrawItemsView source, mut MaterialPassDrawItems retained){
     AssignVector(retained.meshDrawItems, source.meshDrawItems);
     AssignVector(retained.indexedDrawItems, source.indexedDrawItems);

@@ -17,7 +17,6 @@ const Array<NormalMode, 3u> s_NormalModes = Array<NormalMode, 3u>(NormalMode::Im
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void AppendFbxOptions<Option, ToText>(mut String out, in Span<Option> values, in ToText toText){
     for(usize i = 0u; i < values.size(); ++i){
         if(i > 0u){
@@ -30,12 +29,10 @@ void AppendFbxOptions<Option, ToText>(mut String out, in Span<Option> values, in
     }
 }
 
-[cpp_unwind]
 void AppendOutputAssetTypeOptionsText(mut String out){
     AppendFbxOptions(out, Span<OutputAssetType>(s_OutputAssetTypes), OutputAssetTypeText);
 }
 
-[cpp_unwind]
 String OutputAssetTypeOptionsText(){
     String out;
     out.reserve(64u);
@@ -43,7 +40,6 @@ String OutputAssetTypeOptionsText(){
     return out;
 }
 
-[cpp_unwind]
 String OutputAssetTypeErrorText(){
     String out;
     out.reserve(96u);
@@ -56,12 +52,10 @@ Expected<OutputAssetType> ParseAssetTypeText(in StringView value){
     return ParseOptionText<OutputAssetType>(value, Span<OutputAssetType>(s_OutputAssetTypes), OutputAssetTypeText);
 }
 
-[cpp_unwind]
 void AppendNormalModeOptionsText(mut String out){
     AppendFbxOptions(out, Span<NormalMode>(s_NormalModes), NormalModeText);
 }
 
-[cpp_unwind]
 String NormalModeErrorText(){
     String out;
     out.reserve(80u);
@@ -102,7 +96,6 @@ Expected<Vec4> ParseFbxColorText(in StringView text){
     return TryMakeFiniteColorVec4(components[0u], components[1u], components[2u], components[3u]);
 }
 
-[cpp_unwind]
 Path DefaultFbxOutputPath(in StringView inputPath){
     Path outputPath(inputPath);
     outputPath.replaceExtension(s_NwbFileExtensionText);

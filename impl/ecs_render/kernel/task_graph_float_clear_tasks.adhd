@@ -19,7 +19,6 @@ class FloatTextureClearGraphTask{
         return commands;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         GpuClearTextureTaskDesc clear;
         clear.destination = this.m_destination;
@@ -42,7 +41,6 @@ class FloatTextureClearGraphTask{
 }
 
 
-[cpp_unwind]
 Expected<GpuTaskId> AddFloatTextureClearTask(
     mut GpuTaskGraph graph,
     in GpuTaskDesc desc,

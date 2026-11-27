@@ -113,7 +113,6 @@ class GpuTargetReadyTask{
     }
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareGpuTargetInitialization(in GpuVersion<GpuTargetVersion> target, mut GpuTaskGraph graph){
     GpuGraphResourceDesc colorDesc;
     colorDesc.setIdentity(s_GpuTargetInitTextureName);
@@ -152,7 +151,6 @@ Expected<GpuTaskId> DeclareGpuTargetInitialization(in GpuVersion<GpuTargetVersio
     return graph.addPayloadTask(ready, payload);
 }
 
-[cpp_unwind]
 Expected<GpuVersion<GpuTargetVersion>> CreateGpuTargetNamed(in SharedPool versions, mut GraphicsRuntime graphics, in u32 width, in u32 height, in Name textureName){
     const Expected<GpuVersion<GpuTargetVersion>> created = versions.make<GpuTargetVersion>(graphics);
     if(!created.has_value())
@@ -194,7 +192,6 @@ Expected<GpuVersion<GpuTargetVersion>> CreateGpuTargetNamed(in SharedPool versio
     return target;
 }
 
-[cpp_unwind]
 Expected<GpuVersion<GpuTargetVersion>> CreateGpuTarget(in SharedPool versions, mut GraphicsRuntime graphics, in u32 width, in u32 height){
     return CreateGpuTargetNamed(versions, graphics, width, height, s_GpuLayerTextureName);
 }

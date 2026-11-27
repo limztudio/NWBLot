@@ -23,7 +23,7 @@ class EditHistoryRules{
         outHistoryBytes = 0u;
     }
 
-    [cpp_unwind] public b8 prepareRecord(
+    public b8 prepareRecord(
         in StringView before,
         in usize beforeAnchor,
         in usize beforeCaret,

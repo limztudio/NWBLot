@@ -167,7 +167,6 @@ void VerifyFbxOptions_MixedSkinningSelectionIsRejected(){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-[cpp_unwind]
 void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
@@ -205,7 +204,6 @@ void VerifyFbxSkin_RejectsFiniteDoubleMatricesThatCannotBeStoredAsFloats(){
     EXPECT_GE(logger.errorCount(), 3u);
 }
 
-[cpp_unwind]
 void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);
@@ -231,7 +229,6 @@ void VerifyFbxSkin_RejectsMismatchedOrNonFiniteSkeletonMatrices(){
     EXPECT_GE(logger.errorCount(), 4u);
 }
 
-[cpp_unwind]
 void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
     NodeStorage longName;
     NodeStorage firstFallback;
@@ -259,7 +256,6 @@ void VerifyFbxSkin_SortsBorrowedAndFallbackJointNames(){
     EXPECT_EQ(result.value().joints[3u].identity(), longName.view().identity());
 }
 
-[cpp_unwind]
 void VerifyFbxSkin_FallbackNamesOnlyCollideWithPublishedNames(){
     Vector<String> names;
     names.reserve(4u);

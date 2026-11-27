@@ -44,7 +44,6 @@ class OpaqueRegularComputeEmulationGraphTaskPayload{
     public GpuTaskCommandRequirements commandRequirements()const{
         return SharedComputeEmulationCommandRequirements(true);
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
 }
 
@@ -86,7 +85,6 @@ class OpaqueRegularSharedComputeEmulationGraphTask{
     public GpuTaskCommandRequirements commandRequirements()const{
         return SharedComputeEmulationCommandRequirements(this.phase == SharedComputeEmulationPhase::Generate);
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
     public void discarded(){
         DiscardGpuTimingMeasure(this.opaqueRegularTiming);

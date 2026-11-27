@@ -30,7 +30,6 @@ b8 Mesh::validatePayload()const{
     );
 }
 
-[cpp_unwind]
 b8 Mesh::loadBinary(in Span<u8> binary){
     if(!this.checkVirtualPath("Mesh::loadBinary"))
         return false;
@@ -59,7 +58,6 @@ b8 Mesh::loadBinary(in Span<u8> binary){
     return true;
 }
 
-[cpp_unwind]
 b8 Skin::loadBinary(in Span<u8> binary){
     Skin candidate(this.virtualPath());
     const Expected<SkinBinaryReferences> references = SkinBinaryCodec().deserialize(binary, candidate.m_influences, candidate.m_inverseBindMatrices);

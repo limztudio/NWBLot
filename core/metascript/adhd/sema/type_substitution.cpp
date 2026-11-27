@@ -123,6 +123,8 @@ TypeRef* TypeSubstitution::SubstituteAliasType(const TypeRef& origType, const Sp
     cloned->isOperator = method->isOperator;
     cloned->isConst = method->isConst;
     cloned->allowsCppUnwind = method->allowsCppUnwind;
+    cloned->forceNothrowContract = method->forceNothrowContract;
+    cloned->isOpenVirtualContract = method->isOpenVirtualContract;
     cloned->exportsExplicitBool = method->exportsExplicitBool;
     cloned->exportsTakingAssignment = method->exportsTakingAssignment;
     cloned->exportsRvalueOverload = method->exportsRvalueOverload;

@@ -82,7 +82,6 @@ Expected<GpuGraphResourceId> ImportSoftShadowSoftwareBuffer(mut GpuTaskGraph gra
     return ImportExternalBuffer(graph, buffer, identity, label);
 }
 
-[cpp_unwind]
 b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inputs, mut SoftShadowSplitResourceUses uses){
 
     in SoftShadowSplitRoute route = inputs.route;
@@ -312,7 +311,6 @@ b8 SoftShadowSplitResourceUseBuilder::build(in SoftShadowSplitResourceInputs inp
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 SoftShadowSplitTaskChainBuilder::declare(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses, mut SoftShadowSplitTasks tasks){
 
     GpuTaskId shadowTraceDependency = inputs.prefixTask;
@@ -337,7 +335,6 @@ b8 SoftShadowSplitTaskChainBuilder::declare(in SoftShadowSplitTaskChainInputs in
     return this.declareTransparentTasks(inputs, uses, tailScheduling, csgShadowContext, tasks);
 }
 
-[cpp_unwind]
 Expected<SoftShadowLightSpaceMaps> SoftShadowSplitTaskChainBuilder::declareLightSpaceShadowMaps(in SoftShadowSplitTaskChainInputs inputs, mut SoftShadowSplitResourceUses uses){
 
     if(!inputs.rayTracingPlan.lightSpace.valid())
@@ -441,7 +438,6 @@ Expected<SoftShadowLightSpaceMaps> SoftShadowSplitTaskChainBuilder::declareLight
     return result;
 }
 
-[cpp_unwind]
 b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     in SoftShadowSplitTaskChainInputs inputs,
     in SoftShadowSplitResourceUses uses,
@@ -542,7 +538,6 @@ b8 SoftShadowSplitTaskChainBuilder::declareOpaqueTasks(
     return true;
 }
 
-[cpp_unwind]
 b8 SoftShadowSplitTaskChainBuilder::declareTransparentTasks(
     in SoftShadowSplitTaskChainInputs inputs,
     in SoftShadowSplitResourceUses uses,

@@ -10,7 +10,7 @@
 
 type EditBoundaryVector = Vector<usize>;
 
-[cpp_unwind] Expected<EditBoundaryVector> BuildEditGraphemeBoundaries(in StringView text, in b8 singleLine){
+Expected<EditBoundaryVector> BuildEditGraphemeBoundaries(in StringView text, in b8 singleLine){
     if(!ValidateGraphemeText(text, singleLine) || text.size() == usize.max)
         return MakeUnexpected(Failure());
     EditBoundaryVector boundaries;

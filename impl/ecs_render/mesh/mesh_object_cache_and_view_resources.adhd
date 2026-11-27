@@ -51,14 +51,12 @@ b8 MeshViewSetupGraphTask::record(mut CommandList commandList, in GpuTaskRecordC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RendererMeshSystem::invalidateResources(){
     this.releaseAllMeshGeometryHeapHandles();
     this.releaseMeshFrameHeapHandles();
     this.m_meshState.invalidateResources();
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::prepareObjectGeometryCache(mut MeshResources mesh, in ComputePipelineHandle decoderPipeline){
     if(!decoderPipeline.valid())
         return false;
@@ -121,7 +119,6 @@ b8 RendererMeshSystem::confirmObjectGeometryCache(in Name meshKey, in RuntimeMes
     return AcceptObjectGeometryCacheWrite(mesh.value(), sourceBuffers, expected, runtimeMesh);
 }
 
-[cpp_unwind]
 b8 RendererMeshSystem::createMeshViewBuffer(){
     if(this.m_meshState.m_meshViewBuffer.valid())
         return true;

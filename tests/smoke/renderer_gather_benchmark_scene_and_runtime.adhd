@@ -396,7 +396,6 @@ ProjectFrameClientSize GetProjectFrameClientSize(){ return ProjectFrameClientSiz
 
 PlatformStringView GetProjectWindowTitle(){ return PlatformTextLiteral("NWB Renderer Gather Benchmark"); }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateSmokeWorld(GatherBenchmarkProjectName(), context);
     if(!world.has_value())

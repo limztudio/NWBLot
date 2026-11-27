@@ -57,7 +57,6 @@ class MutatingContributor : IFrameGraphContributor{
     public b8 clearRegistry = false;
     public b8 throwAfterMutation = false;
     public MutatingContributor(mut FrameGraphRegistry registry){ this.m_registry = registry; }
-    [cpp_unwind]
     public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
         ++this.calls;
         const auto node = builder.addPass(s_TelemetryCaseMutation, "mutation");
@@ -111,7 +110,6 @@ class CacheLifetimeContributor : IFrameGraphContributor{
         this.m_session = session;
         this.m_label = label;
     }
-    [cpp_unwind]
     public b8 appendFrameGraph(mut FrameGraphBuilder builder)override{
         if(!builder.addPass(s_TelemetryCaseCacheLifetime, StringView(this.m_label)).valid())
             return false;
@@ -634,7 +632,6 @@ void VerifyTelemetry_RegistryCanRemoveAndReregisterTheCurrentContributor(){
     EXPECT_EQ(contributor.calls, 2u);
 }
 
-[cpp_unwind]
 void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);
@@ -659,7 +656,6 @@ void VerifyTelemetry_RegistryAppliesCallbackMutationsAfterUnwind(){
     EXPECT_EQ(added.calls, 1u);
 }
 
-[cpp_unwind]
 void VerifyTelemetry_RegistryClearsBorrowedDescriptorsAfterUnwindAndReusesGraphCapacity(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryCaptureSession session = TelemetryCaptureSession(testArena.arena);

@@ -143,17 +143,17 @@ inline constexpr BuiltinSimdMatrixInfo s_BuiltinSimdMatrixTypes[] = {
 };
 
 inline constexpr BuiltinMemberMethodInfo s_BuiltinMemberMethods[] = {
-#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, returnRule, returnTypeName) \
-    BuiltinMemberMethodInfo{ methodName, returnTypeName, BuiltinMemberReturnRule::returnRule, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement },
+#define NWB_ADHD_EXPORT_MEMBER_METHOD(methodName, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, allowsCppUnwind, returnRule, returnTypeName) \
+    BuiltinMemberMethodInfo{ methodName, returnTypeName, BuiltinMemberReturnRule::returnRule, isMutating, firstArgIsMut, adaptsFirstArgToElement, adaptsSecondArgToElement, allowsCppUnwind },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_MEMBER_METHOD
 };
 
 inline constexpr BuiltinReceiverMethodInfo s_BuiltinReceiverMethods[] = {
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef) \
-    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, "", "", "", synthesizeTypeRef, false, false },
-#define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating) \
-    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, returnTypeArgName, "", returnErrorTypeName, synthesizeTypeRef, isMutating, false },
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD(receiverTypeName, methodName, returnTypeName, synthesizeTypeRef, allowsCppUnwind) \
+    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, "", "", "", synthesizeTypeRef, false, false, ParamPassingMode::None, allowsCppUnwind },
+#define NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT(receiverTypeName, methodName, returnTypeName, returnTypeArgName, returnErrorTypeName, synthesizeTypeRef, isMutating, allowsCppUnwind) \
+    BuiltinReceiverMethodInfo{ receiverTypeName, methodName, returnTypeName, returnTypeArgName, "", returnErrorTypeName, synthesizeTypeRef, isMutating, false, ParamPassingMode::None, allowsCppUnwind },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD_MUT
 #undef NWB_ADHD_EXPORT_RECEIVER_METHOD
@@ -188,11 +188,11 @@ static_assert(AreStaticArgRulesDense());
 
 inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
-#define NWB_ADHD_EXPORT_FUNCTION_EX(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, prependsScratchArena, isVariadic, wrapsFormatArgs, (BuiltinFunctionReturnRule::returnRule == BuiltinFunctionReturnRule::CallTemplateArg0), false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
-#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::callLowering, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule } },
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
+#define NWB_ADHD_EXPORT_FUNCTION_EX(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, prependsScratchArena, isVariadic, wrapsFormatArgs, (BuiltinFunctionReturnRule::returnRule == BuiltinFunctionReturnRule::CallTemplateArg0), false, false, false, allowsCppUnwind, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
+#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::callLowering, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, false, allowsCppUnwind, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule } },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION_CALL
 #undef NWB_ADHD_EXPORT_FUNCTION_EX
@@ -459,7 +459,7 @@ private:
     };
 
     static inline constexpr u32 s_BinaryCacheMagic = 0x4E574250u;
-    static inline constexpr u32 s_BinaryCacheVersion = 2u;
+    static inline constexpr u32 s_BinaryCacheVersion = 4u;
 
     [[nodiscard]] static u64 ComputeBinaryCacheSchemaSignature()noexcept{
         u64 sig = s_Fnv64OffsetBasis;
@@ -1277,6 +1277,7 @@ private:
                 rm.synthesizeTypeRef = true;
                 rm.isMutating = !method->isConst;
                 rm.returnsReference = method->returnsReference || (method->returnType && method->returnType->refMode != ParamPassingMode::None);
+                rm.allowsCppUnwind = cls->isPolymorphicBase ? method->allowsCppUnwind : !method->isNothrowExtern;
 
                 const usize rmIdx = m_receiverMethods.size();
                 m_receiverMethods.push_back(rm);
@@ -1289,7 +1290,7 @@ private:
                     for(BuiltinFunctionArgRule::Enum& r : sig.argRules)
                         r = BuiltinFunctionArgRule::Any;
                     sig.arity = static_cast<u8>(method->params.size());
-                    sig.allowsCppUnwind = method->allowsCppUnwind;
+                    sig.allowsCppUnwind = cls->isPolymorphicBase ? method->allowsCppUnwind : !method->isNothrowExtern;
                     for(usize pi = 0u; pi < method->params.size(); ++pi){
                         sig.argRules[pi] = resolveArgRule(method->params[pi]);
                         if(method->params[pi].cppConstReference)
@@ -1444,6 +1445,7 @@ private:
             info.returnsBorrowedView = fn->returnsBorrowedView;
             info.rejectsSimdStorage = false;
             info.returnsReference = fn->returnsReference || (fn->returnType && fn->returnType->refMode != ParamPassingMode::None);
+            info.allowsCppUnwind = !fn->isNothrowExtern;
             for(BuiltinFunctionArgRule::Enum& r : info.argRules)
                 r = BuiltinFunctionArgRule::Any;
             for(usize pi = 0u; pi < info.arity; ++pi){
@@ -1820,6 +1822,7 @@ private:
                 || !reader.readBool(rm.isMutating)
                 || !reader.readBool(rm.returnsReference)
                 || !reader.readValue(retArgRefModeByte)
+                || !reader.readBool(rm.allowsCppUnwind)
             ){
                 resetRegistryState();
                 return false;
@@ -1934,6 +1937,7 @@ private:
                 || !reader.readBool(fn.returnsBorrowedView)
                 || !reader.readBool(fn.rejectsSimdStorage)
                 || !reader.readBool(fn.returnsReference)
+                || !reader.readBool(fn.allowsCppUnwind)
             ){
                 resetRegistryState();
                 return false;
@@ -2213,6 +2217,7 @@ private:
             writer.writeBool(rm.isMutating);
             writer.writeBool(rm.returnsReference);
             writer.writeValue(static_cast<u8>(rm.returnTypeArgRefMode));
+            writer.writeBool(rm.allowsCppUnwind);
         }
 
         writer.writeValue(static_cast<u32>(m_receiverSignatures.size()));
@@ -2266,6 +2271,7 @@ private:
             writer.writeBool(fn.returnsBorrowedView);
             writer.writeBool(fn.rejectsSimdStorage);
             writer.writeBool(fn.returnsReference);
+            writer.writeBool(fn.allowsCppUnwind);
             for(const BuiltinFunctionArgRule::Enum r : fn.argRules)
                 writer.writeValue(static_cast<u16>(r));
             writer.writeValue(fn.retainedArgMask);

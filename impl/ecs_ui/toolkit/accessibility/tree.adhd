@@ -92,7 +92,6 @@ class AccessibleTree : NoCopy{
         this.m_pressedId = WidgetId();
     }
 
-    [cpp_unwind]
     public b8 addNode(in AccessibleNodeDesc desc){
         if(!desc.id.valid() || desc.role >= AccessibilityRole::kCount || desc.liveMode > AccessibilityLiveMode::Assertive)
             return false;
@@ -150,7 +149,6 @@ class AccessibleTree : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public b8 announce(in StringView text, in AccessibilityLiveMode liveMode){
         if(text.empty() || liveMode == AccessibilityLiveMode::Off || liveMode > AccessibilityLiveMode::Assertive)
             return false;

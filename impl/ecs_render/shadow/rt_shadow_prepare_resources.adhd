@@ -218,7 +218,6 @@ ResourceStates ShadowPrepareBlasInitialState(in b8 fresh){
     return ResourceStates::Unknown;
 }
 
-[cpp_unwind]
 b8 ShadowPrepareResourcePlanner::prepare(in ShadowPrepareResourceInputs inputs, mut ShadowPrepareResourcePlan result){
 
     const auto currentBindlessSlots = inputs.currentBindlessSlots;

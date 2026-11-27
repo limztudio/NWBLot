@@ -255,7 +255,6 @@ StringView CsgShadowProjectName(){
     return "CsgShadowSmokeProject";
 }
 
-[cpp_unwind]
 Expected<NotNullUniquePtr<World>> CreateCsgShadowWorld(mut ProjectRuntimeContext context){
     auto created = CreateSmokeWorld(CsgShadowProjectName(), context);
     if(!created.has_value())
@@ -280,7 +279,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB CSG Shadow Smoke");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateCsgShadowWorld(context);
     if(!world.has_value())

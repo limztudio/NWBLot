@@ -40,7 +40,6 @@ class RendererSystem : IRenderPass, IFrameGraphContributor{
 
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override;
 
-    [cpp_unwind]
     public b8 prepareResources(in FramebufferPtr framebuffer)override;
     public void render(in FramebufferPtr framebuffer)override;
     public b8 appendFrameGraph(mut FrameGraphBuilder builder)override;

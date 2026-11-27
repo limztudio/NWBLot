@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<Optional<usize>> RemapMeshStreamIndex(
     in Name virtualPath,
     in StringView metaKind,
@@ -60,7 +59,6 @@ Expected<Optional<usize>> RemapMeshStreamIndex(
     return appendedSource;
 }
 
-[cpp_unwind]
 b8 RemapMeshStreamRef<T>(
     in Name virtualPath,
     in StringView metaKind,
@@ -78,12 +76,10 @@ b8 RemapMeshStreamRef<T>(
     return true;
 }
 
-[cpp_unwind]
 void CopyReorderedMeshStream<T>(in Vector<T> reordered, mut Vector<T> outStream){
     AssignTriviallyCopyableVector(outStream, Span<T>(reordered));
 }
 
-[cpp_unwind]
 b8 ReorderMeshStreamsByMeshletTraversal(
     in Name virtualPath,
     in Span<MeshletDesc> meshlets,

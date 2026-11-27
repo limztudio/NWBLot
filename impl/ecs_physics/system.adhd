@@ -605,7 +605,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     public in PhysicsDebugDrawOptions debugDrawOptions()const{ return this.m_debugDrawOptions; }
     public in PhysicsDebugDrawStats lastDebugDrawStats()const{ return this.m_debugDrawStats; }
     public b8 hasDebugLines()const override{ return this.m_debugDrawEnabled; }
-    [cpp_unwind]
     public void collectDebugLines(mut GpuDebugLineCollector collector)override;
     public mut CsgShapeRegistry csgShapeRegistry(){ return this.m_csgShapeRegistry; }
     public in CsgShapeRegistry csgShapeRegistry()const{ return this.m_csgShapeRegistry; }
@@ -2909,7 +2908,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         );
     }
 
-    [cpp_unwind]
     public b8 syncGpuResidentToWorld(){
         if(!this.m_gpuDispatcher.isGpuResidentDirtyCpu())
             return true;
@@ -2939,7 +2937,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return true;
     }
 
-    [cpp_unwind]
     public b8 prepareInstanceTransformPatches()override{
         const u32 bodyCount = this.m_physicsWorld.activeBodyCount();
         const u32 exportCount = cast<u32>(this.m_world.view<GpuRenderTransformExportComponent>().candidateCount());
@@ -2948,7 +2945,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return this.m_gpuDispatcher.beginRenderExportFrame(estimatedBindings * 12u, estimatedBindings * 6u);
     }
 
-    [cpp_unwind]
     public Expected<GpuTaskId> declareInstanceTransformPatch(
         in GpuTaskGraphInstanceTransformPatchRequest request,
         in Span<u32> instanceEntityIds,
@@ -3001,7 +2997,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return Expected<GpuTaskId>(outTaskId);
     }
 
-    [cpp_unwind]
     public b8 declareExportRenderTransformsTask(
         mut GpuTaskGraph graph,
         in GpuGraphResourceId targetResource,

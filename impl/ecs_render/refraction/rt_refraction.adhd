@@ -56,7 +56,6 @@ b8 CanEnableRefractionHardwareTracing(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 EnsureRefractionProgram(mut RendererShaderSystem shaders, mut Device device, in BindingLayoutHandle layout, in b8 hardware, in b8 diagnostics, in b8 csg, in b8 dense, mut RefractionResolveProgram program){
     if(program.pipeline.valid())
         return true;
@@ -84,7 +83,6 @@ b8 EnsureRefractionProgram(mut RendererShaderSystem shaders, mut Device device, 
     return true;
 }
 
-[cpp_unwind]
 b8 RefractionRenderer::prepareRefractionResources(){
     mut Device device = this.m_system.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -223,7 +221,6 @@ RefractionPushConstants MakeRefractionPassPushConstants(in DeferredFrameTargets 
     );
 }
 
-[cpp_unwind]
 b8 RefractionRenderer::recordRefractionTileClassification(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const{
     if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height) || !targets.avboit.refractionTileListDescriptor.valid() || !targets.avboit.refractionTileArgumentsDescriptor.valid())
         return false;
@@ -246,7 +243,6 @@ b8 RefractionRenderer::recordRefractionTileClassification(mut CommandList comman
     return true;
 }
 
-[cpp_unwind]
 b8 RefractionRenderer::recordRefractionResolve(mut CommandList commandList, in DeferredFrameTargets targets, in RayTracingRefractionGraphResources resources)const{
     if(!CanRecordRefractionPass(resources.valid(), targets.bindless.valid(), targets.width, targets.height))
         return false;

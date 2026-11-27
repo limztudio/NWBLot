@@ -697,7 +697,6 @@ class PhysicsCollisionTask{
         this.skipBroadphaseBuild = skipBuild;
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         if(this.shapeCount == 0u || this.maxPairs == 0u || !this.broadphasePipeline.valid() || !this.narrowphasePrimPipeline.valid())
             return false;
@@ -779,7 +778,6 @@ class PhysicsCollisionTask{
     }
 }
 
-[cpp_unwind]
 b8 RecordGpuCollisionUploads(
     mut CommandList commands,
     in PhysicsGpuBufferGroup buffers,
@@ -891,7 +889,6 @@ b8 RecordGpuCollisionUploads(
     return !commands.commandRecordingFailed();
 }
 
-[cpp_unwind]
 b8 RecordGpuBroadphaseAndNarrowphaseCore(
     mut CommandList commands,
     mut GpuDescriptorHeap heap,
@@ -1188,7 +1185,6 @@ class PhysicsBulletToiTask{
         this.pairCount = numPairs;
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         if(this.pairCount == 0u || !this.narrowphasePipeline.valid())
             return false;
@@ -1603,7 +1599,6 @@ class PhysicsSolverTask{
         }
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         if(this.awakeCount == 0u || this.subStepCount == 0u || this.dt <= 0.0f)
             return false;
@@ -1940,7 +1935,6 @@ class PhysicsResidentStepTask{
         this.uploadInitial = uploadInit;
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         if(this.bodyCount == 0u || !this.pipeline.valid())
             return false;
@@ -2238,7 +2232,6 @@ class PhysicsResidentFullStepTask{
         }
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         const b8 hasShapes = this.shapeCount > 0u;
         const b8 hasJoints = this.jointCount > 0u;
@@ -3098,7 +3091,6 @@ class PhysicsBatchSpatialQueryTask{
         this.lbvhInvExtent = f32x4(invExtent, 0.0f);
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         if(this.queryCount == 0u || (!this.queryPipe.valid() && !this.queryShapePipe.valid()))
             return false;
@@ -3398,7 +3390,6 @@ class PhysicsExportRenderTransformsTask{
         this.uploadPoses = doUploadPoses;
     }
 
-    [cpp_unwind]
     public b8 recordCommands(mut CommandList commands)const{
         if(!this.pipeline.valid() || (this.resBindings.empty() && this.poseBindings.empty()))
             return false;
@@ -3456,7 +3447,6 @@ class PhysicsExportRenderTransformsTask{
     }
 }
 
-[cpp_unwind]
 b8 RecordExportRenderTransformsDispatches(
     mut CommandList commands,
     mut GpuDescriptorHeap heap,
@@ -3591,7 +3581,6 @@ class PhysicsExportRenderTransformsGraphPayload{
         return req;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         if(!this.pipeline.valid())
             return false;
@@ -5054,7 +5043,6 @@ class PhysicsGpuDispatcher{
         this.m_pipelinesReady = false;
     }
 
-    [cpp_unwind]
     public b8 validateResources(){
         if(!this.m_graphics.has_value() || !this.m_assetManager.has_value())
             return false;
@@ -5142,7 +5130,6 @@ class PhysicsGpuDispatcher{
         return this.m_lastComputeToken;
     }
 
-    [cpp_unwind]
     private b8 waitForLastCompute(mut Device device){
         if(!this.m_lastComputeToken.valid())
             return true;
@@ -5154,7 +5141,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     private b8 ensureComputeCommandList(mut Device device){
         if(this.m_computeCmdTokens[this.m_computeCmdCursor].valid()){
             if(!device.waitForSubmissionToken(this.m_computeCmdTokens[this.m_computeCmdCursor]))
@@ -5195,7 +5181,6 @@ class PhysicsGpuDispatcher{
         commands.close();
     }
 
-    [cpp_unwind]
     private Expected<QueueSubmissionToken> submitComputeCommandList(
         mut Device device,
         mut CommandList commands,
@@ -5217,7 +5202,6 @@ class PhysicsGpuDispatcher{
         return receipt.value().token;
     }
 
-    [cpp_unwind]
     private Expected<QueueSubmissionToken> submitCollisionAsync(
         mut Device device,
         mut GpuDescriptorHeap heap,
@@ -5308,7 +5292,6 @@ class PhysicsGpuDispatcher{
         return this.submitComputeCommandList(device, commands, recorded);
     }
 
-    [cpp_unwind]
     private Expected<QueueSubmissionToken> submitBulletToiAsync(
         mut Device device,
         mut GpuDescriptorHeap heap,
@@ -5340,7 +5323,6 @@ class PhysicsGpuDispatcher{
         return this.submitComputeCommandList(device, commands, recorded);
     }
 
-    [cpp_unwind]
     private Expected<u32> readbackCollisionResults(
         mut Device device,
         in QueueSubmissionToken token,
@@ -5408,7 +5390,6 @@ class PhysicsGpuDispatcher{
         }
     }
 
-    [cpp_unwind]
     private Expected<QueueSubmissionToken> submitSolverAsync(
         mut Device device,
         mut GpuDescriptorHeap heap,
@@ -5501,7 +5482,6 @@ class PhysicsGpuDispatcher{
         return this.submitComputeCommandList(device, commands, recorded);
     }
 
-    [cpp_unwind]
     private void syncDirtyGpuResidentToWorld(mut PhysicsWorld world){
         if(!this.m_gpuResidentDirtyCpu)
             return;
@@ -5577,7 +5557,6 @@ class PhysicsGpuDispatcher{
         this.m_gpuResidentDirtyCpu = false;
     }
 
-    [cpp_unwind]
     private b8 readbackSolverResults(
         mut Device device,
         in QueueSubmissionToken token,
@@ -5616,7 +5595,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     private b8 ensureStaticGeometry(
         in PhysicsWorld world,
         mut GraphicsRuntime graphics,
@@ -6072,7 +6050,6 @@ class PhysicsGpuDispatcher{
         return maxRadius;
     }
 
-    [cpp_unwind]
     private b8 solveBulletContinuousGpu(in f32 dt, mut PhysicsWorld world, mut CpuTaskScheduler cpuScheduler){
         if(!world.m_def.enableContinuous || dt <= 0.0f || world.m_bulletBodyCount == 0u)
             return true;
@@ -6429,7 +6406,6 @@ class PhysicsGpuDispatcher{
         world.m_jointBreakEvents.clear();
     }
 
-    [cpp_unwind]
     private b8 finishStepLocallyOnCpu(
         mut PhysicsWorld world,
         in f32 dt,
@@ -6502,7 +6478,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 tryExecuteStep(mut PhysicsWorld world, in f32 dt, in u32 subStepCount, mut CpuTaskScheduler cpuScheduler){
         this.syncDirtyGpuResidentToWorld(world);
         if(world.m_backendMode == PhysicsBackendMode::CpuOnly)
@@ -9309,7 +9284,6 @@ class PhysicsGpuDispatcher{
         }
     }
 
-    [cpp_unwind]
     private b8 readbackResidentOutputsAndApplyToWorld(mut Device device, mut PhysicsWorld world, in u32 awakeCount){
         const Timer tReadStart = TimerNow();
         if(!this.waitForLastCompute(device))
@@ -9490,7 +9464,6 @@ class PhysicsGpuDispatcher{
         }
     }
 
-    [cpp_unwind]
     public b8 stepGpuResidentBodies(
         mut PhysicsWorld world,
         in f32 dt,
@@ -10285,7 +10258,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 readbackGpuResidentEvents(mut PhysicsWorld world, mut Vector<GpuPhysicsEvent> outEvents){
         outEvents.clear();
         if(!this.validateResources() || !this.isReady())
@@ -10412,7 +10384,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 stepGpuBulletToiResident(mut PhysicsWorld world, in f32 dt){
         if(dt <= 0.0f)
             return false;
@@ -12195,7 +12166,6 @@ class PhysicsGpuDispatcher{
         return cpuRes;
     }
 
-    [cpp_unwind]
     private PhysicsBatchSpatialQueryPending submitBatchSpatialQueriesAsyncWithShapes(
         in PhysicsWorld world,
         in Span<GpuPhysicsSpatialQuery> queries,
@@ -12901,7 +12871,6 @@ class PhysicsGpuDispatcher{
         return pending;
     }
 
-    [cpp_unwind]
     public PhysicsBatchSpatialQueryPending submitBatchSpatialQueriesAsync(
         in PhysicsWorld world,
         in Span<GpuPhysicsSpatialQuery> queries,
@@ -12911,7 +12880,6 @@ class PhysicsGpuDispatcher{
         return this.submitBatchSpatialQueriesAsyncWithShapes(world, queries, queryAux, Span<GpuPhysicsShapeProxy>(), Span<f32x4>(), Span<ShapeProxy>(), Span<Transform3D>(), maxHitsPerQuery);
     }
 
-    [cpp_unwind]
     public PhysicsBatchSpatialQueryPending submitBatchSpatialQueriesAsync(
         in PhysicsWorld world,
         in Span<GpuPhysicsSpatialQuery> queries
@@ -12919,7 +12887,6 @@ class PhysicsGpuDispatcher{
         return this.submitBatchSpatialQueriesAsyncWithShapes(world, queries, Span<GpuPhysicsSpatialQueryAux>(), Span<GpuPhysicsShapeProxy>(), Span<f32x4>(), Span<ShapeProxy>(), Span<Transform3D>(), 0u);
     }
 
-    [cpp_unwind]
     public b8 collectBatchSpatialQueries(
         in PhysicsWorld world,
         mut PhysicsBatchSpatialQueryPending pending,
@@ -13073,7 +13040,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 dispatchBatchSpatialQueriesEx(
         in PhysicsWorld world,
         in Span<GpuPhysicsSpatialQuery> queries,
@@ -13088,7 +13054,6 @@ class PhysicsGpuDispatcher{
         return this.collectBatchSpatialQueries(world, pending, outResults, outMultiHits);
     }
 
-    [cpp_unwind]
     public b8 dispatchBatchSpatialQueries(
         in PhysicsWorld world,
         in Span<GpuPhysicsSpatialQuery> queries,
@@ -13098,7 +13063,6 @@ class PhysicsGpuDispatcher{
         return this.dispatchBatchSpatialQueriesEx(world, queries, Span<GpuPhysicsSpatialQueryAux>(), 0u, outResults, this.m_queryFallbackMultiHitScratch);
     }
 
-    [cpp_unwind]
     public b8 castShapeBatchGpu(
         in PhysicsWorld world,
         in Span<ShapeProxy> queryProxies,
@@ -13187,7 +13151,6 @@ class PhysicsGpuDispatcher{
         return this.collectBatchSpatialQueries(world, pending, outResults, this.m_queryFallbackMultiHitScratch);
     }
 
-    [cpp_unwind]
     public b8 overlapShapeBatchGpu(
         in PhysicsWorld world,
         in Span<ShapeProxy> queryProxies,
@@ -13255,7 +13218,6 @@ class PhysicsGpuDispatcher{
         return this.collectBatchSpatialQueries(world, pending, outResults, outMultiHits);
     }
 
-    [cpp_unwind]
     public b8 overlapShapeBatchGpu(
         in PhysicsWorld world,
         in Span<ShapeProxy> queryProxies,
@@ -13342,7 +13304,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     private b8 ensureRenderExportBuffersAndFlags(
         mut GraphicsRuntime graphics,
         mut Device device,
@@ -13404,7 +13365,6 @@ class PhysicsGpuDispatcher{
         }
     }
 
-    [cpp_unwind]
     public b8 exportRenderTransforms(
         in PhysicsWorld world,
         in Span<GpuPhysicsRenderTransformBinding> bindings,
@@ -13442,7 +13402,6 @@ class PhysicsGpuDispatcher{
         return device.readMappedBuffer(this.m_renderTransformOutSlot.buffer.deref(), outTransforms);
     }
 
-    [cpp_unwind]
     private b8 exportRenderTransformsToBufferImpl(
         in PhysicsWorld world,
         in Span<GpuPhysicsRenderTransformBinding> bindings,
@@ -13479,7 +13438,6 @@ class PhysicsGpuDispatcher{
         return this.recordAndSubmitRenderTransformExport(graphics, device, heap, totalActive, targetBuffer, targetUavSlot, s_GpuExportModePatchInstanceBuffer, instanceStrideFloat4, waitCompletion, outToken);
     }
 
-    [cpp_unwind]
     public b8 exportRenderTransformsToBuffer(
         in PhysicsWorld world,
         in Span<GpuPhysicsRenderTransformBinding> bindings,
@@ -13491,7 +13449,6 @@ class PhysicsGpuDispatcher{
         return this.exportRenderTransformsToBufferImpl(world, bindings, targetBuffer, targetUavSlot, instanceStrideFloat4, true, unusedToken);
     }
 
-    [cpp_unwind]
     public b8 exportRenderTransformsToBufferAsync(
         in PhysicsWorld world,
         in Span<GpuPhysicsRenderTransformBinding> bindings,
@@ -13565,7 +13522,6 @@ class PhysicsGpuDispatcher{
         this.m_retiredExportBuffers.resize(keepIdx);
     }
 
-    [cpp_unwind]
     private b8 ensureSuballocatedExportSlot(
         mut GraphicsRuntime graphics,
         mut GpuDescriptorHeap heap,
@@ -13597,7 +13553,6 @@ class PhysicsGpuDispatcher{
         return AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, bufName, stride, targetCount, false, false, slot);
     }
 
-    [cpp_unwind]
     public b8 beginRenderExportFrame(in u32 estimatedBindings, in u32 estimatedPoses){
         if(!this.validateResources() || !this.isReady())
             return true;
@@ -13652,7 +13607,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 prepareRenderExportCapacity(in u32 maxBindingCount){
         return this.beginRenderExportFrame(maxBindingCount, maxBindingCount);
     }
@@ -13681,7 +13635,6 @@ class PhysicsGpuDispatcher{
         return this.m_gpuResidentDirtyCpu;
     }
 
-    [cpp_unwind]
     public void syncGpuResidentToWorld(mut PhysicsWorld world){
         this.syncDirtyGpuResidentToWorld(world);
     }
@@ -13765,7 +13718,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 declareExportRenderTransformsTask(
         mut GpuTaskGraph graph,
         in PhysicsWorld world,
@@ -14097,7 +14049,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     private b8 ensureResidentBodyBuffers(
         mut PhysicsWorld world,
         mut GraphicsRuntime graphics,
@@ -14161,7 +14112,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 stepSoftBodyGpu(
         mut SoftBody softBody,
         in PhysicsWorld world,
@@ -15398,7 +15348,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 applyEnvironmentGpu(
         mut PhysicsWorld world,
         in PhysicsEnvironment env,
@@ -15686,7 +15635,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    [cpp_unwind]
     public b8 applyExplosionGpu(
         mut PhysicsWorld world,
         in VectorSingle origin,
@@ -17721,7 +17669,6 @@ void ConvertGpuManifoldToCpu(
     }
 }
 
-[cpp_unwind]
 void ReleasePhysicsGpuBufferSlot(mut GpuDescriptorHeap heap, mut PhysicsGpuBufferSlot slot){
     if(slot.descriptor.valid() && heap.isInitialized())
         heap.free(slot.descriptor);
@@ -17735,7 +17682,6 @@ void ReleasePhysicsGpuBufferSlot(mut GpuDescriptorHeap heap, mut PhysicsGpuBuffe
     slot.cpuReadable = false;
 }
 
-[cpp_unwind]
 b8 WaitPhysicsGpuBufferRelease(
     mut Device device,
     mut QueueSubmissionToken lastComputeToken
@@ -17748,7 +17694,6 @@ b8 WaitPhysicsGpuBufferRelease(
     return true;
 }
 
-[cpp_unwind]
 Expected<Name> BuildPhysicsExportBufferName(in StringView prefix, in u32 generation){
     if(generation == 0u)
         return ParseName(prefix);
@@ -17759,7 +17704,6 @@ Expected<Name> BuildPhysicsExportBufferName(in StringView prefix, in u32 generat
     return ParseName(text.view());
 }
 
-[cpp_unwind]
 b8 AllocatePhysicsGpuComputeStorageBuffer(
     mut GraphicsRuntime graphics,
     mut GpuDescriptorHeap heap,
@@ -17803,7 +17747,6 @@ b8 AllocatePhysicsGpuComputeStorageBuffer(
     return true;
 }
 
-[cpp_unwind]
 b8 EnsurePhysicsGpuComputeStorageBuffer(
     mut GraphicsRuntime graphics,
     mut Device device,
@@ -17836,7 +17779,6 @@ b8 EnsurePhysicsGpuComputeStorageBuffer(
     return AllocatePhysicsGpuComputeStorageBuffer(graphics, heap, debugName, stride, newCap, isIndirectArgs, cpuReadable, slot);
 }
 
-[cpp_unwind]
 b8 EnsurePhysicsGpuComputeReadbackBuffer(
     mut GraphicsRuntime graphics,
     mut Device device,
@@ -17905,7 +17847,6 @@ void FillResidentShapeMaterialsScratch(
     }
 }
 
-[cpp_unwind]
 b8 LoadPhysicsComputePipeline(
     mut GraphicsRuntime graphics,
     mut AssetManager assetManager,
@@ -18187,7 +18128,6 @@ void ApplyGpuManifoldInPlaceAt(
     transitionFlags[mi] = txFlags;
 }
 
-[cpp_unwind]
 void StepWorldWithGpu(
     mut PhysicsWorld world,
     mut PhysicsGpuDispatcher gpuDispatcher,

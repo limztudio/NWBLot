@@ -32,7 +32,6 @@ class FrameExecuteStateLifecycleSet : NoCopy{
     public usize recordedCallbackCount = 0u;
     public usize acceptedCallbackCount = 0u;
 
-    [cpp_unwind]
     public FrameExecuteStateLifecycleSet(
         mut RendererFramePipeline renderer,
         mut DeferredFrameTargets targets,
@@ -130,7 +129,6 @@ class FrameExecuteStateLifecycleSet : NoCopy{
             this.shadowPrepareLiveStateBuffers.push_back(buffer);
     }
 
-    [cpp_unwind]
     private void collectShadowPrepareStateBuffers(mut RendererFramePipeline renderer, in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources, in RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources){
         renderer.m_meshSystem.collectRetainedAccelerationStateBuffers(this.meshAccelerationStateBuffers);
         const Span<BufferHandle> acceptedTraceGeometry = renderer.m_raytracingSystem.acceptedShadowTraceGeometryBuffers();

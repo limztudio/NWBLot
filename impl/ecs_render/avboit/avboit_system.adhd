@@ -127,7 +127,6 @@ class RendererAvboitSystem : NoCopy{
         in b8 materialGeometryStatesGraphOwned,
         mut Optional<GpuTimingMeasure> intervalTiming
     );
-    [cpp_unwind]
     public void renderPreparedGraphPass(
         mut CommandList commands,
         mut DeferredFrameTargets targets,

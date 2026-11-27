@@ -287,7 +287,6 @@ b8 AllocateSoftBodyStorageUav(
     return true;
 }
 
-[cpp_unwind]
 b8 CreateSoftBodyEntryGpuBuffers(
     mut GraphicsRuntime graphics,
     in EntityID entity,
@@ -386,7 +385,6 @@ b8 CreateSoftBodyEntryGpuBuffers(
     return true;
 }
 
-[cpp_unwind]
 b8 DeclareSoftBodyDynamicUploads(
     mut GpuTaskGraph graph,
     in SoftBodyRuntimeMeshEntry entry,
@@ -402,7 +400,6 @@ b8 DeclareSoftBodyDynamicUploads(
     return ok;
 }
 
-[cpp_unwind]
 b8 DeclareSoftBodyTopologyUploads(
     mut GpuTaskGraph graph,
     in SoftBodyRuntimeMeshEntry entry,
@@ -724,7 +721,6 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         return s_SoftBodyFallbackName;
     }
 
-    [cpp_unwind]
     private void syncEntities(){
         this.m_staleEntities.clear();
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
@@ -838,7 +834,6 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         }
     }
 
-    [cpp_unwind]
     private b8 uploadPendingBatches(in b8 uploadTopologies, in b8 uploadDeformations){
         b8 hasPending = false;
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){

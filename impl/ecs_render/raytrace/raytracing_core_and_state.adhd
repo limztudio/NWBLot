@@ -95,7 +95,6 @@ b8 AreSurfelSplitGraphPipelinesReady(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFrameTargets targets){
     RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
         this.m_rayTracingState.shadow.m_softwareTransparentSampling.m_history.prepareScene(RayTracingSceneContentStamp());
@@ -285,7 +284,6 @@ b8 RendererRayTracingSystem::preflightShadowVisibilityResources(mut DeferredFram
     return true;
 }
 
-[cpp_unwind]
 Expected<b8> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     mut CommandList commandList,
     mut DeferredFrameTargets targets,
@@ -366,7 +364,6 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
     this.m_meshSystem.discardRayTracingBuildState();
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     this.m_preparedShadowTraceGeometryBuffers.clear();
     if(!this.m_shadowVisibilityResourcesPreflighted)
@@ -419,7 +416,6 @@ ResourceStates RendererRayTracingSystem::sceneTlasBackingInitialState()const{
     return ResourceStates::Unknown;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::capturePreparedSceneBvh(in b8 staticScene, in u64 staticSceneHash, in Span<NwbBvhNodeGpu> nodes, in Span<SceneSwBvhInstanceGpu> instances){
     this.clearPreparedSceneBvh();
     return this.m_preparedSceneBvh.capture(this.m_rayTracingState, staticScene, staticSceneHash, nodes, instances);
@@ -437,7 +433,6 @@ void RendererRayTracingSystem::clearPreparedSceneBvh(){
     this.m_preparedSceneBvhInstanceEntityIds.clear();
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::invalidateResources(){
     RayTraceMaterialResources materialResources(this.m_graphics, this.m_rayTracingState.sceneBvh, this.m_rayTracingState.shadow);
     SoftwareBvhBuilder bvh(this.m_graphics, this.m_shaderSystem, this.m_rayTracingState.sceneBvh);
@@ -462,7 +457,6 @@ void RendererRayTracingSystem::invalidateResources(){
     this.m_rayTracingState.invalidateResources();
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
@@ -480,7 +474,6 @@ RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLighting
     return result;
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::publishPreparedLightingClassification(in RayTracingLightingClassification classification, in Span<SceneLightGpuData> lights){
     RayTracingDiagnostics diagnostics;
     this.m_rayTracingState.caustics.m_causticLightCount = classification.causticLightCount;
@@ -575,7 +568,6 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
     return snapshot;
 }
 
-[cpp_unwind]
 void RendererRayTracingSystem::logCapabilityOnce(){
     RayTracingDiagnostics diagnostics;
     diagnostics.rayTracingCapability(

@@ -117,7 +117,6 @@ b8 CanReuseStaticSceneSwBvh(in b8 staticScene, in b8 hashValid, in u64 cachedHas
     return staticScene && hashValid && cachedHash == currentHash && cachedInstanceCount == currentInstanceCount && hasPreparedBuffers;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     this.m_preparedSceneContentStamp = RayTracingSceneContentStamp();
     this.m_rayTracingState.m_refraction.m_refractionCertifiedInstanceIndex = u32.max;
@@ -476,7 +475,6 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     const SceneSwBvhMeshReadinessPolicy readinessPolicy();
 

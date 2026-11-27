@@ -79,7 +79,6 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         return Optional<MaterialTypedByteRange>();
     }
 
-    [cpp_unwind]
     private mut MaterialTypedByteEntry copyBytes(in Span<u8> bytes){
         const usize index = this.m_entries.size();
         const usize storageOffset = this.m_storage.size();
@@ -92,7 +91,6 @@ class MaterialTypedByteContentRangeMap : NoCopy{
     }
 
     public usize size()const{ return this.m_entries.size(); }
-    [cpp_unwind]
     public void reserve(in usize count){
         this.m_heads.reserve(count);
         this.m_entries.reserve(count);
@@ -111,7 +109,6 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         return Optional<MaterialTypedByteRange>();
     }
 
-    [cpp_unwind]
     public b8 insert(in MaterialTypedByteContentLookup lookup, in MaterialTypedByteRange range){
         const auto head = this.m_heads.try_emplace(MaterialTypedByteBucket(lookup), usize.max);
         if(!head.second && this.findInChain(head.first.value(), lookup).has_value())
@@ -126,7 +123,6 @@ class MaterialTypedByteContentRangeMap : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     public Expected<MaterialTypedByteRange> findOrAppend(in Span<u8> bytes, mut Vector<u8> upload){
         if(bytes.empty())
             return MaterialTypedByteRange();
@@ -196,7 +192,6 @@ u64 HashMaterialTypedBytesFast(in Span<u8> bytes){
     return hash;
 }
 
-[cpp_unwind]
 Expected<MaterialTypedByteRange> FindOrAppendMaterialConstantTypedByteRange(
     in Name materialName,
     in u64 typedLayoutHash,

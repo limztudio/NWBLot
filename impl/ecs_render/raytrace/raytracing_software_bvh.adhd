@@ -135,7 +135,6 @@ void DispatchBvhBuildKernel(mut CommandList commandList, mut GpuDescriptorHeap h
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void SoftwareBvhBuilder::releaseSwBvhScratchHeapHandles(){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -150,7 +149,6 @@ void SoftwareBvhBuilder::releaseSwBvhScratchHeapHandles(){
     this.m_state.m_bvhVisitCounterHeapHandle = GpuDescriptorHandleInvalid();
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureBvhSortPipeline(){
     if(this.m_state.m_bvhSortPipeline.valid())
         return true;
@@ -188,7 +186,6 @@ b8 SoftwareBvhBuilder::ensureBvhSortPipeline(){
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureBvhSortBuffers(in usize paddedCount){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -242,7 +239,6 @@ b8 SoftwareBvhBuilder::ensureBvhSortBuffers(in usize paddedCount){
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 paddedCount){
     assert(this.m_state.m_bvhSortPipeline.valid());
     assert(this.m_state.m_bvhSortKeysBuffer.valid());
@@ -284,7 +280,6 @@ b8 SoftwareBvhBuilder::bvhBitonicSort(mut CommandList commandList, in u32 padded
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureBvhBuildPipeline(){
     if(this.m_state.m_bvhMortonPipeline.valid() && this.m_state.m_bvhTopologyPipeline.valid() && this.m_state.m_bvhFitPipeline.valid())
         return true;
@@ -320,7 +315,6 @@ b8 SoftwareBvhBuilder::ensureBvhBuildPipeline(){
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(in usize primitiveCount){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -367,7 +361,6 @@ b8 SoftwareBvhBuilder::ensureBvhVisitCounterBuffer(in usize primitiveCount){
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceMaterialResources materials){
     const usize requiredNodes = ComputeBinaryBvhNodeCount(cast<usize>(instanceCount));
     if(!this.m_state.m_sceneBvhNodeBuffer.valid() || this.m_state.m_sceneBvhNodeCapacity < requiredNodes){
@@ -414,7 +407,6 @@ b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceM
         && materials.ensureWritableRayTraceMaterialContextHeapHandle(this.m_state.m_sceneInstanceBuffer.deref(), this.m_state.m_sceneInstanceUavHeapHandle);
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::createMeshBvhStorage(in usize primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -469,7 +461,6 @@ b8 SoftwareBvhBuilder::createMeshBvhStorage(in usize primitiveCount, mut BufferH
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::ensureMeshSwBvhResources(in u32 primitiveCount, mut BufferHandle nodeBuffer, mut BufferHandle parentBuffer, mut GpuDescriptorHandle nodeHeapHandle, mut GpuDescriptorHandle parentHeapHandle){
     if(!RayTracingBuildPolicy().validateMeshSwBvhPrimitiveCount(primitiveCount))
         return false;
@@ -491,7 +482,6 @@ b8 SoftwareBvhBuilder::meshSwBvhResourcesReady(in BufferHandle nodeBuffer, in Bu
     return MeshSwBvhResourcesReady(this.m_state, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle);
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
     in u32 positionHeapSlot,
     in u32 triangleIndexHeapSlot,
@@ -547,7 +537,6 @@ b8 SoftwareBvhBuilder::buildMeshSwBvhPrepared(
     return true;
 }
 
-[cpp_unwind]
 b8 SoftwareBvhBuilder::refitMeshSwBvhPrepared(
     in u32 positionHeapSlot,
     in u32 triangleIndexHeapSlot,

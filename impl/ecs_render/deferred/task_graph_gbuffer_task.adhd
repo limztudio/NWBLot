@@ -51,7 +51,6 @@ class GbufferGraphTask{
         this.sceneShadingSetupReady = shadingReady;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics | GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
     public void discarded(){
         if(this.regularSharedComputeEmulationTiming.has_value())

@@ -141,6 +141,10 @@ struct MethodDecl{
     b8 isInline = false;
     b8 isOutOfLine = false;
     b8 allowsCppUnwind = false;
+    b8 declaredBodylessInImport = false;
+    b8 forceNothrowContract = false;
+    b8 isOpenVirtualContract = false;
+    b8 isNothrowExtern = false;
     b8 exportsExplicitBool = false;
     b8 exportsTakingAssignment = false;
     b8 exportsRvalueOverload = false;

@@ -43,7 +43,6 @@ class DepthWarpProbeBatchTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         for(u32 index = 0u; index < this.cases.size(); ++index){
             in AvboitDepthWarpCase probe = this.cases[index];
@@ -143,7 +142,6 @@ RendererAvboitPushConstants BuildAvboitDepthWarpPush(in AvboitDepthWarpCase prob
     return push;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareDepthWarpBatch(in DepthWarpProbeBatchTask payload, mut GpuTaskGraph graph){
     const Array<BufferHandle, 5u> buffers(payload.coverage, payload.warp, payload.control, payload.slots, payload.readback);
     const Array<StringView, 5u> labels("Depth warp probe coverage", "Depth warp probe LUT", "Depth warp probe control", "Depth warp probe heap slots", "Depth warp probe readback");

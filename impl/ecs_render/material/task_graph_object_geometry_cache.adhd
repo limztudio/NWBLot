@@ -58,7 +58,6 @@ class ObjectGeometryDecodeGraphTask{
         this.frameBindings = bindings;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext recordContext)const{
         GraphicsPrefixTimingTicket ticket = this.timingTicket;
         if(this.rebindableTimingTicket.has_value())
@@ -101,7 +100,6 @@ class ObjectGeometryCacheGraph : NoCopy{
         this.m_meshSystem = meshes;
     }
 
-    [cpp_unwind]
     private Expected<GpuTaskId> declareDecode(
         in Span<MaterialPassDrawItem> draw,
         in MeshFrameBindingSnapshot bindings,
@@ -140,7 +138,6 @@ class ObjectGeometryCacheGraph : NoCopy{
         return this.m_graph.addPreparedPayloadTask(desc, decode);
     }
 
-    [cpp_unwind]
     public b8 prepare(
         in Span<MaterialPassDrawItem> draws,
         in MeshFrameBindingSnapshot bindings,

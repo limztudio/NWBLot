@@ -9,7 +9,6 @@
 
 
 class MeshBinaryCodec{
-    [cpp_unwind]
     private b8 appendStreams(
         in Span<f32x3u> positions,
         in Span<f16x4u> normals,
@@ -55,7 +54,6 @@ class MeshBinaryCodec{
         ;
     }
 
-    [cpp_unwind]
     public b8 deserialize(
         in Span<u8> binary,
         mut Vector<f32x3u> outPositions,
@@ -98,7 +96,6 @@ class MeshBinaryCodec{
         return ReadCompletePayload(binary, cursor, "Mesh::loadBinary");
     }
 
-    [cpp_unwind]
     public b8 serialize(
         in Span<f32x3u> positions,
         in Span<f16x4u> normals,

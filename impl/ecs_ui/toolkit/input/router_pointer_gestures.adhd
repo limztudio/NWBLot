@@ -183,7 +183,6 @@ b8 WantsRouterPointer(in PointerSourceTable pointerSources, in b8 hasPopup, in W
     return hasPopup || hover.valid();
 }
 
-[cpp_unwind]
 Expected<InputEvent> TryResolveRouterPointerEvent(
     in InputEvent event,
     mut PointerBindingTable pointerBindings

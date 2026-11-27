@@ -17,7 +17,6 @@ void ExpectBalancedStorage(in ArenaMemoryStats before, in ArenaMemoryStats after
     EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
 }
 
-[cpp_unwind]
 void VerifyConstructionFailure<S, Factory>(mut S storage, in usize failAt, in Factory factory){
     ConstructionState state;
     state.failAt = failAt;
@@ -114,7 +113,6 @@ void VerifyArrayOwnerReentry<S, const usize Empty>(mut S oldStorage, mut S newSt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_RawObjectFailureReleasesAlignedStorageAndConstructedMembers(){
     HeapStorageHandle storage(s_GlobalArenaCaseArenaObjectRawConstructorFailure);
     VerifyConstructionFailure(storage, 1u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -123,7 +121,6 @@ void VerifyArenaObjectConstruction_RawObjectFailureReleasesAlignedStorageAndCons
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_GenericUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
     HeapStorageHandle storage(s_GlobalArenaCaseArenaObjectGenericConstructorFailure);
     VerifyConstructionFailure(storage, 1u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -132,7 +129,6 @@ void VerifyArenaObjectConstruction_GenericUniqueObjectFailureReleasesAlignedStor
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_GlobalUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
     HeapStorageHandle storage(s_GlobalArenaCaseArenaObjectGlobalConstructorFailure);
     VerifyConstructionFailure(storage, 1u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -141,7 +137,6 @@ void VerifyArenaObjectConstruction_GlobalUniqueObjectFailureReleasesAlignedStora
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers(){
     PersistentStorage storage(s_GlobalArenaCaseArenaObjectPersistentConstructorFailure, PersistentArenaStructureAlignedSize(16384u));
     VerifyConstructionFailure(storage, 1u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -150,7 +145,6 @@ void VerifyArenaObjectConstruction_PersistentUniqueObjectFailureReleasesAlignedS
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_GenericArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
     HeapStorageHandle storage(s_GlobalArenaCaseArenaObjectGenericArrayFailure);
     VerifyConstructionFailure(storage, 3u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -159,7 +153,6 @@ void VerifyArenaObjectConstruction_GenericArrayFailureDestroysOnlyCompletedEleme
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_GlobalArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
     HeapStorageHandle storage(s_GlobalArenaCaseArenaObjectGlobalArrayFailure);
     VerifyConstructionFailure(storage, 3u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -168,7 +161,6 @@ void VerifyArenaObjectConstruction_GlobalArrayFailureDestroysOnlyCompletedElemen
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage(){
     PersistentStorage storage(s_GlobalArenaCaseArenaObjectPersistentArrayFailure, PersistentArenaStructureAlignedSize(16384u));
     VerifyConstructionFailure(storage, 3u, lambda[mut storage](mut ConstructionState state) -> b8{
@@ -177,7 +169,6 @@ void VerifyArenaObjectConstruction_PersistentArrayFailureDestroysOnlyCompletedEl
     EXPECT_EQ(storage.memoryStats().usedBytes, 0u);
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_NestedFactorySuccessIsDestroyedWhenOuterConstructionThrows(){
     HeapStorageHandle storage(s_GlobalArenaCaseArenaObjectNestedConstructorFailure);
     ConstructionState state;
@@ -244,7 +235,6 @@ void VerifyArenaObjectConstruction_ArenaFactoriesRetainStorageIdentityAndBypassC
     ExpectBalancedStorage(persistentBefore, persistent.memoryStats());
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_ArgumentTemporaryFailureDestroysCompletedMembersBeforeReleasingArenaStorage(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectGlobalArgumentCleanupFailure);
     PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPersistentArgumentCleanupFailure, PersistentArenaStructureAlignedSize(4096u));
@@ -264,7 +254,6 @@ void VerifyArenaObjectConstruction_ArgumentTemporaryFailureDestroysCompletedMemb
     ExpectBalancedStorage(persistentBefore, persistent.memoryStats());
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_CanonicalPrivateDestructorsRetainOwningRollbackAndRawConstructionAccess(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectPrivateGlobalDestructor);
     PersistentStorage persistent(s_GlobalArenaCaseArenaObjectPrivatePersistentDestructor, PersistentArenaStructureAlignedSize(4096u));
@@ -299,7 +288,6 @@ void VerifyArenaObjectConstruction_CanonicalPrivateDestructorsRetainOwningRollba
     ExpectBalancedStorage(persistentBefore, persistent.memoryStats());
 }
 
-[cpp_unwind]
 void VerifyArenaObjectConstruction_IndividualDeleterFriendRetainsCompletedRollbackAndNormalOwningDestruction(){
     HeapStorageHandle global(s_GlobalArenaCaseArenaObjectOperatorFriendGlobalDestructor);
     PersistentStorage persistent(s_GlobalArenaCaseArenaObjectOperatorFriendPersistentDestructor, PersistentArenaStructureAlignedSize(4096u));

@@ -22,7 +22,6 @@ class SkinningStateHandoff{
         this.m_buffers = buffers;
     }
 
-    [cpp_unwind]
     public b8 recorded(in Optional<in CommandListResourceStateHandoff> finalState){
         this.m_preparationInvoked = true;
         if(!CanPrepareSkinningStateHandoff(finalState.has_value(), this.m_buffers.empty(), HasSpanStorage<BufferHandle>(this.m_buffers)))

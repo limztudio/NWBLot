@@ -88,33 +88,21 @@ class RendererMaterialSystem : IPreparedMaterialLookup, MoveOnly{
 
     public in RendererMaterialState materialState()const{ return this.m_materialState; }
     public mut MaterialPassDrawRecorder drawRecorder(){ return this.m_drawRecorder; }
-    [cpp_unwind]
     public void invalidateResources();
-    [cpp_unwind]
     public Expected<mut MaterialSurfaceInfo> createMaterialSurfaceInfo(in AssetRef<Material> materialAsset);
     public Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset)override;
-    [cpp_unwind]
     public b8 prepareVisibleMaterialSurfaceInfos();
     public b8 hasNoVisibleRefractiveRenderers()const;
-    [cpp_unwind]
     public void prepareVisibleMaterialInstanceMutableCache();
-    [cpp_unwind]
     public Expected<BindingLayoutHandle> prepareMaterialPassBindingLayout();
-    [cpp_unwind]
     public Expected<mut MaterialPipelineResources> createRendererPipeline(in MaterialSurfaceInfo materialInfo, in MaterialPipelineKey pipelineKey, mut Framebuffer framebuffer);
     public Expected<mut MaterialPipelineResources> findRendererPipeline(in MaterialPipelineKey pipelineKey);
     public void invalidateRendererPipelines();
-    [cpp_unwind]
     public b8 hasTransparentRenderers(in RendererResourceLookupMode lookupMode);
-    [cpp_unwind]
     public void logMaterialRenderPathDecision(in Name materialKey, in RenderPath renderPath, in b8 meshSupported);
-    [cpp_unwind]
     public b8 prepareMeshComputeBindingLayout();
-    [cpp_unwind]
     public b8 createComputeEmulationResources();
-    [cpp_unwind]
     public b8 createObjectGeometryPipelineResources(mut MaterialPipelineResources resources);
-    [cpp_unwind]
     public void renderPreparedAvboitMaterialPass(
         mut CommandList commands,
         in FramebufferHandle framebuffer,
@@ -136,17 +124,11 @@ class RendererMaterialSystem : IPreparedMaterialLookup, MoveOnly{
     public void beginPreparedFrameCache(){ this.m_materialState.clearPreparedFrameCache(); }
     public void clearPreparedFrameCache(){ this.m_materialState.clearPreparedFrameCache(); }
     public u64 lastGatheredStreamToken()const{ return this.m_materialState.m_lastGatheredStreamToken; }
-    [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState);
-    [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState);
-    [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets);
-    [cpp_unwind]
     public b8 prepareMaterialPassResources(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in AvboitFrameTargets avboitTargets, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState);
-    [cpp_unwind]
     public b8 prepareTransparentMaterialPasses(in Span<TransparentPassPrepareDesc> passes, in CsgFrameState csgFrameState, in b8 avboitTargetsValid, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState);
-    [cpp_unwind]
     public void gatherMaterialPassDrawItems(
         in FramebufferHandle framebuffer,
         in MaterialPipelinePass pass,
@@ -163,7 +145,6 @@ class RendererMaterialSystem : IPreparedMaterialLookup, MoveOnly{
         MaterialPassGatherOutputs outputs(drawItems, instanceData, csgFrameData, materialTypedRanges, materialTypedBytes);
         this.gatherDraws(framebuffer, pass, transparent, csgFrameState, lookupMode, csgWorkRegionMeshViewState, outputs);
     }
-    [cpp_unwind]
     private void gatherDraws(
         in FramebufferHandle framebuffer,
         in MaterialPipelinePass pass,
@@ -173,10 +154,8 @@ class RendererMaterialSystem : IPreparedMaterialLookup, MoveOnly{
         in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState,
         in MaterialPassGatherOutputs outputs
     );
-    [cpp_unwind]
     public Expected<Span<u8>> prepareMaterialInstanceMutableTypedBytes(in EntityID entity, in MaterialSurfaceInfo materialInfo, in Optional<in MaterialInstanceComponent> materialInstance);
     public Expected<Span<u8>> findPreparedMaterialInstanceMutableTypedBytes(in EntityID entity, in MaterialSurfaceInfo materialInfo, in Optional<in MaterialInstanceComponent> materialInstance)const override;
-    [cpp_unwind]
     public Expected<ShadowOccluderMaterialContext> appendShadowOccluderMaterialContext(
         in EntityID entity,
         in MaterialSurfaceInfo materialInfo,
@@ -208,23 +187,16 @@ class RendererMaterialSystem : IPreparedMaterialLookup, MoveOnly{
         context.constantByteOffset = constant.value().byteOffset;
         return context;
     }
-    [cpp_unwind]
     public b8 recordObjectGeometryDecode(in MaterialPassDrawContext context, in MaterialPassDrawItem drawItem);
-    [cpp_unwind]
     public b8 reserveInstanceBufferCapacity(in usize instanceCount);
-    [cpp_unwind]
     public b8 reserveMaterialTypedBufferCapacity(in usize byteCount);
-    [cpp_unwind]
     public b8 prepareMaterialPassDrawBuffers(in Span<InstanceGpuData> instanceData, in Span<u8> materialTypedBytes);
     public b8 materialPassDrawBuffersReady(in Span<InstanceGpuData> instanceData, in Span<u8> materialTypedBytes)const;
     public b8 materialPassDrawBuffersReady(in usize instanceCount, in usize materialTypedByteCount)const;
     public MaterialPassBufferSnapshot materialPassBufferSnapshot()const;
     public void prepareMaterialPassInstanceUploadData(in CsgGraphResourceSnapshot csgResources, mut Span<InstanceGpuData> instanceData);
-    [cpp_unwind]
     private void releaseMaterialResourceReferences();
-    [cpp_unwind]
     private b8 prepareMaterialPassResourcesImpl(in FramebufferHandle framebuffer, in MaterialPipelinePass pass, in b8 transparent, in CsgFrameState csgFrameState, in b8 avboitTargetsValid, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState);
-    [cpp_unwind]
     private b8 prepareTransparentMaterialPassesImpl(mut World world, in borrow MeshSystem ecsMeshes, in Span<TransparentPassPrepareDesc> passes, in CsgFrameState csgFrameState, in Optional<in MeshViewGpuData> csgWorkRegionMeshViewState, in Optional<in CsgFrameReceiverLookup> lookup);
 }
 

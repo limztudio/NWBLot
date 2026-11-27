@@ -42,7 +42,6 @@ class MisdirectedImageCodec : IAssetCodec{
     [cpp_base(IAssetCodec, type)]
     public MisdirectedImageCodec(in borrow Name type, in b8 wrongType){ this.m_wrongType = wrongType; }
 
-    [cpp_unwind]
     public Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> binary, mut GlobalAllocator storage)const override{
         if(this.m_wrongType){
             UniquePtr<IAsset> skin = MakeUnique<UiSkin>(storage, path);

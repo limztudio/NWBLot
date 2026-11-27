@@ -43,12 +43,10 @@ class OpaqueCsgIntervalClearBuilder : NoCopy{
 
     public OpaqueCsgIntervalClearBuilder(mut GpuTaskGraph graph){ this.m_graph = graph; }
 
-    [cpp_unwind]
     public Expected<OpaqueCsgIntervalClearResult> declare(in OpaqueCsgIntervalClearInputs inputs, mut GraphClearTimingRecordState clearTimingState);
 }
 
 
-[cpp_unwind]
 Expected<OpaqueCsgIntervalClearResult> DeclareCsgIntervalRectClearTasks(
     in CsgIntervalRectClearDesc desc,
     mut GpuTaskGraph graph,
@@ -94,7 +92,6 @@ Expected<OpaqueCsgIntervalClearResult> DeclareCsgIntervalRectClearTasks(
 }
 
 
-[cpp_unwind]
 Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(in OpaqueCsgIntervalClearInputs inputs, mut GraphClearTimingRecordState clearTimingState){
     OpaqueCsgIntervalClearResult result;
     if(!inputs.dependencyTask.valid())

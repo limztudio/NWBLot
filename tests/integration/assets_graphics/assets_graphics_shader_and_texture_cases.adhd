@@ -1073,7 +1073,6 @@ void VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSel
     EXPECT_TRUE(GraphicsRemoveAllIfExists(root));
 }
 
-[cpp_unwind]
 void VerifyAssetsGraphics_TextureMipDecoderRejectsSrgbAndUnsupportedLdrUploadFormatsBeforeDecoding(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
@@ -1236,7 +1235,6 @@ NWB_ADHD_GTEST(AssetsGraphics, HdrAlphaMergeRejectsTruncatedOutput, VerifyAssets
 NWB_ADHD_GTEST(AssetsGraphics, TextureUploadPitchRejectsU64MultiplicationOverflow, VerifyAssetsGraphics_TextureUploadPitchRejectsU64MultiplicationOverflow)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations, VerifyAssetsGraphics_TextureCookerRejectsOverflowingRawLayoutWithoutRetainingAllocations)
 NWB_ADHD_GTEST(AssetsGraphics, TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile, VerifyAssetsGraphics_TextureCookerRejectsMissingImplicitSidecarInsteadOfSelectingAnotherFile)
-[cpp_unwind]
 void VerifyAssetsGraphics_TextureMipDecoderClassifiesDecodeAndSubmitFailuresWithoutDevice(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::ReportOnly);

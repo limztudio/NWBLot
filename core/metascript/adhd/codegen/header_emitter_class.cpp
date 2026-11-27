@@ -390,8 +390,37 @@ void HeaderEmitter::emitClassMethodsCpp(MString& out, const ClassDecl& decl, con
             hasUserAssignOp = true;
     }
 
-    if(decl.isExtensible && !hasUserDestructor)
-        out.append("public:\r\n    virtual ~").append(decl.name).append("() = default;\r\n");
+    if(!hasUserDestructor){
+        const b8 hasPolymorphicBase = m_symbols.hasPolymorphicBase(decl);
+        b8 hasUnwindingMemberDtor = false;
+        if(decl.isExtensible || hasPolymorphicBase){
+            for(const FieldDecl* field : orderedFields){
+                if(!field || field->isStatic || !field->type)
+                    continue;
+                const TypeRef* unwrappedFieldType = m_symbols.unwrapTypeAlias(field->type);
+                const MStringView fieldBase = unwrappedFieldType ? m_symbols.resolveBaseTypeName(unwrappedFieldType->name) : MStringView{};
+                if(const ClassDecl* fieldCls = m_symbols.findClass(fieldBase); fieldCls && !fieldCls->isExtern){
+                    for(const MethodDecl* fm : fieldCls->methods){
+                        if(fm && fm->isDestructor && fm->allowsCppUnwind){
+                            hasUnwindingMemberDtor = true;
+                            break;
+                        }
+                    }
+                }
+                if(hasUnwindingMemberDtor)
+                    break;
+            }
+        }
+        if(decl.isExtensible){
+            out.append("public:\r\n    virtual ~").append(decl.name).append("()noexcept");
+            if(hasPolymorphicBase)
+                out.append(" override");
+            out.append(hasUnwindingMemberDtor ? "{}\r\n" : " = default;\r\n");
+        }
+        else if(hasPolymorphicBase && hasUnwindingMemberDtor){
+            out.append("public:\r\n    virtual ~").append(decl.name).append("()noexcept override{}\r\n");
+        }
+    }
 
     const auto emitDeletedSpecialMembers = [&](const b8 emitCopy, const b8 emitMove, const b8 isAssign){
         const MStringView opPrefix = isAssign ? "& operator=(" : "(";

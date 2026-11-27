@@ -67,7 +67,6 @@ b8 PrepareReflectionPipeline(
     return true;
 }
 
-[cpp_unwind]
 void RendererReflectionFeedback::invalidateResources(){
     if(this.m_control.valid())
         this.m_control.deref().reset(0u);
@@ -76,7 +75,6 @@ void RendererReflectionFeedback::invalidateResources(){
     this.m_deviceGeneration = 0u;
 }
 
-[cpp_unwind]
 b8 RendererReflectionFeedback::prepareResources(in u32 width, in u32 height, in ReflectionSettings settings, in b8 enabled){
     const Expected<ReflectionFeedbackExtent> extentResult = TryComputeReflectionFeedbackExtent(width, height);
     if(!extentResult.has_value()){
@@ -133,7 +131,6 @@ ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(in ReflectionSce
     return result;
 }
 
-[cpp_unwind]
 void RendererReflectionFeedback::releaseBuffers(){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     for(mut ReflectionFeedbackBinding bank : this.m_banks){
@@ -143,7 +140,6 @@ void RendererReflectionFeedback::releaseBuffers(){
     }
 }
 
-[cpp_unwind]
 Expected<ReflectionFeedbackBinding> RendererReflectionFeedback::prepareBank(in u32 byteCount, in Name name){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
@@ -171,7 +167,6 @@ Expected<ReflectionFeedbackBinding> RendererReflectionFeedback::prepareBank(in u
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RendererReflectionPostprocess::invalidateResources(){
     this.releaseTargets();
     this.m_temporalPipeline.reset();
@@ -183,7 +178,6 @@ void RendererReflectionPostprocess::invalidateResources(){
     this.m_layout.reset();
 }
 
-[cpp_unwind]
 b8 RendererReflectionPostprocess::prepareResources(in u32 width, in u32 height, in ReflectionSettings settings){
     if(settings.spatialRadius > s_ReflectionShaderSpatialMaxRadius)
         return false;
@@ -244,7 +238,6 @@ ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(in Reflect
     return result;
 }
 
-[cpp_unwind]
 void RendererReflectionPostprocess::releaseTargets(){
     if(this.m_control.valid())
         this.m_control.deref().reset(0u);
@@ -257,7 +250,6 @@ void RendererReflectionPostprocess::releaseTargets(){
     this.m_height = 0u;
 }
 
-[cpp_unwind]
 b8 RendererReflectionPostprocess::preparePipeline(
     in ReflectionComputeShaderSelector selector,
     in StringView variant,
@@ -279,7 +271,6 @@ b8 RendererReflectionPostprocess::preparePipeline(
     );
 }
 
-[cpp_unwind]
 b8 RendererReflectionPostprocess::prepareImage(mut ReflectionRadianceBinding image, in u32 descriptorIndex, in Name name){
     if(image.texture.valid())
         return true;

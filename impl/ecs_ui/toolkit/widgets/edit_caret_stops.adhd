@@ -223,7 +223,7 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
     return Rect(leftX, line.top, width, line.height);
 }
 
-[cpp_unwind] b8 BuildEditCaretStopsAndLinesInto(
+b8 BuildEditCaretStopsAndLinesInto(
     in StringView expectedText,
     in Span<TextLine> textLines,
     in Span<TextCluster> clusters,
@@ -257,7 +257,7 @@ Expected<Rect> ResolveEditCaretRangeOnLine(
     return true;
 }
 
-[cpp_unwind] b8 AdoptEditCaretGeometryInto(
+b8 AdoptEditCaretGeometryInto(
     in StringView layoutText,
     in f32 layoutFontSize,
     in Span<TextLine> textLines,

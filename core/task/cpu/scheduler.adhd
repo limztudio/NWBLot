@@ -4,26 +4,26 @@
 
 [cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScheduler"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
 extern class CpuTaskScheduler{
-    CpuAffinity currentWorkerAffinity(...)const;
-    usize currentWorkerIndex(...)const;
-    u64 domainIdentity(...)const;
-    void drain(...);
-    b8 isParallelEnabled(...)const;
+    [cpp_flags(nothrow)] CpuAffinity currentWorkerAffinity(...)const;
+    [cpp_flags(nothrow)] usize currentWorkerIndex(...)const;
+    [cpp_flags(nothrow)] u64 domainIdentity(...)const;
+    [cpp_flags(nothrow)] void drain(...);
+    [cpp_flags(nothrow)] b8 isParallelEnabled(...)const;
     Expected<void, CpuTaskAdmissionError> parallelFor(...);
     void pumpMainThread(...);
     CpuTaskProfileLabel registerProfileLabel(...);
     void setProfiling(...);
-    CpuTaskSchedulerStatistics statistics(...)const;
+    [cpp_flags(nothrow)] CpuTaskSchedulerStatistics statistics(...)const;
     void wait(...);
-    u32 workerThreadCount(...)const;
+    [cpp_flags(nothrow)] u32 workerThreadCount(...)const;
 };
 
 [cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScope"), cpp_flags(no_copy, no_assign)]
 extern class CpuTaskScope{
-    void cancel(...);
-    void drain(...);
+    [cpp_flags(nothrow)] void cancel(...);
+    [cpp_flags(nothrow)] void drain(...);
     Expected<void, CpuTaskAdmissionError> parallelFor(...);
-    mut CpuTaskScheduler scheduler(...)const;
+    [cpp_flags(nothrow)] mut CpuTaskScheduler scheduler(...)const;
     void wait(...);
 };
 

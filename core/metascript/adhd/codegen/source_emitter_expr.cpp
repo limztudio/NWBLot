@@ -641,7 +641,8 @@ void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOu
         }
         out.push_back(']');
         m_typeEmitter.emitParamListCpp(out, expr.lambdaParams, expr.lambdaInjectsCallerArena);
-        out.append(lambdaExceptionSpec()).append(" -> ");
+        const b8 lambdaUnwinds = expr.lambdaAllowsUnwind || m_inNoexceptLike;
+        out.append(lambdaUnwinds ? "" : "noexcept").append(" -> ");
         if(expr.lambdaReturnType)
             m_typeEmitter.emitReturnTypeCpp(out, *expr.lambdaReturnType);
         else
@@ -662,11 +663,13 @@ void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOu
         }
         if(expr.lambdaUsesTaskScope)
             ParallelStatementEmitter(*this).emitTaskSchedulerPrologue(out, 2u);
+        const b8 prevLambdaUnwind = m_allowsCppUnwind;
         const TypeRef* prevLambdaCallerRet = m_activeCallerArenaReturnType;
         const u32 prevLambdaParallelDepth = m_parallelWorkerDepth;
         const b8 prevLambdaHasActiveTaskScope = m_hasActiveTaskScope;
         const u32 prevLambdaTaskGuardCounter = m_taskGuardCounter;
         const u32 prevSwitchBreak = m_activeSwitchBreakLabelLine;
+        m_allowsCppUnwind = lambdaUnwinds;
         m_activeCallerArenaReturnType = expr.lambdaInjectsCallerArena ? expr.lambdaReturnType : nullptr;
         m_parallelWorkerDepth = 0u;
         m_hasActiveTaskScope = false;
@@ -678,6 +681,7 @@ void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOu
         m_hasActiveTaskScope = prevLambdaHasActiveTaskScope;
         m_parallelWorkerDepth = prevLambdaParallelDepth;
         m_activeCallerArenaReturnType = prevLambdaCallerRet;
+        m_allowsCppUnwind = prevLambdaUnwind;
         out.append("    }");
         break;
     }

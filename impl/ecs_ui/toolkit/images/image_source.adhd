@@ -20,7 +20,6 @@ class ImageSourceFactory{
         return this.m_texture.value();
     }
 
-    [cpp_unwind]
     public Expected<SharedImageSource> copy(in SharedPool pool, in borrow Texture texture)const{
         if(!ValidateImageSourceTextureDimension(texture.virtualPath(), texture.dimension() == TexturePayloadDimension::Texture2D, texture.depth()) || !texture.validatePayload())
             return MakeUnexpected(Failure());
@@ -46,7 +45,6 @@ class ImageSource : NoCopy{
     public in Texture texture()const{ return this.m_texture; }
 }
 
-[cpp_unwind]
 Expected<SharedImageSource> MakeImageSource(in SharedPool pool, in borrow Texture texture){
     return ImageSourceFactory().copy(pool, texture);
 }

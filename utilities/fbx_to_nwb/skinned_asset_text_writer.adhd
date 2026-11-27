@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 String FormatFbxJointBaseName(in StringView rawName, in usize fallbackIndex){
     String out;
     if(!rawName.empty()){
@@ -30,7 +29,6 @@ b8 IsUsedFbxJointName(in Span<String> usedNames, in StringView candidate){
     return false;
 }
 
-[cpp_unwind]
 String MakeUniqueFbxJointName(in StringView baseName, in Span<String> usedNames){
     String name;
     name.reserve(baseName.size() + s_UniqueNameSuffixReserve);
@@ -45,7 +43,6 @@ String MakeUniqueFbxJointName(in StringView baseName, in Span<String> usedNames)
     return name;
 }
 
-[cpp_unwind]
 void AppendJointMatrixRowsText(
     in Vec4 row0,
     in Vec4 row1,
@@ -60,7 +57,6 @@ void AppendJointMatrixRowsText(
     out.append("]");
 }
 
-[cpp_unwind]
 void AppendSkeletonJointEntryText(
     in StringView jointName,
     in b8 hasParent,
@@ -85,7 +81,6 @@ void AppendSkeletonJointEntryText(
     out.append(s_TableEntryCloseText);
 }
 
-[cpp_unwind]
 void AppendSkinAssetHeaderAndInfluencesText(
     in StringView variableName,
     in StringView meshName,

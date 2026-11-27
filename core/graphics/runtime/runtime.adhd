@@ -44,10 +44,10 @@ extern class GraphicsRuntime{
     void requestDeviceRecreation(...)const;
     b8 runFrame(...);
     b8 setAsyncComputeLaneEnabled(...);
-    b8 setBindlessHeapAbi(...);
+    [cpp_flags(nothrow)] b8 setBindlessHeapAbi(...);
     b8 setDebugRuntimeEnabled(...);
     void setFrameSubmissionSuspended(...);
-    b8 setHDR10OutputEnabled(...);
+    [cpp_flags(nothrow)] b8 setHDR10OutputEnabled(...);
     b8 setHardwareRayTracingPolicy(...);
     b8 setSwapChainReadbackEnabled(...);
     b8 shouldRenderUnfocused(...)const;

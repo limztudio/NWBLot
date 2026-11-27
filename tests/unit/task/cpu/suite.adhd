@@ -58,7 +58,6 @@ class ShutdownSubmittingCallbacks : ProjectShutdownListener{
         this.m_callbacks = callbacks;
     }
     public ~ShutdownSubmittingCallbacks(){ this.m_ownerAlive = false; }
-    [cpp_unwind]
     public void onShutdown()override{
         const auto first = this.m_scope.submit(lambda[mut this]() -> void{
             ++this.m_callbacks;
@@ -220,7 +219,6 @@ void VerifyCpuTaskCancellationTests_ParallelRangesPreserveHistoryInRecycledSlots
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void VerifyCpuTaskCleanupTests_SchedulerDestructorPropagatesCallerFailureToTheTerminalEntry(){
     Atomic<u32> retirements(0u);
     u32 callbacks = 0u;
@@ -257,7 +255,6 @@ void VerifyCpuTaskCleanupTests_SchedulerDestructorPropagatesCallerFailureToTheTe
     EXPECT_EQ(callbacks, 1u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskCleanupTests_ScopeDestructorPropagatesCallerFailureAfterDrainingItsTasks(){
     CpuTaskScheduler scheduler(0u);
     Atomic<u32> retirements(0u);
@@ -295,7 +292,6 @@ void VerifyCpuTaskCleanupTests_ScopeDestructorPropagatesCallerFailureAfterDraini
     EXPECT_EQ(callbacks, 1u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskCleanupTests_UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOriginalFailure(){
     Atomic<u32> retirements(0u);
     u32 callbacks = 0u;
@@ -331,7 +327,6 @@ void VerifyCpuTaskCleanupTests_UnrelatedUnwindCancelsQueuedTasksWithoutReplacing
     EXPECT_EQ(callbacks, 0u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskCleanupTests_TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCaptures(){
     const TestSchedulerConfig config = HomogeneousWorkers(1u);
     CpuTaskScheduler scheduler(config);
@@ -381,7 +376,6 @@ void VerifyCpuTaskCleanupTests_TerminalDrainJoinsAnActiveWorkerAndRetiresCancele
     EXPECT_FALSE(postDrainAdmission.has_value());
 }
 
-[cpp_unwind]
 void VerifyCpuTaskCleanupTests_NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheReceivingScope(){
     Atomic<u32> retirements(0u);
     CpuTaskScheduler scheduler(0u);
@@ -444,7 +438,6 @@ void VerifyCpuTaskCleanupTests_DescendantRetirementCanReenterSchedulerBeforePare
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
-[cpp_unwind]
 void VerifyCpuTaskCleanupTests_LoaderShutdownJoinsPostCallbackTasksBeforeCallbackOwnerExpires(){
     b8 ownerAlive = true;
     Atomic<u32> retirements(0u);

@@ -112,7 +112,6 @@ b8 LaggedLightingHistoryTokenPending(mut Device device, in u64 historyGeneration
     return !completed.has_value() || completed.value() < token.value;
 }
 
-[cpp_unwind]
 void DiscardRendererFramePackets(
     mut FrameExecuteTimingState timing,
     mut FrameExecuteRecovery recovery,
@@ -138,7 +137,6 @@ void DiscardRendererFramePackets(
     rayTracing.discardSoftShadowTemporalHistory();
 }
 
-[cpp_unwind]
 void RendererFramePipeline::render(in FramebufferPtr framebuffer){
     this.m_frameGraphSourceFrameIndex = this.m_graphics.getFrameIndex();
 

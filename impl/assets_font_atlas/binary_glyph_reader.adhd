@@ -128,7 +128,6 @@ Expected<FontAtlasGlyph> TryReadFontAtlasGlyph(in Span<u8> bytes, mut usize curs
     return glyph;
 }
 
-[cpp_unwind]
 b8 TryReadFontAtlasGlyphs(
     in Span<u8> bytes,
     in u32 glyphCount,
@@ -146,7 +145,6 @@ b8 TryReadFontAtlasGlyphs(
     return true;
 }
 
-[cpp_unwind]
 void AppendFontAtlasGlyphBinary(in FontAtlasGlyph glyph, mut Vector<u8> outBinary){
     AppendU32LittleEndian(outBinary, glyph.glyphId);
     AppendU32LittleEndian(outBinary, glyph.group);
@@ -163,7 +161,6 @@ void AppendFontAtlasGlyphBinary(in FontAtlasGlyph glyph, mut Vector<u8> outBinar
     AppendU32LittleEndian(outBinary, glyph.drawable);
 }
 
-[cpp_unwind]
 void AppendFontAtlasGlyphsBinary(in Span<FontAtlasGlyph> glyphs, mut Vector<u8> outBinary){
     for(in FontAtlasGlyph glyph : glyphs)
         AppendFontAtlasGlyphBinary(glyph, outBinary);
@@ -307,7 +304,6 @@ b8 ValidateFontAtlasBinaryTableChunk(
         && cast<usize>(byteCount) <= totalBytes - cursor;
 }
 
-[cpp_unwind]
 void AppendFontAtlasBinaryPreambleAndIdentity(
     in Array<u64, s_FontAtlasIdentityLaneCount> fontIdentityQwords,
     mut Vector<u8> outBinary
@@ -322,7 +318,6 @@ void AppendFontAtlasBinaryPreambleAndIdentity(
     }
 }
 
-[cpp_unwind]
 void AppendFontAtlasBinaryHeaderTail(
     in u32 faceIndex,
     in u32 unitsPerEm,
@@ -354,7 +349,6 @@ void AppendFontAtlasBinaryHeaderTail(
     AppendU32LittleEndian(outBinary, tableCount);
 }
 
-[cpp_unwind]
 void AppendFontAtlasGroupChunk(
     in u32 width,
     in u32 height,
@@ -373,7 +367,6 @@ void AppendFontAtlasGroupChunk(
         return;
 }
 
-[cpp_unwind]
 void AppendFontAtlasTableChunk(
     in u32 tag,
     in Span<u8> sha256Bytes,
@@ -422,7 +415,6 @@ Expected<FontAtlasBinaryTableHeader> TryReadFontAtlasTableHeader(in Span<u8> byt
     return header;
 }
 
-[cpp_unwind]
 b8 ReadFontAtlasBytesInto(
     in Span<u8> bytes,
     in u32 byteCount,

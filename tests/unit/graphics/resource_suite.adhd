@@ -351,7 +351,6 @@ void VerifyStandaloneGraphWorkspacePool_OverlappingLeasesKeepDistinctWorkspacesA
     EXPECT_TRUE(pool.releaseCommandListCaches());
 }
 
-[cpp_unwind]
 void VerifyStandaloneGraphWorkspacePool_ExceptionDiscardsLeaseWithoutBlockingNextSubmission(){
     DefaultResourceTestArena arena = DefaultResourceTestArena();
     StandaloneGraphWorkspacePool pool = StandaloneGraphWorkspacePool(arena);

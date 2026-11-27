@@ -50,7 +50,6 @@ class ShadowTraceBufferIndex : NoCopy{
         this.m_capacity = capacity;
     }
 
-    [cpp_unwind]
     public void add(in usize key, in u32 member, in usize meshIndex){
         if(this.m_map.has_value()){
             ShadowTraceBufferRecord initial;
@@ -101,7 +100,6 @@ class ShadowTraceBufferIndex : NoCopy{
         return false;
     }
 
-    [cpp_unwind]
     public b8 appendBuffer(
         in BufferHandle buffer,
         in MeshRayTracingResourceSnapshot mesh,
@@ -125,7 +123,6 @@ class ShadowTraceBufferIndex : NoCopy{
         return false;
     }
 
-    [cpp_unwind]
     public b8 appendSelectedBuffer(
         in usize key,
         in Span<MeshRayTracingResourceSnapshot> meshes,
@@ -195,7 +192,6 @@ in BufferHandle ShadowTraceMember(in MeshRayTracingResourceSnapshot mesh, in u32
     }
 }
 
-[cpp_unwind]
 b8 AppendShadowTraceBufferRecord(
     in BufferHandle buffer,
     in MeshRayTracingResourceSnapshot mesh,
@@ -224,7 +220,6 @@ b8 AppendShadowTraceBufferRecord(
     return true;
 }
 
-[cpp_unwind]
 b8 AppendShadowTraceBuffer(
     in BufferHandle buffer,
     in MeshRayTracingResourceSnapshot mesh,
@@ -236,7 +231,6 @@ b8 AppendShadowTraceBuffer(
     return index.appendBuffer(buffer, mesh, suffix, role, prepared);
 }
 
-[cpp_unwind]
 b8 AppendSelectedShadowTraceBuffers(
     in Span<mut Buffer> selected,
     in Span<MeshRayTracingResourceSnapshot> meshes,
@@ -254,7 +248,6 @@ b8 AppendSelectedShadowTraceBuffers(
     return true;
 }
 
-[cpp_unwind]
 b8 FreezePreparedShadowTraceGeometryBuffers(
     in Span<MeshRayTracingResourceSnapshot> meshes,
     in ShadowTraceGeometrySelection selection,

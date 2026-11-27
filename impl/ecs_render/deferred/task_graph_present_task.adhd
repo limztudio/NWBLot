@@ -53,7 +53,6 @@ class DeferredPresentGraphTask{
         return requirements;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         const auto shadowQueue = QueueForTask(context, this.m_shadowVisibilityTask);
         if(!this.m_presentationFrame.valid() || !this.m_backBuffer.valid() || !shadowQueue.has_value())
@@ -80,7 +79,6 @@ class DeferredPresentGraphTask{
         return recorded;
     }
 
-    [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
         AcceptDeferredOutputLayer(this.m_contributor, this.m_outputLayer.frameGeneration, token);
     }
@@ -94,7 +92,6 @@ b8 ShouldAcceptDeferredOutputLayer(in b8 hasContributor, in u64 frameGeneration,
     return hasContributor && frameGeneration != 0u && tokenValid;
 }
 
-[cpp_unwind]
 void AcceptDeferredOutputLayer(in Optional<mut IGpuTaskGraphOutputLayerContributor> contributor, in u64 generation, in QueueSubmissionToken token){
     if(ShouldAcceptDeferredOutputLayer(contributor.has_value(), generation, token.valid()))
         contributor.value().acceptTaskGraphOutputLayer(generation, token);

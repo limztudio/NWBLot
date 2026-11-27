@@ -22,7 +22,6 @@ type VoidErrorResult = Expected<void, ErrorCode>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void VerifyGlobalFilesystemCleanup_UnwindRetiresPopulatedTreeAndRepeatedMissingCleanupSucceeds(){
     b8 caught = false;
     b8 hadCleanupError = true;

@@ -84,7 +84,6 @@ class FrameGraphReflectionResolve : NoCopy{
         this.m_reflectionSystem = reflectionSystem;
     }
 
-    [cpp_unwind]
     public Expected<FrameGraphReflectionResolveResult> declare(in FrameGraphReflectionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads);
 }
 

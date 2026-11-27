@@ -29,7 +29,7 @@ class UiEditClipboardController : NoCopy{
             TerminateInvariant();
     }
 
-    [cpp_unwind] public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel, in b8 readOnly){
+    public UiEditClipboardResult request(in UiTextEditOwner owner, in EditModel model, in EditClipboardAction action, in ClipboardChannel channel, in b8 readOnly){
         if(!this.m_service.isOwnerThread())
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::WrongThread);
         if(!owner.valid())
@@ -77,7 +77,7 @@ class UiEditClipboardController : NoCopy{
         return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::Pending);
     }
 
-    [cpp_unwind] public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model, in b8 readOnly){
+    public UiEditClipboardResult drain(in UiTextEditOwner owner, mut EditModel model, in b8 readOnly){
         if(!this.m_service.isOwnerThread())
             return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::WrongThread);
         if(!this.m_token.valid())
@@ -136,7 +136,7 @@ class UiEditClipboardController : NoCopy{
         this.m_insertText.clear();
     }
 
-    [cpp_unwind] private UiEditClipboardResult applyCompletion(mut EditModel model, in b8 readOnly){
+    private UiEditClipboardResult applyCompletion(mut EditModel model, in b8 readOnly){
         if(this.m_completion.status != ClipboardStatus::Success){
             switch(this.m_completion.status){
             case ClipboardStatus::Unsupported: return MakeUiEditClipboardStatusResult(UiEditClipboardStatus::Unsupported);

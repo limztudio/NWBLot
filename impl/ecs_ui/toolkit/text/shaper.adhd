@@ -15,7 +15,6 @@ type ShapedGlyph = ShapedGlyphRecord<SharedFontFace>;
 
 
 interface ITextShaper : NoCopy{
-    [cpp_unwind]
     Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request);
 }
 
@@ -57,7 +56,6 @@ class TextShaper : ITextShaper{
         return Optional<SharedFontFace>(this.m_fonts[idx]);
     }
 
-    [cpp_unwind]
     public b8 registerFont(in FontSource source){
         if(this.m_fonts.size() >= s_TextMaxFontSources)
             return false;
@@ -71,7 +69,6 @@ class TextShaper : ITextShaper{
         return true;
     }
 
-    [cpp_unwind]
     public b8 setFonts(in Span<FontSource> sources){
         if(!IsValidTextFontSourceCount(sources.size()))
             return false;
@@ -93,7 +90,6 @@ class TextShaper : ITextShaper{
         return true;
     }
 
-    [cpp_unwind]
     private TextLayoutStatus shapeSegmentInto(in ShapeRequest request, in usize primaryIndex, in u32 segBegin, in u32 segEnd, mut FontMetrics inOutMetrics, mut Vector<ShapedGlyph> outGlyphs){
         if(segBegin >= segEnd)
             return TextLayoutStatus::Success;
@@ -176,7 +172,6 @@ class TextShaper : ITextShaper{
         return TextLayoutStatus::Success;
     }
 
-    [cpp_unwind]
     public TextLayoutStatus shapeInto(in ShapeRequest request, mut ShapedRun outRun){
         outRun.glyphs.clear();
         const TextLayoutStatus validation = ValidateTextRequest(request, false);
@@ -280,7 +275,6 @@ class TextShaper : ITextShaper{
         return TextLayoutStatus::Success;
     }
 
-    [cpp_unwind]
     public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
         ShapedRun run;
         const TextLayoutStatus status = this.shapeInto(request, run);

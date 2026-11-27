@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void AppendMeshField<Value>(in StringView variableName, in StringView fieldName, in Span<Value> values, in StringView indent, mut String out){
     out.append(variableName);
     out.append(s_FieldAccessText);
@@ -19,7 +18,6 @@ void AppendMeshField<Value>(in StringView variableName, in StringView fieldName,
     out.append(s_ListCloseSectionText);
 }
 
-[cpp_unwind]
 void AppendMeshAssetBodyText(
     in Span<Vec3> positions,
     in Span<Vec3> normals,

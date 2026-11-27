@@ -61,7 +61,6 @@ class SurfelGiPhaseTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_lighting.valid())
             return false;
@@ -150,7 +149,6 @@ b8 RequiresActiveSurfelAsyncTiming(in b8 isComputeQueue, in b8 hasAsyncTimingVal
     return isComputeQueue && !hasAsyncTimingValue;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareSurfelInitializationTask(mut RendererRayTracingSystem system, mut GpuTaskGraph graph, in GpuTaskDesc desc){
     return graph.addPayloadTask(desc, SurfelGiInitializationTask(system));
 }

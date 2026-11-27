@@ -24,7 +24,6 @@ class CaretShaper : ITextShaper{
     public b8 variedHeight = false;
     public b8 zeroAdvance = false;
 
-    [cpp_unwind]
     public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
         ShapedRun run;
         PopulateCaretShapedRun(this, request, run);

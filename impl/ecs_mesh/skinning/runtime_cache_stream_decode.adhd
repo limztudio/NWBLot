@@ -74,7 +74,6 @@ MeshletAttributeStreamRef MakeRuntimeMeshletAttributeStreamRef(in MeshletAttribu
     return runtimeRef;
 }
 
-[cpp_unwind]
 b8 TryDecodeRuntimeZippedMeshletStreams(
     in Span<MeshletDesc> sourceMeshlets,
     in Span<u8> sourcePositionRefDeltas,

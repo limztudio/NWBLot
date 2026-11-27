@@ -53,7 +53,6 @@ class OpaqueUploadChainBuilder : NoCopy{
         this.m_csgSystem = csg;
     }
 
-    [cpp_unwind]
     public Expected<OpaqueUploadChainResult> declare(in OpaqueUploadChainInputs inputs, mut Span<InstanceGpuData> instanceData){
         OpaqueUploadChainResult result;
         if(!inputs.dependencyTask.valid())
@@ -110,7 +109,6 @@ class OpaqueUploadChainBuilder : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 DeclareOpaqueMaterialUploads(mut GpuTaskGraph graph, in Span<InstanceGpuData> instances, in Span<u8> bytes, in GpuGraphResourceId instanceBuffer, in GpuGraphResourceId typedBuffer, mut GpuTaskId dependency){
     const auto instanceBlob = graph.copyUploadElements<InstanceGpuData>(instances);
     const auto typedBlob = graph.copyUploadBytes<u32>(bytes);
@@ -120,7 +118,6 @@ b8 DeclareOpaqueMaterialUploads(mut GpuTaskGraph graph, in Span<InstanceGpuData>
         && AppendImmutableBufferUpload(graph, typedBlob.value(), typedBuffer, s_RenderNameRenderGraphicsPrefixMaterialTypedUpload, "Material Typed Upload", dependency);
 }
 
-[cpp_unwind]
 b8 DeclareOpaqueCsgUploads(
     mut GpuTaskGraph graph,
     in CsgFrameGpuDataView frame,

@@ -24,7 +24,7 @@ class InputAdmission : NoCopy{
         return TryQueueRouterPointerInput(this.m_bindings.bindings(), input, this.m_pointerBindings, this.m_boundSources, this.m_events);
     }
 
-    [cpp_unwind] public b8 setBindings(in Span<InputKeyBinding> bindings){
+    public b8 setBindings(in Span<InputKeyBinding> bindings){
         return this.m_bindings.set(bindings);
     }
 

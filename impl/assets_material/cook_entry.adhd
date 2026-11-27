@@ -67,7 +67,6 @@ class MaterialBindDependency{
 }
 
 class MaterialBindTypedLayout{
-    [cpp_unwind]
     public MaterialBindTypedLayout(){}
 
     public String interfacePath = "<unknown>";
@@ -80,13 +79,11 @@ class MaterialBindTypedLayout{
 }
 
 class MaterialBindTypedLayoutCache{
-    [cpp_unwind]
     public MaterialBindTypedLayoutCache(){}
 
     public Deque<MaterialBindTypedLayout> entries;
     public HashMap<Name, usize> lookup;
 
-    [cpp_unwind]
     public void reserve(in usize count){
         this.lookup.reserve(count);
     }
@@ -127,7 +124,6 @@ Expected<Name> ReadMaterialCookName(in StringView text){
     return s_NameNone;
 }
 
-[cpp_unwind]
 Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(in Span<MaterialBindEntry> entries){
     MaterialBindInterfaceLookup lookup;
     lookup.reserve(entries.size());
@@ -143,7 +139,6 @@ Expected<MaterialBindInterfaceLookup> BuildMaterialBindInterfaceLookup(in Span<M
     return lookup;
 }
 
-[cpp_unwind]
 Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in MaterialBindEntry bindEntry, mut MaterialBindTypedLayoutCache cache){
     if(cache.lookup.contains(materialInterface)){
         const usize index = cache.lookup.at(materialInterface);
@@ -167,7 +162,6 @@ Expected<usize> FindOrBuildMaterialBindTypedLayout(in Name materialInterface, in
     return index;
 }
 
-[cpp_unwind]
 void CopyMaterialBindTypedLayoutDefaults(
     in MaterialBindTypedLayout layout,
     mut u64 hash,
@@ -180,7 +174,6 @@ void CopyMaterialBindTypedLayoutDefaults(
         layout.typedBlockBytes, hash, blocks, fields, bytes);
 }
 
-[cpp_unwind]
 b8 ApplyMaterialBindTypedLayoutParameters(
     in MaterialBindTypedLayout layout,
     in Name name,

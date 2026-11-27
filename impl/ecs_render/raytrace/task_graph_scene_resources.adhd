@@ -83,7 +83,6 @@ TraceResourceSetUses MakeTraceResourceSetUses(in GpuGraphResourceSetId traceGeom
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 AppendCurrentCsgBufferRead(in BufferHandle buffer, mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> resourceUses){
     if(!buffer.valid())
         return false;
@@ -106,7 +105,6 @@ b8 AppendCurrentCsgBufferRead(in BufferHandle buffer, mut GpuTaskGraph graph, mu
     return true;
 }
 
-[cpp_unwind]
 b8 AppendCurrentCsgRayGeometry(in BufferHandle context, in Span<BufferHandle> bounds, mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> resourceUses){
     if(!context.valid())
         return true;
@@ -119,7 +117,6 @@ b8 AppendCurrentCsgRayGeometry(in BufferHandle context, in Span<BufferHandle> bo
     return true;
 }
 
-[cpp_unwind]
 b8 AppendRayTracingSceneShadowBuffers(in RayTracingDeferredGraphResourceSnapshot rayTracingResources, mut GpuTaskGraph graph, mut Vector<GpuTaskResourceUse> resourceUses){
     Array<BufferHandle, s_SceneShadowBufferCount> sceneShadowBuffers;
     sceneShadowBuffers[0u] = rayTracingResources.sceneBvhNodeBuffer;
@@ -152,7 +149,6 @@ b8 AppendRayTracingSceneShadowBuffers(in RayTracingDeferredGraphResourceSnapshot
     return true;
 }
 
-[cpp_unwind]
 Expected<RayTracingSceneGraphReads> ImportRayTracingSceneGraphReads(in RayTracingSceneGraphResources resources, in ResourceStates tlasInitialState, in borrow GpuTaskId priorReadersDrained, mut GpuTaskGraph graph){
     if(!resources.valid())
         return MakeUnexpected(Failure());

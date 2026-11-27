@@ -159,11 +159,6 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
             ok = false;
             continue;
         }
-        if(ool->allowsCppUnwind && !matched->allowsCppUnwind){
-            ReportAdhdDiagnostic(m_arena, errors, ool->span, "'[cpp_unwind]' must appear on the class method declaration");
-            ok = false;
-            continue;
-        }
 
         if(ool->isOverride && !matched->isOverride){
             ReportAdhdDiagnostic(m_arena, errors, ool->span, "out-of-line method cannot specify 'override' when class declaration is not marked 'override'");
@@ -221,8 +216,11 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
             matched->isReflect = true;
             cls->isReflect = true;
         }
-        if(!ool->isImported)
+        if(!ool->isImported){
+            if(cls->isImported)
+                matched->declaredBodylessInImport = true;
             matched->isImported = false;
+        }
     }
 
     constexpr usize s_InvalidFnIdx = Limit<usize>::s_Max;
@@ -291,11 +289,6 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
                 ok = false;
                 continue;
             }
-            if(prev->allowsCppUnwind != fn->allowsCppUnwind){
-                ReportAdhdDiagnostic(m_arena, errors, fn->span, "free function declarations must agree on '[cpp_unwind]'");
-                ok = false;
-                continue;
-            }
             if(!m_comparator.areEquivalent(prev->returnType, fn->returnType)){
                 ReportAdhdDiagnostic(m_arena, errors, fn->span, "conflicting return type for free function declaration");
                 ok = false;
@@ -317,6 +310,10 @@ b8 CallableDeclarationLinker::link(TranslationUnit& unit, MVector<ParseError>& e
                 }
                 else{
                     fn->isOutOfLine = true;
+                    if(!fn->isImported){
+                        prev->declaredBodylessInImport = true;
+                        fn->declaredBodylessInImport = true;
+                    }
                     prev->hasBody = true;
                 }
             }

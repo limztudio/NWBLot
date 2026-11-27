@@ -336,26 +336,32 @@ void VerifyAdhdCompiler_ReordersTemplateInstantiationFieldsAndRejectsFreeOperato
 void VerifyAdhdCompiler_SystemUpdateUnwindRespectsSdkContract(){
     AdhdTestArena arena = AdhdTestArena();
     CompileResult result = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[system(\"unwind_sys\")] class UnwindSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override { return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/unwind_system.adhd", arena.arena, result));
+    ASSERT_TRUE(Compile("[system(\"unwind_sys\")] class UnwindSystem { public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override { Vector<u32> scratch; scratch.push_back(1u); return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/unwind_system.adhd", arena.arena, result));
     const StringView header = GeneratedHeaderView(result);
     EXPECT_NE(header.find("update(::NWB::Core::ECS::World& world, const f32 delta) override"), usize.max);
     EXPECT_EQ(header.find("update(::NWB::Core::ECS::World& world, const f32 delta)noexcept override"), usize.max);
     {
-        const ScopedTestTrace trace("bad_sys");
-        ExpectCompileFailsWithMessage(arena, "[system(\"bad_sys\")] class BadSystem { [cpp_unwind] public void prepare(mut World world)override{} }", "impl/ecs_sample/bad_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+        const ScopedTestTrace trace("pure_update_sys");
+        CompileResult pureRes = CompileResult(arena.arena);
+        ASSERT_TRUE(Compile("[system(\"pure_sys\")] class PureSystem { public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override { return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/pure_system.adhd", arena.arena, pureRes));
+        const StringView pureHeader = GeneratedHeaderView(pureRes);
+        EXPECT_NE(pureHeader.find("update(::NWB::Core::ECS::World& world, const f32 delta)noexcept override"), usize.max);
     }
     {
-        const ScopedTestTrace trace("bad_implicit_sys");
-        ExpectCompileFailsWithMessage(arena, "[system(\"bad_implicit_sys\")] class BadImplicitSystem { [cpp_unwind] public void prepare(mut World world){} }", "impl/ecs_sample/bad_implicit_unwind_system.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing SDK override contract");
+        const ScopedTestTrace trace("clamped_prepare_sys");
+        CompileResult clampedRes = CompileResult(arena.arena);
+        ASSERT_TRUE(Compile("[cpp_header(\"<opaque/probe.h>\"), cpp_name(\"::OpaqueProbe\")] extern void OpaqueProbe(); [system(\"clamped_sys\")] class ClampedSystem { public void prepare(mut World world)override{ OpaqueProbe(); } }", "impl/ecs_sample/clamped_system.adhd", arena.arena, clampedRes));
+        const StringView clampedHeader = GeneratedHeaderView(clampedRes);
+        EXPECT_NE(clampedHeader.find("prepare(::NWB::Core::ECS::World& world)noexcept override"), usize.max);
     }
     {
         const ScopedTestTrace trace("bad_param_sys");
-        ExpectCompileFailsWithMessage(arena, "[system(\"bad_param_sys\")] class BadParamSystem { [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in u32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/bad_unwind_param_system.adhd", "method marked 'override' does not match any method in an implemented interface");
+        ExpectCompileFailsWithMessage(arena, "[system(\"bad_param_sys\")] class BadParamSystem { public Expected<void, CpuTaskAdmissionError> update(mut World world, in u32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/bad_unwind_param_system.adhd", "method marked 'override' does not match any method in an implemented interface");
     }
     {
         const ScopedTestTrace trace("overload_sys");
         CompileResult helperResult = CompileResult(arena.arena);
-        ASSERT_TRUE(Compile("[system(\"overload_sys\")] class OverloadHelperSystem { [cpp_unwind] public void helper(in u32 count){} public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/overload_prepare_system.adhd", arena.arena, helperResult));
+        ASSERT_TRUE(Compile("[system(\"overload_sys\")] class OverloadHelperSystem { public void helper(in u32 count){} public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{ return Expected<void, CpuTaskAdmissionError>(); } }", "impl/ecs_sample/overload_prepare_system.adhd", arena.arena, helperResult));
     }
 }
 
@@ -392,21 +398,21 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "[extensible] class Parent{ private u32 hidden = 1u; } class Child : Parent{ public u32 read()const{ return this.hidden; } }", "impl/private_inherited_field.adhd", "cannot access an inherited private member");
     ExpectCompileFailsWithMessage(arena, "[extensible] class Parent{ private u32 read()const{ return 1u; } } class Child : Parent{ public u32 other()const{ return this.read(); } }", "impl/private_inherited_method.adhd", "cannot access an inherited private member");
     ExpectCompileFailsWithMessage(arena, "[extensible] class Parent{ public Parent(in u32 value){} } class Child : Parent{}", "impl/missing_base_constructor.adhd", "a derived class requires an accessible default constructor on its concrete base");
-    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] extern void Foreign();", "impl/bad_unwind_extern.adhd", "'[cpp_unwind]' takes no arguments and may appear once on an ADHD function or method");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] extern void Foreign();", "impl/bad_unwind_extern.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
     ExpectCompileFailsWithMessage(arena, "class Item{ [cpp_base(IRenderPass, value)] public Item(mut u32 value){} }", "impl/bad_cpp_base_target.adhd", "'[cpp_base]' must name a direct external polymorphic base");
     ExpectCompileFailsWithMessage(arena, "class Pass : IRenderPass{ [cpp_base(IRenderPass, value)] public Pass(in u32 value){} }", "impl/bad_cpp_base_input.adhd", "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
     ExpectCompileFailsWithMessage(arena, "class Pass : IRenderPass{ [cpp_base(IRenderPass, first, second)] public Pass(mut u32 first, in u32 second){} }", "impl/bad_cpp_base_second_input.adhd", "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
-    ExpectCompileFailsWithMessage(arena, "interface IObserver{ void observe(); } class Owner : IObserver{ public void observe()override{} [cpp_unwind] public ~Owner(){} }", "impl/bad_unwind_dtor.adhd", "'[cpp_unwind]' cannot weaken an inherited destructor contract");
-    ExpectCompileFailsWithMessage(arena, "[component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'[cpp_unwind]' cannot change a registered class construction or destruction contract");
+    ExpectCompileFailsWithMessage(arena, "class Owner{ [cpp_unwind] public ~Owner(){} }", "impl/bad_unwind_dtor.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
     ExpectCompileFailsWithMessage(arena, "[friend(Writer)] class Vault{ private u32 key = 1u; } class Reader{ public u32 read(in Vault vault)const{ return vault.key; } }", "impl/bad_friend_access.adhd", "cannot access 'private' or 'protected' field outside of its declaring class");
     ExpectCompileFailsWithMessage(arena, "[friend(Box)] class Vault{} class Box<T>{}", "impl/bad_friend_template.adhd", "a friend must name a non-template peer class");
     ExpectCompileFailsWithMessage(arena, "class Secret : MoveOnly{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
     ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
     ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
     ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
-    ExpectCompileFailsWithMessage(arena, "interface Receiver{ void record(); } class Task : Receiver{ [cpp_unwind] public void record()override{} }", "impl/bad_unwind_interface.adhd", "'[cpp_unwind]' cannot weaken a nonthrowing interface contract");
-    ExpectCompileFailsWithMessage(arena, "interface Base{ void record(); } interface Sub : Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_derived_interface.adhd", "'[cpp_unwind]' cannot weaken an inherited nonthrowing interface contract");
-    ExpectCompileFailsWithMessage(arena, "void Call(); [cpp_unwind] void Call(){}", "impl/bad_unwind_decl.adhd", "free function declarations must agree on '[cpp_unwind]'");
+    ExpectCompileFailsWithMessage(arena, "class Task{ [cpp_unwind] public void record()const{} }", "impl/bad_unwind_method.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "interface Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_interface.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] void Call(){}", "impl/bad_unwind_free.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
     ExpectCompileFails(arena, "[noinline]\r\nvoid BadNoInlineAttr() {}\r\n", "impl/bad_noinline_attr.adhd");
     ExpectCompileFails(arena, "inline void BadInlineKeyword() {}\r\n", "impl/bad_inline_kw.adhd");
     ExpectCompileFails(arena, "noinline void BadNoInlineKeyword() {}\r\n", "impl/bad_noinline_kw.adhd");
@@ -452,7 +458,7 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     EXPECT_NE(assetCpp.find("__adhd_asset_codec_registrar_SampleBlob(&::NWB::Core::Assets::CreateAssetCodec<SampleBlobAssetCodec>);"), usize.max);
 
     CompileResult cookUnwindRes = CompileResult(arena.arena);
-    ASSERT_TRUE(Compile("[asset(\"unwind_blob\")]\r\nclass UnwindBlob {\r\n    private Vector<u8> m_bytes;\r\n    [cpp_unwind] public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"UnwindBlob::loadBinary\") && !binary.empty(); }\r\n}\r\nconst StringView s_UnwindBlobDiag = \"unwind blob\";\r\nclass UnwindEntry {\r\n    public Name virtualPath = s_NameNone;\r\n}\r\nExpected<UnwindEntry> ReadUnwindEntry(in Name path, in Path file, in MetascriptValue value) {\r\n    UnwindEntry entry;\r\n    entry.virtualPath = path;\r\n    return entry;\r\n}\r\n[cpp_unwind, asset_writer]\r\nb8 WriteUnwindBlob(in UnwindBlob asset, mut Vector<u8> outBinary) {\r\n    outBinary.reserve(4u);\r\n    return true;\r\n}\r\n[cpp_unwind, cook_entry(\"unwind_blob\", s_UnwindBlobDiag, ReadUnwindEntry, document_and_value, quiet)]\r\nExpected<UnwindBlob> BuildUnwindBlob(in UnwindEntry entry) {\r\n    UnwindBlob asset(entry.virtualPath);\r\n    return asset;\r\n}\r\n", "impl/assets_unwind/cook.adhd", arena.arena, cookUnwindRes));
+    ASSERT_TRUE(Compile("[asset(\"unwind_blob\")]\r\nclass UnwindBlob {\r\n    private Vector<u8> m_bytes;\r\n    public b8 loadBinary(in Span<u8> binary) { return this.checkVirtualPath(\"UnwindBlob::loadBinary\") && !binary.empty(); }\r\n}\r\nconst StringView s_UnwindBlobDiag = \"unwind blob\";\r\nclass UnwindEntry {\r\n    public Name virtualPath = s_NameNone;\r\n}\r\nExpected<UnwindEntry> ReadUnwindEntry(in Name path, in Path file, in MetascriptValue value) {\r\n    UnwindEntry entry;\r\n    entry.virtualPath = path;\r\n    return entry;\r\n}\r\n[asset_writer]\r\nb8 WriteUnwindBlob(in UnwindBlob asset, mut Vector<u8> outBinary) {\r\n    outBinary.reserve(4u);\r\n    return true;\r\n}\r\n[cook_entry(\"unwind_blob\", s_UnwindBlobDiag, ReadUnwindEntry, document_and_value, quiet)]\r\nExpected<UnwindBlob> BuildUnwindBlob(in UnwindEntry entry) {\r\n    Vector<u8> scratch;\r\n    scratch.reserve(4u);\r\n    UnwindBlob asset(entry.virtualPath);\r\n    return asset;\r\n}\r\n", "impl/assets_unwind/cook.adhd", arena.arena, cookUnwindRes));
     const StringView cookUnwindHdr = GeneratedHeaderView(cookUnwindRes);
     const StringView cookUnwindCpp = GeneratedSourceView(cookUnwindRes);
     EXPECT_NE(cookUnwindHdr.find("b8 WriteUnwindBlob("), usize.max);
@@ -460,7 +466,7 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     EXPECT_NE(cookUnwindHdr.find("Expected<UnwindBlob> BuildUnwindBlob("), usize.max);
     EXPECT_EQ(cookUnwindHdr.find("BuildUnwindBlob(const UnwindEntry& entry)noexcept"), usize.max);
     EXPECT_NE(cookUnwindCpp.find("UnwindBlobAssetCodec::serialize("), usize.max);
-    ExpectCompileFailsWithMessage(arena, "[cpp_unwind, cook_setup] void BadUnwindSetup() {}\r\n", "impl/assets_unwind/bad_setup.adhd", "'[cpp_unwind]' requires an ordinary function or method without an imposed C++ contract");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind, cook_setup] void BadUnwindSetup() {}\r\n", "impl/assets_unwind/bad_setup.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
 
     CompileResult systemRes = CompileResult(arena.arena);
     ASSERT_TRUE(Compile("[component(\"pos\")]\r\nclass PosComp {\r\n    public i32 x = 0;\r\n}\r\n[system(\"sample_sys\")]\r\nclass SampleSystem {\r\n    public u32 ticks = 0u;\r\n    public SampleSystem() {\r\n        this.writeAccess<PosComp>();\r\n    }\r\n    public void prepare(mut World world) {\r\n        ++this.ticks;\r\n    }\r\n    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta) {\r\n        return Expected<void, CpuTaskAdmissionError>();\r\n    }\r\n    public Name currentType()const {\r\n        return SampleSystem::SystemTypeName();\r\n    }\r\n}\r\n", "impl/ecs_sample/system.adhd", arena.arena, systemRes));
@@ -1542,7 +1548,7 @@ void RunCoreCppHeaderImportVerification(){
 void VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder(){
     AdhdTestArena arena;
     const StringView kParallelSource =
-        "void ParWorker(in Vector<u32> items, in u32 index){\r\n    if(items.size() > index){}\r\n}\r\n[cpp_unwind]\r\nvoid RunParallel(in u32 count, mut ParallelVector<u32> outItems){\r\n    Vector<u32> preLocal;\r\n    preLocal.resize(count);\r\n    parallel TaskA{\r\n        preLocal.size();\r\n    }\r\n    Vector<u32> midLocal;\r\n    midLocal.resize(count);\r\n    Vector<u32> callLocal;\r\n    callLocal.resize(count);\r\n    parallel TaskB : TaskA{\r\n        midLocal.size();\r\n    }\r\n    parallel_for(u32 i = 0u; i < count; ++i){\r\n        outItems.push_back(i);\r\n    }\r\n    parallel ParWorker(callLocal, count);\r\n    wait(TaskA, TaskB);\r\n}\r\n[cpp_unwind]\r\nvoid RunScalarParallel(in u32 count){\r\n    parallel ScalarTask{\r\n        if(count == 0u){}\r\n    }\r\n    wait(ScalarTask);\r\n}\r\n";
+        "void ParWorker(in Vector<u32> items, in u32 index){\r\n    if(items.size() > index){}\r\n}\r\nvoid RunParallel(in u32 count, mut ParallelVector<u32> outItems){\r\n    Vector<u32> preLocal;\r\n    preLocal.resize(count);\r\n    parallel TaskA{\r\n        preLocal.size();\r\n    }\r\n    Vector<u32> midLocal;\r\n    midLocal.resize(count);\r\n    Vector<u32> callLocal;\r\n    callLocal.resize(count);\r\n    parallel TaskB : TaskA{\r\n        midLocal.size();\r\n    }\r\n    parallel_for(u32 i = 0u; i < count; ++i){\r\n        outItems.push_back(i);\r\n    }\r\n    parallel ParWorker(callLocal, count);\r\n    wait(TaskA, TaskB);\r\n}\r\nvoid RunScalarParallel(in u32 count){\r\n    parallel ScalarTask{\r\n        if(count == 0u){}\r\n    }\r\n    wait(ScalarTask);\r\n}\r\n";
     CompileResult res(arena.arena);
     CompilerOptions opts;
     opts.source = kParallelSource;
@@ -1730,6 +1736,46 @@ void VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass()
     EXPECT_NE(arenaHdr.find("ArenaPayload& operator=(ArenaPayload&& __adhd_rhs)"), usize.max);
 }
 
+void VerifyAdhdCompiler_InfersExceptionSpecificationsAutomatically(){
+    AdhdTestArena arena = AdhdTestArena();
+
+    const StringView infSource = "[cpp_header(\"<ext/ops.h>\"), cpp_name(\"::ExtOpaque\")]\r\nextern void ExtOpaque();\r\n[cpp_header(\"<ext/ops.h>\"), cpp_name(\"::ExtNothrow\"), cpp_flags(nothrow)]\r\nextern void ExtNothrow();\r\n[cpp_header(\"<ext/ops.h>\"), cpp_name(\"::ExtObj\")]\r\nextern class ExtObj{\r\n    void opaqueMethod();\r\n    [cpp_flags(nothrow)]\r\n    void safeMethod()const;\r\n};\r\nu32 PureFn(in u32 x){ return x + 1u; }\r\nu32 CallNothrowExt(in ExtObj obj){ ExtNothrow(); obj.safeMethod(); return 1u; }\r\nvoid CallOpaqueExt(){ ExtOpaque(); }\r\nvoid CallOpaqueMethod(mut ExtObj obj){ obj.opaqueMethod(); }\r\nvoid AllocVec(){ Vector<u32> v; v.push_back(1u); }\r\nString AllocStr(){ String s = \"hello\"; return s; }\r\nvoid TransitiveCaller(){ CallOpaqueExt(); }\r\nu32 InvokeCallback(mut Func<u32()> cb){ return cb(); }\r\nclass Box{\r\n    private u32 value = 0u;\r\n    public Box(){}\r\n    public ~Box(){}\r\n    public u32 get()const{ return this.value; }\r\n    public void oolUnwind();\r\n}\r\nvoid Box::oolUnwind(){ ExtOpaque(); }\r\nclass UnwindGuard : NoCopy{\r\n    public UnwindGuard(){ ExtOpaque(); }\r\n    public ~UnwindGuard(){ ExtOpaque(); }\r\n}\r\ninterface IOpen{\r\n    u32 run();\r\n}\r\n[extensible]\r\nclass OpenBase : IOpen{\r\n    public u32 run()override{ return 1u; }\r\n}\r\nclass ClampedDtor : IOpen{\r\n    public u32 run()override{ return 2u; }\r\n    public ~ClampedDtor(){ ExtOpaque(); }\r\n}\r\nu32 CreateUnwindingLambdaOnly(){\r\n    auto fn = lambda[]() -> void{ ExtOpaque(); };\r\n    return 42u;\r\n}\r\nvoid InvokeUnwindingLambda(){\r\n    auto fn = lambda[]() -> void{ ExtOpaque(); };\r\n    fn();\r\n}\r\nvoid InvokePureLambda(){\r\n    auto fn = lambda[](in u32 x) -> u32{ return x + 1u; };\r\n    fn(1u);\r\n}\r\n";
+
+    CompileResult infRes = CompileResult(arena.arena);
+    ASSERT_TRUE(Compile(infSource, "impl/edge_cases/infer_exception_specs.adhd", arena.arena, infRes));
+    const StringView hdr = GeneratedHeaderView(infRes);
+    const StringView cpp = GeneratedSourceView(infRes);
+
+    EXPECT_NE(hdr.find("u32 PureFn(const u32 x)noexcept"), usize.max);
+    EXPECT_NE(hdr.find("u32 CallNothrowExt(const ::ExtObj& obj)noexcept"), usize.max);
+    EXPECT_NE(hdr.find("void CallOpaqueExt();"), usize.max);
+    EXPECT_EQ(hdr.find("CallOpaqueExt()noexcept"), usize.max);
+    EXPECT_EQ(hdr.find("CallOpaqueMethod(::ExtObj& obj)noexcept"), usize.max);
+    EXPECT_EQ(hdr.find("AllocVec()noexcept"), usize.max);
+    EXPECT_NE(hdr.find("AllocStr(::ArenaBase&"), usize.max);
+    EXPECT_EQ(hdr.find("AllocStr(::ArenaBase& __adhd_caller_arena)noexcept"), usize.max);
+    EXPECT_EQ(hdr.find("TransitiveCaller()noexcept"), usize.max);
+    EXPECT_NE(hdr.find("u32 InvokeCallback("), usize.max);
+    EXPECT_EQ(hdr.find("cb)noexcept"), usize.max);
+    EXPECT_NE(hdr.find("    Box()noexcept{"), usize.max);
+    EXPECT_NE(hdr.find("    ~Box()noexcept{"), usize.max);
+    EXPECT_NE(hdr.find("u32 get()const noexcept"), usize.max);
+    EXPECT_NE(hdr.find("void oolUnwind();"), usize.max);
+    EXPECT_EQ(hdr.find("oolUnwind()noexcept"), usize.max);
+    EXPECT_NE(hdr.find("    UnwindGuard();"), usize.max);
+    EXPECT_EQ(hdr.find("    UnwindGuard()noexcept"), usize.max);
+    EXPECT_NE(hdr.find("    ~UnwindGuard()noexcept(false);"), usize.max);
+    EXPECT_NE(hdr.find("virtual u32 run() = 0;"), usize.max);
+    EXPECT_EQ(hdr.find("virtual u32 run()noexcept = 0;"), usize.max);
+    EXPECT_NE(hdr.find("virtual u32 run() override{"), usize.max);
+    EXPECT_NE(hdr.find("virtual ~ClampedDtor()noexcept override;"), usize.max);
+    EXPECT_NE(hdr.find("u32 CreateUnwindingLambdaOnly()noexcept"), usize.max);
+    EXPECT_EQ(hdr.find("InvokeUnwindingLambda()noexcept"), usize.max);
+    EXPECT_NE(hdr.find("void InvokePureLambda()noexcept"), usize.max);
+    EXPECT_NE(cpp.find("[]() -> void{"), usize.max);
+    EXPECT_NE(cpp.find("[](const u32 x)noexcept -> u32{"), usize.max);
+}
+
 NWB_ADHD_GTEST(AdhdPreprocessor, DeduplicatesRepeatedIncludes, VerifyAdhdPreprocessor_DeduplicatesRepeatedIncludes)
 
 NWB_ADHD_GTEST(AdhdPreprocessor, BorrowedExpansionPreservesAliasingAndFailures, VerifyAdhdPreprocessor_BorrowedExpansionPreservesAliasingAndFailures)
@@ -1813,6 +1859,8 @@ NWB_ADHD_GTEST(AdhdCompiler, ParallelLoweringUsesCheckedAdmissionAndBlockLifetim
 NWB_ADHD_GTEST(AdhdCompiler, ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder, VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldOrder)
 
 NWB_ADHD_GTEST(AdhdCompiler, ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass, VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass)
+
+NWB_ADHD_GTEST(AdhdCompiler, InfersExceptionSpecificationsAutomatically, VerifyAdhdCompiler_InfersExceptionSpecificationsAutomatically)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

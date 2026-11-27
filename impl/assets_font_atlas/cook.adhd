@@ -74,7 +74,6 @@ b8 ValidatePairedFontSourceMetrics(in Path path, in b8 valid){
     return false;
 }
 
-[cpp_unwind]
 void MoveSourceGroups(mut PreparedFontSource source, mut FontAtlasPayload payload){
     payload.groups.reserve(source.groups.size());
     for(usize index = 0u; index < source.groups.size(); ++index){
@@ -170,7 +169,6 @@ Expected<FontAtlasGlyph> ReadFontAtlasGlyphMetadata(in Path path, in MetascriptV
     return glyph;
 }
 
-[cpp_unwind]
 Expected<Vector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(in Path nwbFilePath, in MetascriptValue asset, in FontAtlasPayload payload){
     const Expected<Span<MetascriptValue>> glyphsResult = ReadMetadataListField(nwbFilePath, asset, s_FontAtlasGlyphMetaDiagnosticPrefix, s_FontAtlasGlyphsField);
     if(!glyphsResult.has_value())
@@ -223,7 +221,7 @@ b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPa
     return true;
 }
 
-[cpp_unwind, asset_writer]
+[asset_writer]
 b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     if(!atlas.checkVirtualPath("FontAtlas::validatePayload"))
         return false;
@@ -232,7 +230,6 @@ b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     return SerializeFontAtlasPayloadInto(atlas.payload(), outBinary);
 }
 
-[cpp_unwind]
 Expected<FontAtlas> BuildFontAtlasAssetFromPayloadWithValidation(in Name virtualPath, in FontAtlasPayload payload, in b8 validatePayloadFlag){
     FontAtlas candidate(virtualPath);
     candidate.setPayload(payload);
@@ -247,7 +244,6 @@ Expected<FontAtlas> BuildFontAtlasAssetFromPayloadWithValidation(in Name virtual
     return candidate;
 }
 
-[cpp_unwind]
 b8 FinalizeFontAtlasPayloadFromPreparedSource(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -281,7 +277,6 @@ b8 FinalizeFontAtlasPayloadFromPreparedSource(
     return ValidateFontAtlasPayloadWithOptions(inOutPayload, verifyPixelDigests);
 }
 
-[cpp_unwind]
 b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
     in Path nwbFilePath,
     in MetascriptValue asset,
@@ -298,7 +293,7 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind, cook_sidecar(s_PreparedFontExtension)]
+[cook_sidecar(s_PreparedFontExtension)]
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath, in Path path, in MetascriptValue asset){
     if(virtualPath == s_NameNone || !CheckMetadataAssetMap(path, asset, s_FontAtlasMetaDiagnosticPrefix))
         return MakeUnexpected(Failure());
@@ -333,7 +328,6 @@ Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<FontAtlas> BuildFontAtlasAsset(in FontAtlasCookEntry entry){
     return BuildFontAtlasAssetFromPayloadWithValidation(entry.virtualPath, entry.payload, !entry.payloadValidated);
 }

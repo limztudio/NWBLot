@@ -1704,7 +1704,6 @@ class SuiteCoincidentMaterialLookup : IPreparedMaterialLookup{
         this.info.refractive = true;
     }
 
-    [cpp_unwind]
     public Expected<mut MaterialSurfaceInfo> findMaterialSurfaceInfo(in AssetRef<Material> materialAsset)override{
         if(!materialAsset.valid() || materialAsset.name() != this.info.materialName)
             return MakeUnexpected(Failure());

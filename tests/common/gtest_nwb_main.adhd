@@ -17,7 +17,6 @@ extern class GoogleTestArguments{
 const StringView s_ThreadsafeDeathTestStyle = "threadsafe";
 const i32 s_GoogleTestInitFailureExitCode = -1;
 
-[cpp_unwind]
 i32 GoogleTestEntryPoint(in GoogleTestArguments arguments){
     InitializerGuard guard;
     if(!guard.initialize()){

@@ -18,7 +18,6 @@ class MeshDescriptorTransaction : NoCopy{
         this.m_mesh = mesh;
     }
 
-    [cpp_unwind]
     public ~MeshDescriptorTransaction(){
         if(this.m_active)
             this.m_meshSystem.releaseMeshGeometryHeapHandles(this.m_mesh);

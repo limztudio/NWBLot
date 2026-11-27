@@ -338,7 +338,6 @@ PlatformStringView GetProjectWindowTitle(){
 #endif
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateSmokeSkinnedRenderWorld(s_CsgSkinnedProjectName, SmokeRenderQualitySettings(), context);
     if(!world.has_value())

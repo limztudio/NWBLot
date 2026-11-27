@@ -36,7 +36,6 @@ const AStringView s_UiTextLayoutTwoGlyphText = "AB";
 class ThrowingFontConstructionLogger : Utf8LogSink{
     public b8 sawFaceFailure = false;
 
-    [cpp_unwind]
     public void receive(in StringView text, in LogType kind)override{
         if(text.find("UI font face initialization failed") == usize.max)
             return;
@@ -52,7 +51,6 @@ class GeometryShaper : ITextShaper{
     public Rect m_ink = Rect(-2.0f, -8.0f, 9.0f, 10.0f);
     public GlyphCoverageBounds m_coverage;
 
-    [cpp_unwind]
     public Expected<ShapedRun, TextLayoutStatus> shape(in ShapeRequest request)override{
         ShapedRun run;
         run.metrics.ascender = 8.0f;
@@ -220,7 +218,6 @@ GlyphCoverageBounds MakeUiTextFontLayoutCoverage(in Rect ink, in b8 known){
     return coverage;
 }
 
-[cpp_unwind]
 void VerifyTextFontConstruction_ThrowingNativeFaceDiagnosticReleasesAcquiredArenaMemory(){
     HeapStorage sourceArena = HeapStorage(Name(s_UiFixtureNameTestsUiFontConstructionSource));
     const AssetRef<Font> emptyFontRef("tests/ui/font_construction/empty");

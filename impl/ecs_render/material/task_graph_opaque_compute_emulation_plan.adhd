@@ -19,7 +19,6 @@ class OpaqueRegularComputeEmulationGraphPlan{
         this.generated.reset();
     }
 
-    [cpp_unwind]
     public b8 capture(in MaterialPassDrawItemsView source, in b8 requireCsg){
         this.reset();
         if(source.computeDrawItems.empty())

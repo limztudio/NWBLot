@@ -109,7 +109,6 @@ class RenderableRayTracingMeshResources{
     public MeshRayTracingResourceSnapshot meshResources;
 }
 
-[cpp_unwind]
 Expected<RenderableRayTracingMeshResources, RenderableMeshResolution> ResolveRenderableMeshResources(mut MeshSystem meshSystem, mut RendererMeshSystem rendererMeshSystem, in EntityID entity){
     const auto resolved = meshSystem.resolveRenderableMeshStatus(entity);
     if(!resolved.has_value())

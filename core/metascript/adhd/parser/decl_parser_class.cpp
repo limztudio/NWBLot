@@ -229,17 +229,14 @@ void DeclParser::parseClassMethodQualifiers(MethodDecl& method){
 }
 
 b8 DeclParser::parseClassMemberCallableBody(const ClassDecl& ownerClass, MethodDecl& method, const MStringView missingTerminatorMessage){
+    (void)ownerClass;
     if(m_cursor.check(TokenType::LeftBrace)){
         if(method.isExtern){
             m_cursor.error(method.span.line, method.span.column, "'extern' methods cannot define a body");
             return false;
         }
         method.hasBody = true;
-        const b8 allowSkip = ownerClass.templateParams.empty() && method.templateParams.empty() && !method.isConstructor;
-        b8 skipped = false;
-        if(!trySkipImportedCallableBody(method, allowSkip, skipped))
-            return false;
-        return skipped || m_stmtParser.parseBlockStatements(method.body);
+        return m_stmtParser.parseBlockStatements(method.body);
     }
     return m_cursor.expect(TokenType::Semicolon, missingTerminatorMessage);
 }

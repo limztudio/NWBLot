@@ -51,12 +51,9 @@ class RendererReflectionSystem : NoCopy{
         this.m_feedback = RendererReflectionFeedback(graphics);
         this.m_pipelines = RendererReflectionPipelines(graphics, shaders);
     }
-    [cpp_unwind]
     public void invalidateResources();
-    [cpp_unwind]
     public b8 prepareResources(in u32 width, in u32 height, in b8 prepareHardware, in b8 prepareCsgHardware, in ReflectionSettings settings);
     public Expected<ReflectionCsgDispatchHandle> acquireCsgDispatchState(in ReflectionFrameSnapshot resources);
-    [cpp_unwind]
     public void pollStatistics(){ this.m_statistics.pollCompleted(); }
     public Expected<ReflectionStatistics> tryGetLatestStatistics()const{ return this.m_statistics.latestStatistics(); }
     public ReflectionFrameSnapshot snapshotFrameResources(
@@ -68,13 +65,9 @@ class RendererReflectionSystem : NoCopy{
         in ReflectionSceneContentStamp stamp
     )const;
 
-    [cpp_unwind]
     private void releaseTargets();
-    [cpp_unwind]
     private b8 prepareCsgDispatchResources();
-    [cpp_unwind]
     private b8 prepareQueue(in u32 capacity);
-    [cpp_unwind]
     private b8 prepareArguments(in u32 capacity, in b8 sliced);
 }
 

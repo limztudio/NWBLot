@@ -111,9 +111,7 @@ class AvboitGeneratedGeometryReuse : NoCopy{
     private b8 m_captured = false;
 
     public void reset();
-    [cpp_unwind]
     public b8 capture(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass);
-    [cpp_unwind]
     public b8 matches(in MaterialPassDrawItemPartitionsView draws, in Span<InstanceGpuData> instances, in MeshFrameBindingSnapshot frameBindings, in MeshViewGpuData view, in MaterialPipelinePass pass);
     public b8 publishProducer(in GpuTaskId task);
     public GpuTaskId producerTask()const{ return this.m_producer; }

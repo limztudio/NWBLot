@@ -12,7 +12,7 @@
 class BakeFontRasterizer{
     public RasterGlyphs glyphs;
 
-    [cpp_unwind] public b8 rasterize(in BakeOptions options, in Span<u8> sourceBytes, mut FontAtlasPayload payload);
+    public b8 rasterize(in BakeOptions options, in Span<u8> sourceBytes, mut FontAtlasPayload payload);
 }
 
 

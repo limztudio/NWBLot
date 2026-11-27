@@ -41,7 +41,6 @@ class PreparedSceneTlasBuild : NoCopy{
         in Span<RayTracingAccelStructHandle> instanceBlases,
         in Span<u32> instanceEntityIds
     );
-    [cpp_unwind]
     public Expected<Optional<GpuUploadBlobId>> retainUpload(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
     public b8 record(mut RendererRayTracingState state, mut CommandList commandList);
     public void confirm(mut RendererRayTracingState state);

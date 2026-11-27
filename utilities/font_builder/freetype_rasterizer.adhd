@@ -22,7 +22,6 @@ b8 AdmitBakeFontFace(mut FreeTypeFaceView face){
     return true;
 }
 
-[cpp_unwind]
 b8 ConfigureBakeFontFace(in BakeOptions options, mut FreeTypeLibrary library, mut FreeTypeFaceView face, mut FontAtlasPayload payload){
     if(!IsValidBakeFontFaceMetrics(face.glyphCount(), cast<u16>(face.unitsPerEm()))){
         error("font_builder: unsupported glyph count or units per em");
@@ -60,7 +59,6 @@ b8 ConfigureBakeFontFace(in BakeOptions options, mut FreeTypeLibrary library, mu
     return true;
 }
 
-[cpp_unwind]
 b8 RasterizeBakeGlyphs(in BakeOptions options, mut FreeTypeFaceView face, mut RasterGlyphs glyphs){
     const f32 designPerPixel = ComputeFontAtlasUnitsPerPixel(face.unitsPerEm(), options.ppem);
     const u64 capacity = ComputeBakePixelCapacity(options.extent, options.maxGroups);
@@ -114,7 +112,6 @@ b8 RasterizeBakeGlyphs(in BakeOptions options, mut FreeTypeFaceView face, mut Ra
     return true;
 }
 
-[cpp_unwind]
 b8 BakeFontRasterizer::rasterize(in BakeOptions options, in Span<u8> sourceBytes, mut FontAtlasPayload payload){
     mut RasterGlyphs glyphs = this.glyphs;
     if(!ValidateFontSourceDirectory(sourceBytes, 0u)){

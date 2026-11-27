@@ -41,7 +41,6 @@ class InputRouter : NoCopy{
     private u64 m_nextActionSequence = 1u;
     private b8 m_windowFocused = true;
 
-    [cpp_unwind]
     public InputRouter(){
         this.m_commandSources.reserve();
         this.m_pointerState.reserveSources();
@@ -51,16 +50,11 @@ class InputRouter : NoCopy{
         this.m_windowPresses.reserve(s_InputMaxWindowPresses);
         this.m_pointerState.reserveGestures();
     }
-    [cpp_unwind]
     public Expected<InputEvent> queue(in InputEvent event){ return this.m_admission.queue(event); }
-    [cpp_unwind]
     public Expected<InputEvent> queuePointer(in PointerInput input){ return this.m_admission.queuePointer(input); }
-    [cpp_unwind]
     public b8 setBindings(in Span<InputKeyBinding> bindings){ return this.m_admission.setBindings(bindings); }
-    [cpp_unwind]
     public void restoreDefaultBindings(){ this.m_admission.restoreDefaultBindings(); }
     public in InputBindings bindings()const{ return this.m_admission.bindings(); }
-    [cpp_unwind]
     public InputRoutingResult process(){
         InputRoutingResult result;
         for(in InputEvent event : this.m_admission.events()){
@@ -98,7 +92,6 @@ class InputRouter : NoCopy{
         this.refreshPressedCache();
         return result;
     }
-    [cpp_unwind]
     public b8 commitTargets(in Span<HitTarget> targets, in u64 layoutGeneration, in Span<PopupScope> popups, in u64 expectedFocusLossGeneration){
         if(!this.m_targetTable.canPublish(targets.size(), layoutGeneration))
             return false;
@@ -126,7 +119,6 @@ class InputRouter : NoCopy{
     public Expected<PopupDismissReason> consumePopupDismissal(in PopupToken token){
         return this.m_popupState.consumeDismissal(token);
     }
-    [cpp_unwind]
     public b8 dismissPopup(in PopupDismissReason reason){
         if(!this.m_popupState.dismiss(reason))
             return false;
@@ -169,14 +161,12 @@ class InputRouter : NoCopy{
         return this.m_popupState.records().back().scope.token;
     }
     public u64 focusLossGeneration()const{ return this.m_focusLossGeneration; }
-    [cpp_unwind]
     public void invalidateTarget(in WidgetId id){
         this.retirePopup(id);
         if(!this.m_targetTable.invalidate(id))
             return;
         this.reconcileTargets();
     }
-    [cpp_unwind]
     public void invalidateTargets(in Span<WidgetId> ids){
         if(ids.empty())
             return;
@@ -207,7 +197,6 @@ class InputRouter : NoCopy{
         this.m_commandSources.clearFocus();
         this.m_commandPressedTarget = WidgetId();
     }
-    [cpp_unwind]
     public b8 setFocus(in WidgetId target){
         if(!this.m_windowFocused || !target.valid())
             return false;
@@ -226,7 +215,6 @@ class InputRouter : NoCopy{
         this.refreshPressedCache();
         return true;
     }
-    [cpp_unwind]
     public b8 moveFocus(in FocusDirection direction){
         if(!this.m_windowFocused)
             return false;
@@ -429,7 +417,6 @@ class InputRouter : NoCopy{
         if(unfinishedHoverSource)
             this.m_hoverState.forgetSource();
     }
-    [cpp_unwind]
     private void routePointerSource(in InputEvent event, mut InputRoutingResult result){
         if(event.type == InputEventType::PointerCaptureLost){
             AccumulateTerminatedPointerSourceResult(
@@ -525,7 +512,6 @@ class InputRouter : NoCopy{
             return Optional<in HitTarget>();
         return Optional<in HitTarget>(this.m_targetTable.targets()[hitIndex.value()]);
     }
-    [cpp_unwind]
     private void routeSecondary(in InputEvent event, in b8 hasHit, in HitTarget hit, mut InputRoutingResult result){
         const InputPointerRouteEffects effects = this.m_pointerState.routeSecondary(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_windowFocused, this.m_contextMenuActions, this.m_windowPresses, this.m_nextActionSequence, result);
         if(effects.dismissedPopup && !this.m_popupState.apply(effects.popupDismissal))
@@ -537,15 +523,12 @@ class InputRouter : NoCopy{
             this.updateHover();
         }
     }
-    [cpp_unwind]
     private void routeWheel(in InputEvent event, in b8 hasHit, in HitTarget hit, mut InputRoutingResult result){
         this.m_pointerState.routeWheel(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_controlActions, this.m_nextActionSequence, result);
     }
-    [cpp_unwind]
     private b8 stagePopups(in Span<PopupScope> scopes){
         return this.m_popupState.stage(scopes);
     }
-    [cpp_unwind]
     private void installPopups(in u64 expectedFocusLossGeneration){
         this.m_popupState.install(
             this.m_targetTable.targets(),
@@ -559,7 +542,6 @@ class InputRouter : NoCopy{
             this.m_commandSources.control()
         );
     }
-    [cpp_unwind]
     private void retirePopup(in WidgetId id){
         const Optional<InputPopupRetirement> retirement = this.m_popupState.retire(this.m_targetTable, id);
         if(!retirement.has_value())
@@ -659,7 +641,6 @@ class InputRouter : NoCopy{
             this.m_pointerState.submitArmed()
         );
     }
-    [cpp_unwind]
     private void routePointer(in InputEvent event, in b8 hasHit, in HitTarget hit, mut InputRoutingResult result){
         const InputPointerRouteEffects effects = this.m_pointerState.routePrimary(event, hasHit, hit, this.m_targetTable, this.m_popupState, this.m_commandSources, this.m_actions, this.m_controlActions, this.m_windowPresses, this.m_nextActionSequence, result);
         if(effects.dismissedPopup && !this.m_popupState.apply(effects.popupDismissal))
@@ -673,7 +654,6 @@ class InputRouter : NoCopy{
         if(!effects.ok)
             TerminateInvariant();
     }
-    [cpp_unwind]
     private void routeCommand(in InputEvent event, mut InputRoutingResult result){
         b8 dismissedPopup = false;
         PopupDismissRequest popupDismissal;

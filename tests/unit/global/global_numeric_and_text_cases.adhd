@@ -192,7 +192,6 @@ void VerifyScopeExit_ReleaseIsIdempotentAndDestroysTheOwnedCallable(){
     EXPECT_EQ(destructionsAfterExit, 1u);
 }
 
-[cpp_unwind]
 void VerifyScopeExit_UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailure(){
     Array<u32, 3> order = Array<u32, 3>();
     u32 count = 0u;
@@ -210,7 +209,6 @@ void VerifyScopeExit_UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailur
     EXPECT_EQ(order[2u], 0u);
 }
 
-[cpp_unwind]
 void VerifyScopeExit_ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind(){
     b8 published = false;
     const auto operation = lambda[mut published](in b8 fails) -> b8{
@@ -227,7 +225,6 @@ void VerifyScopeExit_ResolvesTheFinalResultOnSuccessAndTheInitialResultOnUnwind(
     EXPECT_FALSE(published);
 }
 
-[cpp_unwind]
 void VerifyScopeExit_CleanupObservesEarlierCapturedObjectsBeforeTheirDestruction(){
     b8 alive = false;
     b8 observedAlive = false;
@@ -271,7 +268,6 @@ void VerifyGlobalSync_FutexPreservesEveryIncrementUnderContention(){
     EXPECT_EQ(value, threadCount * s_FutexIncrementsPerThread);
 }
 
-[cpp_unwind]
 void VerifyTerminalEntry_TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContextRemainsAlive(){
     u32 cleanupCount = 0u;
     u32 handled = 0u;
@@ -303,7 +299,6 @@ void VerifyTerminalEntry_TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingC
     EXPECT_FALSE(reportingContextAlive);
 }
 
-[cpp_unwind]
 void VerifyTerminalEntry_UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup(){
     Array<u32, 3> order = Array<u32, 3>();
     u32 count = 0u;

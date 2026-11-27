@@ -14,7 +14,7 @@ class NumericEditDraft : NoCopy{
     private String m_accepted;
     private u64 m_revision = 1u;
 
-    [cpp_unwind] public NumericEditDraft(){
+    public NumericEditDraft(){
         this.m_model = EditModel(MakeNumericDraftLimits());
         this.m_accepted.reserve(s_NumericEditMaxBytes);
     }
@@ -27,11 +27,11 @@ class NumericEditDraft : NoCopy{
 
     public u64 revision()const{ return this.m_revision; }
 
-    [cpp_unwind] public b8 setText(in StringView text){
+    public b8 setText(in StringView text){
         return FinalizeNumericDraftTextUpdate(this.m_model.setText(text), this.m_revision);
     }
 
-    [cpp_unwind] public Expected<b8, ErrorCode> canonicalize(in StringView formatted){
+    public Expected<b8, ErrorCode> canonicalize(in StringView formatted){
         const b8 changed = HasCanonicalDraftChanged(formatted, this.m_model.text());
         const b8 updated = this.m_model.setText(formatted);
         return FinalizeCanonicalNumericDraft(formatted, changed, updated, this.m_accepted);
@@ -50,7 +50,7 @@ class NumericEditDraft : NoCopy{
         return result;
     }
 
-    [cpp_unwind] public NumericEditResult commit(
+    public NumericEditResult commit(
         in b8 canonical,
         in b8 accepted,
         in b8 clamped,
@@ -93,11 +93,11 @@ EditLimits MakeNumericDraftLimits(){
     return limits;
 }
 
-[cpp_unwind] Expected<void, ErrorCode> FormatNumericEditValueInto(in i64 value, mut CompactString outText){
+Expected<void, ErrorCode> FormatNumericEditValueInto(in i64 value, mut CompactString outText){
     return FormatI64Into(value, outText);
 }
 
-[cpp_unwind] Expected<void, ErrorCode> FormatNumericEditValueInto(in f64 value, mut CompactString outText){
+Expected<void, ErrorCode> FormatNumericEditValueInto(in f64 value, mut CompactString outText){
     return FormatF64Into(value, outText);
 }
 
@@ -117,7 +117,7 @@ b8 HasNumericEditValueChanged(in f64 candidate, in f64 value){
     return HasFloatEditBitsChanged(candidate, value);
 }
 
-[cpp_unwind] Expected<b8, ErrorCode> CanonicalizeNumericEditDraft<ValueT>(in ValueT value, mut NumericEditDraft inOutDraft){
+Expected<b8, ErrorCode> CanonicalizeNumericEditDraft<ValueT>(in ValueT value, mut NumericEditDraft inOutDraft){
     CompactString text;
     const Expected<void, ErrorCode> formatted = FormatNumericEditValueInto(value, text);
     if(!formatted.has_value())
@@ -125,7 +125,7 @@ b8 HasNumericEditValueChanged(in f64 candidate, in f64 value){
     return inOutDraft.canonicalize(text.view());
 }
 
-[cpp_unwind] NumericEditResult CommitNumericEdit<ValueT, BoundsT>(
+NumericEditResult CommitNumericEdit<ValueT, BoundsT>(
     in BoundsT bounds,
     in Expected<ValueT, NumericParseStatus> parsed,
     in b8 canonical,
@@ -153,7 +153,7 @@ b8 HasNumericEditValueChanged(in f64 candidate, in f64 value){
     return result;
 }
 
-[cpp_unwind] NumericEditResult ApplyNumericEditModelAction<ValueT, BoundsT>(
+NumericEditResult ApplyNumericEditModelAction<ValueT, BoundsT>(
     in BoundsT bounds,
     in Expected<ValueT, NumericParseStatus> parsed,
     in EditAction action,

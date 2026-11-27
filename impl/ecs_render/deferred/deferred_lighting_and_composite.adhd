@@ -54,7 +54,6 @@ class DeferredLightingGraphTask{
         this.m_useLaggedLightingHistory = useLaggedLightingHistory;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope recording(this.m_timingTicket);
         return this.m_system.renderDeferredLighting(commands, this.m_targets, this.m_useLaggedLightingHistory);
@@ -74,7 +73,6 @@ class DeferredCompositeGraphTask{
         this.m_reflectionInputs = reflectionInputs;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         GpuTimingTicketRecordingScope recording(this.m_timingTicket);
         return this.m_system.renderDeferredComposite(commands, this.m_targets, this.m_reflectionInputs);
@@ -108,7 +106,6 @@ class DeferredDebugLinesGraphTask{
         return requirements;
     }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         return this.m_system.renderDeferredDebugLines(commands, this.m_targets, MatrixSingle(this.m_viewProj), this.m_depthVertexCount, this.m_overlayVertexCount);
     }
@@ -681,7 +678,6 @@ Expected<GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
     return graph.addPayloadTask(desc, DeferredCompositeGraphTask(this, targets, timingTicket, reflectionInputs));
 }
 
-[cpp_unwind]
 Expected<Optional<GpuTaskId>> RendererDeferredSystem::declareDeferredDebugLinesTasks(
     mut GpuTaskGraph graph,
     mut DeferredFrameTargets targets,

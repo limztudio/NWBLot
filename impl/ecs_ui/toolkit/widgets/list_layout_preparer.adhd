@@ -23,7 +23,6 @@ class ListLayoutPreparer{
         this.m_paint = paint;
     }
 
-    [cpp_unwind]
     private Expected<BuilderListRow> prepareListRow(in BuilderListFrame frame, in u64 index)const{
         BuilderListRow row;
         if(!this.m_scope.listMatches(this.m_context, frame) || index >= frame.rowCount)
@@ -61,7 +60,6 @@ class ListLayoutPreparer{
         return row;
     }
 
-    [cpp_unwind]
     public b8 ensureVariableRowOffsets(in BuilderListFrame frame, mut ListState state)const{
         if(!frame.rowHeights.has_value()){
             if(!state.m_rowOffsets.empty())
@@ -97,7 +95,6 @@ class ListLayoutPreparer{
         return true;
     }
 
-    [cpp_unwind]
     public Expected<ListScrollPlacementResult> measureListPlacement(mut BuilderListFrame frame, in LayoutBox box, in Rect clip)const{
         mut Vector<BuilderListRow> rows = frame.rows;
         mut ListState state = frame.state.value();

@@ -18,7 +18,6 @@ const usize s_ReflectionSurfaceReadCount = 9u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void BindReflectionComputeDispatch<PushT>(
     mut GraphicsRuntime graphics,
     mut CommandList commandList,
@@ -38,7 +37,6 @@ void BindReflectionComputeDispatch<PushT>(
     commandList.setPushConstants(pushConstants);
 }
 
-[cpp_unwind]
 void ConfirmReflectionTimingBegin(mut GpuTimingFrameTransaction timing, in QueueSubmissionToken token){
     if(!timing.confirmBeginSubmission(token)){
         LogReflectionConfirmTimingBeginFailed();
@@ -46,7 +44,6 @@ void ConfirmReflectionTimingBegin(mut GpuTimingFrameTransaction timing, in Queue
     }
 }
 
-[cpp_unwind]
 void ConfirmReflectionTimingEnd(mut GpuTimingFrameTransaction timing, in QueueSubmissionToken token){
     if(!timing.confirmEndSubmission(token, true)){
         LogReflectionConfirmTimingEndFailed();
@@ -88,7 +85,6 @@ class ReflectionParametersUploadTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         const b8 hardwareReady = this.m_hardwarePreparationReady;
         const ReflectionFrameParameters parameters = ResolveReflectionUploadFrameParameters(this.m_parameters, this.m_history, this.m_feedback, this.m_feedbackReserved, hardwareReady);
@@ -117,7 +113,6 @@ class ReflectionDispatchTask : MoveOnly{
         this.m_fallbackDispatchLogged = inputs.fallbackDispatchLogged;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         in ReflectionFrameSnapshot resources = this.m_resources;
         const b8 hardware = this.m_stage == ReflectionDispatchStage::Hardware;
@@ -147,7 +142,6 @@ class ReflectionDispatchTask : MoveOnly{
         return true;
     }
 
-    [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
         const b8 hardware = IsReflectionHardwareDispatchActive(this.m_resources.parameters.hardwareEnabled, this.m_resources.parameters.maxHardwareRays, this.m_hardwarePreparationReady);
         this.feedbackReservation.accept(token, IsReflectionHardwareSceneReady(this.m_resources.parameters.hardwareEnabled, this.m_hardwarePreparationReady));
@@ -186,7 +180,6 @@ class ReflectionCsgHardwareSliceTask{
         commands.requiresPrimaryGraphicsQueue = true;
         return commands;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_hardwarePreparationReady)
             return true;
@@ -212,7 +205,6 @@ class ReflectionCsgHardwareSliceTask{
             return timing.recordEnd(commandList);
         return true;
     }
-    [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
         if(!this.m_hardwarePreparationReady)
             return;
@@ -247,7 +239,6 @@ class ReflectionOpticalHardwareStageTask{
         this.m_hardwareDispatchLogged = inputs.hardwareDispatchLogged;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_hardwarePreparationReady)
             return true;
@@ -278,7 +269,6 @@ class ReflectionOpticalHardwareStageTask{
         commandList.dispatchIndirect(s_ReflectionIndirectArgumentBytes);
         return timing.recordEnd(commandList);
     }
-    [cpp_unwind]
     public void accepted(in QueueSubmissionToken token){
         if(!this.m_hardwarePreparationReady)
             return;
@@ -400,7 +390,6 @@ void SetReflectionSurfaceReads(mut Vector<GpuTaskResourceUse> uses, in Reflectio
     uses.push_back(ReadUse(frameParameters, ResourceStates::ConstantBuffer));
 }
 
-[cpp_unwind]
 b8 AddReflectionDispatch(
     mut GpuTaskGraph graph,
     mut GraphicsRuntime graphics,
@@ -430,7 +419,6 @@ b8 AddReflectionDispatch(
     return true;
 }
 
-[cpp_unwind]
 Expected<ReflectionGraphResult> DeclareReflectionTasks(
     in ReflectionFrameSnapshot resources,
     in ReflectionGraphInputs inputs,
@@ -643,7 +631,6 @@ Expected<ReflectionGraphResult> DeclareReflectionTasks(
     return result;
 }
 
-[cpp_unwind]
 Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(in FrameGraphReflectionResolveInputs inputs, mut RayTracingSceneGraphReads sceneReads){
     FrameGraphReflectionResolveResult result;
     in RayTracingSceneGraphResources sceneResources = inputs.sceneResources;

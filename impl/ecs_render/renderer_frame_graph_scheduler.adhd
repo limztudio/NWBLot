@@ -22,7 +22,6 @@ b8 CanScheduleDeclaredDeferredTaskGraph(in b8 declared){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(in GpuTaskGraphDeclarationReadView graph, in GpuCompiledGraphReadView compiledGraph){
     const GpuSubmissionPacketRange range = compiledGraph.packetTimingEnvelopeRange();
     if(!range.valid() || !compiledGraph.validPacketRange(range))
@@ -70,7 +69,6 @@ b8 RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(in GpuTaskGr
     );
 }
 
-[cpp_unwind]
 b8 RendererFramePipeline::declareFrameTimingBeginTask(mut GpuTimingFrameTransaction frameTimingTransaction){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
@@ -92,7 +90,6 @@ b8 RendererFramePipeline::declareFrameTimingBeginTask(mut GpuTimingFrameTransact
     return true;
 }
 
-[cpp_unwind]
 b8 RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(){
     this.m_deferredLightingTaskGraphScheduled = false;
     if(!CanScheduleDeclaredDeferredTaskGraph(this.m_deferredLightingTaskGraphDeclared))

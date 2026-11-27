@@ -23,7 +23,6 @@ class GpuPacketThrowingResetTask : NoCopy{
     }
     public ~GpuPacketThrowingResetTask(){ ++this.m_destructions; }
 
-    [cpp_unwind]
     public void discarded(){
         ++this.m_discards;
         ThrowTestException<GpuPacketResetDiscardFailure>(GpuPacketResetDiscardFailure());
@@ -51,7 +50,6 @@ class GpuPacketBorrowedPayloadLifetimeTask : NoCopy{
         ++this.m_destructions;
     }
 
-    [cpp_unwind]
     public void discarded(){
         if(!this.m_alive)
             ++this.m_lateUses;
@@ -89,13 +87,11 @@ GpuTaskExternalStateSource MakeGpuPacketExternalStateSource(in borrow CommandLis
     return source;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> AddThrowingResetTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut u32 destructions, mut u32 discards){
     return graph.addPayloadTaskFrom<GpuPacketThrowingResetTask>(desc,
         lambda[mut destructions, mut discards]() -> GpuPacketThrowingResetTask{ return GpuPacketThrowingResetTask(destructions, discards); });
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> AddBorrowedPayloadLifetimeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, mut b8 alive, mut u32 destructions, mut u32 discards, mut u32 lateUses, in b8 throwOnDiscard){
     return graph.addPayloadTaskFrom<GpuPacketBorrowedPayloadLifetimeTask>(desc,
         lambda[mut alive, mut destructions, mut discards, mut lateUses, in throwOnDiscard]() -> GpuPacketBorrowedPayloadLifetimeTask{
@@ -103,12 +99,10 @@ Expected<GpuTaskId> AddBorrowedPayloadLifetimeTask(mut GpuTaskGraph graph, in Gp
         });
 }
 
-[cpp_unwind]
 b8 ResetThrowsDiscardFailure(mut GpuTaskGraph graph){
     return ThrowsException<GpuPacketResetDiscardFailure>(lambda[mut graph]() -> void{ graph.reset(); });
 }
 
-[cpp_unwind]
 b8 UnwindWithScopeExitResetPreservesOriginalFailure(mut GpuTaskGraph graph){
     return ThrowsException<GpuPacketResetOriginalFailure>(lambda[mut graph]() -> void{
         GpuResetOnUnwind reset(graph);
@@ -116,7 +110,6 @@ b8 UnwindWithScopeExitResetPreservesOriginalFailure(mut GpuTaskGraph graph){
     });
 }
 
-[cpp_unwind]
 b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(
     mut GpuGraphSubmissionTransaction transaction,
     mut GpuTaskGraph graph,
@@ -141,7 +134,6 @@ b8 RetireTwoBorrowedPayloadsCatchesDiscardFailure(
     return caught && bothAdded;
 }
 
-[cpp_unwind]
 b8 UnwindBorrowedPayloadLifetimeCatchesOriginalFailure(
     mut GpuGraphSubmissionTransaction transaction,
     mut GpuTaskGraph graph,

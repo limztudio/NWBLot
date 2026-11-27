@@ -91,13 +91,10 @@ class RendererRayTracingSystem : NoCopy{
     public void setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor){ this.m_instanceTransformPatchContributor = contributor; }
     public b8 hasInstanceTransformPatchContributor()const{ return this.m_instanceTransformPatchContributor.has_value(); }
 
-    [cpp_unwind]
     public void invalidateResources();
-    [cpp_unwind]
     public void releaseSceneTlasHeapHandle();
 
     public RayTracingLightingClassificationInput snapshotLightingClassificationInput()const;
-    [cpp_unwind]
     public void publishPreparedLightingClassification(in RayTracingLightingClassification classification, in Span<SceneLightGpuData> lights);
     public RayTracingFrameCpuStateSnapshot captureFrameCpuState()const;
     public void restoreShadowPacketCpuState(in RayTracingFrameCpuStateSnapshot snapshot);
@@ -107,7 +104,6 @@ class RendererRayTracingSystem : NoCopy{
 
     public RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const;
     public RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const;
-    [cpp_unwind]
     public b8 prepareSceneQueryResources();
     public RayTracingSceneGraphResources snapshotSceneGraphResources()const;
     public RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const;
@@ -122,20 +118,16 @@ class RendererRayTracingSystem : NoCopy{
     public in LightSpaceShadowSnapshot lightSpaceShadowSnapshotRef()const{ return this.m_lightSpaceShadow.m_snapshot; }
     public FrozenLightSpaceShadowHandle frozenLightSpaceShadowSnapshot()const{ return this.m_lightSpaceShadow.m_frozenSnapshot; }
     public PreflightedSceneLightsView preflightedSceneLights()const;
-    [cpp_unwind]
     public void acceptLightSpaceShadowCapture(in LightSpaceCaptureTicket ticket, in b8 prepared);
     public void invalidateLightSpaceShadowCapture(){ this.m_lightSpaceShadow.m_captureHistory.invalidate(); }
 
-    [cpp_unwind]
     public void logCapabilityOnce();
 
     public mut RefractionRenderer refraction(){ return this.m_refraction; }
     public in RefractionRenderer refraction()const{ return this.m_refraction; }
     public void setRefractionHardwareTracingEnabled(in b8 enabled){ this.m_rayTracingState.m_refraction.m_refractionHardwareTracingEnabled = enabled; }
 
-    [cpp_unwind]
     public b8 preflightShadowVisibilityResources(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<b8> recordPreflightShadowVisibilityResources(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -152,7 +144,6 @@ class RendererRayTracingSystem : NoCopy{
         return IsShadowVisibilitySoftwareResourcesPreflighted(this.m_shadowVisibilityTraceResourcesPreflighted, this.m_shadowVisibilityHardwareSupported);
     }
     public void discardPreflightShadowVisibilityResources();
-    [cpp_unwind]
     public b8 freezePreparedShadowTraceGeometryBuffers();
     public Span<PreparedShadowTraceGeometryBuffer> preparedShadowTraceGeometryBuffers()const{ return Span<PreparedShadowTraceGeometryBuffer>(this.m_preparedShadowTraceGeometryBuffers); }
 
@@ -161,40 +152,29 @@ class RendererRayTracingSystem : NoCopy{
     public void confirmPreparedShadowTraceGeometryNormalization();
     public void invalidatePreparedShadowTraceGeometryBuffers();
 
-    [cpp_unwind]
     public void releaseCausticEmissionTargetHeapHandle();
-    [cpp_unwind]
     public b8 createCausticTargets(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public b8 createSurfelTargets(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
     public b8 rayTraceMaterialContextSlotsUploadNeeded(in RayTraceMaterialContextSlots slots, in usize bufferIdentity, mut u64 outWord0, mut u64 outWord1, mut u64 outWord2, mut u64 outWord3)const;
     public void confirmPreparedRayTraceMaterialContextSlotsUpload(in u64 word0, in u64 word1, in u64 word2, in u64 word3, in usize bufferIdentity);
-    [cpp_unwind]
     public Expected<Optional<GpuUploadBlobId>> retainPreparedCsgTraceContextUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const;
     public void confirmPreparedCsgTraceContextUpload(in u64 hash, in usize byteSize, in usize bufferIdentity);
-    [cpp_unwind]
     public b8 prepareCausticOpticalReadTracking(in MeshViewBufferSnapshot meshView);
     public void confirmRayTraceContextReadSubmission(in QueueSubmissionToken token);
-    [cpp_unwind]
     public Expected<Optional<GpuUploadBlobId>> retainPreparedCausticEmissionTargetUpload(mut GpuTaskGraph graph, mut u64 outHash, mut usize outByteSize, mut usize outBufferIdentity)const;
     public void confirmPreparedCausticEmissionTargetUpload(in u64 hash, in usize byteSize, in usize bufferIdentity);
-    [cpp_unwind]
     public Expected<Optional<GpuUploadBlobId>> retainPreparedSurfelFrameConstantsUpload(mut GpuTaskGraph graph, in DeferredFrameTargets targets)const;
-    [cpp_unwind]
     public Expected<PreparedShadowMaterialContextUploads> retainPreparedShadowMaterialContextUploads(mut GpuTaskGraph graph)const{
         return this.m_preparedShadowMaterialContext.retainUploads(this.m_rayTracingState, graph);
     }
     public void confirmPreparedShadowMaterialContextUploads();
-    [cpp_unwind]
     public Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(mut GpuTaskGraph graph)const{
         return this.m_preparedSceneBvh.retainUploads(this.m_rayTracingState, graph);
     }
     public void confirmPreparedSceneBvhUploads();
     public b8 preparedSceneTlasBuildReady()const{ return this.m_preparedSceneTlas.ready(); }
     public b8 preparedSceneTlasUsesInstanceBuffer()const{ return this.m_preparedSceneTlas.useInstanceBuffer(); }
-    [cpp_unwind]
     public Expected<Optional<GpuUploadBlobId>> retainPreparedSceneTlasUpload(mut GpuTaskGraph graph)const{
         return this.m_preparedSceneTlas.retainUpload(this.m_rayTracingState, graph);
     }
@@ -214,7 +194,6 @@ class RendererRayTracingSystem : NoCopy{
     public b8 preparedMeshBlasBuildsReady()const{ return this.m_preparedMeshBlasBuildsReady; }
 
     public Span<PreparedMeshBlasBuild> preparedMeshBlasBuilds()const{ return Span<PreparedMeshBlasBuild>(this.m_preparedMeshBlasBuilds); }
-    [cpp_unwind]
     public void confirmPreparedMeshBlasBuilds();
     public in SoftwareSceneRefitHandle preparedSceneSwBvhRefit()const{ return this.m_preparedSceneSwBvhRefit; }
 
@@ -223,13 +202,9 @@ class RendererRayTracingSystem : NoCopy{
     public b8 preparedMeshSwBvhBuildsReady()const{ return this.m_preparedMeshSwBvhBuildsReady; }
 
     public Span<PreparedMeshSwBvhBuild> preparedMeshSwBvhBuilds()const{ return Span<PreparedMeshSwBvhBuild>(this.m_preparedMeshSwBvhBuilds); }
-    [cpp_unwind]
     public b8 recordPreparedMeshSwBvhBuildAfterGraphClears(mut CommandList commandList, in PreparedMeshSwBvhBuild build);
-    [cpp_unwind]
     public void confirmPreparedMeshSwBvhBuilds();
-    [cpp_unwind]
     public void releaseSurfelGiHeapHandles();
-    [cpp_unwind]
     public Expected<u32> renderShadowVisibility(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -239,19 +214,15 @@ class RendererRayTracingSystem : NoCopy{
         in b8 splitOpaqueSoftResolve,
         in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
-    [cpp_unwind]
     public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources){
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, false, false, false, Optional<in LightSpaceShadowSnapshot>());
     }
-    [cpp_unwind]
     public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold){
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, false, false, Optional<in LightSpaceShadowSnapshot>());
     }
-    [cpp_unwind]
     public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold, in b8 graphOwnsOpaqueTemporalMergeEntryStates){
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, false, Optional<in LightSpaceShadowSnapshot>());
     }
-    [cpp_unwind]
     public Expected<u32> renderShadowVisibility(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -262,7 +233,6 @@ class RendererRayTracingSystem : NoCopy{
     ){
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, splitOpaqueSoftResolve, Optional<in LightSpaceShadowSnapshot>());
     }
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -273,7 +243,6 @@ class RendererRayTracingSystem : NoCopy{
         mut DeferredFrameTargets targets,
         mut GpuTimingSubmissionTicket timingTicket
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityOpaqueTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -283,7 +252,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 graphOwnsOpaqueTemporalMergeEntryStates,
         in FrozenLightSpaceShadowHandle lightSpace
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityOpaqueFirstWaveletTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -293,14 +261,12 @@ class RendererRayTracingSystem : NoCopy{
         in b8 deferUpsample,
         in b8 deferWavelet
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowVisibilityOpaqueResolveTailTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
         in SoftShadowSplitTaskContext context,
         in b8 hardwareShadowSupported
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftTemporalMergeTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -309,7 +275,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 combinedTemporal,
         in b8 hardwareShadowSupported
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftFirstWaveletTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -318,24 +283,20 @@ class RendererRayTracingSystem : NoCopy{
         in b8 startsTransparentResolveTiming,
         in b8 combinedWavelet
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftFoldTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
         in SoftShadowSplitTaskContext context,
         in b8 combinedUpsample
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareShadowTransparentSoftTraceTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
         in SoftShadowSplitTaskContext context,
         in FrozenLightSpaceShadowHandle lightSpace
     );
-    [cpp_unwind]
     public void clearShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets);
     public void confirmCausticAccumulatorBootstrapClear(){ this.m_rayTracingState.caustics.m_causticAccumulatorInitialized = true; }
-    [cpp_unwind]
     public Expected<GpuTaskId> declareCausticAccumulatorDecayTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -346,18 +307,14 @@ class RendererRayTracingSystem : NoCopy{
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> causticPhotonTiming
     );
-    [cpp_unwind]
     public b8 dispatchCausticAccumulatorDecay(mut CommandList commandList, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<u32> renderGpuBvhShadowVisibility(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
         in DeferredLightingGraphResources deferredLightingResources,
         in ShadowVisibilityRenderOptions options
     );
-    [cpp_unwind]
     public b8 prepareGpuBvhCausticResources(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<GpuTaskId> declareSoftwareCausticsTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -371,15 +328,11 @@ class RendererRayTracingSystem : NoCopy{
         mut b8 causticProducerDispatched
     );
     public b8 hasCausticWork(in MeshViewBufferSnapshot meshView)const;
-    [cpp_unwind]
     public b8 renderGpuBvhCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming);
-    [cpp_unwind]
     public b8 renderGpuBvhCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets){
         return this.renderGpuBvhCaustics(commandList, meshView, targets, Optional<mut Optional<GpuTimingMeasure>>());
     }
-    [cpp_unwind]
     public b8 prepareHwCausticResources(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<GpuTaskId> declareHardwareCausticsTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -392,13 +345,10 @@ class RendererRayTracingSystem : NoCopy{
         mut Optional<GpuTimingMeasure> causticPhotonTiming,
         mut b8 causticProducerDispatched
     );
-    [cpp_unwind]
     public b8 renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming);
-    [cpp_unwind]
     public b8 renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets){
         return this.renderHwCaustics(commandList, meshView, targets, Optional<mut Optional<GpuTimingMeasure>>());
     }
-    [cpp_unwind]
     public Expected<GpuTaskId> declareCausticGeometryDownsampleTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -408,7 +358,6 @@ class RendererRayTracingSystem : NoCopy{
         mut Optional<GpuTimingMeasure> causticResolveTiming
     );
     public CausticResolveActivitySnapshot causticResolveActivitySnapshot(in DeferredFrameTargets targets)const;
-    [cpp_unwind]
     public Expected<GpuTaskId> declareCausticResolveTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -416,19 +365,12 @@ class RendererRayTracingSystem : NoCopy{
         mut GpuTimingSubmissionTicket timingTicket,
         mut Optional<GpuTimingMeasure> causticResolveTiming
     );
-    [cpp_unwind]
     public Expected<GpuTaskId> declareCausticResolvePrepareTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<GpuTaskId> declareCausticResolveWaveletTask(in GpuTaskDesc desc, in u32 passIndex, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public Expected<GpuTaskId> declareCausticResolveUpsampleTask(in GpuTaskDesc desc, in borrow b8 causticProducerDispatched, mut GpuTaskGraph graph, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public void dispatchCausticGeometryDownsample(mut CommandList commandList, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public void dispatchCausticResolvePrepare(mut CommandList commandList, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public void dispatchCausticResolveWaveletPass(mut CommandList commandList, mut DeferredFrameTargets targets, in u32 passIndex);
-    [cpp_unwind]
     public void dispatchCausticResolveUpsample(mut CommandList commandList, mut DeferredFrameTargets targets);
     public b8 hasHwCausticWork()const;
     public b8 hasHwCausticWork(in MeshViewBufferSnapshot meshView)const;
@@ -439,14 +381,12 @@ class RendererRayTracingSystem : NoCopy{
     public b8 recordSurfelResourceInitializationLifecycle();
     public void finalizeSurfelResourceInitialization();
     public void discardSurfelResourceInitialization(){ this.m_rayTracingState.surfelGi.m_surfelResourcesClearPending = false; }
-    [cpp_unwind]
     public b8 ensureSurfelResources();
     public b8 shouldCaptureSurfelCountReadback()const;
     public void markSurfelCountReadbackScheduled(){ this.m_rayTracingState.surfelGi.m_surfelCountReadbackFrame = this.m_rayTracingState.surfelGi.m_surfelFrameIndex; }
     public b8 softTransparentShadowReady()const{ return this.m_rayTracingState.softShadow.m_softTransparentReady; }
     public void finalizeSoftShadowTemporalHistory(mut DeferredFrameTargets targets);
     public void discardSoftShadowTemporalHistory();
-    [cpp_unwind]
     public b8 renderSurfelGiPhases(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -459,13 +399,9 @@ class RendererRayTracingSystem : NoCopy{
         in b8 dispatchResolve,
         in b8 dispatchRemaining
     );
-    [cpp_unwind]
     public b8 renderSoftShadowCombinedTemporalMerge(mut CommandList commandList, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public b8 renderSoftShadowCombinedWavelet(mut CommandList commandList, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     public b8 renderSoftShadowTerminalUpsample(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 transparentReady);
-    [cpp_unwind]
     public Expected<u32> renderShadowVisibilityOpaque(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -473,7 +409,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 graphOwnsOpaqueTemporalMergeEntryStates,
         in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
-    [cpp_unwind]
     public b8 renderSoftOpaqueShadowResolvePhase(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -483,9 +418,7 @@ class RendererRayTracingSystem : NoCopy{
         in b8 graphOwnsOpaqueTemporalMergeEntryStates,
         in SoftShadowOpaqueResolvePhase phase
     );
-    [cpp_unwind]
     public b8 renderSoftOpaqueShadowResolveTail(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 hardwareShadowSupported);
-    [cpp_unwind]
     public Expected<u32> renderGpuBvhShadowVisibilityOpaque(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -493,7 +426,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 graphOwnsOpaqueTemporalMergeEntryStates,
         in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
-    [cpp_unwind]
     public b8 renderSoftTransparentShadowTrace(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -502,26 +434,17 @@ class RendererRayTracingSystem : NoCopy{
         in b8 graphOwnsOpaqueToTransparentBoundary,
         in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
-    [cpp_unwind]
     public b8 renderSoftTransparentShadowTrace(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsOpaqueToTransparentBoundary){
         return this.renderSoftTransparentShadowTrace(commandList, targets, deferredLightingResources, frameIndex, graphOwnsOpaqueToTransparentBoundary, Optional<in LightSpaceShadowSnapshot>());
     }
-    [cpp_unwind]
     public b8 renderSoftTransparentShadowTemporalMerge(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsTransparentTemporalMergeEntryStates);
-    [cpp_unwind]
     public b8 renderSoftTransparentShadowFirstWavelet(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsTransparentWaveletInputBoundary);
-    [cpp_unwind]
     public b8 renderSoftTransparentShadowFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex);
 
-    [cpp_unwind]
     private b8 preparePendingMeshBlasResources();
-    [cpp_unwind]
     private b8 prepareSceneTlasResources();
-    [cpp_unwind]
     private b8 prepareSceneSwBvhResources();
-    [cpp_unwind]
     private b8 prepareCausticEmissionTargetResources();
-    [cpp_unwind]
     private b8 capturePreparedShadowMaterialContext(
         in PreparedShadowMaterialContextRoute route,
         in b8 staticScene,
@@ -537,32 +460,23 @@ class RendererRayTracingSystem : NoCopy{
     private b8 capturePreparedShadowMaterialContextCacheReuse(in PreparedShadowMaterialContextRoute route, in u64 hash, in usize instanceMaterialCount, in usize instanceCount, in usize materialTypedByteCount);
     private void clearPreparedShadowMaterialContext();
     private void clearPreparedShadowTraceMaterialSampledTextures(){ this.m_preparedShadowTraceMaterialSampledTextures.clear(); }
-    [cpp_unwind]
     private b8 capturePreparedSceneBvh(in b8 staticScene, in u64 staticSceneHash, in Span<NwbBvhNodeGpu> nodes, in Span<SceneSwBvhInstanceGpu> instances);
     private b8 capturePreparedSceneBvhCacheReuse(in u64 staticSceneHash, in u32 instanceCount);
     private void clearPreparedSceneBvh();
-    [cpp_unwind]
     private b8 capturePreparedMeshBlasBuilds();
-    [cpp_unwind]
     private b8 recordPreparedMeshBlasBuilds(mut CommandList commandList, in b8 meshBlasGeometryBuildInputStatesGraphOwned);
     private void clearPreparedMeshBlasBuilds();
-    [cpp_unwind]
     private b8 capturePreparedMeshSwBvhBuilds();
     private b8 preparedMeshSwBvhBuildMatchesCurrent(in PreparedMeshSwBvhBuild build);
     private b8 rejectPreparedTraversal();
     private b8 matchesPreparedTraversalMesh(in MeshRayTracingResourceSnapshot mesh, in PreparedSceneSwBvhMesh prepared)const;
     private b8 preparedMeshSwBvhBuildProducesTopology(in MeshRayTracingResourceSnapshot mesh)const;
     private void clearPreparedMeshSwBvhBuilds();
-    [cpp_unwind]
     private b8 prepareSurfelResources(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     private b8 prepareMeshBlasResources(mut MeshRayTracingResourceSnapshot meshResources);
-    [cpp_unwind]
     private b8 preparePendingMeshSwBvhResources();
     private b8 hardwareTransparentShadowReady()const;
-    [cpp_unwind]
     private void dispatchHardwareTransparentShadow(mut CommandList commandList, mut DeferredFrameTargets targets, in u32 frameIndex);
-    [cpp_unwind]
     private void dispatchSoftShadowResolve(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -573,9 +487,7 @@ class RendererRayTracingSystem : NoCopy{
         in b8 dispatchFirstWavelet,
         in b8 dispatchTail
     );
-    [cpp_unwind]
     private void enableSoftShadowResolveBarriers(mut CommandList commandList, mut DeferredFrameTargets targets);
-    [cpp_unwind]
     private void dispatchPrimarySoftShadowResolve(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -587,7 +499,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 splitSoftTransparentFold,
         in b8 graphOwnsOpaqueTemporalMergeEntryStates
     );
-    [cpp_unwind]
     private void dispatchSoftShadowDenoiseAndTransparentFold(
         mut CommandList commandList,
         mut DeferredFrameTargets targets,
@@ -597,26 +508,19 @@ class RendererRayTracingSystem : NoCopy{
         in u32 softGroupsY,
         in SoftShadowDenoiseDispatchOptions options
     );
-    [cpp_unwind]
     private void reportSoftwareShadowTraversal(in DeferredFrameTargets targets);
     private b8 softShadowTemporalHistoryUsable()const;
     private u32 transparentShadowSampleCount()const;
-    [cpp_unwind]
     private void reportTransparentShadowSampling(in u32 sampleCount);
     private void swapSoftShadowTemporalHistory(mut DeferredFrameTargets targets);
-    [cpp_unwind]
     private b8 prepareCausticResources(in MeshViewBufferSnapshot meshView, in b8 hardware, mut DeferredFrameTargets targets);
     private b8 causticResolveResourcesReady(in DeferredFrameTargets targets)const;
     private b8 hasCommonCausticWork(in MeshViewBufferSnapshot meshView)const;
-    [cpp_unwind]
     private void preflightLightSpaceShadowResources();
     private Expected<LightSpacePlan> buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights, mut u32 outDrawCount)const;
     private Expected<LightSpacePlan> buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights)const;
-    [cpp_unwind]
     private void prepareLightSpaceShadows(in Span<SceneLightGpuData> lights);
-    [cpp_unwind]
     private b8 ensureRayTraceContextReadTracking(in b8 opticalCausticReader);
-    [cpp_unwind]
     private b8 ensureCsgTraceContextResources();
 }
 

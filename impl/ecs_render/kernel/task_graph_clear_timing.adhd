@@ -42,7 +42,6 @@ class GraphClearTimingRecordState{
     public GpuClearTextureTaskRecordHooks hooks(in b8 before, in b8 after){
         return MakeGpuClearTextureTaskRecordHooks(this, before, after);
     }
-    [cpp_unwind]
     public b8 beforeClear(mut CommandList commands, in GpuTaskRecordContext context){
         const auto ticket = this.currentTicket();
         if(!CanBeginGraphClearTimingState(this.m_graphics.has_value(), this.m_timing.has_value(), ticket.has_value(), this.m_timing.has_value() && this.m_timing.value().has_value()))
@@ -51,7 +50,6 @@ class GraphClearTimingRecordState{
         this.m_timing.value().emplace(this.m_graphics.value().gpuTiming(), this.m_scope, this.m_graphics.value().getDevice(), commands);
         return FinishSplitGpuTimingMarker(this.m_timing.value());
     }
-    [cpp_unwind]
     public b8 afterClear(mut CommandList commands, in GpuTaskRecordContext context){
         const auto ticket = this.currentTicket();
         if(!CanEndGraphClearTimingState(this.m_timing.has_value(), this.m_timing.has_value() && this.m_timing.value().has_value(), ticket.has_value()))
@@ -61,7 +59,6 @@ class GraphClearTimingRecordState{
         this.m_timing.value().reset();
         return true;
     }
-    [cpp_unwind]
     public void discarded(){
         if(this.m_timing.has_value())
             DiscardGpuTimingMeasure(this.m_timing.value());

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RecordStatisticsReadbackCopy(
     mut CommandList commandList,
     in GpuTaskRecordContext context,
@@ -64,7 +63,6 @@ class StatisticsReadbackBuffers<StatisticsT, OutcomeT : IStatisticsOutcome<Stati
         snapshot.buffers = this.buffers;
     }
 
-    [cpp_unwind]
     public b8 prepare(in Array<Name, s_StatisticsReadbackSlotCount> names, in StringView errorMessage){
         const u16 generation = this.graphics.getDevice().getDeviceGeneration();
         if(!this.control.valid()){
@@ -87,7 +85,6 @@ class StatisticsReadbackBuffers<StatisticsT, OutcomeT : IStatisticsOutcome<Stati
         return true;
     }
 
-    [cpp_unwind]
     public void pollCompleted(in StringView errorMessage){
         if(!this.control.valid())
             return;

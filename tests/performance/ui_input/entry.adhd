@@ -755,7 +755,6 @@ b8 RunAllUiInputBenchmarks(){
         && RunEditBenchmarks();
 }
 
-[cpp_unwind]
 i32 RunUiInputBenchmark(){
     InitializerGuard initializer();
     if(!initializer.initialize()){

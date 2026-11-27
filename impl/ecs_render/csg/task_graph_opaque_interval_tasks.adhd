@@ -61,7 +61,6 @@ class OpaqueCsgComputeIntervalGraphTask{
         this.pass = pass;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return SharedComputeEmulationCommandRequirements(true); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
 }
 
@@ -87,7 +86,6 @@ class OpaqueCsgIntervalSampleGraphTask{
         this.graphics = graphics;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Graphics | GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const;
     public void discarded(){
         if(this.opaqueCsgComputeEmulationTiming.has_value())

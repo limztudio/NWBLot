@@ -13,13 +13,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 VectorSingle FailSingleTransform(in VectorSingle value, in MatrixSingle matrix){
     ThrowTestException<u32>(0xe206u);
     return value;
 }
 
-[cpp_unwind]
 VectorDouble FailDoubleTransform(in VectorDouble value, in MatrixDouble matrix){
     ThrowTestException<u32>(0xe207u);
     return value;

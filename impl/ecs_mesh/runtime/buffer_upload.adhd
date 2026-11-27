@@ -53,7 +53,6 @@ class RuntimeMeshBatchUploadReadyTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Vector<u8> PadRuntimeMeshRawBytePayload(in Span<u8> payload, in usize paddedByteCount){
     Vector<u8> paddedPayload = Vector<u8>();
     paddedPayload.reserve(paddedByteCount);
@@ -117,7 +116,6 @@ Expected<BufferHandle, BufferSetupFailure> SetupRequiredBuffer<T>(mut GraphicsRu
     return SetupBuffer<T>(graphics, debugName, payload, flags);
 }
 
-[cpp_unwind]
 Expected<BufferHandle, BufferSetupFailure> SetupRequiredPaddedRawByteBuffer(mut GraphicsRuntime graphics, in Name debugName, in Span<u8> payload, in BufferFlags flags){
     if(payload.empty())
         return MakeUnexpected(BufferSetupFailure::EmptyPayload);
@@ -142,7 +140,6 @@ GpuTaskSchedulingHint MakeRuntimeMeshBatchUploadScheduling(){
     return scheduling;
 }
 
-[cpp_unwind]
 b8 DeclareRuntimeMeshBatchBufferUploadBlob(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,
@@ -181,7 +178,6 @@ b8 DeclareRuntimeMeshBatchBufferUploadBlob(
     return true;
 }
 
-[cpp_unwind]
 b8 DeclareRuntimeMeshBatchTypedUpload<T>(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,
@@ -194,7 +190,6 @@ b8 DeclareRuntimeMeshBatchTypedUpload<T>(
     return DeclareRuntimeMeshBatchBufferUploadBlob(graph, buffer, label, graph.copyUploadElements<T>(payload), outTasks);
 }
 
-[cpp_unwind]
 b8 DeclareRuntimeMeshBatchPaddedRawUpload(
     mut GpuTaskGraph graph,
     in BufferHandle buffer,

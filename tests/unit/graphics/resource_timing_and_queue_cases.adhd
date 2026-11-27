@@ -35,7 +35,6 @@ class ThrowOnceTimingSink : TimingSink{
     private usize m_registrationAttempt = 0u;
     public ThrowOnceTimingSink(mut TimingRecorder timing){ this.m_timing = timing; }
     public b8 enabled()const override{ return true; }
-    [cpp_unwind]
     public Expected<TimingScopeId> registerScope(in Name scopeName)override{
         ++this.m_registrationAttempt;
         if(this.m_registrationAttempt == 3u)
@@ -349,7 +348,6 @@ void VerifyGpuTimingPacketEnvelopeMetrics_PreservesPartialFramesAcrossGrowthReje
     }
 }
 
-[cpp_unwind]
 void VerifyGpuTimingPacketEnvelopeMetrics_PublishesNoPartialFrameWhenOutputRegistrationThrows(){
     ThrowOnceCorrelatorContext context = ThrowOnceCorrelatorContext();
     context.timing.setEnabled(true);

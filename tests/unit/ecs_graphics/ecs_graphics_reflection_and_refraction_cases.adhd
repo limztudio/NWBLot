@@ -114,7 +114,6 @@ class PruneContext{
 class RuntimeMeshPruningContext{
     public ScratchStorage scratch;
     public RuntimeMeshRequestSet requests;
-    [cpp_unwind]
     public RuntimeMeshPruningContext(in usize capacityHint){
         this.scratch = ScratchStorage(s_EcsGraphicsCaseTestsRuntimeMeshPruningRequestScratch);
         this.requests = this.scratch.makeValue<RuntimeMeshRequestSet>(capacityHint);

@@ -29,7 +29,6 @@ class ReflectionDepthReduceTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_pipeline.valid())
             return false;
@@ -52,7 +51,6 @@ class ReflectionSpatialTask{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         DispatchReflectionPostprocess(commandList, this.m_graphics, this.m_pipeline.deref(), this.m_parameters, s_TimingScopeReflectionSpatial, this.m_parameters.width, this.m_parameters.height, this.m_groupSize);
         return !commandList.commandRecordingFailed();
@@ -63,7 +61,6 @@ class ReflectionFinalizeTask{
     public GpuTaskCommandRequirements commandRequirements()const{
         return GpuTaskCommandRequirements();
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         commandList.endRenderPass();
         return true;
@@ -90,7 +87,6 @@ class ReflectionTemporalTask : MoveOnly{
     }
 
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Compute); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.m_snapshot.history.eligible)
             return true;
@@ -133,7 +129,6 @@ class ReflectionStatisticsReadbackTask : MoveOnly{
         this.m_hardwareEnabled = resources.parameters.hardwareEnabled != 0u;
     }
     public GpuTaskCommandRequirements commandRequirements()const{ return GpuTaskCommandRequirements(GpuQueueCapability::Transfer); }
-    [cpp_unwind]
     public b8 record(mut CommandList commandList, in GpuTaskRecordContext context)const{
         if(!this.reservation.valid())
             return false;
@@ -195,7 +190,6 @@ ReflectionFeedbackOutcome ResolvePublishedReflectionFeedbackOutcome(in Reflectio
     return outcome;
 }
 
-[cpp_unwind]
 void DispatchReflectionPostprocess<T>(
     mut CommandList commandList,
     mut GraphicsRuntime graphics,

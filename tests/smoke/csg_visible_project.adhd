@@ -291,7 +291,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB CSG Visible Smoke");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateCsgVisibleWorld(context);
     if(!world.has_value())

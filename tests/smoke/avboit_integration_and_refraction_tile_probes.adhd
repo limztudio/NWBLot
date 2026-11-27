@@ -144,7 +144,6 @@ class AvboitIntegrationProbeTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         this.progress.stage = "recording entry";
         if(context.hasCommandIrCapture())
@@ -210,7 +209,6 @@ class RefractionTileProbeTask{
 
     public GpuTaskCommandRequirements commandRequirements()const{ return ComputeTransferProbeCommands(); }
 
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         this.progress.stage = "resource initialization";
         if(context.hasCommandIrCapture())
@@ -380,7 +378,6 @@ b8 VerifyAvboitIntegrationSliceValues(
     return true;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(
     mut GpuTaskGraph graph,
     in Name probeName,
@@ -399,7 +396,6 @@ Expected<GpuTaskId> DeclareTrackedProbeTask<TaskT>(
     return task;
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask payload, mut GpuTaskGraph graph){
     const Name probeName = s_SmokeNameAvboitIntegrationProbe;
     payload.progress.stage = "buffer imports";
@@ -433,7 +429,6 @@ Expected<GpuTaskId> DeclareAvboitIntegrationProbe(in AvboitIntegrationProbeTask 
     return DeclareTrackedProbeTask(graph, probeName, "AVBOIT sparse integration boundary probe", uses, payload, payload.progress);
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareRefractionTileProbe(in RefractionTileProbeTask payload, mut GpuTaskGraph graph){
     const Name probeName = s_SmokeNameRefractionTileProbe;
     payload.progress.stage = "graph imports";
@@ -498,7 +493,6 @@ b8 CompareIntegrationSlice(in StagingTextureMapping mapping, in AvboitIntegratio
     return VerifyAvboitIntegrationSliceValues(phaseState, phase, slice, Span<f32>(observedPixels), Span<f32>(expectedPixels), extinctionFixed);
 }
 
-[cpp_unwind]
 b8 RunAvboitIntegrationProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
     AvboitIntegrationPhaseState phaseState = AvboitIntegrationPhaseState();
     mut GraphicsRuntime graphics = context.graphics;
@@ -805,7 +799,6 @@ b8 VerifyRefractionTileProbeReadback(
     return true;
 }
 
-[cpp_unwind]
 b8 RunRefractionTileProbe(in ActiveSceneSubsystems sceneSubsystems, mut ProjectRuntimeContext context){
     Vector<u32> reversedTiles;
     BuildRefractionProbeReversedTiles(reversedTiles);

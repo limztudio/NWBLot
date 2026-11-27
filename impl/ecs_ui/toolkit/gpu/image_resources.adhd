@@ -21,7 +21,6 @@ class GpuImageResources : NoCopy{
         this.m_versions = versions;
     }
 
-    [cpp_unwind]
     private Expected<GpuVersion<GpuGlyphVersion>> prepareGlyphPage(in SharedGlyphPage page){
         usize replaceIndex = this.m_imageCache.glyphs().size();
         for(usize index = 0u; index < this.m_imageCache.glyphs().size(); ++index){
@@ -83,7 +82,6 @@ class GpuImageResources : NoCopy{
         return version;
     }
 
-    [cpp_unwind]
     public b8 prepareGlyphPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuGlyphVersion>> versions){
         in Vector<SharedGlyphPage> pages = snapshot.glyphPages();
         versions.reserve(pages.size());
@@ -96,7 +94,6 @@ class GpuImageResources : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     private Expected<GpuVersion<GpuSdfAtlasVersion>> prepareSdfPage(in SharedSdfAtlasPage page){
         for(usize index = 0u; index < this.m_imageCache.sdfs().size(); ++index){
             in GpuVersion<GpuSdfAtlasVersion> existing = this.m_imageCache.sdfs()[index];
@@ -158,7 +155,6 @@ class GpuImageResources : NoCopy{
         return version;
     }
 
-    [cpp_unwind]
     public b8 prepareSdfPages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuSdfAtlasVersion>> versions){
         in Vector<SharedSdfAtlasPage> pages = snapshot.sdfPages();
         versions.reserve(pages.size());
@@ -171,7 +167,6 @@ class GpuImageResources : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     private Expected<GpuVersion<GpuTextureImageVersion>> prepareTextureImage(in SharedImageSource source){
         if(!source.valid() || !ValidUiTextureImageSource(source.deref()))
             return MakeUnexpected(Failure());
@@ -205,7 +200,6 @@ class GpuImageResources : NoCopy{
         return version;
     }
 
-    [cpp_unwind]
     public b8 prepareTextureImages(in DrawSnapshot snapshot, mut Vector<GpuVersion<GpuTextureImageVersion>> versions){
         in Vector<SharedImageSource> images = snapshot.textureImages();
         versions.reserve(images.size());
@@ -424,7 +418,6 @@ b8 ValidateGpuSnapshotImages(in DrawSnapshot snapshot){
     return true;
 }
 
-[cpp_unwind]
 Expected<GpuGraphResourceId> TryDeclareGpuAtlasPage(
     mut GpuTaskGraph graph,
     mut GpuSampledTextureNameTable nameTable,
@@ -477,7 +470,6 @@ Expected<GpuGraphResourceId> TryDeclareGpuAtlasPage(
     return texture.value();
 }
 
-[cpp_unwind]
 Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(
     mut GpuTaskGraph graph,
     in DrawSnapshot snapshot,
@@ -518,7 +510,6 @@ Expected<GpuSampledGraphResources> DeclareGpuGlyphPages(
     return resources;
 }
 
-[cpp_unwind]
 Expected<GpuSampledGraphResources> DeclareGpuSdfPages(
     mut GpuTaskGraph graph,
     in DrawSnapshot snapshot,
@@ -559,7 +550,6 @@ Expected<GpuSampledGraphResources> DeclareGpuSdfPages(
     return resources;
 }
 
-[cpp_unwind]
 Expected<GpuSampledGraphResources> DeclareGpuTextureImages(
     mut GpuTaskGraph graph,
     in DrawSnapshot snapshot,

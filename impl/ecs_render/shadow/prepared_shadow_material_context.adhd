@@ -33,11 +33,9 @@ class ShadowMaterialSampledTextureCollector : NoCopy{
         this.m_pendingTextures = pending;
         this.m_pending = MaterialSampledTextureCollector(pending);
     }
-    [cpp_unwind]
     public void indexExisting(){
         this.m_output.indexExisting();
     }
-    [cpp_unwind]
     public b8 collect(in MaterialSurfaceInfo material, in RendererMaterialResourceState resources){
         PendingShadowTextureReset reset(this.m_pending);
         if(!AppendPreparedMaterialSurfaceSampledTextures(material, resources, this.m_pending))

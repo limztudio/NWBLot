@@ -9,13 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherOpaqueGbufferGeometrySet(in MaterialPassDrawItemPartitions drawItems, mut GpuTaskGraph graph){
     const Array<MaterialPassDrawItemsView, 2u> drawSets(MaterialPassDrawItemsView(drawItems.regular), MaterialPassDrawItemsView(drawItems.csgReceiverSurface));
     return GatherPreparedMaterialGeometryResourceSet(drawSets, s_GbufferMaterialGeometrySet, "Opaque Material Geometry", graph);
 }
 
-[cpp_unwind]
 Expected<GpuGraphResourceSetId> GatherOpaqueGbufferSampledTextureSet(
     in MaterialPassDrawItemPartitions drawItems,
     in RendererMaterialSystem materialSystem,

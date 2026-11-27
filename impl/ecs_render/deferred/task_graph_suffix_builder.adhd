@@ -63,7 +63,6 @@ class DeferredGraphSuffixBuilder : NoCopy{
         this.m_debugLineProvider = debugLineProvider;
     }
 
-    [cpp_unwind]
     public Expected<DeferredGraphSuffixResult> declare(
         mut DeferredGraphSuffixInputs inputs,
         in borrow GpuTaskId shadowVisibilityTask,

@@ -35,7 +35,6 @@ class DependencyQueueState{
     public Vector<u8> processed;
     public Vector<usize> fileQueue;
 
-    [cpp_unwind]
     public void initialize(in usize fileCount, in Span<u8> initialSelected, in Span<usize> initialOrder){
         this.included.clear();
         this.included.reserve(initialSelected.size());
@@ -58,7 +57,6 @@ class DependencyQueueState{
         return true;
     }
 
-    [cpp_unwind]
     public void enqueueIfUnprocessed(in usize providerIndex){
         if(this.processed[providerIndex] == 0u)
             this.fileQueue.push_back(providerIndex);
@@ -84,7 +82,6 @@ class DependencyProviderCatalog : NoCopy{
         this.access = access;
     }
 
-    [cpp_unwind]
     public b8 discover(in AssetDependencyOptions options){
         const auto repo = ResolvePipelineRepoRoot(StringView(options.repoRoot), s_DiagnosticPrefix);
         if(!repo.has_value())
@@ -116,7 +113,6 @@ class DependencyProviderCatalog : NoCopy{
         return expected == s_NameNone || actual == expected || this.access.registry.matchesAssetType(actual, expected);
     }
 
-    [cpp_unwind]
     private Expected<b8> matchesFile(in DiscoveredNwbFile file, in MetascriptDocument document, in Name path, in Name type)const{
         const auto bunch = HasAssetBunchDeclaration(document);
         if(!bunch.has_value())
@@ -152,7 +148,6 @@ class DependencyProviderCatalog : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     private Expected<b8> matchesChild(in DiscoveredNwbFile file, in MetascriptDocument document, in Name path, in Name type)const{
         const auto expanded = this.access.expand(file, document);
         if(!expanded.has_value()){
@@ -167,7 +162,6 @@ class DependencyProviderCatalog : NoCopy{
         return false;
     }
 
-    [cpp_unwind]
     public Expected<usize> resolve(in Name path, in Name type, in StringView hint)const{
         if(path == s_NameNone)
             return MakeUnexpected(Failure());
@@ -197,7 +191,6 @@ class DependencyProviderCatalog : NoCopy{
         return matched;
     }
 
-    [cpp_unwind]
     public Expected<DependencyInputSelection> selectInputs(in AssetDependencyOptions options)const;
 }
 
@@ -212,7 +205,6 @@ class DependencyTraversal : NoCopy{
         this.m_candidates = candidates;
     }
 
-    [cpp_unwind]
     private b8 enqueue(in Name path, in Name type){
         if(path == s_NameNone)
             return false;
@@ -226,15 +218,12 @@ class DependencyTraversal : NoCopy{
         return true;
     }
 
-    [cpp_unwind]
     private b8 extract(in DiscoveredNwbFile file, in Name type, in Name path, in MetascriptValue value, in Optional<in MetascriptDocument> document){
         return this.m_providers.access.extract(file, type, path, value, document, lambda[mut this](in Name dep, in Name expected) -> b8{ return this.enqueue(dep, expected); });
     }
 
-    [cpp_unwind]
     private b8 process(in usize index);
 
-    [cpp_unwind]
     public b8 traverse(in DependencyInputSelection selected){
         this.m_queue.initialize(this.m_providers.catalog.files.size(), selected.selected, selected.order);
         this.m_hints.reserve(this.m_providers.catalog.files.size());
@@ -284,7 +273,6 @@ void LogReturnedDependencyInputCount(in usize count){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void CollectValuePathHints(in MetascriptValue value, mut DependencyPathHints hints){
     if(value.isString()){
         hints.record(value.asString());
@@ -303,7 +291,6 @@ void CollectValuePathHints(in MetascriptValue value, mut DependencyPathHints hin
         });
 }
 
-[cpp_unwind]
 void CollectDocumentPathHints(in MetascriptDocument document, mut DependencyPathHints hints){
     const Optional<in MetascriptDocument> owner(document);
     document.forEachDeclaration(lambda[in owner, mut hints](in StringView typeName, in StringView variableName) -> b8{
@@ -315,7 +302,6 @@ void CollectDocumentPathHints(in MetascriptDocument document, mut DependencyPath
     });
 }
 
-[cpp_unwind]
 Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(in AssetDependencyOptions options)const{
     DependencyInputSelection result;
     result.selected.resize(this.catalog.files.size(), 0u);
@@ -337,7 +323,6 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(in As
     return result;
 }
 
-[cpp_unwind]
 b8 DependencyTraversal::process(in usize index){
     in DiscoveredNwbFile file = this.m_providers.catalog.files[index];
     const auto doc = this.m_providers.access.read(file, s_DiagnosticPrefix);
@@ -378,7 +363,6 @@ b8 DependencyTraversal::process(in usize index){
     });
 }
 
-[cpp_unwind]
 Expected<Vector<String>> ComputeAssetDependencies(in AssetDependencyOptions options){
     AssetCookWorkspace workspace(s_DependencyComputerArena);
     CookFileCatalog catalog(workspace);
@@ -403,7 +387,6 @@ Expected<Vector<String>> ComputeAssetDependencies(in AssetDependencyOptions opti
     return paths;
 }
 
-[cpp_unwind]
 b8 WriteAssetDependencies(in AssetDependencyOptions options){
     const auto paths = ComputeAssetDependencies(options);
     if(!paths.has_value())

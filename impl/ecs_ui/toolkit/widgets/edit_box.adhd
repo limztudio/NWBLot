@@ -27,12 +27,10 @@ class EditBoxView : MoveOnly{
     private b8 m_composing = false;
     private b8 m_ready = false;
 
-    [cpp_unwind]
     public b8 snapshot(in EditModel model){
         return this.snapshot(model, false, s_EditBoxDefaultMaskCodePoint);
     }
 
-    [cpp_unwind]
     public b8 snapshot(in EditModel model, in b8 password, in u32 maskCodePoint){
         return EditBoxSnapshotBuilder().commit(
             model.text(), model.graphemeBoundaries(), model.composition(), model.textMode(),
@@ -43,7 +41,6 @@ class EditBoxView : MoveOnly{
         );
     }
 
-    [cpp_unwind]
     public TextLayoutStatus shape(mut TextService text, in ShapeRequest options){
         ShapeRequest request = options;
         const TextLayoutStatus validation = PrepareEditBoxShapeRequest(this.m_revision, this.displayText(), this.m_textMode, request);
@@ -52,7 +49,6 @@ class EditBoxView : MoveOnly{
         return AdoptEditBoxShapingResult(this, text.layout(request));
     }
 
-    [cpp_unwind]
     public b8 adoptLayout(mut TextLayout layout){
         if(this.m_revision == 0u)
             return false;
@@ -67,7 +63,6 @@ class EditBoxView : MoveOnly{
         this.m_ready = true;
         return true;
     }
-    [cpp_unwind]
     public b8 measure(mut TextService text, in DisplayMetrics display){
         const Expected<Rect> measured = MeasureEditBoxViewVisual(this.m_ready, this.layout(), display, text);
         if(!measured.has_value())
@@ -101,7 +96,6 @@ class EditBoxView : MoveOnly{
         return TryHitTestEditBoxView(this.m_ready, this.m_geometry.ready(), point, placement, this.m_geometry.lines(), this.m_geometry.caretStops());
     }
 
-    [cpp_unwind]
     public b8 paint(mut TextService text, mut PaintBuilder paint, in UiSkin skin, in EditBoxPlacement placement, in EditBoxStyle style, in EditBoxPaintFlags flags, in Optional<in TextLayout> placeholder)const{
         if(!this.m_ready)
             return false;
@@ -134,7 +128,6 @@ class EditBoxView : MoveOnly{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 TextLayoutStatus AdoptEditBoxShapingResult<T>(mut EditBoxView view, mut forward T shaped){
     mut Expected<TextLayout, TextLayoutStatus> result = shaped;
     if(!result.has_value())

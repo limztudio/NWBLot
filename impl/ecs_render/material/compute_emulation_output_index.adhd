@@ -38,7 +38,6 @@ class MaterialPassEmulationOutputIndex<T> : NoCopy{
         return false;
     }
 
-    [cpp_unwind]
     public b8 insert(in T identity){
         if(this.m_promoted)
             return this.m_index.insert(identity).second;

@@ -47,7 +47,6 @@ class InvalidTargetCase{
 class UnexpectedReadFailure{}
 
 class ThrowingReader : ReaderWithSpan{
-    [cpp_unwind]
     public Expected<usize> readBytes(mut Span<u8> buffer)override{
         ThrowTestException<UnexpectedReadFailure>(UnexpectedReadFailure());
         return MakeUnexpected(Failure());
@@ -441,7 +440,6 @@ void VerifyMetascript_ConcatenatesNestedListElementsAcrossReallocation(){
     }
 }
 
-[cpp_unwind]
 void VerifyMetascript_UnexpectedReaderExceptionsPropagateWithoutBecomingParseErrors(){
     ReaderArena arena = ReaderArena();
     Document document = Document(arena.arena);
@@ -879,7 +877,6 @@ void VerifyBorrowOnlyPublisherKeepsMoveOnlySnapshotInOwnerArena(){
     EXPECT_EQ(retained.values[0u], 5u);
 }
 
-[cpp_unwind]
 void VerifyCppUnwindPreservesExceptionAcrossNestedLambdas(){
     const CppUnwindCallback probe = CppUnwindCallback();
     Func<u32()> callback = lambda[]() -> u32{ ThrowTestException<UnexpectedReadFailure>(UnexpectedReadFailure()); return 0u; };
@@ -887,7 +884,6 @@ void VerifyCppUnwindPreservesExceptionAcrossNestedLambdas(){
     EXPECT_TRUE(ThrowsException<UnexpectedReadFailure>(lambda[in dispatch, mut callback]() -> void{ dispatch.record(callback); }));
 }
 
-[cpp_unwind]
 void VerifyCppUnwindParallelDrainsAcceptedWorkBeforeCaptureAndScratchDestroy(){
     const CppUnwindCallback probe = CppUnwindCallback();
     ParallelUnwindTracker tracker;

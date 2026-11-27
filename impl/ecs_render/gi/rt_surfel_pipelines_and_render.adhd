@@ -408,7 +408,6 @@ b8 SurfelGiPipelineSet::ensureSurfelTraceBuildArgsPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 RendererRayTracingSystem::renderSurfelGiPhases(
     mut CommandList commandList,
     mut DeferredFrameTargets targets,

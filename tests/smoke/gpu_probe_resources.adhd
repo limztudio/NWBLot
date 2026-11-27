@@ -19,7 +19,6 @@ class GpuProbeDescriptors{
         this.m_graphics = graphics;
     }
 
-    [cpp_unwind]
     public ~GpuProbeDescriptors(){
         if(!this.m_graphics.waitForIdle())
             TerminateInvariant();
@@ -48,7 +47,6 @@ class ProbeBufferImport{
         this.access = access;
     }
 
-    [cpp_unwind]
     public Expected<GpuTaskResourceUse> importUse(mut GpuTaskGraph graph)const{
         GpuGraphResourceDesc desc;
         desc.setIdentity(this.buffer.deref().getCreationDescription().debugName).setMarkerLabel(this.label).setType(GpuGraphResourceType::Buffer)
@@ -87,7 +85,6 @@ Expected<ComputePipelineHandle> LoadGpuProbePipeline(
     return CreateHeapComputePipeline(device, shader, layout, false);
 }
 
-[cpp_unwind]
 b8 ImportProbeBufferUses(mut GpuTaskGraph graph, in Span<ProbeBufferImport> buffers, mut Span<GpuTaskResourceUse> uses){
     if(uses.size() < buffers.size())
         return false;

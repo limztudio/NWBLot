@@ -23,7 +23,6 @@ class SharedComputeEmulationPhaseTable{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, in GpuGraphResourceId destination, in Name identity, in StringView label, mut GpuTaskId dependency, in b8 mergeWithPrevious){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
@@ -46,7 +45,6 @@ b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, 
     return true;
 }
 
-[cpp_unwind]
 b8 AppendImmutableBufferUpload(mut GpuTaskGraph graph, in GpuUploadBlobId blob, in GpuGraphResourceId destination, in Name identity, in StringView label, mut GpuTaskId dependency){
     return AppendImmutableBufferUpload(graph, blob, destination, identity, label, dependency, true);
 }

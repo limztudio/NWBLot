@@ -75,7 +75,6 @@ class OpaqueCsgIntervalStage : NoCopy{
         this.m_intervalSampleComputeEmulationPayload = OpaqueCsgIntervalSampleComputeEmulationGraphTask(graphics, materials, targets, intervalSampleTicket, meshReady, shadingReady, computeTiming);
     }
 
-    [cpp_unwind]
     public void capturePayloads(
         in MeshFrameBindingSnapshot frameBindings,
         in CsgGraphResourceSnapshot csgResources,
@@ -88,7 +87,6 @@ class OpaqueCsgIntervalStage : NoCopy{
         in b8 hasOpaqueDrawItems,
         in b8 hasOpaqueCsgFrameWork
     );
-    [cpp_unwind]
     public Expected<OpaqueCsgIntervalStageTasks> declare(in OpaqueCsgIntervalStageInputs inputs, mut ObjectGeometryCacheGraph objectGeometry);
 }
 

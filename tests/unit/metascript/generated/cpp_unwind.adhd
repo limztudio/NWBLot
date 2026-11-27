@@ -24,14 +24,11 @@ extern class ParallelLifetimeProbe;
 
 
 interface IUnwindCallback{
-    [cpp_unwind]
     u32 record(mut Func<u32()> callback)const;
 }
 
 class CppUnwindCallback : IUnwindCallback{
-    [cpp_unwind]
     public u32 record(mut Func<u32()> callback)const override;
-    [cpp_unwind]
     public void runParallelUnwind(in ParallelUnwindTracker tracker, mut Func<void()> callback)const;
     public b8 ready()const{
         return true;

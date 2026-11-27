@@ -15,7 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<String> PromptString(in StringView label, in StringView defaultValue, mut b8 prompted){
     prompted = true;
     ConsoleWrite(label);
@@ -35,7 +34,6 @@ Expected<String> PromptString(in StringView label, in StringView defaultValue, m
     return line;
 }
 
-[cpp_unwind]
 b8 PromptOption(in StringView label, mut String value, mut b8 prompted){
     const auto result = PromptString(label, value, prompted);
     if(!result.has_value())
@@ -44,7 +42,6 @@ b8 PromptOption(in StringView label, mut String value, mut b8 prompted){
     return true;
 }
 
-[cpp_unwind]
 b8 PromptBool(in StringView label, in b8 defaultValue, mut b8 prompted){
     prompted = true;
     String line;
@@ -61,7 +58,6 @@ b8 PromptBool(in StringView label, in b8 defaultValue, mut b8 prompted){
     }
 }
 
-[cpp_unwind]
 f64 PromptDouble(in StringView label, in f64 defaultValue, mut b8 prompted){
     prompted = true;
     const String prompt = StringFormat("{} [{:.6g}]: ", label, defaultValue);
@@ -81,7 +77,6 @@ f64 PromptDouble(in StringView label, in f64 defaultValue, mut b8 prompted){
     }
 }
 
-[cpp_unwind]
 b8 ValidateOutputOverwrite(in Path outputPath, in ImportOptions options, mut b8 prompted){
     const auto exists = FileExistsNoFollow(outputPath);
     if(!exists.has_value()){
@@ -97,7 +92,6 @@ b8 ValidateOutputOverwrite(in Path outputPath, in ImportOptions options, mut b8 
     return PromptBool("Output already exists. Overwrite it?", false, prompted);
 }
 
-[cpp_unwind]
 b8 ConfigurePromptsBeforeLoad(in OptionPresence presence, mut ImportOptions options, mut b8 prompted){
     if(options.inputPath.empty() && (options.acceptDefaults || !PromptOption("Input FBX or NWB path", options.inputPath, prompted))){
         warning("Input FBX or NWB path is required.");
@@ -109,7 +103,6 @@ b8 ConfigurePromptsBeforeLoad(in OptionPresence presence, mut ImportOptions opti
     return true;
 }
 
-[cpp_unwind]
 b8 ConfigurePromptsAfterLoad(in OptionPresence presence, in Span<MeshInstance> instances, mut ImportOptions options, mut b8 prompted){
     if(!presence.assetType && !options.acceptDefaults && !PromptOption(FormatAssetTypePromptLabel(), options.assetType, prompted))
         return false;
@@ -156,7 +149,6 @@ Expected<b8> SelectedMeshesUseSkinning(in Span<MeshInstance> instances, in Span<
     return summary.resolve();
 }
 
-[cpp_unwind]
 i32 RunNwbRefreshCommand(in ToolCli app, in OptionPresence presence, mut ImportOptions options, mut b8 prompted){
     if(options.listMeshes)
         return app.validationExit(s_FbxToNwbListMeshesFlag, "Only valid for FBX input.");
@@ -182,7 +174,6 @@ i32 RunNwbRefreshCommand(in ToolCli app, in OptionPresence presence, mut ImportO
     return s_FbxToNwbExitSuccess;
 }
 
-[cpp_unwind]
 i32 ImportFbx(in ToolCli app, in OptionPresence presence, mut ImportOptions options, mut b8 prompted){
     auto scene = LoadScene(options);
     if(!scene.has_value())
@@ -273,7 +264,6 @@ i32 ImportFbx(in ToolCli app, in OptionPresence presence, mut ImportOptions opti
     return s_FbxToNwbExitSuccess;
 }
 
-[cpp_unwind]
 i32 RunFbxCommand(in ConsoleArguments arguments, mut b8 prompted){
     ImportOptions options;
     OptionPresence presence;

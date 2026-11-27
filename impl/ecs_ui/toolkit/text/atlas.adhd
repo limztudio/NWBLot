@@ -103,7 +103,6 @@ class GlyphAtlas : NoCopy{
             TerminateInvariant();
     }
 
-    [cpp_unwind]
     public Optional<in AtlasGlyph> prepareAndFind(in SharedFontFace face, in u32 glyphId, in u32 pixelSize){
         if(!face.valid() || !face.deref().valid() || pixelSize == 0u)
             return Optional<in AtlasGlyph>();
@@ -163,7 +162,6 @@ class GlyphAtlas : NoCopy{
         return Optional<in AtlasGlyph>(this.m_glyphs[this.m_glyphs.size() - 1u]);
     }
 
-    [cpp_unwind]
     public b8 prepare(in SharedFontFace face, in u32 glyphId, in u32 pixelSize){
         return this.prepareAndFind(face, glyphId, pixelSize).has_value();
     }

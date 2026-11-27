@@ -42,7 +42,6 @@ class SrgbClearEdgeTask{
         commands.requiredCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
         return commands;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         if(!this.destination.valid() || context.hasCommandIrCapture())
             return false;
@@ -63,7 +62,6 @@ class SrgbClearEdgeReadbackTask{
         commands.requiredCapabilities = GpuQueueCapability::Transfer;
         return commands;
     }
-    [cpp_unwind]
     public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
         if(!this.source.valid() || !this.destination.valid() || context.hasCommandIrCapture())
             return false;
@@ -195,7 +193,6 @@ u8 ExpectedSRGBClearByte(in f32 value, in b8 srgb){
     return cast<u8>(Floor(cast<f32>(cast<f64>(quantized) + 0.5)));
 }
 
-[cpp_unwind]
 Expected<GpuTaskId> DeclareSrgbClearEdges(mut GpuTaskGraph graph, in TextureHandle destination, in StagingTextureHandle staging){
     GpuGraphResourceDesc textureDesc;
     textureDesc.setIdentity(s_SmokeNameTestsSmokeTextureSrgbEdges).setMarkerLabel("sRGB clear edge texture")
@@ -288,7 +285,6 @@ b8 VerifyTextureSrgbClearPixels(in u32 formatCode, in b8 swapRb, in Span<u8> byt
     return true;
 }
 
-[cpp_unwind]
 b8 VerifyTextureSrgbClear(mut GraphicsRuntime graphics){
     mut Device device = graphics.getDevice();
     for(u32 i = 0u; i < 2u; ++i){
@@ -345,7 +341,6 @@ PlatformStringView GetProjectWindowTitle(){
     return PlatformTextLiteral("NWB Texture Smoke");
 }
 
-[cpp_unwind]
 UniquePtr<IProjectEntryCallbacks> CreateProjectCallbacks(mut ProjectRuntimeContext context){
     auto world = CreateSmokeRenderWorld(s_TextureSmokeProjectName, context);
     if(!world.has_value())

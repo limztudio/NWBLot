@@ -41,7 +41,6 @@ class CreatedFilesystem{
 }
 
 class ThrowingPublishLogger : Utf8LogSink{
-    [cpp_unwind]
     public void receive(in StringView text, in LogType kind)override{ ThrowTestException<i32>(s_FilesystemPublishLogFailure); }
 }
 
@@ -50,7 +49,6 @@ class BlockingRestoreLogger : Utf8LogSink{
     private b8 m_throws;
     private b8 m_received = false;
     public BlockingRestoreLogger(in Path path, in b8 throws){ this.m_path = path; this.m_throws = throws; }
-    [cpp_unwind]
     public void receive(in StringView text, in LogType kind)override{
         this.m_received = EnsureDirectories(this.m_path).has_value();
         if(this.m_throws) ThrowTestException<i32>(s_FilesystemPublishLogFailure);

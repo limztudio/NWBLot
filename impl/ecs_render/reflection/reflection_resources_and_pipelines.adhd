@@ -52,7 +52,6 @@ b8 HasPreparedReflectionIndirectArgsCapacity(in b8 hasIndirectArgsBuffer, in u64
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 void RendererReflectionSystem::invalidateResources(){
     this.m_preparedCsgDispatch.reset();
     this.m_csgDispatchStates.clear();
@@ -61,7 +60,6 @@ void RendererReflectionSystem::invalidateResources(){
     this.m_pipelines.invalidate(this.m_resources);
 }
 
-[cpp_unwind]
 b8 RendererReflectionSystem::prepareResources(in u32 width, in u32 height, in b8 prepareHardware, in b8 prepareCsgHardware, in ReflectionSettings settings){
     const Expected<u32> capacityResult = TryResolveReflectionQueueCapacity(width, height, settings.maxHardwareRaysPerFrame);
     if(!capacityResult.has_value())
@@ -384,7 +382,6 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
 }
 
 
-[cpp_unwind]
 void RendererReflectionSystem::releaseTargets(){
     this.m_postprocess.invalidateResources();
     this.m_feedback.invalidateResources();
@@ -416,7 +413,6 @@ void RendererReflectionSystem::releaseTargets(){
         mip = ReflectionDepthPyramidMip();
 }
 
-[cpp_unwind]
 b8 RendererReflectionSystem::prepareCsgDispatchResources(){
     this.m_preparedCsgDispatch.reset();
     for(usize index = 0u; index < this.m_csgDispatchStates.size(); ++index){
@@ -438,7 +434,6 @@ b8 RendererReflectionSystem::prepareCsgDispatchResources(){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererReflectionSystem::prepareQueue(in u32 capacity){
     if(HasPreparedReflectionQueueCapacity(this.m_resources.queue.valid(), this.m_resources.parameters.queueCapacity, capacity))
         return true;
@@ -464,7 +459,6 @@ b8 RendererReflectionSystem::prepareQueue(in u32 capacity){
     return true;
 }
 
-[cpp_unwind]
 b8 RendererReflectionSystem::prepareArguments(in u32 capacity, in b8 sliced){
     const u32 argumentCount = ResolveReflectionIndirectArgumentCount(capacity, sliced);
     const u64 byteSize = ReflectionIndirectArgumentsByteSize(argumentCount, s_ReflectionIndirectArgumentBytes);

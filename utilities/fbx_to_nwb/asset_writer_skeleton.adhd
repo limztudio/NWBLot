@@ -14,7 +14,6 @@ b8 HasSkeletonJointParentIndex(in u32 parentIndex){
     return parentIndex != s_MeshMissingStreamIndex;
 }
 
-[cpp_unwind]
 String MakeSkeletonJointName(in UfbxNode node, in usize fallbackIndex, in Span<String> usedNames){
     const StringView name = node.name();
     if(!name.empty())
@@ -23,7 +22,6 @@ String MakeSkeletonJointName(in UfbxNode node, in usize fallbackIndex, in Span<S
     return MakeUniqueFbxJointName(fallback, usedNames);
 }
 
-[cpp_unwind]
 Expected<SkeletonOutputData> BuildSkeletonOutputData(in Span<UfbxNode> joints, in Span<JointMatrix> bindPoseMatrices, in Span<JointMatrix> inverseBindMatrices){
     SkeletonOutputData outData;
     if(!ValidateSkeletonOutputInputCounts(joints.size(), bindPoseMatrices.size(), inverseBindMatrices.size()))
@@ -119,7 +117,6 @@ Expected<SkeletonOutputData> BuildSkeletonOutputData(in Span<UfbxNode> joints, i
     return outData;
 }
 
-[cpp_unwind]
 Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(in SourceMeshStreams sourceMesh){
     if(!ValidateSkinnedModelSourceMeshRefs(CountSourceMeshStreams(sourceMesh), sourceMesh.vertexRefs, sourceMesh.indices))
         return MakeUnexpected(Failure());

@@ -4782,7 +4782,6 @@ b8 ProjectPhysicsWorldSegmentToScreen(
     return projector.projectSegment(worldP0, worldP1, outSegment);
 }
 
-[cpp_unwind]
 void PhysicsSystem::collectDebugLines(mut GpuDebugLineCollector collector){
     if(!this.m_debugDrawEnabled)
         return;

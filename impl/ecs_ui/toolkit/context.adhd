@@ -65,7 +65,6 @@ class Context : NoCopy{
     private b8 m_failed = false;
     private b8 m_rootPrunedThisFrame = false;
 
-    [cpp_unwind]
     public Context(){
         this.m_scopes.reserve(s_ContextMaxScopeDepth);
         this.m_accessibleParents.reserve(s_ContextMaxScopeDepth);
@@ -143,7 +142,6 @@ class Context : NoCopy{
         this.m_activeWindowId = WidgetId();
         this.m_activeWindowDeclarationGeneration = 0u;
     }
-    [cpp_unwind]
     public b8 beginRoot(in WidgetRoot root){
         if(!TryBeginContextRoot(this.m_failed, this.m_frameGeneration, this.m_rootActive, root, this.m_root, this.m_rootActive, this.m_scopes)){
             this.fail();
@@ -223,7 +221,6 @@ class Context : NoCopy{
         this.m_nextTargetTrapDirectional = false;
         this.m_hasNextTargetFocusGroup = false;
     }
-    [cpp_unwind]
     public b8 pushAccessibleParent(in WidgetId id){
         if(this.m_failed || !this.m_rootActive || !id.valid() || this.m_accessibleParents.size() >= s_ContextMaxScopeDepth)
             return false;
@@ -241,14 +238,12 @@ class Context : NoCopy{
             return WidgetId();
         return this.m_accessibleParents.back();
     }
-    [cpp_unwind]
     public void setNextAccessibleOverride(in AccessibleOverride value){
         this.m_nextAccessibleOverride = value;
     }
     public void clearNextAccessibleOverride(){
         this.m_nextAccessibleOverride.reset();
     }
-    [cpp_unwind]
     public b8 addAccessibleNode(in AccessibleNodeDesc desc){
         AccessibleNodeDesc resolved = desc;
         if(!resolved.parentId.valid())
@@ -267,13 +262,11 @@ class Context : NoCopy{
         this.m_nextAccessibleOverride.reset();
         return added;
     }
-    [cpp_unwind]
     public b8 announce(in StringView text, in AccessibilityLiveMode liveMode){
         if(this.m_failed || !this.m_rootActive)
             return false;
         return this.m_accessibility.announce(text, liveMode);
     }
-    [cpp_unwind]
     public b8 applyAccessibleAction(in AccessibilityActionEvent action){
         if(action.targetId == 0u)
             return false;
@@ -385,7 +378,6 @@ class Context : NoCopy{
         }
         return false;
     }
-    [cpp_unwind]
     public b8 pushScope(in StringView stableKey){
         if(!TryPushContextScope(this.m_failed, this.m_rootActive, stableKey, this.m_scopes)){
             this.fail();
@@ -400,7 +392,6 @@ class Context : NoCopy{
         }
         return true;
     }
-    [cpp_unwind]
     public Expected<mut WidgetState> declare(in StringView stableKey, in WidgetKind kind){
         if(this.m_failed || !this.m_rootActive)
             return MakeUnexpected(Failure());
@@ -411,7 +402,6 @@ class Context : NoCopy{
         }
         return this.declareId(id.value(), kind);
     }
-    [cpp_unwind]
     public Expected<mut WidgetState> declarePart(in WidgetState owner, in StringView stableKey, in WidgetKind kind){
         if(this.m_failed || !this.currentDeclaration(owner)){
             this.fail();
@@ -424,7 +414,6 @@ class Context : NoCopy{
         }
         return this.declareId(id.value(), kind);
     }
-    [cpp_unwind]
     public b8 claimState(in WidgetState owner, in u64 instanceGeneration){
         if(this.m_failed || !this.currentDeclaration(owner) || !TryClaimContextState(owner.kind, instanceGeneration, this.m_smallStateClaims, this.m_stateClaims, this.m_stateClaimCount)){
             this.fail();
@@ -432,7 +421,6 @@ class Context : NoCopy{
         }
         return true;
     }
-    [cpp_unwind]
     public b8 addTarget(in WidgetState state, in HitTarget target){
         WidgetId scrollOwnerId;
         u64 scrollOwnerGen = 0u;
@@ -475,7 +463,6 @@ class Context : NoCopy{
         }
         return true;
     }
-    [cpp_unwind]
     public b8 addPartTarget(in WidgetState owner, in WidgetId part, in HitTarget target){
         WidgetId scrollOwnerId;
         u64 scrollOwnerGen = 0u;
@@ -499,7 +486,6 @@ class Context : NoCopy{
         }
         return true;
     }
-    [cpp_unwind]
     public b8 takeActivation(in WidgetState state, in b8 enabled){
         if(this.m_failed || !this.currentDeclaration(state))
             return false;
@@ -514,7 +500,6 @@ class Context : NoCopy{
             return false;
         return !this.m_failed && this.m_input.consumeActivation(state.id);
     }
-    [cpp_unwind]
     public Expected<PointerGesture> takePointerGesture(in WidgetState state, in b8 enabled){
         if(this.m_failed || !this.currentDeclaration(state))
             return MakeUnexpected(Failure());
@@ -529,7 +514,6 @@ class Context : NoCopy{
             return MakeUnexpected(Failure());
         return this.m_input.consumePointerGesture(state.id, state.declarationGeneration);
     }
-    [cpp_unwind]
     public Expected<ControlAction> takeControlAction(in WidgetState state, in b8 enabled, in ControlToken token){
         if(this.m_failed || !this.currentDeclaration(state))
             return MakeUnexpected(Failure());
@@ -544,7 +528,6 @@ class Context : NoCopy{
             return MakeUnexpected(Failure());
         return this.m_input.consumeControlAction(state.id, state.declarationGeneration, token);
     }
-    [cpp_unwind]
     public Expected<PointerGesture> takePartPointerGesture(in WidgetState owner, in WidgetId part, in b8 enabled){
         if(this.m_failed || !this.currentDeclaration(owner))
             return MakeUnexpected(Failure());
@@ -559,7 +542,6 @@ class Context : NoCopy{
             return MakeUnexpected(Failure());
         return this.m_input.consumePointerGesture(part, owner.declarationGeneration);
     }
-    [cpp_unwind]
     public b8 registerPopupScope(in WidgetState state, in PopupScope scope){
         if(this.m_failed || !this.currentDeclaration(state)){
             this.fail();
@@ -594,7 +576,6 @@ class Context : NoCopy{
         }
         return true;
     }
-    [cpp_unwind]
     public b8 beginPopupScope(in WidgetState state, in PopupScope scope){ return this.registerPopupScope(state, scope) && this.activatePopupScope(scope.token); }
     public b8 endPopupScope(in b8 visible){
         const Expected<PopupEndResult> ended = TryEndContextPopupScope(this.m_popups, this.m_popupStack, this.m_popupDepth, this.m_currentPopup);
@@ -630,7 +611,6 @@ class Context : NoCopy{
             return PopupToken();
         return this.m_popups.back().scope.token;
     }
-    [cpp_unwind]
     public b8 finishFrame(){
         if(!CanFinishContextFrame(this.m_failed, this.m_frameGeneration, this.m_rootActive, this.m_popupDepth, this.m_currentPopup)){
             this.fail();
@@ -641,7 +621,6 @@ class Context : NoCopy{
         this.m_frameGeneration = 0u;
         return true;
     }
-    [cpp_unwind]
     public b8 commitFrame(in u64 generation){
         if(!CanCommitContextFrameGeneration(generation, this.m_readyGeneration))
             return false;
@@ -661,7 +640,6 @@ class Context : NoCopy{
         this.m_readyGeneration = 0u;
         return true;
     }
-    [cpp_unwind]
     public void abandonFrame(){
         this.resetInput();
         this.retireUnseenStates();
@@ -699,7 +677,6 @@ class Context : NoCopy{
             this.m_readyGeneration
         );
     }
-    [cpp_unwind]
     public void retainRoots(in Span<WidgetRoot> roots){
         if(this.m_states.entries().empty() && this.m_targets.empty() && this.m_popups.empty())
             return;
@@ -722,7 +699,6 @@ class Context : NoCopy{
     public in AccessibleTree accessibility()const{ return this.m_accessibility; }
     public mut AccessibleTree accessibility(){ return this.m_accessibility; }
     public in WidgetStateStore states()const{ return this.m_states; }
-    [cpp_unwind]
     private Expected<mut WidgetState> declareId(in WidgetId id, in WidgetKind kind){
         if(!CanDeclareNextContextWidget(this.m_declarationCount)){
             this.fail();
@@ -760,7 +736,6 @@ class Context : NoCopy{
             this.m_windowPromotions.push_back(promotion);
         }
     }
-    [cpp_unwind]
     private void retireUnseenStates(){
         if(this.m_frameGeneration == 0u)
             return;

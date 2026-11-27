@@ -416,7 +416,6 @@ b8 SerializeMaterialAsset(in Material material, mut Vector<u8> outBinary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<Material> BuildMaterialAsset(in MaterialCookEntry entry){
     if(!ValidateMaterialCookEntryRequiredFields(entry.virtualPath, entry.materialInterface, entry.typedLayoutHash, entry.shaderVariant))
         return MakeUnexpected(Failure());
@@ -551,7 +550,6 @@ Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface<PathRang
     return result;
 }
 
-[cpp_unwind]
 b8 ValidateMaterialCookInterfaces(in Span<MaterialBindEntry> entries, mut Span<MaterialCookEntry> materials){
     const Expected<MaterialBindInterfaceLookup> lookup = BuildMaterialBindInterfaceLookup(entries);
     if(!lookup.has_value())

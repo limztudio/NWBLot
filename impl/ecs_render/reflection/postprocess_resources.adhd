@@ -50,16 +50,11 @@ class RendererReflectionPostprocess : NoCopy{
         this.m_graphics = graphics;
         this.m_shaders = shaders;
     }
-    [cpp_unwind]
     public void invalidateResources();
-    [cpp_unwind]
     public b8 prepareResources(in u32 width, in u32 height, in ReflectionSettings settings);
     public ReflectionPostprocessSnapshot snapshot(in ReflectionRadianceBinding base, in ReflectionSceneContentStamp stamp, in ReflectionSettings settings, in u64 graphicsFrameIndex)const;
-    [cpp_unwind]
     private void releaseTargets();
-    [cpp_unwind]
     private b8 preparePipeline(in ReflectionComputeShaderSelector selector, in StringView variant, mut ComputePipelineHandle pipeline, mut ShaderHandle shader);
-    [cpp_unwind]
     private b8 prepareImage(mut ReflectionRadianceBinding image, in u32 descriptorIndex, in Name name);
 }
 

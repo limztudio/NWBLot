@@ -35,8 +35,20 @@ type TextInputAdmissionEnum = TextInputAdmission;
 [cpp_type_alias(TestTypeAlias, ShaderArchivePathResolver)]
 class TestTypeAliasedClass{}
 
+class NothrowRvalueProbe{
+    private i32 m_value = 0;
+
+    [cpp_rvalue_overload]
+    public b8 submit(mut i32 incoming){
+        this.m_value = incoming;
+        incoming = 0;
+        return this.m_value != 0;
+    }
+}
+
 static_assert(is_cpp_type_alias<TestTypeAliasedClass, ShaderArchivePathResolver>(TestTypeAlias));
-static_assert(has_nothrow_rvalue_member<GpuRenderer, b8, DrawSnapshot>(submit));
+static_assert(!has_nothrow_rvalue_member<GpuRenderer, b8, DrawSnapshot>(submit));
+static_assert(has_nothrow_rvalue_member<NothrowRvalueProbe, b8, i32>(submit));
 static_assert(!has_nothrow_rvalue_member<GpuRenderer, void, DrawSnapshot>(submit));
 static_assert(!is_cpp_type_alias<TestTypeAliasedClass, DrawSnapshot>(TestTypeAlias));
 
@@ -94,7 +106,7 @@ class UiUnwindProbeSystem{
         return options;
     }
 
-    [cpp_unwind] public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+    public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
         ++this.updates;
         if(this.failUpdate){
             TriggerProbeOom();
@@ -153,7 +165,6 @@ UiTextEditOwner MakeReplacedSessionOwner(in u64 modelGeneration){
 }
 
 
-[cpp_unwind]
 void VerifyPaintSlot_ClearAndRemoveReaddDoNotRestoreTheRunningCallback(){
     PaintSlotFixture fixture = PaintSlotFixture();
     auto entity = fixture.ecs.world.createEntity();
@@ -250,7 +261,6 @@ void VerifyPaintSlot_VectorGrowthAndExplicitMovePreserveMutableCaptures(){
     EXPECT_EQ(observed, 2);
 }
 
-[cpp_unwind]
 void VerifyPaintSlot_ExceptionRestoresCallbackWhenItStillHasAnOwner(){
     PaintSlotFixture fixture = PaintSlotFixture();
     UiPaintSlot slot = UiPaintSlot();
@@ -263,7 +273,6 @@ void VerifyPaintSlot_ExceptionRestoresCallbackWhenItStillHasAnOwner(){
     EXPECT_EQ(calls, 2);
 }
 
-[cpp_unwind]
 void VerifyPaintSlot_NestedReplacementAndExceptionDoNotRestoreTheDisplacedCallback(){
     PaintSlotFixture fixture = PaintSlotFixture();
     UiPaintSlot slot = UiPaintSlot();
@@ -573,18 +582,15 @@ class BridgeGamepadHandler : IInputEventHandler{
         this.m_context = context;
     }
 
-    [cpp_unwind]
     public void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected)override{
         this.m_adapter.onConnection(gamepadIndex, connected, this.m_context.input());
     }
 
-    [cpp_unwind]
     public b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action)override{
         ++this.m_buttonEvents;
         return this.m_adapter.onButton(gamepadIndex, button, action, this.m_context.input());
     }
 
-    [cpp_unwind]
     public b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value)override{
         ++this.m_axisEvents;
         return this.m_adapter.onAxis(gamepadIndex, axis, value, this.m_context.input());

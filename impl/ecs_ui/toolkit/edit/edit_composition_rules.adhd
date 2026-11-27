@@ -70,7 +70,7 @@ class EditCompositionRules{
         return true;
     }
 
-    [cpp_unwind] public b8 update(
+    public b8 update(
         in b8 compositionActive,
         in StringView value,
         in usize anchor,

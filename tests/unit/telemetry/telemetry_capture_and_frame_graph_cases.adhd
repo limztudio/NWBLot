@@ -421,7 +421,6 @@ void VerifyTelemetry_DiagnosticObserverRejectsOversizeWithoutTruncatingDirectDia
     EXPECT_EQ(recorder.droppedDiagnosticCount(), 1u);
 }
 
-[cpp_unwind]
 void VerifyTelemetry_DiagnosticObserverCapturesDuringUnwindWithoutAllocating(){
     TelemetryTestArena testArena = TelemetryTestArena();
     TelemetryRecorder recorder = TelemetryRecorder(testArena.arena);

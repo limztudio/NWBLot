@@ -20,7 +20,6 @@ class OpaqueGbufferMaterialResources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 Expected<OpaqueGbufferMaterialResources> GatherOpaqueGbufferMaterialResources(
     in MaterialPassDrawItemPartitions drawItems,
     in RendererMaterialSystem materialSystem,

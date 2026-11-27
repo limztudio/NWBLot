@@ -25,7 +25,6 @@ class InitializerProbe : Initializerable{
 
     public InitializerProbe(in u32 index){ this.m_index = index; }
 
-    [cpp_unwind]
     public b8 initialize()override{
         mut InitializerState state = TestProcessValue<InitializerState>();
         ++state.initializeCounts[this.m_index];
@@ -104,7 +103,6 @@ void VerifyCommonInitializerLifetime_FailedInitializationRollsBackOnlyTheSuccess
     EXPECT_EQ(SnapshotInitializerState().eventCount, 7u);
 }
 
-[cpp_unwind]
 void VerifyCommonInitializerLifetime_ThrowingInitializationRollsBackOnlyTheSuccessfulPrefixAndAllowsReacquire(){
     ResetInitializerState(false, true);
     const i32 result = InvokeTerminalEntry<InitializerFailure>(
@@ -174,7 +172,6 @@ void VerifyCommonInitializerLifetime_NestedGuardsFinalizeOnlyTheLastOwnerAndAllo
     EXPECT_EQ(finalState.eventCount, 8u);
 }
 
-[cpp_unwind]
 void VerifyCommonInitializerLifetime_GuardUnwindFinalizesAllItemsBeforeTheTerminalEntryHandlesTheOriginalFailure(){
     ResetInitializerState(false, false);
     const i32 result = InvokeTerminalEntry<InitializerFailure>(
@@ -214,7 +211,6 @@ NWB_ADHD_GTEST(CommonInitializerLifetime, GuardUnwindFinalizesAllItemsBeforeTheT
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_unwind]
 i32 RunInitializerTests(in InitializerTestArguments arguments){
     return InvokeTerminalEntry<InitializerFailure>(
         lambda[in arguments]() -> i32{

@@ -33,6 +33,7 @@ class RendererDeferredState : NoCopy{
     public ShaderHandle m_debugLinePixelShader = ShaderHandle();
     public GraphicsPipelineHandle m_debugLineDepthPipeline = GraphicsPipelineHandle();
     public GraphicsPipelineHandle m_debugLineOverlayPipeline = GraphicsPipelineHandle();
+    public GraphicsPipelineHandle m_debugLineOverlayColorOnlyPipeline = GraphicsPipelineHandle();
     public BufferHandle m_debugLineVertexBuffer = BufferHandle();
     public GpuDescriptorHandle m_debugLineVertexHeapHandle = GpuDescriptorHandleInvalid();
     public usize m_debugLineVertexCapacity = 0u;
@@ -64,6 +65,7 @@ class RendererDeferredState : NoCopy{
         this.m_debugLinePixelShader.reset();
         this.m_debugLineDepthPipeline.reset();
         this.m_debugLineOverlayPipeline.reset();
+        this.m_debugLineOverlayColorOnlyPipeline.reset();
         this.m_debugLineVertexBuffer.reset();
         this.m_debugLineVertexHeapHandle = GpuDescriptorHandleInvalid();
         this.m_debugLineVertexCapacity = 0u;

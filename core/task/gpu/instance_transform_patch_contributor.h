@@ -47,7 +47,20 @@ public:
 
 public:
     [[nodiscard]] virtual b8 prepareInstanceTransformPatches() = 0;
+    [[nodiscard]] virtual b8 hasActiveInstanceTransformPatches()const = 0;
+    [[nodiscard]] virtual u64 instanceTransformPatchMembershipSignature()const = 0;
     [[nodiscard]] virtual Expected<GpuTaskId> declareInstanceTransformPatch(const GpuTaskGraphInstanceTransformPatchRequest& request, Span<const u32> instanceEntityIds, GpuTaskGraph& graph) = 0;
+    [[nodiscard]] virtual Expected<GpuTaskId> declareBatchInstanceTransformPatches(
+        Span<const GpuTaskGraphInstanceTransformPatchRequest> requests,
+        Span<const u32> packedEntityIds,
+        Span<const u32> entityIdOffsets,
+        Span<const u32> entityIdCounts,
+        Name batchIdentityPrefix,
+        GpuTaskId dependency,
+        b8 mergeWithPrevious,
+        b8 allowMergeAcrossConsumerFrontier,
+        GpuTaskGraph& graph
+    ) = 0;
 };
 
 

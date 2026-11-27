@@ -92,6 +92,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             this.m_physicsSceneMode = this.m_pendingSceneMode;
             ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
             this.m_selectedEntity = s_InvalidEntityId;
+            this.m_softBodyCentroidCache = TestbedSoftBodyCentroidCache();
             this.m_physicsSnapshotBytes.clear();
             this.m_postSnapshotSpawnedEntities.clear();
             this.m_showcaseRefs = TestbedShowcaseRefs();
@@ -162,10 +163,10 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         if(this.m_pendingGrabBegin){
             this.m_pendingGrabBegin = false;
             const EntityID prevSelected = this.m_selectedEntity;
-            if(BeginTestbedPickOrGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, !this.m_physicsPaused, this.m_selectedEntity, this.m_grabState)){
+            if(BeginTestbedPickOrGrab(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, !this.m_physicsPaused, this.m_softBodyCentroidCache, this.m_selectedEntity, this.m_grabState)){
                 if(this.m_selectedEntity != prevSelected){
                     TestbedSelectedEntityInfo selInfo;
-                    QueryTestbedSelectedEntityInfo(this.m_world, this.m_selectedEntity, selInfo);
+                    QueryTestbedSelectedEntityInfo(this.m_world, this.m_selectedEntity, this.m_softBodyCentroidCache, selInfo);
                     if(selInfo.hasBody)
                         this.m_sliderInspectGravScale.setValue(cast<f64>(selInfo.gravityScale));
                     this.m_uiWindow.initialized = false;
@@ -183,7 +184,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 UpdateTestbedPointerDragTarget(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
         }
         else if(!WantsUiPointer(this.m_world)){
-            UpdateTestbedGizmoHover(this.m_world, this.m_selectedEntity, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
+            UpdateTestbedGizmoHover(this.m_world, this.m_selectedEntity, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_softBodyCentroidCache, this.m_grabState);
         }
 
         if(this.m_pendingSpawn){
@@ -377,6 +378,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_selectedEntity,
                 this.m_world,
                 context,
+                this.m_softBodyCentroidCache,
                 this.m_physicsDebugScratch,
                 this.m_physicsScreenLines
             );
@@ -1062,7 +1064,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             else{
                 inspectTabRendered = true;
                 TestbedSelectedEntityInfo info;
-                QueryTestbedSelectedEntityInfo(this.m_world, this.m_selectedEntity, info);
+                QueryTestbedSelectedEntityInfo(this.m_world, this.m_selectedEntity, this.m_softBodyCentroidCache, info);
                 if(!info.valid){
                     declared = context.ui.label("ins_none", "No entity selected (LMB pick in viewport)") && declared;
                 }
@@ -1178,6 +1180,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private b8 m_worldDestroyed = false;
     private EntityID m_physicsConfigEntity;
     private EntityID m_selectedEntity = s_InvalidEntityId;
+    private TestbedSoftBodyCentroidCache m_softBodyCentroidCache = TestbedSoftBodyCentroidCache();
     private Vector<EntityID> m_physicsEntities;
     private Vector<EntityID> m_postSnapshotSpawnedEntities;
     private TestbedShowcaseRefs m_showcaseRefs = TestbedShowcaseRefs();

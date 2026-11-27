@@ -35,6 +35,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint bodyPoseSlot = g_NwbPhysicsPushConstants.slots0.x;
     const uint shapeAabbSlot = g_NwbPhysicsPushConstants.slots0.y;
     const uint shapeSlot = g_NwbPhysicsPushConstants.slots0.z;
+    const uint surfacePairSlot = g_NwbPhysicsPushConstants.slots0.w;
     const uint pairSlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint counterSlot = g_NwbPhysicsPushConstants.slots1.y;
     const uint gridSlot = g_NwbPhysicsPushConstants.slots1.z;
@@ -56,11 +57,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const uint maxPairs = g_NwbPhysicsPushConstants.flags;
             const uint rawPrim = g_NwbPhysicsUintBuffers[counterSlot][0u];
             const uint rawComplex = g_NwbPhysicsUintBuffers[counterSlot][1u];
+            const uint rawMesh = g_NwbPhysicsUintBuffers[counterSlot][5u];
+            const uint rawTerrain = g_NwbPhysicsUintBuffers[counterSlot][6u];
             const bool stackOverflow = g_NwbPhysicsUintBuffers[counterSlot][4u] != 0u;
-            const bool overflow = stackOverflow || (rawPrim > maxPairs) || (rawComplex > (maxPairs - rawPrim));
-            const uint clampedTotal = stackOverflow ? 0u : (overflow ? maxPairs : (rawPrim + rawComplex));
+            const bool primOverflow = (rawPrim > maxPairs) || (rawComplex > (maxPairs - rawPrim));
+            const bool surfOverflow = (rawMesh > maxPairs) || (rawTerrain > (maxPairs - rawMesh));
+            const bool overflow = stackOverflow || primOverflow || surfOverflow;
+            const uint totalPairs = rawPrim + rawComplex + rawMesh + rawTerrain;
+            const uint clampedTotal = stackOverflow ? 0u : (overflow ? (maxPairs * 2u) : totalPairs);
             const uint primGroups = (overflow || rawPrim == 0u) ? 0u : ((rawPrim + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE);
             const uint complexGroups = (overflow || rawComplex == 0u) ? 0u : ((rawComplex + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE);
+            const uint meshGroups = (overflow || rawMesh == 0u) ? 0u : ((rawMesh + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE);
+            const uint terrainGroups = (overflow || rawTerrain == 0u) ? 0u : ((rawTerrain + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE);
             const uint indirectSlot = g_NwbPhysicsPushConstants.slots1.z;
             g_NwbPhysicsUintBuffers[counterSlot][3u] = clampedTotal;
             g_NwbPhysicsUintBuffers[indirectSlot][0u] = primGroups;
@@ -69,6 +77,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             g_NwbPhysicsUintBuffers[indirectSlot][3u] = complexGroups;
             g_NwbPhysicsUintBuffers[indirectSlot][4u] = 1u;
             g_NwbPhysicsUintBuffers[indirectSlot][5u] = 1u;
+            g_NwbPhysicsUintBuffers[indirectSlot][9u] = meshGroups;
+            g_NwbPhysicsUintBuffers[indirectSlot][10u] = 1u;
+            g_NwbPhysicsUintBuffers[indirectSlot][11u] = 1u;
+            g_NwbPhysicsUintBuffers[indirectSlot][12u] = terrainGroups;
+            g_NwbPhysicsUintBuffers[indirectSlot][13u] = 1u;
+            g_NwbPhysicsUintBuffers[indirectSlot][14u] = 1u;
         }
         return;
     }
@@ -402,7 +416,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                                     const uint outB = idx < idxB ? idxB : idx;
                                     const uint bodyOutA = idx < idxB ? metaA.x : metaB.x;
                                     const uint bodyOutB = idx < idxB ? metaB.x : metaA.x;
-                                    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsIsComplexPair(metaA, metaB));
+                                    nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsBroadphasePairBucket(metaA, metaB));
                                 }
                             }
                         }
@@ -442,7 +456,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const uint outB = idx < otherIdx ? otherIdx : idx;
                     const uint bodyOutA = idx < otherIdx ? metaA.x : metaB.x;
                     const uint bodyOutB = idx < otherIdx ? metaB.x : metaA.x;
-                    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsIsComplexPair(metaA, metaB));
+                    nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsBroadphasePairBucket(metaA, metaB));
                 }
             }
             GroupMemoryBarrierWithGroupSync();
@@ -508,7 +522,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const uint outB = lIdx < otherIdx ? otherIdx : lIdx;
                     const uint bodyOutA = lIdx < otherIdx ? metaA.x : metaB.x;
                     const uint bodyOutB = lIdx < otherIdx ? metaB.x : metaA.x;
-                    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsIsComplexPair(metaA, metaB));
+                    nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsBroadphasePairBucket(metaA, metaB));
                 }
             }
             GroupMemoryBarrierWithGroupSync();
@@ -537,7 +551,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 continue;
             if(((metaA.w & metaB.w) & NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT) != 0u && ((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
                 continue;
-            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idxB, idx, metaB.x, metaA.x, nwbPhysicsIsComplexPair(metaA, metaB));
+            nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, idxB, idx, metaB.x, metaA.x, nwbPhysicsBroadphasePairBucket(metaA, metaB));
         }
         for(uint idxB = idx + 1u; idxB < totalShapeCount; ++idxB){
             const float4 aabb0B = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][idxB * 2u + 0u];
@@ -550,7 +564,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 continue;
             if(((metaA.w & metaB.w) & NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT) != 0u && ((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
                 continue;
-            nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, idx, idxB, metaA.x, metaB.x, nwbPhysicsIsComplexPair(metaA, metaB));
+            nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, idx, idxB, metaA.x, metaB.x, nwbPhysicsBroadphasePairBucket(metaA, metaB));
         }
     }
 }

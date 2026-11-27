@@ -23,7 +23,7 @@ b8 AppendTypedInstanceTransformPatch(
     mut GpuTaskGraph graph,
     mut GpuTaskId dependency
 ){
-    if(!contributor.has_value() || instanceEntityIds.empty())
+    if(!contributor.has_value() || !contributor.value().hasActiveInstanceTransformPatches() || instanceEntityIds.empty())
         return true;
     if(!targetBufferResource.valid() || !targetUavHeapHandle.valid())
         return false;
@@ -59,7 +59,7 @@ b8 AppendInstanceTransformPatch(
     mut GpuTaskGraph graph,
     mut GpuTaskId dependency
 ){
-    if(!contributor.has_value() || instances.empty())
+    if(!contributor.has_value() || !contributor.value().hasActiveInstanceTransformPatches() || instances.empty())
         return true;
 
     Vector<u32> instanceEntityIds;

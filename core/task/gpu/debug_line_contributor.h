@@ -81,7 +81,7 @@ public:
 
 public:
     [[nodiscard]] virtual b8 hasDebugLines()const = 0;
-    virtual void collectDebugLines(GpuDebugLineCollector& collector) = 0;
+    virtual void collectDebugLines(GpuDebugLineCollector& collector, const SIMDMatrix& viewProj) = 0;
 };
 
 

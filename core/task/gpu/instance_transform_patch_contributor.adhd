@@ -27,7 +27,23 @@ extern class IGpuTaskGraphInstanceTransformPatchContributor{
     [cpp_flags(unwind)]
     b8 prepareInstanceTransformPatches();
     [cpp_flags(unwind)]
+    b8 hasActiveInstanceTransformPatches()const;
+    [cpp_flags(unwind)]
+    u64 instanceTransformPatchMembershipSignature()const;
+    [cpp_flags(unwind)]
     Expected<GpuTaskId> declareInstanceTransformPatch(in GpuTaskGraphInstanceTransformPatchRequest request, in Span<u32> instanceEntityIds, mut GpuTaskGraph graph);
+    [cpp_flags(unwind)]
+    Expected<GpuTaskId> declareBatchInstanceTransformPatches(
+        in Span<GpuTaskGraphInstanceTransformPatchRequest> requests,
+        in Span<u32> packedEntityIds,
+        in Span<u32> entityIdOffsets,
+        in Span<u32> entityIdCounts,
+        in Name batchIdentityPrefix,
+        in GpuTaskId dependency,
+        in b8 mergeWithPrevious,
+        in b8 allowMergeAcrossConsumerFrontier,
+        mut GpuTaskGraph graph
+    );
 };
 
 

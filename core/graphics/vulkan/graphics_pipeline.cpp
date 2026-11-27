@@ -724,12 +724,13 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
                 cachedColor.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
                 cachedColor.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
             }
+            const VkAttachmentStoreOp defaultDepthStencilStoreOp = fbDesc.depthAttachment.isReadOnly ? VK_ATTACHMENT_STORE_OP_NONE : VK_ATTACHMENT_STORE_OP_STORE;
             if(hasDepth){
                 framebuffer.m_cachedDefaultDepthAttachment = VulkanDetail::MakeVkStruct<VkRenderingAttachmentInfo>(VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO);
                 framebuffer.m_cachedDefaultDepthAttachment.imageView = depthAttachment.imageView;
                 framebuffer.m_cachedDefaultDepthAttachment.imageLayout = depthAttachment.imageLayout;
                 framebuffer.m_cachedDefaultDepthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-                framebuffer.m_cachedDefaultDepthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                framebuffer.m_cachedDefaultDepthAttachment.storeOp = defaultDepthStencilStoreOp;
                 framebuffer.m_cachedDefaultDepthAttachment.clearValue.depthStencil.depth = s_DepthClearValue;
             }
             if(hasStencil){
@@ -737,7 +738,7 @@ b8 CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPass
                 framebuffer.m_cachedDefaultStencilAttachment.imageView = stencilAttachment.imageView;
                 framebuffer.m_cachedDefaultStencilAttachment.imageLayout = stencilAttachment.imageLayout;
                 framebuffer.m_cachedDefaultStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-                framebuffer.m_cachedDefaultStencilAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                framebuffer.m_cachedDefaultStencilAttachment.storeOp = defaultDepthStencilStoreOp;
                 framebuffer.m_cachedDefaultStencilAttachment.clearValue.depthStencil.stencil = 0u;
             }
             auto& cachedInfo = framebuffer.m_cachedDefaultRenderingInfo;

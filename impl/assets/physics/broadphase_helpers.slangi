@@ -40,47 +40,72 @@ bool nwbPhysicsShouldCollideFields(const uint4 metaA, const uint4 filterA, const
     return ((filterA.x & filterB.y) != 0u) && ((filterB.x & filterA.y) != 0u);
 }
 
-bool nwbPhysicsIsComplexPair(const uint4 metaA, const uint4 metaB){
+uint nwbPhysicsBroadphasePairBucket(const uint4 metaA, const uint4 metaB){
     const uint typeA = metaA.y;
     const uint typeB = metaB.y;
+    const bool hasH = (typeA == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD || typeB == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD);
+    const bool hasM = (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH || typeB == NWB_PHYSICS_SHAPE_TYPE_MESH);
+    const bool bothM = (typeA == NWB_PHYSICS_SHAPE_TYPE_MESH && typeB == NWB_PHYSICS_SHAPE_TYPE_MESH);
+    if(hasH || bothM)
+        return 3u;
+    if(hasM)
+        return 2u;
     const bool isBoxA = (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaA.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
     const bool isBoxB = (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL) && ((metaB.w & NWB_PHYSICS_SHAPE_FLAG_IS_BOX) != 0u);
-    return (typeA >= NWB_PHYSICS_SHAPE_TYPE_MESH)
-        || (typeB >= NWB_PHYSICS_SHAPE_TYPE_MESH)
+    const bool isCpx = (typeA >= NWB_PHYSICS_SHAPE_TYPE_CYLINDER)
+        || (typeB >= NWB_PHYSICS_SHAPE_TYPE_CYLINDER)
         || (typeA == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxA)
         || (typeB == NWB_PHYSICS_SHAPE_TYPE_HULL && !isBoxB);
+    return isCpx ? 1u : 0u;
 }
 
 void nwbPhysicsEmitBroadphasePair(
     const uint pairSlot,
+    const uint surfacePairSlot,
     const uint counterSlot,
     const uint maxPairs,
     const uint idxA,
     const uint idxB,
     const uint bodyA,
     const uint bodyB,
-    const bool isComplex
+    const uint bucket
 ){
-    const uint primOffset = WavePrefixCountBits(!isComplex);
-    const uint primCount = WaveActiveCountBits(!isComplex);
-    const uint cpxOffset = WavePrefixCountBits(isComplex);
-    const uint cpxCount = WaveActiveCountBits(isComplex);
-    uint primBase = 0u;
-    uint cpxBase = 0u;
+    const uint off0 = WavePrefixCountBits(bucket == 0u);
+    const uint cnt0 = WaveActiveCountBits(bucket == 0u);
+    const uint off1 = WavePrefixCountBits(bucket == 1u);
+    const uint cnt1 = WaveActiveCountBits(bucket == 1u);
+    const uint off2 = WavePrefixCountBits(bucket == 2u);
+    const uint cnt2 = WaveActiveCountBits(bucket == 2u);
+    const uint off3 = WavePrefixCountBits(bucket == 3u);
+    const uint cnt3 = WaveActiveCountBits(bucket == 3u);
+    uint base0 = 0u;
+    uint base1 = 0u;
+    uint base2 = 0u;
+    uint base3 = 0u;
     if(WaveIsFirstLane()){
-        if(primCount > 0u)
-            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][0u], primCount, primBase);
-        if(cpxCount > 0u)
-            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][1u], cpxCount, cpxBase);
+        if(cnt0 > 0u)
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][0u], cnt0, base0);
+        if(cnt1 > 0u)
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][1u], cnt1, base1);
+        if(cnt2 > 0u)
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][5u], cnt2, base2);
+        if(cnt3 > 0u)
+            InterlockedAdd(g_NwbPhysicsUintBuffers[counterSlot][6u], cnt3, base3);
     }
-    primBase = WaveReadLaneFirst(primBase);
-    cpxBase = WaveReadLaneFirst(cpxBase);
-    const uint writeIndex = isComplex ? (cpxBase + cpxOffset) : (primBase + primOffset);
+    base0 = WaveReadLaneFirst(base0);
+    base1 = WaveReadLaneFirst(base1);
+    base2 = WaveReadLaneFirst(base2);
+    base3 = WaveReadLaneFirst(base3);
+    const uint writeIndex = (bucket == 0u)
+        ? (base0 + off0)
+        : ((bucket == 1u) ? (base1 + off1) : ((bucket == 2u) ? (base2 + off2) : (base3 + off3)));
     if(writeIndex < maxPairs){
         NwbPhysicsGpuBroadphasePair pairOut;
         pairOut.indices = uint4(idxA, idxB, bodyA, bodyB);
-        const uint dstIdx = isComplex ? (maxPairs - 1u - writeIndex) : writeIndex;
-        g_NwbPhysicsBroadphasePairBuffers[pairSlot][dstIdx] = pairOut;
+        const bool isBackward = (bucket == 1u) || (bucket == 3u);
+        const uint dstSlot = (bucket >= 2u && surfacePairSlot != NWB_PHYSICS_INVALID_INDEX) ? surfacePairSlot : pairSlot;
+        const uint dstIdx = isBackward ? (maxPairs - 1u - writeIndex) : writeIndex;
+        g_NwbPhysicsBroadphasePairBuffers[dstSlot][dstIdx] = pairOut;
     }
 }
 
@@ -88,7 +113,9 @@ void nwbPhysicsEmitBroadphasePair(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

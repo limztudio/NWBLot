@@ -196,6 +196,7 @@ class RendererRayTracingSystem : NoCopy{
     public Span<PreparedMeshBlasBuild> preparedMeshBlasBuilds()const{ return Span<PreparedMeshBlasBuild>(this.m_preparedMeshBlasBuilds); }
     public void confirmPreparedMeshBlasBuilds();
     public in SoftwareSceneRefitHandle preparedSceneSwBvhRefit()const{ return this.m_preparedSceneSwBvhRefit; }
+    public void confirmPreparedSceneSwBvhRefit();
 
     public b8 preparedMeshSwBvhBuildPlanFrozen()const{ return this.m_preparedMeshSwBvhBuildPlanFrozen; }
 

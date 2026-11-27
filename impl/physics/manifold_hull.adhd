@@ -1092,7 +1092,7 @@ void CollideHullAndMeshMulti(
     in ShapeId meshShapeId,
     in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -1716,7 +1716,7 @@ Manifold CollideHullAndMesh(
     in f32 maxDistance
 ){
     Manifold primary;
-    Vector<Manifold> unusedExtras;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
     Optional<TriangleFilterCallback> noFilter;
     CollideHullAndMeshMulti(hullA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
     return primary;
@@ -1753,7 +1753,7 @@ void CollideMeshesMulti(
     in ShapeId meshShapeIdB,
     in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -2258,7 +2258,7 @@ Manifold CollideMeshes(
     in f32 maxDistance
 ){
     Manifold primary;
-    Vector<Manifold> unusedExtras;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
     Optional<TriangleFilterCallback> noFilter;
     CollideMeshesMulti(meshA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
     return primary;

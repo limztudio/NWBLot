@@ -3087,6 +3087,7 @@ b8 ComputeEpaPenetrationViewsFromSimplex(
 
     FixedVector<u16, 128u> openU;
     FixedVector<u16, 128u> openV;
+    FixedVector<u16, 128u> removedFaces;
     usize bestFaceIdx = 0u;
     for(usize iter = 0u; iter < 32u; ++iter){
         bestFaceIdx = s_NullIndex;
@@ -3115,7 +3116,7 @@ b8 ComputeEpaPenetrationViewsFromSimplex(
 
         openU.clear();
         openV.clear();
-        FixedVector<u16, 128u> removedFaces;
+        removedFaces.clear();
         b8 horizonOverflow = false;
         for(usize fi = 0u; fi < faces.size(); ++fi){
             if(!faces[fi].alive)
@@ -4191,6 +4192,16 @@ f32 FindMinSdfConvexSeparation(
     mut VectorSingle outWitnessLocalSdf,
     mut VectorSingle outOutwardGradLocalSdf
 ){
+    if(queryProxy.points.size() == 1u){
+        const VectorSingle x = TransformPointValues(qPosInSdf, qRotInSdf, VectorSingle(queryProxy.points[0u], 0.0f));
+        f32 rawD = 0.0f;
+        VectorSingle gx(0.0f, 1.0f, 0.0f, 0.0f);
+        sdf.sampleDistanceAndGradient(x, rawD, gx);
+        outOutwardGradLocalSdf = gx;
+        outWitnessLocalSdf = x - gx * queryProxy.radius;
+        return rawD - queryProxy.radius;
+    }
+
     Array<f32x4, 7u> seedDirs;
     const VectorSingle sdfCenter = (VectorSingle(sdf.boundsMin, 0.0f) + VectorSingle(sdf.boundsMax, 0.0f)) * 0.5f;
     const VectorSingle qCenter = TransformPointValues(qPosInSdf, qRotInSdf, ComputeProxyViewCenter(queryProxy));
@@ -4215,8 +4226,10 @@ f32 FindMinSdfConvexSeparation(
             qRotInSdf,
             ComputeProxyViewSupport(queryProxy, Vector3InverseRotate(seedDirWorld, qRotInSdf), supIdx)
         );
-        f32 fx = sdf.sampleDistance(x) - queryProxy.radius;
-        VectorSingle gx = sdf.sampleGradient(x);
+        f32 rawFx = 0.0f;
+        VectorSingle gx(0.0f, 1.0f, 0.0f, 0.0f);
+        sdf.sampleDistanceAndGradient(x, rawFx, gx);
+        f32 fx = rawFx - queryProxy.radius;
 
         for(u32 fwIter = 0u; fwIter < 6u; ++fwIter){
             const VectorSingle descendDir = -gx;

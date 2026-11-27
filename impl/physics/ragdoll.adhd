@@ -179,20 +179,22 @@ class RagdollAutoGenParams{
     public b8 useBoxForRoot = true;
 }
 
-f32 ExtractBoneMaxInertia(in PhysicsWorld world, in BodyId bodyId){
+void ExtractBoneInertiaPair(in PhysicsWorld world, in BodyId bodyId, mut f32 outMaxInertia, mut Mat3 outLocalInertia){
     const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
     if(inRes.has_value()){
         in Mat3 inMat = inRes.value();
-        return Max(1.0e-4f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
+        outMaxInertia = Max(1.0e-4f, Vector3MaxComponent(VectorSingle(inMat.row0.x, inMat.row1.y, inMat.row2.z, 0.0f)).x);
+        outLocalInertia = inMat;
+        return;
     }
-    return 0.5f;
+    outMaxInertia = 0.5f;
+    outLocalInertia = Mat3(VectorSingle(0.5f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.5f, 0.0f));
 }
 
-Mat3 ExtractBoneLocalInertiaMat3(in PhysicsWorld world, in BodyId bodyId){
-    const Expected<Mat3> inRes = world.tryGetBodyInertia(bodyId);
-    if(inRes.has_value())
-        return inRes.value();
-    return Mat3(VectorSingle(0.5f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.5f, 0.0f));
+u64 PackRagdollBonePairKey(in u32 a, in u32 b){
+    if(a <= b)
+        return (cast<u64>(a) << 32u) | cast<u64>(b);
+    return (cast<u64>(b) << 32u) | cast<u64>(a);
 }
 
 VectorSingle QuatFromRagdollBasisCols(in VectorSingle c0, in VectorSingle c1, in VectorSingle c2){
@@ -324,6 +326,8 @@ class RagdollInstance{
     private Vector<f32x4> m_driveAngVel;
     private Vector<f32x4> m_driveTargetAngVels;
     private Vector<u8> m_driveFlags;
+    private Vector<SymMat3> m_driveInvIWorld;
+    private Vector<Transform3D> m_poseScratchXf;
 
     public void reset(){
         this.boneBodies.clear();
@@ -348,6 +352,8 @@ class RagdollInstance{
         this.m_driveAngVel.clear();
         this.m_driveTargetAngVels.clear();
         this.m_driveFlags.clear();
+        this.m_driveInvIWorld.clear();
+        this.m_poseScratchXf.clear();
     }
 
     public void shiftOrigin(in VectorSingle negDelta){
@@ -393,6 +399,8 @@ class RagdollInstance{
         this.m_driveAngVel.clear();
         this.m_driveTargetAngVels.clear();
         this.m_driveFlags.clear();
+        this.m_driveInvIWorld.clear();
+        this.m_poseScratchXf.clear();
     }
 
     public void refreshBoneInertias(in PhysicsWorld world){
@@ -402,8 +410,7 @@ class RagdollInstance{
         for(usize i = 0u; i < n; ++i){
             const BodyId bodyId = this.boneBodies[i];
             if(world.isValidBody(bodyId)){
-                this.m_boneMaxInertias[i] = ExtractBoneMaxInertia(world, bodyId);
-                this.m_boneLocalInertias[i] = ExtractBoneLocalInertiaMat3(world, bodyId);
+                ExtractBoneInertiaPair(world, bodyId, this.m_boneMaxInertias[i], this.m_boneLocalInertias[i]);
             }
             else{
                 this.m_boneMaxInertias[i] = 0.5f;
@@ -458,29 +465,65 @@ class RagdollInstance{
         const usize n = this.boneBodies.size();
         if(n == 0u)
             return false;
-        Vector<RagdollSelfCollisionPair> excCopy;
-        excCopy.reserve(exceptions.size());
-        for(usize ei = 0u; ei < exceptions.size(); ++ei)
-            excCopy.push_back(exceptions[ei]);
+        HashSet<u64> excKeys;
+        if(!exceptions.empty()){
+            excKeys.reserve(exceptions.size());
+            for(usize ei = 0u; ei < exceptions.size(); ++ei)
+                excKeys.emplace(PackRagdollBonePairKey(exceptions[ei].boneA, exceptions[ei].boneB));
+        }
+        HashSet<u64> keptKeys;
+        usize writeIdx = 0u;
+        for(usize pi = 0u; pi < this.disabledSelfCollisionPairs.size(); ++pi){
+            in RagdollSelfCollisionPair p = this.disabledSelfCollisionPairs[pi];
+            b8 keepEntry = false;
+            if(cast<usize>(p.boneA) >= n || cast<usize>(p.boneB) >= n || p.boneA == p.boneB){
+                keepEntry = true;
+            }
+            else{
+                const b8 isAdj = (this.parentIndices[p.boneB] == p.boneA) || (this.parentIndices[p.boneA] == p.boneB);
+                const b8 bothValid = world.isValidBody(this.boneBodies[p.boneA]) && world.isValidBody(this.boneBodies[p.boneB]);
+                if(isAdj || !bothValid)
+                    keepEntry = true;
+            }
+            if(keepEntry){
+                this.disabledSelfCollisionPairs[writeIdx] = p;
+                ++writeIdx;
+                if(p.boneA < n && p.boneB < n)
+                    keptKeys.emplace(PackRagdollBonePairKey(p.boneA, p.boneB));
+            }
+        }
+        this.disabledSelfCollisionPairs.resize(writeIdx);
+
         for(usize i = 0u; i < n; ++i){
+            const BodyId bodyI = this.boneBodies[i];
+            if(!world.isValidBody(bodyI))
+                continue;
+            const u32 ui = cast<u32>(i);
             for(usize j = i + 1u; j < n; ++j){
-                const u32 ui = cast<u32>(i);
                 const u32 uj = cast<u32>(j);
                 const b8 isAdj = (this.parentIndices[j] == ui) || (this.parentIndices[i] == uj);
                 if(isAdj)
                     continue;
-                b8 matchedExc = false;
-                for(usize ei = 0u; ei < excCopy.size(); ++ei){
-                    in RagdollSelfCollisionPair ep = excCopy[ei];
-                    if((ep.boneA == ui && ep.boneB == uj) || (ep.boneA == uj && ep.boneB == ui)){
-                        matchedExc = true;
-                        break;
+                const BodyId bodyJ = this.boneBodies[j];
+                if(!world.isValidBody(bodyJ))
+                    continue;
+                const u64 pk = (cast<u64>(ui) << 32u) | cast<u64>(uj);
+                b8 allowCol = defaultCollideNonAdjacent;
+                if(excKeys.contains(pk))
+                    allowCol = !allowCol;
+                if(allowCol){
+                    world.removeIgnoreCollisionPair(bodyI, bodyJ);
+                }
+                else{
+                    world.addIgnoreCollisionPair(bodyI, bodyJ);
+                    if(!keptKeys.contains(pk)){
+                        keptKeys.emplace(pk);
+                        RagdollSelfCollisionPair newPair;
+                        newPair.boneA = ui;
+                        newPair.boneB = uj;
+                        this.disabledSelfCollisionPairs.push_back(newPair);
                     }
                 }
-                b8 allowCol = defaultCollideNonAdjacent;
-                if(matchedExc)
-                    allowCol = !defaultCollideNonAdjacent;
-                this.setBonePairSelfCollision(world, ui, uj, allowCol);
             }
         }
         return true;
@@ -576,8 +619,11 @@ class RagdollInstance{
             this.maxMotorTorques.push_back(motorVec.x);
             this.motorHertzes.push_back(motorVec.y);
             this.motorDampings.push_back(motorVec.z);
-            this.m_boneMaxInertias.push_back(ExtractBoneMaxInertia(world, bodyId));
-            this.m_boneLocalInertias.push_back(ExtractBoneLocalInertiaMat3(world, bodyId));
+            f32 maxI = 0.5f;
+            Mat3 locIMat;
+            ExtractBoneInertiaPair(world, bodyId, maxI, locIMat);
+            this.m_boneMaxInertias.push_back(maxI);
+            this.m_boneLocalInertias.push_back(locIMat);
             u8 solverMotorFlag = 0u;
             if(bDef.useSolverMotors)
                 solverMotorFlag = 1u;
@@ -934,18 +980,18 @@ class RagdollInstance{
 
     public void setSkeletonPose(mut PhysicsWorld world, in Span<Transform3D> jointWorldTransforms, in b8 resetVelocities){
         const usize count = Min(this.boneBodies.size(), jointWorldTransforms.size());
-        Vector<Transform3D> bodyXfs;
-        bodyXfs.resize(count);
+        this.m_poseScratchXf.resize(count);
         for(usize i = 0u; i < count; ++i){
             in Transform3D jXf = jointWorldTransforms[i];
             Transform3D off;
             if(i < this.boneJointToBodyOffsets.size())
                 off = this.boneJointToBodyOffsets[i];
-            const VectorSingle wPos = TransformPointValues(VectorSingle(jXf.position), SafeNormalizeQuat(VectorSingle(jXf.rotation)), VectorSingle(off.position));
-            const VectorSingle wRot = SafeNormalizeQuat(QuaternionMultiply(SafeNormalizeQuat(VectorSingle(jXf.rotation)), SafeNormalizeQuat(VectorSingle(off.rotation))));
-            bodyXfs[i] = Transform3D(wPos, wRot);
+            const VectorSingle jRotN = SafeNormalizeQuat(VectorSingle(jXf.rotation));
+            const VectorSingle wPos = TransformPointValues(VectorSingle(jXf.position), jRotN, VectorSingle(off.position));
+            const VectorSingle wRot = SafeNormalizeQuat(QuaternionMultiply(jRotN, SafeNormalizeQuat(VectorSingle(off.rotation))));
+            this.m_poseScratchXf[i] = Transform3D(wPos, wRot);
         }
-        this.setPose(world, Span<Transform3D>(bodyXfs.data(), bodyXfs.size()), resetVelocities);
+        this.setPose(world, Span<Transform3D>(this.m_poseScratchXf.data(), this.m_poseScratchXf.size()), resetVelocities);
     }
 
     public void writeSkeletonPose(in PhysicsWorld world, mut Vector<Transform3D> outJointWorldTransforms)const{
@@ -961,10 +1007,11 @@ class RagdollInstance{
             Transform3D off;
             if(i < this.boneJointToBodyOffsets.size())
                 off = this.boneJointToBodyOffsets[i];
+            const VectorSingle bRotN = SafeNormalizeQuat(VectorSingle(bXf.rotation));
             const VectorSingle invOffRot = QuaternionConjugate(SafeNormalizeQuat(VectorSingle(off.rotation)));
             const VectorSingle invOffPos = -Vector3Rotate(VectorSingle(off.position), invOffRot);
-            const VectorSingle jPos = TransformPointValues(VectorSingle(bXf.position), SafeNormalizeQuat(VectorSingle(bXf.rotation)), invOffPos);
-            const VectorSingle jRot = SafeNormalizeQuat(QuaternionMultiply(SafeNormalizeQuat(VectorSingle(bXf.rotation)), invOffRot));
+            const VectorSingle jPos = TransformPointValues(VectorSingle(bXf.position), bRotN, invOffPos);
+            const VectorSingle jRot = SafeNormalizeQuat(QuaternionMultiply(bRotN, invOffRot));
             outJointWorldTransforms.push_back(Transform3D(jPos, jRot));
         }
     }
@@ -1040,6 +1087,7 @@ class RagdollInstance{
         this.m_driveAngVel.resize(boneCount);
         this.m_driveTargetAngVels.resize(boneCount);
         this.m_driveFlags.resize(boneCount, 0u);
+        this.m_driveInvIWorld.resize(boneCount);
         for(usize i = 0u; i < boneCount; ++i){
             const BodyId bodyId = this.boneBodies[i];
             if(!world.isValidBody(bodyId)){
@@ -1052,8 +1100,10 @@ class RagdollInstance{
                 continue;
             }
             in SolverSet ss = world.m_solverSets[b.setIndex];
-            const VectorSingle curQ = SafeNormalizeQuat(VectorSingle(ss.sims[b.localIndex].transform.rotation));
+            in BodySim bsim = ss.sims[b.localIndex];
+            const VectorSingle curQ = SafeNormalizeQuat(VectorSingle(bsim.transform.rotation));
             this.m_driveCurQ[i] = f32x4(curQ);
+            this.m_driveInvIWorld[i] = bsim.invInertiaWorld;
             this.m_driveAngVel[i] = f32x4(VectorSingle(ss.states[b.localIndex].angularVelocity), 0.0f);
             if(i < targetWorldTransforms.size())
                 this.m_driveTgtQ[i] = f32x4(SafeNormalizeQuat(VectorSingle(targetWorldTransforms[i].rotation)));
@@ -1139,23 +1189,31 @@ class RagdollInstance{
             const f32 omegaN = 2.0f * s_Pi * hertz;
             const f32 kp = omegaN * omegaN;
             const f32 kd = 2.0f * this.motorDampings[i] * omegaN;
-            const MatrixSingle rChild = Matrix3FromQuaternion(curQ);
-            const MatrixSingle iWorldChild = Matrix3Mul(Matrix3Mul(rChild, Matrix3FromMat3(this.m_boneLocalInertias[i])), Matrix3Transpose(rChild));
-            MatrixSingle effInertiaMat = iWorldChild;
+            in SymMat3 invIC = this.m_driveInvIWorld[i];
+            SymMat3 invEffSym = invIC;
             if(parentIsDynamic){
-                const MatrixSingle rParent = Matrix3FromQuaternion(VectorSingle(this.m_driveCurQ[pIdx]));
-                const MatrixSingle iWorldParent = Matrix3Mul(Matrix3Mul(rParent, Matrix3FromMat3(this.m_boneLocalInertias[pIdx])), Matrix3Transpose(rParent));
-                MatrixSingle invIChild = MatrixSingle();
-                MatrixSingle invIParent = MatrixSingle();
-                MatrixSingle coupled = MatrixSingle();
-                if(TryInvertSymmetricMat3Simd(iWorldChild, invIChild) && TryInvertSymmetricMat3Simd(iWorldParent, invIParent) && TryInvertSymmetricMat3Simd(Matrix3Add(invIChild, invIParent), coupled))
-                    effInertiaMat = coupled;
+                in SymMat3 invIP = this.m_driveInvIWorld[pIdx];
+                invEffSym = SymMat3(
+                    invIC.m00 + invIP.m00,
+                    invIC.m01 + invIP.m01,
+                    invIC.m02 + invIP.m02,
+                    invIC.m11 + invIP.m11,
+                    invIC.m12 + invIP.m12,
+                    invIC.m22 + invIP.m22
+                );
             }
+            const MatrixSingle invEffMat = Matrix3FromSymMat3(invEffSym);
             const f32 impDenom = 1.0f + dt * (kd + dt * kp);
             const VectorSingle relAv = (VectorSingle(this.m_driveAngVel[i]) - refAngVel) - tgtRelAngVel;
             const VectorSingle desiredAlpha = rotErr * kp - relAv * kd;
 
-            VectorSingle torque = Matrix3MulVec(effInertiaMat, desiredAlpha) * (1.0f / impDenom);
+            VectorSingle effAlphaTorque = Matrix3SolveLinear(invEffMat, desiredAlpha);
+            if(Abs(MatrixLinearDeterminantV(invEffMat)).x <= 1.0e-30f){
+                const MatrixSingle rChild = Matrix3FromQuaternion(curQ);
+                const MatrixSingle iWorldChild = Matrix3Mul(Matrix3Mul(rChild, Matrix3FromMat3(this.m_boneLocalInertias[i])), Matrix3Transpose(rChild));
+                effAlphaTorque = Matrix3MulVec(iWorldChild, desiredAlpha);
+            }
+            VectorSingle torque = effAlphaTorque * (1.0f / impDenom);
             const f32 tMagSq = Vector3LengthSq(VectorSingle(torque, 0.0f)).x;
             if(tMagSq > maxTorque * maxTorque && tMagSq > 1.0e-10f)
                 torque = torque * (maxTorque * Rsqrt(VectorSingle(tMagSq)).x);

@@ -23,7 +23,7 @@ extern class GpuDebugLineCollector{
 extern class IDebugLineProvider{
     b8 hasDebugLines()const;
     [cpp_flags(unwind)]
-    void collectDebugLines(mut GpuDebugLineCollector collector);
+    void collectDebugLines(mut GpuDebugLineCollector collector, in MatrixSingle viewProj);
 };
 
 

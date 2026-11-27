@@ -111,6 +111,9 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     private EcsPhysicsSyncScratch m_syncScratch;
     private EcsPhysicsAssetCache m_assetCache;
     private Vector<GpuPhysicsRenderTransformBinding> m_exportBindingsScratch;
+    private Vector<GpuPhysicsRenderTransformBinding> m_batchSingleBindingsScratch;
+    private Vector<PhysicsBatchExportTargetInput> m_batchExportTargetsScratch;
+    private u64 m_activeInstanceTransformPatchMembershipSig = 0u;
     private Vector<BodyMoveEvent> m_frameBodyMoveEvents;
     private Vector<ContactBeginTouchEvent> m_frameContactBeginEvents;
     private Vector<ContactEndTouchEvent> m_frameContactEndEvents;
@@ -146,6 +149,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     private b8 m_ecsEventsPopulated = false;
     private b8 m_pendingSingleStep = false;
     private b8 m_hasAnyPhysicsParents = false;
+    private b8 m_hasActiveInstanceTransformPatches = false;
     private b8 m_publishEventsToMessageBus = false;
     private b8 m_publishContinuousEventsToMessageBus = false;
     private b8 m_cfgPublishEventsToMessageBus = false;
@@ -605,7 +609,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     public in PhysicsDebugDrawOptions debugDrawOptions()const{ return this.m_debugDrawOptions; }
     public in PhysicsDebugDrawStats lastDebugDrawStats()const{ return this.m_debugDrawStats; }
     public b8 hasDebugLines()const override{ return this.m_debugDrawEnabled; }
-    public void collectDebugLines(mut GpuDebugLineCollector collector)override;
+    public void collectDebugLines(mut GpuDebugLineCollector collector, in MatrixSingle viewProj)override;
     public mut CsgShapeRegistry csgShapeRegistry(){ return this.m_csgShapeRegistry; }
     public in CsgShapeRegistry csgShapeRegistry()const{ return this.m_csgShapeRegistry; }
 
@@ -615,18 +619,19 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         const Optional<mut ColliderComponent> colOpt = this.m_world.borrowComponent<ColliderComponent>(entity);
         if(!colOpt.has_value())
             return false;
-        const b8 hasAnyPhysicsParents = AnyPhysicsHierarchyActive(this.m_world);
+        const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
         if(hasAnyPhysicsParents)
             this.m_syncScratch.writeBackPoseCache.clear();
-        Vector<EcsGatheredCsgCutter> gatheredCutters;
-        GatherActiveEcsCsgCutters(this.m_world, this.m_csgShapeRegistry, gatheredCutters);
-        const Span<EcsGatheredCsgCutter> cuttersSpan(gatheredCutters.data(), gatheredCutters.size());
+        u64 globalCutterSig = 0u;
+        GatherActiveEcsCsgCutters(this.m_world, this.m_csgShapeRegistry, this.m_syncScratch.csgGatheredCuttersScratch, globalCutterSig);
+        const Span<EcsGatheredCsgCutter> cuttersSpan(this.m_syncScratch.csgGatheredCuttersScratch.data(), this.m_syncScratch.csgGatheredCuttersScratch.size());
         mut ColliderComponent col = colOpt.value();
         return RebuildSingleEntityCsgCollider(
             entity,
             this.m_assetManager,
             this.m_csgShapeRegistry,
             cuttersSpan,
+            globalCutterSig,
             hasAnyPhysicsParents,
             true,
             this.m_world,
@@ -2191,7 +2196,20 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         ReleaseEcsPhysicsAssetCache(this.m_assetCache, this.m_physicsWorld, false);
         this.m_environmentScratch = bundle.environment;
         this.m_syncScratch.jointFastCache.clear();
-        this.m_hasAnyPhysicsParents = AnyPhysicsHierarchyActive(this.m_world);
+        for(auto it = this.m_activeRagdolls.begin(); it != this.m_activeRagdolls.end(); ++it)
+            it.value().wroteSleepingPose = false;
+        for(auto it = this.m_activeFractures.begin(); it != this.m_activeFractures.end(); ++it)
+            it.value().wroteSleepingPose = false;
+        for(auto it = this.m_syncScratch.vehicleEventSyncStates.begin(); it != this.m_syncScratch.vehicleEventSyncStates.end(); ++it)
+            it.value().wroteSleepingPose = false;
+        for(auto it = this.m_syncScratch.articulationLiveStates.begin(); it != this.m_syncScratch.articulationLiveStates.end(); ++it)
+            it.value().wroteSleepingPose = false;
+        this.m_syncScratch.hierarchyCacheValid = false;
+        this.m_syncScratch.mutationVersionsValid = false;
+        this.m_syncScratch.hasSyncedPhysicsEntityCounts = false;
+        this.m_hasActiveInstanceTransformPatches = false;
+        this.m_activeInstanceTransformPatchMembershipSig = 0u;
+        this.m_hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
 
         in WorldDef restoredDef = this.m_physicsWorld.m_def;
         const PhysicsBackendMode restoredBackend = this.m_physicsWorld.m_backendMode;
@@ -2839,6 +2857,8 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_syncScratch = EcsPhysicsSyncScratch();
         ReleaseEcsPhysicsAssetCache(this.m_assetCache, this.m_physicsWorld, false);
         this.m_exportBindingsScratch.clear();
+        this.m_batchSingleBindingsScratch.clear();
+        this.m_batchExportTargetsScratch.clear();
         this.m_gpuResidentEventsScratch.clear();
         this.m_prevGpuResidentContactPairs.clear();
         this.m_currGpuResidentContactPairs.clear();
@@ -2854,13 +2874,15 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_interpolationAlpha = 1.0f;
         this.m_pendingSingleStep = false;
         this.m_hasAnyPhysicsParents = false;
+        this.m_hasActiveInstanceTransformPatches = false;
+        this.m_activeInstanceTransformPatchMembershipSig = 0u;
         this.m_lastStepStats = WorldStepStats();
         this.m_lastStepMs = 0.0;
         this.m_lastStepTopologyVersion = 0u;
     }
 
     private void collectEcsExportBindings(){
-        const b8 hasAnyPhysicsParents = AnyPhysicsHierarchyActive(this.m_world);
+        const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
         if(hasAnyPhysicsParents)
             this.m_syncScratch.writeBackPoseCache.clear();
         const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
@@ -2938,11 +2960,33 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     }
 
     public b8 prepareInstanceTransformPatches()override{
-        const u32 bodyCount = this.m_physicsWorld.activeBodyCount();
+        const u32 residentCount = this.m_gpuDispatcher.liveResidentBodyCount(this.m_physicsWorld);
         const u32 exportCount = cast<u32>(this.m_world.view<GpuRenderTransformExportComponent>().candidateCount());
-        const u32 recordCount = cast<u32>(this.m_entityRecords.size());
-        const u32 estimatedBindings = Max(Max(bodyCount, exportCount), recordCount);
-        return this.m_gpuDispatcher.beginRenderExportFrame(estimatedBindings * 12u, estimatedBindings * 6u);
+        const u32 activeCandidates = residentCount + exportCount;
+        this.m_hasActiveInstanceTransformPatches = (activeCandidates > 0u);
+        if(!this.m_hasActiveInstanceTransformPatches){
+            this.m_activeInstanceTransformPatchMembershipSig = 0u;
+            return true;
+        }
+        u64 sig = 14695981039346656037u;
+        sig = UpdateFnv64U64(sig, this.m_gpuDispatcher.residentPatchMembershipSignature(this.m_physicsWorld));
+        sig = UpdateFnv64U32(sig, exportCount);
+        sig = UpdateFnv64U64(sig, this.m_world.componentMutationVersion<GpuRenderTransformExportComponent>());
+        sig = UpdateFnv64U64(sig, this.m_world.componentMutationVersion<RigidBodyComponent>());
+        sig = UpdateFnv64U64(sig, this.m_physicsWorld.m_topologyVersion);
+        if(sig == 0u)
+            sig = 1u;
+        this.m_activeInstanceTransformPatchMembershipSig = sig;
+        this.m_syncScratch.writeBackPoseCache.clear();
+        return this.m_gpuDispatcher.beginRenderExportFrame(activeCandidates * 6u, activeCandidates * 3u);
+    }
+
+    public b8 hasActiveInstanceTransformPatches()const override{
+        return this.m_hasActiveInstanceTransformPatches;
+    }
+
+    public u64 instanceTransformPatchMembershipSignature()const override{
+        return this.m_activeInstanceTransformPatchMembershipSig;
     }
 
     public Expected<GpuTaskId> declareInstanceTransformPatch(
@@ -2950,6 +2994,9 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         in Span<u32> instanceEntityIds,
         mut GpuTaskGraph graph
     )override{
+        if(!this.m_hasActiveInstanceTransformPatches)
+            return Expected<GpuTaskId>(request.dependency);
+
         u32 exportMode = s_GpuExportModePatchInstanceBuffer;
         if(request.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld)
             exportMode = s_GpuExportModePatchAffine3x4ObjToWorld;
@@ -2958,9 +3005,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         else if(request.layout != GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs)
             return MakeUnexpected(Failure());
 
-        const b8 hasAnyPhysicsParents = AnyPhysicsHierarchyActive(this.m_world);
-        if(hasAnyPhysicsParents)
-            this.m_syncScratch.writeBackPoseCache.clear();
+        const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
         const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
         CollectEcsPassGpuRenderTransformBindings(
             instanceEntityIds,
@@ -2991,6 +3036,116 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             request.mergeWithPrevious,
             request.allowMergeAcrossConsumerFrontier,
             request.dependency,
+            outTaskId
+        ))
+            return MakeUnexpected(Failure());
+        return Expected<GpuTaskId>(outTaskId);
+    }
+
+    public Expected<GpuTaskId> declareBatchInstanceTransformPatches(
+        in Span<GpuTaskGraphInstanceTransformPatchRequest> requests,
+        in Span<u32> packedEntityIds,
+        in Span<u32> entityIdOffsets,
+        in Span<u32> entityIdCounts,
+        in Name batchIdentityPrefix,
+        in GpuTaskId dependency,
+        in b8 mergeWithPrevious,
+        in b8 allowMergeAcrossConsumerFrontier,
+        mut GpuTaskGraph graph
+    )override{
+        if(!this.m_hasActiveInstanceTransformPatches || requests.empty() || packedEntityIds.empty())
+            return Expected<GpuTaskId>(dependency);
+        if(entityIdOffsets.size() != requests.size() || entityIdCounts.size() != requests.size())
+            return MakeUnexpected(Failure());
+        if(requests.size() > 16u)
+            return MakeUnexpected(Failure());
+
+        const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
+        const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
+
+        this.m_exportBindingsScratch.clear();
+        this.m_batchExportTargetsScratch.clear();
+
+        FixedVector<u32, 16u> uniqueIdOffsets;
+        FixedVector<u32, 16u> uniqueIdCounts;
+        FixedVector<u32, 16u> uniqueBindOffsets;
+        FixedVector<u32, 16u> uniqueBindCounts;
+
+        for(usize ri = 0u; ri < requests.size(); ++ri){
+            in GpuTaskGraphInstanceTransformPatchRequest req = requests[ri];
+            const u32 idOff = entityIdOffsets[ri];
+            const u32 idCnt = entityIdCounts[ri];
+            if(idCnt == 0u)
+                continue;
+            if(idOff > cast<u32>(packedEntityIds.size()) || idCnt > cast<u32>(packedEntityIds.size()) - idOff)
+                return MakeUnexpected(Failure());
+
+            u32 exportMode = s_GpuExportModePatchInstanceBuffer;
+            if(req.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld)
+                exportMode = s_GpuExportModePatchAffine3x4ObjToWorld;
+            else if(req.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject)
+                exportMode = s_GpuExportModePatchAffine3x4WorldToObj;
+            else if(req.layout != GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs)
+                return MakeUnexpected(Failure());
+
+            usize sliceIdx = uniqueIdOffsets.size();
+            for(usize ui = 0u; ui < uniqueIdOffsets.size(); ++ui){
+                if(uniqueIdOffsets[ui] == idOff && uniqueIdCounts[ui] == idCnt){
+                    sliceIdx = ui;
+                    break;
+                }
+            }
+            if(sliceIdx == uniqueIdOffsets.size()){
+                CollectEcsPassGpuRenderTransformBindings(
+                    packedEntityIds.subspan(idOff, idCnt),
+                    this.m_entityRecords,
+                    this.m_bodyIndexToEntity,
+                    hasAnyPhysicsParents,
+                    bodyHandlesTrusted,
+                    this.m_physicsWorld,
+                    this.m_gpuDispatcher,
+                    this.m_world,
+                    this.m_syncScratch.writeBackPoseCache,
+                    this.m_batchSingleBindingsScratch
+                );
+                const u32 bOff = cast<u32>(this.m_exportBindingsScratch.size());
+                const u32 bCnt = cast<u32>(this.m_batchSingleBindingsScratch.size());
+                for(usize bi = 0u; bi < this.m_batchSingleBindingsScratch.size(); ++bi)
+                    this.m_exportBindingsScratch.push_back(this.m_batchSingleBindingsScratch[bi]);
+                uniqueIdOffsets.push_back(idOff);
+                uniqueIdCounts.push_back(idCnt);
+                uniqueBindOffsets.push_back(bOff);
+                uniqueBindCounts.push_back(bCnt);
+            }
+
+            const u32 bindCnt = uniqueBindCounts[sliceIdx];
+            if(bindCnt == 0u)
+                continue;
+
+            PhysicsBatchExportTargetInput targetInput;
+            targetInput.targetResource = req.instanceBufferResource;
+            targetInput.targetUavSlot = req.instanceBufferUavSlot;
+            targetInput.instanceStrideFloat4 = req.instanceStrideFloat4;
+            targetInput.exportMode = exportMode;
+            targetInput.baseFloat4Offset = req.baseFloat4Offset;
+            targetInput.bindingOffset = uniqueBindOffsets[sliceIdx];
+            targetInput.bindingCount = bindCnt;
+            this.m_batchExportTargetsScratch.push_back(targetInput);
+        }
+
+        if(this.m_batchExportTargetsScratch.empty())
+            return Expected<GpuTaskId>(dependency);
+
+        GpuTaskId outTaskId;
+        if(!this.m_gpuDispatcher.declareBatchExportRenderTransformsTasks(
+            graph,
+            this.m_physicsWorld,
+            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
+            Span<PhysicsBatchExportTargetInput>(this.m_batchExportTargetsScratch.data(), this.m_batchExportTargetsScratch.size()),
+            batchIdentityPrefix,
+            mergeWithPrevious,
+            allowMergeAcrossConsumerFrontier,
+            dependency,
             outTaskId
         ))
             return MakeUnexpected(Failure());
@@ -3182,9 +3337,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 this.m_physicsWorld.m_contactEndEvents.push_back(ev);
             }
         }
-        this.m_prevGpuResidentContactPairs.clear();
-        for(in auto kv : this.m_currGpuResidentContactPairs)
-            this.m_prevGpuResidentContactPairs.insert_or_assign(kv.first, kv.second);
+        this.m_prevGpuResidentContactPairs.swap(this.m_currGpuResidentContactPairs);
 
         for(in auto kv : this.m_currGpuResidentSensorPairs){
             const u64 k = kv.first;
@@ -3214,9 +3367,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 this.m_physicsWorld.m_sensorEndEvents.push_back(ev);
             }
         }
-        this.m_prevGpuResidentSensorPairs.clear();
-        for(in auto kv : this.m_currGpuResidentSensorPairs)
-            this.m_prevGpuResidentSensorPairs.insert_or_assign(kv.first, kv.second);
+        this.m_prevGpuResidentSensorPairs.swap(this.m_currGpuResidentSensorPairs);
 
         this.m_physicsWorld.m_inStep = false;
         if(!this.m_pendingCpuWakeBodiesScratch.empty() || needsCpuFallbackSync){
@@ -3243,9 +3394,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         in Optional<in PhysicsEnvironment> env,
         in f32 dt,
         in b8 readbackToSoftBody,
-        in Optional<in SoftBodyGpuDeformTarget> deformTarget
+        in Optional<in SoftBodyGpuDeformTarget> deformTarget,
+        mut Aabb3D outWorldAabb
     ){
-        return this.m_gpuDispatcher.stepSoftBodyGpu(softBody, this.m_physicsWorld, env, dt, readbackToSoftBody, deformTarget);
+        return this.m_gpuDispatcher.stepSoftBodyGpu(softBody, this.m_physicsWorld, env, dt, readbackToSoftBody, deformTarget, outWorldAabb);
     }
 
     public b8 applyEnvironmentGpu(in PhysicsEnvironment env, in f32 dt){
@@ -3298,6 +3450,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     }
 
     public void invalidateResources(){
+        this.m_syncScratch.hierarchyCacheValid = false;
+        this.m_syncScratch.mutationVersionsValid = false;
+        this.m_syncScratch.hasSyncedPhysicsEntityCounts = false;
+        this.m_hasActiveInstanceTransformPatches = false;
+        this.m_activeInstanceTransformPatchMembershipSig = 0u;
         this.m_gpuDispatcher.invalidateResources();
     }
 
@@ -3338,7 +3495,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         b8 hasDrivenKinematic = false;
         SyncEcsCsgColliderDeforms(
             this.m_assetManager,
-            AnyPhysicsHierarchyActive(world),
+            RefreshPhysicsHierarchyCache(world, this.m_syncScratch),
             this.m_csgShapeRegistry,
             world,
             this.m_syncScratch
@@ -3641,6 +3798,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 );
                 WriteBackEcsFracturePoses(
                     this.m_physicsWorld,
+                    this.m_activeFractures,
                     this.m_bodyTransformSnapshots,
                     this.m_bodyTransformSnapshotMeta,
                     interpolateTransforms,

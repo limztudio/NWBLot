@@ -93,23 +93,44 @@ class CharacterControllerDef{
 }
 
 VectorSingle SolveCharacterMultiPlaneLcp(in Span<f32x4> planeNormals, in VectorSingle desiredVec){
-    const usize n = Min(planeNormals.size(), cast<usize>(8u));
-    if(n == 0u)
+    const usize rawCount = Min(planeNormals.size(), cast<usize>(8u));
+    if(rawCount == 0u)
         return VectorSingle(desiredVec, 0.0f);
     const VectorSingle desired(desiredVec, 0.0f);
     if(Vector3LengthSq(desired).x <= 1.0e-12f)
         return VectorSingle(0.0f);
 
+    Array<f32x4, 8u> unitNormals;
+    usize validCount = 0u;
+    for(usize i = 0u; i < rawCount; ++i){
+        const VectorSingle ni = SafeNormalizeVec3(VectorSingle(planeNormals[i]), VectorSingle(0.0f));
+        if(Vector3LengthSq(ni).x > 1.0e-8f){
+            unitNormals[validCount] = f32x4(ni, 0.0f);
+            ++validCount;
+        }
+    }
+    if(validCount == 0u)
+        return desired;
+    if(validCount == 1u){
+        const VectorSingle u0 = VectorSingle(unitNormals[0u]);
+        const f32 c = Vector3Dot(u0, desired).x;
+        VectorSingle v = desired;
+        if(c < 0.0f)
+            v = desired - u0 * c;
+        if(Vector3Dot(v, desired).x <= 1.0e-8f)
+            return VectorSingle(0.0f);
+        return v;
+    }
+
     Array<f32, 8u> lambdas;
-    for(usize i = 0u; i < n; ++i)
+    for(usize i = 0u; i < validCount; ++i)
         lambdas[i] = 0.0f;
     VectorSingle v = desired;
 
     for(u32 iter = 0u; iter < 24u; ++iter){
-        for(usize i = 0u; i < n; ++i){
-            const VectorSingle ni = SafeNormalizeVec3(VectorSingle(planeNormals[i]), VectorSingle(0.0f));
-            if(Vector3LengthSq(ni).x <= 1.0e-8f)
-                continue;
+        f32 maxDelta = 0.0f;
+        for(usize i = 0u; i < validCount; ++i){
+            const VectorSingle ni = VectorSingle(unitNormals[i]);
             const f32 c = Vector3Dot(ni, v).x;
             const f32 oldL = lambdas[i];
             const f32 newL = Max(0.0f, oldL - c);
@@ -117,15 +138,19 @@ VectorSingle SolveCharacterMultiPlaneLcp(in Span<f32x4> planeNormals, in VectorS
             if(dl != 0.0f){
                 v = v + ni * dl;
                 lambdas[i] = newL;
+                const f32 absDl = Abs(VectorSingle(dl)).x;
+                if(absDl > maxDelta)
+                    maxDelta = absDl;
             }
         }
+        if(maxDelta <= 1.0e-6f)
+            break;
     }
 
     if(Vector3Dot(v, desired).x <= 1.0e-8f)
         return VectorSingle(0.0f);
-    for(usize i = 0u; i < n; ++i){
-        const VectorSingle ni = SafeNormalizeVec3(VectorSingle(planeNormals[i]), VectorSingle(0.0f));
-        if(Vector3LengthSq(ni).x > 1.0e-8f && Vector3Dot(ni, v).x < -1.0e-3f)
+    for(usize i = 0u; i < validCount; ++i){
+        if(Vector3Dot(VectorSingle(unitNormals[i]), v).x < -1.0e-3f)
             return VectorSingle(0.0f);
     }
     return v;
@@ -153,6 +178,7 @@ class CharacterController{
     public Vector<CharacterControllerEvent> stepEvents;
     private f32x4 m_groundConveyorVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     private Vector<ShapeOverlapHit> m_scratchHits;
+    private Vector<u32> m_scratchCandShapes;
     private Vector<CharacterContactInfo> m_scratchStepContacts;
     private FixedVector<f32x4, 8u> m_lastBlockingNormals;
     private Optional<CharacterContactValidateCallback> m_onContactValidateCallback;
@@ -346,6 +372,75 @@ class CharacterController{
         return MakeSpanProxyView(Span<f32x3u>(outPts.data(), 2u), this.def.radius + extra);
     }
 
+    private void ensureCandidateCacheForAabb(
+        in PhysicsWorld world,
+        in VectorSingle qMin,
+        in VectorSingle qMax,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax
+    ){
+        if(
+            ioCacheValid
+            && qMin.x >= ioCandMin.x && qMin.y >= ioCandMin.y && qMin.z >= ioCandMin.z
+            && qMax.x <= ioCandMax.x && qMax.y <= ioCandMax.y && qMax.z <= ioCandMax.z
+        )
+            return;
+        const VectorSingle pad(0.5f, 0.5f, 0.5f, 0.0f);
+        if(ioCacheValid){
+            ioCandMin = Min(ioCandMin, qMin - pad);
+            ioCandMax = Max(ioCandMax, qMax + pad);
+        }
+        else{
+            ioCandMin = qMin - pad;
+            ioCandMax = qMax + pad;
+            ioCacheValid = true;
+        }
+        world.gatherCandidateShapesAabb(ioCandMin, ioCandMax, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchCandShapes);
+    }
+
+    private void gatherOverlapsWithCache(
+        in PhysicsWorld world,
+        in ShapeProxyView skinView,
+        in VectorSingle effRot,
+        in VectorSingle halfExt,
+        in VectorSingle testPos,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax
+    ){
+        this.ensureCandidateCacheForAabb(world, testPos - halfExt, testPos + halfExt, ioCacheValid, ioCandMin, ioCandMax);
+        const Transform3D xf(testPos, effRot);
+        world.overlapShapeDetailedInCandidates(skinView, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, Span<u32>(this.m_scratchCandShapes), this.m_scratchHits);
+    }
+
+    private ShapeCastHit castWithCache(
+        in PhysicsWorld world,
+        in ShapeProxyView baseView,
+        in VectorSingle effRot,
+        in VectorSingle halfExt,
+        in VectorSingle fromPos,
+        in VectorSingle delta,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax
+    ){
+        const VectorSingle qMin = Min(fromPos, fromPos + delta) - halfExt;
+        const VectorSingle qMax = Max(fromPos, fromPos + delta) + halfExt;
+        this.ensureCandidateCacheForAabb(world, qMin, qMax, ioCacheValid, ioCandMin, ioCandMax);
+        ShapeCastInput input;
+        input.originTransform = Transform3D(fromPos, effRot);
+        input.translation = f32x4(delta, 0.0f);
+        input.radius = this.def.skinWidth;
+        input.filter = this.def.filter;
+        input.ignoreBodyId = this.def.ignoreBodyId;
+        input.ignoreShapeId = this.def.ignoreShapeId;
+        input.hitSensors = this.def.hitSensors;
+        input.hasRotation = false;
+        input.useCustomFilter = true;
+        return world.shapeCastClosestInCandidates(baseView, input, Span<u32>(this.m_scratchCandShapes));
+    }
+
     private void gatherOverlapsAt(in PhysicsWorld world, in VectorSingle testPos, in f32 extraRadius){
         Array<f32x3u, 8u> pts;
         const ShapeProxyView view = this.makeShapeProxyView(extraRadius, pts);
@@ -437,14 +532,28 @@ class CharacterController{
             world.applyLinearImpulseAtPoint(otherBody, outNormal * (-impMag), hitPt, true);
     }
 
-    public void depenetrate(mut PhysicsWorld world){
+    private void depenetrateCached(
+        in ShapeProxyView skinView,
+        in VectorSingle effRot,
+        in VectorSingle halfExt,
+        mut PhysicsWorld world,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax,
+        mut b8 outMovedAny,
+        mut b8 outLastProbeClean
+    ){
+        outMovedAny = false;
+        outLastProbeClean = false;
         VectorSingle pos = VectorSingle(this.position);
         const f32 depMargin = 1.0e-3f;
         for(u32 iter = 0u; iter < this.def.maxConstraintIterations; ++iter){
-            this.gatherOverlapsAt(world, pos, this.def.skinWidth);
+            this.gatherOverlapsWithCache(world, skinView, effRot, halfExt, pos, ioCacheValid, ioCandMin, ioCandMax);
             const usize hitCount = this.m_scratchHits.size();
-            if(hitCount == 0u)
+            if(hitCount == 0u){
+                outLastProbeClean = true;
                 break;
+            }
             VectorSingle totalCorr(0.0f);
             f32 maxPen = 0.0f;
             for(usize i = 0u; i < hitCount; ++i){
@@ -461,11 +570,30 @@ class CharacterController{
                         totalCorr = totalCorr + outN * (target - already);
                 }
             }
-            if(maxPen <= 1.0e-5f || Vector3LengthSq(VectorSingle(totalCorr, 0.0f)).x <= 1.0e-10f)
+            if(maxPen <= 1.0e-5f || Vector3LengthSq(VectorSingle(totalCorr, 0.0f)).x <= 1.0e-10f){
+                outLastProbeClean = true;
                 break;
+            }
             pos = pos + totalCorr;
+            outMovedAny = true;
         }
         this.position = f32x4(pos, 0.0f);
+    }
+
+    public void depenetrate(mut PhysicsWorld world){
+        Array<f32x3u, 8u> ptsSkin;
+        const ShapeProxyView skinView = this.makeShapeProxyView(this.def.skinWidth, ptsSkin);
+        const VectorSingle effRot = this.effectiveProxyRotation();
+        VectorSingle lMin(0.0f);
+        VectorSingle lMax(0.0f);
+        ComputeShapeProxyViewWorldAabbValues(skinView, VectorSingle(0.0f), effRot, 0.0f, lMin, lMax);
+        const VectorSingle halfExt = Max(Abs(lMin), Abs(lMax)) + VectorSingle(0.01f, 0.01f, 0.01f, 0.0f);
+        b8 cacheValid = false;
+        VectorSingle candMin(0.0f);
+        VectorSingle candMax(0.0f);
+        b8 unusedMoved = false;
+        b8 unusedClean = false;
+        this.depenetrateCached(skinView, effRot, halfExt, world, cacheValid, candMin, candMax, unusedMoved, unusedClean);
     }
 
     private void pushOrMergeStepEvent(in CharacterControllerEvent ev){
@@ -492,7 +620,13 @@ class CharacterController{
         in f32 dt,
         in b8 pushBodies,
         in b8 emitSlideEvents,
+        in ShapeProxyView baseView,
+        in VectorSingle effRot,
+        in VectorSingle halfExt,
         mut PhysicsWorld world,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax,
         mut Vector<CharacterContactInfo> dstContacts,
         mut b8 outHitSteepWall,
         mut b8 outHitCeiling
@@ -509,7 +643,7 @@ class CharacterController{
             const f32 remLenSq = Vector3LengthSq(VectorSingle(remDelta, 0.0f)).x;
             if(remLenSq <= 1.0e-10f)
                 break;
-            const ShapeCastHit hit = this.castCapsule(world, curPos, remDelta);
+            const ShapeCastHit hit = this.castWithCache(world, baseView, effRot, halfExt, curPos, remDelta, ioCacheValid, ioCandMin, ioCandMax);
             if(!hit.hit){
                 curPos = curPos + remDelta;
                 remDelta = VectorSingle(0.0f);
@@ -609,14 +743,21 @@ class CharacterController{
         in VectorSingle startPos,
         in VectorSingle horizDelta,
         in f32 dt,
+        in ShapeProxyView baseView,
+        in ShapeProxyView skinView,
+        in VectorSingle effRot,
+        in VectorSingle halfExt,
         mut PhysicsWorld world,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax,
         mut VectorSingle outSteppedPos
     ){
         if(this.def.stepUpHeight <= 1.0e-4f)
             return false;
         const VectorSingle up = this.upDirection();
         const VectorSingle upVec = up * this.def.stepUpHeight;
-        const ShapeCastHit upHit = this.castCapsule(world, startPos, upVec);
+        const ShapeCastHit upHit = this.castWithCache(world, baseView, effRot, halfExt, startPos, upVec, ioCacheValid, ioCandMin, ioCandMax);
         f32 lifted = this.def.stepUpHeight;
         if(upHit.hit)
             lifted = Max(0.0f, upHit.fraction - 0.002f) * this.def.stepUpHeight;
@@ -627,10 +768,10 @@ class CharacterController{
         const VectorSingle topPos = startPos + up * lifted;
         b8 hitSteep = false;
         b8 hitCeil = false;
-        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, this.def.pushDynamicBodies, false, world, this.m_scratchStepContacts, hitSteep, hitCeil);
+        VectorSingle movedTop = this.slideMoveFrom(topPos, horizDelta, dt, this.def.pushDynamicBodies, false, baseView, effRot, halfExt, world, ioCacheValid, ioCandMin, ioCandMax, this.m_scratchStepContacts, hitSteep, hitCeil);
 
         const VectorSingle downVec = up * (-(lifted + this.def.stepDownHeight));
-        ShapeCastHit downHit = this.castCapsule(world, movedTop, downVec);
+        ShapeCastHit downHit = this.castWithCache(world, baseView, effRot, halfExt, movedTop, downVec, ioCacheValid, ioCandMin, ioCandMax);
         if(!downHit.hit)
             return false;
 
@@ -645,8 +786,8 @@ class CharacterController{
             const f32 maxSlopeSin = Sqrt(VectorSingle(Max(0.0f, 1.0f - this.m_minWalkableCos * this.m_minWalkableCos))).x;
             const f32 extraForward = effR * (1.0f - maxSlopeSin) + 0.02f;
             const VectorSingle extraHoriz = horizDelta * (extraForward * Rsqrt(VectorSingle(horizLenSq)).x);
-            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, this.def.pushDynamicBodies, false, world, this.m_scratchStepContacts, hitSteep, hitCeil);
-            const ShapeCastHit probeDown = this.castCapsule(world, probeTop, downVec);
+            const VectorSingle probeTop = this.slideMoveFrom(movedTop, extraHoriz, dt, this.def.pushDynamicBodies, false, baseView, effRot, halfExt, world, ioCacheValid, ioCandMin, ioCandMax, this.m_scratchStepContacts, hitSteep, hitCeil);
+            const ShapeCastHit probeDown = this.castWithCache(world, baseView, effRot, halfExt, probeTop, downVec, ioCacheValid, ioCandMin, ioCandMax);
             if(!probeDown.hit)
                 return false;
             const VectorSingle probeLandN = SafeNormalizeVec3(VectorSingle(probeDown.normal), up);
@@ -664,7 +805,7 @@ class CharacterController{
         if(candDistSq <= 1.0e-7f)
             return false;
 
-        this.gatherOverlapsAt(world, candidate, 0.0f);
+        this.gatherOverlapsWithCache(world, skinView, effRot, halfExt, candidate, ioCacheValid, ioCandMin, ioCandMax);
         for(usize i = 0u; i < this.m_scratchHits.size(); ++i){
             if(this.m_scratchHits[i].penetrationDepth > this.def.skinWidth)
                 return false;
@@ -698,11 +839,27 @@ class CharacterController{
         }
     }
 
-    private void updateGroundState(in PhysicsWorld world){
+    private void updateGroundState(
+        in PhysicsWorld world,
+        in ShapeProxyView baseView,
+        in ShapeProxyView skinView,
+        in VectorSingle effRot,
+        in VectorSingle halfExt,
+        in b8 hasPrecomputedStickHit,
+        in ShapeCastHit stickHit,
+        in b8 reuseDepOverlaps,
+        mut b8 ioCacheValid,
+        mut VectorSingle ioCandMin,
+        mut VectorSingle ioCandMax
+    ){
         const VectorSingle up = this.upDirection();
         const VectorSingle curPos = VectorSingle(this.position);
         const f32 probeDist = this.def.skinWidth + Max(0.02f, this.def.predictiveContactDistance);
-        const ShapeCastHit groundHit = this.castCapsule(world, curPos, up * (-probeDist));
+        ShapeCastHit groundHit;
+        if(hasPrecomputedStickHit)
+            groundHit = stickHit;
+        else
+            groundHit = this.castWithCache(world, baseView, effRot, halfExt, curPos, up * (-probeDist), ioCacheValid, ioCandMin, ioCandMax);
 
         if(groundHit.hit){
             const VectorSingle n = SafeNormalizeVec3(VectorSingle(groundHit.normal), up);
@@ -745,7 +902,8 @@ class CharacterController{
             return;
         }
 
-        this.gatherOverlapsAt(world, curPos, this.def.skinWidth);
+        if(!reuseDepOverlaps)
+            this.gatherOverlapsWithCache(world, skinView, effRot, halfExt, curPos, ioCacheValid, ioCandMin, ioCandMax);
         f32 minWalkCos = this.m_minWalkableCos;
         if(this.def.maxSlopeAngleRad != this.m_cachedSlopeAngleRad)
             minWalkCos = Cos(Clamp(VectorSingle(this.def.maxSlopeAngleRad), VectorSingle(0.0f), VectorSingle(1.56f))).x;
@@ -853,6 +1011,29 @@ class CharacterController{
             }
         }
 
+        const VectorSingle effRot = this.effectiveProxyRotation();
+        Array<f32x3u, 8u> ptsBase;
+        Array<f32x3u, 8u> ptsSkin;
+        const ShapeProxyView baseView = this.makeShapeProxyView(0.0f, ptsBase);
+        const ShapeProxyView skinView = this.makeShapeProxyView(this.def.skinWidth, ptsSkin);
+        VectorSingle lMin(0.0f);
+        VectorSingle lMax(0.0f);
+        ComputeShapeProxyViewWorldAabbValues(skinView, VectorSingle(0.0f), effRot, 0.0f, lMin, lMax);
+        const VectorSingle halfExt = Max(Abs(lMin), Abs(lMax)) + VectorSingle(0.01f, 0.01f, 0.01f, 0.0f);
+        b8 cacheValid = false;
+        VectorSingle candMin(0.0f);
+        VectorSingle candMax(0.0f);
+        {
+            const VectorSingle startPos = VectorSingle(this.position);
+            const VectorSingle estVel = VectorSingle(this.linearVelocity) + world.gravity() * (this.def.gravityScale * dt) + VectorSingle(this.m_groundConveyorVelocity);
+            const VectorSingle estEnd = startPos + estVel * dt;
+            const VectorSingle pad = halfExt + VectorSingle(this.def.stepUpHeight + this.def.stepDownHeight + this.def.predictiveContactDistance + 0.5f);
+            candMin = Min(startPos, estEnd) - pad;
+            candMax = Max(startPos, estEnd) + pad;
+            cacheValid = true;
+            world.gatherCandidateShapesAabb(candMin, candMax, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchCandShapes);
+        }
+
         if(wasOnGround && this.hasPrevGroundTransform && this.groundBodyId.valid() && world.isValidBody(this.groundBodyId)){
             const Expected<Transform3D> curGroundRes = world.tryGetBodyTransform(this.groundBodyId);
             if(curGroundRes.has_value()){
@@ -866,7 +1047,7 @@ class CharacterController{
                     b8 carrySteep = false;
                     b8 carryCeil = false;
                     const VectorSingle carryBefore = VectorSingle(this.position);
-                    const VectorSingle carriedEnd = this.slideMoveFrom(carryBefore, carryDelta, dt, this.def.pushDynamicBodies, false, world, this.m_scratchStepContacts, carrySteep, carryCeil);
+                    const VectorSingle carriedEnd = this.slideMoveFrom(carryBefore, carryDelta, dt, this.def.pushDynamicBodies, false, baseView, effRot, halfExt, world, cacheValid, candMin, candMax, this.m_scratchStepContacts, carrySteep, carryCeil);
                     this.position = f32x4(carriedEnd, 0.0f);
                     const f32 carryLen = Sqrt(VectorSingle(carryLenSq)).x;
                     const VectorSingle carryDir = carryDelta * (1.0f / carryLen);
@@ -888,7 +1069,9 @@ class CharacterController{
             }
         }
 
-        this.depenetrate(world);
+        b8 depMoved = false;
+        b8 depClean = false;
+        this.depenetrateCached(skinView, effRot, halfExt, world, cacheValid, candMin, candMax, depMoved, depClean);
 
         const VectorSingle vel = VectorSingle(this.linearVelocity);
         VectorSingle fullDelta = vel * dt;
@@ -917,7 +1100,7 @@ class CharacterController{
         for(u32 ms = 0u; ms < moveSubSteps; ++ms){
             b8 subSteep = false;
             b8 subCeil = false;
-            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, world, this.activeContacts, subSteep, subCeil);
+            flatEndPos = this.slideMoveFrom(flatEndPos, subDelta, subDt, true, true, baseView, effRot, halfExt, world, cacheValid, candMin, candMax, this.activeContacts, subSteep, subCeil);
             if(subSteep)
                 hitSteep = true;
             if(subCeil)
@@ -939,7 +1122,7 @@ class CharacterController{
 
         if(wasOnGround && hitSteep && Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x > 1.0e-8f){
             VectorSingle steppedPos(0.0f);
-            if(this.tryStepUp(curPos, horizDelta, dt, world, steppedPos)){
+            if(this.tryStepUp(curPos, horizDelta, dt, baseView, skinView, effRot, halfExt, world, cacheValid, candMin, candMax, steppedPos)){
                 const VectorSingle dFlat = flatEndPos - curPos;
                 const VectorSingle hFlat = dFlat - up * Vector3Dot(dFlat, up).x;
                 const VectorSingle dStep = steppedPos - curPos;
@@ -968,23 +1151,31 @@ class CharacterController{
 
         this.position = f32x4(flatEndPos, 0.0f);
 
+        b8 stickProbeHit = false;
+        ShapeCastHit floorProbe;
         const f32 velUp = Vector3Dot(vel, up).x;
         if(this.def.stickToFloor && wasOnGround && velUp <= 0.1f){
-            const ShapeCastHit floorProbe = this.castCapsule(world, VectorSingle(this.position), up * (-(this.def.stepDownHeight + this.def.skinWidth)));
+            const f32 stickDist = this.def.stepDownHeight + this.def.skinWidth;
+            floorProbe = this.castWithCache(world, baseView, effRot, halfExt, VectorSingle(this.position), up * (-stickDist), cacheValid, candMin, candMax);
             if(floorProbe.hit){
                 const VectorSingle n = SafeNormalizeVec3(VectorSingle(floorProbe.normal), up);
                 if(this.isWalkableNormal(n)){
-                    const f32 dropDist = (this.def.stepDownHeight + this.def.skinWidth) * floorProbe.fraction;
+                    const f32 dropDist = stickDist * floorProbe.fraction;
                     if(dropDist > this.def.skinWidth){
                         const VectorSingle snapped = VectorSingle(this.position) + up * (-Max(0.0f, dropDist - 1.0e-3f));
                         this.position = f32x4(snapped, 0.0f);
+                        stickProbeHit = true;
+                    }
+                    else if(dropDist <= this.def.skinWidth + Max(0.02f, this.def.predictiveContactDistance)){
+                        stickProbeHit = true;
                     }
                 }
             }
         }
 
-        this.depenetrate(world);
-        this.updateGroundState(world);
+        this.depenetrateCached(skinView, effRot, halfExt, world, cacheValid, candMin, candMax, depMoved, depClean);
+        const b8 reuseStick = stickProbeHit && !depMoved;
+        this.updateGroundState(world, baseView, skinView, effRot, halfExt, reuseStick, floorProbe, depClean, cacheValid, candMin, candMax);
         const b8 nowGroundedAny = (this.groundState == CharacterGroundState::OnGround || this.groundState == CharacterGroundState::OnSteepGround);
         if(!wasGroundedAny && nowGroundedAny){
             this.platformInheritedVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1141,13 +1332,23 @@ class CharacterController{
             view = MakeSpanProxyView(Span<f32x3u>(pts.data(), 2u), testDef.radius + extra);
         }
         const Transform3D xf(testPos, this.effectiveProxyRotation());
-        Vector<ShapeOverlapHit> hits;
-        world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, hits);
-        for(usize i = 0u; i < hits.size(); ++i){
-            if(hits[i].penetrationDepth > this.def.skinWidth)
-                return false;
-        }
-        return true;
+        b8 clear = true;
+        world.overlapShapeCollectView(
+            view,
+            xf,
+            this.def.filter,
+            this.def.hitSensors,
+            this.def.ignoreBodyId,
+            this.def.ignoreShapeId,
+            lambda[in this, mut clear](in ShapeOverlapHit hit) -> b8{
+                if(hit.penetrationDepth > this.def.skinWidth){
+                    clear = false;
+                    return false;
+                }
+                return true;
+            }
+        );
+        return clear;
     }
 
     public b8 canResizeShape(in PhysicsWorld world, in f32 newRadius, in f32 newHalfHeight)const{
@@ -1305,8 +1506,7 @@ class CharacterController{
             const VectorSingle n = fv.normalizedSurfaceNormal();
             f32 depth = 0.0f;
             VectorSingle flowVel(0.0f);
-            VectorSingle localN(0.0f);
-            fv.evaluateSurfaceAt(pos, n, env.elapsedTimeSec, depth, flowVel, localN);
+            fv.evaluateSurfaceAtDepthAndFlow(pos, n, env.elapsedTimeSec, depth, flowVel);
             const f32 subFrac = Clamp((depth + hh) / Max(0.1f, 2.0f * hh), 0.0f, 1.0f);
             if(subFrac <= 1.0e-5f)
                 continue;

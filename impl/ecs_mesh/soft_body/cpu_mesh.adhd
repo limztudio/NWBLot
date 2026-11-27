@@ -130,6 +130,35 @@ u32 CountSoftBodyTriangleMissingVertices(
     return missing;
 }
 
+void BuildSoftBodyWorldToLocalColumns(
+    in VectorSingle xfPos,
+    in VectorSingle xfRot,
+    in VectorSingle invScale,
+    mut VectorSingle outCol0,
+    mut VectorSingle outCol1,
+    mut VectorSingle outCol2,
+    mut VectorSingle outCol3
+){
+    outCol0 = Vector3InverseRotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), xfRot) * invScale;
+    outCol1 = Vector3InverseRotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), xfRot) * invScale;
+    outCol2 = Vector3InverseRotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), xfRot) * invScale;
+    outCol3 = Vector3InverseRotate(-xfPos, xfRot) * invScale;
+}
+
+VectorSingle TransformSoftBodyPointWithColumns(
+    in VectorSingle point,
+    in VectorSingle col0,
+    in VectorSingle col1,
+    in VectorSingle col2,
+    in VectorSingle col3
+){
+    return VectorMultiplyAdd(
+        col0,
+        VectorSplatX(point),
+        VectorMultiplyAdd(col1, VectorSplatY(point), VectorMultiplyAdd(col2, VectorSplatZ(point), col3))
+    );
+}
+
 class SoftBodyCachedSourceMesh{
     public Vector<f32x3u> positions;
     public Vector<f32x2u> posUv0;
@@ -287,6 +316,10 @@ class SoftBodyRuntimeMeshCpuState{
     private Vector<f32x4> m_accumNormals;
     private Vector<f32x4> m_accumTangents;
     private Vector<f32x4> m_accumBitangents;
+    private Vector<f32x4> m_localParticlePositions;
+    private Vector<f32x4> m_cachedFaceNormals;
+    private SolidTopologyCache m_solidTopologyCache;
+    private SolidTopologyScratch m_solidTopologyScratch;
     private Vector<u32> m_renderVertToParticle;
     private Vector<u32> m_renderVertToSourcePos;
     private Vector<u32> m_cachedRenderTriangles;
@@ -358,6 +391,9 @@ class SoftBodyRuntimeMeshCpuState{
         this.m_accumNormals.clear();
         this.m_accumTangents.clear();
         this.m_accumBitangents.clear();
+        this.m_localParticlePositions.clear();
+        this.m_cachedFaceNormals.clear();
+        this.m_solidTopologyCache.valid = false;
         this.m_renderVertToParticle.clear();
         this.m_renderVertToSourcePos.clear();
         this.m_cachedRenderTriangles.clear();
@@ -1002,6 +1038,8 @@ class SoftBodyRuntimeMeshCpuState{
         this.cachedSourceMeshName = recordedSourceMeshName;
         this.m_cachedMirroredWinding = isMirroredWinding;
         this.m_cachedCageBindingCount = sb.cageBinding.bindings.size();
+        if(!PrepareSolidTopologyCache(this.positions.size(), Span<u32>(this.triangleIndices), this.m_solidTopologyCache))
+            return false;
         this.rebuildGpuTopologyData(sb);
         this.topologyValid = true;
         ++this.editRevision;
@@ -1132,30 +1170,102 @@ class SoftBodyRuntimeMeshCpuState{
             return false;
 
         const usize renderVertCount = this.positions.size();
+        const usize particleCount = sb.particles.size();
         const b8 worldBaked = sb.isWorldSpaceBaked();
-        const VectorSingle xfPos(xf.position.x, xf.position.y, xf.position.z, 0.0f);
-        const VectorSingle xfRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
-        const VectorSingle invScale = ComputeSoftBodyInverseScale(xf);
+
+        VectorSingle col0(1.0f, 0.0f, 0.0f, 0.0f);
+        VectorSingle col1(0.0f, 1.0f, 0.0f, 0.0f);
+        VectorSingle col2(0.0f, 0.0f, 1.0f, 0.0f);
+        VectorSingle col3(0.0f, 0.0f, 0.0f, 0.0f);
+        if(worldBaked){
+            const VectorSingle xfPos(xf.position.x, xf.position.y, xf.position.z, 0.0f);
+            const VectorSingle xfRot = SafeNormalizeQuat(VectorSingle(xf.rotation));
+            const VectorSingle invScale = ComputeSoftBodyInverseScale(xf);
+            BuildSoftBodyWorldToLocalColumns(xfPos, xfRot, invScale, col0, col1, col2, col3);
+        }
 
         if(this.m_useCageBinding){
-            sb.cageBinding.evaluateDeformedPositions(Span<SoftBodyParticle>(sb.particles), Span<SoftBodyVolumeConstraint>(sb.volumeConstraints), this.m_cageSourcePositions);
-            const usize cageVertCount = this.m_cageSourcePositions.size();
-            for(usize rv = 0u; rv < renderVertCount; ++rv){
-                const u32 spIdx = this.m_renderVertToSourcePos[rv];
-                if(cast<usize>(spIdx) < cageVertCount){
-                    const f32x3u cageP = this.m_cageSourcePositions[cast<usize>(spIdx)];
-                    this.positions[rv] = TransformWorldPointToSoftBodyLocal(VectorSingle(cageP.x, cageP.y, cageP.z, 0.0f), worldBaked, xfPos, xfRot, invScale);
+            if(worldBaked){
+                this.m_localParticlePositions.resize(particleCount);
+                for(usize pi = 0u; pi < particleCount; ++pi){
+                    const VectorSingle wp(sb.particles[pi].position);
+                    this.m_localParticlePositions[pi] = f32x4(TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3));
+                }
+                for(usize rv = 0u; rv < renderVertCount; ++rv){
+                    const f32x4 bw = this.gpuCageBaryWeights[rv];
+                    if(bw.x == 0.0f && bw.y == 0.0f && bw.z == 0.0f && bw.w == 0.0f)
+                        continue;
+                    const u32x4 idx = this.gpuCageParticleIndices[rv];
+                    const VectorSingle wv(bw);
+                    const VectorSingle lp = VectorMultiplyAdd(
+                        VectorSingle(this.m_localParticlePositions[cast<usize>(idx.x)]),
+                        VectorSplatX(wv),
+                        VectorMultiplyAdd(
+                            VectorSingle(this.m_localParticlePositions[cast<usize>(idx.y)]),
+                            VectorSplatY(wv),
+                            VectorMultiplyAdd(
+                                VectorSingle(this.m_localParticlePositions[cast<usize>(idx.z)]),
+                                VectorSplatZ(wv),
+                                VectorSingle(this.m_localParticlePositions[cast<usize>(idx.w)]) * VectorSplatW(wv)
+                            )
+                        )
+                    );
+                    this.positions[rv] = f32x3u(lp);
+                }
+            }
+            else{
+                for(usize rv = 0u; rv < renderVertCount; ++rv){
+                    const f32x4 bw = this.gpuCageBaryWeights[rv];
+                    if(bw.x == 0.0f && bw.y == 0.0f && bw.z == 0.0f && bw.w == 0.0f)
+                        continue;
+                    const u32x4 idx = this.gpuCageParticleIndices[rv];
+                    const VectorSingle wv(bw);
+                    const VectorSingle lp = VectorMultiplyAdd(
+                        VectorSingle(sb.particles[cast<usize>(idx.x)].position),
+                        VectorSplatX(wv),
+                        VectorMultiplyAdd(
+                            VectorSingle(sb.particles[cast<usize>(idx.y)].position),
+                            VectorSplatY(wv),
+                            VectorMultiplyAdd(
+                                VectorSingle(sb.particles[cast<usize>(idx.z)].position),
+                                VectorSplatZ(wv),
+                                VectorSingle(sb.particles[cast<usize>(idx.w)].position) * VectorSplatW(wv)
+                            )
+                        )
+                    );
+                    this.positions[rv] = f32x3u(lp);
+                }
+            }
+        }
+        else if(worldBaked){
+            if(renderVertCount > particleCount){
+                this.m_localParticlePositions.resize(particleCount);
+                for(usize pi = 0u; pi < particleCount; ++pi){
+                    const VectorSingle wp(sb.particles[pi].position);
+                    this.m_localParticlePositions[pi] = f32x4(TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3));
+                }
+                for(usize rv = 0u; rv < renderVertCount; ++rv)
+                    this.positions[rv] = f32x3u(VectorSingle(this.m_localParticlePositions[cast<usize>(this.m_renderVertToParticle[rv])]));
+            }
+            else{
+                for(usize rv = 0u; rv < renderVertCount; ++rv){
+                    const VectorSingle wp(sb.particles[cast<usize>(this.m_renderVertToParticle[rv])].position);
+                    this.positions[rv] = f32x3u(TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3));
                 }
             }
         }
         else{
-            for(usize rv = 0u; rv < renderVertCount; ++rv){
-                const u32 pIdx = this.m_renderVertToParticle[rv];
-                this.positions[rv] = TransformWorldPointToSoftBodyLocal(VectorSingle(sb.particles[cast<usize>(pIdx)].position), worldBaked, xfPos, xfRot, invScale);
-            }
+            for(usize rv = 0u; rv < renderVertCount; ++rv)
+                this.positions[rv] = f32x3u(VectorSingle(sb.particles[cast<usize>(this.m_renderVertToParticle[rv])].position));
         }
 
-        if(!BuildSolidTriangleWordsInto(Span<f32x3u>(this.positions), Span<u32>(this.triangleIndices), this.solidTriangleWords))
+        if(!FinalizeMeshSolidTriangleWordsWithCache(
+            Span<f32x3u>(this.positions),
+            Span<u32>(this.triangleIndices),
+            this.m_solidTopologyCache,
+            this.m_solidTopologyScratch,
+            this.solidTriangleWords
+        ))
             return false;
         if(this.solidTriangleWords.size() != ExpectedMeshletSolidTriangleWordCount(cast<u32>(this.meshletPrimitiveIndices.size())))
             return false;
@@ -1164,25 +1274,26 @@ class SoftBodyRuntimeMeshCpuState{
         this.m_accumTangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
         this.m_accumBitangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
 
+        const usize renderTriCount = this.triangleIndices.size() / 3u;
         if(!this.emptySurfaceSentinel){
-            const usize renderTriCount = this.m_cachedRenderTriangles.size() / 3u;
+            this.m_cachedFaceNormals.resize(renderTriCount);
             for(usize ti = 0u; ti < renderTriCount; ++ti){
                 const usize tBase = ti * 3u;
-                const usize i0 = cast<usize>(this.m_cachedRenderTriangles[tBase]);
-                const usize i1 = cast<usize>(this.m_cachedRenderTriangles[tBase + 1u]);
-                const usize i2 = cast<usize>(this.m_cachedRenderTriangles[tBase + 2u]);
-                if(i0 >= renderVertCount || i1 >= renderVertCount || i2 >= renderVertCount)
+                const usize i0 = cast<usize>(this.triangleIndices[tBase]);
+                const usize i1 = cast<usize>(this.triangleIndices[tBase + 1u]);
+                const usize i2 = cast<usize>(this.triangleIndices[tBase + 2u]);
+                if(i0 >= renderVertCount || i1 >= renderVertCount || i2 >= renderVertCount){
+                    this.m_cachedFaceNormals[ti] = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                     continue;
+                }
 
-                const f32x3u p0u = this.positions[i0];
-                const f32x3u p1u = this.positions[i1];
-                const f32x3u p2u = this.positions[i2];
-                const VectorSingle p0(p0u.x, p0u.y, p0u.z, 0.0f);
-                const VectorSingle p1(p1u.x, p1u.y, p1u.z, 0.0f);
-                const VectorSingle p2(p2u.x, p2u.y, p2u.z, 0.0f);
+                const VectorSingle p0(this.positions[i0]);
+                const VectorSingle p1(this.positions[i1]);
+                const VectorSingle p2(this.positions[i2]);
                 const VectorSingle e1 = p1 - p0;
                 const VectorSingle e2 = p2 - p0;
                 const VectorSingle faceN = Cross(e1.xyz, e2.xyz);
+                this.m_cachedFaceNormals[ti] = f32x4(faceN);
                 if(LengthSq(faceN.xyz) > 1.0e-16f){
                     this.m_accumNormals[i0] = f32x4(VectorSingle(this.m_accumNormals[i0]) + faceN);
                     this.m_accumNormals[i1] = f32x4(VectorSingle(this.m_accumNormals[i1]) + faceN);
@@ -1211,6 +1322,9 @@ class SoftBodyRuntimeMeshCpuState{
                     this.m_accumBitangents[i2] = f32x4(VectorSingle(this.m_accumBitangents[i2]) + bContrib);
                 }
             }
+        }
+        else{
+            this.m_cachedFaceNormals.assign(renderTriCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
         }
 
         const VectorSingle defaultN(0.0f, 1.0f, 0.0f, 0.0f);
@@ -1248,11 +1362,10 @@ class SoftBodyRuntimeMeshCpuState{
             boundsDesc.positionRefOffset = this.meshletPositionRefElementOffsets[m];
             VectorSingle minM(0.0f);
             VectorSingle maxM(0.0f);
-            this.meshletBounds[m] = BuildMeshletBoundsWithAabb(
+            this.meshletBounds[m] = BuildMeshletBoundsWithAabbCachedNormals(
                 Span<f32x3u>(this.positions),
                 Span<MeshletPositionStreamRef>(this.meshletPositionStreamRefs),
-                Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
-                Span<u8>(this.meshletPrimitiveIndices),
+                Span<f32x4>(this.m_cachedFaceNormals),
                 boundsDesc,
                 minM,
                 maxM

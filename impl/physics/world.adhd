@@ -192,27 +192,19 @@ Expected<DistanceOutput> ComputeInfinitePlaneHeightfieldDistance(
         const f32 sz = hf.cellSizeZ();
         const usize topLvl = hf.hierarchy.size() - 1u;
         in HeightfieldMipLevel topMip = hf.hierarchy[topLvl];
-        Vector<u32> stackLvl;
-        Vector<u32> stackBx;
-        Vector<u32> stackBz;
-        stackLvl.reserve(256u);
-        stackBx.reserve(256u);
-        stackBz.reserve(256u);
+        BvhSpillStack<u64, 128u> stack;
         for(u32 bz = 0u; bz < topMip.rows; ++bz){
             for(u32 bx = 0u; bx < topMip.cols; ++bx){
-                stackLvl.push_back(cast<u32>(topLvl));
-                stackBx.push_back(bx);
-                stackBz.push_back(bz);
+                in f32x2u tmm = topMip.minMaxY[cast<usize>(bz) * cast<usize>(topMip.cols) + cast<usize>(bx)];
+                if(tmm.x <= tmm.y)
+                    stack.push((cast<u64>(topLvl) << 58u) | (cast<u64>(bz) << 29u) | cast<u64>(bx));
             }
         }
-        HashSet<u64> visitedVerts;
-        while(!stackLvl.empty()){
-            const u32 lvl = stackLvl.back();
-            const u32 bx = stackBx.back();
-            const u32 bz = stackBz.back();
-            stackLvl.pop_back();
-            stackBx.pop_back();
-            stackBz.pop_back();
+        u64 packedNode = 0u;
+        while(stack.pop(packedNode)){
+            const u32 lvl = cast<u32>(packedNode >> 58u);
+            const u32 bz = cast<u32>((packedNode >> 29u) & 0x1fffffffu);
+            const u32 bx = cast<u32>(packedNode & 0x1fffffffu);
             in HeightfieldMipLevel mip = hf.hierarchy[lvl];
             if(bx >= mip.cols || bz >= mip.rows)
                 continue;
@@ -230,19 +222,21 @@ Expected<DistanceOutput> ComputeInfinitePlaneHeightfieldDistance(
             if(foundAny && blockMinSd >= minSd)
                 continue;
             if(lvl == 0u){
+                u16 localBlockMask = 0u;
                 for(u32 cz = r0; cz < r1; ++cz){
                     for(u32 cx = c0; cx < c1; ++cx){
                         if(hf.isCellHole(cx, cz))
                             continue;
                         for(u32 dz = 0u; dz < 2u; ++dz){
                             const u32 vz = cz + dz;
+                            const u32 lz = vz - r0;
                             const f32 pz = oz + cast<f32>(vz) * sz;
                             for(u32 dx = 0u; dx < 2u; ++dx){
                                 const u32 vx = cx + dx;
-                                const u64 vKey = (cast<u64>(vz) << 32u) | cast<u64>(vx);
-                                if(visitedVerts.find(vKey) != visitedVerts.end())
+                                const u16 vBit = cast<u16>(1u << (lz * 3u + (vx - c0)));
+                                if((localBlockMask & vBit) != 0u)
                                     continue;
-                                visitedVerts.emplace(vKey);
+                                localBlockMask |= vBit;
                                 const f32 rawH = hf.heights[cast<usize>(vz) * cast<usize>(hf.cols) + cast<usize>(vx)];
                                 const VectorSingle v(ox + cast<f32>(vx) * sx, hf.originMaxY.y + rawH * hf.scaleMinMaxY.y, pz, 0.0f);
                                 const f32 sd = Vector3Dot(planeNInHf, v).x - planeDInHf - thick;
@@ -267,9 +261,9 @@ Expected<DistanceOutput> ComputeInfinitePlaneHeightfieldDistance(
                         const u32 cbx = bx * 2u + dx;
                         if(cbx >= childMip.cols)
                             continue;
-                        stackLvl.push_back(childLvl);
-                        stackBx.push_back(cbx);
-                        stackBz.push_back(cbz);
+                        in f32x2u cmm = childMip.minMaxY[cast<usize>(cbz) * cast<usize>(childMip.cols) + cast<usize>(cbx)];
+                        if(cmm.x <= cmm.y)
+                            stack.push((cast<u64>(childLvl) << 58u) | (cast<u64>(cbz) << 29u) | cast<u64>(cbx));
                     }
                 }
             }
@@ -682,6 +676,11 @@ class CpuBucketSolverScratch{
     public Vector<JointBreakEvent> breakEvents;
     public Vector<u32> brokenJointIds;
     public Vector<u32> brokenJointSlotIndices;
+    public Vector<u8> shockDynLevels;
+    public Vector<u32> shockCandidates;
+    public Vector<u32> shockGroundedRefs;
+    public Vector<ContactConstraint> shockConstraints;
+    public Vector<ContactConstraintStepCache> shockCaches;
 
     public void clear(){
         this.extraConstraints.clear();
@@ -691,6 +690,11 @@ class CpuBucketSolverScratch{
         this.breakEvents.clear();
         this.brokenJointIds.clear();
         this.brokenJointSlotIndices.clear();
+        this.shockDynLevels.clear();
+        this.shockCandidates.clear();
+        this.shockGroundedRefs.clear();
+        this.shockConstraints.clear();
+        this.shockCaches.clear();
     }
 }
 
@@ -705,7 +709,7 @@ class PhysicsWorldCpuScratch{
     public Vector<u32> pruneContactIds;
     public Vector<u8> contactTransitionFlags;
     public Vector<Manifold> evaluatedManifolds;
-    public Vector<Vector<Manifold>> evaluatedExtraManifolds;
+    public Vector<FixedVector<Manifold, s_MaxExtraManifoldsPerContact>> evaluatedExtraManifolds;
     public Array<Vector<ContactConstraint>, s_GraphColorCount> colorConstraints;
     public Array<Vector<ContactConstraintStepCache>, s_GraphColorCount> colorConstraintCaches;
     public Vector<ContactConstraint> globalExtraConstraints;
@@ -797,6 +801,18 @@ class PhysicsWorldCpuScratch{
     public Vector<u32> envWakeQueue;
     public Vector<f32x4> envWakeForces;
     public Vector<f32x4> envWakeTorques;
+    public Vector<u32> envSingleFieldGravStamps;
+    public u32 envSingleFieldGravEpoch = 0u;
+    public Vector<u8> meshRefitEdgeFlagsScratch;
+    public Vector<u8> meshRefitSharpVertsScratch;
+    public Vector<u8> shockDynLevels;
+    public Vector<u32> shockCandidates;
+    public Vector<u32> shockGroundedRefs;
+    public Vector<ContactConstraint> shockConstraints;
+    public Vector<ContactConstraintStepCache> shockCaches;
+    public Vector<u32> bulletToiJointIds;
+    public Vector<JointConstraint> bulletToiJcs;
+    public Vector<JointConstraintStepCache> bulletToiJCaches;
     public usize parUsedBucketCount = 0u;
     public b8 parAllAwakeDynamic = false;
     public b8 parSkipComponentPartition = false;
@@ -907,6 +923,18 @@ class PhysicsWorldCpuScratch{
         this.envWakeQueue.clear();
         this.envWakeForces.clear();
         this.envWakeTorques.clear();
+        this.envSingleFieldGravStamps.clear();
+        this.envSingleFieldGravEpoch = 0u;
+        this.meshRefitEdgeFlagsScratch.clear();
+        this.meshRefitSharpVertsScratch.clear();
+        this.shockDynLevels.clear();
+        this.shockCandidates.clear();
+        this.shockGroundedRefs.clear();
+        this.shockConstraints.clear();
+        this.shockCaches.clear();
+        this.bulletToiJointIds.clear();
+        this.bulletToiJcs.clear();
+        this.bulletToiJCaches.clear();
         this.parUsedBucketCount = 0u;
         this.parAllAwakeDynamic = false;
         this.parSkipComponentPartition = false;
@@ -935,6 +963,7 @@ class PhysicsWorld{
     public Vector<u16> m_meshGenerations;
     public Vector<u8> m_meshOwnedByUser;
     public Vector<u32> m_freeMeshShapeIds;
+    public Vector<MeshRefitNeighborCache> m_meshRefitCaches;
     public Vector<HeightfieldShape> m_heightfieldShapes;
     public Vector<u32> m_heightfieldRefCounts;
     public Vector<u16> m_heightfieldGenerations;
@@ -964,7 +993,7 @@ class PhysicsWorld{
     public Vector<Contact> m_contacts;
     public Vector<u32> m_freeContactIds;
     public HashMap<u64, u32> m_pairContactMap;
-    public HashMap<u32, Vector<Manifold>> m_extraContactManifolds;
+    public HashMap<u32, FixedVector<Manifold, s_MaxExtraManifoldsPerContact>> m_extraContactManifolds;
     public HashSet<u64> m_ignoredBodyPairs;
     public Vector<Joint> m_joints;
     public Vector<u32> m_freeJointIds;
@@ -1003,6 +1032,13 @@ class PhysicsWorld{
     public u64 m_sleepingSetStamp = 1u;
     public u64 m_awakeSetStamp = 1u;
     public u64 m_geomDataStamp = 1u;
+    public u64 m_hullPoolVersion = 1u;
+    public u64 m_meshPoolVersion = 1u;
+    public u64 m_heightfieldPoolVersion = 1u;
+    public u64 m_compoundPoolVersion = 1u;
+    public u64 m_scaledPoolVersion = 1u;
+    public u64 m_chainPoolVersion = 1u;
+    public u64 m_sdfPoolVersion = 1u;
     public u64 m_poseMutationVersion = 1u;
     public u64 m_stepPoseVersion = 1u;
     public u64 m_nonCollideJointVersion = 0u;
@@ -1067,6 +1103,7 @@ class PhysicsWorld{
         this.m_meshGenerations.clear();
         this.m_meshOwnedByUser.clear();
         this.m_freeMeshShapeIds.clear();
+        this.m_meshRefitCaches.clear();
         this.m_heightfieldShapes.clear();
         this.m_heightfieldRefCounts.clear();
         this.m_heightfieldGenerations.clear();
@@ -1136,6 +1173,13 @@ class PhysicsWorld{
         this.m_preSolveCallback.reset();
         this.m_materialCombineCallback.reset();
         this.markAllSetsTopologyDirty();
+        ++this.m_hullPoolVersion;
+        ++this.m_meshPoolVersion;
+        ++this.m_heightfieldPoolVersion;
+        ++this.m_compoundPoolVersion;
+        ++this.m_scaledPoolVersion;
+        ++this.m_chainPoolVersion;
+        ++this.m_sdfPoolVersion;
         ++this.m_poseMutationVersion;
         ++this.m_stepPoseVersion;
         ++this.m_nonCollideJointVersion;
@@ -2000,6 +2044,7 @@ class PhysicsWorld{
         if(slot < this.m_hullOwnedByUser.size())
             this.m_hullOwnedByUser[slot] = 0u;
         this.m_freeHullShapeIds.push_back(slot);
+        ++this.m_hullPoolVersion;
     }
 
     private u32 allocateHullShapeWithOwnership(in HullShape hull, in b8 ownedByUser){
@@ -2025,7 +2070,7 @@ class PhysicsWorld{
         VectorSingle lMin(0.0f);
         VectorSingle lMax(0.0f);
         ComputeHullAabbValues(this.m_hullShapes[slot], VectorSingle(0.0f), QuaternionIdentity(), lMin, lMax);
-        this.m_hullShapes[slot].cachedBuoyancyVolume = ComputeHullBuoyancyVolume(this.m_hullShapes[slot]);
+        PrepareHullBuoyancyCaches(this.m_hullShapes[slot]);
         this.m_hullLocalAabbs[slot] = Aabb3D(lMin, lMax);
         u16 nextGen = this.m_hullGenerations[slot] + 1u;
         if(nextGen == 0u)
@@ -2040,6 +2085,7 @@ class PhysicsWorld{
             this.m_hullOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_hullPoolVersion;
         return slot;
     }
 
@@ -2050,8 +2096,10 @@ class PhysicsWorld{
     private void freeHullShape(in u32 slot){
         if(slot >= this.m_hullShapes.size())
             return;
-        if(slot < this.m_hullRefCounts.size() && this.m_hullRefCounts[slot] > 0u)
+        if(slot < this.m_hullRefCounts.size() && this.m_hullRefCounts[slot] > 0u){
             --this.m_hullRefCounts[slot];
+            ++this.m_hullPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_hullRefCounts.size())
             refs = this.m_hullRefCounts[slot];
@@ -2066,11 +2114,14 @@ class PhysicsWorld{
         if(slot >= this.m_meshShapes.size())
             return;
         this.m_meshShapes[slot] = MeshShape();
+        if(slot < this.m_meshRefitCaches.size())
+            this.m_meshRefitCaches[slot].clear();
         if(slot < this.m_meshRefCounts.size())
             this.m_meshRefCounts[slot] = 0u;
         if(slot < this.m_meshOwnedByUser.size())
             this.m_meshOwnedByUser[slot] = 0u;
         this.m_freeMeshShapeIds.push_back(slot);
+        ++this.m_meshPoolVersion;
     }
 
     private u32 allocateMeshShapeWithOwnership(in MeshShape mesh, in b8 ownedByUser){
@@ -2090,7 +2141,10 @@ class PhysicsWorld{
             this.m_meshGenerations.resize(this.m_meshShapes.size(), 0u);
         if(this.m_meshOwnedByUser.size() < this.m_meshShapes.size())
             this.m_meshOwnedByUser.resize(this.m_meshShapes.size(), 0u);
-        this.m_meshShapes[slot].cachedBuoyancyVolume = ComputeMeshBuoyancyVolume(this.m_meshShapes[slot]);
+        if(this.m_meshRefitCaches.size() < this.m_meshShapes.size())
+            this.m_meshRefitCaches.resize(this.m_meshShapes.size());
+        this.m_meshRefitCaches[slot].clear();
+        PrepareMeshBuoyancyVolumeCache(this.m_meshShapes[slot]);
 
         u16 nextGen = this.m_meshGenerations[slot] + 1u;
         if(nextGen == 0u)
@@ -2105,6 +2159,7 @@ class PhysicsWorld{
             this.m_meshOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_meshPoolVersion;
         return slot;
     }
 
@@ -2115,8 +2170,10 @@ class PhysicsWorld{
     private void freeMeshShape(in u32 slot){
         if(slot >= this.m_meshShapes.size())
             return;
-        if(slot < this.m_meshRefCounts.size() && this.m_meshRefCounts[slot] > 0u)
+        if(slot < this.m_meshRefCounts.size() && this.m_meshRefCounts[slot] > 0u){
             --this.m_meshRefCounts[slot];
+            ++this.m_meshPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_meshRefCounts.size())
             refs = this.m_meshRefCounts[slot];
@@ -2136,6 +2193,7 @@ class PhysicsWorld{
         if(slot < this.m_heightfieldOwnedByUser.size())
             this.m_heightfieldOwnedByUser[slot] = 0u;
         this.m_freeHeightfieldShapeIds.push_back(slot);
+        ++this.m_heightfieldPoolVersion;
     }
 
     private u32 allocateHeightfieldShapeWithOwnership(in HeightfieldShape hf, in b8 ownedByUser){
@@ -2169,6 +2227,7 @@ class PhysicsWorld{
             this.m_heightfieldOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_heightfieldPoolVersion;
         return slot;
     }
 
@@ -2179,8 +2238,10 @@ class PhysicsWorld{
     private void freeHeightfieldShape(in u32 slot){
         if(slot >= this.m_heightfieldShapes.size())
             return;
-        if(slot < this.m_heightfieldRefCounts.size() && this.m_heightfieldRefCounts[slot] > 0u)
+        if(slot < this.m_heightfieldRefCounts.size() && this.m_heightfieldRefCounts[slot] > 0u){
             --this.m_heightfieldRefCounts[slot];
+            ++this.m_heightfieldPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_heightfieldRefCounts.size())
             refs = this.m_heightfieldRefCounts[slot];
@@ -2267,6 +2328,7 @@ class PhysicsWorld{
         if(slot < this.m_compoundOwnedByUser.size())
             this.m_compoundOwnedByUser[slot] = 0u;
         this.m_freeCompoundShapeIds.push_back(slot);
+        ++this.m_compoundPoolVersion;
     }
 
     private u32 allocateCompoundShapeWithOwnership(in CompoundShape comp, in b8 ownedByUser){
@@ -2289,8 +2351,10 @@ class PhysicsWorld{
 
         for(usize i = 0u; i < this.m_compoundShapes[slot].children.size(); ++i){
             in CompoundSubShape ch = this.m_compoundShapes[slot].children[i];
-            if(ch.type == ShapeType::Hull && ch.geometryIndex < this.m_hullRefCounts.size())
+            if(ch.type == ShapeType::Hull && ch.geometryIndex < this.m_hullRefCounts.size()){
                 ++this.m_hullRefCounts[ch.geometryIndex];
+                ++this.m_hullPoolVersion;
+            }
         }
         this.m_compoundShapes[slot].cachedBuoyancyVolume = ComputeCompoundGeometricVolume(this.m_compoundShapes[slot], this.m_hullShapes);
 
@@ -2307,6 +2371,7 @@ class PhysicsWorld{
             this.m_compoundOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_compoundPoolVersion;
         return slot;
     }
 
@@ -2317,8 +2382,10 @@ class PhysicsWorld{
     private void freeCompoundShape(in u32 slot){
         if(slot >= this.m_compoundShapes.size())
             return;
-        if(slot < this.m_compoundRefCounts.size() && this.m_compoundRefCounts[slot] > 0u)
+        if(slot < this.m_compoundRefCounts.size() && this.m_compoundRefCounts[slot] > 0u){
             --this.m_compoundRefCounts[slot];
+            ++this.m_compoundPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_compoundRefCounts.size())
             refs = this.m_compoundRefCounts[slot];
@@ -2350,18 +2417,30 @@ class PhysicsWorld{
     private void retainScaledChildRef(in ScaledShape sc){
         if(sc.childGeometryIndex == s_NullIndex)
             return;
-        if(sc.childType == ShapeType::Hull && sc.childGeometryIndex < this.m_hullRefCounts.size())
+        if(sc.childType == ShapeType::Hull && sc.childGeometryIndex < this.m_hullRefCounts.size()){
             ++this.m_hullRefCounts[sc.childGeometryIndex];
-        else if(sc.childType == ShapeType::Mesh && sc.childGeometryIndex < this.m_meshRefCounts.size())
+            ++this.m_hullPoolVersion;
+        }
+        else if(sc.childType == ShapeType::Mesh && sc.childGeometryIndex < this.m_meshRefCounts.size()){
             ++this.m_meshRefCounts[sc.childGeometryIndex];
-        else if(sc.childType == ShapeType::Heightfield && sc.childGeometryIndex < this.m_heightfieldRefCounts.size())
+            ++this.m_meshPoolVersion;
+        }
+        else if(sc.childType == ShapeType::Heightfield && sc.childGeometryIndex < this.m_heightfieldRefCounts.size()){
             ++this.m_heightfieldRefCounts[sc.childGeometryIndex];
-        else if(sc.childType == ShapeType::Compound && sc.childGeometryIndex < this.m_compoundRefCounts.size())
+            ++this.m_heightfieldPoolVersion;
+        }
+        else if(sc.childType == ShapeType::Compound && sc.childGeometryIndex < this.m_compoundRefCounts.size()){
             ++this.m_compoundRefCounts[sc.childGeometryIndex];
-        else if(sc.childType == ShapeType::Chain && sc.childGeometryIndex < this.m_chainRefCounts.size())
+            ++this.m_compoundPoolVersion;
+        }
+        else if(sc.childType == ShapeType::Chain && sc.childGeometryIndex < this.m_chainRefCounts.size()){
             ++this.m_chainRefCounts[sc.childGeometryIndex];
-        else if(sc.childType == ShapeType::Sdf && sc.childGeometryIndex < this.m_sdfRefCounts.size())
+            ++this.m_chainPoolVersion;
+        }
+        else if(sc.childType == ShapeType::Sdf && sc.childGeometryIndex < this.m_sdfRefCounts.size()){
             ++this.m_sdfRefCounts[sc.childGeometryIndex];
+            ++this.m_sdfPoolVersion;
+        }
     }
 
     private void releaseScaledChildRef(in ScaledShape sc){
@@ -2391,6 +2470,7 @@ class PhysicsWorld{
         if(slot < this.m_scaledOwnedByUser.size())
             this.m_scaledOwnedByUser[slot] = 0u;
         this.m_freeScaledShapeIds.push_back(slot);
+        ++this.m_scaledPoolVersion;
     }
 
     private u32 allocateScaledShapeWithOwnership(in ScaledShape sc, in b8 ownedByUser){
@@ -2425,6 +2505,7 @@ class PhysicsWorld{
             this.m_scaledOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_scaledPoolVersion;
         return slot;
     }
 
@@ -2435,8 +2516,10 @@ class PhysicsWorld{
     private void freeScaledShape(in u32 slot){
         if(slot >= this.m_scaledShapes.size())
             return;
-        if(slot < this.m_scaledRefCounts.size() && this.m_scaledRefCounts[slot] > 0u)
+        if(slot < this.m_scaledRefCounts.size() && this.m_scaledRefCounts[slot] > 0u){
             --this.m_scaledRefCounts[slot];
+            ++this.m_scaledPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_scaledRefCounts.size())
             refs = this.m_scaledRefCounts[slot];
@@ -2456,6 +2539,7 @@ class PhysicsWorld{
         if(slot < this.m_chainOwnedByUser.size())
             this.m_chainOwnedByUser[slot] = 0u;
         this.m_freeChainShapeIds.push_back(slot);
+        ++this.m_chainPoolVersion;
     }
 
     private u32 allocateChainShapeWithOwnership(in ChainShape chain, in b8 ownedByUser){
@@ -2489,6 +2573,7 @@ class PhysicsWorld{
             this.m_chainOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_chainPoolVersion;
         return slot;
     }
 
@@ -2499,8 +2584,10 @@ class PhysicsWorld{
     private void freeChainShape(in u32 slot){
         if(slot >= this.m_chainShapes.size())
             return;
-        if(slot < this.m_chainRefCounts.size() && this.m_chainRefCounts[slot] > 0u)
+        if(slot < this.m_chainRefCounts.size() && this.m_chainRefCounts[slot] > 0u){
             --this.m_chainRefCounts[slot];
+            ++this.m_chainPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_chainRefCounts.size())
             refs = this.m_chainRefCounts[slot];
@@ -2520,6 +2607,7 @@ class PhysicsWorld{
         if(slot < this.m_sdfOwnedByUser.size())
             this.m_sdfOwnedByUser[slot] = 0u;
         this.m_freeSdfShapeIds.push_back(slot);
+        ++this.m_sdfPoolVersion;
     }
 
     private u32 allocateSdfShapeWithOwnership(in SdfShape sdf, in b8 ownedByUser){
@@ -2554,6 +2642,7 @@ class PhysicsWorld{
             this.m_sdfOwnedByUser[slot] = 0u;
         }
         ++this.m_geomDataStamp;
+        ++this.m_sdfPoolVersion;
         return slot;
     }
 
@@ -2564,8 +2653,10 @@ class PhysicsWorld{
     private void freeSdfShape(in u32 slot){
         if(slot >= this.m_sdfShapes.size())
             return;
-        if(slot < this.m_sdfRefCounts.size() && this.m_sdfRefCounts[slot] > 0u)
+        if(slot < this.m_sdfRefCounts.size() && this.m_sdfRefCounts[slot] > 0u){
             --this.m_sdfRefCounts[slot];
+            ++this.m_sdfPoolVersion;
+        }
         u32 refs = 0u;
         if(slot < this.m_sdfRefCounts.size())
             refs = this.m_sdfRefCounts[slot];
@@ -2602,6 +2693,7 @@ class PhysicsWorld{
         if(!this.isHullGeometryValid(id))
             return false;
         this.m_hullOwnedByUser[id.index] = 0u;
+        ++this.m_hullPoolVersion;
         if(this.m_hullRefCounts[id.index] == 0u)
             this.recycleHullSlot(id.index);
         return true;
@@ -2639,6 +2731,7 @@ class PhysicsWorld{
         if(!this.isMeshGeometryValid(id))
             return false;
         this.m_meshOwnedByUser[id.index] = 0u;
+        ++this.m_meshPoolVersion;
         if(this.m_meshRefCounts[id.index] == 0u)
             this.recycleMeshSlot(id.index);
         return true;
@@ -2676,6 +2769,7 @@ class PhysicsWorld{
         if(!this.isHeightfieldGeometryValid(id))
             return false;
         this.m_heightfieldOwnedByUser[id.index] = 0u;
+        ++this.m_heightfieldPoolVersion;
         if(this.m_heightfieldRefCounts[id.index] == 0u)
             this.recycleHeightfieldSlot(id.index);
         return true;
@@ -2713,6 +2807,7 @@ class PhysicsWorld{
         if(!this.isCompoundGeometryValid(id))
             return false;
         this.m_compoundOwnedByUser[id.index] = 0u;
+        ++this.m_compoundPoolVersion;
         if(this.m_compoundRefCounts[id.index] == 0u)
             this.recycleCompoundSlot(id.index);
         return true;
@@ -2750,6 +2845,7 @@ class PhysicsWorld{
         if(!this.isScaledGeometryValid(id))
             return false;
         this.m_scaledOwnedByUser[id.index] = 0u;
+        ++this.m_scaledPoolVersion;
         if(this.m_scaledRefCounts[id.index] == 0u)
             this.recycleScaledSlot(id.index);
         return true;
@@ -2787,6 +2883,7 @@ class PhysicsWorld{
         if(!this.isChainGeometryValid(id))
             return false;
         this.m_chainOwnedByUser[id.index] = 0u;
+        ++this.m_chainPoolVersion;
         if(this.m_chainRefCounts[id.index] == 0u)
             this.recycleChainSlot(id.index);
         return true;
@@ -2831,6 +2928,7 @@ class PhysicsWorld{
         if(!this.isSdfGeometryValid(id))
             return false;
         this.m_sdfOwnedByUser[id.index] = 0u;
+        ++this.m_sdfPoolVersion;
         if(this.m_sdfRefCounts[id.index] == 0u)
             this.recycleSdfSlot(id.index);
         return true;
@@ -3086,6 +3184,7 @@ class PhysicsWorld{
         if(!this.isValidBody(bodyId) || !this.validateShapeDef(def) || !this.isChainGeometryValid(id))
             return MakeUnexpected(Failure());
         ++this.m_chainRefCounts[id.index];
+        ++this.m_chainPoolVersion;
         Shape proto;
         proto.type = ShapeType::Chain;
         proto.geometryIndex = id.index;
@@ -3136,6 +3235,7 @@ class PhysicsWorld{
         if(!this.isValidBody(bodyId) || !this.validateShapeDef(def) || !this.isCompoundGeometryValid(id))
             return MakeUnexpected(Failure());
         ++this.m_compoundRefCounts[id.index];
+        ++this.m_compoundPoolVersion;
         Shape proto;
         proto.type = ShapeType::Compound;
         proto.geometryIndex = id.index;
@@ -3180,6 +3280,7 @@ class PhysicsWorld{
         )
             return MakeUnexpected(Failure());
         ++this.m_scaledRefCounts[id.index];
+        ++this.m_scaledPoolVersion;
         Shape proto;
         proto.type = ShapeType::Scaled;
         proto.geometryIndex = id.index;
@@ -3199,6 +3300,7 @@ class PhysicsWorld{
         if(!this.isValidBody(bodyId) || !this.validateShapeDef(def) || !this.isSdfGeometryValid(id))
             return MakeUnexpected(Failure());
         ++this.m_sdfRefCounts[id.index];
+        ++this.m_sdfPoolVersion;
         Shape proto;
         proto.type = ShapeType::Sdf;
         proto.geometryIndex = id.index;
@@ -3218,6 +3320,7 @@ class PhysicsWorld{
         if(!this.isValidBody(bodyId) || !this.validateShapeDef(def) || !this.isHullGeometryValid(id))
             return MakeUnexpected(Failure());
         ++this.m_hullRefCounts[id.index];
+        ++this.m_hullPoolVersion;
         Shape proto;
         proto.type = ShapeType::Hull;
         proto.geometryIndex = id.index;
@@ -3272,6 +3375,7 @@ class PhysicsWorld{
         if(this.m_bodies[bodyId.index].type == BodyType::Dynamic)
             return MakeUnexpected(Failure());
         ++this.m_meshRefCounts[id.index];
+        ++this.m_meshPoolVersion;
         Shape proto;
         proto.type = ShapeType::Mesh;
         proto.geometryIndex = id.index;
@@ -3297,6 +3401,7 @@ class PhysicsWorld{
         if(this.m_bodies[bodyId.index].type == BodyType::Dynamic)
             return MakeUnexpected(Failure());
         ++this.m_heightfieldRefCounts[id.index];
+        ++this.m_heightfieldPoolVersion;
         Shape proto;
         proto.type = ShapeType::Heightfield;
         proto.geometryIndex = id.index;
@@ -4893,6 +4998,7 @@ class PhysicsWorld{
         }
         this.releaseShapeGeometry(this.m_shapes[idx]);
         ++this.m_hullRefCounts[id.index];
+        ++this.m_hullPoolVersion;
         this.m_shapes[idx].type = ShapeType::Hull;
         this.m_shapes[idx].geometryIndex = id.index;
         this.refreshShapeGeometryAndContacts(idx, updateBodyMass);
@@ -4910,6 +5016,7 @@ class PhysicsWorld{
             return true;
         this.releaseShapeGeometry(this.m_shapes[idx]);
         ++this.m_meshRefCounts[id.index];
+        ++this.m_meshPoolVersion;
         this.m_shapes[idx].type = ShapeType::Mesh;
         this.m_shapes[idx].geometryIndex = id.index;
         this.refreshShapeGeometryAndContacts(idx, false);
@@ -4919,9 +5026,18 @@ class PhysicsWorld{
     public b8 updateMeshGeometryVertices(in MeshGeometryId id, in Span<f32x4> newVertices){
         if(!this.isMeshGeometryValid(id))
             return false;
-        if(!this.m_meshShapes[id.index].refitBvh(newVertices))
+        if(this.m_meshRefitCaches.size() < this.m_meshShapes.size())
+            this.m_meshRefitCaches.resize(this.m_meshShapes.size());
+        if(!this.m_meshShapes[id.index].refitBvhWithCache(
+            newVertices,
+            cast<u32>(this.m_meshGenerations[id.index]),
+            this.m_meshRefitCaches[id.index],
+            this.m_cpuScratch.meshRefitEdgeFlagsScratch,
+            this.m_cpuScratch.meshRefitSharpVertsScratch
+        ))
             return false;
-        this.m_meshShapes[id.index].cachedBuoyancyVolume = ComputeMeshBuoyancyVolume(this.m_meshShapes[id.index]);
+        PrepareMeshBuoyancyVolumeCache(this.m_meshShapes[id.index]);
+        ++this.m_meshPoolVersion;
         for(usize si = 0u; si < this.m_shapes.size(); ++si){
             in Shape s = this.m_shapes[si];
             if(s.alive() && s.type == ShapeType::Mesh && s.geometryIndex == id.index)
@@ -4941,6 +5057,7 @@ class PhysicsWorld{
             return true;
         this.releaseShapeGeometry(this.m_shapes[idx]);
         ++this.m_heightfieldRefCounts[id.index];
+        ++this.m_heightfieldPoolVersion;
         this.m_shapes[idx].type = ShapeType::Heightfield;
         this.m_shapes[idx].geometryIndex = id.index;
         this.refreshShapeGeometryAndContacts(idx, false);
@@ -7838,14 +7955,18 @@ class PhysicsWorld{
             LocalRayHit best;
             f32 curMax = maxFraction;
             if(!comp.nodes.empty()){
-                BvhSpillStack<u32, 128u> stack;
-                stack.push(0u);
+                f32 rootTMin = 0.0f;
+                in MeshBvhNode rootNode = comp.nodes[0u];
+                if(!AabbRayCastValues(VectorSingle(rootNode.aabbMinLeft, 0.0f), VectorSingle(rootNode.aabbMaxRight, 0.0f), localOrigin, rayInvDir, rayMask, curMax, rootTMin))
+                    return best;
+                BvhMetricSpillStack<128u> stack;
+                stack.push(0u, rootTMin);
                 u32 nodeIdx = 0u;
-                while(stack.pop(nodeIdx)){
-                    in MeshBvhNode node = comp.nodes[nodeIdx];
-                    f32 tAabb = 0.0f;
-                    if(!AabbRayCastValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), localOrigin, rayInvDir, rayMask, curMax, tAabb))
+                f32 poppedTMin = 0.0f;
+                while(stack.pop(nodeIdx, poppedTMin)){
+                    if(poppedTMin > curMax)
                         continue;
+                    in MeshBvhNode node = comp.nodes[nodeIdx];
                     if(node.isLeaf()){
                         const u32 endOrd = node.leftOrFirst() + node.rightOrCount();
                         for(u32 oi = node.leftOrFirst(); oi < endOrd; ++oi){
@@ -7870,8 +7991,15 @@ class PhysicsWorld{
                         }
                     }
                     else{
-                        stack.push(node.rightOrCount());
-                        stack.push(node.leftOrFirst());
+                        const u32 leftIdx = node.leftOrFirst();
+                        const u32 rightIdx = node.rightOrCount();
+                        in MeshBvhNode leftNode = comp.nodes[leftIdx];
+                        in MeshBvhNode rightNode = comp.nodes[rightIdx];
+                        f32 tL = 0.0f;
+                        f32 tR = 0.0f;
+                        const b8 hitL = AabbRayCastValues(VectorSingle(leftNode.aabbMinLeft, 0.0f), VectorSingle(leftNode.aabbMaxRight, 0.0f), localOrigin, rayInvDir, rayMask, curMax, tL);
+                        const b8 hitR = AabbRayCastValues(VectorSingle(rightNode.aabbMinLeft, 0.0f), VectorSingle(rightNode.aabbMaxRight, 0.0f), localOrigin, rayInvDir, rayMask, curMax, tR);
+                        stack.pushOrderedPair(leftIdx, hitL, tL, rightIdx, hitR, tR);
                     }
                 }
             }
@@ -8645,33 +8773,40 @@ class PhysicsWorld{
             in CompoundShape comp = this.m_compoundShapes[shape.geometryIndex];
             if(!comp.isValid() || comp.nodes.empty())
                 return LocalRayHit();
-            VectorSingle sweepLocalMin(0.0f);
-            VectorSingle sweepLocalMax(0.0f);
             const VectorSingle localPos0 = InverseTransformPointValues(effPos, effRot, normOriginPos);
             const VectorSingle localRot0 = SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(effRot), normOriginRot));
             const VectorSingle localTrans = Vector3InverseRotate(trans, effRot);
-            VectorSingle localMin0(0.0f);
-            VectorSingle localMax0(0.0f);
-            ComputeShapeProxyViewWorldAabbValues(effectiveView, localPos0, localRot0, 0.0f, localMin0, localMax0);
-            sweepLocalMin = Min(localMin0, localMin0 + localTrans);
-            sweepLocalMax = Max(localMax0, localMax0 + localTrans);
+            VectorSingle castCenterL(0.0f);
+            VectorSingle castHalfL(0.0f);
             if(hasRotation){
-                const f32 padR = ComputeProxyViewBoundingRadius(effectiveView, ComputeProxyViewCenter(effectiveView));
-                const VectorSingle c0L = TransformPointValues(localPos0, localRot0, ComputeProxyViewCenter(effectiveView));
-                const VectorSingle c1L = TransformPointValues(localPos0 + localTrans, SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(effRot), endRot)), ComputeProxyViewCenter(effectiveView));
-                const VectorSingle rPad(padR, padR, padR, 0.0f);
-                sweepLocalMin = Min(sweepLocalMin, Min(c0L, c1L) - rPad);
-                sweepLocalMax = Max(sweepLocalMax, Max(c0L, c1L) + rPad);
+                const f32 boundR = ComputeProxyViewBoundingRadius(effectiveView, VectorSingle(0.0f));
+                castCenterL = localPos0;
+                castHalfL = VectorSingle(boundR, boundR, boundR, 0.0f);
             }
+            else{
+                VectorSingle localMin0(0.0f);
+                VectorSingle localMax0(0.0f);
+                ComputeShapeProxyViewWorldAabbValues(effectiveView, localPos0, localRot0, 0.0f, localMin0, localMax0);
+                castCenterL = (localMin0 + localMax0) * 0.5f;
+                castHalfL = Max((localMax0 - localMin0) * 0.5f, VectorSingle(0.0f));
+            }
+            VectorSingle rayInvDir(0.0f);
+            u32 rayMask = 0u;
+            ComputeRayCastSlabValues(localTrans, rayInvDir, rayMask);
             LocalRayHit best;
             f32 curMax = maxFraction;
-            BvhSpillStack<u32, 128u> stack;
-            stack.push(0u);
+            f32 rootTMin = 0.0f;
+            in MeshBvhNode rootNode = comp.nodes[0u];
+            if(!AabbRayCastValues(VectorSingle(rootNode.aabbMinLeft, 0.0f) - castHalfL, VectorSingle(rootNode.aabbMaxRight, 0.0f) + castHalfL, castCenterL, rayInvDir, rayMask, curMax, rootTMin))
+                return best;
+            BvhMetricSpillStack<128u> stack;
+            stack.push(0u, rootTMin);
             u32 nodeIdx = 0u;
-            while(stack.pop(nodeIdx)){
-                in MeshBvhNode node = comp.nodes[nodeIdx];
-                if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), sweepLocalMin, sweepLocalMax))
+            f32 poppedTMin = 0.0f;
+            while(stack.pop(nodeIdx, poppedTMin)){
+                if(poppedTMin > curMax)
                     continue;
+                in MeshBvhNode node = comp.nodes[nodeIdx];
                 if(node.isLeaf()){
                     const u32 endOrd = node.leftOrFirst() + node.rightOrCount();
                     for(u32 oi = node.leftOrFirst(); oi < endOrd; ++oi){
@@ -8696,8 +8831,15 @@ class PhysicsWorld{
                     }
                 }
                 else{
-                    stack.push(node.rightOrCount());
-                    stack.push(node.leftOrFirst());
+                    const u32 leftIdx = node.leftOrFirst();
+                    const u32 rightIdx = node.rightOrCount();
+                    in MeshBvhNode leftNode = comp.nodes[leftIdx];
+                    in MeshBvhNode rightNode = comp.nodes[rightIdx];
+                    f32 tL = 0.0f;
+                    f32 tR = 0.0f;
+                    const b8 hitL = AabbRayCastValues(VectorSingle(leftNode.aabbMinLeft, 0.0f) - castHalfL, VectorSingle(leftNode.aabbMaxRight, 0.0f) + castHalfL, castCenterL, rayInvDir, rayMask, curMax, tL);
+                    const b8 hitR = AabbRayCastValues(VectorSingle(rightNode.aabbMinLeft, 0.0f) - castHalfL, VectorSingle(rightNode.aabbMaxRight, 0.0f) + castHalfL, castCenterL, rayInvDir, rayMask, curMax, tR);
+                    stack.pushOrderedPair(leftIdx, hitL, tL, rightIdx, hitR, tR);
                 }
             }
             return best;
@@ -8932,6 +9074,113 @@ class PhysicsWorld{
         return best.fraction > 0.0f;
     }
 
+    public void gatherCandidateShapesAabb(
+        in VectorSingle queryMin,
+        in VectorSingle queryMax,
+        in Filter filter,
+        in b8 hitSensors,
+        in BodyId ignoreBodyId,
+        in ShapeId ignoreShapeId,
+        mut Vector<u32> outShapeIds
+    )const{
+        outShapeIds.clear();
+        const u32 queryMask = this.broadPhaseQueryMask(filter);
+        if(queryMask == 0u)
+            return;
+        u8 reqNodeFlags = s_TreeNodeHasNonSensor;
+        if(hitSensors)
+            reqNodeFlags = 0u;
+        const Aabb3D queryBox(queryMin, queryMax);
+        const Optional<ShapeQueryFilterCallback> emptyFilter = Optional<ShapeQueryFilterCallback>();
+        for(usize t = 0u; t < s_TreeCount; ++t){
+            this.m_broadPhase.trees[t].queryAabbFiltered(
+                queryBox,
+                queryMask,
+                reqNodeFlags,
+                lambda[in this, in t, in filter, in ignoreBodyId, in ignoreShapeId, in hitSensors, in emptyFilter, mut outShapeIds](in u32 proxyId, in u32 shapeIdx) -> b8{
+                    if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
+                        return true;
+                    if(this.passesQueryShapeFilter(shapeIdx, filter, ignoreBodyId, ignoreShapeId, hitSensors, true, emptyFilter))
+                        outShapeIds.push_back(shapeIdx);
+                    return true;
+                }
+            );
+        }
+        this.queryAwakeShapesAabb(
+            queryMin,
+            queryMax,
+            queryMask,
+            reqNodeFlags,
+            lambda[in this, in filter, in ignoreBodyId, in ignoreShapeId, in hitSensors, in emptyFilter, mut outShapeIds](in u32 shapeIdx) -> b8{
+                if(this.passesQueryShapeFilter(shapeIdx, filter, ignoreBodyId, ignoreShapeId, hitSensors, true, emptyFilter))
+                    outShapeIds.push_back(shapeIdx);
+                return true;
+            }
+        );
+    }
+
+    public ShapeCastHit shapeCastClosestInCandidates(
+        in ShapeProxyView queryView,
+        in ShapeCastInput input,
+        in Span<u32> candidateShapeIds
+    )const{
+        ShapeCastHit best;
+        if(
+            candidateShapeIds.empty()
+            || !this.validateShapeQueryProxyView(queryView)
+            || !IsFinite(VectorSingle(input.radius))
+            || input.radius < 0.0f
+            || !IsValidPositionVec3(VectorSingle(input.originTransform.position))
+            || !IsFiniteQuat(VectorSingle(input.originTransform.rotation))
+            || !IsFiniteVec3(VectorSingle(input.translation))
+            || (input.hasRotation && !IsFiniteQuat(VectorSingle(input.endRotation)))
+        )
+            return best;
+
+        const VectorSingle normOriginPos = VectorSingle(input.originTransform.position);
+        const VectorSingle normOriginRot = SafeNormalizeQuat(VectorSingle(input.originTransform.rotation));
+        const VectorSingle endRot = SafeNormalizeQuat(VectorSingle(input.endRotation));
+        const VectorSingle trans = VectorSingle(input.translation);
+        VectorSingle castCenterOrigin = normOriginPos;
+        VectorSingle castHalfExtent(0.0f);
+        if(input.hasRotation){
+            const f32 boundR = ComputeProxyViewBoundingRadius(queryView, VectorSingle(0.0f)) + input.radius;
+            castHalfExtent = VectorSingle(boundR, boundR, boundR, 0.0f);
+        }
+        else{
+            VectorSingle sMin(0.0f);
+            VectorSingle sMax(0.0f);
+            ComputeShapeProxyViewWorldAabbValues(queryView, normOriginPos, normOriginRot, input.radius, sMin, sMax);
+            castCenterOrigin = (sMin + sMax) * 0.5f;
+            castHalfExtent = Max((sMax - sMin) * 0.5f, VectorSingle(0.0f));
+        }
+
+        ShapeProxyView effectiveView = queryView;
+        effectiveView.radius += input.radius;
+        best.fraction = 1.0f;
+        best.hit = false;
+
+        VectorSingle invDir(0.0f);
+        u32 parallelMask = 0u;
+        ComputeRayCastSlabValues(trans, invDir, parallelMask);
+        const Optional<ShapeQueryFilterCallback> emptyFilter = Optional<ShapeQueryFilterCallback>();
+        for(usize ci = 0u; ci < candidateShapeIds.size(); ++ci){
+            const u32 shapeIdx = candidateShapeIds[ci];
+            if(shapeIdx >= this.m_shapes.size())
+                continue;
+            in Shape shape = this.m_shapes[shapeIdx];
+            if(!shape.alive())
+                continue;
+            f32 tAabb = 0.0f;
+            if(!AabbRayCastValues(VectorSingle(shape.aabb.lowerBound) - castHalfExtent, VectorSingle(shape.aabb.upperBound) + castHalfExtent, castCenterOrigin, invDir, parallelMask, best.fraction, tAabb))
+                continue;
+            this.evalShapeCastClosestCandidate(shapeIdx, effectiveView, normOriginPos, normOriginRot, endRot, input, emptyFilter, trans, best);
+            if(best.fraction <= 0.0f)
+                break;
+        }
+        return best;
+    }
+
     private ShapeCastHit shapeCastClosestImpl(
         in ShapeProxyView queryView,
         in ShapeCastInput input,
@@ -8949,14 +9198,23 @@ class PhysicsWorld{
         )
             return best;
 
-        VectorSingle normOriginPos(0.0f);
-        VectorSingle normOriginRot(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle endRot(0.0f, 0.0f, 0.0f, 1.0f);
-        VectorSingle sweepMin(0.0f);
-        VectorSingle sweepMax(0.0f);
-        this.computeQuerySweepViewAabbValues(queryView, input, normOriginPos, normOriginRot, endRot, sweepMin, sweepMax);
-        const Aabb3D sweepBox(sweepMin, sweepMax);
+        const VectorSingle normOriginPos = VectorSingle(input.originTransform.position);
+        const VectorSingle normOriginRot = SafeNormalizeQuat(VectorSingle(input.originTransform.rotation));
+        const VectorSingle endRot = SafeNormalizeQuat(VectorSingle(input.endRotation));
         const VectorSingle trans = VectorSingle(input.translation);
+        VectorSingle castCenterOrigin = normOriginPos;
+        VectorSingle castHalfExtent(0.0f);
+        if(input.hasRotation){
+            const f32 boundR = ComputeProxyViewBoundingRadius(queryView, VectorSingle(0.0f)) + input.radius;
+            castHalfExtent = VectorSingle(boundR, boundR, boundR, 0.0f);
+        }
+        else{
+            VectorSingle sMin(0.0f);
+            VectorSingle sMax(0.0f);
+            ComputeShapeProxyViewWorldAabbValues(queryView, normOriginPos, normOriginRot, input.radius, sMin, sMax);
+            castCenterOrigin = (sMin + sMax) * 0.5f;
+            castHalfExtent = Max((sMax - sMin) * 0.5f, VectorSingle(0.0f));
+        }
 
         ShapeProxyView effectiveView = queryView;
         effectiveView.radius += input.radius;
@@ -8974,21 +9232,30 @@ class PhysicsWorld{
         in ShapeCastInput inputRef = input;
         in Optional<ShapeQueryFilterCallback> filterRef = queryFilter;
         for(usize t = 0u; t < s_TreeCount; ++t){
-            this.m_broadPhase.trees[t].queryAabbFiltered(
-                sweepBox,
+            this.m_broadPhase.trees[t].shapeCastFiltered(
+                castCenterOrigin,
+                castHalfExtent,
+                trans,
                 queryMask,
+                best.fraction,
                 reqNodeFlags,
-                lambda[in this, in t, in effectiveViewRef, in normOriginPos, in normOriginRot, in endRot, in inputRef, in filterRef, in trans, mut best](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in t, in effectiveViewRef, in normOriginPos, in normOriginRot, in endRot, in inputRef, in filterRef, in trans, mut best](in u32 proxyId, in u32 shapeIdx, in f32 curMaxFraction) -> f32{
                     if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
-                        return true;
-                    return this.evalShapeCastClosestCandidate(shapeIdx, effectiveViewRef, normOriginPos, normOriginRot, endRot, inputRef, filterRef, trans, best);
+                        return curMaxFraction;
+                    this.evalShapeCastClosestCandidate(shapeIdx, effectiveViewRef, normOriginPos, normOriginRot, endRot, inputRef, filterRef, trans, best);
+                    return best.fraction;
                 }
             );
         }
         if(best.fraction > 0.0f){
+            const VectorSingle c0Min = castCenterOrigin - castHalfExtent;
+            const VectorSingle c0Max = castCenterOrigin + castHalfExtent;
+            const VectorSingle tMaxTrans = trans * best.fraction;
+            const VectorSingle awakeMin = Min(c0Min, c0Min + tMaxTrans);
+            const VectorSingle awakeMax = Max(c0Max, c0Max + tMaxTrans);
             this.queryAwakeShapesAabb(
-                sweepMin,
-                sweepMax,
+                awakeMin,
+                awakeMax,
                 queryMask,
                 reqNodeFlags,
                 lambda[in this, in effectiveViewRef, in normOriginPos, in normOriginRot, in endRot, in inputRef, in filterRef, in trans, mut best](in u32 shapeIdx) -> b8{
@@ -10407,28 +10674,84 @@ class PhysicsWorld{
                 return false;
             b8 found = false;
             f32 bestDSq = s_MaxF32;
-            for(usize ci = 0u; ci < comp.children.size(); ++ci){
-                in CompoundSubShape ch = comp.children[ci];
-                const VectorSingle chPos(ch.localTransform.position);
-                const VectorSingle chRot = SafeNormalizeQuat(VectorSingle(ch.localTransform.rotation));
-                const VectorSingle ptInCh = InverseTransformPointValues(chPos, chRot, localPt);
-                Shape chShape;
-                chShape.type = ch.type;
-                chShape.geom0 = ch.geom0;
-                chShape.geom1 = ch.geom1;
-                chShape.geometryIndex = ch.geometryIndex;
-                VectorSingle chClosest(0.0f);
-                VectorSingle chNormal(0.0f, 1.0f, 0.0f, 0.0f);
-                u32 chTri = s_NullIndex;
-                if(this.closestPointLocalForShape(chShape, shapeId, ptInCh, chClosest, chNormal, chTri)){
-                    const VectorSingle candClosest = TransformPointValues(chPos, chRot, chClosest);
-                    const f32 dSq = Vector3LengthSq(VectorSingle(localPt - candClosest, 0.0f)).x;
-                    if(!found || dSq < bestDSq){
-                        found = true;
-                        bestDSq = dSq;
-                        outClosest = candClosest;
-                        outNormal = SafeNormalizeVec3(Vector3Rotate(chNormal, chRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                        outTriIdx = cast<u32>(ci);
+            if(!comp.nodes.empty()){
+                in MeshBvhNode rootNode = comp.nodes[0u];
+                const VectorSingle rootDiff = Max(Max(VectorSingle(rootNode.aabbMinLeft, 0.0f) - localPt, localPt - VectorSingle(rootNode.aabbMaxRight, 0.0f)), VectorSingle(0.0f));
+                const f32 rootDSq = Vector3LengthSq(rootDiff).x;
+                BvhMetricSpillStack<128u> stack;
+                stack.push(0u, rootDSq);
+                u32 nodeIdx = 0u;
+                f32 poppedDSq = 0.0f;
+                while(stack.pop(nodeIdx, poppedDSq)){
+                    if(found && poppedDSq > bestDSq)
+                        continue;
+                    in MeshBvhNode node = comp.nodes[nodeIdx];
+                    if(node.isLeaf()){
+                        const u32 endOrd = node.leftOrFirst() + node.rightOrCount();
+                        for(u32 oi = node.leftOrFirst(); oi < endOrd; ++oi){
+                            const u32 chIdx = comp.bvhChildOrder[oi];
+                            in CompoundSubShape ch = comp.children[chIdx];
+                            const VectorSingle chPos(ch.localTransform.position);
+                            const VectorSingle chRot = SafeNormalizeQuat(VectorSingle(ch.localTransform.rotation));
+                            const VectorSingle ptInCh = InverseTransformPointValues(chPos, chRot, localPt);
+                            Shape chShape;
+                            chShape.type = ch.type;
+                            chShape.geom0 = ch.geom0;
+                            chShape.geom1 = ch.geom1;
+                            chShape.geometryIndex = ch.geometryIndex;
+                            VectorSingle chClosest(0.0f);
+                            VectorSingle chNormal(0.0f, 1.0f, 0.0f, 0.0f);
+                            u32 chTri = s_NullIndex;
+                            if(this.closestPointLocalForShape(chShape, shapeId, ptInCh, chClosest, chNormal, chTri)){
+                                const VectorSingle candClosest = TransformPointValues(chPos, chRot, chClosest);
+                                const f32 dSq = Vector3LengthSq(VectorSingle(localPt - candClosest, 0.0f)).x;
+                                if(!found || dSq < bestDSq){
+                                    found = true;
+                                    bestDSq = dSq;
+                                    outClosest = candClosest;
+                                    outNormal = SafeNormalizeVec3(Vector3Rotate(chNormal, chRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                                    outTriIdx = chIdx;
+                                }
+                            }
+                        }
+                    }
+                    else{
+                        const u32 leftIdx = node.leftOrFirst();
+                        const u32 rightIdx = node.rightOrCount();
+                        in MeshBvhNode leftNode = comp.nodes[leftIdx];
+                        in MeshBvhNode rightNode = comp.nodes[rightIdx];
+                        const VectorSingle diffL = Max(Max(VectorSingle(leftNode.aabbMinLeft, 0.0f) - localPt, localPt - VectorSingle(leftNode.aabbMaxRight, 0.0f)), VectorSingle(0.0f));
+                        const VectorSingle diffR = Max(Max(VectorSingle(rightNode.aabbMinLeft, 0.0f) - localPt, localPt - VectorSingle(rightNode.aabbMaxRight, 0.0f)), VectorSingle(0.0f));
+                        const f32 dSqL = Vector3LengthSq(diffL).x;
+                        const f32 dSqR = Vector3LengthSq(diffR).x;
+                        stack.pushOrderedPair(leftIdx, !found || dSqL <= bestDSq, dSqL, rightIdx, !found || dSqR <= bestDSq, dSqR);
+                    }
+                }
+            }
+            else{
+                for(usize ci = 0u; ci < comp.children.size(); ++ci){
+                    in CompoundSubShape ch = comp.children[ci];
+                    const VectorSingle chPos(ch.localTransform.position);
+                    const VectorSingle chRot = SafeNormalizeQuat(VectorSingle(ch.localTransform.rotation));
+                    const VectorSingle ptInCh = InverseTransformPointValues(chPos, chRot, localPt);
+                    Shape chShape;
+                    chShape.type = ch.type;
+                    chShape.geom0 = ch.geom0;
+                    chShape.geom1 = ch.geom1;
+                    chShape.geometryIndex = ch.geometryIndex;
+                    VectorSingle chClosest(0.0f);
+                    VectorSingle chNormal(0.0f, 1.0f, 0.0f, 0.0f);
+                    u32 chTri = s_NullIndex;
+                    if(this.closestPointLocalForShape(chShape, shapeId, ptInCh, chClosest, chNormal, chTri)){
+                        const VectorSingle candClosest = TransformPointValues(chPos, chRot, chClosest);
+                        const f32 dSq = Vector3LengthSq(VectorSingle(localPt - candClosest, 0.0f)).x;
+                        if(!found || dSq < bestDSq){
+                            found = true;
+                            bestDSq = dSq;
+                            outClosest = candClosest;
+                            outNormal = SafeNormalizeVec3(Vector3Rotate(chNormal, chRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                            outTriIdx = cast<u32>(ci);
+                        }
                     }
                 }
             }
@@ -10540,32 +10863,35 @@ class PhysicsWorld{
         u8 reqNodeFlags = s_TreeNodeHasNonSensor;
         if(hitSensors)
             reqNodeFlags = 0u;
-        const VectorSingle rVec(maxDistance, maxDistance, maxDistance, 0.0f);
-        const VectorSingle qMin = worldPoint - rVec;
-        const VectorSingle qMax = worldPoint + rVec;
-        const Aabb3D queryBox(qMin, qMax);
         in Filter filterRef = filter;
         for(usize t = 0u; t < s_TreeCount; ++t){
-            this.m_broadPhase.trees[t].queryAabbFiltered(
-                queryBox,
+            this.m_broadPhase.trees[t].closestPointFiltered(
+                worldPoint,
+                best.distance,
                 queryMask,
                 reqNodeFlags,
-                lambda[in this, in t, in worldPoint, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in useCustomFilter, in queryFilter, mut best](in u32 proxyId, in u32 shapeIdx) -> b8{
+                lambda[in this, in t, in worldPoint, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in useCustomFilter, in queryFilter, mut best](in u32 proxyId, in u32 shapeIdx) -> f32{
                     if(this.isAwakeShapeDuringDirtyTree(t, shapeIdx))
-                        return true;
+                        return best.distance;
+                    this.evalClosestPointCandidate(shapeIdx, worldPoint, filterRef, hitSensors, ignoreBodyId, ignoreShapeId, useCustomFilter, queryFilter, best);
+                    return best.distance;
+                }
+            );
+        }
+        if(!best.hit || best.distance > 0.0f){
+            const VectorSingle rVec(best.distance, best.distance, best.distance, 0.0f);
+            const VectorSingle qMin = worldPoint - rVec;
+            const VectorSingle qMax = worldPoint + rVec;
+            this.queryAwakeShapesAabb(
+                qMin,
+                qMax,
+                queryMask,
+                reqNodeFlags,
+                lambda[in this, in worldPoint, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in useCustomFilter, in queryFilter, mut best](in u32 shapeIdx) -> b8{
                     return this.evalClosestPointCandidate(shapeIdx, worldPoint, filterRef, hitSensors, ignoreBodyId, ignoreShapeId, useCustomFilter, queryFilter, best);
                 }
             );
         }
-        this.queryAwakeShapesAabb(
-            qMin,
-            qMax,
-            queryMask,
-            reqNodeFlags,
-            lambda[in this, in worldPoint, in filterRef, in hitSensors, in ignoreBodyId, in ignoreShapeId, in useCustomFilter, in queryFilter, mut best](in u32 shapeIdx) -> b8{
-                return this.evalClosestPointCandidate(shapeIdx, worldPoint, filterRef, hitSensors, ignoreBodyId, ignoreShapeId, useCustomFilter, queryFilter, best);
-            }
-        );
         return best;
     }
 
@@ -10972,7 +11298,7 @@ class PhysicsWorld{
         mut Manifold outManifold
     )const{
         outManifold = Manifold();
-        Vector<Manifold> dummyExtras;
+        FixedVector<Manifold, s_MaxExtraManifoldsPerContact> dummyExtras;
         if(targetShape.type == ShapeType::Plane){
             outManifold = CollideConvexProxyVsPlane(queryView, queryPos, queryRot, targetShape.planeShape(), posB, rotB, 0.0f);
             return;
@@ -11004,31 +11330,83 @@ class PhysicsWorld{
             if(!comp.isValid())
                 return;
             f32 bestSep = s_MaxF32;
-            for(usize ci = 0u; ci < comp.children.size(); ++ci){
-                in CompoundSubShape ch = comp.children[ci];
-                Shape chShape;
-                chShape.type = ch.type;
-                chShape.geom0 = ch.geom0;
-                chShape.geom1 = ch.geom1;
-                chShape.geometryIndex = ch.geometryIndex;
-                chShape.localTransform = ch.localTransform;
-                chShape.setFlag(ShapeFlags::HasLocalTransform, !IsIdentityTransform(ch.localTransform));
-                VectorSingle chPos(0.0f);
-                VectorSingle chRot(0.0f, 0.0f, 0.0f, 1.0f);
-                chShape.worldTransformValues(posB, rotB, chPos, chRot);
-                Manifold candM;
-                this.collideProxyViewWithShapeForOverlap(queryView, queryPos, queryRot, chShape, targetShapeId, chPos, chRot, candM);
-                if(candM.pointCount() == 0u)
-                    continue;
-                f32 candMinSep = s_MaxF32;
-                for(u32 pi = 0u; pi < candM.pointCount(); ++pi){
-                    const f32 pSep = candM.points[pi].separation();
-                    if(pSep < candMinSep)
-                        candMinSep = pSep;
+            if(!comp.nodes.empty()){
+                const VectorSingle qLocalPos = InverseTransformPointValues(posB, rotB, queryPos);
+                const VectorSingle qLocalRot = SafeNormalizeQuat(QuaternionMultiply(QuaternionConjugate(rotB), queryRot));
+                VectorSingle qLocalMin(0.0f);
+                VectorSingle qLocalMax(0.0f);
+                ComputeShapeProxyViewWorldAabbValues(queryView, qLocalPos, qLocalRot, 0.0f, qLocalMin, qLocalMax);
+                BvhSpillStack<u32, 128u> stack;
+                stack.push(0u);
+                u32 nodeIdx = 0u;
+                while(stack.pop(nodeIdx)){
+                    in MeshBvhNode node = comp.nodes[nodeIdx];
+                    if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), qLocalMin, qLocalMax))
+                        continue;
+                    if(node.isLeaf()){
+                        const u32 endOrd = node.leftOrFirst() + node.rightOrCount();
+                        for(u32 oi = node.leftOrFirst(); oi < endOrd; ++oi){
+                            const u32 chIdx = comp.bvhChildOrder[oi];
+                            in CompoundSubShape ch = comp.children[chIdx];
+                            Shape chShape;
+                            chShape.type = ch.type;
+                            chShape.geom0 = ch.geom0;
+                            chShape.geom1 = ch.geom1;
+                            chShape.geometryIndex = ch.geometryIndex;
+                            chShape.localTransform = ch.localTransform;
+                            chShape.setFlag(ShapeFlags::HasLocalTransform, !IsIdentityTransform(ch.localTransform));
+                            VectorSingle chPos(0.0f);
+                            VectorSingle chRot(0.0f, 0.0f, 0.0f, 1.0f);
+                            chShape.worldTransformValues(posB, rotB, chPos, chRot);
+                            Manifold candM;
+                            this.collideProxyViewWithShapeForOverlap(queryView, queryPos, queryRot, chShape, targetShapeId, chPos, chRot, candM);
+                            if(candM.pointCount() == 0u)
+                                continue;
+                            f32 candMinSep = s_MaxF32;
+                            for(u32 pi = 0u; pi < candM.pointCount(); ++pi){
+                                const f32 pSep = candM.points[pi].separation();
+                                if(pSep < candMinSep)
+                                    candMinSep = pSep;
+                            }
+                            if(outManifold.pointCount() == 0u || candMinSep < bestSep){
+                                bestSep = candMinSep;
+                                outManifold = candM;
+                            }
+                        }
+                    }
+                    else{
+                        stack.push(node.rightOrCount());
+                        stack.push(node.leftOrFirst());
+                    }
                 }
-                if(outManifold.pointCount() == 0u || candMinSep < bestSep){
-                    bestSep = candMinSep;
-                    outManifold = candM;
+            }
+            else{
+                for(usize ci = 0u; ci < comp.children.size(); ++ci){
+                    in CompoundSubShape ch = comp.children[ci];
+                    Shape chShape;
+                    chShape.type = ch.type;
+                    chShape.geom0 = ch.geom0;
+                    chShape.geom1 = ch.geom1;
+                    chShape.geometryIndex = ch.geometryIndex;
+                    chShape.localTransform = ch.localTransform;
+                    chShape.setFlag(ShapeFlags::HasLocalTransform, !IsIdentityTransform(ch.localTransform));
+                    VectorSingle chPos(0.0f);
+                    VectorSingle chRot(0.0f, 0.0f, 0.0f, 1.0f);
+                    chShape.worldTransformValues(posB, rotB, chPos, chRot);
+                    Manifold candM;
+                    this.collideProxyViewWithShapeForOverlap(queryView, queryPos, queryRot, chShape, targetShapeId, chPos, chRot, candM);
+                    if(candM.pointCount() == 0u)
+                        continue;
+                    f32 candMinSep = s_MaxF32;
+                    for(u32 pi = 0u; pi < candM.pointCount(); ++pi){
+                        const f32 pSep = candM.points[pi].separation();
+                        if(pSep < candMinSep)
+                            candMinSep = pSep;
+                    }
+                    if(outManifold.pointCount() == 0u || candMinSep < bestSep){
+                        bestSep = candMinSep;
+                        outManifold = candM;
+                    }
                 }
             }
             return;
@@ -11356,7 +11734,7 @@ class PhysicsWorld{
                 flipOrder = true;
             }
             else if(shape.type == ShapeType::Mesh){
-                Vector<Manifold> dummyExtras;
+                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> dummyExtras;
                 CollideHullAndMeshMulti(qHullRef, queryPos, queryRot, this.m_meshShapes[shape.geometryIndex], posB, rotB, 0.0f, shapeId, this.m_triangleFilterCallback, m, dummyExtras);
             }
             else if(shape.type == ShapeType::Hull){
@@ -11370,7 +11748,7 @@ class PhysicsWorld{
         }
         else{
             if(shape.type == ShapeType::Mesh){
-                Vector<Manifold> dummyExtras;
+                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> dummyExtras;
                 CollideConvexProxyAndMeshMulti(queryViewRef, queryPos, queryRot, this.m_meshShapes[shape.geometryIndex], posB, rotB, 0.0f, shapeId, this.m_triangleFilterCallback, m, dummyExtras);
             }
             else{
@@ -11710,6 +12088,75 @@ class PhysicsWorld{
     public void overlapShapeDetailed(in ShapeProxy queryProxy, in Transform3D queryTransform, in Filter filter, in b8 hitSensors, mut Vector<ShapeOverlapHit> outHits)const{
         const Optional<ShapeQueryFilterCallback> emptyFilter = Optional<ShapeQueryFilterCallback>();
         this.overlapShapeDetailedImpl(MakeShapeProxyView(queryProxy), queryTransform, filter, hitSensors, BodyId(), ShapeId(), true, emptyFilter, outHits);
+    }
+
+    public void overlapShapeDetailedInCandidates(
+        in ShapeProxyView queryView,
+        in Transform3D queryTransform,
+        in Filter filter,
+        in b8 hitSensors,
+        in BodyId ignoreBodyId,
+        in ShapeId ignoreShapeId,
+        in Span<u32> candidateShapeIds,
+        mut Vector<ShapeOverlapHit> outHits
+    )const{
+        outHits.clear();
+        if(candidateShapeIds.empty())
+            return;
+        const VectorSingle queryPos(queryTransform.position);
+        const VectorSingle rawQueryRot(queryTransform.rotation);
+        if(!this.validateShapeQueryProxyView(queryView) || !IsValidPositionVec3(queryPos) || !IsFiniteQuat(rawQueryRot))
+            return;
+        const VectorSingle queryRot = SafeNormalizeQuat(rawQueryRot);
+        VectorSingle qMin(0.0f);
+        VectorSingle qMax(0.0f);
+        ComputeShapeProxyViewWorldAabbValues(queryView, queryPos, queryRot, 0.0f, qMin, qMax);
+
+        SphereShape querySphere;
+        CapsuleShape queryCapsule;
+        HullShape queryHull;
+        u8 queryKind = 0u;
+        b8 queryHullAttempted = false;
+        if(queryView.kind == ProxyKind::PointCloud && queryView.scaleMinMargin.w < 0.0f){
+            if(queryView.points.size() == 1u){
+                queryKind = 1u;
+                querySphere.centerRadius = f32x4(VectorSingle(queryView.points[0u], 0.0f), queryView.radius);
+            }
+            else if(queryView.points.size() == 2u){
+                queryKind = 2u;
+                queryCapsule.center1Radius = f32x4(VectorSingle(queryView.points[0u], 0.0f), queryView.radius);
+                queryCapsule.center2 = f32x4(VectorSingle(queryView.points[1u], 0.0f), 0.0f);
+            }
+        }
+        const Optional<ShapeQueryFilterCallback> emptyFilter = Optional<ShapeQueryFilterCallback>();
+        for(usize ci = 0u; ci < candidateShapeIds.size(); ++ci){
+            const u32 shapeIdx = candidateShapeIds[ci];
+            if(shapeIdx >= this.m_shapes.size())
+                continue;
+            in Shape shape = this.m_shapes[shapeIdx];
+            if(!shape.alive())
+                continue;
+            if(!AabbOverlapsValues(VectorSingle(shape.aabb.lowerBound), VectorSingle(shape.aabb.upperBound), qMin, qMax))
+                continue;
+            ShapeOverlapHit singleHit;
+            b8 hasHit = false;
+            this.evalOverlapShapeSingleCandidate(shapeIdx, queryView, queryPos, queryRot, filter, hitSensors, ignoreBodyId, ignoreShapeId, true, emptyFilter, querySphere, queryCapsule, queryKind, queryHullAttempted, queryHull, singleHit, hasHit);
+            if(hasHit)
+                outHits.push_back(singleHit);
+        }
+    }
+
+    public void overlapShapeCollectView(
+        in ShapeProxyView queryView,
+        in Transform3D queryTransform,
+        in Filter filter,
+        in b8 hitSensors,
+        in BodyId ignoreBodyId,
+        in ShapeId ignoreShapeId,
+        in OverlapCollectorCallback collector
+    )const{
+        const Optional<ShapeQueryFilterCallback> emptyFilter = Optional<ShapeQueryFilterCallback>();
+        this.overlapShapeCollectImpl(queryView, queryTransform, filter, hitSensors, ignoreBodyId, ignoreShapeId, true, emptyFilter, collector);
     }
 
     public void overlapShapeDetailed(in ShapeProxy queryProxy, in Transform3D queryTransform, in Filter filter, in b8 hitSensors, in b8 useCustomFilter, mut Vector<ShapeOverlapHit> outHits)const{
@@ -12185,7 +12632,7 @@ class PhysicsWorld{
                 const auto it = this.m_extraContactManifolds.find(cId);
                 if(it == this.m_extraContactManifolds.end())
                     continue;
-                Vector<Manifold> list = it.value();
+                mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> list = it.value();
                 for(usize mi = 0u; mi < list.size(); ++mi){
                     const u32 ptCount = Min(list[mi].pointCount(), cast<u32>(s_MaxManifoldPoints));
                     for(u32 pi = 0u; pi < ptCount; ++pi){
@@ -12193,7 +12640,6 @@ class PhysicsWorld{
                         list[mi].points[pi].pointSeparation = f32x4(list[mi].points[pi].point() + negDelta, sep);
                     }
                 }
-                this.m_extraContactManifolds.insert_or_assign(cId, list);
             }
         }
 
@@ -12420,7 +12866,7 @@ PhysicsQuerySnapshot PhysicsWorld::captureQuerySnapshot()const{
     snap.m_world.m_scaledShapes = this.m_scaledShapes;
     snap.m_world.m_chainShapes = this.m_chainShapes;
     snap.m_world.m_sdfShapes = this.m_sdfShapes;
-    snap.m_world.m_broadPhase = this.m_broadPhase;
+    snap.m_world.m_broadPhase.trees = this.m_broadPhase.trees;
     snap.m_world.m_cpuBroadphaseDirty = this.m_cpuBroadphaseDirty;
     snap.m_world.m_customFilterCallback = this.m_customFilterCallback;
     snap.m_world.m_triangleFilterCallback = this.m_triangleFilterCallback;

@@ -492,6 +492,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     private Vector<TransformComponent> m_localChainScratch;
     private Vector<u8> m_inheritScaleScratch;
     private Vector<EntityID> m_staleEntities;
+    private Vector<GpuTaskId> m_uploadTasksScratch;
     private u64 m_uploadBatchSequence = 0u;
 
     public SoftBodyMeshSystem(
@@ -721,6 +722,105 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         return s_SoftBodyFallbackName;
     }
 
+    private void syncSingleEntity(in EntityID entity, in SoftBodyComponent sbComp){
+        if(!sbComp.enabled || sbComp.softBody.particles.empty())
+            return;
+
+        Name sourceMeshName = s_NameNone;
+        if(this.m_world.hasComponent<MeshComponent>(entity)){
+            in MeshComponent meshComp = this.m_world.getComponent<MeshComponent>(entity);
+            if(meshComp.mesh.valid())
+                sourceMeshName = meshComp.mesh.name();
+        }
+
+        mut SoftBodyRuntimeMeshEntry entry = this.m_entries[entity];
+        entry.entity = entity;
+
+        b8 hasGpuPosOverride = false;
+        const auto ovCheck = this.m_gpuOverrides.find(entity);
+        if(ovCheck != this.m_gpuOverrides.end())
+            hasGpuPosOverride = ovCheck.value().active && ovCheck.value().positionBuffer.valid();
+
+        const b8 worldBaked = sbComp.softBody.isWorldSpaceBaked();
+        if(hasGpuPosOverride && entry.cpu.topologyValid && entry.gpu.valid() && !entry.cpu.needsTopologyRebuild(sbComp.softBody, sourceMeshName))
+            return;
+
+        TransformComponent xf;
+        if(worldBaked)
+            xf = ResolveSoftBodyEntityWorldTransform(this.m_world, entity, this.m_localChainScratch, this.m_inheritScaleScratch);
+
+        const u64 deformSignature = ComputeSoftBodyDeformSignature(sbComp.softBody, xf);
+        if(entry.cpu.needsTopologyRebuild(sbComp.softBody, xf, sourceMeshName)){
+            b8 rebuilt = false;
+            if(sourceMeshName != s_NameNone){
+                const auto cacheIt = this.m_sourceMeshCache.find(sourceMeshName);
+                if(cacheIt != this.m_sourceMeshCache.end()){
+                    rebuilt = entry.cpu.rebuildTopologyFromCachedSource(sbComp.softBody, xf, cacheIt.value(), sourceMeshName);
+                }
+                else{
+                    auto loadedAsset = LoadTypedAssetSync<Mesh>(this.m_assetManager, sourceMeshName, s_SoftBodyAssetOwnerName);
+                    if(loadedAsset.has_value()){
+                        SoftBodyCachedSourceMesh cachedSrc;
+                        ExtractSoftBodyCachedSourceMesh(loadedAsset.value().deref(), cachedSrc);
+                        if(!cachedSrc.positions.empty()){
+                            this.m_sourceMeshCache.insert_or_assign(sourceMeshName, cachedSrc);
+                            rebuilt = entry.cpu.rebuildTopologyFromCachedSource(sbComp.softBody, xf, cachedSrc, sourceMeshName);
+                        }
+                        else{
+                            rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
+                        }
+                    }
+                    else{
+                        rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
+                    }
+                }
+            }
+            else{
+                rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, s_NameNone);
+            }
+
+            if(!rebuilt){
+                this.retireGpuBuffers(entry.gpu);
+                entry.cpu.reset();
+                entry.gpu.reset();
+                entry.pendingTopologyUpload = false;
+                entry.pendingDeformUpload = false;
+                return;
+            }
+
+            this.retireGpuBuffers(entry.gpu);
+            const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
+            if(!CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
+                entry.gpu.reset();
+                entry.pendingTopologyUpload = false;
+                entry.pendingDeformUpload = false;
+                return;
+            }
+
+            entry.lastDeformSignature = deformSignature;
+            entry.pendingTopologyUpload = true;
+            entry.pendingDeformUpload = false;
+            return;
+        }
+
+        if(!hasGpuPosOverride && (deformSignature != entry.lastDeformSignature || !entry.gpu.valid())){
+            if(entry.cpu.updateDeformation(sbComp.softBody, xf)){
+                entry.lastDeformSignature = deformSignature;
+                if(!entry.gpu.valid() || entry.gpu.uploadedEditRevision != entry.cpu.editRevision){
+                    this.retireGpuBuffers(entry.gpu);
+                    const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
+                    if(CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
+                        entry.pendingTopologyUpload = true;
+                        entry.pendingDeformUpload = false;
+                    }
+                }
+                else if(!entry.pendingTopologyUpload){
+                    entry.pendingDeformUpload = true;
+                }
+            }
+        }
+    }
+
     private void syncEntities(){
         this.m_staleEntities.clear();
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
@@ -738,100 +838,8 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         }
         this.m_staleEntities.clear();
 
-        for(in auto row : this.m_world.view<SoftBodyComponent>()){
-            const EntityID entity = Get<0>(row);
-            in SoftBodyComponent sbComp = this.m_world.getComponent<SoftBodyComponent>(entity);
-            if(!sbComp.enabled || sbComp.softBody.particles.empty())
-                continue;
-
-            const TransformComponent xf = ResolveSoftBodyEntityWorldTransform(this.m_world, entity, this.m_localChainScratch, this.m_inheritScaleScratch);
-
-            Name sourceMeshName = s_NameNone;
-            if(this.m_world.hasComponent<MeshComponent>(entity)){
-                in MeshComponent meshComp = this.m_world.getComponent<MeshComponent>(entity);
-                if(meshComp.mesh.valid())
-                    sourceMeshName = meshComp.mesh.name();
-            }
-
-            mut SoftBodyRuntimeMeshEntry entry = this.m_entries[entity];
-            entry.entity = entity;
-
-            const u64 deformSignature = ComputeSoftBodyDeformSignature(sbComp.softBody, xf);
-            if(entry.cpu.needsTopologyRebuild(sbComp.softBody, xf, sourceMeshName)){
-                b8 rebuilt = false;
-                if(sourceMeshName != s_NameNone){
-                    const auto cacheIt = this.m_sourceMeshCache.find(sourceMeshName);
-                    if(cacheIt != this.m_sourceMeshCache.end()){
-                        rebuilt = entry.cpu.rebuildTopologyFromCachedSource(sbComp.softBody, xf, cacheIt.value(), sourceMeshName);
-                    }
-                    else{
-                        auto loadedAsset = LoadTypedAssetSync<Mesh>(this.m_assetManager, sourceMeshName, s_SoftBodyAssetOwnerName);
-                        if(loadedAsset.has_value()){
-                            SoftBodyCachedSourceMesh cachedSrc;
-                            ExtractSoftBodyCachedSourceMesh(loadedAsset.value().deref(), cachedSrc);
-                            if(!cachedSrc.positions.empty()){
-                                this.m_sourceMeshCache.insert_or_assign(sourceMeshName, cachedSrc);
-                                rebuilt = entry.cpu.rebuildTopologyFromCachedSource(sbComp.softBody, xf, cachedSrc, sourceMeshName);
-                            }
-                            else{
-                                rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
-                            }
-                        }
-                        else{
-                            rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
-                        }
-                    }
-                }
-                else{
-                    rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, s_NameNone);
-                }
-
-                if(!rebuilt){
-                    this.retireGpuBuffers(entry.gpu);
-                    entry.cpu.reset();
-                    entry.gpu.reset();
-                    entry.pendingTopologyUpload = false;
-                    entry.pendingDeformUpload = false;
-                    continue;
-                }
-
-                this.retireGpuBuffers(entry.gpu);
-                const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
-                if(!CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
-                    entry.gpu.reset();
-                    entry.pendingTopologyUpload = false;
-                    entry.pendingDeformUpload = false;
-                    continue;
-                }
-
-                entry.lastDeformSignature = deformSignature;
-                entry.pendingTopologyUpload = true;
-                entry.pendingDeformUpload = false;
-                continue;
-            }
-
-            b8 hasGpuPosOverride = false;
-            const auto ovCheck = this.m_gpuOverrides.find(entity);
-            if(ovCheck != this.m_gpuOverrides.end())
-                hasGpuPosOverride = ovCheck.value().active && ovCheck.value().positionBuffer.valid();
-
-            if(!hasGpuPosOverride && (deformSignature != entry.lastDeformSignature || !entry.gpu.valid())){
-                if(entry.cpu.updateDeformation(sbComp.softBody, xf)){
-                    entry.lastDeformSignature = deformSignature;
-                    if(!entry.gpu.valid() || entry.gpu.uploadedEditRevision != entry.cpu.editRevision){
-                        this.retireGpuBuffers(entry.gpu);
-                        const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
-                        if(CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
-                            entry.pendingTopologyUpload = true;
-                            entry.pendingDeformUpload = false;
-                        }
-                    }
-                    else if(!entry.pendingTopologyUpload){
-                        entry.pendingDeformUpload = true;
-                    }
-                }
-            }
-        }
+        for(in auto row : this.m_world.view<SoftBodyComponent>())
+            this.syncSingleEntity(Get<0>(row), Get<1>(row));
     }
 
     private b8 uploadPendingBatches(in b8 uploadTopologies, in b8 uploadDeformations){
@@ -853,34 +861,35 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             return false;
 
         in HashMap<EntityID, SoftBodyRuntimeMeshEntry> entriesRef = this.m_entries;
+        mut Vector<GpuTaskId> uploadTasksScratch = this.m_uploadTasksScratch;
         const GpuPhysicalQueueId graphicsQueue = this.m_graphics.getDevice().getPrimaryPhysicalQueue(CommandQueue::Graphics);
         const Expected<QueueSubmissionToken> uploaded = this.m_graphics.standaloneGraph().submitStandaloneTaskGraph(
-            lambda[in entriesRef, in batchReadyName, in uploadTopologies, in uploadDeformations](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
-                Vector<GpuTaskId> uploadTasks;
-                uploadTasks.reserve(entriesRef.size() * 15u);
+            lambda[in entriesRef, in batchReadyName, in uploadTopologies, in uploadDeformations, mut uploadTasksScratch](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+                uploadTasksScratch.clear();
+                uploadTasksScratch.reserve(entriesRef.size() * 15u);
 
                 for(auto it = entriesRef.begin(); it != entriesRef.end(); ++it){
                     if(!it.value().cpu.topologyValid || !it.value().gpu.valid())
                         continue;
 
                     if(uploadTopologies && it.value().pendingTopologyUpload){
-                        if(!DeclareSoftBodyTopologyUploads(graph, it.value(), uploadTasks))
+                        if(!DeclareSoftBodyTopologyUploads(graph, it.value(), uploadTasksScratch))
                             return MakeUnexpected(Failure());
                     }
                     else if(uploadDeformations && it.value().pendingDeformUpload){
-                        if(!DeclareSoftBodyDynamicUploads(graph, it.value(), uploadTasks))
+                        if(!DeclareSoftBodyDynamicUploads(graph, it.value(), uploadTasksScratch))
                             return MakeUnexpected(Failure());
                     }
                 }
 
-                if(uploadTasks.empty())
+                if(uploadTasksScratch.empty())
                     return MakeUnexpected(Failure());
 
                 GpuTaskDesc readyDesc = GpuTaskDesc();
                 readyDesc
                     .setIdentity(batchReadyName)
                     .setMarkerLabel("SoftBody Runtime Batch Upload Ready")
-                    .setDependencies(Span<GpuTaskId>(uploadTasks))
+                    .setDependencies(Span<GpuTaskId>(uploadTasksScratch))
                 ;
                 RuntimeMeshBatchUploadReadyTask readyTask;
                 return graph.addPayloadTask(readyDesc, readyTask);

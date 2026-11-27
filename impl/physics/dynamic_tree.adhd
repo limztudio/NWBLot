@@ -491,6 +491,145 @@ class DynamicTree{
         }
     }
 
+    public void shapeCastFiltered<Callback>(
+        in VectorSingle centerOrigin,
+        in VectorSingle halfExtent,
+        in VectorSingle translation,
+        in u32 maskBits,
+        in f32 initialMaxFraction,
+        in u8 requiredNodeFlags,
+        in Callback callback
+    )const{
+        if(this.m_root == s_NullIndex || maskBits == 0u || initialMaxFraction <= 0.0f)
+            return;
+
+        in TreeNode rootNode = this.m_nodes[this.m_root];
+        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+            return;
+        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
+            return;
+
+        f32 maxFraction = initialMaxFraction;
+        VectorSingle invDir(0.0f);
+        u32 parallelMask = 0u;
+        ComputeRayCastSlabValues(translation, invDir, parallelMask);
+        f32 rootTMin = 0.0f;
+        if(!AabbRayCastValues(VectorSingle(rootNode.aabbMinUser, 0.0f) - halfExtent, VectorSingle(rootNode.aabbMaxCategory, 0.0f) + halfExtent, centerOrigin, invDir, parallelMask, maxFraction, rootTMin))
+            return;
+        if(rootNode.isLeaf()){
+            callback(this.m_root, rootNode.userData(), maxFraction);
+            return;
+        }
+
+        BvhMetricSpillStack<256u> stack;
+        stack.push(this.m_root, rootTMin);
+        u32 nodeId = 0u;
+        f32 poppedTMin = 0.0f;
+        while(stack.pop(nodeId, poppedTMin)){
+            if(poppedTMin > maxFraction)
+                continue;
+
+            in TreeNode node = this.m_nodes[nodeId];
+            if(node.isLeaf()){
+                maxFraction = callback(nodeId, node.userData(), maxFraction);
+                if(maxFraction <= 0.0f)
+                    return;
+            }
+            else{
+                Array<u32, 2u> children;
+                children[0u] = node.child1;
+                children[1u] = node.child2;
+                Array<b8, 2u> hits;
+                Array<f32, 2u> tMins;
+                for(usize ci = 0u; ci < 2u; ++ci){
+                    hits[ci] = false;
+                    tMins[ci] = 0.0f;
+                    const u32 childIdx = children[ci];
+                    if(childIdx != s_NullIndex){
+                        in TreeNode child = this.m_nodes[childIdx];
+                        if(
+                            (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                            && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
+                        )
+                            hits[ci] = AabbRayCastValues(VectorSingle(child.aabbMinUser, 0.0f) - halfExtent, VectorSingle(child.aabbMaxCategory, 0.0f) + halfExtent, centerOrigin, invDir, parallelMask, maxFraction, tMins[ci]);
+                    }
+                }
+                stack.pushOrderedPair(node.child1, hits[0u], tMins[0u], node.child2, hits[1u], tMins[1u]);
+            }
+        }
+    }
+
+    public void closestPointFiltered<Callback>(
+        in VectorSingle queryPoint,
+        in f32 initialMaxDistance,
+        in u32 maskBits,
+        in u8 requiredNodeFlags,
+        in Callback callback
+    )const{
+        if(this.m_root == s_NullIndex || maskBits == 0u || initialMaxDistance < 0.0f)
+            return;
+
+        in TreeNode rootNode = this.m_nodes[this.m_root];
+        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
+            return;
+        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
+            return;
+
+        f32 maxDistSq = initialMaxDistance * initialMaxDistance;
+        const VectorSingle rootDiff = Max(Max(VectorSingle(rootNode.aabbMinUser, 0.0f) - queryPoint, queryPoint - VectorSingle(rootNode.aabbMaxCategory, 0.0f)), VectorSingle(0.0f));
+        const f32 rootDistSq = Vector3LengthSq(rootDiff).x;
+        if(rootDistSq > maxDistSq)
+            return;
+        if(rootNode.isLeaf()){
+            callback(this.m_root, rootNode.userData());
+            return;
+        }
+
+        BvhMetricSpillStack<256u> stack;
+        stack.push(this.m_root, rootDistSq);
+        u32 nodeId = 0u;
+        f32 poppedDistSq = 0.0f;
+        while(stack.pop(nodeId, poppedDistSq)){
+            if(poppedDistSq > maxDistSq)
+                continue;
+
+            in TreeNode node = this.m_nodes[nodeId];
+            if(node.isLeaf()){
+                const f32 nextMaxDist = callback(nodeId, node.userData());
+                maxDistSq = nextMaxDist * nextMaxDist;
+                if(maxDistSq <= 0.0f)
+                    return;
+            }
+            else{
+                Array<u32, 2u> children;
+                children[0u] = node.child1;
+                children[1u] = node.child2;
+                Array<b8, 2u> hits;
+                Array<f32, 2u> dSqs;
+                for(usize ci = 0u; ci < 2u; ++ci){
+                    hits[ci] = false;
+                    dSqs[ci] = 0.0f;
+                    const u32 childIdx = children[ci];
+                    if(childIdx != s_NullIndex){
+                        in TreeNode child = this.m_nodes[childIdx];
+                        if(
+                            (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
+                            && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
+                        ){
+                            const VectorSingle cDiff = Max(Max(VectorSingle(child.aabbMinUser, 0.0f) - queryPoint, queryPoint - VectorSingle(child.aabbMaxCategory, 0.0f)), VectorSingle(0.0f));
+                            const f32 dSq = Vector3LengthSq(cDiff).x;
+                            if(dSq <= maxDistSq){
+                                hits[ci] = true;
+                                dSqs[ci] = dSq;
+                            }
+                        }
+                    }
+                }
+                stack.pushOrderedPair(node.child1, hits[0u], dSqs[0u], node.child2, hits[1u], dSqs[1u]);
+            }
+        }
+    }
+
     private u32 allocateNode(){
         if(this.m_freeList == s_NullIndex){
             const usize prevCap = this.m_nodes.size();

@@ -20,16 +20,21 @@ class PreparedSceneTlasBuild : NoCopy{
     private usize m_maxInstances = 0u;
     private u32 m_instanceCount = 0u;
     private u64 m_staticSceneHash = 0u;
+    private u64 m_topologyHash = 0u;
+    private u64 m_patchMembershipSignature = 0u;
     private GpuDescriptorHandle m_heapHandle;
     private GpuDescriptorHandle m_instanceUavHeapHandle = GpuDescriptorHandleInvalid();
     private b8 m_useInstanceBuffer = false;
     private b8 m_static = false;
+    private b8 m_performUpdate = false;
     private b8 m_ready = false;
 
     public b8 capture(
         in RendererRayTracingState state,
         in b8 staticScene,
         in u64 staticSceneHash,
+        in u64 topologyHash,
+        in b8 performUpdate,
         in Span<RayTracingInstanceDesc> instances,
         in Span<RayTracingAccelStructHandle> instanceBlases
     );
@@ -37,6 +42,9 @@ class PreparedSceneTlasBuild : NoCopy{
         in RendererRayTracingState state,
         in b8 staticScene,
         in u64 staticSceneHash,
+        in u64 topologyHash,
+        in u64 patchMembershipSignature,
+        in b8 performUpdate,
         in Span<RayTracingInstanceDesc> instances,
         in Span<RayTracingAccelStructHandle> instanceBlases,
         in Span<u32> instanceEntityIds
@@ -57,8 +65,11 @@ class PreparedSceneTlasBuild : NoCopy{
         this.m_maxInstances = 0u;
         this.m_instanceCount = 0u;
         this.m_staticSceneHash = 0u;
+        this.m_topologyHash = 0u;
+        this.m_patchMembershipSignature = 0u;
         this.m_useInstanceBuffer = false;
         this.m_static = false;
+        this.m_performUpdate = false;
         this.m_ready = false;
     }
     public b8 ready()const{ return this.m_ready; }

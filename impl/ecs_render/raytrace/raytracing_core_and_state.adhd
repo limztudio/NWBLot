@@ -351,6 +351,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
     this.m_shadowVisibilityBackendPipelinePreflighted = false;
 
     this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
+    this.m_rayTracingState.sceneBvh.m_tlasInstanceUploadValid = false;
     this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
     this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
     this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
@@ -405,8 +406,21 @@ void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers(){
 }
 
 void RendererRayTracingSystem::confirmPreparedSceneBvhUploads(){
-    if(this.m_preparedSceneBvh.publishAcceptedUpload(this.m_rayTracingState))
-        this.clearPreparedSceneBvh();
+    if(this.m_preparedSceneBvh.publishAcceptedUpload(this.m_rayTracingState)){
+        this.m_preparedSceneSwBvhTraversal.clear();
+        this.m_preparedSceneBvh.clear();
+        this.m_preparedSceneBvhInstanceEntityIds.clear();
+        if(!this.m_preparedSceneSwBvhRefit.valid())
+            this.m_rayTracingState.sceneBvh.m_sceneSwBvhWasGpuPatched = false;
+    }
+}
+
+void RendererRayTracingSystem::confirmPreparedSceneSwBvhRefit(){
+    if(!this.m_preparedSceneSwBvhRefit.valid())
+        return;
+    this.m_sceneSwBvhRefit.confirmAccepted(this.m_preparedSceneSwBvhRefit);
+    this.m_rayTracingState.sceneBvh.m_sceneSwBvhWasGpuPatched = this.m_preparedSceneSwBvhRefit.deref().gpuPatched;
+    this.m_preparedSceneSwBvhRefit.reset();
 }
 
 ResourceStates RendererRayTracingSystem::sceneTlasBackingInitialState()const{

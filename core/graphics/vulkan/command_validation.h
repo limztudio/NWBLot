@@ -119,6 +119,8 @@ struct RenderPassAttachmentOperations{
         return VK_ATTACHMENT_STORE_OP_STORE;
     case RenderPassStoreAction::Discard:
         return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    case RenderPassStoreAction::None:
+        return VK_ATTACHMENT_STORE_OP_NONE;
     default:
         return VK_ATTACHMENT_STORE_OP_MAX_ENUM;
     }

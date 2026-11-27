@@ -805,9 +805,18 @@ b8 TestbedRaySphereHit(
     return true;
 }
 
-b8 TryGetTestbedEntityWorldPose(
+class TestbedSoftBodyCentroidCache{
+    public EntityID entity = s_InvalidEntityId;
+    public u64 deformVersion = 0u;
+    public usize particleCount = 0u;
+    public f32x4 centroid(0.0f, 0.0f, 0.0f, 0.0f);
+    public b8 valid = false;
+}
+
+b8 TryGetTestbedEntityWorldPoseCore(
     mut World world,
     in EntityID entity,
+    in Optional<mut TestbedSoftBodyCentroidCache> centroidCacheOpt,
     mut VectorSingle outPos,
     mut VectorSingle outRot
 ){
@@ -857,11 +866,31 @@ b8 TryGetTestbedEntityWorldPose(
     }
     if(world.hasComponent<SoftBodyComponent>(entity)){
         in SoftBodyComponent sbc = world.getComponent<SoftBodyComponent>(entity);
-        if(!sbc.softBody.particles.empty()){
+        const usize pCount = sbc.softBody.particles.size();
+        if(pCount > 0u){
+            if(centroidCacheOpt.has_value()){
+                mut TestbedSoftBodyCentroidCache cache = centroidCacheOpt.value();
+                if(cache.valid && cache.entity == entity && cache.deformVersion == sbc.softBody.deformVersion && cache.particleCount == pCount){
+                    outPos = VectorSingle(cache.centroid);
+                    outRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+                    return true;
+                }
+                VectorSingle sum(0.0f);
+                for(usize i = 0u; i < pCount; ++i)
+                    sum = sum + VectorSingle(sbc.softBody.particles[i].position);
+                outPos = sum * (1.0f / cast<f32>(pCount));
+                outRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
+                cache.entity = entity;
+                cache.deformVersion = sbc.softBody.deformVersion;
+                cache.particleCount = pCount;
+                cache.centroid = f32x4(outPos, 0.0f);
+                cache.valid = true;
+                return true;
+            }
             VectorSingle sum(0.0f);
-            for(usize i = 0u; i < sbc.softBody.particles.size(); ++i)
+            for(usize i = 0u; i < pCount; ++i)
                 sum = sum + VectorSingle(sbc.softBody.particles[i].position);
-            outPos = sum * (1.0f / cast<f32>(sbc.softBody.particles.size()));
+            outPos = sum * (1.0f / cast<f32>(pCount));
             outRot = VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
             return true;
         }
@@ -873,6 +902,27 @@ b8 TryGetTestbedEntityWorldPose(
         return true;
     }
     return false;
+}
+
+b8 TryGetTestbedEntityWorldPose(
+    mut World world,
+    in EntityID entity,
+    mut TestbedSoftBodyCentroidCache centroidCache,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
+){
+    const Optional<mut TestbedSoftBodyCentroidCache> cacheOpt(centroidCache);
+    return TryGetTestbedEntityWorldPoseCore(world, entity, cacheOpt, outPos, outRot);
+}
+
+b8 TryGetTestbedEntityWorldPose(
+    mut World world,
+    in EntityID entity,
+    mut VectorSingle outPos,
+    mut VectorSingle outRot
+){
+    const Optional<mut TestbedSoftBodyCentroidCache> noCache = Optional<mut TestbedSoftBodyCentroidCache>();
+    return TryGetTestbedEntityWorldPoseCore(world, entity, noCache, outPos, outRot);
 }
 
 f32 ComputeScreenPointSegmentDistSq(in f32 px, in f32 py, in VectorSingle seg){
@@ -901,7 +951,8 @@ u32 HitTestSelectedTestbedGizmoAxis(
     in f32 vpW,
     in f32 vpH,
     in f32 mouseX,
-    in f32 mouseY
+    in f32 mouseY,
+    mut TestbedSoftBodyCentroidCache centroidCache
 ){
     if(!selectedEntity.valid() || !world.alive(selectedEntity))
         return s_NullIndex;
@@ -909,7 +960,7 @@ u32 HitTestSelectedTestbedGizmoAxis(
         return s_NullIndex;
     VectorSingle gizmoPos(0.0f);
     VectorSingle gizmoRot(0.0f, 0.0f, 0.0f, 1.0f);
-    if(!TryGetTestbedEntityWorldPose(world, selectedEntity, gizmoPos, gizmoRot))
+    if(!TryGetTestbedEntityWorldPose(world, selectedEntity, centroidCache, gizmoPos, gizmoRot))
         return s_NullIndex;
     const SceneCameraView cameraView = ResolveSceneCameraView(world, vpW / vpH);
     if(!cameraView.valid())
@@ -961,6 +1012,7 @@ void UpdateTestbedGizmoHover(
     in f32 vpH,
     in f32 mouseX,
     in f32 mouseY,
+    mut TestbedSoftBodyCentroidCache centroidCache,
     mut TestbedGrabState inOutGrab
 ){
     if(inOutGrab.active && inOutGrab.targetKind == TestbedGrabTargetKind::GizmoAxis){
@@ -968,7 +1020,7 @@ void UpdateTestbedGizmoHover(
         inOutGrab.hoveredGizmoAxis = inOutGrab.targetSubIndex;
         return;
     }
-    const u32 hitAxis = HitTestSelectedTestbedGizmoAxis(worldHandle.deref(), selectedEntity, vpW, vpH, mouseX, mouseY);
+    const u32 hitAxis = HitTestSelectedTestbedGizmoAxis(worldHandle.deref(), selectedEntity, vpW, vpH, mouseX, mouseY, centroidCache);
     inOutGrab.hoveredGizmoAxis = hitAxis;
     inOutGrab.hoveredGizmoActive = (hitAxis < 3u);
 }
@@ -1002,6 +1054,7 @@ b8 BeginTestbedPickOrGrab(
     in f32 mouseX,
     in f32 mouseY,
     in b8 allowGrab,
+    mut TestbedSoftBodyCentroidCache centroidCache,
     mut EntityID inOutSelectedEntity,
     mut TestbedGrabState outGrab
 ){
@@ -1017,11 +1070,11 @@ b8 BeginTestbedPickOrGrab(
     if(!ComputeCameraMouseRay(world, vpW, vpH, mouseX, mouseY, rayOrigin, rayDir))
         return false;
 
-    const u32 gizmoAxis = HitTestSelectedTestbedGizmoAxis(world, inOutSelectedEntity, vpW, vpH, mouseX, mouseY);
+    const u32 gizmoAxis = HitTestSelectedTestbedGizmoAxis(world, inOutSelectedEntity, vpW, vpH, mouseX, mouseY, centroidCache);
     if(gizmoAxis < 3u){
         VectorSingle selPos(0.0f);
         VectorSingle selRot(0.0f, 0.0f, 0.0f, 1.0f);
-        if(TryGetTestbedEntityWorldPose(world, inOutSelectedEntity, selPos, selRot)){
+        if(TryGetTestbedEntityWorldPose(world, inOutSelectedEntity, centroidCache, selPos, selRot)){
             const VectorSingle axisDir = TestbedGizmoWorldAxisDir(gizmoAxis);
             f32 startParam = 0.0f;
             if(ComputeRayToLineClosestParam(selPos, axisDir, rayOrigin, rayDir, startParam)){
@@ -1533,6 +1586,7 @@ void BindVehicleWheelVisuals(
 void QueryTestbedSelectedEntityInfo(
     mut NotNullUniquePtr<World> worldHandle,
     in EntityID entity,
+    mut TestbedSoftBodyCentroidCache centroidCache,
     mut TestbedSelectedEntityInfo outInfo
 ){
     outInfo = TestbedSelectedEntityInfo();
@@ -1561,7 +1615,7 @@ void QueryTestbedSelectedEntityInfo(
 
     VectorSingle worldPos(0.0f);
     VectorSingle worldRot(0.0f, 0.0f, 0.0f, 1.0f);
-    if(TryGetTestbedEntityWorldPose(world, entity, worldPos, worldRot))
+    if(TryGetTestbedEntityWorldPose(world, entity, centroidCache, worldPos, worldRot))
         outInfo.position = f32x4(worldPos, 0.0f);
 
     if(world.hasComponent<ColliderComponent>(entity)){
@@ -3164,6 +3218,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     in EntityID selectedEntity,
     mut NotNullUniquePtr<World> worldHandle,
     mut UiPaintContext context,
+    mut TestbedSoftBodyCentroidCache centroidCache,
     mut PhysicsDebugDrawScratch debugScratch,
     mut Vector<PaintLineSegment> screenLines
 ){
@@ -3211,7 +3266,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     if(showGizmo){
         VectorSingle gizmoPos(0.0f);
         VectorSingle gizmoRot(0.0f, 0.0f, 0.0f, 1.0f);
-        if(TryGetTestbedEntityWorldPose(world, selectedEntity, gizmoPos, gizmoRot)){
+        if(TryGetTestbedEntityWorldPose(world, selectedEntity, centroidCache, gizmoPos, gizmoRot)){
             const f32 axisLen = 0.75f;
             const f32 gizmoThickness = Max(2.6f, lineThickness * 1.75f);
             for(u32 ai = 0u; ai < 3u; ++ai){
@@ -3244,7 +3299,7 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
     if(drawPhysicsWorldDebug && options.drawLabels){
         debugScratch.worldLabels.clear();
         debugScratch.projectedLabels.clear();
-        BuildEcsPhysicsDebugLabels(world, physicsSystem.value(), options, projector, debugScratch.worldLabels);
+        BuildEcsPhysicsDebugLabels(world, physicsSystem.value(), options, projector, debugScratch, debugScratch.worldLabels);
         ProjectPhysicsDebugLabels(projector, Span<PhysicsDebugLabel>(debugScratch.worldLabels.data(), debugScratch.worldLabels.size()), debugScratch.projectedLabels);
         for(usize li = 0u; li < debugScratch.projectedLabels.size(); ++li){
             in PhysicsDebugScreenLabel sl = debugScratch.projectedLabels[li];

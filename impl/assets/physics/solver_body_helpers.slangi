@@ -142,6 +142,32 @@ void nwbPhysicsLoadBodyState(
     outFlags = asuint(s.deltaPositionFlags.w);
 }
 
+void nwbPhysicsLoadBodyDeltaPose(
+    const uint bodyStateSlot,
+    const uint bodyIdx,
+    out float3 outDeltaPos,
+    out float4 outDeltaRot,
+    out uint outFlags
+){
+    if(bodyIdx == NWB_PHYSICS_INVALID_INDEX){
+        outDeltaPos = float3(0.0f, 0.0f, 0.0f);
+        outDeltaRot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+        outFlags = 0u;
+        return;
+    }
+#ifdef NWB_PHYSICS_USE_LDS_BODY_STATES
+    const uint ldsIdx = bodyIdx - g_NwbPhysicsLdsBodyOffset;
+    outDeltaPos = g_NwbPhysicsLdsDeltaPos[ldsIdx];
+    outDeltaRot = g_NwbPhysicsLdsDeltaRot[ldsIdx];
+    outFlags = g_NwbPhysicsLdsFlags[ldsIdx];
+#else
+    const float4 deltaPosFlags = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].deltaPositionFlags;
+    outDeltaPos = deltaPosFlags.xyz;
+    outDeltaRot = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][bodyIdx].deltaRotation;
+    outFlags = asuint(deltaPosFlags.w);
+#endif
+}
+
 void nwbPhysicsMaskInvInertia(const float4 inI0, const float2 inI1, const uint flags, out float4 outI0, out float2 outI1){
     outI0 = inI0;
     outI1 = inI1;

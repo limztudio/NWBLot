@@ -182,7 +182,7 @@ b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 
         this.commitFrameTargets(createdTargetsResult.value());
         targetsReady = this.m_deferredSystem.createDeferredLightingPipeline()
             && this.m_deferredSystem.createDeferredCompositePipeline()
-            && this.m_deferredSystem.createDeferredDebugLinePipelines(this.m_frameTargets.compositeDebugFramebuffer.deref())
+            && this.m_deferredSystem.createDeferredDebugLinePipelines(this.m_frameTargets.compositeDebugFramebuffer.deref(), this.m_frameTargets.compositeFramebuffer.deref())
         ;
         if(!targetsReady)
             this.resetFrameTargets();
@@ -335,6 +335,13 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
     if(hasCsgFrameWork && !this.m_csgSystem.prepareCsgFrameResources(csgReceiverRangeCount, cast<usize>(this.m_preparedCsgFrameState.cutterCount)))
         return false;
 
+    if(this.m_instanceTransformPatchContributor.has_value()){
+        if(!this.m_instanceTransformPatchContributor.value().prepareInstanceTransformPatches()){
+            warning("RendererSystem: instance transform patch contributor preparation failed");
+            return false;
+        }
+    }
+
     this.m_raytracingSystem.discardSurfelResourceInitialization();
     if(!this.m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets)){
         this.m_shadowPrepareGraph.m_shadowPreparationOutcome.resourcesValid = false;
@@ -382,13 +389,6 @@ b8 RendererFramePipeline::prepareResources(in FramebufferPtr framebuffer){
         }
         else
             warning("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay");
-    }
-
-    if(this.m_instanceTransformPatchContributor.has_value()){
-        if(!this.m_instanceTransformPatchContributor.value().prepareInstanceTransformPatches()){
-            warning("RendererSystem: instance transform patch contributor preparation failed");
-            return false;
-        }
     }
 
     return true;

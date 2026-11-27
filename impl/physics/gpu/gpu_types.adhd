@@ -560,8 +560,11 @@ extern const u32 s_GpuSubsysModeSoftDeformMesh;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_REDUCE_BOUNDS")]
 extern const u32 s_GpuSubsysModeSoftReduceBounds;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_PARTICLE_BYTES")]
-extern const u32 s_GpuSoftParticleBytes;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_PARTICLE_POS_BYTES")]
+extern const u32 s_GpuSoftParticlePosBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_PARTICLE_STATE_BYTES")]
+extern const u32 s_GpuSoftParticleStateBytes;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_DIST_CONSTRAINT_BYTES")]
 extern const u32 s_GpuSoftDistConstraintBytes;
@@ -894,8 +897,7 @@ class GpuPhysicsEvent{
 }
 
 [align(16)]
-class GpuPhysicsSoftParticle{
-    public f32x4 posInvMass(0.0f, 0.0f, 0.0f, 1.0f);
+class GpuPhysicsSoftParticleState{
     public f32x4 prevPosFlags(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 velPad(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 extForcePad(0.0f, 0.0f, 0.0f, 0.0f);
@@ -986,7 +988,8 @@ static_assert(size_of<GpuPhysicsRenderTransformOut>() == s_GpuRenderTransformByt
 static_assert(size_of<GpuPhysicsShapeMaterial>() == s_GpuShapeMaterialBytes, "GpuPhysicsShapeMaterial layout drifted from shader");
 static_assert(size_of<GpuPhysicsWarmCacheEntry>() == s_GpuWarmCacheEntryBytes, "GpuPhysicsWarmCacheEntry layout drifted from shader");
 static_assert(size_of<GpuPhysicsEvent>() == s_GpuEventBytes, "GpuPhysicsEvent layout drifted from shader");
-static_assert(size_of<GpuPhysicsSoftParticle>() == s_GpuSoftParticleBytes, "GpuPhysicsSoftParticle layout drifted from shader");
+static_assert(size_of<f32x4>() == s_GpuSoftParticlePosBytes, "Soft particle position layout drifted from shader");
+static_assert(size_of<GpuPhysicsSoftParticleState>() == s_GpuSoftParticleStateBytes, "GpuPhysicsSoftParticleState layout drifted from shader");
 static_assert(size_of<GpuPhysicsSoftDistConstraint>() == s_GpuSoftDistConstraintBytes, "GpuPhysicsSoftDistConstraint layout drifted from shader");
 static_assert(size_of<GpuPhysicsSoftVolConstraint>() == s_GpuSoftVolConstraintBytes, "GpuPhysicsSoftVolConstraint layout drifted from shader");
 static_assert(size_of<GpuPhysicsSoftBendConstraint>() == s_GpuSoftBendConstraintBytes, "GpuPhysicsSoftBendConstraint layout drifted from shader");
@@ -1096,7 +1099,7 @@ static_assert(is_trivially_copyable<GpuPhysicsRenderTransformOut>(), "GpuPhysics
 static_assert(is_trivially_copyable<GpuPhysicsShapeMaterial>(), "GpuPhysicsShapeMaterial must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsWarmCacheEntry>(), "GpuPhysicsWarmCacheEntry must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsEvent>(), "GpuPhysicsEvent must stay trivially copyable");
-static_assert(is_trivially_copyable<GpuPhysicsSoftParticle>(), "GpuPhysicsSoftParticle must stay trivially copyable");
+static_assert(is_trivially_copyable<GpuPhysicsSoftParticleState>(), "GpuPhysicsSoftParticleState must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsSoftDistConstraint>(), "GpuPhysicsSoftDistConstraint must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsSoftVolConstraint>(), "GpuPhysicsSoftVolConstraint must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsSoftBackstop>(), "GpuPhysicsSoftBackstop must stay trivially copyable");

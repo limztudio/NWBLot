@@ -3,6 +3,7 @@
 
 
 #include <impl/physics/snapshot.adhd>
+#include <impl/ecs_physics/system_sync.adhd>
 #include <impl/ecs_scene/camera.adhd>
 
 
@@ -355,6 +356,41 @@ class PhysicsDebugScreenProjector{
         this.m_planesSoa = BuildDebugFrustumPlanesSoa(this.m_planes);
     }
 
+    public void initFromViewProj(in MatrixSingle viewProj){
+        this.m_isOrthographic = false;
+        this.m_valid = false;
+        const VectorSingle r0 = viewProj[0u];
+        const VectorSingle r1 = viewProj[1u];
+        const VectorSingle r2 = viewProj[2u];
+        const VectorSingle r3 = viewProj[3u];
+        if(!IsFinite(r0) || !IsFinite(r1) || !IsFinite(r2) || !IsFinite(r3))
+            return;
+
+        const VectorSingle rawNear = r2;
+        const VectorSingle rawLeft = r3 + r0;
+        const VectorSingle rawRight = r3 - r0;
+        const VectorSingle rawBottom = r3 + r1;
+        const VectorSingle rawTop = r3 - r1;
+        const VectorSingle rawFar = r3 - r2;
+
+        if(
+            Vector3LengthSq(VectorSingle(rawLeft, 0.0f)).x <= s_NormalizeEpsilonSq
+            || Vector3LengthSq(VectorSingle(rawRight, 0.0f)).x <= s_NormalizeEpsilonSq
+            || Vector3LengthSq(VectorSingle(rawBottom, 0.0f)).x <= s_NormalizeEpsilonSq
+            || Vector3LengthSq(VectorSingle(rawTop, 0.0f)).x <= s_NormalizeEpsilonSq
+        )
+            return;
+
+        this.m_planes[0u] = NormalizeDebugFrustumPlane(VectorSingle(rawNear, 0.0f), rawNear.w);
+        this.m_planes[1u] = NormalizeDebugFrustumPlane(VectorSingle(rawLeft, 0.0f), rawLeft.w);
+        this.m_planes[2u] = NormalizeDebugFrustumPlane(VectorSingle(rawRight, 0.0f), rawRight.w);
+        this.m_planes[3u] = NormalizeDebugFrustumPlane(VectorSingle(rawBottom, 0.0f), rawBottom.w);
+        this.m_planes[4u] = NormalizeDebugFrustumPlane(VectorSingle(rawTop, 0.0f), rawTop.w);
+        this.m_planes[5u] = NormalizeDebugFrustumPlane(VectorSingle(rawFar, 0.0f), rawFar.w);
+        this.m_planesSoa = BuildDebugFrustumPlanesSoa(this.m_planes);
+        this.m_valid = true;
+    }
+
     public b8 isAabbVisible(in Aabb3D aabb)const{
         if(!this.m_valid)
             return true;
@@ -539,6 +575,10 @@ class PhysicsDebugEdgeDedupTable{
         return false;
     }
 
+    public b8 isSaturated()const{
+        return this.m_count >= s_PhysicsDebugEdgeTableMaxCount;
+    }
+
     public b8 tryInsert(in u64 ha, in u64 hb){
         u64 lo = ha;
         u64 hi = hb;
@@ -576,9 +616,15 @@ class PhysicsDebugDrawScratch{
     public Vector<PhysicsDebugLabel> worldLabels;
     public Vector<PhysicsDebugScreenLabel> projectedLabels;
     public Vector<f32x4> indexedEdgeViewPts;
+    public Vector<Transform3D> resolvedLinkXfsScratch;
+    public Vector<Transform3D> ragdollTargetScratch;
+    public HashMap<EntityID, EcsWorldPose> worldPoseCache;
+    public FluidVolume fluidVolumeScratch;
+    public ForceField forceFieldScratch;
     public u32 bodyPoseStamp = 0u;
 
     public void beginBodyPosePass(in usize bodyCount){
+        this.worldPoseCache.clear();
         if(this.cachedBodyStamp.size() < bodyCount){
             this.cachedBodyPos.resize(bodyCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
             this.cachedBodyRot.resize(bodyCount, f32x4(0.0f, 0.0f, 0.0f, 1.0f));

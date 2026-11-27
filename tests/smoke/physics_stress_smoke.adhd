@@ -1727,7 +1727,8 @@ b8 RunGpuParitySubsystemsSubtest(mut PhysicsGpuDispatcher gpuDispatcher, mut Cpu
         for(u32 s = 0u; s < 15u; ++s){
             cpuSb.applyForceField(windField, softWorld.gravity(), softEnv.elapsedTimeSec + dt, dt);
             cpuSb.step(softWorld, dt);
-            if(!gpuDispatcher.stepSoftBodyGpu(gpuSb, softWorld, softEnvOpt, dt, true, Optional<in SoftBodyGpuDeformTarget>())){
+            Aabb3D gpuSoftAabb;
+            if(!gpuDispatcher.stepSoftBodyGpu(gpuSb, softWorld, softEnvOpt, dt, true, Optional<in SoftBodyGpuDeformTarget>(), gpuSoftAabb)){
                 error("PhysicsStressSmoke: stepSoftBodyGpu failed at step {}", s);
                 return false;
             }
@@ -2560,7 +2561,8 @@ b8 RunGpuParityWave5And6Subtest(
             return false;
         }
         GpuDebugLineCollector collector;
-        physSys.collectDebugLines(collector);
+        const MatrixSingle noCullViewProj = MatrixSet(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        physSys.collectDebugLines(collector, noCullViewProj);
         if(collector.depthTestedVertices().empty() || !collector.overlayVertices().empty()){
             error("PhysicsStressSmoke: Wave6 depthTest=true collectDebugLines bucket mismatch");
             physSys.invalidateResources();
@@ -2570,7 +2572,7 @@ b8 RunGpuParityWave5And6Subtest(
         collector.clear();
         dbgOpts.depthTest = false;
         physSys.setDebugDrawOptions(dbgOpts);
-        physSys.collectDebugLines(collector);
+        physSys.collectDebugLines(collector, noCullViewProj);
         if(!collector.depthTestedVertices().empty() || collector.overlayVertices().empty()){
             error("PhysicsStressSmoke: Wave6 depthTest=false collectDebugLines bucket mismatch");
             physSys.invalidateResources();

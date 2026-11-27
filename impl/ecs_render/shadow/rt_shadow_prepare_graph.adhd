@@ -276,6 +276,70 @@ b8 AppendShadowSoftwareBvhClear(mut GpuTaskGraph graph, in GpuTaskSchedulingHint
     return true;
 }
 
+b8 AppendShadowPrepareBatchPatchTarget(
+    in Span<u32> entityIds,
+    in GpuGraphResourceId bufferRes,
+    in GpuDescriptorHandle uavHandle,
+    in u32 strideFloat4,
+    in GpuTaskGraphInstanceTransformPatchLayout layout,
+    in u32 baseFloat4Offset,
+    in Name identityPrefix,
+    in GpuTaskId dependency,
+    mut FixedVector<GpuTaskGraphInstanceTransformPatchRequest, 5u> patchRequests,
+    mut FixedVector<u32, 5u> entityIdOffsets,
+    mut FixedVector<u32, 5u> entityIdCounts,
+    mut Vector<u32> packedEntityIds,
+    mut FixedVector<Span<u32>, 5u> sourceSpans
+){
+    if(entityIds.empty())
+        return true;
+    if(!bufferRes.valid() || !uavHandle.valid())
+        return false;
+    u32 offset = cast<u32>(packedEntityIds.size());
+    const u32 count = cast<u32>(entityIds.size());
+    b8 matchedExisting = false;
+    for(usize existingIdx = 0u; existingIdx < sourceSpans.size(); ++existingIdx){
+        in Span<u32> prev = sourceSpans[existingIdx];
+        if(prev.size() == entityIds.size()){
+            b8 equalIds = (prev.data() == entityIds.data());
+            if(!equalIds){
+                equalIds = true;
+                for(usize ei = 0u; ei < entityIds.size(); ++ei){
+                    if(prev[ei] != entityIds[ei]){
+                        equalIds = false;
+                        break;
+                    }
+                }
+            }
+            if(equalIds){
+                offset = entityIdOffsets[existingIdx];
+                matchedExisting = true;
+                break;
+            }
+        }
+    }
+    if(!matchedExisting){
+        packedEntityIds.reserve(packedEntityIds.size() + entityIds.size());
+        for(usize ei = 0u; ei < entityIds.size(); ++ei)
+            packedEntityIds.push_back(entityIds[ei]);
+    }
+    GpuTaskGraphInstanceTransformPatchRequest req;
+    req.instanceBufferResource = bufferRes;
+    req.instanceBufferUavSlot = uavHandle.slot();
+    req.instanceStrideFloat4 = strideFloat4;
+    req.baseFloat4Offset = baseFloat4Offset;
+    req.layout = layout;
+    req.passIdentityPrefix = identityPrefix;
+    req.dependency = dependency;
+    req.mergeWithPrevious = true;
+    req.allowMergeAcrossConsumerFrontier = true;
+    patchRequests.push_back(req);
+    entityIdOffsets.push_back(offset);
+    entityIdCounts.push_back(count);
+    sourceSpans.push_back(entityIds);
+    return true;
+}
+
 b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     in ShadowPrepareGraphContext context,
     in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
@@ -372,11 +436,15 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     }
 
     b8 hasTransformPatchTask = false;
-    {
-        const GpuTaskId patchStartDep = shadowPrepareDependency;
+    if(context.instanceTransformPatchContributor.has_value() && context.instanceTransformPatchContributor.value().hasActiveInstanceTransformPatches()){
+        FixedVector<GpuTaskGraphInstanceTransformPatchRequest, 5u> patchRequests;
+        FixedVector<u32, 5u> entityIdOffsets;
+        FixedVector<u32, 5u> entityIdCounts;
+        Vector<u32> packedEntityIds;
+        FixedVector<Span<u32>, 5u> sourceSpans;
+
         if(context.rayTracing.preparedSceneTlasUsesInstanceBuffer()){
-            if(!AppendTypedInstanceTransformPatch(
-                context.instanceTransformPatchContributor,
+            if(!AppendShadowPrepareBatchPatchTarget(
                 context.rayTracing.preparedSceneTlasInstanceEntityIds(),
                 uploads.tlasInstanceBuffer,
                 context.rayTracing.preparedSceneTlasInstanceUavHeapHandle(),
@@ -384,15 +452,16 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
                 GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld,
                 0u,
                 Name("shadow.prepare.tlas.physics_patch"),
-                true,
-                true,
-                context.graph,
-                shadowPrepareDependency
+                shadowPrepareDependency,
+                patchRequests,
+                entityIdOffsets,
+                entityIdCounts,
+                packedEntityIds,
+                sourceSpans
             ))
                 return false;
         }
-        if(!AppendTypedInstanceTransformPatch(
-            context.instanceTransformPatchContributor,
+        if(!AppendShadowPrepareBatchPatchTarget(
             context.rayTracing.preparedShadowInstanceEntityIds(),
             uploads.shadowInstances,
             context.rayTracing.shadowInstanceUavHeapHandle(),
@@ -400,14 +469,15 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
             GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs,
             0u,
             Name("shadow.prepare.shadow_instances.physics_patch"),
-            true,
-            true,
-            context.graph,
-            shadowPrepareDependency
+            shadowPrepareDependency,
+            patchRequests,
+            entityIdOffsets,
+            entityIdCounts,
+            packedEntityIds,
+            sourceSpans
         ))
             return false;
-        if(!AppendTypedInstanceTransformPatch(
-            context.instanceTransformPatchContributor,
+        if(!AppendShadowPrepareBatchPatchTarget(
             context.rayTracing.preparedSceneBvhInstanceEntityIds(),
             uploads.sceneBvhInstances,
             context.rayTracing.sceneInstanceUavHeapHandle(),
@@ -415,15 +485,16 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
             GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
             0u,
             Name("shadow.prepare.scene_bvh_instances.physics_patch"),
-            true,
-            true,
-            context.graph,
-            shadowPrepareDependency
+            shadowPrepareDependency,
+            patchRequests,
+            entityIdOffsets,
+            entityIdCounts,
+            packedEntityIds,
+            sourceSpans
         ))
             return false;
         if(uploads.csgTraceContext.valid()){
-            if(!AppendTypedInstanceTransformPatch(
-                context.instanceTransformPatchContributor,
+            if(!AppendShadowPrepareBatchPatchTarget(
                 context.rayTracing.preparedCsgCutterEntityIds(),
                 uploads.csgTraceContext,
                 context.rayTracing.csgTraceContextUavHeapHandle(),
@@ -431,14 +502,15 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
                 GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
                 context.rayTracing.preparedCsgCutterByteOffset() / 16u + 1u,
                 Name("shadow.prepare.csg_cutters.physics_patch"),
-                true,
-                true,
-                context.graph,
-                shadowPrepareDependency
+                shadowPrepareDependency,
+                patchRequests,
+                entityIdOffsets,
+                entityIdCounts,
+                packedEntityIds,
+                sourceSpans
             ))
                 return false;
-            if(!AppendTypedInstanceTransformPatch(
-                context.instanceTransformPatchContributor,
+            if(!AppendShadowPrepareBatchPatchTarget(
                 context.rayTracing.preparedCsgInstanceEntityIds(),
                 uploads.csgTraceContext,
                 context.rayTracing.csgTraceContextUavHeapHandle(),
@@ -446,14 +518,36 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
                 GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
                 context.rayTracing.preparedCsgInstanceByteOffset() / 16u,
                 Name("shadow.prepare.csg_instances.physics_patch"),
-                true,
-                true,
-                context.graph,
-                shadowPrepareDependency
+                shadowPrepareDependency,
+                patchRequests,
+                entityIdOffsets,
+                entityIdCounts,
+                packedEntityIds,
+                sourceSpans
             ))
                 return false;
         }
-        hasTransformPatchTask = shadowPrepareDependency.valid() && shadowPrepareDependency != patchStartDep;
+        if(!patchRequests.empty()){
+            const GpuTaskId patchStartDep = shadowPrepareDependency;
+            const auto batchResult = context.instanceTransformPatchContributor.value().declareBatchInstanceTransformPatches(
+                Span<GpuTaskGraphInstanceTransformPatchRequest>(patchRequests.data(), patchRequests.size()),
+                Span<u32>(packedEntityIds.data(), packedEntityIds.size()),
+                Span<u32>(entityIdOffsets.data(), entityIdOffsets.size()),
+                Span<u32>(entityIdCounts.data(), entityIdCounts.size()),
+                Name("shadow.prepare.physics_patch_batch"),
+                shadowPrepareDependency,
+                true,
+                true,
+                context.graph
+            );
+            if(!batchResult.has_value()){
+                shadowPrepareDependency = GpuTaskId();
+                return false;
+            }
+            if(batchResult.value().valid())
+                shadowPrepareDependency = batchResult.value();
+            hasTransformPatchTask = shadowPrepareDependency.valid() && shadowPrepareDependency != patchStartDep;
+        }
     }
 
     if(context.rayTracing.preparedSceneSwBvhRefit().valid()){
@@ -467,7 +561,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         }
         this.m_deferredShadowPrepareSceneRefitTask = refitTasks.value().refit;
         this.m_sceneBvhRefitInputsUploadTask = refitTasks.value().inputUpload;
-        if(!this.m_deferredShadowPrepareSceneRefitTask.valid() || !this.m_sceneBvhRefitInputsUploadTask.valid())
+        if(!this.m_deferredShadowPrepareSceneRefitTask.valid())
             return false;
         shadowPrepareDependency = this.m_deferredShadowPrepareSceneRefitTask;
     }
@@ -626,9 +720,10 @@ void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiled
             && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildFirstTask)
             && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSoftwareBvhBuildLastTask);
     outResult.softwareSceneRefitMerged =
-        pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask.valid() == pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask.valid()
+        (!pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask.valid()
+            || (pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask.valid() && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask)))
         && (!pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask.valid()
-            || (compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask) && compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_sceneBvhRefitInputsUploadTask)))
+            || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareSceneRefitTask))
     ;
     outResult.accelStructFinalizeMerged = !pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareAccelStructFinalizeTask);
     outResult.bindlessSlotsUploadMerged = !pipeline.m_shadowPrepareGraph.m_deferredBindlessSlotsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_deferredBindlessSlotsUploadTask);

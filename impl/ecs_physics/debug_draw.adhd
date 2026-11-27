@@ -966,7 +966,10 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
                                 budget.noteOverflow();
                                 return;
                             }
-                            EmitDebugMeshTriangleDedup(mesh.triangles[ti], pos, col0, col1, col2, hasRot, color, seenEdges, sink, budget);
+                            if(seenEdges.isSaturated())
+                                EmitDebugMeshTriangleNoDedup(mesh.triangles[ti], pos, col0, col1, col2, hasRot, color, sink, budget);
+                            else
+                                EmitDebugMeshTriangleDedup(mesh.triangles[ti], pos, col0, col1, col2, hasRot, color, seenEdges, sink, budget);
                         }
                     }
                     else{
@@ -1021,7 +1024,10 @@ void AppendPhysicsDebugMeshLines<TSink : IPhysicsDebugLineSink>(
                 budget.noteOverflow();
                 return;
             }
-            EmitDebugMeshTriangleDedup(mesh.triangles[ti], pos, col0, col1, col2, hasRot, color, seenEdges, sink, budget);
+            if(seenEdges.isSaturated())
+                EmitDebugMeshTriangleNoDedup(mesh.triangles[ti], pos, col0, col1, col2, hasRot, color, sink, budget);
+            else
+                EmitDebugMeshTriangleDedup(mesh.triangles[ti], pos, col0, col1, col2, hasRot, color, seenEdges, sink, budget);
         }
     }
     else{
@@ -3407,18 +3413,17 @@ void AppendEcsRagdollDebugLineItem<TSink : IPhysicsDebugLineSink>(
 
     if(options.drawRagdollTargetPose && rc.driveToPose && !rc.targetPose.empty() && !IsPhysicsDebugPhaseFull(sink, budget)){
         EcsWorldPose rootPose;
-        const b8 hasRootPose = ResolveEcsSubsystemWorldPose(entity, ecsWorld, rootPose);
-        Vector<Transform3D> worldTarget;
-        BuildRagdollWorldTargetPose(Span<Transform3D>(rc.targetPose.data(), rc.targetPose.size()), rootPose, hasRootPose, worldTarget);
+        const b8 hasRootPose = ResolveEcsSubsystemWorldPoseCached(entity, true, ecsWorld, scratch.worldPoseCache, rootPose);
+        BuildRagdollWorldTargetPose(Span<Transform3D>(rc.targetPose.data(), rc.targetPose.size()), rootPose, hasRootPose, scratch.ragdollTargetScratch);
         const VectorSingle targetCol(0.25f, 0.92f, 0.98f, 0.72f);
         const VectorSingle tetherCol(0.25f, 0.92f, 0.98f, 0.40f);
-        const usize tgtCount = Min(boneCount, worldTarget.size());
+        const usize tgtCount = Min(boneCount, scratch.ragdollTargetScratch.size());
         for(usize bi = 0u; bi < tgtCount && !IsPhysicsDebugPhaseFull(sink, budget); ++bi){
-            const VectorSingle tPos(worldTarget[bi].position);
+            const VectorSingle tPos(scratch.ragdollTargetScratch[bi].position);
             if(bi < rc.instance.parentIndices.size()){
                 const u32 pIdx = rc.instance.parentIndices[bi];
                 if(pIdx != s_NullIndex && cast<usize>(pIdx) < tgtCount)
-                    AppendPhysicsDebugLine(VectorSingle(worldTarget[pIdx].position), tPos, targetCol, sink, budget);
+                    AppendPhysicsDebugLine(VectorSingle(scratch.ragdollTargetScratch[pIdx].position), tPos, targetCol, sink, budget);
             }
             const BodyId bId = rc.instance.boneBodies[bi];
             if(bId.valid() && bId.index < physicsWorld.m_bodies.size()){
@@ -3984,6 +3989,7 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
     in b8 useProjector,
     in Optional<in PhysicsSystem> physicsSystemOpt,
     in VectorSingle boneCol,
+    mut PhysicsDebugDrawScratch scratch,
     mut TSink sink,
     mut PhysicsDebugPhaseBudget budget
 ){
@@ -4003,25 +4009,24 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
     const VectorSingle secAxisCol(0.98f, 0.52f, 0.18f, 0.95f);
     const VectorSingle driveCol(0.25f, 0.95f, 0.85f, 0.95f);
 
-    Vector<Transform3D> resolvedLinkXfs;
-    resolvedLinkXfs.resize(linkCount);
+    scratch.resolvedLinkXfsScratch.resize(linkCount);
     for(usize li = 0u; li < linkCount; ++li){
-        resolvedLinkXfs[li] = ac.articulation.linkStates[li].worldTransform;
+        scratch.resolvedLinkXfsScratch[li] = ac.articulation.linkStates[li].worldTransform;
         if(options.useInterpolatedTransforms && physicsSystemOpt.has_value()){
             const Expected<Transform3D> interpLink = physicsSystemOpt.value().tryGetInterpolatedArticulationLinkTransform(entity, li);
             if(interpLink.has_value())
-                resolvedLinkXfs[li] = interpLink.value();
+                scratch.resolvedLinkXfsScratch[li] = interpLink.value();
         }
     }
 
     for(usize li = 0u; li < linkCount; ++li){
         in ArticulationLinkDef def = ac.articulation.linkDefs[li];
         in ArticulationLinkState st = ac.articulation.linkStates[li];
-        in Transform3D linkXf = resolvedLinkXfs[li];
+        in Transform3D linkXf = scratch.resolvedLinkXfsScratch[li];
         const VectorSingle linkPos = VectorSingle(linkXf.position);
         Transform3D parentXf = baseXf;
         if(def.parentIndex != s_NullIndex && cast<usize>(def.parentIndex) < linkCount)
-            parentXf = resolvedLinkXfs[def.parentIndex];
+            parentXf = scratch.resolvedLinkXfsScratch[def.parentIndex];
         const VectorSingle parentPos = VectorSingle(parentXf.position);
         if(useProjector){
             const f32 spanRadius = Vector3Length(VectorSingle(linkPos - parentPos, 0.0f)).x * 0.5f + 0.35f;
@@ -4128,7 +4133,7 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
         in ArticulationMimicConstraint mc = ac.articulation.mimicConstraints[mi];
         if(!mc.enabled || mc.linkIndex >= linkCount || mc.targetLinkIndex >= linkCount)
             continue;
-        AppendPhysicsDebugLine(VectorSingle(resolvedLinkXfs[mc.linkIndex].position), VectorSingle(resolvedLinkXfs[mc.targetLinkIndex].position), mimicCol, sink, budget);
+        AppendPhysicsDebugLine(VectorSingle(scratch.resolvedLinkXfsScratch[mc.linkIndex].position), VectorSingle(scratch.resolvedLinkXfsScratch[mc.targetLinkIndex].position), mimicCol, sink, budget);
     }
     const VectorSingle tendonCol(0.95f, 0.35f, 0.92f, 0.92f);
     for(usize ti = 0u; ti < ac.articulation.tendonConstraints.size() && !IsPhysicsDebugPhaseFull(sink, budget); ++ti){
@@ -4139,7 +4144,7 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
             const u32 lA = tc.linkIndices[k - 1u];
             const u32 lB = tc.linkIndices[k];
             if(lA < linkCount && lB < linkCount)
-                AppendPhysicsDebugLine(VectorSingle(resolvedLinkXfs[lA].position), VectorSingle(resolvedLinkXfs[lB].position), tendonCol, sink, budget);
+                AppendPhysicsDebugLine(VectorSingle(scratch.resolvedLinkXfsScratch[lA].position), VectorSingle(scratch.resolvedLinkXfsScratch[lB].position), tendonCol, sink, budget);
         }
     }
     const VectorSingle spatialTendonCol(0.98f, 0.65f, 0.25f, 0.92f);
@@ -4151,8 +4156,8 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
             in ArticulationSpatialTendonAttachment a0 = stn.attachments[k - 1u];
             in ArticulationSpatialTendonAttachment a1 = stn.attachments[k];
             if(a0.linkIndex < linkCount && a1.linkIndex < linkCount){
-                in Transform3D xf0 = resolvedLinkXfs[a0.linkIndex];
-                in Transform3D xf1 = resolvedLinkXfs[a1.linkIndex];
+                in Transform3D xf0 = scratch.resolvedLinkXfsScratch[a0.linkIndex];
+                in Transform3D xf1 = scratch.resolvedLinkXfsScratch[a1.linkIndex];
                 const VectorSingle w0 = TransformPointValues(VectorSingle(xf0.position), SafeNormalizeQuat(VectorSingle(xf0.rotation)), VectorSingle(a0.localPoint));
                 const VectorSingle w1 = TransformPointValues(VectorSingle(xf1.position), SafeNormalizeQuat(VectorSingle(xf1.rotation)), VectorSingle(a1.localPoint));
                 AppendPhysicsDebugLine(w0, w1, spatialTendonCol, sink, budget);
@@ -4163,8 +4168,8 @@ void AppendEcsArticulationDebugLineItem<TSink : IPhysicsDebugLineSink>(
         in ArticulationLoopConstraint lc = ac.articulation.loopConstraints[lci];
         if(!lc.enabled || lc.linkIndexA >= linkCount || lc.linkIndexB >= linkCount)
             continue;
-        in Transform3D xfA = resolvedLinkXfs[lc.linkIndexA];
-        in Transform3D xfB = resolvedLinkXfs[lc.linkIndexB];
+        in Transform3D xfA = scratch.resolvedLinkXfsScratch[lc.linkIndexA];
+        in Transform3D xfB = scratch.resolvedLinkXfsScratch[lc.linkIndexB];
         const VectorSingle wA = TransformPointValues(VectorSingle(xfA.position), SafeNormalizeQuat(VectorSingle(xfA.rotation)), VectorSingle(lc.localAnchorA));
         const VectorSingle wB = TransformPointValues(VectorSingle(xfB.position), SafeNormalizeQuat(VectorSingle(xfB.rotation)), VectorSingle(lc.localAnchorB));
         const f32 gap = Vector3Length(VectorSingle(wB - wA, 0.0f)).x;
@@ -4259,16 +4264,20 @@ void AppendEcsFluidComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
     in b8 useProjector,
     in VectorSingle fluidCol,
     mut World ecsWorld,
+    mut PhysicsDebugDrawScratch scratch,
     mut TSink sink,
     mut PhysicsDebugPhaseBudget budget
 ){
     if(!fvc.enabled || !fvc.volume.enabled)
         return;
     EcsWorldPose pose;
-    if(ResolveEcsSubsystemWorldPose(ent, ecsWorld, pose))
-        AppendEcsFluidDebugLineItem(BuildWorldTransformedFluidVolume(fvc.volume, pose.transform, VectorSingle(pose.scale)), projector, useProjector, fluidCol, sink, budget);
-    else
+    if(ResolveEcsSubsystemWorldPoseCached(ent, true, ecsWorld, scratch.worldPoseCache, pose)){
+        TransformFluidVolumeInto(fvc.volume, true, pose.transform, VectorSingle(pose.scale), fvc.volume.filter, scratch.fluidVolumeScratch);
+        AppendEcsFluidDebugLineItem(scratch.fluidVolumeScratch, projector, useProjector, fluidCol, sink, budget);
+    }
+    else{
         AppendEcsFluidDebugLineItem(fvc.volume, projector, useProjector, fluidCol, sink, budget);
+    }
 }
 
 void AppendEcsForceFieldComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
@@ -4278,16 +4287,20 @@ void AppendEcsForceFieldComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
     in b8 useProjector,
     in VectorSingle fieldCol,
     mut World ecsWorld,
+    mut PhysicsDebugDrawScratch scratch,
     mut TSink sink,
     mut PhysicsDebugPhaseBudget budget
 ){
     if(!ffc.enabled || !ffc.field.enabled)
         return;
     EcsWorldPose pose;
-    if(ResolveEcsSubsystemWorldPose(ent, ecsWorld, pose))
-        AppendEcsForceFieldDebugLineItem(BuildWorldTransformedForceField(ffc.field, pose.transform, VectorSingle(pose.scale)), projector, useProjector, fieldCol, sink, budget);
-    else
+    if(ResolveEcsSubsystemWorldPoseCached(ent, true, ecsWorld, scratch.worldPoseCache, pose)){
+        TransformForceFieldInto(ffc.field, true, pose.transform, VectorSingle(pose.scale), ffc.field.filter, scratch.forceFieldScratch);
+        AppendEcsForceFieldDebugLineItem(scratch.forceFieldScratch, projector, useProjector, fieldCol, sink, budget);
+    }
+    else{
         AppendEcsForceFieldDebugLineItem(ffc.field, projector, useProjector, fieldCol, sink, budget);
+    }
 }
 
 void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
@@ -4340,7 +4353,7 @@ void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
     {
         const VectorSingle fluidCol(0.18f, 0.65f, 0.98f, 0.70f);
         for(in auto row : ecsWorld.view<FluidVolumeComponent>()){
-            AppendEcsFluidComponentDebugLineItem(Get<0>(row), Get<1>(row), projector, useProjector, fluidCol, ecsWorld, sink, budget);
+            AppendEcsFluidComponentDebugLineItem(Get<0>(row), Get<1>(row), projector, useProjector, fluidCol, ecsWorld, scratch, sink, budget);
             if(IsPhysicsDebugPhaseFull(sink, budget))
                 break;
         }
@@ -4351,7 +4364,7 @@ void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
     {
         const VectorSingle fieldCol(0.75f, 0.35f, 0.98f, 0.80f);
         for(in auto row : ecsWorld.view<ForceFieldComponent>()){
-            AppendEcsForceFieldComponentDebugLineItem(Get<0>(row), Get<1>(row), projector, useProjector, fieldCol, ecsWorld, sink, budget);
+            AppendEcsForceFieldComponentDebugLineItem(Get<0>(row), Get<1>(row), projector, useProjector, fieldCol, ecsWorld, scratch, sink, budget);
             if(IsPhysicsDebugPhaseFull(sink, budget))
                 break;
         }
@@ -4373,7 +4386,7 @@ void AppendEcsSubsystemDebugLines<TSink : IPhysicsDebugLineSink>(
     {
         const VectorSingle artCol(0.95f, 0.72f, 0.28f, 0.95f);
         for(in auto row : ecsWorld.view<ArticulationComponent>()){
-            AppendEcsArticulationDebugLineItem(Get<0>(row), Get<1>(row), options, projector, useProjector, physicsSystemOpt, artCol, sink, budget);
+            AppendEcsArticulationDebugLineItem(Get<0>(row), Get<1>(row), options, projector, useProjector, physicsSystemOpt, artCol, scratch, sink, budget);
             if(IsPhysicsDebugPhaseFull(sink, budget))
                 break;
         }
@@ -4416,6 +4429,7 @@ void BuildPhysicsDebugLabels(
     in PhysicsDebugDrawOptions options,
     in PhysicsDebugScreenProjector projector,
     in Optional<in PhysicsSystem> physicsSystemOpt,
+    mut PhysicsDebugDrawScratch scratch,
     mut Vector<PhysicsDebugLabel> outLabels
 ){
     outLabels.clear();
@@ -4423,6 +4437,8 @@ void BuildPhysicsDebugLabels(
         return;
     const b8 useProjector = projector.valid();
     const usize limit = cast<usize>(options.maxLabels);
+    outLabels.reserve(Min(world.m_bodies.size(), limit));
+    scratch.beginBodyPosePass(world.m_bodies.size());
     for(usize bi = 0u; bi < world.m_bodies.size() && outLabels.size() < limit; ++bi){
         in Body body = world.m_bodies[bi];
         if(!body.alive || (!options.drawDisabledBodies && body.setIndex == s_DisabledSetIndex))
@@ -4433,7 +4449,7 @@ void BuildPhysicsDebugLabels(
             continue;
         VectorSingle bodyPos(0.0f);
         VectorSingle bodyRot(0.0f, 0.0f, 0.0f, 1.0f);
-        ResolveDebugBodyTransformValues(world, physicsSystemOpt, cast<u32>(bi), body, bodyPos, bodyRot);
+        ResolveDebugBodyTransformValuesCached(world, physicsSystemOpt, cast<u32>(bi), body, scratch, bodyPos, bodyRot);
         in BodySim sim = world.m_solverSets[body.setIndex].sims[body.localIndex];
         const VectorSingle c = TransformDebugPoint(bodyPos, bodyRot, sim.localCenter());
         if(useProjector && !projector.isSphereVisible(c, 0.25f))
@@ -4477,7 +4493,7 @@ void BuildPhysicsDebugLabels(
                 continue;
             VectorSingle posA(0.0f);
             VectorSingle rotA(0.0f, 0.0f, 0.0f, 1.0f);
-            ResolveDebugBodyTransformValues(world, physicsSystemOpt, bAId, bA, posA, rotA);
+            ResolveDebugBodyTransformValuesCached(world, physicsSystemOpt, bAId, bA, scratch, posA, rotA);
             const VectorSingle aA = TransformPointValues(posA, rotA, j.localAnchorA());
             if(useProjector && !projector.isSphereVisible(aA, 0.25f))
                 continue;
@@ -4531,10 +4547,22 @@ void BuildPhysicsDebugLabels(
     in PhysicsWorld world,
     in PhysicsDebugDrawOptions options,
     in PhysicsDebugScreenProjector projector,
+    mut PhysicsDebugDrawScratch scratch,
     mut Vector<PhysicsDebugLabel> outLabels
 ){
     const Optional<in PhysicsSystem> noSys = Optional<in PhysicsSystem>();
-    BuildPhysicsDebugLabels(world, options, projector, noSys, outLabels);
+    BuildPhysicsDebugLabels(world, options, projector, noSys, scratch, outLabels);
+}
+
+void BuildPhysicsDebugLabels(
+    in PhysicsWorld world,
+    in PhysicsDebugDrawOptions options,
+    in PhysicsDebugScreenProjector projector,
+    mut Vector<PhysicsDebugLabel> outLabels
+){
+    PhysicsDebugDrawScratch scratch;
+    const Optional<in PhysicsSystem> noSys = Optional<in PhysicsSystem>();
+    BuildPhysicsDebugLabels(world, options, projector, noSys, scratch, outLabels);
 }
 
 void BuildPhysicsDebugLabels(
@@ -4542,9 +4570,10 @@ void BuildPhysicsDebugLabels(
     in PhysicsDebugDrawOptions options,
     mut Vector<PhysicsDebugLabel> outLabels
 ){
+    PhysicsDebugDrawScratch scratch;
     const PhysicsDebugScreenProjector emptyProj = PhysicsDebugScreenProjector();
     const Optional<in PhysicsSystem> noSys = Optional<in PhysicsSystem>();
-    BuildPhysicsDebugLabels(world, options, emptyProj, noSys, outLabels);
+    BuildPhysicsDebugLabels(world, options, emptyProj, noSys, scratch, outLabels);
 }
 
 void BuildEcsPhysicsDebugLabels(
@@ -4552,6 +4581,7 @@ void BuildEcsPhysicsDebugLabels(
     in PhysicsSystem physicsSystem,
     in PhysicsDebugDrawOptions options,
     in PhysicsDebugScreenProjector projector,
+    mut PhysicsDebugDrawScratch scratch,
     mut Vector<PhysicsDebugLabel> outLabels
 ){
     outLabels.clear();
@@ -4560,7 +4590,7 @@ void BuildEcsPhysicsDebugLabels(
     Optional<in PhysicsSystem> physOpt;
     if(options.useInterpolatedTransforms)
         physOpt = Optional<in PhysicsSystem>(physicsSystem);
-    BuildPhysicsDebugLabels(physicsSystem.physicsWorld(), options, projector, physOpt, outLabels);
+    BuildPhysicsDebugLabels(physicsSystem.physicsWorld(), options, projector, physOpt, scratch, outLabels);
     if(!options.drawSubsystems)
         return;
     const b8 useProjector = projector.valid();
@@ -4597,7 +4627,7 @@ void BuildEcsPhysicsDebugLabels(
     );
     const auto vehView = ecsWorld.view<VehicleComponent>();
     vehView.each(
-        lambda[in physSysRef, in physOpt, in options, in projector, in useProjector, in limit, mut outLabels](in EntityID entity, in VehicleComponent vc) -> void{
+        lambda[in physSysRef, in physOpt, in options, in projector, in useProjector, in limit, mut scratch, mut outLabels](in EntityID entity, in VehicleComponent vc) -> void{
             if(outLabels.size() >= limit || !vc.enabled || !vc.controller.chassisBodyId.valid())
                 return;
             in PhysicsWorld physWorld = physSysRef.value().physicsWorld();
@@ -4609,7 +4639,7 @@ void BuildEcsPhysicsDebugLabels(
                 return;
             VectorSingle chPos(0.0f);
             VectorSingle chRot(0.0f, 0.0f, 0.0f, 1.0f);
-            ResolveDebugBodyTransformValues(physWorld, physOpt, chIdx, chBody, chPos, chRot);
+            ResolveDebugBodyTransformValuesCached(physWorld, physOpt, chIdx, chBody, scratch, chPos, chRot);
             if(useProjector && !projector.isSphereVisible(chPos, 1.5f))
                 return;
             PhysicsDebugLabel lbl;
@@ -4782,12 +4812,13 @@ b8 ProjectPhysicsWorldSegmentToScreen(
     return projector.projectSegment(worldP0, worldP1, outSegment);
 }
 
-void PhysicsSystem::collectDebugLines(mut GpuDebugLineCollector collector){
+void PhysicsSystem::collectDebugLines(mut GpuDebugLineCollector collector, in MatrixSingle viewProj){
     if(!this.m_debugDrawEnabled)
         return;
     PhysicsGpuDebugLineSink sink(collector, this.m_debugDrawOptions.maxLines, this.m_debugDrawOptions.depthTest);
-    const PhysicsDebugScreenProjector emptyProjector = PhysicsDebugScreenProjector();
-    this.m_debugDrawStats = BuildEcsPhysicsDebugLinesToSink(this.m_world, this, this.m_debugDrawOptions, emptyProjector, sink, this.m_debugDrawScratch);
+    PhysicsDebugScreenProjector projector;
+    projector.initFromViewProj(viewProj);
+    this.m_debugDrawStats = BuildEcsPhysicsDebugLinesToSink(this.m_world, this, this.m_debugDrawOptions, projector, sink, this.m_debugDrawScratch);
 }
 
 

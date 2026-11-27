@@ -807,27 +807,35 @@ b8 BuildCenteredChunkSpecFromLocalPts(
     const Expected<HullShape> rawRes = BuildConvexHull(Span<f32x4>(trimmedPts), hullRadius);
     if(!rawRes.has_value())
         return false;
-    const f32 vol = ComputeHullBuoyancyVolume(rawRes.value());
+    HullShape hull = rawRes.value();
+    f32 vol = hull.cachedBuoyancyVolume;
+    if(vol < 0.0f){
+        PrepareHullBuoyancyCaches(hull);
+        vol = hull.cachedBuoyancyVolume;
+    }
     if(vol <= 1.0e-7f)
         return false;
 
-    const VectorSingle centroid = rawRes.value().centroid();
-    Vector<f32x4> centeredPts;
-    centeredPts.resize(trimmedPts.size());
+    const VectorSingle centroid = hull.centroid();
     VectorSingle bMin(s_MaxF32);
     VectorSingle bMax(-s_MaxF32);
     for(usize pi = 0u; pi < trimmedPts.size(); ++pi){
         const VectorSingle pWorldLocal = VectorSingle(trimmedPts[pi]);
         bMin = Min(bMin, pWorldLocal);
         bMax = Max(bMax, pWorldLocal);
-        centeredPts[pi] = f32x4(pWorldLocal - centroid, 0.0f);
     }
 
-    const Expected<HullShape> centeredRes = BuildConvexHull(Span<f32x4>(centeredPts), hullRadius);
-    if(!centeredRes.has_value())
-        return false;
+    for(usize vi = 0u; vi < hull.vertices.size(); ++vi){
+        const VectorSingle shifted = VectorSingle(hull.vertices[vi], 0.0f) - centroid;
+        hull.vertices[vi] = f32x3u(shifted.x, shifted.y, shifted.z);
+    }
+    for(usize fi = 0u; fi < hull.facePlanes.size(); ++fi){
+        const VectorSingle n(hull.facePlanes[fi].normalOffset, 0.0f);
+        hull.facePlanes[fi].normalOffset.w -= Vector3Dot(n, centroid).x;
+    }
+    hull.centroidRadius = f32x4(0.0f, 0.0f, 0.0f, hull.radius());
 
-    outSpec.hull = centeredRes.value();
+    outSpec.hull = hull;
     outSpec.localCentroid = f32x4(centroid, 0.0f);
     outSpec.localAabbMin = f32x4(bMin, 0.0f);
     outSpec.localAabbMax = f32x4(bMax, 0.0f);
@@ -1097,6 +1105,56 @@ void GenerateFractureSites(
     }
 }
 
+class FractureDistSite{
+    public f32 distSq = 0.0f;
+    public u32 siteIdx = 0u;
+}
+
+void BuildSortedVoronoiNeighborOrder(
+    in Span<f32x4> sites,
+    in u32 selfIdx,
+    mut Vector<FractureDistSite> outOrder
+){
+    outOrder.clear();
+    const u32 siteCount = cast<u32>(sites.size());
+    if(siteCount <= 1u)
+        return;
+    outOrder.reserve(siteCount - 1u);
+    const VectorSingle siteI(sites[selfIdx]);
+    for(u32 j = 0u; j < siteCount; ++j){
+        if(j == selfIdx)
+            continue;
+        const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(sites[j]) - siteI, 0.0f)).x;
+        if(dSq <= 1.0e-10f)
+            continue;
+        FractureDistSite entry;
+        entry.distSq = dSq;
+        entry.siteIdx = j;
+        outOrder.push_back(entry);
+    }
+    for(usize i = 1u; i < outOrder.size(); ++i){
+        const FractureDistSite key = outOrder[i];
+        usize k = i;
+        while(k > 0u && outOrder[k - 1u].distSq > key.distSq){
+            outOrder[k] = outOrder[k - 1u];
+            --k;
+        }
+        outOrder[k] = key;
+    }
+}
+
+f32 ComputePolyFacesMaxRadiusSq(in Vector<VoronoiPolyFace> faces, in VectorSingle origin){
+    f32 maxRadSq = 0.0f;
+    for(usize fi = 0u; fi < faces.size(); ++fi){
+        in Vector<f32x4> fv = faces[fi].vertices;
+        for(usize vi = 0u; vi < fv.size(); ++vi){
+            const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(fv[vi]) - origin, 0.0f)).x;
+            maxRadSq = Max(maxRadSq, dSq);
+        }
+    }
+    return maxRadSq;
+}
+
 Expected<FractureResult> GenerateVoronoiFractureChunks(
     in HullShape sourceHull,
     in FracturePatternParams params
@@ -1130,37 +1188,65 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
     siteToFinalChunk.assign(siteCount, s_NullIndex);
 
     Vector<FractureNeighborPair> rawSiteNeighbors;
-    Vector<VoronoiPolyFace> workFaces;
-    Vector<VoronoiPolyFace> nextFaces;
+    Vector<VoronoiPolyFace> facesA;
+    Vector<VoronoiPolyFace> facesB;
     Vector<f32x4> cellPts;
+    Vector<FractureDistSite> neighborOrder;
 
     for(u32 i = 0u; i < siteCount; ++i){
         const VectorSingle siteI = VectorSingle(sites[i]);
-        workFaces = srcFaces;
-
+        BuildSortedVoronoiNeighborOrder(Span<f32x4>(sites.data(), sites.size()), i, neighborOrder);
+        f32 maxRadSq = ComputePolyFacesMaxRadiusSq(srcFaces, siteI);
+        b8 useSrc = true;
+        b8 useA = true;
         b8 cellEmpty = false;
-        for(u32 j = 0u; j < siteCount; ++j){
-            if(i == j)
-                continue;
+
+        for(usize ni = 0u; ni < neighborOrder.size(); ++ni){
+            const FractureDistSite cand = neighborOrder[ni];
+            const f32 radEff = Sqrt(VectorSingle(maxRadSq)).x + 1.0e-5f;
+            if(0.25f * cand.distSq > radEff * radEff)
+                break;
+
+            const u32 j = cand.siteIdx;
             const VectorSingle siteJ = VectorSingle(sites[j]);
             const VectorSingle diff = siteJ - siteI;
-            const f32 diffSq = Vector3LengthSq(VectorSingle(diff, 0.0f)).x;
-            if(diffSq <= 1.0e-10f)
-                continue;
-            const VectorSingle bisN = diff * Rsqrt(VectorSingle(diffSq)).x;
+            const VectorSingle bisN = diff * Rsqrt(VectorSingle(cand.distSq)).x;
             const VectorSingle mid = (siteI + siteJ) * 0.5f;
             const f32 bisD = Vector3Dot(bisN, mid).x;
 
             f32 minProj = s_MaxF32;
             f32 maxProj = -s_MaxF32;
-            for(usize fi = 0u; fi < workFaces.size(); ++fi){
-                in Vector<f32x4> fv = workFaces[fi].vertices;
-                for(usize vi = 0u; vi < fv.size(); ++vi){
-                    const f32 d = Vector3Dot(bisN, VectorSingle(fv[vi])).x - bisD;
-                    minProj = Min(minProj, d);
-                    maxProj = Max(maxProj, d);
+            if(useSrc){
+                for(usize fi = 0u; fi < srcFaces.size(); ++fi){
+                    in Vector<f32x4> fv = srcFaces[fi].vertices;
+                    for(usize vi = 0u; vi < fv.size(); ++vi){
+                        const f32 d = Vector3Dot(bisN, VectorSingle(fv[vi])).x - bisD;
+                        minProj = Min(minProj, d);
+                        maxProj = Max(maxProj, d);
+                    }
                 }
             }
+            else if(useA){
+                for(usize fi = 0u; fi < facesA.size(); ++fi){
+                    in Vector<f32x4> fv = facesA[fi].vertices;
+                    for(usize vi = 0u; vi < fv.size(); ++vi){
+                        const f32 d = Vector3Dot(bisN, VectorSingle(fv[vi])).x - bisD;
+                        minProj = Min(minProj, d);
+                        maxProj = Max(maxProj, d);
+                    }
+                }
+            }
+            else{
+                for(usize fi = 0u; fi < facesB.size(); ++fi){
+                    in Vector<f32x4> fv = facesB[fi].vertices;
+                    for(usize vi = 0u; vi < fv.size(); ++vi){
+                        const f32 d = Vector3Dot(bisN, VectorSingle(fv[vi])).x - bisD;
+                        minProj = Min(minProj, d);
+                        maxProj = Max(maxProj, d);
+                    }
+                }
+            }
+
             if(maxProj <= 1.0e-5f)
                 continue;
             if(minProj >= -1.0e-5f){
@@ -1168,19 +1254,49 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
                 break;
             }
 
-            ClipPolyhedronFacesByPlane(workFaces, bisN, bisD, j, nextFaces);
-            if(nextFaces.size() < 4u){
-                cellEmpty = true;
-                break;
+            if(useSrc){
+                ClipPolyhedronFacesByPlane(srcFaces, bisN, bisD, j, facesA);
+                useSrc = false;
+                useA = true;
+                if(facesA.size() < 4u){
+                    cellEmpty = true;
+                    break;
+                }
+                maxRadSq = ComputePolyFacesMaxRadiusSq(facesA, siteI);
             }
-            workFaces = nextFaces;
+            else if(useA){
+                ClipPolyhedronFacesByPlane(facesA, bisN, bisD, j, facesB);
+                useA = false;
+                if(facesB.size() < 4u){
+                    cellEmpty = true;
+                    break;
+                }
+                maxRadSq = ComputePolyFacesMaxRadiusSq(facesB, siteI);
+            }
+            else{
+                ClipPolyhedronFacesByPlane(facesB, bisN, bisD, j, facesA);
+                useA = true;
+                if(facesA.size() < 4u){
+                    cellEmpty = true;
+                    break;
+                }
+                maxRadSq = ComputePolyFacesMaxRadiusSq(facesA, siteI);
+            }
         }
         if(cellEmpty)
             continue;
 
+        Vector<VoronoiPolyFace> finalFaces;
+        if(useSrc)
+            finalFaces = srcFaces;
+        else if(useA)
+            finalFaces = facesA;
+        else
+            finalFaces = facesB;
+
         cellPts.clear();
-        for(usize fi = 0u; fi < workFaces.size(); ++fi){
-            in Vector<f32x4> fv = workFaces[fi].vertices;
+        for(usize fi = 0u; fi < finalFaces.size(); ++fi){
+            in Vector<f32x4> fv = finalFaces[fi].vertices;
             for(usize vi = 0u; vi < fv.size(); ++vi)
                 cellPts.push_back(fv[vi]);
         }
@@ -1196,8 +1312,8 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
         result.totalVolume += chunkSpec.volume;
         result.chunks.push_back(chunkSpec);
 
-        for(usize fi = 0u; fi < workFaces.size(); ++fi){
-            in VoronoiPolyFace f = workFaces[fi];
+        for(usize fi = 0u; fi < finalFaces.size(); ++fi){
+            in VoronoiPolyFace f = finalFaces[fi];
             if(f.neighborSiteIndex == s_NullIndex || f.neighborSiteIndex <= i)
                 continue;
             const VectorSingle bisN = SafeNormalizeVec3(VectorSingle(sites[f.neighborSiteIndex]) - siteI, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -1283,6 +1399,41 @@ b8 IsPointInTriangle2D(
     return c1 >= -1.0e-6f && c2 >= -1.0e-6f && c3 >= -1.0e-6f;
 }
 
+f32 ComputeVertexCross2D(
+    in Vector<u32> active,
+    in usize posIdx,
+    in Vector<f32x2u> pts2d
+){
+    const usize m = active.size();
+    const u32 prev = active[(posIdx + m - 1u) % m];
+    const u32 curr = active[posIdx];
+    const u32 next = active[(posIdx + 1u) % m];
+    const f32x2u a = pts2d[prev];
+    const f32x2u b = pts2d[curr];
+    const f32x2u c = pts2d[next];
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+void UpdateReflexVertexStateAt(
+    in Vector<u32> active,
+    in usize posIdx,
+    in Vector<f32x2u> pts2d,
+    mut Vector<u8> isReflex,
+    mut Vector<u32> reflexList
+){
+    const u32 v = active[posIdx];
+    const f32 cross2 = ComputeVertexCross2D(active, posIdx, pts2d);
+    if(cross2 <= 1.0e-8f){
+        if(isReflex[v] == 0u){
+            isReflex[v] = 1u;
+            reflexList.push_back(v);
+        }
+    }
+    else{
+        isReflex[v] = 0u;
+    }
+}
+
 void EarClipAndAppendCapLoop(
     in Span<f32x4> loopPts3D,
     in VectorSingle capPlaneN,
@@ -1330,6 +1481,15 @@ void EarClipAndAppendCapLoop(
             active[i] = cast<u32>(n - 1u - i);
     }
 
+    Vector<u8> isActive;
+    isActive.assign(n, 1u);
+    Vector<u8> isReflex;
+    isReflex.assign(n, 0u);
+    Vector<u32> reflexList;
+    reflexList.reserve(n);
+    for(usize i = 0u; i < n; ++i)
+        UpdateReflexVertexStateAt(active, i, pts2d, isReflex, reflexList);
+
     usize guard = n * n + 8u;
     while(active.size() >= 3u && guard > 0u){
         --guard;
@@ -1364,14 +1524,19 @@ void EarClipAndAppendCapLoop(
                 continue;
 
             b8 containsAny = false;
-            for(usize k = 0u; k < m; ++k){
-                const u32 chk = active[k];
-                if(chk == prev || chk == curr || chk == next)
+            usize rk = 0u;
+            while(rk < reflexList.size()){
+                const u32 chk = reflexList[rk];
+                if(isActive[chk] == 0u || isReflex[chk] == 0u){
+                    reflexList[rk] = reflexList[reflexList.size() - 1u];
+                    reflexList.pop_back();
                     continue;
-                if(IsPointInTriangle2D(a, b, c, pts2d[chk])){
+                }
+                if(chk != prev && chk != curr && chk != next && IsPointInTriangle2D(a, b, c, pts2d[chk])){
                     containsAny = true;
                     break;
                 }
+                ++rk;
             }
             if(containsAny)
                 continue;
@@ -1386,9 +1551,17 @@ void EarClipAndAppendCapLoop(
                 mesh.indices.push_back(vertIds[next]);
             }
             mesh.triangleMaterialIndices.push_back(1u);
+
+            isActive[curr] = 0u;
+            isReflex[curr] = 0u;
             for(usize s = i; s + 1u < m; ++s)
                 active[s] = active[s + 1u];
             active.pop_back();
+            if(active.size() >= 3u){
+                const usize newM = active.size();
+                UpdateReflexVertexStateAt(active, (i + newM - 1u) % newM, pts2d, isReflex, reflexList);
+                UpdateReflexVertexStateAt(active, i % newM, pts2d, isReflex, reflexList);
+            }
             earClipped = true;
             break;
         }
@@ -1467,7 +1640,122 @@ void AppendClippedExteriorTri(
     mesh.triangleMaterialIndices.push_back(matIdx);
 }
 
-b8 SliceTriangleMeshByPlane(
+u64 PackFractureCutCellKey(in i32 cx, in i32 cy, in i32 cz){
+    const u64 kx = cast<u64>(cast<i64>(cx)) * cast<u64>(73856093u);
+    const u64 ky = cast<u64>(cast<i64>(cy)) * cast<u64>(19349663u);
+    const u64 kz = cast<u64>(cast<i64>(cz)) * cast<u64>(83492791u);
+    return kx ^ ky ^ kz;
+}
+
+void StitchAndCapCutSegments(
+    in Span<FractureMeshCutSeg> cutSegs,
+    in VectorSingle planeN,
+    in f32 interiorUvScale,
+    in b8 capNeg,
+    in b8 capPos,
+    mut FractureChunkMesh negMesh,
+    mut FractureChunkMesh posMesh
+){
+    const usize segCount = cutSegs.size();
+    if(segCount == 0u)
+        return;
+
+    Vector<u8> segUsed;
+    segUsed.assign(segCount, 0u);
+    Vector<f32x4> loopPts;
+    const f32 stitchEpsSq = 1.0e-6f;
+    const f32 maxMatchDistSq = 1.0e-3f;
+
+    const b8 useSpatialHash = (segCount > 16u);
+    const f32 invCell = 1.0f / 0.032f;
+    HashMap<u64, u32> cellHead;
+    Vector<u32> nextInCell;
+    if(useSpatialHash){
+        cellHead.reserve(segCount * 2u);
+        nextInCell.resize(segCount, s_NullIndex);
+        for(usize si = 0u; si < segCount; ++si){
+            const VectorSingle g = VectorFloor(VectorSingle(cutSegs[si].p0) * invCell);
+            const u64 key = PackFractureCutCellKey(cast<i32>(g.x), cast<i32>(g.y), cast<i32>(g.z));
+            const auto found = cellHead.find(key);
+            if(found != cellHead.end()){
+                nextInCell[si] = found.value();
+                found.value() = cast<u32>(si);
+            }
+            else{
+                cellHead.try_emplace(key, cast<u32>(si));
+            }
+        }
+    }
+
+    for(usize si = 0u; si < segCount; ++si){
+        if(segUsed[si] != 0u)
+            continue;
+        segUsed[si] = 1u;
+        loopPts.clear();
+        loopPts.push_back(cutSegs[si].p0);
+        VectorSingle endPt = VectorSingle(cutSegs[si].p1);
+
+        while(true){
+            if(Vector3LengthSq(VectorSingle(endPt - VectorSingle(loopPts[0u]), 0.0f)).x <= stitchEpsSq)
+                break;
+
+            usize bestSeg = s_NullIndex;
+            f32 bestDistSq = maxMatchDistSq;
+            if(useSpatialHash){
+                const VectorSingle ge = VectorFloor(endPt * invCell);
+                const i32 ex = cast<i32>(ge.x);
+                const i32 ey = cast<i32>(ge.y);
+                const i32 ez = cast<i32>(ge.z);
+                for(i32 dz = -1; dz <= 1; ++dz){
+                    for(i32 dy = -1; dy <= 1; ++dy){
+                        for(i32 dx = -1; dx <= 1; ++dx){
+                            const u64 qKey = PackFractureCutCellKey(ex + dx, ey + dy, ez + dz);
+                            const auto bucketIt = cellHead.find(qKey);
+                            if(bucketIt == cellHead.end())
+                                continue;
+                            u32 cur = bucketIt.value();
+                            while(cur != s_NullIndex){
+                                if(segUsed[cur] == 0u){
+                                    const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(cutSegs[cur].p0) - endPt, 0.0f)).x;
+                                    if(dSq < bestDistSq || (dSq == bestDistSq && cast<usize>(cur) < bestSeg)){
+                                        bestDistSq = dSq;
+                                        bestSeg = cast<usize>(cur);
+                                    }
+                                }
+                                cur = nextInCell[cur];
+                            }
+                        }
+                    }
+                }
+            }
+            else{
+                for(usize sj = 0u; sj < segCount; ++sj){
+                    if(segUsed[sj] != 0u)
+                        continue;
+                    const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(cutSegs[sj].p0) - endPt, 0.0f)).x;
+                    if(dSq < bestDistSq){
+                        bestDistSq = dSq;
+                        bestSeg = sj;
+                    }
+                }
+            }
+            if(bestSeg == s_NullIndex)
+                break;
+            segUsed[bestSeg] = 1u;
+            loopPts.push_back(f32x4(endPt, 0.0f));
+            endPt = VectorSingle(cutSegs[bestSeg].p1);
+        }
+
+        if(loopPts.size() >= 3u){
+            if(capNeg)
+                EarClipAndAppendCapLoop(Span<f32x4>(loopPts), planeN, interiorUvScale, negMesh, false);
+            if(capPos)
+                EarClipAndAppendCapLoop(Span<f32x4>(loopPts), planeN, interiorUvScale, posMesh, true);
+        }
+    }
+}
+
+b8 ClipTriangleMeshByPlaneInternal(
     in Span<f32x3u> positions,
     in Span<u32> indices,
     in Span<f32x2u> uv0,
@@ -1475,12 +1763,13 @@ b8 SliceTriangleMeshByPlane(
     in VectorSingle planeNormal,
     in f32 planeOffset,
     in f32 interiorUvScale,
-    mut FractureMeshSliceResult outResult
+    in b8 emitPos,
+    mut FractureChunkMesh outNegMesh,
+    mut FractureChunkMesh outPosMesh
 ){
-    outResult.hasNeg = false;
-    outResult.hasPos = false;
-    outResult.negMesh.clear();
-    outResult.posMesh.clear();
+    outNegMesh.clear();
+    if(emitPos)
+        outPosMesh.clear();
 
     const VectorSingle planeN = SafeNormalizeVec3(planeNormal, VectorSingle(0.0f));
     if(Vector3LengthSq(planeN).x <= 0.5f || positions.empty() || indices.size() < 3u)
@@ -1522,11 +1811,12 @@ b8 SliceTriangleMeshByPlane(
         const f32 dc = Vector3Dot(planeN, pc).x - planeOffset;
 
         if(da <= eps && db <= eps && dc <= eps){
-            AppendClippedExteriorTri(pa, uva, pb, uvb, pc, uvc, faceN, matIdx, outResult.negMesh);
+            AppendClippedExteriorTri(pa, uva, pb, uvb, pc, uvc, faceN, matIdx, outNegMesh);
             continue;
         }
         if(da >= -eps && db >= -eps && dc >= -eps){
-            AppendClippedExteriorTri(pa, uva, pb, uvb, pc, uvc, faceN, matIdx, outResult.posMesh);
+            if(emitPos)
+                AppendClippedExteriorTri(pa, uva, pb, uvb, pc, uvc, faceN, matIdx, outPosMesh);
             continue;
         }
 
@@ -1564,7 +1854,7 @@ b8 SliceTriangleMeshByPlane(
                 negPolyUv[negCount] = uvCur;
                 ++negCount;
             }
-            if(dCur >= -eps){
+            if(emitPos && dCur >= -eps){
                 posPolyP[posCount] = f32x4(pCur, 0.0f);
                 posPolyUv[posCount] = uvCur;
                 ++posCount;
@@ -1583,7 +1873,7 @@ b8 SliceTriangleMeshByPlane(
                     negPolyUv[negCount] = uvInter;
                     ++negCount;
                 }
-                if(posCount < 4u){
+                if(emitPos && posCount < 4u){
                     posPolyP[posCount] = f32x4(pInter, 0.0f);
                     posPolyUv[posCount] = uvInter;
                     ++posCount;
@@ -1600,14 +1890,14 @@ b8 SliceTriangleMeshByPlane(
         }
 
         if(negCount >= 3u){
-            AppendClippedExteriorTri(VectorSingle(negPolyP[0u]), negPolyUv[0u], VectorSingle(negPolyP[1u]), negPolyUv[1u], VectorSingle(negPolyP[2u]), negPolyUv[2u], faceN, matIdx, outResult.negMesh);
+            AppendClippedExteriorTri(VectorSingle(negPolyP[0u]), negPolyUv[0u], VectorSingle(negPolyP[1u]), negPolyUv[1u], VectorSingle(negPolyP[2u]), negPolyUv[2u], faceN, matIdx, outNegMesh);
             if(negCount == 4u)
-                AppendClippedExteriorTri(VectorSingle(negPolyP[0u]), negPolyUv[0u], VectorSingle(negPolyP[2u]), negPolyUv[2u], VectorSingle(negPolyP[3u]), negPolyUv[3u], faceN, matIdx, outResult.negMesh);
+                AppendClippedExteriorTri(VectorSingle(negPolyP[0u]), negPolyUv[0u], VectorSingle(negPolyP[2u]), negPolyUv[2u], VectorSingle(negPolyP[3u]), negPolyUv[3u], faceN, matIdx, outNegMesh);
         }
-        if(posCount >= 3u){
-            AppendClippedExteriorTri(VectorSingle(posPolyP[0u]), posPolyUv[0u], VectorSingle(posPolyP[1u]), posPolyUv[1u], VectorSingle(posPolyP[2u]), posPolyUv[2u], faceN, matIdx, outResult.posMesh);
+        if(emitPos && posCount >= 3u){
+            AppendClippedExteriorTri(VectorSingle(posPolyP[0u]), posPolyUv[0u], VectorSingle(posPolyP[1u]), posPolyUv[1u], VectorSingle(posPolyP[2u]), posPolyUv[2u], faceN, matIdx, outPosMesh);
             if(posCount == 4u)
-                AppendClippedExteriorTri(VectorSingle(posPolyP[0u]), posPolyUv[0u], VectorSingle(posPolyP[2u]), posPolyUv[2u], VectorSingle(posPolyP[3u]), posPolyUv[3u], faceN, matIdx, outResult.posMesh);
+                AppendClippedExteriorTri(VectorSingle(posPolyP[0u]), posPolyUv[0u], VectorSingle(posPolyP[2u]), posPolyUv[2u], VectorSingle(posPolyP[3u]), posPolyUv[3u], faceN, matIdx, outPosMesh);
         }
 
         if(hasEnter && hasExit && Vector3LengthSq(VectorSingle(pExit - pEnter, 0.0f)).x > 1.0e-10f){
@@ -1618,47 +1908,35 @@ b8 SliceTriangleMeshByPlane(
         }
     }
 
-    const usize segCount = cutSegs.size();
-    Vector<u8> segUsed;
-    segUsed.assign(segCount, 0u);
-    Vector<f32x4> loopPts;
-    const f32 stitchEpsSq = 1.0e-6f;
+    StitchAndCapCutSegments(Span<FractureMeshCutSeg>(cutSegs.data(), cutSegs.size()), planeN, interiorUvScale, true, emitPos, outNegMesh, outPosMesh);
+    return true;
+}
 
-    for(usize si = 0u; si < segCount; ++si){
-        if(segUsed[si] != 0u)
-            continue;
-        segUsed[si] = 1u;
-        loopPts.clear();
-        loopPts.push_back(cutSegs[si].p0);
-        VectorSingle endPt = VectorSingle(cutSegs[si].p1);
-
-        while(true){
-            if(Vector3LengthSq(VectorSingle(endPt - VectorSingle(loopPts[0u]), 0.0f)).x <= stitchEpsSq)
-                break;
-
-            usize bestSeg = s_NullIndex;
-            f32 bestDistSq = 1.0e-3f;
-            for(usize sj = 0u; sj < segCount; ++sj){
-                if(segUsed[sj] != 0u)
-                    continue;
-                const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(cutSegs[sj].p0) - endPt, 0.0f)).x;
-                if(dSq < bestDistSq){
-                    bestDistSq = dSq;
-                    bestSeg = sj;
-                }
-            }
-            if(bestSeg == s_NullIndex)
-                break;
-            segUsed[bestSeg] = 1u;
-            loopPts.push_back(f32x4(endPt, 0.0f));
-            endPt = VectorSingle(cutSegs[bestSeg].p1);
-        }
-
-        if(loopPts.size() >= 3u){
-            EarClipAndAppendCapLoop(Span<f32x4>(loopPts), planeN, interiorUvScale, outResult.negMesh, false);
-            EarClipAndAppendCapLoop(Span<f32x4>(loopPts), planeN, interiorUvScale, outResult.posMesh, true);
-        }
-    }
+b8 SliceTriangleMeshByPlane(
+    in Span<f32x3u> positions,
+    in Span<u32> indices,
+    in Span<f32x2u> uv0,
+    in Span<u32> triangleMaterialIndices,
+    in VectorSingle planeNormal,
+    in f32 planeOffset,
+    in f32 interiorUvScale,
+    mut FractureMeshSliceResult outResult
+){
+    outResult.hasNeg = false;
+    outResult.hasPos = false;
+    if(!ClipTriangleMeshByPlaneInternal(
+        positions,
+        indices,
+        uv0,
+        triangleMaterialIndices,
+        planeNormal,
+        planeOffset,
+        interiorUvScale,
+        true,
+        outResult.negMesh,
+        outResult.posMesh
+    ))
+        return false;
 
     FinalizeFractureChunkMeshVolume(outResult.negMesh);
     FinalizeFractureChunkMeshVolume(outResult.posMesh);
@@ -1675,6 +1953,53 @@ b8 SliceTriangleMeshByPlane(
             outResult.posMesh.massFraction = outResult.posMesh.volume / totVol;
     }
     return true;
+}
+
+b8 ClipTriangleMeshByPlaneNegOnly(
+    in FractureChunkMesh inMesh,
+    in VectorSingle planeN,
+    in f32 planeD,
+    in f32 interiorUvScale,
+    mut FractureChunkMesh outNegMesh
+){
+    FractureChunkMesh unusedPosMesh;
+    if(!ClipTriangleMeshByPlaneInternal(
+        Span<f32x3u>(inMesh.positions.data(), inMesh.positions.size()),
+        Span<u32>(inMesh.indices.data(), inMesh.indices.size()),
+        Span<f32x2u>(inMesh.uv0.data(), inMesh.uv0.size()),
+        Span<u32>(inMesh.triangleMaterialIndices.data(), inMesh.triangleMaterialIndices.size()),
+        planeN,
+        planeD,
+        interiorUvScale,
+        false,
+        outNegMesh,
+        unusedPosMesh
+    ))
+        return false;
+    FinalizeFractureChunkMeshVolume(outNegMesh);
+    return outNegMesh.indices.size() >= 3u && outNegMesh.volume > 1.0e-8f;
+}
+
+void ComputeChunkMeshSpatialBounds(
+    in Span<f32x3u> positions,
+    in VectorSingle siteOrigin,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax,
+    mut f32 outMaxRadSq
+){
+    VectorSingle bMin(s_MaxF32);
+    VectorSingle bMax(-s_MaxF32);
+    f32 maxRadSq = 0.0f;
+    for(usize i = 0u; i < positions.size(); ++i){
+        const VectorSingle p(positions[i], 0.0f);
+        bMin = Min(bMin, p);
+        bMax = Max(bMax, p);
+        const f32 dSq = Vector3LengthSq(VectorSingle(p - siteOrigin, 0.0f)).x;
+        maxRadSq = Max(maxRadSq, dSq);
+    }
+    outMin = bMin;
+    outMax = bMax;
+    outMaxRadSq = maxRadSq;
 }
 
 b8 GenerateVoronoiFractureMeshes(
@@ -1727,44 +2052,85 @@ b8 GenerateVoronoiFractureMeshes(
     FinalizeFractureChunkMeshVolume(baseMesh);
     const f32 minChunkVol = Max(0.0f, params.minChunkVolumeRatio) * Max(1.0e-6f, baseMesh.volume);
 
+    FractureChunkMesh workA;
+    FractureChunkMesh workB;
+    Vector<FractureDistSite> neighborOrder;
     f32 totalVol = 0.0f;
     for(u32 i = 0u; i < siteCount; ++i){
-        FractureChunkMesh work = baseMesh;
         const VectorSingle siteI = VectorSingle(sites[i]);
+        BuildSortedVoronoiNeighborOrder(Span<f32x4>(sites.data(), sites.size()), i, neighborOrder);
+
+        VectorSingle curMin(0.0f);
+        VectorSingle curMax(0.0f);
+        f32 curMaxRadSq = 0.0f;
+        ComputeChunkMeshSpatialBounds(Span<f32x3u>(baseMesh.positions.data(), baseMesh.positions.size()), siteI, curMin, curMax, curMaxRadSq);
+
+        b8 useBase = true;
+        b8 useA = true;
         b8 ok = true;
-        for(u32 j = 0u; j < siteCount; ++j){
-            if(i == j)
-                continue;
-            const VectorSingle siteJ = VectorSingle(sites[j]);
+        for(usize ni = 0u; ni < neighborOrder.size(); ++ni){
+            const FractureDistSite cand = neighborOrder[ni];
+            const f32 radEff = Sqrt(VectorSingle(curMaxRadSq)).x + 1.0e-5f;
+            if(0.25f * cand.distSq > radEff * radEff)
+                break;
+
+            const VectorSingle siteJ = VectorSingle(sites[cand.siteIdx]);
             const VectorSingle diff = siteJ - siteI;
-            const f32 diffSq = Vector3LengthSq(diff).x;
-            if(diffSq <= 1.0e-10f)
-                continue;
-            const VectorSingle bisN = diff * Rsqrt(VectorSingle(diffSq)).x;
+            const VectorSingle bisN = diff * Rsqrt(VectorSingle(cand.distSq)).x;
             const VectorSingle mid = (siteI + siteJ) * 0.5f;
             const f32 bisD = Vector3Dot(bisN, mid).x;
 
-            FractureMeshSliceResult sliceRes;
-            if(!SliceTriangleMeshByPlane(
-                Span<f32x3u>(work.positions.data(), work.positions.size()),
-                Span<u32>(work.indices.data(), work.indices.size()),
-                Span<f32x2u>(work.uv0.data(), work.uv0.size()),
-                Span<u32>(work.triangleMaterialIndices.data(), work.triangleMaterialIndices.size()),
-                bisN,
-                bisD,
-                interiorUvScale,
-                sliceRes
-            ) || !sliceRes.hasNeg){
+            const VectorSingle negMask = VectorLess(bisN, VectorZero());
+            const VectorSingle maxDotPt = VectorSelect(curMax, curMin, negMask);
+            const VectorSingle minDotPt = VectorSelect(curMin, curMax, negMask);
+            if(Vector3Dot(bisN, maxDotPt).x - bisD <= 1.0e-5f)
+                continue;
+            if(Vector3Dot(bisN, minDotPt).x - bisD >= -1.0e-5f){
                 ok = false;
                 break;
             }
-            work = sliceRes.negMesh;
+
+            if(useBase){
+                if(!ClipTriangleMeshByPlaneNegOnly(baseMesh, bisN, bisD, interiorUvScale, workA)){
+                    ok = false;
+                    break;
+                }
+                useBase = false;
+                useA = true;
+                ComputeChunkMeshSpatialBounds(Span<f32x3u>(workA.positions.data(), workA.positions.size()), siteI, curMin, curMax, curMaxRadSq);
+            }
+            else if(useA){
+                if(!ClipTriangleMeshByPlaneNegOnly(workA, bisN, bisD, interiorUvScale, workB)){
+                    ok = false;
+                    break;
+                }
+                useA = false;
+                ComputeChunkMeshSpatialBounds(Span<f32x3u>(workB.positions.data(), workB.positions.size()), siteI, curMin, curMax, curMaxRadSq);
+            }
+            else{
+                if(!ClipTriangleMeshByPlaneNegOnly(workB, bisN, bisD, interiorUvScale, workA)){
+                    ok = false;
+                    break;
+                }
+                useA = true;
+                ComputeChunkMeshSpatialBounds(Span<f32x3u>(workA.positions.data(), workA.positions.size()), siteI, curMin, curMax, curMaxRadSq);
+            }
         }
-        if(!ok || work.volume < minChunkVol)
+        if(!ok)
             continue;
-        work.cellIndex = i;
-        totalVol += work.volume;
-        outChunkMeshes.push_back(work);
+
+        FractureChunkMesh outMesh;
+        if(useBase)
+            outMesh = baseMesh;
+        else if(useA)
+            outMesh = workA;
+        else
+            outMesh = workB;
+        if(outMesh.volume < minChunkVol)
+            continue;
+        outMesh.cellIndex = i;
+        totalVol += outMesh.volume;
+        outChunkMeshes.push_back(outMesh);
     }
 
     if(outChunkMeshes.empty() || totalVol <= 1.0e-7f)
@@ -1901,6 +2267,28 @@ class FractureSplitEvent{
     public f32 impactImpulse = 0.0f;
 }
 
+void PropagateFractureBondStressHop(
+    in Vector<FractureClusterBond> bonds,
+    in Vector<u8> chunkActive,
+    in f32 decay,
+    in Vector<f32> srcStress,
+    mut Vector<f32> dstStress
+){
+    for(usize i = 0u; i < srcStress.size(); ++i)
+        dstStress[i] = srcStress[i];
+    for(usize bi = 0u; bi < bonds.size(); ++bi){
+        in FractureClusterBond b = bonds[bi];
+        if(b.broken || chunkActive[b.chunkA] == 0u || chunkActive[b.chunkB] == 0u)
+            continue;
+        const f32 sA = srcStress[b.chunkA] * decay;
+        const f32 sB = srcStress[b.chunkB] * decay;
+        if(sA > dstStress[b.chunkB])
+            dstStress[b.chunkB] = sA;
+        if(sB > dstStress[b.chunkA])
+            dstStress[b.chunkA] = sB;
+    }
+}
+
 class FractureClusterBody{
     public BodyId rootBodyId;
     public ShapeId rootShapeId;
@@ -1917,6 +2305,45 @@ class FractureClusterBody{
     public f32 stressPropagationDecay = 0.72f;
     public f32 gravityStressScale = 1.0f;
     public f32 outwardBurstScale = 0.15f;
+    private Vector<HullGeometryId> m_cachedChunkHullIds;
+    private Vector<f32> m_bondGravArmFactors;
+    private b8 m_bondGravArmFactorsValid = false;
+    private Vector<f32> m_stressA;
+    private Vector<f32> m_stressB;
+    private Vector<u32> m_compIds;
+    private Vector<u32> m_bfsDeg;
+    private Vector<u32> m_bfsOffsets;
+    private Vector<u32> m_bfsCursor;
+    private Vector<u32> m_bfsTargets;
+    private Vector<u32> m_bfsQueue;
+    private Vector<u8> m_compAnchored;
+    private Vector<f32> m_compMasses;
+    private Vector<u32> m_compCounts;
+    private Vector<u32> m_compOffsets;
+    private Vector<u32> m_compCursor;
+    private Vector<u32> m_compMembers;
+    private Vector<CompoundSubShape> m_subShapesScratch;
+
+    public void finalizeSnapshotRestore(){
+        this.m_cachedChunkHullIds.clear();
+        this.m_bondGravArmFactors.clear();
+        this.m_bondGravArmFactorsValid = false;
+        this.m_stressA.clear();
+        this.m_stressB.clear();
+        this.m_compIds.clear();
+        this.m_bfsDeg.clear();
+        this.m_bfsOffsets.clear();
+        this.m_bfsCursor.clear();
+        this.m_bfsTargets.clear();
+        this.m_bfsQueue.clear();
+        this.m_compAnchored.clear();
+        this.m_compMasses.clear();
+        this.m_compCounts.clear();
+        this.m_compOffsets.clear();
+        this.m_compCursor.clear();
+        this.m_compMembers.clear();
+        this.m_subShapesScratch.clear();
+    }
 
     public void clear(){
         this.rootBodyId = BodyId();
@@ -1928,6 +2355,7 @@ class FractureClusterBody{
         this.detachedBodies.clear();
         this.detachedShapes.clear();
         this.initialWorldTransform = Transform3D();
+        this.finalizeSnapshotRestore();
     }
 
     public void shiftOrigin(in VectorSingle negDelta){
@@ -1935,6 +2363,10 @@ class FractureClusterBody{
     }
 
     public void destroy(mut PhysicsWorld world){
+        for(usize i = 0u; i < this.m_cachedChunkHullIds.size(); ++i){
+            if(world.isHullGeometryValid(this.m_cachedChunkHullIds[i]))
+                world.destroyHullGeometry(this.m_cachedChunkHullIds[i]);
+        }
         for(usize i = 0u; i < this.detachedBodies.size(); ++i){
             if(world.isValidBody(this.detachedBodies[i]))
                 world.destroyBody(this.detachedBodies[i]);
@@ -1978,6 +2410,40 @@ class FractureClusterBody{
         }
     }
 
+    private b8 ensureChunkHullGeometry(in usize chunkIdx, mut PhysicsWorld world, mut HullGeometryId outId){
+        if(chunkIdx >= this.chunks.size())
+            return false;
+        if(this.m_cachedChunkHullIds.size() < this.chunks.size())
+            this.m_cachedChunkHullIds.resize(this.chunks.size());
+        if(world.isHullGeometryValid(this.m_cachedChunkHullIds[chunkIdx])){
+            outId = this.m_cachedChunkHullIds[chunkIdx];
+            return true;
+        }
+        const Expected<HullGeometryId> hRes = world.createHullGeometry(this.chunks[chunkIdx].hull);
+        if(!hRes.has_value())
+            return false;
+        this.m_cachedChunkHullIds[chunkIdx] = hRes.value();
+        outId = hRes.value();
+        return true;
+    }
+
+    private void ensureBondGravArmFactors(){
+        if(this.m_bondGravArmFactorsValid && this.m_bondGravArmFactors.size() == this.bonds.size())
+            return;
+        this.m_bondGravArmFactors.resize(this.bonds.size(), 0.0f);
+        for(usize bi = 0u; bi < this.bonds.size(); ++bi){
+            in FractureClusterBond b = this.bonds[bi];
+            if(cast<usize>(b.chunkA) >= this.chunks.size() || cast<usize>(b.chunkB) >= this.chunks.size()){
+                this.m_bondGravArmFactors[bi] = 0.0f;
+                continue;
+            }
+            const f32 armA = Vector3Length(VectorSingle(VectorSingle(this.chunks[b.chunkA].localCentroid) - VectorSingle(b.localAnchor), 0.0f)).x;
+            const f32 armB = Vector3Length(VectorSingle(VectorSingle(this.chunks[b.chunkB].localCentroid) - VectorSingle(b.localAnchor), 0.0f)).x;
+            this.m_bondGravArmFactors[bi] = Max(this.chunks[b.chunkA].massFraction * armA, this.chunks[b.chunkB].massFraction * armB);
+        }
+        this.m_bondGravArmFactorsValid = true;
+    }
+
     private b8 buildCompoundShapeForClusterIndices(
         in Span<u32> chunkIndices,
         in Filter filter,
@@ -1990,7 +2456,7 @@ class FractureClusterBody{
         in VectorSingle angVel,
         mut BodyId outBodyId,
         mut ShapeId outShapeId
-    )const{
+    ){
         if(chunkIndices.empty())
             return false;
 
@@ -2015,9 +2481,14 @@ class FractureClusterBody{
         sd.density = 1000.0f;
 
         if(chunkIndices.size() == 1u){
-            in FractureChunkSpec ch = this.chunks[chunkIndices[0u]];
-            sd.localTransform = Transform3D(VectorSingle(ch.localCentroid), QuaternionIdentity());
-            const Expected<ShapeId> sRes = world.createHullShape(newBody, sd, ch.hull);
+            const usize cIdx = cast<usize>(chunkIndices[0u]);
+            HullGeometryId hullId;
+            if(!this.ensureChunkHullGeometry(cIdx, world, hullId)){
+                world.destroyBody(newBody);
+                return false;
+            }
+            sd.localTransform = Transform3D(VectorSingle(this.chunks[cIdx].localCentroid), QuaternionIdentity());
+            const Expected<ShapeId> sRes = world.createHullShapeFromGeometry(newBody, sd, hullId);
             if(!sRes.has_value()){
                 world.destroyBody(newBody);
                 return false;
@@ -2025,35 +2496,24 @@ class FractureClusterBody{
             outShapeId = sRes.value();
         }
         else{
-            Vector<CompoundSubShape> subShapes;
-            subShapes.reserve(chunkIndices.size());
-            Vector<HullGeometryId> tmpHullIds;
-            tmpHullIds.reserve(chunkIndices.size());
-            b8 allBuilt = true;
+            this.m_subShapesScratch.clear();
+            this.m_subShapesScratch.reserve(chunkIndices.size());
             for(usize i = 0u; i < chunkIndices.size(); ++i){
-                in FractureChunkSpec ch = this.chunks[chunkIndices[i]];
-                const Expected<HullGeometryId> hullIdxRes = world.createHullGeometry(ch.hull);
-                if(!hullIdxRes.has_value()){
-                    allBuilt = false;
-                    break;
+                const usize cIdx = cast<usize>(chunkIndices[i]);
+                HullGeometryId hullId;
+                if(!this.ensureChunkHullGeometry(cIdx, world, hullId)){
+                    world.destroyBody(newBody);
+                    return false;
                 }
-                tmpHullIds.push_back(hullIdxRes.value());
+                in FractureChunkSpec ch = this.chunks[cIdx];
                 CompoundSubShape sub;
                 sub.type = ShapeType::Hull;
-                sub.geometryIndex = hullIdxRes.value().index;
+                sub.geometryIndex = hullId.index;
                 sub.localTransform = Transform3D(VectorSingle(ch.localCentroid), QuaternionIdentity());
                 sub.density = Max(0.01f, ch.massFraction * 100.0f);
-                subShapes.push_back(sub);
+                this.m_subShapesScratch.push_back(sub);
             }
-            if(!allBuilt){
-                for(usize hi = 0u; hi < tmpHullIds.size(); ++hi)
-                    world.destroyHullGeometry(tmpHullIds[hi]);
-                world.destroyBody(newBody);
-                return false;
-            }
-            const Expected<ShapeId> sRes = world.createCompoundShape(newBody, sd, Span<CompoundSubShape>(subShapes.data(), subShapes.size()));
-            for(usize hi = 0u; hi < tmpHullIds.size(); ++hi)
-                world.destroyHullGeometry(tmpHullIds[hi]);
+            const Expected<ShapeId> sRes = world.createCompoundShape(newBody, sd, Span<CompoundSubShape>(this.m_subShapesScratch.data(), this.m_subShapesScratch.size()));
             if(!sRes.has_value()){
                 world.destroyBody(newBody);
                 return false;
@@ -2145,71 +2605,65 @@ class FractureClusterBody{
             this.rootBodyId,
             this.rootShapeId
         )){
-            this.clear();
+            this.destroy(world);
             return false;
         }
         return true;
     }
 
-    private void computeActiveConnectedComponents(
-        mut Vector<u32> outCompId,
-        mut u32 outCompCount
-    )const{
+    private void computeActiveConnectedComponents(mut u32 outCompCount){
         const usize n = this.chunks.size();
-        outCompId.assign(n, s_NullIndex);
+        this.m_compIds.assign(n, s_NullIndex);
         outCompCount = 0u;
         if(n == 0u)
             return;
 
-        Vector<u32> deg;
-        deg.assign(n, 0u);
+        this.m_bfsDeg.assign(n, 0u);
         for(usize bi = 0u; bi < this.bonds.size(); ++bi){
             in FractureClusterBond b = this.bonds[bi];
             if(b.broken)
                 continue;
             if(cast<usize>(b.chunkA) < n && cast<usize>(b.chunkB) < n && this.chunkActive[b.chunkA] != 0u && this.chunkActive[b.chunkB] != 0u){
-                ++deg[b.chunkA];
-                ++deg[b.chunkB];
+                ++this.m_bfsDeg[b.chunkA];
+                ++this.m_bfsDeg[b.chunkB];
             }
         }
-        Vector<u32> offsets;
-        offsets.resize(n + 1u, 0u);
+        this.m_bfsOffsets.resize(n + 1u);
+        this.m_bfsOffsets[0u] = 0u;
         for(usize i = 0u; i < n; ++i)
-            offsets[i + 1u] = offsets[i] + deg[i];
-        Vector<u32> cursor = offsets;
-        Vector<u32> targets;
-        targets.resize(offsets[n], s_NullIndex);
+            this.m_bfsOffsets[i + 1u] = this.m_bfsOffsets[i] + this.m_bfsDeg[i];
+        this.m_bfsCursor = this.m_bfsOffsets;
+        this.m_bfsTargets.resize(this.m_bfsOffsets[n], s_NullIndex);
         for(usize bi = 0u; bi < this.bonds.size(); ++bi){
             in FractureClusterBond b = this.bonds[bi];
             if(b.broken)
                 continue;
             if(cast<usize>(b.chunkA) < n && cast<usize>(b.chunkB) < n && this.chunkActive[b.chunkA] != 0u && this.chunkActive[b.chunkB] != 0u){
-                targets[cursor[b.chunkA]] = b.chunkB;
-                ++cursor[b.chunkA];
-                targets[cursor[b.chunkB]] = b.chunkA;
-                ++cursor[b.chunkB];
+                this.m_bfsTargets[this.m_bfsCursor[b.chunkA]] = b.chunkB;
+                ++this.m_bfsCursor[b.chunkA];
+                this.m_bfsTargets[this.m_bfsCursor[b.chunkB]] = b.chunkA;
+                ++this.m_bfsCursor[b.chunkB];
             }
         }
 
-        Vector<u32> queue;
-        queue.reserve(n);
+        this.m_bfsQueue.reserve(n);
         for(usize start = 0u; start < n; ++start){
-            if(this.chunkActive[start] == 0u || outCompId[start] != s_NullIndex)
+            if(this.chunkActive[start] == 0u || this.m_compIds[start] != s_NullIndex)
                 continue;
             const u32 cid = outCompCount;
             ++outCompCount;
-            outCompId[start] = cid;
-            queue.clear();
-            queue.push_back(cast<u32>(start));
+            this.m_compIds[start] = cid;
+            this.m_bfsQueue.clear();
+            this.m_bfsQueue.push_back(cast<u32>(start));
             usize head = 0u;
-            while(head < queue.size()){
-                const u32 u = queue[head];
+            while(head < this.m_bfsQueue.size()){
+                const u32 u = this.m_bfsQueue[head];
                 ++head;
-                for(u32 ei = offsets[u]; ei < offsets[u + 1u]; ++ei){
-                    const u32 v = targets[ei];
-                    if(v != s_NullIndex && this.chunkActive[v] != 0u && outCompId[v] == s_NullIndex){
-                        outCompId[v] = cid;
-                        queue.push_back(v);
+                for(u32 ei = this.m_bfsOffsets[u]; ei < this.m_bfsOffsets[u + 1u]; ++ei){
+                    const u32 v = this.m_bfsTargets[ei];
+                    if(v != s_NullIndex && this.chunkActive[v] != 0u && this.m_compIds[v] == s_NullIndex){
+                        this.m_compIds[v] = cid;
+                        this.m_bfsQueue.push_back(v);
                     }
                 }
             }
@@ -2246,9 +2700,10 @@ class FractureClusterBody{
         const VectorSingle localHit = InverseTransformPointValues(rootPos, rootRot, worldPoint);
         const usize n = this.chunks.size();
 
-        Vector<f32> chunkStress;
-        chunkStress.assign(n, 0.0f);
+        this.m_stressA.assign(n, 0.0f);
+        this.m_stressB.resize(n, 0.0f);
         const f32 radSq = Max(1.0e-4f, damageRadius * damageRadius);
+        const f32 invDamageRad = 1.0f / Max(1.0e-3f, damageRadius);
         for(usize ci = 0u; ci < n; ++ci){
             if(this.chunkActive[ci] == 0u)
                 continue;
@@ -2256,49 +2711,36 @@ class FractureClusterBody{
             const f32 dSq = Vector3LengthSq(VectorSingle(cPos - localHit, 0.0f)).x;
             if(dSq <= radSq){
                 const f32 d = Sqrt(VectorSingle(dSq)).x;
-                const f32 atten = Clamp(1.0f - d / Max(1.0e-3f, damageRadius), 0.0f, 1.0f);
-                chunkStress[ci] = impulseMagnitude * atten;
+                const f32 atten = Clamp(1.0f - d * invDamageRad, 0.0f, 1.0f);
+                this.m_stressA[ci] = impulseMagnitude * atten;
             }
         }
 
         const f32 decay = Clamp(this.stressPropagationDecay, 0.0f, 0.99f);
-        for(u32 hop = 0u; hop < 3u; ++hop){
-            Vector<f32> nextStress = chunkStress;
-            for(usize bi = 0u; bi < this.bonds.size(); ++bi){
-                in FractureClusterBond b = this.bonds[bi];
-                if(b.broken || this.chunkActive[b.chunkA] == 0u || this.chunkActive[b.chunkB] == 0u)
-                    continue;
-                const f32 sA = chunkStress[b.chunkA] * decay;
-                const f32 sB = chunkStress[b.chunkB] * decay;
-                if(sA > nextStress[b.chunkB])
-                    nextStress[b.chunkB] = sA;
-                if(sB > nextStress[b.chunkA])
-                    nextStress[b.chunkA] = sB;
-            }
-            chunkStress = nextStress;
-        }
+        PropagateFractureBondStressHop(this.bonds, this.chunkActive, decay, this.m_stressA, this.m_stressB);
+        PropagateFractureBondStressHop(this.bonds, this.chunkActive, decay, this.m_stressB, this.m_stressA);
+        PropagateFractureBondStressHop(this.bonds, this.chunkActive, decay, this.m_stressA, this.m_stressB);
+
+        if(this.gravityStressScale > 0.0f)
+            this.ensureBondGravArmFactors();
 
         u32 newlyBroken = 0u;
         const f32 gMag = Vector3Length(world.gravity()).x;
+        const f32 gravLoadScale = this.gravityStressScale * gMag * this.totalMass * 0.25f;
         for(usize bi = 0u; bi < this.bonds.size(); ++bi){
             mut FractureClusterBond b = this.bonds[bi];
             if(b.broken || this.chunkActive[b.chunkA] == 0u || this.chunkActive[b.chunkB] == 0u)
                 continue;
 
-            const VectorSingle bondW = TransformPointValues(rootPos, rootRot, VectorSingle(b.localAnchor));
-            const f32 dBondSq = Vector3LengthSq(VectorSingle(bondW - worldPoint, 0.0f)).x;
-            f32 bondHitStress = Max(chunkStress[b.chunkA], chunkStress[b.chunkB]);
+            const f32 dBondSq = Vector3LengthSq(VectorSingle(VectorSingle(b.localAnchor) - localHit, 0.0f)).x;
+            f32 bondHitStress = Max(this.m_stressB[b.chunkA], this.m_stressB[b.chunkB]);
             if(dBondSq <= radSq){
-                const f32 attenB = Clamp(1.0f - Sqrt(VectorSingle(dBondSq)).x / Max(1.0e-3f, damageRadius), 0.0f, 1.0f);
+                const f32 attenB = Clamp(1.0f - Sqrt(VectorSingle(dBondSq)).x * invDamageRad, 0.0f, 1.0f);
                 bondHitStress = Max(bondHitStress, impulseMagnitude * attenB);
             }
 
-            if(this.gravityStressScale > 0.0f){
-                const f32 armA = Vector3Length(VectorSingle(VectorSingle(this.chunks[b.chunkA].localCentroid) - VectorSingle(b.localAnchor), 0.0f)).x;
-                const f32 armB = Vector3Length(VectorSingle(VectorSingle(this.chunks[b.chunkB].localCentroid) - VectorSingle(b.localAnchor), 0.0f)).x;
-                const f32 gravLoad = this.gravityStressScale * gMag * this.totalMass * Max(this.chunks[b.chunkA].massFraction * armA, this.chunks[b.chunkB].massFraction * armB);
-                bondHitStress += gravLoad * 0.25f;
-            }
+            if(this.gravityStressScale > 0.0f)
+                bondHitStress += gravLoadScale * this.m_bondGravArmFactors[bi];
 
             b.accumulatedStress += bondHitStress;
             if(b.accumulatedStress >= b.strength){
@@ -2310,71 +2752,74 @@ class FractureClusterBody{
         if(newlyBroken == 0u)
             return 0u;
 
-        Vector<u32> compIds;
         u32 compCount = 0u;
-        this.computeActiveConnectedComponents(compIds, compCount);
+        this.computeActiveConnectedComponents(compCount);
         if(compCount <= 1u)
             return newlyBroken;
 
-        Vector<u8> compAnchored;
-        compAnchored.assign(compCount, 0u);
+        this.m_compAnchored.assign(compCount, 0u);
+        this.m_compMasses.assign(compCount, 0.0f);
+        this.m_compCounts.assign(compCount, 0u);
         for(usize ci = 0u; ci < n; ++ci){
-            if(this.chunkActive[ci] != 0u && compIds[ci] < compCount && this.chunkAnchored[ci] != 0u)
-                compAnchored[compIds[ci]] = 1u;
+            if(this.chunkActive[ci] == 0u)
+                continue;
+            const u32 cid = this.m_compIds[ci];
+            if(cid >= compCount)
+                continue;
+            ++this.m_compCounts[cid];
+            if(this.chunkAnchored[ci] != 0u)
+                this.m_compAnchored[cid] = 1u;
+            this.m_compMasses[cid] += this.chunks[ci].massFraction * this.totalMass;
+        }
+
+        this.m_compOffsets.resize(cast<usize>(compCount) + 1u);
+        this.m_compOffsets[0u] = 0u;
+        for(u32 cid = 0u; cid < compCount; ++cid)
+            this.m_compOffsets[cid + 1u] = this.m_compOffsets[cid] + this.m_compCounts[cid];
+        this.m_compCursor = this.m_compOffsets;
+        this.m_compMembers.resize(this.m_compOffsets[compCount], 0u);
+        for(usize ci = 0u; ci < n; ++ci){
+            if(this.chunkActive[ci] == 0u)
+                continue;
+            const u32 cid = this.m_compIds[ci];
+            if(cid >= compCount)
+                continue;
+            this.m_compMembers[this.m_compCursor[cid]] = cast<u32>(ci);
+            ++this.m_compCursor[cid];
         }
 
         u32 keepComp = 0u;
         f32 largestMass = -1.0f;
         for(u32 cid = 0u; cid < compCount; ++cid){
-            if(compAnchored[cid] != 0u){
+            if(this.m_compAnchored[cid] != 0u){
                 keepComp = cid;
                 largestMass = s_MaxF32;
                 break;
             }
-            f32 compMass = 0.0f;
-            for(usize ci = 0u; ci < n; ++ci){
-                if(compIds[ci] == cid)
-                    compMass += this.chunks[ci].massFraction * this.totalMass;
-            }
-            if(compMass > largestMass){
-                largestMass = compMass;
+            if(this.m_compMasses[cid] > largestMass){
+                largestMass = this.m_compMasses[cid];
                 keepComp = cid;
             }
         }
 
         const BodyId oldRootBody = this.rootBodyId;
-        Vector<u32> keepIndices;
-        f32 keepMass = 0.0f;
-        b8 keepStatic = false;
-        Vector<u32> detachIndices;
-
         for(u32 cid = 0u; cid < compCount; ++cid){
-            if(cid == keepComp){
-                for(usize ci = 0u; ci < n; ++ci){
-                    if(compIds[ci] == cid){
-                        keepIndices.push_back(cast<u32>(ci));
-                        keepMass += Max(1.0e-4f, this.chunks[ci].massFraction) * this.totalMass;
-                        if(this.chunkAnchored[ci] != 0u)
-                            keepStatic = true;
-                    }
-                }
+            if(cid == keepComp)
                 continue;
-            }
+            const u32 startOff = this.m_compOffsets[cid];
+            const u32 endOff = this.m_compOffsets[cid + 1u];
+            if(startOff >= endOff)
+                continue;
 
-            detachIndices.clear();
             f32 detachMass = 0.0f;
             VectorSingle weightedCent(0.0f);
-            for(usize ci = 0u; ci < n; ++ci){
-                if(compIds[ci] == cid){
-                    detachIndices.push_back(cast<u32>(ci));
-                    const f32 m = Max(1.0e-4f, this.chunks[ci].massFraction) * this.totalMass;
-                    detachMass += m;
-                    weightedCent = weightedCent + VectorSingle(this.chunks[ci].localCentroid) * m;
-                    this.chunkActive[ci] = 0u;
-                }
+            for(u32 mi = startOff; mi < endOff; ++mi){
+                const u32 ci = this.m_compMembers[mi];
+                const f32 m = Max(1.0e-4f, this.chunks[ci].massFraction) * this.totalMass;
+                detachMass += m;
+                weightedCent = weightedCent + VectorSingle(this.chunks[ci].localCentroid) * m;
+                this.chunkActive[ci] = 0u;
             }
-            if(detachIndices.empty())
-                continue;
             const VectorSingle avgLocalCent = weightedCent / Max(1.0e-5f, detachMass);
             const VectorSingle avgWorldCent = TransformPointValues(rootPos, rootRot, avgLocalCent);
             const VectorSingle relArm = avgWorldCent - rootPos;
@@ -2384,7 +2829,7 @@ class FractureClusterBody{
             BodyId newDetBody;
             ShapeId newDetShape;
             if(this.buildCompoundShapeForClusterIndices(
-                Span<u32>(detachIndices.data(), detachIndices.size()),
+                Span<u32>(this.m_compMembers.data() + cast<usize>(startOff), cast<usize>(endOff - startOff)),
                 this.collisionFilter,
                 this.material,
                 detachMass,
@@ -2413,7 +2858,15 @@ class FractureClusterBody{
         this.rootBodyId = BodyId();
         this.rootShapeId = ShapeId();
 
-        if(!keepIndices.empty()){
+        const u32 keepStart = this.m_compOffsets[keepComp];
+        const u32 keepEnd = this.m_compOffsets[keepComp + 1u];
+        if(keepStart < keepEnd){
+            f32 keepMass = 0.0f;
+            const b8 keepStatic = (this.m_compAnchored[keepComp] != 0u);
+            for(u32 mi = keepStart; mi < keepEnd; ++mi){
+                const u32 ci = this.m_compMembers[mi];
+                keepMass += Max(1.0e-4f, this.chunks[ci].massFraction) * this.totalMass;
+            }
             VectorSingle keepLinVel = rootLinVel;
             VectorSingle keepAngVel = rootAngVel;
             if(keepStatic){
@@ -2423,7 +2876,7 @@ class FractureClusterBody{
             BodyId newRootBody;
             ShapeId newRootShape;
             if(this.buildCompoundShapeForClusterIndices(
-                Span<u32>(keepIndices.data(), keepIndices.size()),
+                Span<u32>(this.m_compMembers.data() + cast<usize>(keepStart), cast<usize>(keepEnd - keepStart)),
                 this.collisionFilter,
                 this.material,
                 keepMass,

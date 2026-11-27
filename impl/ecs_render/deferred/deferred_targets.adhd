@@ -148,6 +148,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(mut DeferredFrameTargets 
     this.resetLaggedLightingHistoryResources(targets);
     this.resetDeferredBindlessFrameResources(targets);
     targets.framebuffer.reset();
+    targets.compositeFramebuffer.reset();
     targets.compositeDebugFramebuffer.reset();
 
     targets.albedo.reset();
@@ -237,6 +238,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     this.m_deferredState.m_compositeComputePipeline.reset();
     this.m_deferredState.m_debugLineDepthPipeline.reset();
     this.m_deferredState.m_debugLineOverlayPipeline.reset();
+    this.m_deferredState.m_debugLineOverlayColorOnlyPipeline.reset();
     this.m_deferredState.m_presentPipeline.reset();
 
     DeferredFrameTargets createdTargets;
@@ -313,6 +315,16 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
 
     FramebufferAttachment compositeDebugColorAttachment;
     compositeDebugColorAttachment.setTexture(createdTargets.compositeColor.deref()).setSubresources(s_FramebufferSubresources);
+    FramebufferDesc compositeFramebufferDesc;
+    compositeFramebufferDesc.addColorAttachment(compositeDebugColorAttachment);
+    const Expected<FramebufferHandle> compositeFramebufferResult = device.createFramebuffer(compositeFramebufferDesc);
+    if(!compositeFramebufferResult.has_value()){
+        createdTargets.compositeFramebuffer.reset();
+        error("RendererSystem: failed to create deferred composite framebuffer");
+        return MakeUnexpected(Failure());
+    }
+    createdTargets.compositeFramebuffer = compositeFramebufferResult.value();
+
     FramebufferAttachment compositeDebugDepthAttachment;
     compositeDebugDepthAttachment.setTexture(createdTargets.depth.deref()).setSubresources(s_FramebufferSubresources).setIsReadOnly(true);
     FramebufferDesc compositeDebugFramebufferDesc;
@@ -352,7 +364,7 @@ static_assert(s_MeshGbufferTargetCount == s_ShaderMeshGbufferTargetCount);
 
 b8 DeferredFrameTargets::valid()const{
     if(!s_RuntimeAssertionsEnabled)
-        return this.framebuffer.valid() && this.compositeDebugFramebuffer.valid();
+        return this.framebuffer.valid() && this.compositeFramebuffer.valid() && this.compositeDebugFramebuffer.valid();
     return
         ValidDeferredTargetExtent(this.width, this.height)
         && this.albedoFormat != Format::UNKNOWN
@@ -371,6 +383,7 @@ b8 DeferredFrameTargets::valid()const{
         && this.compositeColor.valid()
         && this.depth.valid()
         && this.framebuffer.valid()
+        && this.compositeFramebuffer.valid()
         && this.compositeDebugFramebuffer.valid()
         && this.bindless.valid()
         && this.avboit.valid()

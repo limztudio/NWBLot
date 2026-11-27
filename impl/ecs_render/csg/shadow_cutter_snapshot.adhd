@@ -70,7 +70,7 @@ b8 HasActiveShadowCsgRange(in CsgShadowReceiverRangeGpu range){
     return (range.flags & s_CsgRayReceiverActive) != 0u;
 }
 
-void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDrawState drawState, in CsgFrameReceiverLookup receiverLookup, in CsgShapeRegistry shapeRegistry, mut CsgShadowSnapshot snapshot, mut CsgShadowReceiverRangeGpu range){
+void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDrawState drawState, in CsgFrameReceiverLookup receiverLookup, in CsgShapeRegistry shapeRegistry, mut CsgShadowSnapshot snapshot, mut CsgShadowReceiverRangeGpu range, mut b8 anyCutterSyncFromTransform){
     const VectorSingle receiverMin = VectorSingle(receiver.worldMin);
     const VectorSingle receiverMax = VectorSingle(receiver.worldMax);
     const b8 boundsCanCull = receiver.boundsValid && AabbValid(receiverMin, receiverMax);
@@ -106,8 +106,10 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
             );
             if(snapshot.cutters.size() > prevCutterCount){
                 u32 cutterEntityId = u32.max;
-                if(cutter.syncFromTransform)
+                if(cutter.syncFromTransform){
                     cutterEntityId = cutter.entity.id;
+                    anyCutterSyncFromTransform = true;
+                }
                 snapshot.cutterEntityIds.push_back(cutterEntityId);
             }
         }
@@ -158,8 +160,10 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
         );
         if(snapshot.cutters.size() > prevCutterCount){
             u32 cutterEntityId = u32.max;
-            if(cutter.syncFromTransform)
+            if(cutter.syncFromTransform){
                 cutterEntityId = record.value().entity.id;
+                anyCutterSyncFromTransform = true;
+            }
             snapshot.cutterEntityIds.push_back(cutterEntityId);
         }
     }
@@ -205,13 +209,14 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
     outSnapshot.cutters.reserve(cutterCapacity);
     outSnapshot.cutterEntityIds.reserve(cutterCapacity);
     CsgSnapshotIdentityBuilder().initializeShadowCutterSnapshotHashes(shapeRegistry.revision(), receiverCount, outSnapshot.contentIdentity, outSnapshot.identity);
+    b8 anyCutterSyncFromTransform = false;
     for(usize index = 0u; index < receiverCount; ++index){
         in CsgShadowReceiverInput receiver = receivers[index];
         CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotHeaderHashes(receiver, drawStates[index].active, outSnapshot.contentIdentity, outSnapshot.identity);
         mut CsgShadowReceiverRangeGpu range = outSnapshot.receiverRanges[index];
         range = CsgShadowReceiverRangeGpu();
         if(drawStates[index].active){
-            AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range);
+            AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range, anyCutterSyncFromTransform);
             outSnapshot.hasCsg = outSnapshot.hasCsg || HasActiveShadowCsgRange(range);
         }
         CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);
@@ -222,6 +227,9 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
         outSnapshot.cutterEntityIds.clear();
         outSnapshot.identity = 0u;
         outSnapshot.contentIdentity = 0u;
+    }
+    else if(!anyCutterSyncFromTransform){
+        outSnapshot.cutterEntityIds.clear();
     }
     return true;
 }

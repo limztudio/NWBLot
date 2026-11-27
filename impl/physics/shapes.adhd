@@ -58,6 +58,8 @@ class HullShape{
     public Vector<HullFaceTopology> faceTopologies;
     public Vector<HalfEdge> halfEdges;
     public f32 cachedBuoyancyVolume = -1.0f;
+    public f32 cachedCoreVolume = -1.0f;
+    public b8 cachedFlipWinding = false;
 
     public VectorSingle centroid()const{
         return VectorSingle(this.centroidRadius, 0.0f);
@@ -121,6 +123,22 @@ class MeshBvhNode{
     }
 }
 
+class MeshRefitNeighborCache{
+    public u32 weldedVertCount = 0u;
+    public u32 generation = 0u;
+    public usize triCount = 0u;
+    public Vector<Array<u32, 3u>> triNeighbors;
+    public Vector<Array<u32, 3u>> weldedTriVerts;
+
+    public void clear(){
+        this.weldedVertCount = 0u;
+        this.generation = 0u;
+        this.triCount = 0u;
+        this.triNeighbors.clear();
+        this.weldedTriVerts.clear();
+    }
+}
+
 class MeshShape{
     public Vector<MeshTriangle> triangles;
     public Vector<MeshBvhNode> nodes;
@@ -130,6 +148,8 @@ class MeshShape{
     public f32x4 localAabbMinRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x3_u32 localAabbMaxMeta(0.0f, 0.0f, 0.0f, 0u);
     public f32 cachedBuoyancyVolume = -1.0f;
+    public f32 cachedCoreVolume = -1.0f;
+    public b8 cachedFlipWinding = false;
 
     public f32 radius()const{
         return this.localAabbMinRadius.w;
@@ -202,6 +222,7 @@ class MeshShape{
         return this.nodes[slot].aabbMaxRight.w;
     }
 
+    public b8 refitBvhWithCache(in Span<f32x4> newVertices, in u32 cacheGen, mut MeshRefitNeighborCache cache, mut Vector<u8> edgeFlagsScratch, mut Vector<u8> sharpVertsScratch);
     public b8 refitBvh(in Span<f32x4> newVertices);
 }
 
@@ -391,6 +412,8 @@ Expected<HullShape> MakeBoxHull(in f32 halfX, in f32 halfY, in f32 halfZ, in f32
     AppendBoxHalfEdge(hull, 2u, 5u, 23u, 0u);
     AppendBoxHalfEdge(hull, 1u, 5u, 20u, 12u);
 
+    hull.cachedCoreVolume = 8.0f * halfX * halfY * halfZ;
+    hull.cachedFlipWinding = false;
     return hull;
 }
 
@@ -671,49 +694,73 @@ MassData ComputeHullMass(in HullShape hull, in f32 density){
     return outMass;
 }
 
-f32 ComputeHullBuoyancyVolume(in HullShape hull){
+void ComputeHullBuoyancyCoreAndTotal(in HullShape hull, mut f32 outCoreVol, mut b8 outFlipWinding, mut f32 outTotalVol){
     const f32 r = Max(0.0f, hull.radius());
-    if(hull.isBox())
-        return ComputeRoundedBoxVolume(hull.halfExtents(), r);
-    if(!hull.faceTopologies.empty() && !hull.vertices.empty()){
-        const VectorSingle refPoint = VectorSingle(hull.vertices[0u], 0.0f);
-        f32 volume6 = 0.0f;
-        f32 skinVol = 0.0f;
-        for(usize fIdx = 0u; fIdx < hull.faceTopologies.size(); ++fIdx){
-            in HullFaceTopology face = hull.faceTopologies[fIdx];
-            if(face.vertexCount < 3u)
-                continue;
-            u8 eIdx = face.edge;
-            const VectorSingle w0 = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
-            const VectorSingle v0 = w0 - refPoint;
-            eIdx = hull.halfEdges[eIdx].next;
-            VectorSingle wPrev = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
-            VectorSingle vPrev = wPrev - refPoint;
-            for(u8 t = 2u; t < face.vertexCount; ++t){
-                eIdx = hull.halfEdges[eIdx].next;
-                const VectorSingle wCurr = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
-                const VectorSingle vCurr = wCurr - refPoint;
-                volume6 += Vector3Dot(v0, Cross(vPrev, vCurr)).x;
-                if(r > 0.0f){
-                    const f32 twiceArea = Vector3Length(Cross(VectorSingle(wPrev - w0, 0.0f), VectorSingle(wCurr - w0, 0.0f))).x;
-                    if(twiceArea > 1.0e-10f)
-                        skinVol += 0.5f * twiceArea * r;
-                }
-                wPrev = wCurr;
-                vPrev = vCurr;
-            }
-        }
-        if(volume6 <= 1.0e-12f){
-            if(r > 0.0f)
-                return (4.0f / 3.0f) * s_Pi * r * r * r;
-            return 0.0f;
-        }
-        f32 shapeVol = volume6 / 6.0f;
-        if(r > 0.0f)
-            shapeVol += skinVol + (4.0f / 3.0f) * s_Pi * r * r * r;
-        return shapeVol;
+    if(hull.isBox()){
+        const VectorSingle he = hull.halfExtents();
+        outCoreVol = 8.0f * he.x * he.y * he.z;
+        outFlipWinding = false;
+        outTotalVol = ComputeRoundedBoxVolume(he, r);
+        return;
     }
-    return 0.0f;
+    if(hull.faceTopologies.empty() || hull.vertices.empty() || hull.halfEdges.empty()){
+        outCoreVol = 0.0f;
+        outFlipWinding = false;
+        outTotalVol = 0.0f;
+        return;
+    }
+    const VectorSingle refPoint = VectorSingle(hull.vertices[0u], 0.0f);
+    f32 volume6 = 0.0f;
+    f32 skinVol = 0.0f;
+    for(usize fIdx = 0u; fIdx < hull.faceTopologies.size(); ++fIdx){
+        in HullFaceTopology face = hull.faceTopologies[fIdx];
+        if(face.vertexCount < 3u)
+            continue;
+        u8 eIdx = face.edge;
+        const VectorSingle w0 = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
+        const VectorSingle v0 = w0 - refPoint;
+        eIdx = hull.halfEdges[eIdx].next;
+        VectorSingle wPrev = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
+        VectorSingle vPrev = wPrev - refPoint;
+        for(u8 t = 2u; t < face.vertexCount; ++t){
+            eIdx = hull.halfEdges[eIdx].next;
+            const VectorSingle wCurr = VectorSingle(hull.vertices[hull.halfEdges[eIdx].tail], 0.0f);
+            const VectorSingle vCurr = wCurr - refPoint;
+            volume6 += Vector3Dot(v0, Cross(vPrev, vCurr)).x;
+            if(r > 0.0f){
+                const f32 twiceArea = Vector3Length(Cross(VectorSingle(wPrev - w0, 0.0f), VectorSingle(wCurr - w0, 0.0f))).x;
+                if(twiceArea > 1.0e-10f)
+                    skinVol += 0.5f * twiceArea * r;
+            }
+            wPrev = wCurr;
+            vPrev = vCurr;
+        }
+    }
+    outFlipWinding = (volume6 < 0.0f);
+    const f32 absVol6 = Abs(VectorSingle(volume6)).x;
+    outCoreVol = absVol6 * (1.0f / 6.0f);
+    if(absVol6 <= 1.0e-12f){
+        if(r > 0.0f)
+            outTotalVol = (4.0f / 3.0f) * s_Pi * r * r * r;
+        else
+            outTotalVol = 0.0f;
+        return;
+    }
+    outTotalVol = outCoreVol;
+    if(r > 0.0f)
+        outTotalVol += skinVol + (4.0f / 3.0f) * s_Pi * r * r * r;
+}
+
+f32 ComputeHullBuoyancyVolume(in HullShape hull){
+    f32 coreVol = 0.0f;
+    b8 flipWinding = false;
+    f32 totalVol = 0.0f;
+    ComputeHullBuoyancyCoreAndTotal(hull, coreVol, flipWinding, totalVol);
+    return totalVol;
+}
+
+void PrepareHullBuoyancyCaches(mut HullShape hull){
+    ComputeHullBuoyancyCoreAndTotal(hull, hull.cachedCoreVolume, hull.cachedFlipWinding, hull.cachedBuoyancyVolume);
 }
 
 void ComputeSphereAabbValues(in SphereShape sphere, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
@@ -1063,7 +1110,7 @@ void WeldMeshVerticesByPosition(in Span<f32x4> vertices, mut Vector<u32> outWeld
 void ComputeMeshInternalEdgeFlags(
     in Vector<MeshTriangle> triangles,
     in Vector<u32x4> weldedTriIndices,
-    in Vector<f32x4> vertices,
+    in Span<f32x4> vertices,
     mut Vector<u8> outEdgeFlags,
     mut b8 outClosedMesh
 ){
@@ -1176,6 +1223,176 @@ void ComputeMeshInternalEdgeFlags(
     }
 }
 
+VectorSingle GetMeshTriangleCornerPos(in MeshTriangle tri, in u32 slot){
+    if(slot == 0u)
+        return VectorSingle(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+    if(slot == 1u)
+        return VectorSingle(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+    return VectorSingle(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+}
+
+void ComputeMeshBuoyancyCoreAndTotal(in MeshShape mesh, mut f32 outCoreVol, mut b8 outFlipWinding, mut f32 outTotalVol){
+    if(mesh.triangles.empty()){
+        outCoreVol = 0.0f;
+        outFlipWinding = false;
+        outTotalVol = 0.0f;
+        return;
+    }
+    const f32 r = mesh.radius();
+    if(mesh.isClosed()){
+        const VectorSingle refPt = VectorSingle(mesh.triangles[0u].v0, 0.0f);
+        f32 volume6 = 0.0f;
+        f32 skinVol = 0.0f;
+        for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+            in MeshTriangle tri = mesh.triangles[ti];
+            const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
+            const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
+            const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
+            volume6 += Vector3Dot(tv0 - refPt, Cross(tv1 - refPt, tv2 - refPt)).x;
+            if(r > 0.0f){
+                const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
+                if(twiceArea > 1.0e-10f)
+                    skinVol += 0.5f * twiceArea * r;
+            }
+        }
+        outFlipWinding = (volume6 < 0.0f);
+        outCoreVol = Abs(VectorSingle(volume6)).x * (1.0f / 6.0f);
+        outTotalVol = outCoreVol + skinVol;
+        return;
+    }
+    outFlipWinding = false;
+    outCoreVol = 0.0f;
+    f32 surfArea = 0.0f;
+    for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
+        in MeshTriangle tri = mesh.triangles[ti];
+        const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
+        const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
+        const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
+        const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
+        surfArea += 0.5f * twiceArea;
+    }
+    outTotalVol = surfArea * Max(2.0f * r, 0.02f);
+}
+
+f32 ComputeMeshBuoyancyVolume(in MeshShape mesh){
+    f32 coreVol = 0.0f;
+    b8 flipWinding = false;
+    f32 totalVol = 0.0f;
+    ComputeMeshBuoyancyCoreAndTotal(mesh, coreVol, flipWinding, totalVol);
+    return totalVol;
+}
+
+void PrepareMeshNeighborCache(in MeshShape mesh, in u32 cacheGen, mut MeshRefitNeighborCache outCache){
+    const usize tCount = mesh.triangles.size();
+    outCache.triNeighbors.resize(tCount);
+    outCache.weldedTriVerts.resize(tCount);
+    outCache.weldedVertCount = 0u;
+    outCache.generation = cacheGen;
+    outCache.triCount = tCount;
+    for(usize ti = 0u; ti < tCount; ++ti){
+        outCache.triNeighbors[ti][0u] = s_NullIndex;
+        outCache.triNeighbors[ti][1u] = s_NullIndex;
+        outCache.triNeighbors[ti][2u] = s_NullIndex;
+        outCache.weldedTriVerts[ti][0u] = 0u;
+        outCache.weldedTriVerts[ti][1u] = 0u;
+        outCache.weldedTriVerts[ti][2u] = 0u;
+    }
+    if(tCount == 0u || tCount >= 0x03ffffffu)
+        return;
+
+    Vector<f32x4> cornerVerts;
+    cornerVerts.resize(tCount * 3u);
+    for(usize ti = 0u; ti < tCount; ++ti){
+        in MeshTriangle tri = mesh.triangles[ti];
+        cornerVerts[ti * 3u + 0u] = f32x4(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f);
+        cornerVerts[ti * 3u + 1u] = f32x4(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f);
+        cornerVerts[ti * 3u + 2u] = f32x4(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f);
+    }
+
+    Vector<u32> weldedIds;
+    WeldMeshVerticesByPosition(Span<f32x4>(cornerVerts), weldedIds);
+    Vector<u32> denseMap;
+    denseMap.resize(cornerVerts.size(), 0u);
+    u32 denseCount = 0u;
+    for(usize k = 0u; k < cornerVerts.size(); ++k){
+        const u32 wId = weldedIds[k];
+        if(wId == cast<u32>(k)){
+            denseMap[k] = denseCount;
+            ++denseCount;
+        }
+        else{
+            denseMap[k] = denseMap[wId];
+        }
+    }
+    outCache.weldedVertCount = denseCount;
+
+    HashMap<u64, MeshEdgeAdjacency> edgeMap;
+    edgeMap.reserve(tCount * 2u);
+    for(usize ti = 0u; ti < tCount; ++ti){
+        const u32 v0 = denseMap[ti * 3u + 0u];
+        const u32 v1 = denseMap[ti * 3u + 1u];
+        const u32 v2 = denseMap[ti * 3u + 2u];
+        outCache.weldedTriVerts[ti][0u] = v0;
+        outCache.weldedTriVerts[ti][1u] = v1;
+        outCache.weldedTriVerts[ti][2u] = v2;
+        Array<u32, 3u> vIds;
+        vIds[0u] = v0;
+        vIds[1u] = v1;
+        vIds[2u] = v2;
+        for(u32 e = 0u; e < 3u; ++e){
+            const u32 a = vIds[e];
+            const u32 b = vIds[(e + 1u) % 3u];
+            if(a == b)
+                continue;
+            const u32 lo = Min(a, b);
+            const u32 hi = Max(a, b);
+            const u64 key = (cast<u64>(lo) << 32u) | cast<u64>(hi);
+            const auto foundEdge = edgeMap.find(key);
+            if(foundEdge == edgeMap.end()){
+                MeshEdgeAdjacency rec;
+                rec.triIdx[0u] = cast<u32>(ti);
+                rec.edgeIdx[0u] = cast<u8>(e);
+                if(a < b)
+                    rec.forward[0u] = 1u;
+                else
+                    rec.forward[0u] = 0u;
+                rec.count = 1u;
+                edgeMap.emplace(key, rec);
+            }
+            else{
+                mut MeshEdgeAdjacency rec = foundEdge.value();
+                if(rec.count < 2u){
+                    rec.triIdx[rec.count] = cast<u32>(ti);
+                    rec.edgeIdx[rec.count] = cast<u8>(e);
+                    if(a < b)
+                        rec.forward[rec.count] = 1u;
+                    else
+                        rec.forward[rec.count] = 0u;
+                }
+                ++rec.count;
+            }
+        }
+    }
+
+    for(in auto kv : edgeMap){
+        in MeshEdgeAdjacency rec = kv.second;
+        if(rec.count != 2u || rec.forward[0u] == rec.forward[1u])
+            continue;
+        const u32 tA = rec.triIdx[0u];
+        const u32 tB = rec.triIdx[1u];
+        const u32 eA = cast<u32>(rec.edgeIdx[0u]);
+        const u32 eB = cast<u32>(rec.edgeIdx[1u]);
+        const u32 oppSlotA = (eA + 2u) % 3u;
+        const u32 oppSlotB = (eB + 2u) % 3u;
+        outCache.triNeighbors[tA][eA] = (tB << 6u) | (eB << 4u) | (oppSlotB << 2u) | eA;
+        outCache.triNeighbors[tB][eB] = (tA << 6u) | (eA << 4u) | (oppSlotA << 2u) | eB;
+    }
+}
+
+void PrepareMeshBuoyancyVolumeCache(mut MeshShape mesh){
+    ComputeMeshBuoyancyCoreAndTotal(mesh, mesh.cachedCoreVolume, mesh.cachedFlipWinding, mesh.cachedBuoyancyVolume);
+}
+
 Expected<MeshShape> MakeMeshShapeWithMaterials(
     in Span<f32x4> vertices,
     in Span<u32> indices,
@@ -1252,14 +1469,9 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
     if(rawTriangles.empty())
         return MakeUnexpected(Failure());
 
-    Vector<f32x4> vertexSpanCopy;
-    vertexSpanCopy.reserve(vertices.size());
-    for(usize vi = 0u; vi < vertices.size(); ++vi)
-        vertexSpanCopy.push_back(vertices[vi]);
-
     Vector<u8> rawEdgeFlags;
     b8 closedMesh = true;
-    ComputeMeshInternalEdgeFlags(rawTriangles, rawTriIndices, vertexSpanCopy, rawEdgeFlags, closedMesh);
+    ComputeMeshInternalEdgeFlags(rawTriangles, rawTriIndices, vertices, rawEdgeFlags, closedMesh);
 
     MeshShape mesh;
     mesh.localAabbMinRadius = f32x4(0.0f, 0.0f, 0.0f, radius);
@@ -1341,10 +1553,17 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
         localMax = localMax + rVec;
     }
     mesh.setLocalAabb(Aabb3D(localMin, localMax));
+    PrepareMeshBuoyancyVolumeCache(mesh);
     return Expected<MeshShape>(mesh);
 }
 
-b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
+b8 MeshShape::refitBvhWithCache(
+    in Span<f32x4> newVertices,
+    in u32 cacheGen,
+    mut MeshRefitNeighborCache cache,
+    mut Vector<u8> edgeFlagsScratch,
+    mut Vector<u8> sharpVertsScratch
+){
     const u32 bvhCount = this.bvhNodeCount();
     const usize tCount = this.triangles.size();
     const usize extraFlagSlots = (tCount + 7u) >> 3u;
@@ -1365,11 +1584,6 @@ b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
             return false;
     }
 
-    Vector<u32> weldedVerts;
-    WeldMeshVerticesByPosition(newVertices, weldedVerts);
-
-    Vector<u32x4> weldedTriIndices;
-    weldedTriIndices.reserve(tCount);
     for(usize ti = 0u; ti < tCount; ++ti){
         const usize wBase = ti * 3u;
         const u32 i0 = this.triangleMetaWordAt(wBase);
@@ -1384,17 +1598,61 @@ b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
         this.triangles[ti].v1 = f32x3u(p1);
         this.triangles[ti].v2 = f32x3u(p2);
         this.triangles[ti].normal = f32x3u(SafeNormalizeVec3(cr, fallbackN));
-        weldedTriIndices.push_back(u32x4(weldedVerts[i0], weldedVerts[i1], weldedVerts[i2], 0u));
     }
 
-    Vector<f32x4> vertexCopy;
-    vertexCopy.reserve(vCount);
-    for(usize vi = 0u; vi < vCount; ++vi)
-        vertexCopy.push_back(newVertices[vi]);
+    if(cache.generation != cacheGen || cache.triCount != tCount || cache.triNeighbors.size() != tCount || cache.weldedTriVerts.size() != tCount)
+        PrepareMeshNeighborCache(this, cacheGen, cache);
 
-    Vector<u8> edgeFlags;
+    edgeFlagsScratch.assign(tCount, 0u);
+    sharpVertsScratch.assign(cast<usize>(cache.weldedVertCount), 0u);
     b8 closedMesh = true;
-    ComputeMeshInternalEdgeFlags(this.triangles, weldedTriIndices, vertexCopy, edgeFlags, closedMesh);
+    for(usize ti = 0u; ti < tCount; ++ti){
+        in MeshTriangle triA = this.triangles[ti];
+        const VectorSingle nA(triA.normal.x, triA.normal.y, triA.normal.z, 0.0f);
+        for(u32 e = 0u; e < 3u; ++e){
+            const u32 packed = cache.triNeighbors[ti][e];
+            if(packed == s_NullIndex){
+                closedMesh = false;
+                continue;
+            }
+            const u32 oppTri = packed >> 6u;
+            if(oppTri <= cast<u32>(ti))
+                continue;
+            const u32 oppEdge = (packed >> 4u) & 0x3u;
+            const u32 oppOppSlot = (packed >> 2u) & 0x3u;
+            in MeshTriangle triB = this.triangles[oppTri];
+            const VectorSingle nB(triB.normal.x, triB.normal.y, triB.normal.z, 0.0f);
+            const VectorSingle pEdgeA = GetMeshTriangleCornerPos(triA, e);
+            const VectorSingle pOppB = GetMeshTriangleCornerPos(triB, oppOppSlot);
+            const b8 coplanar = Vector3Dot(nA, nB).x >= 0.999f;
+            const b8 concave = Vector3Dot(nA, VectorSingle(pOppB - pEdgeA, 0.0f)).x > 1.0e-5f;
+            if(coplanar || concave){
+                edgeFlagsScratch[ti] |= cast<u8>(1u << e);
+                edgeFlagsScratch[oppTri] |= cast<u8>(1u << oppEdge);
+            }
+        }
+    }
+    const usize wVertCap = sharpVertsScratch.size();
+    for(usize ti = 0u; ti < tCount; ++ti){
+        in Array<u32, 3u> iv = cache.weldedTriVerts[ti];
+        const u8 ef = edgeFlagsScratch[ti];
+        for(u32 c = 0u; c < 3u; ++c){
+            const u32 ePrev = (c + 2u) % 3u;
+            if((ef & (1u << ePrev)) == 0u || (ef & (1u << c)) == 0u){
+                if(cast<usize>(iv[c]) < wVertCap)
+                    sharpVertsScratch[iv[c]] = 1u;
+            }
+        }
+    }
+    for(usize ti = 0u; ti < tCount; ++ti){
+        in Array<u32, 3u> iv = cache.weldedTriVerts[ti];
+        if(cast<usize>(iv[0u]) < wVertCap && sharpVertsScratch[iv[0u]] == 0u)
+            edgeFlagsScratch[ti] |= 0x08u;
+        if(cast<usize>(iv[1u]) < wVertCap && sharpVertsScratch[iv[1u]] == 0u)
+            edgeFlagsScratch[ti] |= 0x10u;
+        if(cast<usize>(iv[2u]) < wVertCap && sharpVertsScratch[iv[2u]] == 0u)
+            edgeFlagsScratch[ti] |= 0x20u;
+    }
 
     for(usize s = 0u; s < extraFlagSlots; ++s){
         const usize slotIdx = cast<usize>(bvhCount) + s;
@@ -1402,7 +1660,7 @@ b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
         this.nodes[slotIdx].aabbMaxRight.w = 0u;
     }
     for(usize ti = 0u; ti < tCount; ++ti){
-        const u32 flag = cast<u32>(edgeFlags[ti]);
+        const u32 flag = cast<u32>(edgeFlagsScratch[ti]);
         const usize slotIdx = cast<usize>(bvhCount) + (ti >> 3u);
         const u32 shift = cast<u32>((ti & 3u) * 8u);
         if(((ti >> 2u) & 1u) == 0u)
@@ -1457,7 +1715,16 @@ b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
     }
     this.setLocalAabb(Aabb3D(localMin, localMax));
     this.cachedBuoyancyVolume = -1.0f;
+    this.cachedCoreVolume = -1.0f;
+    this.cachedFlipWinding = false;
     return true;
+}
+
+b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
+    MeshRefitNeighborCache localCache;
+    Vector<u8> edgeFlagsScratch;
+    Vector<u8> sharpVertsScratch;
+    return this.refitBvhWithCache(newVertices, 1u, localCache, edgeFlagsScratch, sharpVertsScratch);
 }
 
 Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices, in f32 radius){
@@ -1473,40 +1740,6 @@ Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices,
         Span<u16>(emptyMatIdx),
         Span<u32>(emptyUserData)
     );
-}
-
-f32 ComputeMeshBuoyancyVolume(in MeshShape mesh){
-    if(mesh.triangles.empty())
-        return 0.0f;
-    const f32 r = mesh.radius();
-    if(mesh.isClosed()){
-        const VectorSingle refPt = VectorSingle(mesh.triangles[0u].v0, 0.0f);
-        f32 volume6 = 0.0f;
-        f32 skinVol = 0.0f;
-        for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
-            in MeshTriangle tri = mesh.triangles[ti];
-            const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
-            const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
-            const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
-            volume6 += Vector3Dot(tv0 - refPt, Cross(tv1 - refPt, tv2 - refPt)).x;
-            if(r > 0.0f){
-                const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
-                if(twiceArea > 1.0e-10f)
-                    skinVol += 0.5f * twiceArea * r;
-            }
-        }
-        return Abs(VectorSingle(volume6)).x / 6.0f + skinVol;
-    }
-    f32 surfArea = 0.0f;
-    for(usize ti = 0u; ti < mesh.triangles.size(); ++ti){
-        in MeshTriangle tri = mesh.triangles[ti];
-        const VectorSingle tv0 = VectorSingle(tri.v0, 0.0f);
-        const VectorSingle tv1 = VectorSingle(tri.v1, 0.0f);
-        const VectorSingle tv2 = VectorSingle(tri.v2, 0.0f);
-        const f32 twiceArea = Vector3Length(Cross(tv1 - tv0, tv2 - tv0)).x;
-        surfArea += 0.5f * twiceArea;
-    }
-    return surfArea * Max(2.0f * r, 0.02f);
 }
 
 void ComputeMeshAabbValues(in MeshShape mesh, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
@@ -2182,31 +2415,84 @@ class SdfShape{
         const f32 c0 = c00 + (c10 - c00) * ty;
         const f32 c1 = c01 + (c11 - c01) * ty;
         const f32 dGrid = c0 + (c1 - c0) * tz;
-
-        const VectorSingle outsideDelta = VectorSingle(localP, 0.0f) - clampedP;
-        const f32 outDistSq = Vector3LengthSq(outsideDelta).x;
+        const f32 outDistSq = Vector3LengthSq(VectorSingle(localP, 0.0f) - clampedP).x;
         if(outDistSq > 1.0e-12f)
             return Max(dGrid, 0.0f) + Sqrt(outDistSq) - this.margin;
         return dGrid - this.margin;
     }
 
-    public VectorSingle sampleGradient(in VectorSingle localP)const{
-        if(!this.isValid())
-            return VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+    public void sampleDistanceAndGradient(in VectorSingle localP, mut f32 outDist, mut VectorSingle outGrad)const{
+        if(!this.isValid()){
+            outDist = s_MaxF32;
+            outGrad = VectorSingle(0.0f, 1.0f, 0.0f, 0.0f);
+            return;
+        }
         const VectorSingle bMin(this.boundsMin, 0.0f);
         const VectorSingle bMax(this.boundsMax, 0.0f);
         const VectorSingle clampedP = Clamp(VectorSingle(localP, 0.0f), bMin, bMax);
+        const VectorSingle rel = (clampedP - bMin) * VectorSingle(this.invCellSize, 0.0f);
+        const u32 maxIx = this.dimX - 2u;
+        const u32 maxIy = this.dimY - 2u;
+        const u32 maxIz = this.dimZ - 2u;
+        u32 x0 = cast<u32>(Floor(VectorSingle(Max(rel.x, 0.0f))).x);
+        u32 y0 = cast<u32>(Floor(VectorSingle(Max(rel.y, 0.0f))).x);
+        u32 z0 = cast<u32>(Floor(VectorSingle(Max(rel.z, 0.0f))).x);
+        if(x0 > maxIx)
+            x0 = maxIx;
+        if(y0 > maxIy)
+            y0 = maxIy;
+        if(z0 > maxIz)
+            z0 = maxIz;
+        const f32 tx = Clamp(rel.x - cast<f32>(x0), 0.0f, 1.0f);
+        const f32 ty = Clamp(rel.y - cast<f32>(y0), 0.0f, 1.0f);
+        const f32 tz = Clamp(rel.z - cast<f32>(z0), 0.0f, 1.0f);
+
+        const usize strideX = 1u;
+        const usize strideY = cast<usize>(this.dimX);
+        const usize strideZ = strideY * cast<usize>(this.dimY);
+        const usize baseIdx = cast<usize>(z0) * strideZ + cast<usize>(y0) * strideY + cast<usize>(x0);
+        const f32 c000 = this.distances[baseIdx];
+        const f32 c100 = this.distances[baseIdx + strideX];
+        const f32 c010 = this.distances[baseIdx + strideY];
+        const f32 c110 = this.distances[baseIdx + strideY + strideX];
+        const f32 c001 = this.distances[baseIdx + strideZ];
+        const f32 c101 = this.distances[baseIdx + strideZ + strideX];
+        const f32 c011 = this.distances[baseIdx + strideZ + strideY];
+        const f32 c111 = this.distances[baseIdx + strideZ + strideY + strideX];
+
+        const f32 c00 = c000 + (c100 - c000) * tx;
+        const f32 c10 = c010 + (c110 - c010) * tx;
+        const f32 c01 = c001 + (c101 - c001) * tx;
+        const f32 c11 = c011 + (c111 - c011) * tx;
+        const f32 c0 = c00 + (c10 - c00) * ty;
+        const f32 c1 = c01 + (c11 - c01) * ty;
+        const f32 dGrid = c0 + (c1 - c0) * tz;
+
         const VectorSingle outsideDelta = VectorSingle(localP, 0.0f) - clampedP;
         const f32 outDistSq = Vector3LengthSq(outsideDelta).x;
-        if(outDistSq > 1.0e-10f)
-            return SafeNormalizeVec3(outsideDelta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        const f32 hx = 0.5f * this.cellSize.x;
-        const f32 hy = 0.5f * this.cellSize.y;
-        const f32 hz = 0.5f * this.cellSize.z;
-        const f32 gx = (this.sampleDistance(localP + VectorSingle(hx, 0.0f, 0.0f, 0.0f)) - this.sampleDistance(localP - VectorSingle(hx, 0.0f, 0.0f, 0.0f))) / Max(2.0f * hx, 1.0e-6f);
-        const f32 gy = (this.sampleDistance(localP + VectorSingle(0.0f, hy, 0.0f, 0.0f)) - this.sampleDistance(localP - VectorSingle(0.0f, hy, 0.0f, 0.0f))) / Max(2.0f * hy, 1.0e-6f);
-        const f32 gz = (this.sampleDistance(localP + VectorSingle(0.0f, 0.0f, hz, 0.0f)) - this.sampleDistance(localP - VectorSingle(0.0f, 0.0f, hz, 0.0f))) / Max(2.0f * hz, 1.0e-6f);
-        return SafeNormalizeVec3(VectorSingle(gx, gy, gz, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        if(outDistSq > 1.0e-12f)
+            outDist = Max(dGrid, 0.0f) + Sqrt(outDistSq) - this.margin;
+        else
+            outDist = dGrid - this.margin;
+        if(outDistSq > 1.0e-10f){
+            outGrad = SafeNormalizeVec3(outsideDelta, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+            return;
+        }
+
+        const f32 omtz = 1.0f - tz;
+        const f32 dx0 = (c100 - c000) + ((c110 - c010) - (c100 - c000)) * ty;
+        const f32 dx1 = (c101 - c001) + ((c111 - c011) - (c101 - c001)) * ty;
+        const f32 gx = (dx0 * omtz + dx1 * tz) * this.invCellSize.x;
+        const f32 gy = ((c10 - c00) * omtz + (c11 - c01) * tz) * this.invCellSize.y;
+        const f32 gz = (c1 - c0) * this.invCellSize.z;
+        outGrad = SafeNormalizeVec3(VectorSingle(gx, gy, gz, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    }
+
+    public VectorSingle sampleGradient(in VectorSingle localP)const{
+        f32 unusedDist = 0.0f;
+        VectorSingle grad(0.0f, 1.0f, 0.0f, 0.0f);
+        this.sampleDistanceAndGradient(localP, unusedDist, grad);
+        return grad;
     }
 }
 

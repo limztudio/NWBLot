@@ -200,8 +200,7 @@ struct NwbPhysicsGpuEvent{
     uint4 bodyIds;
 };
 
-struct NwbPhysicsGpuSoftParticle{
-    float4 posInvMass;
+struct NwbPhysicsGpuSoftParticleState{
     float4 prevPosFlags;
     float4 velPad;
     float4 extForcePad;
@@ -284,7 +283,7 @@ struct NwbPhysicsGpuFluidVolume{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuShapeMaterial, Std430DataLayout> g_NwbPhysicsShapeMaterialBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuWarmCacheEntry, Std430DataLayout> g_NwbPhysicsWarmCacheBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuEvent, Std430DataLayout> g_NwbPhysicsEventBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftParticle, Std430DataLayout> g_NwbPhysicsSoftParticleBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftParticleState, Std430DataLayout> g_NwbPhysicsSoftParticleStateBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftDistConstraint, Std430DataLayout> g_NwbPhysicsSoftDistConstraintBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftVolConstraint, Std430DataLayout> g_NwbPhysicsSoftVolConstraintBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftBackstop, Std430DataLayout> g_NwbPhysicsSoftBackstopBuffers[];
@@ -532,7 +531,7 @@ uint nwbPhysicsClosedMeshRayVote(
     const float3 localPoint,
     const float3 rayDir,
     out bool outOverflow,
-    inout uint stack[64]
+    inout uint stack[NWB_PHYSICS_MESH_BVH_STACK_SIZE]
 ){
     outOverflow = false;
     const float3 invDir = 1.0f / rayDir;
@@ -582,7 +581,7 @@ uint nwbPhysicsClosedMeshRayVote(
             }
         }
         else{
-            if(sp + 2u > 64u){
+            if(sp + 2u > NWB_PHYSICS_MESH_BVH_STACK_SIZE){
                 outOverflow = true;
                 return 0u;
             }
@@ -600,7 +599,7 @@ bool nwbPhysicsIsPointInsideClosedMesh(
     const uint meshTriSlot,
     const float3 localPoint,
     out bool outOverflow,
-    inout uint stack[64]
+    inout uint stack[NWB_PHYSICS_MESH_BVH_STACK_SIZE]
 ){
     outOverflow = false;
     const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
@@ -634,7 +633,7 @@ bool nwbPhysicsIsPointInsideClosedMesh(
     const float3 localPoint,
     out bool outOverflow
 ){
-    uint stack[64];
+    uint stack[NWB_PHYSICS_MESH_BVH_STACK_SIZE];
     return nwbPhysicsIsPointInsideClosedMesh(nodeBase, triBase, meshNodeSlot, meshTriSlot, localPoint, outOverflow, stack);
 }
 

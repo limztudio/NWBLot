@@ -2108,7 +2108,7 @@ void ReduceMeshCandidatesMultiManifold(
     in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
     in f32 maxDistance,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -2858,18 +2858,20 @@ Manifold CollideConvexProxyVsPlane(
     return m;
 }
 
-void CollideConvexProxyAndMeshMulti(
+void CollideConvexProxyAndMeshWithRelativeMulti(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in MeshShape meshB,
     in VectorSingle posB,
     in VectorSingle rotB,
+    in VectorSingle localPosA,
+    in VectorSingle localRotA,
     in f32 maxDistance,
     in ShapeId meshShapeId,
     in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -2878,9 +2880,6 @@ void CollideConvexProxyAndMeshMulti(
 
     const b8 hasTriFilter = triFilter.has_value();
 
-    VectorSingle localPosA(0.0f);
-    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
-    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
     VectorSingle lMin(0.0f);
     VectorSingle lMax(0.0f);
     ComputeProxyViewLocalBounds(proxyA, lMin, lMax);
@@ -2892,6 +2891,9 @@ void CollideConvexProxyAndMeshMulti(
     TransformLocalAabbValuesToWorld(lMin, lMax, totalR + maxDistance, localPosA, localRotA, queryMin, queryMax);
     const VectorSingle shapeCenterB = TransformPointValues(localPosA, localRotA, ComputeProxyViewCenter(proxyA));
     const b8 cullBackFaces = (meshB.isClosed() || meshB.sidedness() == MeshSidedness::SingleSided);
+    const VectorSingle zeroPos(0.0f);
+    const VectorSingle identRot = QuaternionIdentity();
+    const VectorSingle fallbackUp(0.0f, 1.0f, 0.0f, 0.0f);
 
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
@@ -2926,45 +2928,43 @@ void CollideConvexProxyAndMeshMulti(
                 triPts[1u] = tri.v1;
                 triPts[2u] = tri.v2;
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshR);
-                const Manifold triM = CollideConvexProxyViews(proxyA, posA, rotA, triView, posB, rotB, maxDistance);
+                const Manifold triM = CollideConvexProxyViews(proxyA, localPosA, localRotA, triView, zeroPos, identRot, maxDistance);
                 if(triM.pointCount() == 0u)
                     continue;
-                const VectorSingle nAtoB = triM.normal();
-                const VectorSingle triWorldN = SafeNormalizeVec3(Vector3Rotate(triN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                const VectorSingle nLocalAtoB = triM.normal();
                 const u8 edgeFlags = meshB.triangleEdgeFlag(ti);
                 for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
-                    VectorSingle candN = nAtoB;
-                    VectorSingle candPt = triM.points[pi].point();
-                    VectorSingle candAncA = triM.points[pi].anchorA();
-                    VectorSingle candAncB = triM.points[pi].anchorB();
+                    VectorSingle candLocalN = nLocalAtoB;
+                    const VectorSingle localPtA = localPosA + triM.points[pi].anchorA();
+                    VectorSingle localPtB = triM.points[pi].anchorB();
                     f32 sep = triM.points[pi].separation();
                     if(edgeFlags != 0u){
-                        const VectorSingle worldPtA = posA + candAncA;
-                        const VectorSingle worldPtB = posB + candAncB;
-                        const VectorSingle localPtB = InverseTransformPointValues(posB, rotB, worldPtB);
-                        const VectorSingle rawMeshToA = Vector3InverseRotate(-nAtoB, rotB);
+                        const VectorSingle rawMeshToA = -nLocalAtoB;
                         VectorSingle smoothedMeshToA = rawMeshToA;
                         if(SmoothMeshContactNormal(tv0, tv1, tv2, triN, edgeFlags, localPtB, rawMeshToA, smoothedMeshToA)){
-                            const VectorSingle localPtA = InverseTransformPointValues(posB, rotB, worldPtA);
                             const f32 signedPlane = Vector3Dot(triN, VectorSingle(localPtA - tv0, 0.0f)).x - meshR;
                             if(signedPlane > maxDistance)
                                 continue;
                             sep = signedPlane;
-                            candN = SafeNormalizeVec3(Vector3Rotate(-smoothedMeshToA, rotB), nAtoB);
-                            candAncB = (worldPtA + candN * sep) - posB;
-                            candPt = (worldPtA + posB + candAncB) * 0.5f;
+                            candLocalN = -smoothedMeshToA;
+                            localPtB = localPtA + candLocalN * sep;
                         }
                     }
-                    if(cullBackFaces && Vector3Dot(candN, triWorldN).x >= 0.0f)
+                    if(cullBackFaces && Vector3Dot(candLocalN, triN).x >= 0.0f)
                         continue;
+                    const VectorSingle candN = SafeNormalizeVec3(Vector3Rotate(candLocalN, rotB), fallbackUp);
+                    const VectorSingle worldAncB = Vector3Rotate(localPtB, rotB);
+                    const VectorSingle worldPtA = TransformPointValues(posB, rotB, localPtA);
+                    const VectorSingle worldAncA = worldPtA - posA;
+                    const VectorSingle candPt = (worldPtA + posB + worldAncB) * 0.5f;
                     if(sep < deepestSep){
                         deepestSep = sep;
                         chosenNormal = candN;
                     }
                     PushMeshCandidateWithTris(
                         candPt,
-                        candAncA,
-                        candAncB,
+                        worldAncA,
+                        worldAncB,
                         candN,
                         sep,
                         MakeFeatureId(5u, cast<u8>(pi), 3u, cast<u8>(ti & 0xffu)),
@@ -3013,6 +3013,30 @@ void CollideConvexProxyAndMeshMulti(
         ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
+void CollideConvexProxyAndMeshMulti(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
+){
+    if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA)){
+        outManifold = Manifold();
+        outExtraManifolds.clear();
+        return;
+    }
+    VectorSingle localPosA(0.0f);
+    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
+    CollideConvexProxyAndMeshWithRelativeMulti(proxyA, posA, rotA, meshB, posB, rotB, localPosA, localRotA, maxDistance, meshShapeId, triFilter, outManifold, outExtraManifolds);
+}
+
 Manifold CollideConvexProxyAndMesh(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
@@ -3023,7 +3047,7 @@ Manifold CollideConvexProxyAndMesh(
     in f32 maxDistance
 ){
     Manifold primary;
-    Vector<Manifold> unusedExtras;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
     Optional<TriangleFilterCallback> noFilter;
     CollideConvexProxyAndMeshMulti(proxyA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
     return primary;
@@ -3038,7 +3062,7 @@ void CollideConvexProxyAndChainMulti(
     in VectorSingle rotB,
     in f32 maxDistance,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -3182,9 +3206,17 @@ void PushSdfSampleCandidate(
     mut VectorSingle chosenNormal,
     mut FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates
 ){
-    const VectorSingle g = sdfB.sampleGradient(sampleInSdf);
-    const VectorSingle wAInSdf = sampleInSdf - g * queryRadius;
-    const f32 d = sdfB.sampleDistance(wAInSdf);
+    VectorSingle g(0.0f, 1.0f, 0.0f, 0.0f);
+    VectorSingle wAInSdf = sampleInSdf;
+    f32 d = 0.0f;
+    if(queryRadius <= 0.0f){
+        sdfB.sampleDistanceAndGradient(sampleInSdf, d, g);
+    }
+    else{
+        g = sdfB.sampleGradient(sampleInSdf);
+        wAInSdf = sampleInSdf - g * queryRadius;
+        d = sdfB.sampleDistance(wAInSdf);
+    }
     if(d > maxDistance)
         return;
     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(g, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -3217,7 +3249,7 @@ void CollideConvexProxyAndSdfMulti(
     in VectorSingle rotB,
     in f32 maxDistance,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -3312,7 +3344,7 @@ void CollideSdfAndSdfMulti(
     in VectorSingle rotB,
     in f32 maxDistance,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();
@@ -3350,10 +3382,11 @@ void CollideSdfAndSdfMulti(
                 const VectorSingle gA = sdfA.sampleGradient(pA);
                 const VectorSingle surfA = pA - gA * dA;
                 const VectorSingle surfInB = TransformPointValues(relPosAtoB, relRotAtoB, surfA);
-                const f32 dB = sdfB.sampleDistance(surfInB);
+                f32 dB = 0.0f;
+                VectorSingle gB(0.0f, 1.0f, 0.0f, 0.0f);
+                sdfB.sampleDistanceAndGradient(surfInB, dB, gB);
                 if(dB > maxDistance)
                     continue;
-                const VectorSingle gB = sdfB.sampleGradient(surfInB);
                 const VectorSingle nAtoB = SafeNormalizeVec3(-Vector3Rotate(gB, rotB), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
                 const VectorSingle worldA = TransformPointValues(posA, rotA, surfA);
                 const VectorSingle worldB = TransformPointValues(posB, rotB, surfInB - gB * dB);
@@ -3381,7 +3414,7 @@ void CollideSdfAndMeshMulti(
     in ShapeId meshShapeId,
     in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Vector<Manifold> outExtraManifolds
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
 ){
     outManifold = Manifold();
     outExtraManifolds.clear();

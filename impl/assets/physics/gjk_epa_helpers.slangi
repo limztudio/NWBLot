@@ -597,30 +597,28 @@ bool nwbPhysicsRunGjkDistance(
 
 #if NWB_PHYSICS_ENABLE_EPA
 
-struct NwbPhysicsGpuEpaFace{
-    uint packedIdxAlive;
-    float3 normal;
-    float dist;
-};
+#define NWB_PHYSICS_EPA_MAX_VERTS 16u
+#define NWB_PHYSICS_EPA_MAX_FACES 28u
+#define NWB_PHYSICS_EPA_MAX_ITERS 12u
 
 uint nwbPhysicsEpaPackFaceIdxAlive(const uint i0, const uint i1, const uint i2, const uint alive){
     return (i0 & 0xffu) | ((i1 & 0xffu) << 8u) | ((i2 & 0xffu) << 16u) | ((alive & 0xffu) << 24u);
 }
 
-uint nwbPhysicsEpaFaceI0(const NwbPhysicsGpuEpaFace f){
-    return f.packedIdxAlive & 0xffu;
+uint nwbPhysicsEpaFaceI0(const uint packed){
+    return packed & 0xffu;
 }
 
-uint nwbPhysicsEpaFaceI1(const NwbPhysicsGpuEpaFace f){
-    return (f.packedIdxAlive >> 8u) & 0xffu;
+uint nwbPhysicsEpaFaceI1(const uint packed){
+    return (packed >> 8u) & 0xffu;
 }
 
-uint nwbPhysicsEpaFaceI2(const NwbPhysicsGpuEpaFace f){
-    return (f.packedIdxAlive >> 16u) & 0xffu;
+uint nwbPhysicsEpaFaceI2(const uint packed){
+    return (packed >> 16u) & 0xffu;
 }
 
-bool nwbPhysicsEpaFaceAlive(const NwbPhysicsGpuEpaFace f){
-    return (f.packedIdxAlive >> 24u) != 0u;
+bool nwbPhysicsEpaFaceAlive(const uint packed){
+    return (packed >> 24u) != 0u;
 }
 
 float3 nwbPhysicsEpaSupportPair(
@@ -650,19 +648,19 @@ float3 nwbPhysicsEpaSupportPair(
 }
 
 bool nwbPhysicsEpaMakeFace(
-    const float3 verts[20],
+    const float3 verts[NWB_PHYSICS_EPA_MAX_VERTS],
     const uint i0In,
     const uint i1In,
     const uint i2In,
     const float3 interior,
-    out NwbPhysicsGpuEpaFace outFace
+    out uint outPackedIdxAlive,
+    out float4 outNormalDist
 ){
     const uint f0 = i0In;
     uint f1 = i1In;
     uint f2 = i2In;
-    outFace.packedIdxAlive = nwbPhysicsEpaPackFaceIdxAlive(f0, f1, f2, 0u);
-    outFace.normal = float3(0.0f, 1.0f, 0.0f);
-    outFace.dist = 0.0f;
+    outPackedIdxAlive = nwbPhysicsEpaPackFaceIdxAlive(f0, f1, f2, 0u);
+    outNormalDist = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
     const float3 a = verts[i0In];
     const float3 b = verts[i1In];
@@ -677,9 +675,8 @@ bool nwbPhysicsEpaMakeFace(
         f1 = i2In;
         f2 = i1In;
     }
-    outFace.packedIdxAlive = nwbPhysicsEpaPackFaceIdxAlive(f0, f1, f2, 1u);
-    outFace.normal = n;
-    outFace.dist = dot(n, a);
+    outPackedIdxAlive = nwbPhysicsEpaPackFaceIdxAlive(f0, f1, f2, 1u);
+    outNormalDist = float4(n, dot(n, a));
     return true;
 }
 
@@ -709,8 +706,8 @@ bool nwbPhysicsRunEpaCached(
     outPtB = float3(0.0f, 0.0f, 0.0f);
     outDepth = 0.0f;
 
-    float3 verts[20];
-    float3 wAs[20];
+    float3 verts[NWB_PHYSICS_EPA_MAX_VERTS];
+    float3 wAs[NWB_PHYSICS_EPA_MAX_VERTS];
 
     const float3 d0 = nwbPhysicsSafeNormal(hintNormalAtoB, float3(0.0f, 1.0f, 0.0f));
     verts[0] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, d0, wAs[0]);
@@ -765,88 +762,96 @@ bool nwbPhysicsRunEpaCached(
             return false;
     }
 
-    NwbPhysicsGpuEpaFace faces[36];
+    uint facePackedIdxAlive[NWB_PHYSICS_EPA_MAX_FACES];
+    float4 faceNormalDist[NWB_PHYSICS_EPA_MAX_FACES];
 
     float3 interior = (verts[0] + verts[1] + verts[2] + verts[3]) * 0.25f;
     if(
-        !nwbPhysicsEpaMakeFace(verts, 0u, 1u, 2u, interior, faces[0])
-        || !nwbPhysicsEpaMakeFace(verts, 0u, 2u, 3u, interior, faces[1])
-        || !nwbPhysicsEpaMakeFace(verts, 0u, 3u, 1u, interior, faces[2])
-        || !nwbPhysicsEpaMakeFace(verts, 1u, 3u, 2u, interior, faces[3])
+        !nwbPhysicsEpaMakeFace(verts, 0u, 1u, 2u, interior, facePackedIdxAlive[0], faceNormalDist[0])
+        || !nwbPhysicsEpaMakeFace(verts, 0u, 2u, 3u, interior, facePackedIdxAlive[1], faceNormalDist[1])
+        || !nwbPhysicsEpaMakeFace(verts, 0u, 3u, 1u, interior, facePackedIdxAlive[2], faceNormalDist[2])
+        || !nwbPhysicsEpaMakeFace(verts, 1u, 3u, 2u, interior, facePackedIdxAlive[3], faceNormalDist[3])
     )
         return false;
 
     [loop]
     for(uint enc = 0u; enc < 4u; ++enc){
         uint worstIdx = 0u;
-        float worstDist = faces[0].dist;
+        float worstDist = faceNormalDist[0].w;
         [loop]
         for(uint fi = 1u; fi < 4u; ++fi){
-            if(faces[fi].dist < worstDist){
-                worstDist = faces[fi].dist;
+            if(faceNormalDist[fi].w < worstDist){
+                worstDist = faceNormalDist[fi].w;
                 worstIdx = fi;
             }
         }
         if(worstDist >= -1.0e-4f)
             break;
 
-        const NwbPhysicsGpuEpaFace worstFace = faces[worstIdx];
-        const uint oppIdx = 6u - (nwbPhysicsEpaFaceI0(worstFace) + nwbPhysicsEpaFaceI1(worstFace) + nwbPhysicsEpaFaceI2(worstFace));
+        const uint worstPack = facePackedIdxAlive[worstIdx];
+        const float3 worstNorm = faceNormalDist[worstIdx].xyz;
+        const uint oppIdx = 6u - (nwbPhysicsEpaFaceI0(worstPack) + nwbPhysicsEpaFaceI1(worstPack) + nwbPhysicsEpaFaceI2(worstPack));
         const float3 oldV = verts[oppIdx];
         const float3 oldWA = wAs[oppIdx];
         float3 wANew = float3(0.0f, 0.0f, 0.0f);
-        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, worstFace.normal, wANew);
-        if(dot(worstFace.normal, pNew - verts[nwbPhysicsEpaFaceI0(worstFace)]) <= 1.0e-6f)
+        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, worstNorm, wANew);
+        if(dot(worstNorm, pNew - verts[nwbPhysicsEpaFaceI0(worstPack)]) <= 1.0e-6f)
             break;
 
         verts[oppIdx] = pNew;
         wAs[oppIdx] = wANew;
         const float3 candInterior = (verts[0] + verts[1] + verts[2] + verts[3]) * 0.25f;
         if(
-            !nwbPhysicsEpaMakeFace(verts, 0u, 1u, 2u, candInterior, faces[4])
-            || !nwbPhysicsEpaMakeFace(verts, 0u, 2u, 3u, candInterior, faces[5])
-            || !nwbPhysicsEpaMakeFace(verts, 0u, 3u, 1u, candInterior, faces[6])
-            || !nwbPhysicsEpaMakeFace(verts, 1u, 3u, 2u, candInterior, faces[7])
+            !nwbPhysicsEpaMakeFace(verts, 0u, 1u, 2u, candInterior, facePackedIdxAlive[4], faceNormalDist[4])
+            || !nwbPhysicsEpaMakeFace(verts, 0u, 2u, 3u, candInterior, facePackedIdxAlive[5], faceNormalDist[5])
+            || !nwbPhysicsEpaMakeFace(verts, 0u, 3u, 1u, candInterior, facePackedIdxAlive[6], faceNormalDist[6])
+            || !nwbPhysicsEpaMakeFace(verts, 1u, 3u, 2u, candInterior, facePackedIdxAlive[7], faceNormalDist[7])
         ){
             verts[oppIdx] = oldV;
             wAs[oppIdx] = oldWA;
             break;
         }
         interior = candInterior;
-        faces[0] = faces[4];
-        faces[1] = faces[5];
-        faces[2] = faces[6];
-        faces[3] = faces[7];
+        facePackedIdxAlive[0] = facePackedIdxAlive[4];
+        faceNormalDist[0] = faceNormalDist[4];
+        facePackedIdxAlive[1] = facePackedIdxAlive[5];
+        faceNormalDist[1] = faceNormalDist[5];
+        facePackedIdxAlive[2] = facePackedIdxAlive[6];
+        faceNormalDist[2] = faceNormalDist[6];
+        facePackedIdxAlive[3] = facePackedIdxAlive[7];
+        faceNormalDist[3] = faceNormalDist[7];
     }
 
     [loop]
     for(uint fi = 0u; fi < 4u; ++fi){
-        if(faces[fi].dist < -5.0e-4f)
+        if(faceNormalDist[fi].w < -5.0e-4f)
             return false;
     }
 
     uint vertCount = 4u;
     uint faceCount = 4u;
-    uint openEdges[36];
+    uint openEdges[NWB_PHYSICS_EPA_MAX_FACES];
     openEdges[0] = 0u;
 
     [loop]
-    for(uint iter = 0u; iter < 16u; ++iter){
-        uint bestIdx = 36u;
+    for(uint iter = 0u; iter < NWB_PHYSICS_EPA_MAX_ITERS; ++iter){
+        uint bestIdx = NWB_PHYSICS_EPA_MAX_FACES;
         float bestDist = 1.0e20f;
         [loop]
         for(uint fi = 0u; fi < faceCount; ++fi){
-            if(nwbPhysicsEpaFaceAlive(faces[fi]) && faces[fi].dist < bestDist){
-                bestDist = faces[fi].dist;
+            const float fDist = faceNormalDist[fi].w;
+            if(nwbPhysicsEpaFaceAlive(facePackedIdxAlive[fi]) && fDist < bestDist){
+                bestDist = fDist;
                 bestIdx = fi;
             }
         }
-        if(bestIdx >= faceCount || vertCount >= 20u)
+        if(bestIdx >= faceCount || vertCount >= NWB_PHYSICS_EPA_MAX_VERTS)
             break;
 
+        const float3 bestNorm = faceNormalDist[bestIdx].xyz;
         float3 wANew = float3(0.0f, 0.0f, 0.0f);
-        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, faces[bestIdx].normal, wANew);
-        const float pProj = dot(faces[bestIdx].normal, pNew);
+        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, bestNorm, wANew);
+        const float pProj = dot(bestNorm, pNew);
         if(pProj - bestDist <= max(1.0e-4f, 1.0e-4f * max(bestDist, 0.0f)))
             break;
 
@@ -865,23 +870,20 @@ bool nwbPhysicsRunEpaCached(
         uint edgeCount = 0u;
         bool edgeOverflow = false;
         uint deadSlotsAfterVis = 0u;
-        uint visMaskLo = 0u;
-        uint visMaskHi = 0u;
+        uint visMask = 0u;
         [loop]
         for(uint fi = 0u; fi < faceCount; ++fi){
-            if(!nwbPhysicsEpaFaceAlive(faces[fi])){
+            const uint fPack = facePackedIdxAlive[fi];
+            if(!nwbPhysicsEpaFaceAlive(fPack)){
                 ++deadSlotsAfterVis;
                 continue;
             }
-            const uint fi0 = nwbPhysicsEpaFaceI0(faces[fi]);
-            if(dot(faces[fi].normal, pNew - verts[fi0]) > 1.0e-6f){
-                if(fi < 32u)
-                    visMaskLo |= (1u << fi);
-                else
-                    visMaskHi |= (1u << (fi - 32u));
+            const uint fi0 = nwbPhysicsEpaFaceI0(fPack);
+            if(dot(faceNormalDist[fi].xyz, pNew - verts[fi0]) > 1.0e-6f){
+                visMask |= (1u << fi);
                 ++deadSlotsAfterVis;
-                const uint fi1 = nwbPhysicsEpaFaceI1(faces[fi]);
-                const uint fi2 = nwbPhysicsEpaFaceI2(faces[fi]);
+                const uint fi1 = nwbPhysicsEpaFaceI1(fPack);
+                const uint fi2 = nwbPhysicsEpaFaceI2(fPack);
                 const uint triEdges[3] = {
                     fi0 | (fi1 << 8u),
                     fi1 | (fi2 << 8u),
@@ -902,7 +904,7 @@ bool nwbPhysicsRunEpaCached(
                         }
                     }
                     if(!cancelled){
-                        if(edgeCount >= 36u){
+                        if(edgeCount >= NWB_PHYSICS_EPA_MAX_FACES){
                             edgeOverflow = true;
                             break;
                         }
@@ -915,21 +917,15 @@ bool nwbPhysicsRunEpaCached(
             }
         }
 
-        const uint freeTotal = deadSlotsAfterVis + (36u - faceCount);
+        const uint freeTotal = deadSlotsAfterVis + (NWB_PHYSICS_EPA_MAX_FACES - faceCount);
         if(edgeOverflow || edgeCount == 0u || freeTotal < edgeCount)
             break;
 
-        uint killLo = visMaskLo;
-        while(killLo != 0u){
-            const uint fi = firstbitlow(killLo);
-            killLo &= (killLo - 1u);
-            faces[fi].packedIdxAlive &= 0x00ffffffu;
-        }
-        uint killHi = visMaskHi;
-        while(killHi != 0u){
-            const uint fi = 32u + firstbitlow(killHi);
-            killHi &= (killHi - 1u);
-            faces[fi].packedIdxAlive &= 0x00ffffffu;
+        uint killMask = visMask;
+        while(killMask != 0u){
+            const uint fi = firstbitlow(killMask);
+            killMask &= (killMask - 1u);
+            facePackedIdxAlive[fi] &= 0x00ffffffu;
         }
 
         const uint newV = vertCount;
@@ -940,44 +936,49 @@ bool nwbPhysicsRunEpaCached(
         uint slotSearch = 0u;
         [loop]
         for(uint oi = 0u; oi < edgeCount; ++oi){
-            NwbPhysicsGpuEpaFace nf;
+            uint nfPack = 0u;
+            float4 nfNormDist = float4(0.0f, 1.0f, 0.0f, 0.0f);
             const uint ePacked = openEdges[oi];
-            if(!nwbPhysicsEpaMakeFace(verts, ePacked & 0xffu, (ePacked >> 8u) & 0xffu, newV, interior, nf))
+            if(!nwbPhysicsEpaMakeFace(verts, ePacked & 0xffu, (ePacked >> 8u) & 0xffu, newV, interior, nfPack, nfNormDist))
                 continue;
-            while(slotSearch < faceCount && nwbPhysicsEpaFaceAlive(faces[slotSearch]))
+            while(slotSearch < faceCount && nwbPhysicsEpaFaceAlive(facePackedIdxAlive[slotSearch]))
                 ++slotSearch;
             if(slotSearch < faceCount){
-                faces[slotSearch] = nf;
+                facePackedIdxAlive[slotSearch] = nfPack;
+                faceNormalDist[slotSearch] = nfNormDist;
                 ++slotSearch;
             }
-            else if(faceCount < 36u){
-                faces[faceCount] = nf;
+            else if(faceCount < NWB_PHYSICS_EPA_MAX_FACES){
+                facePackedIdxAlive[faceCount] = nfPack;
+                faceNormalDist[faceCount] = nfNormDist;
                 ++faceCount;
                 slotSearch = faceCount;
             }
         }
     }
 
-    uint winIdx = 36u;
+    uint winIdx = NWB_PHYSICS_EPA_MAX_FACES;
     float winDist = 1.0e20f;
     [loop]
     for(uint fi = 0u; fi < faceCount; ++fi){
-        if(nwbPhysicsEpaFaceAlive(faces[fi]) && faces[fi].dist < winDist){
-            winDist = faces[fi].dist;
+        const float fDist = faceNormalDist[fi].w;
+        if(nwbPhysicsEpaFaceAlive(facePackedIdxAlive[fi]) && fDist < winDist){
+            winDist = fDist;
             winIdx = fi;
         }
     }
     if(winIdx >= faceCount)
         return false;
 
-    const NwbPhysicsGpuEpaFace wf = faces[winIdx];
-    const uint wfI0 = nwbPhysicsEpaFaceI0(wf);
-    const uint wfI1 = nwbPhysicsEpaFaceI1(wf);
-    const uint wfI2 = nwbPhysicsEpaFaceI2(wf);
+    const uint wfPack = facePackedIdxAlive[winIdx];
+    const float4 wfND = faceNormalDist[winIdx];
+    const uint wfI0 = nwbPhysicsEpaFaceI0(wfPack);
+    const uint wfI1 = nwbPhysicsEpaFaceI1(wfPack);
+    const uint wfI2 = nwbPhysicsEpaFaceI2(wfPack);
     const float3 bary = nwbPhysicsClosestPointBaryTriangle(float3(0.0f, 0.0f, 0.0f), verts[wfI0], verts[wfI1], verts[wfI2]);
     const float3 pWin = verts[wfI0] * bary.x + verts[wfI1] * bary.y + verts[wfI2] * bary.z;
-    outNormalAtoB = wf.normal;
-    outDepth = max(wf.dist, 0.0f);
+    outNormalAtoB = wfND.xyz;
+    outDepth = max(wfND.w, 0.0f);
     outPtA = wAs[wfI0] * bary.x + wAs[wfI1] * bary.y + wAs[wfI2] * bary.z;
     outPtB = outPtA - pWin;
     return true;

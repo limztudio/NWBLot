@@ -93,6 +93,12 @@ class SoftwareSceneRefitSnapshot{
     public GpuDescriptorHandle visitCounterDescriptor = GpuDescriptorHandleInvalid();
     public GpuPhysicalQueueId queue;
     public u32 nodeCount = 0u;
+    public u64 inputHash = 0u;
+    public u64 patchMembershipSig = 0u;
+    public b8 needsInitParents = true;
+    public b8 needsInputUpload = true;
+    public b8 staticScene = false;
+    public b8 gpuPatched = false;
 
     public SoftwareSceneRefitSnapshot(mut GraphicsRuntime graphics){ this.graphics = graphics; }
 }
@@ -111,6 +117,15 @@ class SoftwareSceneRefitResources : NoCopy{
     private BindingLayoutHandle m_bindingLayout;
     private ShaderHandle m_shader;
     private ComputePipelineHandle m_pipeline;
+    private usize m_parentsSceneNodesIdentity = 0u;
+    private usize m_parentsBufferIdentity = 0u;
+    private usize m_visitsBufferIdentity = 0u;
+    private u32 m_parentsNodeCount = 0u;
+    private b8 m_parentsInitialized = false;
+    private usize m_inputUploadBufferIdentity = 0u;
+    private u64 m_inputUploadHash = 0u;
+    private u64 m_inputUploadPatchMembershipSig = 0u;
+    private b8 m_inputUploadValid = false;
 
     public SoftwareSceneRefitResources(mut GraphicsRuntime graphics){
         this.m_graphics = graphics;
@@ -123,16 +138,22 @@ class SoftwareSceneRefitResources : NoCopy{
         descriptor = GpuDescriptorHandleInvalid();
     }
 
-    private b8 ensureU32StorageBuffer(in usize byteSize, in Name debugName, mut BufferHandle inOutBuffer, mut GpuDescriptorHandle inOutDescriptor){
+    private b8 ensureU32StorageBuffer(in u32 requiredCount, in Name debugName, mut BufferHandle inOutBuffer, mut GpuDescriptorHandle inOutDescriptor){
         mut Device device = this.m_graphics.getDevice();
         mut GpuDescriptorHeap heap = device.getDescriptorHeap();
         if(inOutBuffer.valid() && inOutBuffer.deref().getDeviceGeneration() != device.getDeviceGeneration())
             return false;
-        if(inOutBuffer.valid() && inOutBuffer.deref().getCreationDescription().byteSize >= byteSize && inOutDescriptor.valid())
+        const usize requiredByteSize = cast<usize>(requiredCount) * size_of<u32>();
+        if(inOutBuffer.valid() && inOutBuffer.deref().getCreationDescription().byteSize >= requiredByteSize && inOutDescriptor.valid())
             return true;
 
+        usize currentCapacity = 0u;
+        if(inOutBuffer.valid())
+            currentCapacity = cast<usize>(inOutBuffer.deref().getCreationDescription().byteSize / size_of<u32>());
+        const usize allocByteSize = NextGrowingCapacity(currentCapacity, cast<usize>(requiredCount), 64u) * size_of<u32>();
+
         BufferDesc desc;
-        desc.setByteSize(byteSize).setStructStride(size_of<u32>()).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        desc.setByteSize(allocByteSize).setStructStride(size_of<u32>()).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(debugName).enableAutomaticStateTracking(ResourceStates::Common);
         auto replacementResult = this.m_graphics.createBuffer(desc);
         if(!replacementResult.has_value())
@@ -162,6 +183,35 @@ class SoftwareSceneRefitResources : NoCopy{
         this.m_pipeline.reset();
         this.m_shader.reset();
         this.m_bindingLayout.reset();
+        this.m_parentsInitialized = false;
+        this.m_parentsSceneNodesIdentity = 0u;
+        this.m_parentsBufferIdentity = 0u;
+        this.m_visitsBufferIdentity = 0u;
+        this.m_parentsNodeCount = 0u;
+        this.m_inputUploadValid = false;
+        this.m_inputUploadBufferIdentity = 0u;
+        this.m_inputUploadHash = 0u;
+        this.m_inputUploadPatchMembershipSig = 0u;
+    }
+
+    public void confirmAccepted(in SoftwareSceneRefitHandle snapshotHandle){
+        if(!snapshotHandle.valid())
+            return;
+        in SoftwareSceneRefitSnapshot snapshot = snapshotHandle.deref();
+        this.m_parentsInitialized = true;
+        this.m_parentsSceneNodesIdentity = snapshot.sceneNodes.identity();
+        this.m_parentsBufferIdentity = snapshot.parentBuffer.identity();
+        this.m_visitsBufferIdentity = snapshot.visitCounterBuffer.identity();
+        this.m_parentsNodeCount = snapshot.nodeCount;
+        if(snapshot.staticScene){
+            this.m_inputUploadBufferIdentity = snapshot.inputBuffer.identity();
+            this.m_inputUploadHash = snapshot.inputHash;
+            this.m_inputUploadPatchMembershipSig = snapshot.patchMembershipSig;
+            this.m_inputUploadValid = true;
+        }
+        else{
+            this.m_inputUploadValid = false;
+        }
     }
 
     public Expected<SoftwareSceneRefitHandle> prepare(
@@ -171,6 +221,10 @@ class SoftwareSceneRefitResources : NoCopy{
         in BufferHandle sceneNodes,
         in GpuDescriptorHandle sceneDescriptor,
         in u32 nodeCount,
+        in b8 staticScene,
+        in b8 sceneBvhRebuilt,
+        in b8 gpuPatched,
+        in u64 patchMembershipSig,
         mut RendererShaderSystem shaderSystem
     ){
         const SoftwareSceneBvhValidationPolicy validationPolicy = SoftwareSceneBvhValidationPolicy();
@@ -191,8 +245,12 @@ class SoftwareSceneRefitResources : NoCopy{
         if(this.m_inputBuffer.valid() && this.m_inputBuffer.deref().getDeviceGeneration() != device.getDeviceGeneration())
             return MakeUnexpected(Failure());
         if(!this.m_inputBuffer.valid() || this.m_inputBuffer.deref().getCreationDescription().byteSize < byteSize){
+            usize currentInputCapacity = 0u;
+            if(this.m_inputBuffer.valid())
+                currentInputCapacity = cast<usize>(this.m_inputBuffer.deref().getCreationDescription().byteSize / size_of<SoftwareSceneRefitInstanceGpu>());
+            const usize allocInputBytes = NextGrowingCapacity(currentInputCapacity, instanceCount, 64u) * size_of<SoftwareSceneRefitInstanceGpu>();
             BufferDesc desc;
-            desc.setByteSize(byteSize).setStructStride(size_of<SoftwareSceneRefitInstanceGpu>()).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+            desc.setByteSize(allocInputBytes).setStructStride(size_of<SoftwareSceneRefitInstanceGpu>()).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
                 .setDebugName(Name(s_SoftwareSceneRefitInputsName)).enableAutomaticStateTracking(ResourceStates::Common);
             auto replacementResult = this.m_graphics.createBuffer(desc);
             if(!replacementResult.has_value())
@@ -213,12 +271,12 @@ class SoftwareSceneRefitResources : NoCopy{
             this.m_inputBuffer = replacement;
             this.m_inputDescriptor = descriptorResult.value();
             this.m_inputUavDescriptor = uavDescriptorResult.value();
+            this.m_inputUploadValid = false;
         }
         else if(!EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, this.m_inputBuffer.deref(), this.m_inputUavDescriptor))
             return MakeUnexpected(Failure());
-        const usize nodeU32Bytes = cast<usize>(nodeCount) * size_of<u32>();
-        if(!this.ensureU32StorageBuffer(nodeU32Bytes, Name(s_SoftwareSceneRefitParentsName), this.m_parentBuffer, this.m_parentDescriptor)
-            || !this.ensureU32StorageBuffer(nodeU32Bytes, Name(s_SoftwareSceneRefitVisitsName), this.m_visitCounterBuffer, this.m_visitCounterDescriptor)
+        if(!this.ensureU32StorageBuffer(nodeCount, Name(s_SoftwareSceneRefitParentsName), this.m_parentBuffer, this.m_parentDescriptor)
+            || !this.ensureU32StorageBuffer(nodeCount, Name(s_SoftwareSceneRefitVisitsName), this.m_visitCounterBuffer, this.m_visitCounterDescriptor)
         )
             return MakeUnexpected(Failure());
         SoftwareSceneRefitHandle snapshot;
@@ -236,6 +294,22 @@ class SoftwareSceneRefitResources : NoCopy{
             snapshot = created.value();
             this.m_snapshots.push_back(snapshot);
         }
+        const u64 inputHash = UpdateFnv64(s_Fnv64OffsetBasis, PodArrayBytes<SoftwareSceneRefitInstanceGpu>(inputs));
+        const b8 needsInitParents = !(
+            this.m_parentsInitialized
+            && !sceneBvhRebuilt
+            && this.m_parentsSceneNodesIdentity == sceneNodes.identity()
+            && this.m_parentsBufferIdentity == this.m_parentBuffer.identity()
+            && this.m_visitsBufferIdentity == this.m_visitCounterBuffer.identity()
+            && this.m_parentsNodeCount == nodeCount
+        );
+        const b8 needsInputUpload = !(
+            staticScene
+            && this.m_inputUploadValid
+            && this.m_inputUploadBufferIdentity == this.m_inputBuffer.identity()
+            && this.m_inputUploadHash == inputHash
+            && this.m_inputUploadPatchMembershipSig == patchMembershipSig
+        );
         snapshot.deref().inputs.clear();
         snapshot.deref().instanceEntityIds.clear();
         snapshot.deref().meshNodes.clear();
@@ -251,6 +325,12 @@ class SoftwareSceneRefitResources : NoCopy{
         snapshot.deref().visitCounterDescriptor = this.m_visitCounterDescriptor;
         snapshot.deref().queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
         snapshot.deref().nodeCount = nodeCount;
+        snapshot.deref().inputHash = inputHash;
+        snapshot.deref().patchMembershipSig = patchMembershipSig;
+        snapshot.deref().needsInitParents = needsInitParents;
+        snapshot.deref().needsInputUpload = needsInputUpload;
+        snapshot.deref().staticScene = staticScene;
+        snapshot.deref().gpuPatched = gpuPatched;
         snapshot.deref().inputs.reserve(instanceCount);
         snapshot.deref().instanceEntityIds.reserve(instanceCount);
         snapshot.deref().meshNodes.reserve(meshNodes.size());
@@ -300,20 +380,22 @@ class SoftwareSceneRefitTask{
         commandList.setComputeState(state);
         snapshot.graphics.getDevice().getDescriptorHeap().bindCompute(commandList, snapshot.pipeline.deref());
 
-        const BufferRange refitRange(0u, cast<u64>(snapshot.nodeCount) * size_of<u32>());
-        mut Buffer parentBuffer = snapshot.parentBuffer.deref();
-        mut Buffer visitCounterBuffer = snapshot.visitCounterBuffer.deref();
         const u32 groupCount = DivideUp(snapshot.nodeCount, s_ShaderSceneBvhRefitGroupSize);
 
-        const SoftwareSceneRefitPushConstants initPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeInitParents);
-        commandList.setPushConstants(initPush);
-        commandList.dispatch(groupCount, 1u, 1u);
+        if(snapshot.needsInitParents){
+            const BufferRange refitRange(0u, cast<u64>(snapshot.nodeCount) * size_of<u32>());
+            mut Buffer parentBuffer = snapshot.parentBuffer.deref();
+            mut Buffer visitCounterBuffer = snapshot.visitCounterBuffer.deref();
+            const SoftwareSceneRefitPushConstants initPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeInitParents);
+            commandList.setPushConstants(initPush);
+            commandList.dispatch(groupCount, 1u, 1u);
 
-        commandList.setEnableUavBarriersForBuffer(parentBuffer, true);
-        commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-        commandList.setBufferState(parentBuffer, ResourceStates::UnorderedAccess, false, refitRange);
-        commandList.setBufferState(visitCounterBuffer, ResourceStates::UnorderedAccess, false, refitRange);
-        commandList.commitBarriers();
+            commandList.setEnableUavBarriersForBuffer(parentBuffer, true);
+            commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+            commandList.setBufferState(parentBuffer, ResourceStates::UnorderedAccess, false, refitRange);
+            commandList.setBufferState(visitCounterBuffer, ResourceStates::UnorderedAccess, false, refitRange);
+            commandList.commitBarriers();
+        }
 
         const SoftwareSceneRefitPushConstants refitPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeRefit);
         commandList.setPushConstants(refitPush);
@@ -403,31 +485,34 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(
                 uses.push_back(ReadUse(resource, ResourceStates::ShaderResource));
         }
     }
-    const auto uploadResult = graph.copyUploadBytes<u32>(PodArrayBytes<SoftwareSceneRefitInstanceGpu>(Span<SoftwareSceneRefitInstanceGpu>(snapshot.deref().inputs)));
-    if(!uploadResult.has_value())
-        return MakeUnexpected(Failure());
-    const GpuUploadBlobId upload = uploadResult.value();
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
-    GpuTaskSchedulingHint uploadScheduling = scheduling;
-    uploadScheduling.mergeWithPrevious = dependency.valid();
-    GpuTaskDesc uploadDesc;
-    uploadDesc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefitInputsUpload)).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(uploadScheduling);
-    if(dependency.valid())
-        uploadDesc.setDependency(dependency);
     SoftwareSceneRefitGraphTasks result;
-    GpuUploadBufferTaskDesc uploadTask;
-    uploadTask.source = upload;
-    uploadTask.destination = input;
-    uploadTask.finalState = ResourceStates::Common;
-    const auto inputUploadResult = graph.addUploadBufferTask(uploadDesc, uploadTask);
-    if(!inputUploadResult.has_value())
-        return MakeUnexpected(Failure());
-    result.inputUpload = inputUploadResult.value();
-    GpuTaskId refitDependency = result.inputUpload;
+    GpuTaskId refitDependency = dependency;
+    if(snapshot.deref().needsInputUpload){
+        const auto uploadResult = graph.copyUploadBytes<u32>(PodArrayBytes<SoftwareSceneRefitInstanceGpu>(Span<SoftwareSceneRefitInstanceGpu>(snapshot.deref().inputs)));
+        if(!uploadResult.has_value())
+            return MakeUnexpected(Failure());
+        const GpuUploadBlobId upload = uploadResult.value();
+        GpuTaskSchedulingHint uploadScheduling = scheduling;
+        uploadScheduling.mergeWithPrevious = dependency.valid();
+        GpuTaskDesc uploadDesc;
+        uploadDesc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefitInputsUpload)).setMarkerLabel("Software Scene Refit Inputs Upload").setScheduling(uploadScheduling);
+        if(dependency.valid())
+            uploadDesc.setDependency(dependency);
+        GpuUploadBufferTaskDesc uploadTask;
+        uploadTask.source = upload;
+        uploadTask.destination = input;
+        uploadTask.finalState = ResourceStates::Common;
+        const auto inputUploadResult = graph.addUploadBufferTask(uploadDesc, uploadTask);
+        if(!inputUploadResult.has_value())
+            return MakeUnexpected(Failure());
+        result.inputUpload = inputUploadResult.value();
+        refitDependency = result.inputUpload;
+    }
     if(!AppendTypedInstanceTransformPatch(
         instanceTransformPatchContributor,
         Span<u32>(snapshot.deref().instanceEntityIds),

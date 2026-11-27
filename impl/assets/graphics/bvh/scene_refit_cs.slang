@@ -108,6 +108,7 @@ void main(const uint3 dispatchThreadId : SV_DispatchThreadID){
         InterlockedAdd(g_NwbHeapBvhWritableUintBuffers[visitCounterSlot][current], 1u, previousVisits);
         if(previousVisits == 0u)
             break;
+        g_NwbHeapBvhWritableUintBuffers[visitCounterSlot][current] = 0u;
 
         NwbBvhNode internalNode = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][current];
         const NwbBvhNode left = g_NwbHeapBvhWritableNodeBuffers[sceneSlot][internalNode.leftChild];

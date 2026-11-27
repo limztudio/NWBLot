@@ -10753,7 +10753,8 @@ void VerifyPhysicsEdgeCases_Wave3BDebugDrawAndSubsystems(){
         lblOpts.drawSubsystems = true;
         Vector<PhysicsDebugLabel> labels;
         Vector<PhysicsDebugScreenLabel> screenLabels;
-        BuildEcsPhysicsDebugLabels(tw.world, physSys, lblOpts, proj, labels);
+        PhysicsDebugDrawScratch debugScratch;
+        BuildEcsPhysicsDebugLabels(tw.world, physSys, lblOpts, proj, debugScratch, labels);
         EXPECT_FALSE(labels.empty());
         ProjectPhysicsDebugLabels(proj, Span<PhysicsDebugLabel>(labels.data(), labels.size()), screenLabels);
         EXPECT_FALSE(screenLabels.empty());

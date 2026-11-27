@@ -351,6 +351,7 @@ namespace RenderPassStoreAction{
     enum Enum : u8{
         Store,
         Discard,
+        None,
         kCount,
     };
 };

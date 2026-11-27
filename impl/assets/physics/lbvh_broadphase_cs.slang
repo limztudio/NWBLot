@@ -96,6 +96,7 @@ void nwbPhysicsLbvhTestLeaf(
     const uint4 filterA,
     const uint shapeSlot,
     const uint pairSlot,
+    const uint surfacePairSlot,
     const uint counterSlot,
     const uint maxPairs,
     const uint nonCollideSlot,
@@ -116,7 +117,7 @@ void nwbPhysicsLbvhTestLeaf(
     const uint outB = idxA < idxB ? idxB : idxA;
     const uint bodyOutA = idxA < idxB ? metaA.x : metaB.x;
     const uint bodyOutB = idxA < idxB ? metaB.x : metaA.x;
-    nwbPhysicsEmitBroadphasePair(pairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsIsComplexPair(metaA, metaB));
+    nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsBroadphasePairBucket(metaA, metaB));
 }
 
 [require(spvGroupNonUniform, spvGroupNonUniformBallot)]
@@ -524,6 +525,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
 
     if(mode == NWB_PHYSICS_LBVH_MODE_QUERY_PAIRS){
         const uint totalShapes = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
+        const uint surfacePairSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.y);
         const uint maxPairs = g_NwbPhysicsPushConstants.flags;
         const bool active = (tid < itemCount) && (totalShapes >= 2u);
 
@@ -561,7 +563,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             const bool hitR = nwbPhysicsAabbOverlaps(minA, maxA, rNode.minLeft.xyz, rNode.maxRight.xyz);
             if(hitL){
                 if(leftIdx >= leafStart){
-                    nwbPhysicsLbvhTestLeaf(idxA, asuint(lNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
+                    nwbPhysicsLbvhTestLeaf(idxA, asuint(lNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, surfacePairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
                 }
                 else if(sp < 64u){
                     stack[sp++] = leftIdx;
@@ -572,7 +574,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             }
             if(hitR){
                 if(rightIdx >= leafStart){
-                    nwbPhysicsLbvhTestLeaf(idxA, asuint(rNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
+                    nwbPhysicsLbvhTestLeaf(idxA, asuint(rNode.minLeft.w), itemOffset, metaA, filterA, shapeSlot, pairSlot, surfacePairSlot, counterSlot, maxPairs, nonCollideSlot, nonCollideMask);
                 }
                 else if(sp < 64u){
                     stack[sp++] = rightIdx;

@@ -57,7 +57,7 @@ class RendererDeferredSystem : NoCopy{
     public b8 createDeferredFrameTargetResources(mut DeferredFrameTargets targets, mut RhiSampler avboitLinearSampler);
     public b8 createDeferredCompositeResources();
     public b8 createDeferredCompositePipeline();
-    public b8 createDeferredDebugLinePipelines(mut Framebuffer debugFramebuffer);
+    public b8 createDeferredDebugLinePipelines(mut Framebuffer debugFramebuffer, mut Framebuffer colorOnlyFramebuffer);
     public b8 createDeferredPresentPipeline(mut Framebuffer presentationFramebuffer);
     public void resetDeferredFrameTargets(mut DeferredFrameTargets targets);
     public Expected<GpuTaskId> declareDeferredCompositeTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in ReflectionCompositeInputs reflectionInputs, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket);

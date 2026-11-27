@@ -10,10 +10,16 @@
 
 
 #define NWB_PHYSICS_RES_TOI_MAX_PAIRS_PER_BULLET 256u
+#define NWB_PHYSICS_RES_TOI_MAX_CACHED_BULLET_SHAPES 16u
 
 groupshared uint s_ToiPairCount;
 groupshared uint s_ToiPairBase;
-groupshared uint4 s_ToiPairs[NWB_PHYSICS_RES_TOI_MAX_PAIRS_PER_BULLET];
+groupshared uint3 s_ToiPairs[NWB_PHYSICS_RES_TOI_MAX_PAIRS_PER_BULLET];
+groupshared uint s_BulletShapeIdx[NWB_PHYSICS_RES_TOI_MAX_CACHED_BULLET_SHAPES];
+groupshared uint4 s_BulletShapeMeta[NWB_PHYSICS_RES_TOI_MAX_CACHED_BULLET_SHAPES];
+groupshared uint4 s_BulletShapeFilter[NWB_PHYSICS_RES_TOI_MAX_CACHED_BULLET_SHAPES];
+groupshared uint s_LbvhWorkCount;
+groupshared uint s_LbvhWorkNodes[NWB_PHYSICS_WORKGROUP_SIZE];
 
 bool nwbPhysicsResToiShouldCollide(
     const uint4 metaA,
@@ -53,6 +59,7 @@ void nwbPhysicsResToiTestCandidateShape(
     const uint bodySlotA,
     const uint shStart,
     const uint shCount,
+    const uint cachedBulletShapeCount,
     const uint awakeShapeOffset,
     const uint awakeBodyOffset,
     const float speculativeDist,
@@ -64,39 +71,57 @@ void nwbPhysicsResToiTestCandidateShape(
     const uint nonCollideSlot,
     const uint nonCollideMask
 ){
-    const NwbPhysicsGpuShapeProxy proxyB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxB];
-    const uint bodySlotB = proxyB.bodyIndexTypeShape.x;
-    if(bodySlotB == bodySlotA || (proxyB.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u)
+    if(shapeIdxB < awakeShapeOffset){
+        const float3 bMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdxB * 2u + 0u].xyz;
+        const float3 bMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdxB * 2u + 1u].xyz;
+        if(any(bMax < queryMin) || any(queryMax < bMin))
+            return;
+    }
+
+    const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxB].bodyIndexTypeShape;
+    const uint bodySlotB = metaB.x;
+    if(bodySlotB == bodySlotA || (metaB.w & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u)
         return;
 
-    float3 bMin = float3(0.0f, 0.0f, 0.0f);
-    float3 bMax = float3(0.0f, 0.0f, 0.0f);
-    if(shapeIdxB >= awakeShapeOffset && bodySlotB >= awakeBodyOffset){
-        const NwbPhysicsGpuBodySim simB = g_NwbPhysicsBodySimBuffers[toiBodySimSlot][bodySlotB];
-        const float extB = g_NwbPhysicsFloat4Buffers[bodyMaxRadiusSlot][bodySlotB - awakeBodyOffset].y + speculativeDist;
-        const float3 c0B = simB.forceLinearDamping.xyz;
-        const float3 c1B = simB.positionInvMass.xyz;
-        bMin = min(c0B, c1B) - float3(extB, extB, extB);
-        bMax = max(c0B, c1B) + float3(extB, extB, extB);
+    if(shapeIdxB >= awakeShapeOffset){
+        if(bodySlotB >= awakeBodyOffset){
+            const float3 c0B = g_NwbPhysicsBodySimBuffers[toiBodySimSlot][bodySlotB].forceLinearDamping.xyz;
+            const float3 c1B = g_NwbPhysicsBodySimBuffers[toiBodySimSlot][bodySlotB].positionInvMass.xyz;
+            const float extB = g_NwbPhysicsFloat4Buffers[bodyMaxRadiusSlot][bodySlotB - awakeBodyOffset].y + speculativeDist;
+            const float3 bMin = min(c0B, c1B) - float3(extB, extB, extB);
+            const float3 bMax = max(c0B, c1B) + float3(extB, extB, extB);
+            if(any(bMax < queryMin) || any(queryMax < bMin))
+                return;
+        }
+        else{
+            const float3 bMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdxB * 2u + 0u].xyz;
+            const float3 bMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdxB * 2u + 1u].xyz;
+            if(any(bMax < queryMin) || any(queryMax < bMin))
+                return;
+        }
     }
-    else{
-        bMin = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdxB * 2u + 0u].xyz;
-        bMax = g_NwbPhysicsFloat4Buffers[shapeAabbSlot][shapeIdxB * 2u + 1u].xyz;
-    }
-    if(any(bMax < queryMin) || any(queryMax < bMin))
-        return;
 
-    const uint4 metaB = proxyB.bodyIndexTypeShape;
-    const uint4 filterB = proxyB.filterData;
+    const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxB].filterData;
     [loop] for(uint si = 0u; si < shCount; ++si){
-        const uint shapeIdxA = g_NwbPhysicsUintBuffers[bulletShapeIdxSlot][shStart + si];
-        const NwbPhysicsGpuShapeProxy proxyA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxA];
-        if(!nwbPhysicsResToiShouldCollide(proxyA.bodyIndexTypeShape, proxyA.filterData, bodySlotA, metaB, filterB, bodySlotB, nonCollideSlot, nonCollideMask))
+        uint shapeIdxA = 0u;
+        uint4 metaA = uint4(0u, 0u, 0u, 0u);
+        uint4 filterA = uint4(0u, 0u, 0u, 0u);
+        if(si < cachedBulletShapeCount){
+            shapeIdxA = s_BulletShapeIdx[si];
+            metaA = s_BulletShapeMeta[si];
+            filterA = s_BulletShapeFilter[si];
+        }
+        else{
+            shapeIdxA = g_NwbPhysicsUintBuffers[bulletShapeIdxSlot][shStart + si];
+            metaA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxA].bodyIndexTypeShape;
+            filterA = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxA].filterData;
+        }
+        if(!nwbPhysicsResToiShouldCollide(metaA, filterA, bodySlotA, metaB, filterB, bodySlotB, nonCollideSlot, nonCollideMask))
             continue;
         uint loc = 0u;
         InterlockedAdd(s_ToiPairCount, 1u, loc);
         if(loc < NWB_PHYSICS_RES_TOI_MAX_PAIRS_PER_BULLET)
-            s_ToiPairs[loc] = uint4(shapeIdxA, shapeIdxB, bodySlotA, bodySlotB);
+            s_ToiPairs[loc] = uint3(shapeIdxA, shapeIdxB, bodySlotB);
     }
 }
 
@@ -202,6 +227,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         if(localTid == 0u){
             s_ToiPairCount = 0u;
             s_ToiPairBase = 0u;
+            s_LbvhWorkCount = 0u;
+        }
+        const uint cachedBulletShapeCount = min(shCount, NWB_PHYSICS_RES_TOI_MAX_CACHED_BULLET_SHAPES);
+        if(localTid < cachedBulletShapeCount){
+            const uint shapeIdxA = g_NwbPhysicsUintBuffers[bulletShapeIdxSlot][shStart + localTid];
+            s_BulletShapeIdx[localTid] = shapeIdxA;
+            s_BulletShapeMeta[localTid] = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxA].bodyIndexTypeShape;
+            s_BulletShapeFilter[localTid] = g_NwbPhysicsShapeProxyBuffers[shapeSlot][shapeIdxA].filterData;
         }
         GroupMemoryBarrierWithGroupSync();
 
@@ -232,6 +265,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
                         bodySlotA,
                         shStart,
                         shCount,
+                        cachedBulletShapeCount,
                         awakeShapeOffset,
                         awakeBodyOffset,
                         speculativeDist,
@@ -244,51 +278,109 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
                         nonCollideMask
                     );
                 }
-                if(useStaticLbvh && localTid == 0u){
+                if(useStaticLbvh){
                     const uint leafStart = totalShapeCount - 1u;
-                    uint stack[64];
-                    stack[0] = 0u;
-                    uint sp = 0u;
-                    const NwbPhysicsGpuLbvhNode root = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][0u];
-                    if(all(root.minLeft.xyz <= queryMax) && all(queryMin <= root.maxRight.xyz)){
-                        stack[0] = 0u;
-                        sp = 1u;
-                    }
-                    while(sp > 0u){
-                        const uint nodeIdx = stack[--sp];
-                        const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][nodeIdx];
-                        const uint childIndices[2] = { asuint(node.minLeft.w), asuint(node.maxRight.w) };
-                        [unroll]
-                        for(uint ci = 0u; ci < 2u; ++ci){
-                            const uint cIdx = childIndices[ci];
-                            const NwbPhysicsGpuLbvhNode cNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][cIdx];
-                            if(!all(cNode.minLeft.xyz <= queryMax) || !all(queryMin <= cNode.maxRight.xyz))
-                                continue;
-                            if(cIdx >= leafStart){
-                                const uint sB = asuint(cNode.minLeft.w);
-                                if(sB < awakeShapeOffset){
-                                    nwbPhysicsResToiTestCandidateShape(
-                                        sB,
-                                        queryMin,
-                                        queryMax,
-                                        bodySlotA,
-                                        shStart,
-                                        shCount,
-                                        awakeShapeOffset,
-                                        awakeBodyOffset,
-                                        speculativeDist,
-                                        shapeSlot,
-                                        shapeAabbSlot,
-                                        toiBodySimSlot,
-                                        bodyMaxRadiusSlot,
-                                        bulletShapeIdxSlot,
-                                        nonCollideSlot,
-                                        nonCollideMask
-                                    );
+                    if(localTid == 0u){
+                        const NwbPhysicsGpuLbvhNode root = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][0u];
+                        if(all(root.minLeft.xyz <= queryMax) && all(queryMin <= root.maxRight.xyz)){
+                            uint wl[NWB_PHYSICS_WORKGROUP_SIZE];
+                            uint head = 0u;
+                            uint tail = 0u;
+                            wl[tail++] = 0u;
+                            while(head < tail && (tail - head) < 32u){
+                                const uint cur = wl[head & (NWB_PHYSICS_WORKGROUP_SIZE - 1u)];
+                                if(cur >= leafStart)
+                                    break;
+                                ++head;
+                                const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][cur];
+                                const uint childIndices[2] = { asuint(node.minLeft.w), asuint(node.maxRight.w) };
+                                [unroll]
+                                for(uint ci = 0u; ci < 2u; ++ci){
+                                    const uint cIdx = childIndices[ci];
+                                    const NwbPhysicsGpuLbvhNode cNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][cIdx];
+                                    if(!all(cNode.minLeft.xyz <= queryMax) || !all(queryMin <= cNode.maxRight.xyz))
+                                        continue;
+                                    if(cIdx >= leafStart){
+                                        const uint sB = asuint(cNode.minLeft.w);
+                                        if(sB < awakeShapeOffset){
+                                            nwbPhysicsResToiTestCandidateShape(
+                                                sB,
+                                                queryMin,
+                                                queryMax,
+                                                bodySlotA,
+                                                shStart,
+                                                shCount,
+                                                cachedBulletShapeCount,
+                                                awakeShapeOffset,
+                                                awakeBodyOffset,
+                                                speculativeDist,
+                                                shapeSlot,
+                                                shapeAabbSlot,
+                                                toiBodySimSlot,
+                                                bodyMaxRadiusSlot,
+                                                bulletShapeIdxSlot,
+                                                nonCollideSlot,
+                                                nonCollideMask
+                                            );
+                                        }
+                                    }
+                                    else{
+                                        wl[tail & (NWB_PHYSICS_WORKGROUP_SIZE - 1u)] = cIdx;
+                                        ++tail;
+                                    }
                                 }
                             }
-                            else if(sp < 64u){
-                                stack[sp++] = cIdx;
+                            uint wc = 0u;
+                            while(head < tail && wc < NWB_PHYSICS_WORKGROUP_SIZE){
+                                s_LbvhWorkNodes[wc++] = wl[head & (NWB_PHYSICS_WORKGROUP_SIZE - 1u)];
+                                ++head;
+                            }
+                            s_LbvhWorkCount = wc;
+                        }
+                    }
+                    GroupMemoryBarrierWithGroupSync();
+                    const uint wc = s_LbvhWorkCount;
+                    [loop] for(uint wi = localTid; wi < wc; wi += NWB_PHYSICS_WORKGROUP_SIZE){
+                        uint stack[64];
+                        stack[0] = s_LbvhWorkNodes[wi];
+                        uint sp = 1u;
+                        while(sp > 0u){
+                            const uint nodeIdx = stack[--sp];
+                            const NwbPhysicsGpuLbvhNode node = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][nodeIdx];
+                            const uint childIndices[2] = { asuint(node.minLeft.w), asuint(node.maxRight.w) };
+                            [unroll]
+                            for(uint ci = 0u; ci < 2u; ++ci){
+                                const uint cIdx = childIndices[ci];
+                                const NwbPhysicsGpuLbvhNode cNode = g_NwbPhysicsLbvhNodeReadBuffers[lbvhNodeSlot][cIdx];
+                                if(!all(cNode.minLeft.xyz <= queryMax) || !all(queryMin <= cNode.maxRight.xyz))
+                                    continue;
+                                if(cIdx >= leafStart){
+                                    const uint sB = asuint(cNode.minLeft.w);
+                                    if(sB < awakeShapeOffset){
+                                        nwbPhysicsResToiTestCandidateShape(
+                                            sB,
+                                            queryMin,
+                                            queryMax,
+                                            bodySlotA,
+                                            shStart,
+                                            shCount,
+                                            cachedBulletShapeCount,
+                                            awakeShapeOffset,
+                                            awakeBodyOffset,
+                                            speculativeDist,
+                                            shapeSlot,
+                                            shapeAabbSlot,
+                                            toiBodySimSlot,
+                                            bodyMaxRadiusSlot,
+                                            bulletShapeIdxSlot,
+                                            nonCollideSlot,
+                                            nonCollideMask
+                                        );
+                                    }
+                                }
+                                else if(sp < 64u){
+                                    stack[sp++] = cIdx;
+                                }
                             }
                         }
                     }
@@ -317,8 +409,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
 
         const uint emitCnt = s_ToiPairCount;
         const uint dstBase = s_ToiPairBase;
-        [loop] for(uint p = localTid; p < emitCnt; p += NWB_PHYSICS_WORKGROUP_SIZE)
-            g_NwbPhysicsBroadphasePairBuffers[toiPairSlot][dstBase + p].indices = s_ToiPairs[p];
+        [loop] for(uint p = localTid; p < emitCnt; p += NWB_PHYSICS_WORKGROUP_SIZE){
+            const uint3 tp = s_ToiPairs[p];
+            g_NwbPhysicsBroadphasePairBuffers[toiPairSlot][dstBase + p].indices = uint4(tp.x, tp.y, bodySlotA, tp.z);
+        }
         return;
     }
 
@@ -397,14 +491,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         uint bestShapeB = NWB_PHYSICS_INVALID_INDEX;
         bool found = false;
         [loop] for(uint pi = 0u; pi < pairCount; ++pi){
-            const NwbPhysicsGpuNarrowphaseManifold gm = g_NwbPhysicsNarrowphaseManifoldBuffers[toiManifoldSlot][pairStart + pi];
-            if(gm.pairInfo.z > 0u && gm.pairInfo.w == 0u && gm.normalPad.w > 1.0e-5f && gm.normalPad.w < bestT){
-                bestT = gm.normalPad.w;
-                bestN = nwbPhysicsSafeNormal(gm.normalPad.xyz, float3(0.0f, 1.0f, 0.0f));
-                bestPoint = gm.anchorAFeature[0].xyz;
-                bestShapeA = gm.pairInfo.x;
-                bestShapeB = gm.pairInfo.y;
-                found = true;
+            const uint4 pairInfo = g_NwbPhysicsNarrowphaseManifoldBuffers[toiManifoldSlot][pairStart + pi].pairInfo;
+            if(pairInfo.z > 0u && pairInfo.w == 0u){
+                const float4 normalPad = g_NwbPhysicsNarrowphaseManifoldBuffers[toiManifoldSlot][pairStart + pi].normalPad;
+                if(normalPad.w > 1.0e-5f && normalPad.w < bestT){
+                    bestT = normalPad.w;
+                    bestN = nwbPhysicsSafeNormal(normalPad.xyz, float3(0.0f, 1.0f, 0.0f));
+                    bestPoint = g_NwbPhysicsNarrowphaseManifoldBuffers[toiManifoldSlot][pairStart + pi].anchorAFeature[0].xyz;
+                    bestShapeA = pairInfo.x;
+                    bestShapeB = pairInfo.y;
+                    found = true;
+                }
             }
         }
         if(!found)
@@ -633,6 +730,34 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     else{
         bo = g_NwbPhysicsBodyOutBuffers[bodyOutSlot][idx];
         sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][idx];
+        const uint preFlags = asuint(bo.linearVelocityFlags.w);
+        if((preFlags & NWB_PHYSICS_BODY_FLAG_SLEEPING) != 0u
+            && all(bo.linearVelocityFlags.xyz == float3(0.0f, 0.0f, 0.0f))
+            && all(bo.angularVelocityPad.xyz == float3(0.0f, 0.0f, 0.0f))
+            && all(sim.positionInvMass.xyz == bo.positionSleepTime.xyz)
+            && all(sim.rotation == bo.rotation)
+            && all(sim.forceLinearDamping.xyz == float3(0.0f, 0.0f, 0.0f))
+            && all(sim.torqueAngularDamping.xyz == float3(0.0f, 0.0f, 0.0f))
+        ){
+            const NwbPhysicsGpuBodyState prevState = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][idx];
+            if(asuint(prevState.linearVelocityPad.w) == preFlags
+                && asuint(prevState.deltaPositionFlags.w) == preFlags
+                && all(prevState.linearVelocityPad.xyz == float3(0.0f, 0.0f, 0.0f))
+                && all(prevState.angularVelocityPad.xyz == float3(0.0f, 0.0f, 0.0f))
+                && all(prevState.deltaPositionFlags.xyz == float3(0.0f, 0.0f, 0.0f))
+                && all(prevState.deltaRotation == float4(0.0f, 0.0f, 0.0f, 1.0f))
+            ){
+                if(bodyPoseSlot == NWB_PHYSICS_INVALID_INDEX)
+                    return;
+                const NwbPhysicsGpuBodyPose prevPose = g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][poseOffset + idx];
+                if(all(prevPose.rotation == bo.rotation)
+                    && prevPose.originPad.w == sim.invInertiaWorld1.w
+                    && all(prevPose.sweepDispFlags.xyz == float3(0.0f, 0.0f, 0.0f))
+                ){
+                    return;
+                }
+            }
+        }
     }
 
     uint bodyFlags = asuint(bo.linearVelocityFlags.w);

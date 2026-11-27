@@ -30,6 +30,7 @@ extern enum RenderPassLoadAction : u8{
 extern enum RenderPassStoreAction : u8{
     Store,
     Discard,
+    None,
     kCount
 };
 

@@ -367,6 +367,10 @@ class VehicleController{
     private Vector<f32x4> m_stepSideTan;
     private Vector<f32x4> m_stepContactPt;
     private Vector<u8> m_stepStaticHold;
+    private Vector<u8> m_stepHasDynGround;
+    private Vector<f32x4> m_stepGbCenter;
+    private Vector<f32> m_stepGbInvMass;
+    private Vector<SymMat3> m_stepGbInvI;
     private Vector<f32x4> m_attachW;
     private Vector<f32x4> m_suspDirW;
     private Vector<f32x4> m_wheelRots;
@@ -428,6 +432,10 @@ class VehicleController{
         this.m_stepSideTan.resize(n, f32x4(1.0f, 0.0f, 0.0f, 0.0f));
         this.m_stepContactPt.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
         this.m_stepStaticHold.resize(n, 0u);
+        this.m_stepHasDynGround.resize(n, 0u);
+        this.m_stepGbCenter.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        this.m_stepGbInvMass.resize(n, 0.0f);
+        this.m_stepGbInvI.resize(n, SymMat3());
         this.m_attachW.resize(n);
         this.m_suspDirW.resize(n);
         this.m_wheelRots.resize(n);
@@ -702,10 +710,10 @@ class VehicleController{
         return 1;
     }
 
-    private b8 extractDynamicBodyInertia(in PhysicsWorld world, in BodyId bodyId, mut VectorSingle outCenter, mut f32 outInvMass, mut MatrixSingle outInvI)const{
+    private b8 extractDynamicBodyInertia(in PhysicsWorld world, in BodyId bodyId, mut VectorSingle outCenter, mut f32 outInvMass, mut SymMat3 outInvI)const{
         outCenter = VectorSingle(0.0f);
         outInvMass = 0.0f;
-        outInvI = Matrix3FromSymMat3(SymMat3());
+        outInvI = SymMat3();
         if(!bodyId.valid() || !world.isValidBody(bodyId))
             return false;
         in Body gb = world.m_bodies[bodyId.index];
@@ -714,7 +722,7 @@ class VehicleController{
         in BodySim gsim = world.m_solverSets[gb.setIndex].sims[gb.localIndex];
         outCenter = gsim.center();
         outInvMass = gsim.invMass();
-        outInvI = Matrix3FromSymMat3(gsim.invInertiaWorld);
+        outInvI = gsim.invInertiaWorld;
         return outInvMass > 0.0f;
     }
 
@@ -743,12 +751,11 @@ class VehicleController{
                 chassisCenter = csim.center();
                 chassisInvI = Matrix3FromSymMat3(csim.invInertiaWorld);
             }
-        }
-        const Expected<f32> chassisMassRes = world.tryGetBodyMass(this.chassisBodyId);
-        if(chassisMassRes.has_value() && chassisMassRes.value() > 0.0f){
-            chassisMass = chassisMassRes.value();
-            if(chassisInvMass <= 0.0f)
-                chassisInvMass = 1.0f / chassisMass;
+            if(cb.alive && cb.mass > 0.0f){
+                chassisMass = cb.mass;
+                if(chassisInvMass <= 0.0f)
+                    chassisInvMass = 1.0f / chassisMass;
+            }
         }
 
         u32 groundedCount = 0u;
@@ -756,11 +763,13 @@ class VehicleController{
         this.m_bumpPens.assign(wheelCount, 0.0f);
         this.m_bumpImpulses.assign(wheelCount, 0.0f);
         this.m_stepStaticHold.assign(wheelCount, 0u);
+        this.m_stepHasDynGround.assign(wheelCount, 0u);
         this.m_stepFrcLong.assign(wheelCount, 0.0f);
         this.m_stepFrcLat.assign(wheelCount, 0.0f);
         this.m_stepNormLoad.assign(wheelCount, 0.0f);
         this.m_stepPeakFric.assign(wheelCount, 0.0f);
 
+        b8 anyStaticHold = false;
         const f32 slipThr = Max(0.01f, this.wheelSlipEventThreshold);
         for(usize i = 0u; i < wheelCount; ++i){
             in VehicleWheelDef wDef = this.wheelDefs[i];
@@ -884,6 +893,21 @@ class VehicleController{
             }
         }
 
+        for(usize i = 0u; i < wheelCount; ++i){
+            in VehicleWheelState wState = this.wheelStates[i];
+            if(!wState.isGrounded)
+                continue;
+            VectorSingle gbCenter(0.0f);
+            f32 gbInvMass = 0.0f;
+            SymMat3 gbInvI;
+            if(this.extractDynamicBodyInertia(world, wState.groundBodyId, gbCenter, gbInvMass, gbInvI)){
+                this.m_stepHasDynGround[i] = 1u;
+                this.m_stepGbCenter[i] = f32x4(gbCenter, 0.0f);
+                this.m_stepGbInvMass[i] = gbInvMass;
+                this.m_stepGbInvI[i] = gbInvI;
+            }
+        }
+
         if(bumpGroundedCount > 0u){
             const f32 safeDt = Max(dt, 1.0e-4f);
             for(usize i = 0u; i < wheelCount; ++i){
@@ -896,10 +920,10 @@ class VehicleController{
                 const VectorSingle contactPt = VectorSingle(wState.contactPoint);
                 const VectorSingle velHub = (chassisLinVel + Cross(chassisAngVel, hubPos - chassisCenter)) - VectorSingle(wState.groundVelocity);
                 const f32 vAlongN = Vector3Dot(velHub, hitN).x;
-                VectorSingle gbCenter(0.0f);
-                f32 gbInvMass = 0.0f;
-                MatrixSingle gbInvI = Matrix3FromSymMat3(SymMat3());
-                const b8 hasDynGround = this.extractDynamicBodyInertia(world, wState.groundBodyId, gbCenter, gbInvMass, gbInvI);
+                const b8 hasDynGround = (this.m_stepHasDynGround[i] != 0u);
+                const VectorSingle gbCenter(this.m_stepGbCenter[i]);
+                const f32 gbInvMass = this.m_stepGbInvMass[i];
+                const MatrixSingle gbInvI = Matrix3FromSymMat3(this.m_stepGbInvI[i]);
                 const f32 invEffN = ComputeVehiclePointInvEffMass(hitN, hubPos - chassisCenter, chassisInvMass, chassisInvI, hasDynGround, contactPt - gbCenter, gbInvMass, gbInvI);
                 const f32 bumpRest = Clamp(wDef.bumpStopRestitution, 0.0f, 1.0f);
                 const f32 closingVel = Min(0.0f, vAlongN);
@@ -1165,10 +1189,10 @@ class VehicleController{
                 const f32 vLong = Vector3Dot(velAtPatch, fwdTan).x;
                 const f32 vLat = Vector3Dot(velAtPatch, sideTan).x;
 
-                VectorSingle gbCenter(0.0f);
-                f32 gbInvMass = 0.0f;
-                MatrixSingle gbInvI = Matrix3FromSymMat3(SymMat3());
-                const b8 hasDynGround = this.extractDynamicBodyInertia(world, wState.groundBodyId, gbCenter, gbInvMass, gbInvI);
+                const b8 hasDynGround = (this.m_stepHasDynGround[i] != 0u);
+                const VectorSingle gbCenter(this.m_stepGbCenter[i]);
+                const f32 gbInvMass = this.m_stepGbInvMass[i];
+                const MatrixSingle gbInvI = Matrix3FromSymMat3(this.m_stepGbInvI[i]);
                 const VectorSingle gbArm = contactPt - gbCenter;
                 const f32 invEffLong = ComputeVehiclePointInvEffMass(fwdTan, arm, chassisInvMass, chassisInvI, hasDynGround, gbArm, gbInvMass, gbInvI);
                 const f32 invEffLat = ComputeVehiclePointInvEffMass(sideTan, arm, chassisInvMass, chassisInvI, hasDynGround, gbArm, gbInvMass, gbInvI);
@@ -1291,6 +1315,7 @@ class VehicleController{
                 f32 fLat = 0.0f;
                 if(useStaticHold){
                     this.m_stepStaticHold[i] = 1u;
+                    anyStaticHold = true;
                     const f32 holdInvScale = groundedShareF * safeDt;
                     if(this.engine.useSolverImpulses){
                         fLong = -vLong / Max(invEffLong * holdInvScale, 1.0e-6f);
@@ -1327,8 +1352,9 @@ class VehicleController{
                     const f32 argL = bxL - (bxL - atanBx.x) * curvELong;
                     const f32 argS = bxS - (bxS - atanBx.y) * curvELat;
                     const VectorSingle atanArgs = ATan2(VectorSingle(argL, argS, 0.0f, 0.0f), VectorSingle(1.0f));
-                    fLong = Sin(VectorSingle(atanArgs.x * shapeCLong)).x * peakFric;
-                    fLat = Sin(VectorSingle(atanArgs.y * shapeCLat)).x * peakFric;
+                    const VectorSingle sinVals = Sin(VectorSingle(atanArgs.x * shapeCLong, atanArgs.y * shapeCLat, 0.0f, 0.0f));
+                    fLong = sinVals.x * peakFric;
+                    fLat = sinVals.y * peakFric;
                     if(Abs(VectorSingle(wDef.camberAngleRad)).x >= 1.0e-5f){
                         f32 cambSign = 1.0f;
                         if(wDef.attachmentPoint.x < -1.0e-4f)
@@ -1395,7 +1421,7 @@ class VehicleController{
             }
         }
 
-        if(this.engine.useSolverImpulses && groundedCount > 1u){
+        if(anyStaticHold && this.engine.useSolverImpulses && groundedCount > 1u){
             for(u32 gsIter = 0u; gsIter < 2u; ++gsIter){
                 VectorSingle dvLin(0.0f);
                 VectorSingle dvAng(0.0f);
@@ -1454,10 +1480,7 @@ class VehicleController{
                 const VectorSingle tireForceVec = VectorSingle(this.m_stepFwdTan[i]) * fLong + VectorSingle(this.m_stepSideTan[i]) * fLat;
                 const VectorSingle suspImpVec = baseSuspForceVec * dt + hitN * this.m_bumpImpulses[i];
                 const VectorSingle tireImpVec = tireForceVec * dt;
-                VectorSingle gbCenter(0.0f);
-                f32 gbInvMass = 0.0f;
-                MatrixSingle gbInvI = Matrix3FromSymMat3(SymMat3());
-                const b8 hasDynGround = this.extractDynamicBodyInertia(world, wState.groundBodyId, gbCenter, gbInvMass, gbInvI);
+                const b8 hasDynGround = (this.m_stepHasDynGround[i] != 0u);
                 if(this.engine.useSolverImpulses){
                     world.applyLinearImpulseAtPoint(this.chassisBodyId, suspImpVec, hubPos, true);
                     world.applyLinearImpulseAtPoint(this.chassisBodyId, tireImpVec, contactPt, true);
@@ -1547,10 +1570,7 @@ class VehicleController{
                 if(!fv.enabled || !ShouldCollideFilters(this.queryFilter, fv.filter))
                     continue;
                 const VectorSingle n = fv.normalizedSurfaceNormal();
-                f32 depth = 0.0f;
-                VectorSingle fVel(0.0f);
-                VectorSingle localN(0.0f);
-                fv.evaluateSurfaceAt(wPos, n, env.elapsedTimeSec, depth, fVel, localN);
+                const f32 depth = fv.signedDepthWithNormalAtTime(wPos, n, env.elapsedTimeSec);
                 const f32 subFrac = Clamp((depth + wr) / (2.0f * wr), 0.0f, 1.0f);
                 if(subFrac > 1.0e-4f){
                     const f32 dragMul = Max(0.0f, 1.0f - Min(0.95f, fv.linearDrag * subFrac * dt * 2.5f));
@@ -1570,28 +1590,72 @@ class VehicleController{
             ApplyForceFieldToSingleBody(world, this.chassisBodyId, env.forceFields[ffi], env.elapsedTimeSec, dt);
     }
 
-    private void stepSubstepInternal(mut PhysicsWorld world, in VehicleInput input, in f32 dt, mut CpuTaskScheduler cpuScheduler, in b8 allowParallel){
-        world.ensureCpuBroadphaseSynced();
+    private void castWheelsSerial(in PhysicsWorld world, in usize wheelCount){
+        for(usize i = 0u; i < wheelCount; ++i){
+            this.m_castResults[i] = CastSingleVehicleWheel(
+                world,
+                this.chassisBodyId,
+                this.queryFilter,
+                VectorSingle(this.m_wheelRots[i]),
+                VectorSingle(this.m_axleAxisNorm[i]),
+                this.wheelDefs[i],
+                VectorSingle(this.m_attachW[i]),
+                VectorSingle(this.m_suspDirW[i])
+            );
+        }
+    }
+
+    private b8 prepareVehicleSubstep(
+        in PhysicsWorld world,
+        in VehicleInput input,
+        in f32 dt,
+        mut Transform3D outChassisXf,
+        mut VectorSingle outChassisLinVel,
+        mut VectorSingle outChassisAngVel,
+        mut VectorSingle outChassisFwd,
+        mut usize outWheelCount
+    ){
         const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.chassisBodyId);
         if(!xfRes.has_value())
-            return;
-        in Transform3D chassisXf = xfRes.value();
-
-        const VectorSingle chassisLinVel = VectorSingle(world.tryGetLinearVelocity(this.chassisBodyId).value());
-        const VectorSingle chassisAngVel = VectorSingle(world.tryGetAngularVelocity(this.chassisBodyId).value());
-        const VectorSingle chassisRot = VectorSingle(chassisXf.rotation);
+            return false;
+        outChassisXf = xfRes.value();
+        outChassisLinVel = VectorSingle(world.tryGetLinearVelocity(this.chassisBodyId).value());
+        outChassisAngVel = VectorSingle(world.tryGetAngularVelocity(this.chassisBodyId).value());
+        const VectorSingle chassisRot = VectorSingle(outChassisXf.rotation);
         const VectorSingle localFwd = SafeNormalizeVec3(VectorSingle(this.engine.chassisForwardAxis), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-        const VectorSingle chassisFwd = SafeNormalizeVec3(Vector3Rotate(localFwd, chassisRot), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-        this.currentSpeedMps = Vector3Dot(chassisLinVel, chassisFwd).x;
-
+        outChassisFwd = SafeNormalizeVec3(Vector3Rotate(localFwd, chassisRot), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        this.currentSpeedMps = Vector3Dot(outChassisLinVel, outChassisFwd).x;
         if(this.shiftCooldown > 0.0f)
             this.shiftCooldown = Max(0.0f, this.shiftCooldown - dt);
+        outWheelCount = this.wheelDefs.size();
+        if(outWheelCount == 0u)
+            return false;
+        this.prepareWheelTransformsAndSteer(VectorSingle(outChassisXf.position), chassisRot, outWheelCount, input.steer, dt);
+        return true;
+    }
 
-        const usize wheelCount = this.wheelDefs.size();
-        if(wheelCount == 0u)
+    private void stepSubstepSerial(mut PhysicsWorld world, in VehicleInput input, in f32 dt){
+        world.ensureCpuBroadphaseSynced();
+        Transform3D chassisXf;
+        VectorSingle chassisLinVel(0.0f);
+        VectorSingle chassisAngVel(0.0f);
+        VectorSingle chassisFwd(0.0f, 0.0f, 1.0f, 0.0f);
+        usize wheelCount = 0u;
+        if(!this.prepareVehicleSubstep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount))
             return;
+        this.castWheelsSerial(world, wheelCount);
+        this.finishVehicleStep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount);
+    }
 
-        this.prepareWheelTransformsAndSteer(VectorSingle(chassisXf.position), chassisRot, wheelCount, input.steer, dt);
+    private void stepSubstepInternal(mut PhysicsWorld world, in VehicleInput input, in f32 dt, mut CpuTaskScheduler cpuScheduler, in b8 allowParallel){
+        world.ensureCpuBroadphaseSynced();
+        Transform3D chassisXf;
+        VectorSingle chassisLinVel(0.0f);
+        VectorSingle chassisAngVel(0.0f);
+        VectorSingle chassisFwd(0.0f, 0.0f, 1.0f, 0.0f);
+        usize wheelCount = 0u;
+        if(!this.prepareVehicleSubstep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount))
+            return;
         if(allowParallel && cpuScheduler.isParallelEnabled() && wheelCount >= 4u){
             in PhysicsWorld worldRef = world;
             const BodyId chassisId = this.chassisBodyId;
@@ -1620,34 +1684,11 @@ class VehicleController{
                 },
                 CpuTaskOptions()
             );
-            if(!res.has_value()){
-                for(usize i = 0u; i < wheelCount; ++i){
-                    this.m_castResults[i] = CastSingleVehicleWheel(
-                        world,
-                        this.chassisBodyId,
-                        this.queryFilter,
-                        VectorSingle(this.m_wheelRots[i]),
-                        VectorSingle(this.m_axleAxisNorm[i]),
-                        this.wheelDefs[i],
-                        VectorSingle(this.m_attachW[i]),
-                        VectorSingle(this.m_suspDirW[i])
-                    );
-                }
-            }
+            if(!res.has_value())
+                this.castWheelsSerial(world, wheelCount);
         }
         else{
-            for(usize i = 0u; i < wheelCount; ++i){
-                this.m_castResults[i] = CastSingleVehicleWheel(
-                    world,
-                    this.chassisBodyId,
-                    this.queryFilter,
-                    VectorSingle(this.m_wheelRots[i]),
-                    VectorSingle(this.m_axleAxisNorm[i]),
-                    this.wheelDefs[i],
-                    VectorSingle(this.m_attachW[i]),
-                    VectorSingle(this.m_suspDirW[i])
-                );
-            }
+            this.castWheelsSerial(world, wheelCount);
         }
         this.finishVehicleStep(world, input, dt, chassisXf, chassisLinVel, chassisAngVel, chassisFwd, wheelCount);
     }
@@ -1658,9 +1699,8 @@ class VehicleController{
             return;
         const u32 steps = Clamp(this.engine.subSteps, 1u, 16u);
         const f32 subDt = dt / cast<f32>(steps);
-        CpuTaskScheduler dummyScheduler(1u);
         for(u32 s = 0u; s < steps; ++s)
-            this.stepSubstepInternal(world, input, subDt, dummyScheduler, false);
+            this.stepSubstepSerial(world, input, subDt);
     }
 
     public void stepWithScheduler(mut PhysicsWorld world, in VehicleInput input, in f32 dt, mut CpuTaskScheduler cpuScheduler){

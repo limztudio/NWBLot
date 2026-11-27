@@ -110,7 +110,30 @@ void PreparedSceneTlasBuild::confirm(mut RendererRayTracingState state){
     if(!this.m_ready)
         return;
 
-    RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(this.storageMatches(state), this.m_static && !this.m_useInstanceBuffer, this.m_staticSceneHash, state.sceneBvh.m_tlasStaticSceneHash, state.sceneBvh.m_tlasStaticSceneHashValid, state.sceneBvh.m_tlasBackingFresh);
+    const b8 storageValid = this.storageMatches(state);
+    RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(storageValid, this.m_static && !this.m_useInstanceBuffer, this.m_staticSceneHash, state.sceneBvh.m_tlasStaticSceneHash, state.sceneBvh.m_tlasStaticSceneHashValid, state.sceneBvh.m_tlasBackingFresh);
+    if(storageValid){
+        state.sceneBvh.m_tlasBuildAccepted = true;
+        if(this.m_useInstanceBuffer)
+            state.sceneBvh.m_tlasAcceptedInstanceCount = this.m_instanceCount;
+        else
+            state.sceneBvh.m_tlasAcceptedInstanceCount = cast<u32>(this.m_instances.size());
+        state.sceneBvh.m_tlasTopologyHash = this.m_topologyHash;
+        state.sceneBvh.m_tlasWasGpuPatched = this.m_useInstanceBuffer;
+        if(this.m_performUpdate)
+            state.sceneBvh.m_tlasRefitsSinceRebuild += 1u;
+        else
+            state.sceneBvh.m_tlasRefitsSinceRebuild = 0u;
+        if(this.m_useInstanceBuffer && this.m_static){
+            state.sceneBvh.m_tlasInstanceUploadStaticHash = this.m_staticSceneHash;
+            state.sceneBvh.m_tlasInstanceUploadPatchMembershipSig = this.m_patchMembershipSignature;
+            state.sceneBvh.m_tlasInstanceUploadBufferIdentity = this.m_instanceBuffer.identity();
+            state.sceneBvh.m_tlasInstanceUploadValid = true;
+        }
+        else{
+            state.sceneBvh.m_tlasInstanceUploadValid = false;
+        }
+    }
     this.clear();
 }
 
@@ -426,6 +449,8 @@ b8 PreparedSceneTlasBuild::capture(
     in RendererRayTracingState state,
     in b8 staticScene,
     in u64 staticSceneHash,
+    in u64 topologyHash,
+    in b8 performUpdate,
     in Span<RayTracingInstanceDesc> instances,
     in Span<RayTracingAccelStructHandle> instanceBlases
 ){
@@ -449,6 +474,9 @@ b8 PreparedSceneTlasBuild::capture(
     this.m_heapHandle = state.sceneBvh.m_tlasHeapHandle;
     this.m_maxInstances = state.sceneBvh.m_tlasMaxInstances;
     this.m_staticSceneHash = staticSceneHash;
+    this.m_topologyHash = topologyHash;
+    this.m_patchMembershipSignature = 0u;
+    this.m_performUpdate = performUpdate;
     this.m_static = staticScene;
     this.m_ready = true;
     return true;
@@ -458,6 +486,9 @@ b8 PreparedSceneTlasBuild::captureFromInstanceBuffer(
     in RendererRayTracingState state,
     in b8 staticScene,
     in u64 staticSceneHash,
+    in u64 topologyHash,
+    in u64 patchMembershipSignature,
+    in b8 performUpdate,
     in Span<RayTracingInstanceDesc> instances,
     in Span<RayTracingAccelStructHandle> instanceBlases,
     in Span<u32> instanceEntityIds
@@ -495,6 +526,9 @@ b8 PreparedSceneTlasBuild::captureFromInstanceBuffer(
     this.m_maxInstances = state.sceneBvh.m_tlasMaxInstances;
     this.m_instanceCount = cast<u32>(instances.size());
     this.m_staticSceneHash = staticSceneHash;
+    this.m_topologyHash = topologyHash;
+    this.m_patchMembershipSignature = patchMembershipSignature;
+    this.m_performUpdate = performUpdate;
     this.m_useInstanceBuffer = true;
     this.m_static = staticScene;
     this.m_ready = true;
@@ -507,6 +541,14 @@ Expected<Optional<GpuUploadBlobId>> PreparedSceneTlasBuild::retainUpload(in Rend
         return emptyBlob;
     if(!this.storageMatches(state) || !IsPreparedSceneTlasStorageReady(state, cast<usize>(this.m_instanceCount)))
         return MakeUnexpected(Failure());
+    if(
+        this.m_static
+        && state.sceneBvh.m_tlasInstanceUploadValid
+        && state.sceneBvh.m_tlasInstanceUploadBufferIdentity == this.m_instanceBuffer.identity()
+        && state.sceneBvh.m_tlasInstanceUploadStaticHash == this.m_staticSceneHash
+        && state.sceneBvh.m_tlasInstanceUploadPatchMembershipSig == this.m_patchMembershipSignature
+    )
+        return emptyBlob;
     const auto uploadResult = graph.copyUploadElements<TlasInstanceGpuData>(Span<TlasInstanceGpuData>(this.m_gpuInstances));
     if(!uploadResult.has_value())
         return MakeUnexpected(uploadResult.error());
@@ -514,6 +556,10 @@ Expected<Optional<GpuUploadBlobId>> PreparedSceneTlasBuild::retainUpload(in Rend
 }
 
 b8 PreparedSceneTlasBuild::record(mut RendererRayTracingState state, mut CommandList commandList){
+    RayTracingAccelStructBuildFlags buildFlags = RayTracingAccelStructBuildFlags::AllowUpdate | RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(this.m_performUpdate)
+        buildFlags |= RayTracingAccelStructBuildFlags::PerformUpdate;
+
     if(this.m_useInstanceBuffer){
         const usize instanceCount = cast<usize>(this.m_instanceCount);
         if(!this.m_ready || instanceCount == 0u || this.m_blases.size() != instanceCount || !this.m_instanceBuffer.valid() || !this.storageMatches(state) || !IsPreparedSceneTlasStorageReady(state, instanceCount)){
@@ -526,7 +572,7 @@ b8 PreparedSceneTlasBuild::record(mut RendererRayTracingState state, mut Command
                 return false;
             }
         }
-        commandList.buildTopLevelAccelStructFromBuffer(this.m_tlas.deref(), this.m_instanceBuffer.deref(), cast<u64>(0u), instanceCount, RayTracingAccelStructBuildFlags::PreferFastTrace);
+        commandList.buildTopLevelAccelStructFromBuffer(this.m_tlas.deref(), this.m_instanceBuffer.deref(), cast<u64>(0u), instanceCount, buildFlags);
         return true;
     }
 
@@ -541,8 +587,22 @@ b8 PreparedSceneTlasBuild::record(mut RendererRayTracingState state, mut Command
         }
     }
 
-    commandList.buildTopLevelAccelStruct(this.m_tlas.deref(), this.m_instances, RayTracingAccelStructBuildFlags::PreferFastTrace);
+    commandList.buildTopLevelAccelStruct(this.m_tlas.deref(), this.m_instances, buildFlags);
     return true;
+}
+
+u64 ComputeTlasTopologyIdentity(in Span<RayTracingInstanceDesc> instances){
+    u64 hash = s_Fnv64OffsetBasis;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(in RayTracingInstanceDesc instance : instances){
+        Fnv64AppendValue(hash, cast<u32>(instance.instanceID));
+        Fnv64AppendValue(hash, cast<u32>(instance.instanceMask));
+        Fnv64AppendValue(hash, cast<u32>(instance.instanceContributionToHitGroupIndex));
+        Fnv64AppendValue(hash, cast<u32>(instance.flags));
+        Fnv64AppendValue(hash, instance.bottomLevelIdentity());
+    }
+    return hash;
 }
 
 void AppendTlasStaticSceneIdentity(in RayTracingInstanceDesc instance, mut u64 inOutHash){

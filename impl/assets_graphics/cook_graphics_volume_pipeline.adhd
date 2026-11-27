@@ -168,7 +168,6 @@ b8 AppendUniqueShaderEntry(in Path file, mut ShaderCookEntry entry, mut Graphics
     return true;
 }
 
-[cook_document]
 AssetMetadataParseResult ParseGraphicsDocumentMetadata(mut AssetDocumentMetadataParseContext context){
     if(ShaderTypeFromAssetType(context.assetType) != ShaderType::Invalid){
         mut GraphicsVolumeMetadata metadata = GetCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata);
@@ -459,7 +458,6 @@ b8 PrepareGraphicsMaterials(mut CookVolumePrepareContext context, mut GraphicsVo
     return true;
 }
 
-[volume_prepare]
 b8 PrepareGraphicsVolumeAssets(mut CookVolumePrepareContext context){
     if(ShouldSkipGraphicsVolumePreparation(HasCookMetadata<GraphicsVolumeMetadata>(s_GraphicsVolumeMetadataExtensionName, context.parsedMetadata), CookBucketSize(context.parsedMetadata, Material::AssetTypeName())))
         return true;
@@ -480,7 +478,6 @@ b8 PrepareGraphicsVolumeAssets(mut CookVolumePrepareContext context){
     });
 }
 
-[cook_setup]
 void RegisterGraphicsCookKinds(){
     RegisterNonStandaloneAssetType(MeshSubsystem::AssetTypeName(), s_MeshSubsystemNonStandaloneKindLabel);
     RegisterNonStandaloneAssetType(s_IncludeAssetTypeName, s_IncludeNonStandaloneKindLabel);

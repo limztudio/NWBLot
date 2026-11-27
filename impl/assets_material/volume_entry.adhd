@@ -66,7 +66,6 @@ Expected<Vector<Name>> CollectSortedMaterialResourceDependencyNames(
 
 register_asset Material using NonStandaloneAssetRegistration<Material>;
 
-[cook_entry("material", s_MaterialMetaDiagnosticPrefix, ParseMaterialCookMetadata, document_only, quiet)]
 Expected<Material> CookMaterialVolumeEntry(in MaterialCookEntry entry){
     return BuildMaterialAsset(entry);
 }
@@ -109,7 +108,6 @@ b8 ExtractMaterialDependencies(in CookDependencyItemContext context, mut ICookDe
     });
 }
 
-[cook_registrar]
 b8 RegisterMaterialDependencies(mut CookDependencyRegistry registry){
     return registry.registerType(Material::AssetTypeName(), ExtractMaterialDependencies);
 }

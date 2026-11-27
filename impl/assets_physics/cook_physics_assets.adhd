@@ -55,42 +55,36 @@ class HeightfieldCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[asset_writer]
 b8 SerializePhysicsMaterialAsset(in PhysicsMaterialAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializePhysicsMaterialUnchecked(asset.surfaceMaterial(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeCollisionLayerMatrixAsset(in CollisionLayerMatrixAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeCollisionLayerMatrixUnchecked(asset.layerMatrix(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeConvexHullAsset(in ConvexHullAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeConvexHullUnchecked(asset.hullShape(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeCompoundHullAsset(in CompoundHullAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeCompoundHullUnchecked(asset.hullShapes(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeCollisionMeshAsset(in CollisionMeshAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;
     return PhysicsAssetBinaryCodec().serializeCollisionMeshUnchecked(asset.meshShape(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeHeightfieldAsset(in HeightfieldAsset asset, mut Vector<u8> outBinary){
     if(!asset.validatePayload())
         return false;

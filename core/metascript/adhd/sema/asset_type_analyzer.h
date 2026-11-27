@@ -43,7 +43,6 @@ public:
         : m_symbols(symbols)
     {}
 
-    [[nodiscard]] const MethodDecl* findCookEntryReader(MStringView name, b8 acceptsValue)const noexcept;
     [[nodiscard]] const TypeRef* findImplementedAssetInterface(const ClassDecl& cls)const noexcept;
     [[nodiscard]] const MethodDecl* findAssetLoadBinaryMethod(const ClassDecl& cls, b8 requireLocalDefinition = false)const noexcept;
     [[nodiscard]] b8 isAssetDependencyType(const TypeRef* type, u32 depth = 0u)const noexcept;

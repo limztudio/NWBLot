@@ -39,7 +39,6 @@ Expected<FontCookEntry> BuildFontCookEntry(in Name virtualPath, in PreparedFontS
     return entry;
 }
 
-[cook_sidecar(s_PreparedFontExtension)]
 Expected<FontCookEntry> ParseFontCookMetadataValue(in Name virtualPath, in Path path, in MetascriptValue asset){
     const Expected<Path> fontPath = ResolveFontCookSourcePath(virtualPath, path, asset);
     if(!fontPath.has_value())
@@ -50,7 +49,6 @@ Expected<FontCookEntry> ParseFontCookMetadataValue(in Name virtualPath, in Path 
     return BuildFontCookEntry(virtualPath, source.value());
 }
 
-[asset_writer]
 b8 SerializeFontAssetPayload(in Font font, mut Vector<u8> outBinary){
     if(!font.validatePayload())
         return false;

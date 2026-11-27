@@ -20,12 +20,10 @@ b8 ExtractFontAtlasDependencies(in CookDependencyItemContext context, mut ICookD
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("font atlas", s_FontAtlasMetaDiagnosticPrefix, ParseFontAtlasCookMetadataValue, document_and_value, quiet)]
 Expected<FontAtlas> CookFontAtlasVolumeEntry(in FontAtlasCookEntry entry){
     return BuildFontAtlasAsset(entry);
 }
 
-[cook_registrar]
 b8 RegisterFontAtlasCookDependency(mut CookDependencyRegistry registry){
     return registry.registerType(FontAtlas::AssetTypeName(), ExtractFontAtlasDependencies);
 }

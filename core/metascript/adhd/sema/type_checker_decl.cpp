@@ -327,96 +327,6 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
             return false;
         }
     }
-    if(!method.pairedSidecar.empty()){
-        const Stmt* extension = m_symbols.findGlobalConstant(method.pairedSidecar);
-        const auto* exported = extension ? nullptr : FindBuiltinGlobalConstant(method.pairedSidecar);
-        if(exported)
-            recordRequiredHeader(exported->requiredHeader);
-        if(enclosingClass || !method.hasBody || method.isExtern || !method.ownerClassName.empty()
-            || ((!extension || !extension->varType || extension->varType->name != "StringView") && (!exported || exported->adhdTypeName != "StringView"))){
-            reportError(errors, method.span, "'[cook_sidecar]' requires a free function definition and a StringView extension constant");
-            return false;
-        }
-    }
-    if(method.assetCookRole != AssetCookRole::None){
-        if(enclosingClass || !method.ownerClassName.empty() || method.isExtern || !method.hasBody || !method.templateParams.empty() || !method.returnType){
-            reportError(errors, method.span, "an asset cook role requires a non-template free function definition");
-            return false;
-        }
-        if(method.assetCookRole == AssetCookRole::DocumentParser || method.assetCookRole == AssetCookRole::VolumePrepare){
-            const b8 document = method.assetCookRole == AssetCookRole::DocumentParser;
-            if(method.returnType->name != (document ? "AssetMetadataParseResult" : "b8") || method.params.size() != 1u || method.params[0].mode != ParamPassingMode::Mut
-                || method.params[0].type->name != (document ? "AssetDocumentMetadataParseContext" : "CookVolumePrepareContext")){
-                reportError(errors, method.span, "a cook callback must match its registry context and return type");
-                return false;
-            }
-        }
-        else if(method.assetCookRole == AssetCookRole::Setup){
-            if(method.returnType->name != "void" || !method.params.empty()){
-                reportError(errors, method.span, "'[cook_setup]' requires a void function with no parameters");
-                return false;
-            }
-        }
-        else if(method.assetCookRole != AssetCookRole::Entry && method.returnType->name != "b8"){
-            reportError(errors, method.span, "asset writers and cook registrars must return b8");
-            return false;
-        }
-        if(method.assetCookRole == AssetCookRole::Entry){
-            const TypeRef* result = method.returnType;
-            const ClassDecl* asset = (result->name == "Expected" && result->templateArgs.size() == 1u) ? m_symbols.findClass(result->templateArgs.front().constantOrTypeName()) : nullptr;
-            const AssetTypeAnalyzer assetTypes(m_symbols);
-            if(!asset || asset->assetTypeName.empty() || !assetTypes.findAssetLoadBinaryMethod(*asset) || (method.cookCodec.empty() && assetTypes.findImplementedAssetInterface(*asset))
-                || method.params.size() != 1u || !m_symbols.findClass(m_symbols.resolveBaseTypeName(method.params[0].type->name))){
-                reportError(errors, method.span, "'[cook_entry]' requires an entry parameter and must return Expected<Asset> for an auto-generated asset codec");
-                return false;
-            }
-            if(!method.cookCodec.empty()){
-                TypeRef alias(m_arena);
-                alias.name = method.cookCodec;
-                const TypeRef* codec = m_symbols.unwrapTypeAlias(&alias);
-                if(!codec || codec->name != "FamilyMemberAssetCodec" || codec->templateArgs.size() != 3u || codec->templateArgs[1].constantOrTypeName() != asset->name){
-                    reportError(errors, method.span, "'[cook_entry]' codec must be a visible family member codec alias for the built asset");
-                    return false;
-                }
-            }
-            const MethodDecl* reader = assetTypes.findCookEntryReader(method.cookValueReader, method.cookAcceptsValue);
-            const Stmt* diagnostic = m_symbols.findGlobalConstant(method.cookDiagnosticPrefix);
-            if(!diagnostic || !diagnostic->varType || diagnostic->varType->name != "StringView"){
-                reportError(errors, method.span, "'[cook_entry]' requires a StringView diagnostic prefix constant");
-                return false;
-            }
-            if(!reader || reader->isExtern || !reader->returnType || reader->returnType->name != "Expected" || reader->returnType->templateArgs.size() != 1u
-                || reader->returnType->templateArgs.front().constantOrTypeName() != method.params[0].type->name){
-                reportError(errors, method.span, "'[cook_entry]' requires a visible typed value reader returning Expected<Entry> and taking (in Name, in Path, in MetascriptValue) and optionally in CpuTaskScheduler, or a document_only reader taking (in Path, in StringView, in Path, in MetascriptDocument)");
-                return false;
-            }
-        }
-        else if(method.assetCookRole == AssetCookRole::GatherMerge){
-            if(method.params.size() != 3u
-                || method.params[0].mode != ParamPassingMode::In || method.params[0].type->name != "Name"
-                || method.params[1].mode != ParamPassingMode::In || method.params[1].type->name != "BinaryByteView"
-                || method.params[2].mode != ParamPassingMode::Mut || method.params[2].type->name != "BinaryUpdateContext"){
-                reportError(errors, method.span, "'[gather_merge]' requires (in Name, in BinaryByteView, mut BinaryUpdateContext)");
-                return false;
-            }
-        }
-        else if(method.assetCookRole == AssetCookRole::Writer){
-            const ClassDecl* asset = method.params.empty() ? nullptr : m_symbols.findClass(m_symbols.resolveBaseTypeName(method.params.front().type->name));
-            const TypeRef* bytes = method.params.size() == 2u ? method.params[1].type : nullptr;
-            const AssetTypeAnalyzer assetTypes(m_symbols);
-            if(!asset || asset->assetTypeName.empty() || !assetTypes.findAssetLoadBinaryMethod(*asset) || assetTypes.findImplementedAssetInterface(*asset)
-                || !bytes || method.params[0].mode != ParamPassingMode::In || method.params[1].mode != ParamPassingMode::Mut
-                || bytes->name != "Vector" || bytes->templateArgs.size() != 1u || bytes->templateArgs[0].constantOrTypeName() != "u8"){
-                reportError(errors, method.span, "'[asset_writer]' requires (in Asset, mut Vector<u8>) for an asset with an auto-generated codec");
-                return false;
-            }
-        }
-        else if(method.assetCookRole == AssetCookRole::Registrar && (method.params.size() != 1u || method.params[0].mode != ParamPassingMode::Mut
-            || (method.params[0].type->name != "CookEntryRegistry" && method.params[0].type->name != "CookDependencyRegistry"))){
-            reportError(errors, method.span, "'[cook_registrar]' requires a mutable cook entry or dependency registry");
-            return false;
-        }
-    }
     if(method.isOperator && !method.isExtern){
         if(!method.templateParams.empty()){
             reportError(errors, method.span, "operator overload cannot declare template parameters");
@@ -452,7 +362,7 @@ b8 TypeChecker::checkCallableSignature(const ClassDecl* enclosingClass, MethodDe
                 return false;
             }
         }
-        if(p.retainsBorrow && (method.isOverride || method.isOperator || method.assetCookRole != AssetCookRole::None)){
+        if(p.retainsBorrow && (method.isOverride || method.isOperator)){
             reportError(errors, p.span, "'in borrow' cannot change an imposed callable contract");
             ok = false;
         }

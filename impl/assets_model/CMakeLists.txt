@@ -19,6 +19,7 @@ target_link_libraries(nwb_assets_model PUBLIC nwb_assets nwb_assets_model_types 
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_model_cook)
+    target_sources(nwb_assets_model_cook PRIVATE "${CMAKE_CURRENT_LIST_DIR}/cook_registration.cpp")
     nwb_target_adhd_sources(nwb_assets_model_cook
         NAMESPACE "NWB::Impl"
         SOURCES
@@ -29,6 +30,7 @@ if(NWB_BUILD_PIPELINE)
     target_compile_definitions(nwb_assets_model_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_model_volume_entry)
+    target_sources(nwb_assets_model_volume_entry PRIVATE "${CMAKE_CURRENT_LIST_DIR}/volume_entry_registration.cpp")
     nwb_target_adhd_sources(nwb_assets_model_volume_entry
         NAMESPACE "NWB::Impl"
         SOURCES

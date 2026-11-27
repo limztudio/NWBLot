@@ -221,7 +221,6 @@ b8 ReadFontAtlasSettings(in Path path, in MetascriptValue asset, mut FontAtlasPa
     return true;
 }
 
-[asset_writer]
 b8 SerializeFontAtlasAsset(in FontAtlas atlas, mut Vector<u8> outBinary){
     if(!atlas.checkVirtualPath("FontAtlas::validatePayload"))
         return false;
@@ -293,7 +292,6 @@ b8 PopulateFontAtlasPayloadFromPreparedSourceConsuming(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_sidecar(s_PreparedFontExtension)]
 Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(in Name virtualPath, in Path path, in MetascriptValue asset){
     if(virtualPath == s_NameNone || !CheckMetadataAssetMap(path, asset, s_FontAtlasMetaDiagnosticPrefix))
         return MakeUnexpected(Failure());

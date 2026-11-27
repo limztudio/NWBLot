@@ -63,7 +63,6 @@ b8 ValidateSamplerCookEntryVirtualPath(in Name virtualPath){
     return false;
 }
 
-[asset_writer]
 b8 SerializeSamplerAsset(in Sampler sampler, mut Vector<u8> outBinary){
     if(!sampler.validatePayload())
         return false;

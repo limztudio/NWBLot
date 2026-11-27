@@ -54,7 +54,6 @@ class NullAllocatedBucket : ICookEntryBucket, NullAllocation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[asset_writer]
 b8 SerializeNullAllocatedAsset(in NullAllocatedAsset asset, mut Vector<u8> bytes){ return false; }
 
 

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("font", s_FontMetaDiagnosticPrefix, ParseFontCookMetadataValue, document_and_value, quiet)]
 Expected<Font> CookFontVolumeEntry(in FontCookEntry entry){
     return BuildFontAsset(entry);
 }

@@ -113,7 +113,6 @@ b8 MergeShaderArchiveIndexRecords(in Span<Record> incomingRecords, mut Vector<Re
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[gather_merge]
 b8 MergeGatheredGraphicsAsset(in Name virtualPath, in BinaryByteView incoming, mut BinaryUpdateContext context){
     if(virtualPath != s_IndexVirtualPathName || (!incoming.empty() && !incoming.hasData()))
         return false;

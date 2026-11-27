@@ -357,30 +357,104 @@ void RegisterAssetPairedSidecarRule(const AssetPairedSidecarRule& rule);
 [[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
 [[nodiscard]] b8 ParseAssetMetadata(Span<const DiscoveredNwbFile> nwbFiles, const Path& assetCacheDirectory, CookArena& cookArena, Core::CpuTaskScheduler& cpuScheduler, ScratchArena& scratchArena, ParsedAssetMetadata& outMetadata);
 
-template<typename Entry, typename Asset, typename Codec, const AStringView& DiagnosticPrefix, typename Read, typename Build>
-[[nodiscard]] inline b8 RegisterAuthoredCookEntry(CookEntryRegistry& registry, const TStringView label, const b8 acceptsValue, const b8 logsFailure, Read, Build){
+#define NWB_COOK_DISPATCH(fn) \
+    [](auto&&... __nwbCookArgs) -> decltype(fn(::Forward<decltype(__nwbCookArgs)>(__nwbCookArgs)...)){ \
+        return fn(::Forward<decltype(__nwbCookArgs)>(__nwbCookArgs)...); \
+    }
+
+namespace CookEntryRegistrationDetail{
+template<typename Read>
+[[nodiscard]] consteval b8 CanInvokeDocumentReader()noexcept{
+    return requires(
+        Read read,
+        CookEntryParseContext& context,
+        const Path& root,
+        AStringView virtualRoot,
+        const Path& path,
+        const Core::Metascript::Document& document
+    ){
+        read(context.cookArena, root, virtualRoot, path, document);
+    } || requires(
+        Read read,
+        const Path& root,
+        AStringView virtualRoot,
+        const Path& path,
+        const Core::Metascript::Document& document
+    ){
+        read(root, virtualRoot, path, document);
+    };
+}
+
+template<typename Read>
+[[nodiscard]] inline decltype(auto) InvokeDocumentReader(
+    CookEntryParseContext& context,
+    const Path& root,
+    const AStringView virtualRoot,
+    const Path& path,
+    const Core::Metascript::Document& document
+){
+    if constexpr(requires(Read read){ read(context.cookArena, root, virtualRoot, path, document); })
+        return Read{}(context.cookArena, root, virtualRoot, path, document);
+    else
+        return Read{}(root, virtualRoot, path, document);
+}
+
+template<typename Read>
+[[nodiscard]] inline decltype(auto) InvokeValueReader(
+    CookEntryParseContext& context,
+    const Name virtualPath,
+    const Path& path,
+    const Core::Metascript::Value& value
+){
+    if constexpr(requires(Read read){ read(context.cookArena, virtualPath, path, value, context.cpuScheduler); })
+        return Read{}(context.cookArena, virtualPath, path, value, context.cpuScheduler);
+    else if constexpr(requires(Read read){ read(virtualPath, path, value, context.cpuScheduler); })
+        return Read{}(virtualPath, path, value, context.cpuScheduler);
+    else if constexpr(requires(Read read){ read(context.cookArena, virtualPath, path, value); })
+        return Read{}(context.cookArena, virtualPath, path, value);
+    else
+        return Read{}(virtualPath, path, value);
+}
+
+template<typename Build>
+[[nodiscard]] inline decltype(auto) InvokeAssetBuilder(AssetArena& arena, auto& entry){
+    if constexpr(requires(Build build){ build(arena, entry); })
+        return Build{}(arena, entry);
+    else
+        return Build{}(entry);
+}
+};
+
+template<typename Entry, typename Asset, typename Codec, const AStringView& DiagnosticPrefix, b8 AcceptsValue, typename Read, typename Build>
+[[nodiscard]] inline b8 RegisterCookEntry(
+    CookEntryRegistry& registry,
+    const TStringView label,
+    const b8 logsFailure,
+    Read,
+    Build
+){
     using Bucket = CookEntryBucket<Entry, Asset, Codec>;
     typename Bucket::DocumentParseFunction readDocument;
     typename Bucket::ValueParseFunction readValue = nullptr;
-    if constexpr(requires(Read read, CookEntryParseContext& context, const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& document){ read(context, root, virtualRoot, path, document); }){
+    if constexpr(!AcceptsValue && CookEntryRegistrationDetail::CanInvokeDocumentReader<Read>()){
         readDocument = [](const Path& root, const AStringView virtualRoot, const Path& path, const Core::Metascript::Document& document, CookEntryParseContext& context){
-            return Read{}(context, root, virtualRoot, path, document);
+            return CookEntryRegistrationDetail::InvokeDocumentReader<Read>(context, root, virtualRoot, path, document);
         };
     }
     else{
         readDocument = [](const Path& root, const AStringView virtualRoot, const Path& path, const Core::Metascript::Document& document, CookEntryParseContext& context){
             return ParseCookMetadataDocument<Entry>(root, virtualRoot, path, document, DiagnosticPrefix, [&](const Name virtualPath, const Core::Metascript::Value& value){
-                return Read{}(context, virtualPath, path, value);
+                return CookEntryRegistrationDetail::InvokeValueReader<Read>(context, virtualPath, path, value);
             }, context.scratchArena);
         };
-        if(acceptsValue){
+        if constexpr(AcceptsValue){
             readValue = [](const Name virtualPath, const Path& path, const Core::Metascript::Value& value, CookEntryParseContext& context){
-                return Read{}(context, virtualPath, path, value);
+                return CookEntryRegistrationDetail::InvokeValueReader<Read>(context, virtualPath, path, value);
             };
         }
     }
     const typename Bucket::BuildAssetFunction build = [](Entry& entry, AssetArena& arena, ScratchArena&){
-        return Build{}(arena, entry);
+        return CookEntryRegistrationDetail::InvokeAssetBuilder<Build>(arena, entry);
     };
     return RegisterDocumentValueCookEntry<Entry, Asset, Codec>(label, readDocument, readValue, build, logsFailure, registry);
 }

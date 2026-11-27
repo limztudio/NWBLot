@@ -386,7 +386,6 @@ Expected<MaterialCookEntry> ParseMaterialCookMetadata(in Path root, in StringVie
     return entry;
 }
 
-[asset_writer]
 b8 SerializeMaterialAsset(in Material material, mut Vector<u8> outBinary){
     if(!material.validatePayload(s_MaterialSerializeContextText, s_MaterialSerializeContextText))
         return false;

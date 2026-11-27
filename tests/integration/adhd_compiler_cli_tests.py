@@ -394,22 +394,7 @@ def check_asset_cook_roles(compiler: pathlib.Path, root: pathlib.Path) -> None:
             raise AssertionError(f"unexpected asset role result: {actual}")
 
     asset = '[asset("sample")] class Sample{ public b8 loadBinary(in Span<u8> bytes); }\n'
-    document = "[cook_document] AssetMetadataParseResult Parse(mut AssetDocumentMetadataParseContext context){ return AssetMetadataParseResult::Unsupported; }"
-    prepare = "[volume_prepare] b8 Prepare(mut CookVolumePrepareContext context){ return true; }"
-    setup = "[cook_setup] void Setup(){}"
-    check(document, "AssetMetadataParserAutoRegistrar s_ParseRegistrar(&Parse, nullptr)", True)
-    check(prepare, "AssetVolumePrepareAutoRegistrar s_PrepareRegistrar(&Prepare)", True)
-    check(setup, "s_SetupRegistered = (Setup(), true)", True)
-    check(document.replace("mut AssetDocumentMetadataParseContext", "in AssetDocumentMetadataParseContext"), "must match its registry", False)
-    check(prepare.replace("CookVolumePrepareContext", "CookEntryRegistry"), "must match its registry", False)
-    check(setup.replace("Setup()", "Setup(in Name name)"), "requires a void function with no parameters", False)
-    merge = "[gather_merge] b8 Merge(in Name path, in BinaryByteView incoming, mut BinaryUpdateContext storage){ return true; }"
-    check(merge, "InvokeAssetGatherMerge<&Merge>", True)
-    check(merge.replace("mut BinaryUpdateContext", "in BinaryUpdateContext"), "mut BinaryUpdateContext", False)
-    writer = "[asset_writer] b8 Write(in Sample sample, mut Vector<u8> output){ return true; }\n"
-    entry = 'class Entry{ public Name path = s_NameNone; }\nconst StringView s_Label = "Sample meta";\n'
-    reader = "Expected<Entry> Read(in Name path, in Path file, in MetascriptValue value){ Entry entry; return entry; }\n"
-    builder = '[cook_entry("sample", s_Label, Read, document_and_value, quiet)] Expected<Sample> Build(in Entry entry){ Sample result(entry.path); return result; }\n'
+    entry = 'class Entry{ public Name path = s_NameNone; }\n'
     subsystem = '[subsystem("group")] class Group{ public AssetRef<Sample> owner; }\n'
     registration = "register_asset Group using TypedAssetRegistration<IAsset, Group, Entry>; "
     check(asset + subsystem + registration, "Group, Entry> s_GroupAssetRegistrar", True)
@@ -417,18 +402,20 @@ def check_asset_cook_roles(compiler: pathlib.Path, root: pathlib.Path) -> None:
     check(asset + "register_asset Sample;", "expected 'using'", False)
     check(asset + "register_asset Entry using AssetCodecRegistration<Entry>;", "requires an asset or a subsystem", False)
     check(asset + subsystem + registration * 2, "duplicate asset registration", False)
-    check(asset + writer, "SampleAssetCodec::serialize", True)
-    check('const StringView s_Ext = ".data";\n[cook_sidecar(s_Ext)] b8 ReadSidecar(){ return true; }', "AssetPairedSidecarRuleAutoRegistrar", True)
-    check("[cook_sidecar(missing)] b8 ReadSidecar(){ return true; }", "StringView extension constant", False)
-    check(asset + entry + reader + builder, "RegisterAuthoredCookEntry<Entry, Sample, SampleAssetCodec, s_Label>", True)
-    check(asset + entry + reader.replace("in MetascriptValue value)", "in MetascriptValue value, in CpuTaskScheduler scheduler)") + builder, "value, context.cpuScheduler)", True)
-    document_reader = "Expected<Entry> Read(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument doc){ Entry entry; return entry; }\n"
-    check(asset + entry + document_reader + builder.replace("document_and_value", "document_only"), "root, virtualRoot, path, document);", True)
-    check(asset + entry + document_reader + builder, "requires a visible typed value reader", False)
     check(asset + "register_asset Sample using NonStandaloneAssetRegistration<Sample>;", "NonStandaloneAssetRegistration<Sample>", True)
-    check(asset + writer.replace("mut Vector<u8>", "in Vector<u8>"), "requires (in Asset, mut Vector<u8>)", False)
-    check(asset + entry + reader.replace("in Name path", "in u32 path") + builder, "requires a visible typed value reader", False)
-    check("[cook_registrar] b8 Bad(in CookEntryRegistry registry){ return false; }", "requires a mutable cook entry or dependency registry", False)
+
+    retired_attrs = [
+        "[asset_writer] b8 Write(){ return true; }",
+        '[cook_entry("sample", s_Label, Read, document_and_value, quiet)] b8 Build(){ return true; }',
+        "[cook_sidecar(s_Ext)] b8 Read(){ return true; }",
+        "[gather_merge] b8 Merge(){ return true; }",
+        "[cook_registrar] b8 Reg(){ return true; }",
+        "[cook_document] b8 Parse(){ return true; }",
+        "[volume_prepare] b8 Prepare(){ return true; }",
+        "[cook_setup] void Setup(){}",
+    ]
+    for snippet in retired_attrs:
+        check(snippet, "unsupported attribute on callable", False)
 
 
 def main() -> None:

@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("texture", s_TextureDiagnosticPrefix, ParseTextureCookMetadata, document_only, quiet)]
 Expected<Texture> CookTextureVolumeEntry(in TextureCookEntry entry){
     return BuildTextureAsset(entry);
 }

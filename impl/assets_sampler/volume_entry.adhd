@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("sampler", s_SamplerMetaDiagnosticPrefix, ParseSamplerCookMetadataValue, document_only, quiet)]
 Expected<Sampler> CookSamplerVolumeEntry(in SamplerCookEntry entry){
     return BuildSamplerAsset(entry);
 }

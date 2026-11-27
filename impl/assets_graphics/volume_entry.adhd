@@ -35,7 +35,6 @@ register_asset CsgSubsystem using SubsystemCookRegistration<CsgSubsystem>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("component", s_ModelComponentDiagnosticPrefix, ParseModelComponentCookMetadata, document_and_value, log_failure, ModelComponentCodec)]
 Expected<ModelComponentAsset> CookModelComponentVolumeEntry(in ModelComponentCookEntry entry){
     return BuildComponentAssetFromEntry<ModelComponentAsset, ModelComponentCookEntry>(entry);
 }
@@ -47,7 +46,6 @@ b8 ExtractModelComponentDependencies(in CookDependencyItemContext context, mut I
     return collector.addAssetDependency(entry.value().component.model.name(), Model::AssetTypeName());
 }
 
-[cook_entry("component", s_MeshComponentDiagnosticPrefix, ParseMeshComponentCookMetadata, document_and_value, log_failure, MeshComponentCodec)]
 Expected<MeshComponentAsset> CookMeshComponentVolumeEntry(in MeshComponentCookEntry entry){
     return BuildComponentAssetFromEntry<MeshComponentAsset, MeshComponentCookEntry>(entry);
 }
@@ -59,7 +57,6 @@ b8 ExtractMeshComponentDependencies(in CookDependencyItemContext context, mut IC
     return collector.addAssetDependency(entry.value().component.mesh.name(), Mesh::AssetTypeName());
 }
 
-[cook_entry("component", s_RendererComponentDiagnosticPrefix, ParseRendererComponentCookMetadata, document_and_value, log_failure, RendererComponentCodec)]
 Expected<RendererComponentAsset> CookRendererComponentVolumeEntry(in RendererComponentCookEntry entry){
     return BuildComponentAssetFromEntry<RendererComponentAsset, RendererComponentCookEntry>(entry);
 }
@@ -71,7 +68,6 @@ b8 ExtractRendererComponentDependencies(in CookDependencyItemContext context, mu
     return collector.addAssetDependency(entry.value().component.material.name(), Material::AssetTypeName());
 }
 
-[cook_entry("component", s_MaterialInstanceComponentDiagnosticPrefix, ParseMaterialInstanceComponentCookMetadata, document_and_value, log_failure, MaterialInstanceComponentCodec)]
 Expected<MaterialInstanceComponentAsset> CookMaterialInstanceComponentVolumeEntry(in MaterialInstanceComponentCookEntry entry){
     return BuildComponentAssetFromEntry<MaterialInstanceComponentAsset, MaterialInstanceComponentCookEntry>(entry);
 }
@@ -80,7 +76,6 @@ b8 ExtractMaterialInstanceComponentDependencies(in CookDependencyItemContext con
     return ReadCookDependencyEntry<MaterialInstanceComponentCookEntry>(context, s_MaterialInstanceComponentDiagnosticPrefix, ParseMaterialInstanceComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_SkeletonJointPaletteComponentDiagnosticPrefix, ParseSkeletonJointPaletteComponentCookMetadata, document_and_value, log_failure, SkeletonJointPaletteComponentCodec)]
 Expected<SkeletonJointPaletteComponentAsset> CookSkeletonJointPaletteComponentVolumeEntry(in SkeletonJointPaletteComponentCookEntry entry){
     return BuildComponentAssetFromEntry<SkeletonJointPaletteComponentAsset, SkeletonJointPaletteComponentCookEntry>(entry);
 }
@@ -89,7 +84,6 @@ b8 ExtractSkeletonJointPaletteComponentDependencies(in CookDependencyItemContext
     return ReadCookDependencyEntry<SkeletonJointPaletteComponentCookEntry>(context, s_SkeletonJointPaletteComponentDiagnosticPrefix, ParseSkeletonJointPaletteComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_SkeletonPoseComponentDiagnosticPrefix, ParseSkeletonPoseComponentCookMetadata, document_and_value, log_failure, SkeletonPoseComponentCodec)]
 Expected<SkeletonPoseComponentAsset> CookSkeletonPoseComponentVolumeEntry(in SkeletonPoseComponentCookEntry entry){
     return BuildComponentAssetFromEntry<SkeletonPoseComponentAsset, SkeletonPoseComponentCookEntry>(entry);
 }
@@ -98,7 +92,6 @@ b8 ExtractSkeletonPoseComponentDependencies(in CookDependencyItemContext context
     return ReadCookDependencyEntry<SkeletonPoseComponentCookEntry>(context, s_SkeletonPoseComponentDiagnosticPrefix, ParseSkeletonPoseComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_SkinnedMeshBindingComponentDiagnosticPrefix, ParseSkinnedMeshBindingComponentCookMetadata, document_and_value, log_failure, SkinnedMeshBindingComponentCodec)]
 Expected<SkinnedMeshBindingComponentAsset> CookSkinnedMeshBindingComponentVolumeEntry(in SkinnedMeshBindingComponentCookEntry entry){
     return BuildComponentAssetFromEntry<SkinnedMeshBindingComponentAsset, SkinnedMeshBindingComponentCookEntry>(entry);
 }
@@ -110,7 +103,6 @@ b8 ExtractSkinnedMeshBindingComponentDependencies(in CookDependencyItemContext c
     return collector.addAssetDependency(entry.value().component.skin.name(), Skin::AssetTypeName());
 }
 
-[cook_entry("component", s_CsgReceiverComponentDiagnosticPrefix, ParseCsgReceiverComponentCookMetadata, document_and_value, log_failure, CsgReceiverComponentCodec)]
 Expected<CsgReceiverComponentAsset> CookCsgReceiverComponentVolumeEntry(in CsgReceiverComponentCookEntry entry){
     return BuildComponentAssetFromEntry<CsgReceiverComponentAsset, CsgReceiverComponentCookEntry>(entry);
 }
@@ -119,7 +111,6 @@ b8 ExtractCsgReceiverComponentDependencies(in CookDependencyItemContext context,
     return ReadCookDependencyEntry<CsgReceiverComponentCookEntry>(context, s_CsgReceiverComponentDiagnosticPrefix, ParseCsgReceiverComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_StaticCsgMeshComponentDiagnosticPrefix, ParseStaticCsgMeshComponentCookMetadata, document_and_value, log_failure, StaticCsgMeshComponentCodec)]
 Expected<StaticCsgMeshComponentAsset> CookStaticCsgMeshComponentVolumeEntry(in StaticCsgMeshComponentCookEntry entry){
     return BuildComponentAssetFromEntry<StaticCsgMeshComponentAsset, StaticCsgMeshComponentCookEntry>(entry);
 }
@@ -128,7 +119,6 @@ b8 ExtractStaticCsgMeshComponentDependencies(in CookDependencyItemContext contex
     return ReadCookDependencyEntry<StaticCsgMeshComponentCookEntry>(context, s_StaticCsgMeshComponentDiagnosticPrefix, ParseStaticCsgMeshComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_SkinnedCsgMeshComponentDiagnosticPrefix, ParseSkinnedCsgMeshComponentCookMetadata, document_and_value, log_failure, SkinnedCsgMeshComponentCodec)]
 Expected<SkinnedCsgMeshComponentAsset> CookSkinnedCsgMeshComponentVolumeEntry(in SkinnedCsgMeshComponentCookEntry entry){
     return BuildComponentAssetFromEntry<SkinnedCsgMeshComponentAsset, SkinnedCsgMeshComponentCookEntry>(entry);
 }
@@ -137,7 +127,6 @@ b8 ExtractSkinnedCsgMeshComponentDependencies(in CookDependencyItemContext conte
     return ReadCookDependencyEntry<SkinnedCsgMeshComponentCookEntry>(context, s_SkinnedCsgMeshComponentDiagnosticPrefix, ParseSkinnedCsgMeshComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_CsgCutterComponentDiagnosticPrefix, ParseCsgCutterComponentCookMetadata, document_and_value, log_failure, CsgCutterComponentCodec)]
 Expected<CsgCutterComponentAsset> CookCsgCutterComponentVolumeEntry(in CsgCutterComponentCookEntry entry){
     return BuildComponentAssetFromEntry<CsgCutterComponentAsset, CsgCutterComponentCookEntry>(entry);
 }
@@ -146,7 +135,6 @@ b8 ExtractCsgCutterComponentDependencies(in CookDependencyItemContext context, m
     return ReadCookDependencyEntry<CsgCutterComponentCookEntry>(context, s_CsgCutterComponentDiagnosticPrefix, ParseCsgCutterComponentCookMetadata).has_value();
 }
 
-[cook_registrar]
 b8 RegisterGraphicsComponentCookDependencies(mut CookDependencyRegistry registry){
     return registry.registerType(ModelComponentAsset::AssetTypeName(), ExtractModelComponentDependencies, IComponent::AssetTypeName())
         && registry.registerType(MeshComponentAsset::AssetTypeName(), ExtractMeshComponentDependencies, IComponent::AssetTypeName())

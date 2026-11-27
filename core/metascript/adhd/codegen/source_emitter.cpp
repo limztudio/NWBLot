@@ -4,7 +4,6 @@
 
 #include "source_emitter.h"
 #include "constructor_argument_emitter.h"
-#include "asset_cook_role_emitter.h"
 #include "parallel_statement_emitter.h"
 #include "simd_expression_analysis.h"
 
@@ -372,18 +371,6 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
             out.append(hdr.data(), hdr.size());
             out.append("\r\n");
         });
-        for(const MethodDecl* fn : unit.freeFunctions){
-            if(fn && !fn->isImported && (fn->assetCookRole == AssetCookRole::Entry || !fn->pairedSidecar.empty())){
-                out.append("#if defined(NWB_COOK)\r\n#include <core/assets/cook_metadata.h>\r\n#endif\r\n");
-                break;
-            }
-        }
-        for(const MethodDecl* fn : unit.freeFunctions){
-            if(fn && !fn->isImported && fn->assetCookRole == AssetCookRole::GatherMerge){
-                out.append("#include <core/assets/gather_merge_registry.h>\r\n");
-                break;
-            }
-        }
         if(hasAutoCodecRegistrar && !codec.registrarHeader.empty()){
             out.append(CodegenSymbols::s_IncludePrefix.data(), CodegenSymbols::s_IncludePrefix.size());
             out.append(codec.registrarHeader.data(), codec.registrarHeader.size());
@@ -436,7 +423,17 @@ MString SourceEmitter::emitSource(const TranslationUnit& unit, const MStringView
 
         emitOutOfClassCallable(out, nullptr, *fn, true, false, false);
     }
-    AssetCookRoleEmitter::Emit(out, unit, m_symbols);
+    for(const AssetRegistration& registration : unit.assetRegistrations){
+        const TypeRef* registrar = m_symbols.unwrapTypeAlias(registration.registrar);
+        const b8 cookOnly = registrar && (registrar->name == ContractSemantics::s_FamilyCookRegistrationType || registrar->name == ContractSemantics::s_CompositeRootRegistrationType || registrar->name == ContractSemantics::s_NonStandaloneAssetRegistrationType);
+        if(cookOnly)
+            out.append("#if defined(NWB_COOK)\r\n");
+        out.append("static ");
+        CppTypeEmitter(m_symbols).emitTypeCpp(out, *registration.registrar);
+        out.append(" s_").append(registration.className).append("AssetRegistrar;\r\n");
+        if(cookOnly)
+            out.append("#endif\r\n");
+    }
 
     for(const RegistrationCall& registration : unit.registrationCalls){
         out.append(registration.cppName.data(), registration.cppName.size());

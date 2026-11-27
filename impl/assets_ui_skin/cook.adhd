@@ -349,7 +349,6 @@ Expected<UiSkinTypography> ParseUiSkinTypography(in Path path, in MetascriptValu
     return result;
 }
 
-[asset_writer]
 b8 SerializeUiSkinAsset(in UiSkin skin, mut Vector<u8> outBinary){
     if(!skin.validatePayload())
         return false;

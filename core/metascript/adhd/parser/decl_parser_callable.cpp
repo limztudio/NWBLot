@@ -256,61 +256,6 @@ b8 DeclParser::applyCallableAttributes(const Span<const ParsedAttribute> attribu
         b8 matchedAttr = false;
         if(!tryParseExternAttribute(attr, decl.cppExportName, decl.requiredHeader, decl.isExtern, matchedAttr))
             return false;
-        if(attr.name == KeywordSemantics::s_CookSidecar){
-            if(!decl.pairedSidecar.empty() || attr.arguments.size() != 1u || attr.arguments[0].kind != TokenType::Identifier){
-                m_cursor.error(attr.line, attr.column, "'[cook_sidecar]' requires a StringView extension constant");
-                return false;
-            }
-            decl.pairedSidecar = attr.arguments[0].text;
-            matchedAttr = true;
-        }
-        if(attr.name == KeywordSemantics::s_CookEntry){
-            const auto& args = attr.arguments;
-            if(decl.assetCookRole != AssetCookRole::None || (args.size() != 5u && args.size() != 6u) || (args.size() == 6u && args[5].kind != TokenType::Identifier) || args[0].kind != TokenType::StringLiteral || args[0].text.empty()
-                || args[1].kind != TokenType::Identifier || args[2].kind != TokenType::Identifier || args[3].kind != TokenType::Identifier || args[4].kind != TokenType::Identifier
-                || (args[3].text != KeywordSemantics::s_CookDocumentOnly && args[3].text != KeywordSemantics::s_CookDocumentAndValue) || (args[4].text != KeywordSemantics::s_CookQuiet && args[4].text != KeywordSemantics::s_CookLogFailure)){
-                m_cursor.error(attr.line, attr.column, "'[cook_entry]' requires a label, diagnostic prefix, value reader, document_only or document_and_value, and quiet or log_failure");
-                return false;
-            }
-            decl.assetCookRole = AssetCookRole::Entry;
-            decl.cookKindLabel = args[0].text;
-            decl.cookDiagnosticPrefix = args[1].text;
-            decl.cookValueReader = args[2].text;
-            if(args.size() == 6u)
-                decl.cookCodec = args[5].text;
-            decl.cookAcceptsValue = args[3].text == KeywordSemantics::s_CookDocumentAndValue;
-            decl.cookLogsFailure = args[4].text == KeywordSemantics::s_CookLogFailure;
-            matchedAttr = true;
-        }
-        if(attr.name == KeywordSemantics::s_GatherMerge){
-            if(decl.assetCookRole != AssetCookRole::None || !attr.arguments.empty()){
-                m_cursor.error(attr.line, attr.column, "'[gather_merge]' takes no arguments and cannot be combined with another registry role");
-                return false;
-            }
-            decl.assetCookRole = AssetCookRole::GatherMerge;
-            matchedAttr = true;
-        }
-        if(attr.name == KeywordSemantics::s_CookDocument || attr.name == KeywordSemantics::s_VolumePrepare || attr.name == KeywordSemantics::s_CookSetup){
-            if(decl.assetCookRole != AssetCookRole::None || !attr.arguments.empty()){
-                m_cursor.error(attr.line, attr.column, "a cook callback role must appear once and takes no arguments");
-                return false;
-            }
-            if(attr.name == KeywordSemantics::s_CookDocument)
-                decl.assetCookRole = AssetCookRole::DocumentParser;
-            else if(attr.name == KeywordSemantics::s_VolumePrepare)
-                decl.assetCookRole = AssetCookRole::VolumePrepare;
-            else
-                decl.assetCookRole = AssetCookRole::Setup;
-            matchedAttr = true;
-        }
-        if(attr.name == KeywordSemantics::s_AssetWriter || attr.name == KeywordSemantics::s_CookRegistrar){
-            if(decl.assetCookRole != AssetCookRole::None || !attr.arguments.empty()){
-                m_cursor.error(attr.line, attr.column, "an asset cook role must appear once and takes no arguments");
-                return false;
-            }
-            decl.assetCookRole = attr.name == KeywordSemantics::s_AssetWriter ? AssetCookRole::Writer : AssetCookRole::Registrar;
-            matchedAttr = true;
-        }
         if(attr.name == KeywordSemantics::s_CppExplicitBool || attr.name == KeywordSemantics::s_CppTakeAssignment){
             b8& enabled = attr.name == KeywordSemantics::s_CppExplicitBool ? decl.exportsExplicitBool : decl.exportsTakingAssignment;
             if(enabled || !attr.arguments.empty() || decl.isExtern){

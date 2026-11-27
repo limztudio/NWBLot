@@ -93,7 +93,6 @@ Expected<Skin> BuildSkinAssetFromPayload(
     return asset;
 }
 
-[asset_writer]
 b8 SerializeMeshAsset(in Mesh mesh, mut Vector<u8> outBinary){
     if(!mesh.validatePayload())
         return false;
@@ -115,7 +114,6 @@ b8 SerializeMeshAsset(in Mesh mesh, mut Vector<u8> outBinary){
     );
 }
 
-[asset_writer]
 b8 SerializeSkinAsset(in Skin skin, mut Vector<u8> outBinary){
     if(!skin.validatePayload())
         return false;

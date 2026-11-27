@@ -63,7 +63,6 @@ register_asset SceneAsset using CompositeRootRegistration<SceneAsset>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("component", s_TransformDiagnosticPrefix, ParseTransformComponentCookMetadata, document_and_value, log_failure, TransformComponentCodec)]
 Expected<TransformComponentAsset> CookTransformVolumeEntry(in TransformComponentCookEntry entry){
     return BuildComponentAssetFromEntry<TransformComponentAsset, TransformComponentCookEntry>(entry);
 }
@@ -72,7 +71,6 @@ b8 ExtractTransformComponentDependencies(in CookDependencyItemContext context, m
     return ReadCookDependencyEntry<TransformComponentCookEntry>(context, s_TransformDiagnosticPrefix, ParseTransformComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_LocalTransformDiagnosticPrefix, ParseLocalTransformComponentCookMetadata, document_and_value, log_failure, LocalTransformComponentCodec)]
 Expected<LocalTransformComponentAsset> CookLocalTransformVolumeEntry(in LocalTransformComponentCookEntry entry){
     return BuildComponentAssetFromEntry<LocalTransformComponentAsset, LocalTransformComponentCookEntry>(entry);
 }
@@ -81,7 +79,6 @@ b8 ExtractLocalTransformComponentDependencies(in CookDependencyItemContext conte
     return ReadCookDependencyEntry<LocalTransformComponentCookEntry>(context, s_LocalTransformDiagnosticPrefix, ParseLocalTransformComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_SceneParentDiagnosticPrefix, ParseSceneParentComponentCookMetadata, document_and_value, log_failure, SceneParentComponentCodec)]
 Expected<SceneParentComponentAsset> CookSceneParentVolumeEntry(in SceneParentComponentCookEntry entry){
     return BuildComponentAssetFromEntry<SceneParentComponentAsset, SceneParentComponentCookEntry>(entry);
 }
@@ -90,7 +87,6 @@ b8 ExtractSceneParentComponentDependencies(in CookDependencyItemContext context,
     return ReadCookDependencyEntry<SceneParentComponentCookEntry>(context, s_SceneParentDiagnosticPrefix, ParseSceneParentComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_CameraDiagnosticPrefix, ParseCameraComponentCookMetadata, document_and_value, log_failure, CameraComponentCodec)]
 Expected<CameraComponentAsset> CookCameraVolumeEntry(in CameraComponentCookEntry entry){
     return BuildComponentAssetFromEntry<CameraComponentAsset, CameraComponentCookEntry>(entry);
 }
@@ -99,7 +95,6 @@ b8 ExtractCameraComponentDependencies(in CookDependencyItemContext context, mut 
     return ReadCookDependencyEntry<CameraComponentCookEntry>(context, s_CameraDiagnosticPrefix, ParseCameraComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_LightDiagnosticPrefix, ParseLightComponentCookMetadata, document_and_value, log_failure, LightComponentCodec)]
 Expected<LightComponentAsset> CookLightVolumeEntry(in LightComponentCookEntry entry){
     return BuildComponentAssetFromEntry<LightComponentAsset, LightComponentCookEntry>(entry);
 }
@@ -108,7 +103,6 @@ b8 ExtractLightComponentDependencies(in CookDependencyItemContext context, mut I
     return ReadCookDependencyEntry<LightComponentCookEntry>(context, s_LightDiagnosticPrefix, ParseLightComponentCookMetadata).has_value();
 }
 
-[cook_entry("component", s_ActiveCameraDiagnosticPrefix, ParseActiveCameraComponentCookMetadata, document_and_value, log_failure, ActiveCameraComponentCodec)]
 Expected<ActiveCameraComponentAsset> CookActiveCameraComponentVolumeEntry(in ActiveCameraComponentCookEntry entry){
     ActiveCameraComponentAsset asset(entry.virtualPath);
     if(!asset.validatePayload())
@@ -120,17 +114,14 @@ b8 ExtractActiveCameraComponentDependencies(in CookDependencyItemContext context
     return ReadCookDependencyEntry<ActiveCameraComponentCookEntry>(context, s_ActiveCameraDiagnosticPrefix, ParseActiveCameraComponentCookMetadata).has_value();
 }
 
-[cook_entry("entity", s_EntityDiagnosticPrefix, ParseEntityCookMetadata, document_and_value, log_failure)]
 Expected<EntityAsset> CookEntityVolumeEntry(in EntityCookEntry entry){
     return BuildEntityAssetFromComponents(entry.virtualPath, entry.name, entry.components);
 }
 
-[cook_entry("project", s_ProjectDiagnosticPrefix, ParseProjectCookMetadata, document_and_value, log_failure)]
 Expected<ProjectAsset> CookProjectVolumeEntry(in ProjectCookEntry entry){
     return BuildProjectAssetFromStartScene(entry.virtualPath, entry.startScene);
 }
 
-[cook_entry("scene", s_SceneDiagnosticPrefix, ParseSceneCookMetadata, document_and_value, log_failure)]
 Expected<SceneAsset> CookSceneVolumeEntry(in SceneCookEntry entry){
     return BuildSceneAssetFromContents(entry.virtualPath, entry.subsystems, entry.assets, entry.entities);
 }
@@ -171,7 +162,6 @@ b8 ExtractSceneDependencies(in CookDependencyItemContext context, mut ICookDepen
     return true;
 }
 
-[cook_registrar]
 b8 RegisterSceneCookDependencies(mut CookDependencyRegistry registry){
     return registry.registerDefaultEntryAsset(s_DefaultProjectVirtualPath, ProjectAsset::AssetTypeName(), s_DefaultProjectVirtualPathText)
         && registry.registerType(TransformComponentAsset::AssetTypeName(), ExtractTransformComponentDependencies, IComponent::AssetTypeName())

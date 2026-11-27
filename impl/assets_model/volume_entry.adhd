@@ -40,12 +40,10 @@ b8 ExtractModelDependencies(in CookDependencyItemContext context, mut ICookDepen
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("model", s_ModelMetaDiagnosticPrefix, ParseModelCookMetadata, document_and_value, log_failure)]
 Expected<Model> CookModelVolumeEntry(in ModelCookEntry entry){
     return BuildModelAsset(entry);
 }
 
-[cook_registrar]
 b8 RegisterModelCookDependency(mut CookDependencyRegistry registry){
     return registry.registerType(Model::AssetTypeName(), ExtractModelDependencies);
 }

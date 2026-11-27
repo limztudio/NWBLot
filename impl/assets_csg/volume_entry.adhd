@@ -16,7 +16,6 @@ b8 ExtractCsgShapeDependencies(in CookDependencyItemContext context, mut ICookDe
     });
 }
 
-[cook_registrar]
 b8 RegisterCsgShapeCookDependency(mut CookDependencyRegistry registry){
     return registry.registerType(CsgShape::AssetTypeName(), ExtractCsgShapeDependencies);
 }

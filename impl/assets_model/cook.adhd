@@ -303,7 +303,6 @@ Expected<ModelCookEntry> ParseModelCookMetadata(in Name virtualPath, in Path nwb
     return entry;
 }
 
-[asset_writer]
 b8 SerializeModelAsset(in Model model, mut Vector<u8> outBinary){
     if(!model.validatePayload())
         return false;

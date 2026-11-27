@@ -226,7 +226,6 @@ Path BuildTextureDataSidecarPath(in Path nwbFilePath){
     return dataPath;
 }
 
-[asset_writer]
 b8 SerializeTextureAsset(in Texture texture, mut Vector<u8> outBinary){
     if(!texture.validatePayload())
         return false;
@@ -331,7 +330,6 @@ Expected<TextureCookMetadataHeader> ParseTextureCookMetadataHeader(in Name virtu
     return header;
 }
 
-[cook_sidecar(s_TextureDataExtension)]
 Expected<TextureCookEntry> ParseTextureCookMetadata(in Name virtualPath, in Path nwbFilePath, in MetascriptValue asset){
     const auto header = ParseTextureCookMetadataHeader(virtualPath, nwbFilePath, asset);
     if(!header.has_value())

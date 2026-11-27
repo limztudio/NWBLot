@@ -26,7 +26,6 @@ b8 ValidateSkeletonJointEntryMap(in b8 isMap, in Path nwbFilePath, in usize join
     return false;
 }
 
-[asset_writer]
 b8 SerializeSkeletonAsset(in Skeleton skeleton, mut Vector<u8> outBinary){
     if(!skeleton.validatePayload())
         return false;

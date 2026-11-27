@@ -93,21 +93,18 @@ b8 ValidateSceneAssetNicknameUnique(in b8 inserted, in StringView nicknameView, 
     return false;
 }
 
-[asset_writer]
 b8 SerializeEntityAsset(in EntityAsset entity, mut Vector<u8> outBinary){
     if(!entity.validatePayload())
         return false;
     return SceneAssetBinaryCodec().serializeEntity(Span<ComponentRef>(entity.components()), entity.name().hash(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeProjectAsset(in ProjectAsset project, mut Vector<u8> outBinary){
     if(!project.validatePayload())
         return false;
     return SceneAssetBinaryCodec().serializeProject(project.startScene().name().hash(), outBinary);
 }
 
-[asset_writer]
 b8 SerializeSceneAsset(in SceneAsset scene, mut Vector<u8> outBinary){
     if(!scene.validatePayload())
         return false;

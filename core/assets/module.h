@@ -206,6 +206,32 @@ public:
     }
 };
 
+#if defined(NWB_COOK)
+template<typename AssetT, typename WriterFn>
+[[nodiscard]] inline b8 InvokeAssetCodecSerialize(
+    const IAssetCodec& codec,
+    const IAsset& asset,
+    AssetBytes& outBinary,
+    const TStringView failureContext,
+    WriterFn&& writer
+){
+    if(!codec.checkSerializeAssetType(asset, failureContext))
+        return false;
+    return writer(*::MakeNotNull(::checked_cast<const AssetT*>(&asset)), outBinary);
+}
+
+#define NWB_DEFINE_ASSET_CODEC_SERIALIZE(codecType, assetType, writerFn) \
+    ::b8 codecType::serialize(const ::NWB::Core::Assets::IAsset& asset, ::NWB::Core::Assets::AssetBytes& outBinary)const{ \
+        return ::NWB::Core::Assets::InvokeAssetCodecSerialize<assetType>( \
+            *this, \
+            asset, \
+            outBinary, \
+            FOUNDATION_TEXT(#codecType "::serialize"), \
+            [](const assetType& value, ::NWB::Core::Assets::AssetBytes& bytes){ return writerFn(value, bytes); } \
+        ); \
+    }
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

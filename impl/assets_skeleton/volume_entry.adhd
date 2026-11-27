@@ -8,7 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("skeleton", s_SkeletonMetaDiagnosticPrefix, ParseSkeletonCookMetadata, document_and_value, log_failure)]
 Expected<Skeleton> CookSkeletonVolumeEntry(in SkeletonCookEntry entry){
     return BuildSkeletonAsset(entry);
 }

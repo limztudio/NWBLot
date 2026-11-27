@@ -13,7 +13,6 @@
 
 register_asset SkinningSubsystem using SubsystemCookRegistration<SkinningSubsystem>;
 
-[cook_entry("skin", s_SkinMetaDiagnosticPrefix, ParseSkinCookMetadata, document_and_value, log_failure)]
 Expected<Skin> CookSkinVolumeEntry(in SkinCookEntry entry){
     return BuildSkinAsset(entry);
 }
@@ -34,12 +33,10 @@ b8 ExtractSkinDependencies(in CookDependencyItemContext context, mut ICookDepend
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cook_entry("mesh", s_MeshMetaText, ParseMeshCookMetadata, document_and_value, log_failure)]
 Expected<Mesh> CookMeshVolumeEntry(mut MeshCookEntry entry){
     return BuildMeshAsset(entry);
 }
 
-[cook_registrar]
 b8 RegisterSkinCookDependency(mut CookDependencyRegistry registry){
     return registry.registerType(Skin::AssetTypeName(), ExtractSkinDependencies);
 }

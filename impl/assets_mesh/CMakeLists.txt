@@ -48,6 +48,7 @@ target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_subsystem nwb
 
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_mesh_cook)
+    target_sources(nwb_assets_mesh_cook PRIVATE "${CMAKE_CURRENT_LIST_DIR}/cook_registration.cpp")
     nwb_target_adhd_sources(nwb_assets_mesh_cook
         NAMESPACE "NWB::Impl"
         SOURCES
@@ -64,6 +65,7 @@ if(NWB_BUILD_PIPELINE)
     target_compile_definitions(nwb_assets_mesh_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_mesh_volume_entries)
+    target_sources(nwb_assets_mesh_volume_entries PRIVATE "${CMAKE_CURRENT_LIST_DIR}/volume_entries_registration.cpp")
     nwb_target_adhd_sources(nwb_assets_mesh_volume_entries
         NAMESPACE "NWB::Impl"
         SOURCES

@@ -107,19 +107,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetCookRole{
-    enum Enum : u8{
-        None,
-        Writer,
-        Registrar,
-        Entry,
-        GatherMerge,
-        DocumentParser,
-        VolumePrepare,
-        Setup,
-    };
-};
-
 struct MethodDecl{
     const ClassDecl* declaringClass = nullptr;
     AccessSpecifier::Enum access = AccessSpecifier::None;
@@ -169,14 +156,6 @@ struct MethodDecl{
     b8 isExtern = false;
     b8 isVariadic = false;
     b8 returnsBorrowedView = false;
-    AssetCookRole::Enum assetCookRole = AssetCookRole::None;
-    MStringView pairedSidecar;
-    MStringView cookKindLabel;
-    MStringView cookDiagnosticPrefix;
-    MStringView cookValueReader;
-    MStringView cookCodec;
-    b8 cookAcceptsValue = false;
-    b8 cookLogsFailure = false;
     u8 callLoweringKind = 0u;
 
 

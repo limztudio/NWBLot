@@ -85,6 +85,7 @@ class RendererFramePipeline : NoCopy{
     private Optional<mut IGpuTaskGraphPresentationContributor> m_preparedTaskGraphPresentationContributor;
     private Optional<mut IGpuTaskGraphOutputLayerContributor> m_preparedTaskGraphOutputLayerContributor;
     private Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> m_instanceTransformPatchContributor;
+    private Optional<mut IDebugLineProvider> m_debugLineProvider;
     private ActiveSceneSubsystems m_defaultSceneSubsystems;
     private ActiveSceneSubsystemsRef m_activeSceneSubsystems;
 
@@ -205,6 +206,7 @@ class RendererFramePipeline : NoCopy{
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems);
     public void setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor);
+    public void setDebugLineProvider(in Optional<mut IDebugLineProvider> provider);
 
     public b8 isTransparentFeatureEnabled()const{
         return this.m_activeSceneSubsystems.has_value() && this.m_activeSceneSubsystems.value().hasSubsystem<TransparentSubsystem>();

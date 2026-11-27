@@ -78,6 +78,10 @@ void RendererSystem::setInstanceTransformPatchContributor(in Optional<mut IGpuTa
     this.m_pipeline.setInstanceTransformPatchContributor(contributor);
 }
 
+void RendererSystem::setDebugLineProvider(in Optional<mut IDebugLineProvider> provider){
+    this.m_pipeline.setDebugLineProvider(provider);
+}
+
 void RendererSystem::setRefractionEnabled(in b8 enabled){
     this.m_pipeline.setRefractionEnabled(enabled);
 }
@@ -178,7 +182,10 @@ b8 RendererFramePipeline::validateResources(in u32 width, in u32 height, in u32 
         if(!createdTargetsResult.has_value())
             return false;
         this.commitFrameTargets(createdTargetsResult.value());
-        targetsReady = this.m_deferredSystem.createDeferredLightingPipeline() && this.m_deferredSystem.createDeferredCompositePipeline();
+        targetsReady = this.m_deferredSystem.createDeferredLightingPipeline()
+            && this.m_deferredSystem.createDeferredCompositePipeline()
+            && this.m_deferredSystem.createDeferredDebugLinePipelines(this.m_frameTargets.compositeDebugFramebuffer.deref())
+        ;
         if(!targetsReady)
             this.resetFrameTargets();
     }
@@ -398,6 +405,11 @@ void RendererFramePipeline::setActiveSceneSubsystems(in ActiveSceneSubsystemsRef
 
 void RendererFramePipeline::setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor){
     this.m_instanceTransformPatchContributor = contributor;
+    this.m_raytracingSystem.setInstanceTransformPatchContributor(contributor);
+}
+
+void RendererFramePipeline::setDebugLineProvider(in Optional<mut IDebugLineProvider> provider){
+    this.m_debugLineProvider = provider;
 }
 
 b8 RendererFramePipeline::setSurfelGiQualitySettings(in SurfelGiQualitySettings settings){

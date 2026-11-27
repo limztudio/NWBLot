@@ -1081,19 +1081,25 @@ Manifold CollideHulls(
     return CollideHullFaces(hullB, posB, rotB, best.indexB, hullA, posA, rotA, posA, posB, false, maxDistance);
 }
 
-Manifold CollideHullAndMesh(
+void CollideHullAndMeshMulti(
     in HullShape hullA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in MeshShape meshB,
     in VectorSingle posB,
     in VectorSingle rotB,
-    in f32 maxDistance
+    in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
 ){
-    Manifold m;
+    outManifold = Manifold();
+    outExtraManifolds.clear();
     if(meshB.nodes.empty() || meshB.triangles.empty() || hullA.vertices.empty() || hullA.facePlanes.empty())
-        return m;
+        return;
 
+    const b8 hasTriFilter = triFilter.has_value();
     VectorSingle localHullPos(0.0f);
     VectorSingle localHullRot(0.0f, 0.0f, 0.0f, 1.0f);
     RelativeTransformValues(posB, rotB, posA, rotA, localHullPos, localHullRot);
@@ -1163,6 +1169,8 @@ Manifold CollideHullAndMesh(
             const u32 firstTri = node.leftOrFirst();
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
+                if(hasTriFilter && !triFilter.value()(meshShapeId, ti))
+                    continue;
                 in MeshTriangle tri = meshB.triangles[ti];
                 const VectorSingle tv0(tri.v0, 0.0f);
                 const VectorSingle tv1(tri.v1, 0.0f);
@@ -1672,11 +1680,11 @@ Manifold CollideHullAndMesh(
         }
     }
 
-    if((candidates.empty() || deepestSep > 0.0f) && closedMesh && IsPointInsideClosedMesh(meshB, hullCentroidB)){
+    if((candidates.empty() || deepestSep > 0.0f) && closedMesh && IsPointInsideClosedMeshFiltered(meshB, hullCentroidB, meshShapeId, triFilter)){
         VectorSingle closePt(0.0f);
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = 0u;
-        if(FindClosestPointOnClosedMesh(meshB, hullCentroidB, closePt, closeN, closeTri)){
+        if(FindClosestPointOnClosedMeshFiltered(meshB, hullCentroidB, meshShapeId, triFilter, closePt, closeN, closeTri)){
             const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle nAtoB = -worldOut;
             const VectorSingle supLocalA = HullSupportVertex(hullA, Vector3InverseRotate(-closeN, localHullRot));
@@ -1695,8 +1703,23 @@ Manifold CollideHullAndMesh(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
-    return m;
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
+}
+
+Manifold CollideHullAndMesh(
+    in HullShape hullA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold primary;
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideHullAndMeshMulti(hullA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
+    return primary;
 }
 
 void TransformLocalAabbValuesWithAbsAxes(
@@ -1718,19 +1741,26 @@ void TransformLocalAabbValuesWithAbsAxes(
     outMax = cA + eA;
 }
 
-Manifold CollideMeshes(
+void CollideMeshesMulti(
     in MeshShape meshA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in MeshShape meshB,
     in VectorSingle posB,
     in VectorSingle rotB,
-    in f32 maxDistance
+    in f32 maxDistance,
+    in ShapeId meshShapeIdA,
+    in ShapeId meshShapeIdB,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
 ){
-    Manifold m;
+    outManifold = Manifold();
+    outExtraManifolds.clear();
     if(meshA.nodes.empty() || meshA.triangles.empty() || meshB.nodes.empty() || meshB.triangles.empty())
-        return m;
+        return;
 
+    const b8 hasTriFilter = triFilter.has_value();
     VectorSingle relPosBtoA(0.0f);
     VectorSingle relRotBtoA(0.0f, 0.0f, 0.0f, 1.0f);
     RelativeTransformValues(posA, rotA, posB, rotB, relPosBtoA, relRotBtoA);
@@ -1797,6 +1827,8 @@ Manifold CollideMeshes(
                 }
                 chunkBaseB = chunkEndB;
                 for(u32 tAi = firstA; tAi < endA; ++tAi){
+                    if(hasTriFilter && !triFilter.value()(meshShapeIdA, tAi))
+                        continue;
                     in MeshTriangle triA = meshA.triangles[tAi];
                     const VectorSingle av0(triA.v0, 0.0f);
                     const VectorSingle av1(triA.v1, 0.0f);
@@ -1813,6 +1845,8 @@ Manifold CollideMeshes(
 
                     for(usize bi = 0u; bi < chunkCountB; ++bi){
                         const u32 tBi = (chunkEndB - cast<u32>(chunkCountB)) + cast<u32>(bi);
+                        if(hasTriFilter && !triFilter.value()(meshShapeIdB, tBi))
+                            continue;
                         if(!AabbOverlapsValues(tAMin, tAMax, VectorSingle(cMin[bi]), VectorSingle(cMax[bi])))
                             continue;
 
@@ -1834,15 +1868,35 @@ Manifold CollideMeshes(
                             continue;
 
                         if(gjk.distance() > 1.0e-5f){
-                            const f32 sep = gjk.distance() - totalR;
-                            const VectorSingle nLocalA = gjk.normal();
+                            f32 sep = gjk.distance() - totalR;
+                            VectorSingle nLocalA = gjk.normal();
+                            if(edgeFlagsB != 0u){
+                                VectorSingle smoothedNLocal = -nLocalA;
+                                if(SmoothMeshContactNormal(bv0InA, bv1InA, bv2InA, nBInA, edgeFlagsB, VectorSingle(gjk.pointB), -nLocalA, smoothedNLocal)){
+                                    const f32 signedPlane = Vector3Dot(nBInA, VectorSingle(gjk.pointA() - bv0InA, 0.0f)).x - totalR;
+                                    if(signedPlane > maxDistance)
+                                        continue;
+                                    sep = signedPlane;
+                                    nLocalA = SafeNormalizeVec3(-smoothedNLocal, nLocalA);
+                                }
+                            }
+                            if(edgeFlagsA != 0u){
+                                VectorSingle smoothedNLocal = nLocalA;
+                                if(SmoothMeshContactNormal(av0, av1, av2, rawTriNA, edgeFlagsA, gjk.pointA(), nLocalA, smoothedNLocal)){
+                                    const f32 signedPlane = Vector3Dot(rawTriNA, VectorSingle(VectorSingle(gjk.pointB) - av0, 0.0f)).x - totalR;
+                                    if(signedPlane > maxDistance)
+                                        continue;
+                                    sep = signedPlane;
+                                    nLocalA = SafeNormalizeVec3(smoothedNLocal, nLocalA);
+                                }
+                            }
                             if(cullA && Vector3Dot(nLocalA, rawTriNA).x <= 0.0f)
                                 continue;
                             if(cullB && Vector3Dot(nLocalA, nBInA).x >= 0.0f)
                                 continue;
                             const VectorSingle nAtoB = Vector3Rotate(nLocalA, rotA);
                             const VectorSingle wA = TransformPointValues(posA, rotA, gjk.pointA()) + nAtoB * rA;
-                            const VectorSingle wB = TransformPointValues(posA, rotA, VectorSingle(gjk.pointB)) - nAtoB * rB;
+                            const VectorSingle wB = wA + nAtoB * sep;
                             if(sep < deepestSep){
                                 deepestSep = sep;
                                 chosenNormal = nAtoB;
@@ -2132,11 +2186,11 @@ Manifold CollideMeshes(
             const VectorSingle cAInB = TransformPointValues(relPosAtoB, relRotAtoB, (VectorSingle(boxA.lowerBound) + VectorSingle(boxA.upperBound)) * 0.5f);
             const VectorSingle vAInB = TransformPointValues(relPosAtoB, relRotAtoB, VectorSingle(meshA.triangles[0u].v0, 0.0f));
             VectorSingle probeB(0.0f);
-            b8 insideB = IsPointInsideClosedMesh(meshB, cAInB);
+            b8 insideB = IsPointInsideClosedMeshFiltered(meshB, cAInB, meshShapeIdB, triFilter);
             if(insideB){
                 probeB = cAInB;
             }
-            else if(IsPointInsideClosedMesh(meshB, vAInB)){
+            else if(IsPointInsideClosedMeshFiltered(meshB, vAInB, meshShapeIdB, triFilter)){
                 insideB = true;
                 probeB = vAInB;
             }
@@ -2144,7 +2198,7 @@ Manifold CollideMeshes(
                 VectorSingle closePt(0.0f);
                 VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
                 u32 closeTri = 0u;
-                if(FindClosestPointOnClosedMesh(meshB, probeB, closePt, closeN, closeTri)){
+                if(FindClosestPointOnClosedMeshFiltered(meshB, probeB, meshShapeIdB, triFilter, closePt, closeN, closeTri)){
                     const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle nAtoB = -worldOut;
                     const VectorSingle wProbe = TransformPointValues(posB, rotB, probeB);
@@ -2163,11 +2217,11 @@ Manifold CollideMeshes(
             const VectorSingle cBInA = TransformPointValues(relPosBtoA, relRotBtoA, (VectorSingle(boxB.lowerBound) + VectorSingle(boxB.upperBound)) * 0.5f);
             const VectorSingle vBInA = TransformPointValues(relPosBtoA, relRotBtoA, VectorSingle(meshB.triangles[0u].v0, 0.0f));
             VectorSingle probeA(0.0f);
-            b8 insideA = IsPointInsideClosedMesh(meshA, cBInA);
+            b8 insideA = IsPointInsideClosedMeshFiltered(meshA, cBInA, meshShapeIdA, triFilter);
             if(insideA){
                 probeA = cBInA;
             }
-            else if(IsPointInsideClosedMesh(meshA, vBInA)){
+            else if(IsPointInsideClosedMeshFiltered(meshA, vBInA, meshShapeIdA, triFilter)){
                 insideA = true;
                 probeA = vBInA;
             }
@@ -2175,7 +2229,7 @@ Manifold CollideMeshes(
                 VectorSingle closePt(0.0f);
                 VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
                 u32 closeTri = 0u;
-                if(FindClosestPointOnClosedMesh(meshA, probeA, closePt, closeN, closeTri)){
+                if(FindClosestPointOnClosedMeshFiltered(meshA, probeA, meshShapeIdA, triFilter, closePt, closeN, closeTri)){
                     const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(closeN, rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
                     const VectorSingle wProbe = TransformPointValues(posA, rotA, probeA);
                     const VectorSingle wSurf = TransformPointValues(posA, rotA, closePt);
@@ -2191,8 +2245,23 @@ Manifold CollideMeshes(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
-    return m;
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
+}
+
+Manifold CollideMeshes(
+    in MeshShape meshA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Manifold primary;
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideMeshesMulti(meshA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
+    return primary;
 }
 
 

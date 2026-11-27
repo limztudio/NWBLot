@@ -1,0 +1,3 @@
+vertex_shader asset;
+
+asset.entry_point = "main";

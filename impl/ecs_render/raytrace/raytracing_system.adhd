@@ -59,6 +59,9 @@ class RendererRayTracingSystem : NoCopy{
     private b8 m_shadowVisibilityTraceResourcesPreflighted = false;
     private b8 m_shadowVisibilityBackendPipelinePreflighted = false;
     private RayTracingSceneGatherScratch m_sceneGatherScratch;
+    private Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> m_instanceTransformPatchContributor;
+    private Vector<u32> m_preparedShadowInstanceEntityIds;
+    private Vector<u32> m_preparedSceneBvhInstanceEntityIds;
 
     public RendererRayTracingSystem(
         mut World world,
@@ -85,6 +88,8 @@ class RendererRayTracingSystem : NoCopy{
     }
 
     public mut GraphicsRuntime graphics(){ return this.m_graphics; }
+    public void setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor){ this.m_instanceTransformPatchContributor = contributor; }
+    public b8 hasInstanceTransformPatchContributor()const{ return this.m_instanceTransformPatchContributor.has_value(); }
 
     [cpp_unwind]
     public void invalidateResources();
@@ -188,6 +193,22 @@ class RendererRayTracingSystem : NoCopy{
     }
     public void confirmPreparedSceneBvhUploads();
     public b8 preparedSceneTlasBuildReady()const{ return this.m_preparedSceneTlas.ready(); }
+    public b8 preparedSceneTlasUsesInstanceBuffer()const{ return this.m_preparedSceneTlas.useInstanceBuffer(); }
+    [cpp_unwind]
+    public Expected<Optional<GpuUploadBlobId>> retainPreparedSceneTlasUpload(mut GpuTaskGraph graph)const{
+        return this.m_preparedSceneTlas.retainUpload(this.m_rayTracingState, graph);
+    }
+    public GpuDescriptorHandle preparedSceneTlasInstanceUavHeapHandle()const{ return this.m_preparedSceneTlas.instanceUavHeapHandle(); }
+    public Span<u32> preparedSceneTlasInstanceEntityIds()const{ return this.m_preparedSceneTlas.instanceEntityIds(); }
+    public GpuDescriptorHandle shadowInstanceUavHeapHandle()const{ return this.m_rayTracingState.shadow.m_shadowInstanceUavHeapHandle; }
+    public Span<u32> preparedShadowInstanceEntityIds()const{ return Span<u32>(this.m_preparedShadowInstanceEntityIds); }
+    public GpuDescriptorHandle sceneInstanceUavHeapHandle()const{ return this.m_rayTracingState.sceneBvh.m_sceneInstanceUavHeapHandle; }
+    public Span<u32> preparedSceneBvhInstanceEntityIds()const{ return Span<u32>(this.m_preparedSceneBvhInstanceEntityIds); }
+    public GpuDescriptorHandle csgTraceContextUavHeapHandle()const{ return this.m_rayTracingState.sceneBvh.m_csgTraceContextUavHeapHandle; }
+    public Span<u32> preparedCsgCutterEntityIds()const{ return Span<u32>(this.m_lightSpaceShadow.m_csg.snapshot.cutterEntityIds); }
+    public Span<u32> preparedCsgInstanceEntityIds()const{ return Span<u32>(this.m_lightSpaceShadow.m_csg.instanceEntityIds); }
+    public u32 preparedCsgCutterByteOffset()const{ return this.m_lightSpaceShadow.m_csg.cutterByteOffset; }
+    public u32 preparedCsgInstanceByteOffset()const{ return this.m_lightSpaceShadow.m_csg.instanceByteOffset; }
     public ResourceStates sceneTlasBackingInitialState()const;
     public void confirmPreparedSceneTlasBuild(){ this.m_preparedSceneTlas.confirm(this.m_rayTracingState); }
     public b8 preparedMeshBlasBuildsReady()const{ return this.m_preparedMeshBlasBuildsReady; }

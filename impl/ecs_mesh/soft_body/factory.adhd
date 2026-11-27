@@ -10,26 +10,36 @@
 
 
 [cpp_unwind]
+b8 TryExtractSoftBodySourceTriangles(in Mesh sourceMesh, in StringView callerName, mut Vector<u32> outIndices){
+    outIndices.clear();
+    if(sourceMesh.positionStream().empty() || sourceMesh.meshlets().empty()){
+        error("{}: source mesh has empty positions or meshlets", callerName);
+        return false;
+    }
+
+    const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(sourceMesh);
+    if(!indices.has_value() || indices.value().empty() || (indices.value().size() % cast<usize>(s_MeshletTriangleIndexCount)) != 0u){
+        error("{}: failed to decode triangle indices from source mesh", callerName);
+        return false;
+    }
+    outIndices = indices.value();
+    return true;
+}
+
+[cpp_unwind]
 Expected<SoftBody> CreateSoftBodyFromMesh(
     in Mesh sourceMesh,
     in SoftBodyMeshCreateParams params,
     mut Vector<u32> outSourcePositionToParticle
 ){
     outSourcePositionToParticle.clear();
-    if(sourceMesh.positionStream().empty() || sourceMesh.meshlets().empty()){
-        error("CreateSoftBodyFromMesh: source mesh has empty positions or meshlets");
+    Vector<u32> indices;
+    if(!TryExtractSoftBodySourceTriangles(sourceMesh, "CreateSoftBodyFromMesh", indices))
         return MakeUnexpected(Failure());
-    }
-
-    const Expected<Vector<u32>> indices = BuildMeshletTriangleIndices(sourceMesh);
-    if(!indices.has_value() || indices.value().empty() || (indices.value().size() % cast<usize>(s_MeshletTriangleIndexCount)) != 0u){
-        error("CreateSoftBodyFromMesh: failed to decode triangle indices from source mesh");
-        return MakeUnexpected(Failure());
-    }
 
     SoftBody sb = CreateSoftBodyFromTriangles(
         Span<f32x3u>(sourceMesh.positionStream()),
-        Span<u32>(indices.value()),
+        Span<u32>(indices),
         params,
         outSourcePositionToParticle
     );
@@ -45,6 +55,39 @@ Expected<SoftBody> CreateSoftBodyFromMesh(
 Expected<SoftBody> CreateSoftBodyFromMesh(in Mesh sourceMesh, in SoftBodyMeshCreateParams params){
     Vector<u32> unusedMap;
     return CreateSoftBodyFromMesh(sourceMesh, params, unusedMap);
+}
+
+[cpp_unwind]
+Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(
+    in Mesh sourceMesh,
+    in f32 cellSize,
+    in SoftBodyMeshCreateParams params,
+    mut SoftBodyCageBinding outCageBinding
+){
+    outCageBinding.clear();
+    Vector<u32> indices;
+    if(!TryExtractSoftBodySourceTriangles(sourceMesh, "CreateTetrahedralSoftBodyAssetFromMesh", indices))
+        return MakeUnexpected(Failure());
+
+    SoftBody sb = CreateTetrahedralSoftBodyFromMesh(
+        Span<f32x3u>(sourceMesh.positionStream()),
+        Span<u32>(indices),
+        cellSize,
+        params,
+        outCageBinding
+    );
+    if(sb.particles.empty() || sb.surfaceTriangles.empty()){
+        error("CreateTetrahedralSoftBodyAssetFromMesh: source mesh produced empty tetrahedral soft body");
+        return MakeUnexpected(Failure());
+    }
+
+    return sb;
+}
+
+[cpp_unwind]
+Expected<SoftBody> CreateTetrahedralSoftBodyAssetFromMesh(in Mesh sourceMesh, in f32 cellSize, in SoftBodyMeshCreateParams params){
+    SoftBodyCageBinding unusedBinding;
+    return CreateTetrahedralSoftBodyAssetFromMesh(sourceMesh, cellSize, params, unusedBinding);
 }
 
 

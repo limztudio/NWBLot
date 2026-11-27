@@ -54,6 +54,7 @@ class RayTracingFrameCpuStateSnapshot{
 class RayTracingShadowPreparationResourceSnapshot{
     public RayTracingAccelStructHandle sceneTlas;
     public BufferHandle sceneTlasBackingBuffer;
+    public BufferHandle tlasInstanceBuffer;
     public BufferHandle bvhSortKeysBuffer;
     public BufferHandle bvhSortPayloadBuffer;
     public BufferHandle bvhVisitCounterBuffer;

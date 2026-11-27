@@ -443,6 +443,43 @@ b8 ShadowPrepareUploadChainBuilder::declareSceneBvhUploads(in ShadowPrepareUploa
     return true;
 }
 
+b8 ShadowPrepareUploadChainBuilder::declareSceneTlasInstanceUpload(in ShadowPrepareUploadInputs inputs, mut ShadowPrepareUploadChain chain){
+    if(!this.m_raytracingSystem.preparedSceneTlasUsesInstanceBuffer())
+        return true;
+    const auto tlasInstancesResult = ImportOptionalShadowPrepareExternalBuffer(this.m_graph, inputs.rayTracingShadowResources.tlasInstanceBuffer, Name("shadow.prepare.tlas_instances"), "Scene TLAS Instances");
+    if(!tlasInstancesResult.has_value() || !tlasInstancesResult.value().valid()){
+        warning("RendererSystem: could not import preflighted scene TLAS instance buffer");
+        return false;
+    }
+    chain.tlasInstanceBuffer = tlasInstancesResult.value();
+
+    const auto tlasUpload = this.m_raytracingSystem.retainPreparedSceneTlasUpload(this.m_graph);
+    if(!tlasUpload.has_value()){
+        warning("RendererSystem: could not retain preflighted scene TLAS instance upload data");
+        return false;
+    }
+    if(!tlasUpload.value().has_value())
+        return true;
+
+    const auto tlasUploadTaskResult = AppendChainedUploadBufferTask(
+        this.m_graph,
+        Name("shadow.prepare.tlas_instances.upload"),
+        "Scene TLAS Instances Upload",
+        GpuTaskCostHint::Medium,
+        tlasUpload.value().value(),
+        chain.tlasInstanceBuffer,
+        "RendererSystem: could not declare scene TLAS instance upload",
+        chain.pendingContextReadCompletions,
+        chain.completionTask
+    );
+    if(!tlasUploadTaskResult.has_value()){
+        chain.tasks.tlasInstances = GpuTaskId();
+        return false;
+    }
+    chain.tasks.tlasInstances = tlasUploadTaskResult.value();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

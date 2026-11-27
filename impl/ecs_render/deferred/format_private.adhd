@@ -32,6 +32,13 @@ Format SelectDeferredOpaqueColorFormat(mut Device device){
     return SelectSupportedFormat(candidates, requiredSupport, device);
 }
 
+Format SelectDeferredCompositeColorFormat(mut Device device){
+    Array<Format, 1u> candidates;
+    candidates[0u] = Format::RGBA16_FLOAT;
+    const FormatSupport requiredSupport = FormatSupport::Texture | FormatSupport::ShaderUavStore | FormatSupport::RenderTarget;
+    return SelectSupportedFormat(candidates, requiredSupport, device);
+}
+
 Format SelectGBufferDepthFormat(mut Device device){
     Array<Format, 3u> candidates;
     candidates[0u] = Format::D32;

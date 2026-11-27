@@ -492,43 +492,52 @@ void SolveSixDofAxisConstraint(
         return;
     }
 
+    f32 curVRel = vRel;
     if(enableSpring && springHertz > 0.0f && useBias){
         const f32 sBias = Clamp(springSoft.biasRate * (posErr - springTargetPos), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
-        const f32 dSpr = -effMass * springSoft.massScale * (vRel + sBias) - springSoft.impulseScale * inOutSpringImp;
+        const f32 dSpr = -effMass * springSoft.massScale * (curVRel + sBias) - springSoft.impulseScale * inOutSpringImp;
         f32 newSpr = inOutSpringImp + dSpr;
-        if(maxMotForce > 0.0f && !enableMotor){
+        if(maxMotForce > 0.0f){
             const f32 maxImp = maxMotForce * h;
             newSpr = Clamp(newSpr, -maxImp, maxImp);
         }
         const f32 appliedSpr = newSpr - inOutSpringImp;
         inOutSpringImp = newSpr;
         outDeltaImpulse += appliedSpr;
+        curVRel += appliedSpr / effMass;
     }
 
     if(enableMotor && maxMotForce > 0.0f){
         const f32 maxImp = maxMotForce * h;
-        const f32 newMot = Clamp(inOutMotImp - effMass * (vRel - motorTargetVel), -maxImp, maxImp);
+        const f32 newMot = Clamp(inOutMotImp - effMass * (curVRel - motorTargetVel), -maxImp, maxImp);
         const f32 appliedMot = newMot - inOutMotImp;
         inOutMotImp = newMot;
         outDeltaImpulse += appliedMot;
+        curVRel += appliedMot / effMass;
     }
 
     if(motion == JointMotion::Limited && lowLim <= highLim){
         if(posErr < lowLim){
-            const f32 newLow = ComputeLimitImpulseStep(posErr - lowLim, vRel, effMass, limitSoft, limitRest, useBias, true, inOutLowImp);
-            outDeltaImpulse += newLow - inOutLowImp;
+            const f32 newLow = ComputeLimitImpulseStep(posErr - lowLim, curVRel, effMass, limitSoft, limitRest, useBias, true, inOutLowImp);
+            const f32 appliedLow = newLow - inOutLowImp;
+            outDeltaImpulse += appliedLow;
             inOutLowImp = newLow;
+            curVRel += appliedLow / effMass;
         }
         else if(useBias && inOutLowImp != 0.0f){
+            curVRel -= inOutLowImp / effMass;
             outDeltaImpulse -= inOutLowImp;
             inOutLowImp = 0.0f;
         }
         if(posErr > highLim){
-            const f32 newHigh = ComputeLimitImpulseStep(posErr - highLim, vRel, effMass, limitSoft, limitRest, useBias, false, inOutHighImp);
-            outDeltaImpulse += newHigh - inOutHighImp;
+            const f32 newHigh = ComputeLimitImpulseStep(posErr - highLim, curVRel, effMass, limitSoft, limitRest, useBias, false, inOutHighImp);
+            const f32 appliedHigh = newHigh - inOutHighImp;
+            outDeltaImpulse += appliedHigh;
             inOutHighImp = newHigh;
+            curVRel += appliedHigh / effMass;
         }
         else if(useBias && inOutHighImp != 0.0f){
+            curVRel -= inOutHighImp / effMass;
             outDeltaImpulse -= inOutHighImp;
             inOutHighImp = 0.0f;
         }
@@ -754,7 +763,8 @@ void ResolveSixDofSwingAxisLimits(
     outLo = cfg.lowerLimit;
     outHi = cfg.upperLimit;
     if(swingMode == SixDofSwingLimitMode::Cone){
-        outMotion = JointMotion::Free;
+        if(outMotion != JointMotion::Locked)
+            outMotion = JointMotion::Free;
     }
     else if(swingMode == SixDofSwingLimitMode::Pyramid && swingLim > 0.0f){
         if(outMotion == JointMotion::Free){
@@ -2083,7 +2093,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             const f32 sBias = Clamp(jc.freeSpringSoftness.biasRate * (angle - jc.springTarget), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
             const f32 dSpring = -axialMass * jc.freeSpringSoftness.massScale * (wAxis + sBias) - jc.freeSpringSoftness.impulseScale * jc.coneOrSuspensionImpulse;
             f32 newSpring = jc.coneOrSuspensionImpulse + dSpring;
-            if(jc.maxMotorForce > 0.0f && !jc.enableMotor()){
+            if(jc.maxMotorForce > 0.0f){
                 const f32 maxSpr = jc.maxMotorForce * h;
                 newSpring = Clamp(newSpring, -maxSpr, maxSpr);
             }
@@ -2230,7 +2240,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             const f32 sBias = Clamp(jc.freeSpringSoftness.biasRate * (trans - jc.springTarget), -s_MaxJointBiasSpeed, s_MaxJointBiasSpeed);
             const f32 dSpring = -axialMass * jc.freeSpringSoftness.massScale * (vAxis + sBias) - jc.freeSpringSoftness.impulseScale * jc.coneOrSuspensionImpulse;
             f32 newSpring = jc.coneOrSuspensionImpulse + dSpring;
-            if(jc.maxMotorForce > 0.0f && !jc.enableMotor()){
+            if(jc.maxMotorForce > 0.0f){
                 const f32 maxSpr = jc.maxMotorForce * h;
                 newSpring = Clamp(newSpring, -maxSpr, maxSpr);
             }
@@ -3088,7 +3098,7 @@ b8 ProjectJointConstraintWithKinematics(
     const VectorSingle d = jc.baseCenterDelta() + deltaPosB - deltaPosA + rB - rA;
 
     VectorSingle linErr(0.0f);
-    if(jc.type == JointType::Spherical || jc.type == JointType::Fixed || jc.type == JointType::Revolute){
+    if((jc.type == JointType::Spherical && !jc.isSpring()) || (jc.type == JointType::Fixed && !jc.isSpring()) || jc.type == JointType::Revolute){
         linErr = d;
     }
     else if(jc.type == JointType::Prismatic || jc.type == JointType::Wheel){
@@ -3105,8 +3115,10 @@ b8 ProjectJointConstraintWithKinematics(
     else if(jc.type == JointType::Distance){
         f32 dist = 0.0f;
         const VectorSingle u = LengthAndNormalizeVec3(d, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), dist);
-        if(!jc.enableLimit())
-            linErr = u * (dist - jc.length());
+        if(!jc.enableLimit()){
+            if(!jc.isSpring())
+                linErr = u * (dist - jc.length());
+        }
         else if(dist < jc.minLength())
             linErr = u * (dist - jc.minLength());
         else if(dist > jc.maxLength())
@@ -3118,12 +3130,6 @@ b8 ProjectJointConstraintWithKinematics(
         if(dist > jc.maxLength())
             linErr = u * (dist - jc.maxLength());
     }
-    else if(jc.type == JointType::Motor){
-        if(jc.enableMotor() && jc.maxMotorForce > 0.0f){
-            const VectorSingle linTarget = Vector3Rotate(jc.linearOffset(), qA);
-            linErr = VectorSingle(d - linTarget, 0.0f);
-        }
-    }
     else if(jc.type == JointType::Path && jc.extraDataIndex < jointExtraData.size()){
         in JointExtraData extra = jointExtraData[jc.extraDataIndex];
         if(extra.pathPoints.size() >= 2u){
@@ -3134,7 +3140,9 @@ b8 ProjectJointConstraintWithKinematics(
             EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
             const VectorSingle cpWorldOff = Vector3Rotate(cpLocal, qA);
             const VectorSingle tanWorld = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-            linErr = VectorSingle(d - cpWorldOff, 0.0f);
+            const VectorSingle pathDiff(d - cpWorldOff, 0.0f);
+            if(!jc.isSpring())
+                linErr = pathDiff;
             const b8 usePathLimits = (!extra.pathClosed || jc.enableLimit());
             if(usePathLimits){
                 f32 pathMin = 0.0f;
@@ -3149,7 +3157,7 @@ b8 ProjectJointConstraintWithKinematics(
                         pathMax = Clamp(jc.upperLimit, pathMin, totalLen);
                     }
                 }
-                const f32 sSigned = arcPos + Vector3Dot(linErr, tanWorld).x;
+                const f32 sSigned = arcPos + Vector3Dot(pathDiff, tanWorld).x;
                 if(sSigned < pathMin)
                     linErr = linErr + tanWorld * (sSigned - pathMin);
                 else if(sSigned > pathMax)
@@ -3213,7 +3221,7 @@ b8 ProjectJointConstraintWithKinematics(
         const VectorSingle uA = LengthAndNormalizeVec3(vecA, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), lenA);
         const VectorSingle uB = LengthAndNormalizeVec3(vecB, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), lenB);
         const f32 cErr = (lenA + jc.ratio * lenB) - jc.length();
-        b8 doPullProj = (Abs(VectorSingle(cErr)).x > jc.projectionLinearTolerance);
+        b8 doPullProj = (!jc.isSpring() && Abs(VectorSingle(cErr)).x > jc.projectionLinearTolerance);
         if(jc.enableLimit())
             doPullProj = (cErr > jc.projectionLinearTolerance);
         if(doPullProj){
@@ -3312,7 +3320,7 @@ b8 ProjectJointConstraintWithKinematics(
     }
 
     VectorSingle angErr(0.0f);
-    if(jc.type == JointType::Fixed || jc.type == JointType::Prismatic || (jc.type == JointType::Motor && jc.enableMotor() && jc.maxTorque > 0.0f)){
+    if((jc.type == JointType::Fixed && !jc.isSpring()) || jc.type == JointType::Prismatic){
         const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
         angErr = ExtractRotationAngleVec(QuaternionMultiply(qB, QuaternionConjugate(qTarget)));
     }

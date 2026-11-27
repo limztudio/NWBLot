@@ -1809,7 +1809,7 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 validFluidVolumeData(in FluidVolumeComponent f)const{
         in FluidVolume v = f.volume;
-        if(cast<u8>(v.shape) > cast<u8>(FluidVolumeShape::Sphere))
+        if(cast<u8>(v.shape) >= cast<u8>(FluidVolumeShape::kCount))
             return false;
         if(!IsFinite(VectorSingle(v.surfaceNormalOffset))
             || !IsFinite(VectorSingle(v.bounds.lowerBound))
@@ -1916,7 +1916,7 @@ class SubsystemPhysicsComponentBinaryCodec{
 
     public b8 validForceFieldData(in ForceFieldComponent ff)const{
         in ForceField field = ff.field;
-        if(cast<u8>(field.type) > cast<u8>(ForceFieldType::LocalGravityOverride))
+        if(cast<u8>(field.type) >= cast<u8>(ForceFieldType::kCount))
             return false;
         if(!IsFinite(VectorSingle(field.bounds.lowerBound))
             || !IsFinite(VectorSingle(field.bounds.upperBound))

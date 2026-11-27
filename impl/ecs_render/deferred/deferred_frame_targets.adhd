@@ -285,6 +285,7 @@ class DeferredFrameTargets{
     public TextureHandle causticResolveHalf;
     public TextureHandle causticResolveGeometry;
     public FramebufferHandle framebuffer;
+    public FramebufferHandle compositeDebugFramebuffer;
     public DeferredBindlessFrameResources bindless;
     public DeferredLaggedLightingHistoryResources laggedLightingHistory;
     public AvboitFrameTargets avboit;

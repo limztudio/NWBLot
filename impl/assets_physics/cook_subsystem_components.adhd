@@ -869,8 +869,13 @@ Expected<FluidVolumeComponentCookEntry> ParseFluidVolumeComponentCookMetadata(in
                 if(text.value() == "half_space_plane") v.shape = FluidVolumeShape::HalfSpacePlane;
                 else if(text.value() == "box_aabb") v.shape = FluidVolumeShape::BoxAabb;
                 else if(text.value() == "sphere") v.shape = FluidVolumeShape::Sphere;
+                else if(text.value() == "obb") v.shape = FluidVolumeShape::Obb;
+                else if(text.value() == "convex_hull") v.shape = FluidVolumeShape::ConvexHull;
+                else if(text.value() == "mesh") v.shape = FluidVolumeShape::Mesh;
+                else if(text.value() == "spline_river") v.shape = FluidVolumeShape::SplineRiver;
+                else if(text.value() == "gerstner_ocean") v.shape = FluidVolumeShape::GerstnerOcean;
                 else{
-                    error("{} '{}': field 'shape' must be 'half_space_plane', 'box_aabb', or 'sphere'", s_FluidVolumeComponentDiagnosticPrefix, PathToString(file));
+                    error("{} '{}': unsupported fluid shape '{}'", s_FluidVolumeComponentDiagnosticPrefix, PathToString(file), text.value());
                     return false;
                 }
                 return true;
@@ -929,8 +934,13 @@ Expected<ForceFieldComponentCookEntry> ParseForceFieldComponentCookMetadata(in N
                 else if(text.value() == "vortex") f.type = ForceFieldType::Vortex;
                 else if(text.value() == "damping_zone") f.type = ForceFieldType::DampingZone;
                 else if(text.value() == "local_gravity_override") f.type = ForceFieldType::LocalGravityOverride;
+                else if(text.value() == "radial_impulse") f.type = ForceFieldType::RadialImpulse;
+                else if(text.value() == "directional") f.type = ForceFieldType::Directional;
+                else if(text.value() == "turbulence") f.type = ForceFieldType::Turbulence;
+                else if(text.value() == "aero_drag") f.type = ForceFieldType::AeroDrag;
+                else if(text.value() == "attractor") f.type = ForceFieldType::Attractor;
                 else{
-                    error("{} '{}': field 'type' must be 'global_gravity', 'point_gravity', 'box_wind', 'vortex', 'damping_zone', or 'local_gravity_override'", s_ForceFieldComponentDiagnosticPrefix, PathToString(file));
+                    error("{} '{}': unsupported force field type '{}'", s_ForceFieldComponentDiagnosticPrefix, PathToString(file), text.value());
                     return false;
                 }
                 return true;
@@ -982,8 +992,10 @@ b8 ParseArticulationLinkMap(in Path file, in MetascriptValue mapVal, mut Articul
             else if(text.value() == "prismatic") outLink.jointType = ArticulationJointType::Prismatic;
             else if(text.value() == "universal") outLink.jointType = ArticulationJointType::Universal;
             else if(text.value() == "spherical") outLink.jointType = ArticulationJointType::Spherical;
+            else if(text.value() == "planar") outLink.jointType = ArticulationJointType::Planar;
+            else if(text.value() == "helical") outLink.jointType = ArticulationJointType::Helical;
             else{
-                error("{} '{}': field 'joint_type' must be 'fixed', 'revolute', 'prismatic', 'universal', or 'spherical'", s_ArticulationComponentDiagnosticPrefix, PathToString(file));
+                error("{} '{}': field 'joint_type' must be 'fixed', 'revolute', 'prismatic', 'universal', 'spherical', 'planar', or 'helical'", s_ArticulationComponentDiagnosticPrefix, PathToString(file));
                 return false;
             }
             return true;
@@ -1070,6 +1082,17 @@ b8 ParseArticulationLinkMap(in Path file, in MetascriptValue mapVal, mut Articul
         if(key == "limit_restitution") return ReadPhysicsF32Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.limitRestitution);
         if(key == "joint_damping") return ReadPhysicsF32Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.jointDamping);
         if(key == "joint_friction") return ReadPhysicsF32Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.jointFriction);
+        if(key == "screw_pitch") return ReadPhysicsF32Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.screwPitch);
+        if(key == "armature"){
+            VectorSingle v(0.0f);
+            if(!DecodePhysicsFloat3Value(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, v)) return false;
+            outLink.armature = f32x4(v, 0.0f);
+            return true;
+        }
+        if(key == "use_implicit_drive") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.useImplicitDrive);
+        if(key == "use_elliptic_cone_limit") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.useEllipticConeLimit);
+        if(key == "use_per_dof_limits") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.usePerDofLimits);
+        if(key == "use_per_dof_drives") return ReadPhysicsBoolValue(file, fieldVal, s_ArticulationComponentDiagnosticPrefix, key, outLink.usePerDofDrives);
         error("{} '{}': unsupported link field '{}'", s_ArticulationComponentDiagnosticPrefix, PathToString(file), key);
         return false;
     });

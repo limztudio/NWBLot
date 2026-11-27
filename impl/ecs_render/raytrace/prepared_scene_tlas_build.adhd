@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/ecs_render/raytrace/push_constants.adhd>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.adhd>
 
 
@@ -10,12 +11,18 @@
 
 class PreparedSceneTlasBuild : NoCopy{
     private Vector<RayTracingInstanceDesc> m_instances;
+    private Vector<TlasInstanceGpuData> m_gpuInstances;
+    private Vector<u32> m_instanceEntityIds;
     private Vector<RayTracingAccelStructHandle> m_blases;
     private RayTracingAccelStructHandle m_tlas;
     private BufferHandle m_backingBuffer;
+    private BufferHandle m_instanceBuffer;
     private usize m_maxInstances = 0u;
+    private u32 m_instanceCount = 0u;
     private u64 m_staticSceneHash = 0u;
     private GpuDescriptorHandle m_heapHandle;
+    private GpuDescriptorHandle m_instanceUavHeapHandle = GpuDescriptorHandleInvalid();
+    private b8 m_useInstanceBuffer = false;
     private b8 m_static = false;
     private b8 m_ready = false;
 
@@ -26,20 +33,39 @@ class PreparedSceneTlasBuild : NoCopy{
         in Span<RayTracingInstanceDesc> instances,
         in Span<RayTracingAccelStructHandle> instanceBlases
     );
+    public b8 captureFromInstanceBuffer(
+        in RendererRayTracingState state,
+        in b8 staticScene,
+        in u64 staticSceneHash,
+        in Span<RayTracingInstanceDesc> instances,
+        in Span<RayTracingAccelStructHandle> instanceBlases,
+        in Span<u32> instanceEntityIds
+    );
+    [cpp_unwind]
+    public Expected<Optional<GpuUploadBlobId>> retainUpload(in RendererRayTracingState state, mut GpuTaskGraph graph)const;
     public b8 record(mut RendererRayTracingState state, mut CommandList commandList);
     public void confirm(mut RendererRayTracingState state);
     public void clear(){
         this.m_instances.clear();
+        this.m_gpuInstances.clear();
+        this.m_instanceEntityIds.clear();
         this.m_blases.clear();
         this.m_tlas.reset();
         this.m_backingBuffer.reset();
+        this.m_instanceBuffer.reset();
         this.m_heapHandle = GpuDescriptorHandleInvalid();
+        this.m_instanceUavHeapHandle = GpuDescriptorHandleInvalid();
         this.m_maxInstances = 0u;
+        this.m_instanceCount = 0u;
         this.m_staticSceneHash = 0u;
+        this.m_useInstanceBuffer = false;
         this.m_static = false;
         this.m_ready = false;
     }
     public b8 ready()const{ return this.m_ready; }
+    public b8 useInstanceBuffer()const{ return this.m_useInstanceBuffer; }
+    public in GpuDescriptorHandle instanceUavHeapHandle()const{ return this.m_instanceUavHeapHandle; }
+    public Span<u32> instanceEntityIds()const{ return Span<u32>(this.m_instanceEntityIds); }
     public b8 storageMatches(in RendererRayTracingState state)const;
 }
 

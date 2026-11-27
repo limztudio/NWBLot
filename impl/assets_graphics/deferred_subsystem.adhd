@@ -7,6 +7,8 @@ class DeferredSubsystem{
     public AssetRef<ComputeShader> compositeCs;
     public AssetRef<PixelShader> compositePs;
     public AssetRef<VertexShader> compositeVs;
+    public AssetRef<PixelShader> debugLinePs;
+    public AssetRef<VertexShader> debugLineVs;
     public AssetRef<ComputeShader> lightingCs;
 }
 

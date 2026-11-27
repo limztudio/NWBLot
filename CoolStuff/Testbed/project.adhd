@@ -243,7 +243,17 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             RequestPhysicsSingleStep(this.m_world);
             tickDelta = 0.0f;
         }
+        this.syncPhysicsDebugState();
         return TickProjectWorld(this.m_world, tickDelta);
+    }
+
+    private void syncPhysicsDebugState(){
+        mut World world = this.m_world.deref();
+        const Optional<mut PhysicsSystem> physicsSystem = world.borrowSystem<PhysicsSystem>();
+        if(!physicsSystem.has_value())
+            return;
+        physicsSystem.value().setDebugDrawEnabled(this.m_showPhysicsDebug);
+        physicsSystem.value().setDebugDrawOptions(this.m_physicsDebugOptions);
     }
 
     public void windowFocusUpdate(in b8 focused)override{
@@ -380,6 +390,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         }
         const UiSkinPreviewGalleryLayout galleryLayout = this.m_uiPreview.measureGalleryLayout(context);
         this.drawUiControls(context, galleryLayout);
+        this.syncPhysicsDebugState();
         this.paintSparklines(context);
         this.m_uiPreview.paintWithLayout(context, galleryLayout);
     }
@@ -392,6 +403,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
 
         CreateDefaultPhysicsScene(this.m_world, this.m_physicsBackendChoice, this.m_physicsConfigEntity, this.m_physicsEntities);
         SetPhysicsInterpolateTransforms(this.m_world, this.m_physicsConfigEntity, this.m_physicsDebugOptions.useInterpolatedTransforms);
+        this.syncPhysicsDebugState();
         AttachProjectUiPaintEntity(this.m_world, this);
         [essential] info("ProjectTestbed: startup scene created ({})", "45-degree directional + point light, female skinned character, rigid-body tower + spheres on white ground plane");
         return true;
@@ -961,6 +973,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 declared = context.ui.endContainer() && declared;
 
                 context.ui.checkbox("dbg_ragtgt", "Ragdoll Target Pose", this.m_physicsDebugOptions.drawRagdollTargetPose, btnOpts);
+                context.ui.checkbox("dbg_depth", "DepthTest", this.m_physicsDebugOptions.depthTest, btnOpts);
 
                 SliderOptions thickOpts = SliderOptions();
                 thickOpts.minimum = 0.5;

@@ -189,16 +189,23 @@ b8 RayTraceMaterialResources::ensureShadowInstanceMaterialBuffer(in usize instan
 }
 
 b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(in usize instanceCount){
-    if(instanceCount == 0u)
-        return !this.m_shadow.m_shadowInstanceBuffer.valid() || this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle);
-    if(this.m_shadow.m_shadowInstanceBuffer.valid() && this.m_shadow.m_shadowInstanceCapacity >= instanceCount)
-        return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle);
+    if(instanceCount == 0u){
+        if(!this.m_shadow.m_shadowInstanceBuffer.valid())
+            return true;
+        return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle)
+            && this.ensureWritableRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceUavHeapHandle);
+    }
+    if(this.m_shadow.m_shadowInstanceBuffer.valid() && this.m_shadow.m_shadowInstanceCapacity >= instanceCount){
+        return this.ensureRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle)
+            && this.ensureWritableRayTraceMaterialContextHeapHandle(this.m_shadow.m_shadowInstanceBuffer.deref(), this.m_shadow.m_shadowInstanceUavHeapHandle);
+    }
 
     const usize capacity = NextGrowingCapacity(this.m_shadow.m_shadowInstanceCapacity, instanceCount);
     BufferDesc instanceBufferDesc;
     instanceBufferDesc
         .setByteSize(cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
+        .setCanHaveUAVs(true)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(s_ShadowResourceInstanceContext)
         .enableAutomaticStateTracking(ResourceStates::Common)
@@ -209,7 +216,10 @@ b8 RayTraceMaterialResources::ensureShadowInstanceContextBuffer(in usize instanc
         return false;
     }
     BufferHandle instanceBuffer = instanceBufferResult.value();
-    if(!this.replaceRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle))
+    if(
+        !this.replaceRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_shadow.m_shadowInstanceHeapHandle)
+        || !this.replaceWritableRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_shadow.m_shadowInstanceUavHeapHandle)
+    )
         return false;
     this.m_shadow.m_shadowInstanceBuffer = instanceBuffer;
     this.m_shadow.m_shadowInstanceCapacity = capacity;
@@ -274,6 +284,7 @@ b8 RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(in P
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext(){
     this.m_preparedShadowMaterialContext.clear();
     this.m_preparedSceneSwBvhTraversal.clear();
+    this.m_preparedShadowInstanceEntityIds.clear();
 }
 
 

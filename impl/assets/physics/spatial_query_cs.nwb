@@ -4,5 +4,5 @@ asset.entry_point = "main";
 asset.include_roots = ["engine/graphics", "engine/physics"];
 asset.optimization_level = "maximal";
 asset.defines = {
-    "NWB_PHYSICS_QUERY_HAS_MESH": ["0", "1"],
+    "NWB_PHYSICS_QUERY_PROFILE": ["0", "1", "2"],
 };

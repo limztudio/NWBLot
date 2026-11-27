@@ -1,0 +1,598 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/physics/snapshot.adhd>
+#include <impl/ecs_scene/camera.adhd>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+enum<u8> PhysicsDebugColorMode{
+    State = 0u,
+    Island = 1u,
+    Backend = 2u,
+    Speed = 3u,
+    Layer = 4u,
+    kCount
+}
+
+class PhysicsDebugDrawOptions{
+    public b8 drawShapes = true;
+    public b8 drawAabbs = false;
+    public b8 drawContacts = true;
+    public b8 drawJoints = true;
+    public b8 drawSpeculativeContacts = false;
+    public b8 drawContactImpulses = false;
+    public b8 drawDisabledBodies = false;
+    public b8 drawBodyAxes = false;
+    public u32 maxLines = 8192u;
+    public b8 drawFatAabbs = false;
+    public b8 drawBroadPhaseTree = false;
+    public b8 drawMeshBvh = false;
+    public b8 drawIslands = false;
+    public b8 drawVelocities = false;
+    public b8 drawBodyOriginVsCom = false;
+    public b8 drawInertiaTensors = false;
+    public b8 drawJointForces = false;
+    public b8 drawContactDetails = false;
+    public b8 drawSubsystems = false;
+    public b8 deduplicateMeshEdges = true;
+    public b8 useInterpolatedTransforms = false;
+    public f32 lineThickness = 1.5f;
+    public PhysicsDebugColorMode colorMode = PhysicsDebugColorMode::State;
+    public b8 drawCcdAndFlags = false;
+    public b8 drawLabels = false;
+    public u32 maxLabels = 256u;
+    public b8 drawSoftBodyNormals = false;
+    public b8 drawSoftBodyVelocities = false;
+    public b8 drawVehicleForces = false;
+    public b8 drawRagdollTargetPose = false;
+    public b8 depthTest = true;
+}
+
+class PhysicsDebugDrawStats{
+    public u32 emittedLines = 0u;
+    public u32 droppedLines = 0u;
+    public b8 truncated = false;
+    public f32 lineThickness = 1.5f;
+}
+
+class PhysicsDebugLabel{
+    public f32x4 worldPosition(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
+    public CompactString text;
+}
+
+class PhysicsDebugScreenLabel{
+    public f32x4 screenPosDepth(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
+    public CompactString text;
+}
+
+f32 ResolvePhysicsDebugLineThickness(in PhysicsDebugDrawOptions options){
+    if(!IsFinite(VectorSingle(options.lineThickness)))
+        return 1.5f;
+    return Clamp(options.lineThickness, 0.5f, 8.0f);
+}
+
+b8 AppendPhysicsDebugCentisText(mut CompactString str, in f32 val){
+    if(!IsFinite(VectorSingle(val)))
+        return str.append("0.00");
+    b8 ok = true;
+    f32 absVal = val;
+    if(val < 0.0f){
+        ok = str.append("-") && ok;
+        absVal = -val;
+    }
+    const f32 clamped = Min(absVal, 99999.0f);
+    const u64 centis = cast<u64>(cast<f64>(clamped) * 100.0 + 0.5);
+    const u64 whole = centis / 100u;
+    const u64 frac = centis % 100u;
+    AppendUnsignedU64Text(str, whole);
+    ok = str.append(".") && ok;
+    if(frac < 10u)
+        ok = str.append("0") && ok;
+    AppendUnsignedU64Text(str, frac);
+    return ok;
+}
+
+class PhysicsDebugLine{
+    public f32x4 start(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 end(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 color(1.0f, 1.0f, 1.0f, 1.0f);
+}
+
+class PhysicsDebugFrustumPlanesSoa{
+    public f32x4 x03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 y03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 z03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 w03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 w03x2(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 absX03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 absY03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 absZ03(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 x45(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 y45(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 z45(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 w45(1.0f, 1.0f, 1.0f, 1.0f);
+    public f32x4 w45x2(2.0f, 2.0f, 2.0f, 2.0f);
+    public f32x4 absX45(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 absY45(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 absZ45(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+PhysicsDebugFrustumPlanesSoa BuildDebugFrustumPlanesSoa(in Array<f32x4, 6u> planes){
+    PhysicsDebugFrustumPlanesSoa soa;
+    const f32x4 p0 = planes[0u];
+    const f32x4 p1 = planes[1u];
+    const f32x4 p2 = planes[2u];
+    const f32x4 p3 = planes[3u];
+    const f32x4 p4 = planes[4u];
+    const f32x4 p5 = planes[5u];
+    const VectorSingle x03(p0.x, p1.x, p2.x, p3.x);
+    const VectorSingle y03(p0.y, p1.y, p2.y, p3.y);
+    const VectorSingle z03(p0.z, p1.z, p2.z, p3.z);
+    const VectorSingle w03(p0.w, p1.w, p2.w, p3.w);
+    soa.x03 = f32x4(x03);
+    soa.y03 = f32x4(y03);
+    soa.z03 = f32x4(z03);
+    soa.w03 = f32x4(w03);
+    soa.w03x2 = f32x4(w03 * 2.0f);
+    soa.absX03 = f32x4(Abs(x03));
+    soa.absY03 = f32x4(Abs(y03));
+    soa.absZ03 = f32x4(Abs(z03));
+    const VectorSingle x45(p4.x, p5.x, 0.0f, 0.0f);
+    const VectorSingle y45(p4.y, p5.y, 0.0f, 0.0f);
+    const VectorSingle z45(p4.z, p5.z, 0.0f, 0.0f);
+    const VectorSingle w45(p4.w, p5.w, 1.0f, 1.0f);
+    soa.x45 = f32x4(x45);
+    soa.y45 = f32x4(y45);
+    soa.z45 = f32x4(z45);
+    soa.w45 = f32x4(w45);
+    soa.w45x2 = f32x4(w45 * 2.0f);
+    soa.absX45 = f32x4(Abs(x45));
+    soa.absY45 = f32x4(Abs(y45));
+    soa.absZ45 = f32x4(Abs(z45));
+    return soa;
+}
+
+f32x4 NormalizeDebugFrustumPlane(in VectorSingle rawNormal, in f32 rawDist){
+    const VectorSingle lenSq = Vector3LengthSq(VectorSingle(rawNormal, 0.0f));
+    if(!IsFinite(lenSq) || lenSq.x <= s_NormalizeEpsilonSq)
+        return f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    const VectorSingle invLen = Rsqrt(lenSq);
+    return f32x4(VectorSingle(VectorSingle(rawNormal, rawDist) * invLen));
+}
+
+b8 TestAabbAgainstFrustumPlanesSoa(in PhysicsDebugFrustumPlanesSoa frustum, in Aabb3D aabb){
+    const VectorSingle lo(aabb.lowerBound);
+    const VectorSingle hi(aabb.upperBound);
+    const VectorSingle sumB = lo + hi;
+    const VectorSingle diffB = hi - lo;
+    const VectorSingle dist03 = VectorSingle(frustum.x03) * sumB.x + VectorSingle(frustum.y03) * sumB.y + VectorSingle(frustum.z03) * sumB.z + VectorSingle(frustum.w03x2);
+    const VectorSingle extent03 = VectorSingle(frustum.absX03) * diffB.x + VectorSingle(frustum.absY03) * diffB.y + VectorSingle(frustum.absZ03) * diffB.z;
+    if((VectorMoveMask(VectorGreaterOrEqual(dist03 + extent03, VectorZero())) & 0xFu) != 0xFu)
+        return false;
+    const VectorSingle dist45 = VectorSingle(frustum.x45) * sumB.x + VectorSingle(frustum.y45) * sumB.y + VectorSingle(frustum.z45) * sumB.z + VectorSingle(frustum.w45x2);
+    const VectorSingle extent45 = VectorSingle(frustum.absX45) * diffB.x + VectorSingle(frustum.absY45) * diffB.y + VectorSingle(frustum.absZ45) * diffB.z;
+    return (VectorMoveMask(VectorGreaterOrEqual(dist45 + extent45, VectorZero())) & 0x3u) == 0x3u;
+}
+
+b8 TestSphereAgainstFrustumPlanesSoa(in PhysicsDebugFrustumPlanesSoa frustum, in VectorSingle center, in f32 radius){
+    const VectorSingle radVec(radius);
+    const VectorSingle sum03 = VectorSingle(frustum.x03) * center.x + VectorSingle(frustum.y03) * center.y + VectorSingle(frustum.z03) * center.z + VectorSingle(frustum.w03) + radVec;
+    if((VectorMoveMask(VectorGreaterOrEqual(sum03, VectorZero())) & 0xFu) != 0xFu)
+        return false;
+    const VectorSingle sum45 = VectorSingle(frustum.x45) * center.x + VectorSingle(frustum.y45) * center.y + VectorSingle(frustum.z45) * center.z + VectorSingle(frustum.w45) + radVec;
+    return (VectorMoveMask(VectorGreaterOrEqual(sum45, VectorZero())) & 0x3u) == 0x3u;
+}
+
+b8 ClipProjectorHalfSpace(in f32 a0, in f32 dA, mut f32 t0, mut f32 t1){
+    const f32 p = -dA;
+    if(Abs(VectorSingle(p)).x <= 1.0e-12f)
+        return a0 >= 0.0f;
+    const f32 r = a0 / p;
+    if(p < 0.0f){
+        if(r > t1)
+            return false;
+        if(r > t0)
+            t0 = r;
+    }
+    else{
+        if(r < t0)
+            return false;
+        if(r < t1)
+            t1 = r;
+    }
+    return true;
+}
+
+class PhysicsDebugScreenProjector{
+    private f32x4 m_projCol0(1.0f, 0.0f, 0.0f, 0.0f);
+    private f32x4 m_projCol1(0.0f, 1.0f, 0.0f, 0.0f);
+    private f32x4 m_projCol2(0.0f, 0.0f, 1.0f, 0.0f);
+    private f32x4 m_projCol3(0.0f, 0.0f, 0.0f, 0.0f);
+    private f32x4 m_screenScale(0.0f, 0.0f, 0.0f, 0.0f);
+    private f32x4 m_screenBias(0.0f, 0.0f, 0.0f, 0.0f);
+    private Array<f32x4, 6u> m_planes;
+    private PhysicsDebugFrustumPlanesSoa m_planesSoa;
+    private f32 m_zMin = 0.01f;
+    private f32 m_zMax = 0.0f;
+    private b8 m_hasFarPlane = false;
+    private b8 m_isOrthographic = false;
+    private b8 m_valid = false;
+
+    public PhysicsDebugScreenProjector(){}
+
+    public PhysicsDebugScreenProjector(
+        in TransformComponent cameraTransform,
+        in CameraProjection projection,
+        in f32 viewportWidth,
+        in f32 viewportHeight
+    ){
+        this.init(cameraTransform, projection, viewportWidth, viewportHeight);
+    }
+
+    public b8 valid()const{
+        return this.m_valid;
+    }
+
+    public b8 isOrthographic()const{
+        return this.m_isOrthographic;
+    }
+
+    public f32x4 frustumPlane(in usize idx)const{
+        return this.m_planes[idx];
+    }
+
+    public void init(
+        in TransformComponent cameraTransform,
+        in CameraProjection projection,
+        in f32 viewportWidth,
+        in f32 viewportHeight
+    ){
+        this.m_isOrthographic = false;
+        this.m_valid =
+            IsFinite(VectorSingle(viewportWidth, viewportHeight, projection.projectionParams.x, projection.projectionParams.y))
+            && viewportWidth > 0.0f
+            && viewportHeight > 0.0f
+            && projection.projectionParams.x > 0.0f
+            && projection.projectionParams.y > 0.0f
+        ;
+        if(!this.m_valid)
+            return;
+        const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
+        const VectorSingle right = basis[0u];
+        const VectorSingle up = basis[1u];
+        const VectorSingle forward = basis[2u];
+        const VectorSingle camPos = basis[3u];
+        const VectorSingle rScaled = right * projection.projectionParams.x;
+        const VectorSingle uScaled = up * projection.projectionParams.y;
+        const f32 negDotRight = -Vector3Dot(camPos, rScaled).x;
+        const f32 negDotUp = -Vector3Dot(camPos, uScaled).x;
+        const f32 negDotForward = -Vector3Dot(camPos, forward).x;
+        this.m_projCol0 = f32x4(rScaled.x, uScaled.x, forward.x, 0.0f);
+        this.m_projCol1 = f32x4(rScaled.y, uScaled.y, forward.y, 0.0f);
+        this.m_projCol2 = f32x4(rScaled.z, uScaled.z, forward.z, 0.0f);
+        this.m_projCol3 = f32x4(negDotRight, negDotUp, negDotForward, 0.0f);
+        this.m_zMin = Max(projection.nearPlane, 0.01f);
+        this.m_hasFarPlane = IsFinite(VectorSingle(projection.farPlane)) && projection.farPlane > this.m_zMin;
+        if(this.m_hasFarPlane)
+            this.m_zMax = projection.farPlane;
+        else
+            this.m_zMax = 0.0f;
+        const VectorSingle halfVp = VectorSingle(viewportWidth, viewportHeight, viewportWidth, viewportHeight) * 0.5f;
+        this.m_screenScale = f32x4(halfVp * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f));
+        this.m_screenBias = f32x4(halfVp);
+
+        this.m_planes[0u] = f32x4(forward, negDotForward - this.m_zMin);
+        this.m_planes[1u] = NormalizeDebugFrustumPlane(rScaled + forward * 1.5f, negDotRight + 1.5f * negDotForward);
+        this.m_planes[2u] = NormalizeDebugFrustumPlane(forward * 1.5f - rScaled, 1.5f * negDotForward - negDotRight);
+        this.m_planes[3u] = NormalizeDebugFrustumPlane(uScaled + forward * 1.5f, negDotUp + 1.5f * negDotForward);
+        this.m_planes[4u] = NormalizeDebugFrustumPlane(forward * 1.5f - uScaled, 1.5f * negDotForward - negDotUp);
+        if(this.m_hasFarPlane)
+            this.m_planes[5u] = f32x4(-forward.x, -forward.y, -forward.z, -negDotForward + this.m_zMax);
+        else
+            this.m_planes[5u] = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        this.m_planesSoa = BuildDebugFrustumPlanesSoa(this.m_planes);
+    }
+
+    public void initOrthographic(
+        in TransformComponent cameraTransform,
+        in f32 halfWidth,
+        in f32 halfHeight,
+        in f32 nearPlane,
+        in f32 farPlane,
+        in f32 viewportWidth,
+        in f32 viewportHeight
+    ){
+        this.m_isOrthographic = true;
+        this.m_valid =
+            IsFinite(VectorSingle(viewportWidth, viewportHeight, halfWidth, halfHeight))
+            && IsFinite(VectorSingle(nearPlane))
+            && viewportWidth > 0.0f
+            && viewportHeight > 0.0f
+            && halfWidth > 0.0f
+            && halfHeight > 0.0f
+        ;
+        if(!this.m_valid)
+            return;
+        const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
+        const VectorSingle right = basis[0u];
+        const VectorSingle up = basis[1u];
+        const VectorSingle forward = basis[2u];
+        const VectorSingle camPos = basis[3u];
+        const VectorSingle rScaled = right * (1.0f / halfWidth);
+        const VectorSingle uScaled = up * (1.0f / halfHeight);
+        const f32 negDotRight = -Vector3Dot(camPos, rScaled).x;
+        const f32 negDotUp = -Vector3Dot(camPos, uScaled).x;
+        const f32 negDotForward = -Vector3Dot(camPos, forward).x;
+        this.m_projCol0 = f32x4(rScaled.x, uScaled.x, forward.x, 0.0f);
+        this.m_projCol1 = f32x4(rScaled.y, uScaled.y, forward.y, 0.0f);
+        this.m_projCol2 = f32x4(rScaled.z, uScaled.z, forward.z, 0.0f);
+        this.m_projCol3 = f32x4(negDotRight, negDotUp, negDotForward, 0.0f);
+        this.m_zMin = nearPlane;
+        this.m_hasFarPlane = IsFinite(VectorSingle(farPlane)) && farPlane > this.m_zMin;
+        if(this.m_hasFarPlane)
+            this.m_zMax = farPlane;
+        else
+            this.m_zMax = 0.0f;
+        const VectorSingle halfVp = VectorSingle(viewportWidth, viewportHeight, viewportWidth, viewportHeight) * 0.5f;
+        this.m_screenScale = f32x4(halfVp * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f));
+        this.m_screenBias = f32x4(halfVp);
+
+        this.m_planes[0u] = f32x4(forward, negDotForward - this.m_zMin);
+        this.m_planes[1u] = NormalizeDebugFrustumPlane(rScaled, negDotRight + 1.5f);
+        this.m_planes[2u] = NormalizeDebugFrustumPlane(-rScaled, 1.5f - negDotRight);
+        this.m_planes[3u] = NormalizeDebugFrustumPlane(uScaled, negDotUp + 1.5f);
+        this.m_planes[4u] = NormalizeDebugFrustumPlane(-uScaled, 1.5f - negDotUp);
+        if(this.m_hasFarPlane)
+            this.m_planes[5u] = f32x4(-forward.x, -forward.y, -forward.z, -negDotForward + this.m_zMax);
+        else
+            this.m_planes[5u] = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+        this.m_planesSoa = BuildDebugFrustumPlanesSoa(this.m_planes);
+    }
+
+    public b8 isAabbVisible(in Aabb3D aabb)const{
+        if(!this.m_valid)
+            return true;
+        return TestAabbAgainstFrustumPlanesSoa(this.m_planesSoa, aabb);
+    }
+
+    public b8 isSphereVisible(in VectorSingle center, in f32 radius)const{
+        if(!this.m_valid)
+            return true;
+        return TestSphereAgainstFrustumPlanesSoa(this.m_planesSoa, center, radius);
+    }
+
+    public VectorSingle projectPointToView(in VectorSingle worldP)const{
+        return VectorSingle(this.m_projCol0) * worldP.x + VectorSingle(this.m_projCol1) * worldP.y + VectorSingle(this.m_projCol2) * worldP.z + VectorSingle(this.m_projCol3);
+    }
+
+    public VectorSingle projectDirToView(in VectorSingle worldDir)const{
+        return VectorSingle(this.m_projCol0) * worldDir.x + VectorSingle(this.m_projCol1) * worldDir.y + VectorSingle(this.m_projCol2) * worldDir.z;
+    }
+
+    public b8 projectViewSpaceSegment(
+        in VectorSingle v0,
+        in VectorSingle v1,
+        mut VectorSingle outSegment
+    )const{
+        if(!this.m_valid)
+            return false;
+
+        if(v0.z < this.m_zMin && v1.z < this.m_zMin)
+            return false;
+        if(this.m_hasFarPlane && v0.z > this.m_zMax && v1.z > this.m_zMax)
+            return false;
+
+        const VectorSingle xy01(v0.x, v0.y, v1.x, v1.y);
+        const VectorSingle zVec(v0.z, v0.z, v1.z, v1.z);
+        VectorSingle gVec = zVec * 1.5f;
+        if(this.m_isOrthographic)
+            gVec = VectorSingle(1.5f);
+        const b8 zInside = v0.z >= this.m_zMin && v1.z >= this.m_zMin && (!this.m_hasFarPlane || (v0.z <= this.m_zMax && v1.z <= this.m_zMax));
+        if(zInside && Vector4LessOrEqual(Abs(xy01), gVec)){
+            VectorSingle ndc = xy01;
+            if(!this.m_isOrthographic)
+                ndc = xy01 / zVec;
+            if(!IsFinite(ndc))
+                return false;
+            outSegment = ndc * VectorSingle(this.m_screenScale) + VectorSingle(this.m_screenBias);
+            return true;
+        }
+
+        const VectorSingle v0Sides(v0.x, -v0.x, v0.y, -v0.y);
+        const VectorSingle v1Sides(v1.x, -v1.x, v1.y, -v1.y);
+        const VectorSingle g0v(gVec.x);
+        const VectorSingle g1v(gVec.z);
+        if((VectorMoveMask(VectorAndInt(VectorLess(v0Sides, -g0v), VectorLess(v1Sides, -g1v))) & 0xFu) != 0u)
+            return false;
+
+        const VectorSingle dv = v1 - v0;
+        f32 t0 = 0.0f;
+        f32 t1 = 1.0f;
+        if(!ClipProjectorHalfSpace(v0.z - this.m_zMin, dv.z, t0, t1))
+            return false;
+        if(this.m_hasFarPlane && !ClipProjectorHalfSpace(this.m_zMax - v0.z, -dv.z, t0, t1))
+            return false;
+
+        VectorSingle dgVec(1.5f * dv.z);
+        if(this.m_isOrthographic)
+            dgVec = VectorZero();
+        const VectorSingle dvSides(dv.x, -dv.x, dv.y, -dv.y);
+        const VectorSingle a0 = v0Sides + g0v;
+        const VectorSingle p = -(dvSides + dgVec);
+        const VectorSingle parallel = VectorLessOrEqual(Abs(p), VectorSingle(1.0e-12f));
+        if((VectorMoveMask(VectorAndInt(parallel, VectorLess(a0, VectorZero()))) & 0xFu) != 0u)
+            return false;
+        const VectorSingle safeP = VectorSelect(p, VectorSingle(1.0f), parallel);
+        const VectorSingle r = a0 / safeP;
+        const VectorSingle rEnter = VectorSelect(VectorZero(), r, VectorAndCInt(VectorLess(p, VectorZero()), parallel));
+        const VectorSingle rExit = VectorSelect(VectorSingle(1.0f), r, VectorAndCInt(VectorGreater(p, VectorZero()), parallel));
+        t0 = Max(t0, Max(Max(rEnter.x, rEnter.y), Max(rEnter.z, rEnter.w)));
+        t1 = Min(t1, Min(Min(rExit.x, rExit.y), Min(rExit.z, rExit.w)));
+        if(!IsFinite(VectorSingle(t0, t1, 0.0f, 0.0f).xy) || t0 > t1)
+            return false;
+
+        const VectorSingle c0 = v0 + dv * t0;
+        const VectorSingle c1 = v0 + dv * t1;
+        if(!this.m_isOrthographic && (c0.z <= this.m_zMin * 0.5f || c1.z <= this.m_zMin * 0.5f))
+            return false;
+
+        VectorSingle ndc = VectorSingle(c0.x, c0.y, c1.x, c1.y);
+        if(!this.m_isOrthographic)
+            ndc = ndc / VectorSingle(c0.z, c0.z, c1.z, c1.z);
+        if(!IsFinite(ndc))
+            return false;
+        outSegment = ndc * VectorSingle(this.m_screenScale) + VectorSingle(this.m_screenBias);
+        return true;
+    }
+
+    public b8 projectPoint(
+        in VectorSingle worldP,
+        mut VectorSingle outScreenPosDepth
+    )const{
+        if(!this.m_valid)
+            return false;
+        const VectorSingle v = this.projectPointToView(worldP);
+        if(v.z < this.m_zMin)
+            return false;
+        if(this.m_hasFarPlane && v.z > this.m_zMax)
+            return false;
+        VectorSingle ndc(0.0f);
+        if(this.m_isOrthographic){
+            ndc = VectorSingle(v.x, v.y, 0.0f, 0.0f);
+        }
+        else{
+            if(v.z <= this.m_zMin * 0.5f)
+                return false;
+            ndc = VectorSingle(v.x / v.z, v.y / v.z, 0.0f, 0.0f);
+        }
+        const VectorSingle absNdc = Abs(ndc);
+        if(!IsFinite(ndc.xy) || absNdc.x > 1.05f || absNdc.y > 1.05f)
+            return false;
+        const VectorSingle screen = VectorSingle(ndc.x, ndc.y, 0.0f, 0.0f) * VectorSingle(this.m_screenScale) + VectorSingle(this.m_screenBias);
+        outScreenPosDepth = VectorSingle(screen.x, screen.y, v.z, 1.0f);
+        return true;
+    }
+
+    public b8 projectSegment(
+        in VectorSingle worldP0,
+        in VectorSingle worldP1,
+        mut VectorSingle outSegment
+    )const{
+        if(!this.m_valid)
+            return false;
+        return this.projectViewSpaceSegment(this.projectPointToView(worldP0), this.projectPointToView(worldP1), outSegment);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const usize s_PhysicsDebugEdgeTableCapacity = 32768u;
+const usize s_PhysicsDebugEdgeTableMask = 32767u;
+const usize s_PhysicsDebugEdgeTableMaxCount = 16384u;
+
+class PhysicsDebugEdgeDedupTable{
+    private Vector<u64> m_keys;
+    private Vector<u32> m_stamps;
+    private u32 m_currentStamp = 0u;
+    private usize m_count = 0u;
+
+    public void beginPass(){
+        if(this.m_keys.size() != s_PhysicsDebugEdgeTableCapacity){
+            this.m_keys.resize(s_PhysicsDebugEdgeTableCapacity, 0u);
+            this.m_stamps.resize(s_PhysicsDebugEdgeTableCapacity, 0u);
+            this.m_currentStamp = 1u;
+            this.m_count = 0u;
+            return;
+        }
+        ++this.m_currentStamp;
+        if(this.m_currentStamp == 0u){
+            for(usize i = 0u; i < s_PhysicsDebugEdgeTableCapacity; ++i)
+                this.m_stamps[i] = 0u;
+            this.m_currentStamp = 1u;
+        }
+        this.m_count = 0u;
+    }
+
+    private b8 insertKey(in u64 key, in u64 hashVal){
+        usize slot = cast<usize>(hashVal) & s_PhysicsDebugEdgeTableMask;
+        while(true){
+            if(this.m_stamps[slot] != this.m_currentStamp){
+                if(this.m_count >= s_PhysicsDebugEdgeTableMaxCount)
+                    return true;
+                this.m_stamps[slot] = this.m_currentStamp;
+                this.m_keys[slot] = key;
+                ++this.m_count;
+                return true;
+            }
+            if(this.m_keys[slot] == key)
+                return false;
+            slot = (slot + 1u) & s_PhysicsDebugEdgeTableMask;
+        }
+        return false;
+    }
+
+    public b8 tryInsert(in u64 ha, in u64 hb){
+        u64 lo = ha;
+        u64 hi = hb;
+        if(hb < ha){
+            lo = hb;
+            hi = ha;
+        }
+        const u64 key = (lo ^ (hi * 0x9E3779B97F4A7C15u)) ^ (lo >> 17u) ^ (hi >> 29u);
+        return this.insertKey(key, key ^ (key >> 33u));
+    }
+
+    public b8 tryInsertPairU32(in u32 a, in u32 b){
+        u32 lo = a;
+        u32 hi = b;
+        if(b < a){
+            lo = b;
+            hi = a;
+        }
+        const u64 key = (cast<u64>(lo) << 32u) | cast<u64>(hi);
+        u64 h = key * 0x9E3779B97F4A7C15u;
+        h ^= h >> 30u;
+        return this.insertKey(key, h);
+    }
+}
+
+class PhysicsDebugDrawScratch{
+    public PhysicsDebugEdgeDedupTable seenMeshEdges;
+    public Vector<f32x4> pathWorldScratch;
+    public Vector<u32> heightfieldCols;
+    public Vector<f32x4> heightfieldRowA;
+    public Vector<f32x4> heightfieldRowB;
+    public Vector<f32x4> cachedBodyPos;
+    public Vector<f32x4> cachedBodyRot;
+    public Vector<u32> cachedBodyStamp;
+    public Vector<PhysicsDebugLabel> worldLabels;
+    public Vector<PhysicsDebugScreenLabel> projectedLabels;
+    public Vector<f32x4> indexedEdgeViewPts;
+    public u32 bodyPoseStamp = 0u;
+
+    public void beginBodyPosePass(in usize bodyCount){
+        if(this.cachedBodyStamp.size() < bodyCount){
+            this.cachedBodyPos.resize(bodyCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+            this.cachedBodyRot.resize(bodyCount, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
+            this.cachedBodyStamp.resize(bodyCount, 0u);
+        }
+        ++this.bodyPoseStamp;
+        if(this.bodyPoseStamp == 0u){
+            for(usize i = 0u; i < this.cachedBodyStamp.size(); ++i)
+                this.cachedBodyStamp[i] = 0u;
+            this.bodyPoseStamp = 1u;
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -8,6 +8,7 @@
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
 #include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.adhd>
+#include <impl/ecs_render/kernel/instance_transform_patch.adhd>
 #include <impl/assets_graphics/bvh_subsystem.adhd>
 
 
@@ -82,9 +83,11 @@ class SoftwareSceneRefitSnapshot{
     public BufferHandle visitCounterBuffer;
     public ComputePipelineHandle pipeline;
     public Vector<SoftwareSceneRefitInstanceGpu> inputs;
+    public Vector<u32> instanceEntityIds;
     public Vector<BufferHandle> meshNodes;
     public mut GraphicsRuntime graphics;
     public GpuDescriptorHandle inputDescriptor = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle inputUavDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle sceneDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle parentDescriptor = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle visitCounterDescriptor = GpuDescriptorHandleInvalid();
@@ -102,6 +105,7 @@ class SoftwareSceneRefitResources : NoCopy{
     private BufferHandle m_parentBuffer;
     private BufferHandle m_visitCounterBuffer;
     private GpuDescriptorHandle m_inputDescriptor = GpuDescriptorHandleInvalid();
+    private GpuDescriptorHandle m_inputUavDescriptor = GpuDescriptorHandleInvalid();
     private GpuDescriptorHandle m_parentDescriptor = GpuDescriptorHandleInvalid();
     private GpuDescriptorHandle m_visitCounterDescriptor = GpuDescriptorHandleInvalid();
     private BindingLayoutHandle m_bindingLayout;
@@ -151,6 +155,9 @@ class SoftwareSceneRefitResources : NoCopy{
         this.m_snapshots.clear();
         mut Device device = this.m_graphics.getDevice();
         mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+        if(heap.isInitialized() && this.m_inputBuffer.valid() && this.m_inputUavDescriptor.valid() && this.m_inputBuffer.deref().getDeviceGeneration() == device.getDeviceGeneration())
+            heap.free(this.m_inputUavDescriptor);
+        this.m_inputUavDescriptor = GpuDescriptorHandleInvalid();
         this.releaseOwnedBufferDescriptor(device, heap, this.m_inputBuffer, this.m_inputDescriptor);
         this.releaseOwnedBufferDescriptor(device, heap, this.m_parentBuffer, this.m_parentDescriptor);
         this.releaseOwnedBufferDescriptor(device, heap, this.m_visitCounterBuffer, this.m_visitCounterDescriptor);
@@ -163,6 +170,7 @@ class SoftwareSceneRefitResources : NoCopy{
     public Expected<SoftwareSceneRefitHandle> prepare(
         in Span<SoftwareSceneRefitInstanceGpu> inputs,
         in Span<BufferHandle> meshNodes,
+        in Span<u32> instanceEntityIds,
         in BufferHandle sceneNodes,
         in GpuDescriptorHandle sceneDescriptor,
         in u32 nodeCount,
@@ -172,6 +180,7 @@ class SoftwareSceneRefitResources : NoCopy{
         const usize instanceCount = inputs.size();
         if(
             !validationPolicy.validateSceneRefitCounts(instanceCount, meshNodes.size(), nodeCount)
+            || instanceEntityIds.size() != instanceCount
             || !sceneNodes.valid() || !sceneDescriptor.valid() || sceneDescriptor.descriptorClass() != GpuDescriptorClass::StorageBuffer
             || !this.ensurePipeline(shaderSystem)
         )
@@ -186,7 +195,7 @@ class SoftwareSceneRefitResources : NoCopy{
             return MakeUnexpected(Failure());
         if(!this.m_inputBuffer.valid() || this.m_inputBuffer.deref().getCreationDescription().byteSize < byteSize){
             BufferDesc desc;
-            desc.setByteSize(byteSize).setCanHaveRawViews(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+            desc.setByteSize(byteSize).setStructStride(size_of<SoftwareSceneRefitInstanceGpu>()).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
                 .setDebugName(Name(s_SoftwareSceneRefitInputsName)).enableAutomaticStateTracking(ResourceStates::Common);
             auto replacementResult = this.m_graphics.createBuffer(desc);
             if(!replacementResult.has_value())
@@ -195,12 +204,21 @@ class SoftwareSceneRefitResources : NoCopy{
             const Expected<GpuDescriptorHandle> descriptorResult = RegisterDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, replacement.deref()));
             if(!descriptorResult.has_value())
                 return MakeUnexpected(descriptorResult.error());
-            const GpuDescriptorHandle descriptor = descriptorResult.value();
+            GpuDescriptorRetirementGuard retireSrv(heap, descriptorResult.value());
+            const Expected<GpuDescriptorHandle> uavDescriptorResult = RegisterHeapBuffer(heap, replacement.deref(), GpuDescriptorClass::StorageBuffer, true);
+            if(!uavDescriptorResult.has_value())
+                return MakeUnexpected(uavDescriptorResult.error());
+            retireSrv.release();
             if(this.m_inputDescriptor.valid())
                 heap.free(this.m_inputDescriptor);
+            if(this.m_inputUavDescriptor.valid())
+                heap.free(this.m_inputUavDescriptor);
             this.m_inputBuffer = replacement;
-            this.m_inputDescriptor = descriptor;
+            this.m_inputDescriptor = descriptorResult.value();
+            this.m_inputUavDescriptor = uavDescriptorResult.value();
         }
+        else if(!EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, this.m_inputBuffer.deref(), this.m_inputUavDescriptor))
+            return MakeUnexpected(Failure());
         const usize nodeU32Bytes = cast<usize>(nodeCount) * size_of<u32>();
         if(!this.ensureU32StorageBuffer(nodeU32Bytes, Name(s_SoftwareSceneRefitParentsName), this.m_parentBuffer, this.m_parentDescriptor)
             || !this.ensureU32StorageBuffer(nodeU32Bytes, Name(s_SoftwareSceneRefitVisitsName), this.m_visitCounterBuffer, this.m_visitCounterDescriptor)
@@ -222,6 +240,7 @@ class SoftwareSceneRefitResources : NoCopy{
             this.m_snapshots.push_back(snapshot);
         }
         snapshot.deref().inputs.clear();
+        snapshot.deref().instanceEntityIds.clear();
         snapshot.deref().meshNodes.clear();
         snapshot.deref().inputBuffer = this.m_inputBuffer;
         snapshot.deref().sceneNodes = sceneNodes;
@@ -229,17 +248,20 @@ class SoftwareSceneRefitResources : NoCopy{
         snapshot.deref().visitCounterBuffer = this.m_visitCounterBuffer;
         snapshot.deref().pipeline = this.m_pipeline;
         snapshot.deref().inputDescriptor = this.m_inputDescriptor;
+        snapshot.deref().inputUavDescriptor = this.m_inputUavDescriptor;
         snapshot.deref().sceneDescriptor = sceneDescriptor;
         snapshot.deref().parentDescriptor = this.m_parentDescriptor;
         snapshot.deref().visitCounterDescriptor = this.m_visitCounterDescriptor;
         snapshot.deref().queue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
         snapshot.deref().nodeCount = nodeCount;
         snapshot.deref().inputs.reserve(instanceCount);
+        snapshot.deref().instanceEntityIds.reserve(instanceCount);
         snapshot.deref().meshNodes.reserve(meshNodes.size());
         for(usize index = 0u; index < instanceCount; ++index){
             if(inputs[index].meshNodeSlot == u32.max)
                 return MakeUnexpected(Failure());
             snapshot.deref().inputs.push_back(inputs[index]);
+            snapshot.deref().instanceEntityIds.push_back(instanceEntityIds[index]);
         }
         for(in BufferHandle root : meshNodes){
             if(!root.valid() || root.deref().getDeviceGeneration() != device.getDeviceGeneration() || root.deref().getCreationDescription().byteSize < s_NwbBvhNodeGpuByteSize)
@@ -328,7 +350,13 @@ SoftwareSceneRefitPushConstants MakeSoftwareSceneBvhRefitPushConstantsWrapper(in
 }
 
 [cpp_unwind]
-Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareSceneRefitHandle snapshot, in GpuGraphResourceId sceneNodes, in borrow GpuTaskId dependency, mut GpuTaskGraph graph){
+Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(
+    in SoftwareSceneRefitHandle snapshot,
+    in GpuGraphResourceId sceneNodes,
+    in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor,
+    in borrow GpuTaskId dependency,
+    mut GpuTaskGraph graph
+){
     if(!snapshot.valid() || !sceneNodes.valid() || snapshot.deref().inputs.empty())
         return MakeUnexpected(Failure());
     {
@@ -405,8 +433,24 @@ Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(in SoftwareScen
     if(!inputUploadResult.has_value())
         return MakeUnexpected(Failure());
     result.inputUpload = inputUploadResult.value();
+    GpuTaskId refitDependency = result.inputUpload;
+    if(!AppendTypedInstanceTransformPatch(
+        instanceTransformPatchContributor,
+        Span<u32>(snapshot.deref().instanceEntityIds),
+        input,
+        snapshot.deref().inputUavDescriptor,
+        cast<u32>(size_of<SoftwareSceneRefitInstanceGpu>() / size_of<f32x4>()),
+        GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld,
+        0u,
+        Name("shadow.prepare.sw_bvh_refit.physics_patch"),
+        true,
+        true,
+        graph,
+        refitDependency
+    ))
+        return MakeUnexpected(Failure());
     GpuTaskDesc desc;
-    desc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefit)).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependency(result.inputUpload).setResourceUses(Span<GpuTaskResourceUse>(uses));
+    desc.setIdentity(Name(s_RenderNameRenderShadowPrepareSceneRefit)).setMarkerLabel("Software Scene BVH Refit").setScheduling(scheduling).setDependency(refitDependency).setResourceUses(Span<GpuTaskResourceUse>(uses));
     const auto refitResult = graph.addPayloadTask(desc, SoftwareSceneRefitTask(snapshot));
     if(!refitResult.has_value())
         return MakeUnexpected(refitResult.error());

@@ -97,6 +97,40 @@ class SoftwareSceneRefitInstanceGpu{
 }
 
 [serialize]
+class TlasInstanceGpuData{
+    public f32x3x4 transform(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 instanceCustomIndexAndMask = 0u;
+    public u32 sbtRecordOffsetAndFlags = 0u;
+    public u32 blasAddressLow = 0u;
+    public u32 blasAddressHigh = 0u;
+}
+static_assert(size_of<TlasInstanceGpuData>() == 64u);
+static_assert(is_standard_layout<TlasInstanceGpuData>());
+static_assert(is_trivially_copyable<TlasInstanceGpuData>());
+
+TlasInstanceGpuData PackTlasInstanceGpuData(in RayTracingInstanceDesc desc, in RayTracingAccelStruct blas){
+    const u32 rawFlags = cast<u32>(desc.flags);
+    u32 vkFlags = 0u;
+    if((rawFlags & cast<u32>(RayTracingInstanceFlags::TriangleCullDisable)) != 0u)
+        vkFlags |= 0x1u;
+    if((rawFlags & cast<u32>(RayTracingInstanceFlags::TriangleFrontCounterclockwise)) != 0u)
+        vkFlags |= 0x2u;
+    if((rawFlags & cast<u32>(RayTracingInstanceFlags::ForceOpaque)) != 0u)
+        vkFlags |= 0x4u;
+    if((rawFlags & cast<u32>(RayTracingInstanceFlags::ForceNonOpaque)) != 0u)
+        vkFlags |= 0x8u;
+
+    const u64 blasAddr = blas.getDeviceAddress();
+    TlasInstanceGpuData packed;
+    packed.transform = desc.transform;
+    packed.instanceCustomIndexAndMask = (cast<u32>(desc.instanceID) & 0x00FFFFFFu) | ((cast<u32>(desc.instanceMask) & 0xFFu) << 24u);
+    packed.sbtRecordOffsetAndFlags = (cast<u32>(desc.instanceContributionToHitGroupIndex) & 0x00FFFFFFu) | ((vkFlags & 0xFFu) << 24u);
+    packed.blasAddressLow = cast<u32>(blasAddr & 0xFFFFFFFFu);
+    packed.blasAddressHigh = cast<u32>((blasAddr >> 32u) & 0xFFFFFFFFu);
+    return packed;
+}
+
+[serialize]
 class BvhSortPushConstants{
     public u32 compareDistance = 0u;
     public u32 sequenceSize = 0u;

@@ -434,6 +434,7 @@ void RendererRayTracingSystem::clearPreparedSceneBvh(){
     this.m_preparedSceneSwBvhRefit.reset();
     this.m_preparedSceneSwBvhTraversal.clear();
     this.m_preparedSceneBvh.clear();
+    this.m_preparedSceneBvhInstanceEntityIds.clear();
 }
 
 [cpp_unwind]
@@ -466,9 +467,11 @@ void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasHeapHandle);
+        RetireDescriptor(heap, this.m_rayTracingState.sceneBvh.m_tlasInstanceUavHeapHandle);
         return;
     }
     this.m_rayTracingState.sceneBvh.m_tlasHeapHandle = GpuDescriptorHandleInvalid();
+    this.m_rayTracingState.sceneBvh.m_tlasInstanceUavHeapHandle = GpuDescriptorHandleInvalid();
 }
 
 RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const{
@@ -517,6 +520,8 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
         snapshot.swShadowEdgeListBuffer = this.m_rayTracingState.shadow.m_swShadowEdgeListBuffer;
         snapshot.swShadowIndirectArgsBuffer = this.m_rayTracingState.shadow.m_swShadowIndirectArgsBuffer;
     }
+    else
+        snapshot.tlasInstanceBuffer = this.m_rayTracingState.sceneBvh.m_tlasInstanceBuffer;
     return snapshot;
 }
 

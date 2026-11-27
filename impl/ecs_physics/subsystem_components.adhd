@@ -9,6 +9,7 @@
 #include <impl/physics/buoyancy.adhd>
 #include <impl/physics/articulation.adhd>
 #include <impl/physics/soft_body.adhd>
+#include <impl/physics/fracture.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,6 +145,8 @@ class RagdollComponent{
     public b8 writeBackToSkeleton = false;
     public b8 autoGenerateFromSkeleton = false;
     public b8 enableSelfCollision = true;
+    public b8 autoExcludeInitialOverlaps = false;
+    public RagdollMode mode = RagdollMode::Joints;
     public Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs;
     [transient]
     public b8 initialized = false;
@@ -178,6 +181,7 @@ class ArticulationComponent{
     public Vector<u32> linkJointIndices;
     public b8 isFixedBase = true;
     public u32 subSteps = 4u;
+    public u32 solverIterations = 6u;
     public b8 enableContactCoupling = false;
     public f32 contactRestitution = 0.0f;
     public f32 contactFriction = 0.5f;
@@ -185,9 +189,12 @@ class ArticulationComponent{
     public Name collisionLayer = s_NameNone;
     public Vector<ArticulationMimicConstraint> mimicConstraints;
     public Vector<ArticulationTendonConstraint> tendonConstraints;
+    public Vector<ArticulationSpatialTendon> spatialTendons;
     public Vector<ArticulationLoopConstraint> loopConstraints;
     public b8 enableSelfCollision = false;
     public f32 selfCollisionMargin = 0.0f;
+    public b8 enableCcd = false;
+    public f32 ccdMotionThreshold = 0.25f;
     public b8 enableSleep = false;
     public f32 sleepLinearThreshold = 0.02f;
     public f32 sleepAngularThreshold = 0.03f;
@@ -211,6 +218,36 @@ class SoftBodyComponent{
     public b8 enabled = true;
     [transient]
     public b8 dirty = false;
+}
+
+[component("fracture")]
+class FractureComponent{
+    public FracturePatternType pattern = FracturePatternType::Voronoi;
+    public u32 chunkCount = 8u;
+    public u32 seed = 1337u;
+    public f32x4 boxHalfExtents(0.5f, 0.5f, 0.5f, 0.0f);
+    public f32 convexRadius = 0.0f;
+    public HullShape customHull;
+    public b8 useCustomHull = false;
+    public f32 bondStrengthPerArea = 250.0f;
+    public f32 impactDamageThreshold = 15.0f;
+    public f32 damageRadius = 0.75f;
+    public f32 totalMass = 100.0f;
+    public f32 stressPropagationDecay = 0.72f;
+    public f32 gravityStressScale = 1.0f;
+    public b8 anchorBottomChunks = false;
+    public f32 anchorBottomThreshold = 0.2f;
+    public b8 autoFractureOnImpact = true;
+    public Filter collisionFilter;
+    public SurfaceMaterial material;
+    public Name collisionLayer = s_NameNone;
+    public b8 enabled = true;
+    [transient]
+    public FractureClusterBody cluster;
+    [transient]
+    public b8 initialized = false;
+    [transient]
+    public b8 dirty = true;
 }
 
 [component("gpu_render_transform_export")]
@@ -281,6 +318,15 @@ class EcsSoftBodyImpactEvent{
     public EntityID entity = s_InvalidEntityId;
     public EntityID otherEntity = s_InvalidEntityId;
     public SoftBodyImpactEvent event;
+}
+
+class EcsFractureEvent{
+    public EntityID entity = s_InvalidEntityId;
+    public BodyId sourceBodyId;
+    public BodyId spawnedBodyId;
+    public u32 brokenBondCount = 0u;
+    public f32x4 impactPoint(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32 impactImpulse = 0.0f;
 }
 
 

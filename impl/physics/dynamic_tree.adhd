@@ -67,6 +67,17 @@ class DynamicTree{
         this.m_nodeCount = 0u;
     }
 
+    public void shiftOrigin(in VectorSingle negDelta){
+        const VectorSingle shift3(negDelta, 0.0f);
+        for(usize ni = 0u; ni < this.m_nodes.size(); ++ni){
+            if(this.m_nodes[ni].height < 0)
+                continue;
+            const VectorSingle curMin(this.m_nodes[ni].aabbMinUser, 0.0f);
+            const VectorSingle curMax(this.m_nodes[ni].aabbMaxCategory, 0.0f);
+            this.m_nodes[ni].setAabbValues(curMin + shift3, curMax + shift3);
+        }
+    }
+
     public u32 createProxyWithFlags(in Aabb3D aabb, in u32 categoryBits, in u8 nodeFlags, in u32 userData){
         const u32 proxyId = this.allocateNode();
         const VectorSingle lower(aabb.lowerBound);

@@ -13,6 +13,7 @@
 class DeferredGraphSuffixInputs{
     public mut DeferredFrameTargets targets;
     public GpuGraphResourceId opaqueColor;
+    public GpuGraphResourceId depth;
     public GpuGraphResourceId avboitAccumColor;
     public GpuGraphResourceId avboitAccumExtinction;
     public GpuGraphResourceId avboitForegroundColor;
@@ -20,6 +21,7 @@ class DeferredGraphSuffixInputs{
     public GpuGraphResourceId refractionResolve;
     public GpuGraphResourceId refractionDepth;
     public GpuGraphResourceId currentBindlessSlots;
+    public f32x4x4 viewProj(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
     public ReflectionGraphResult reflectionGraph;
     public ReflectionCompositeInputs reflectionCompositeInputs;
     public b8 useLaggedLightingHistory = false;
@@ -43,19 +45,22 @@ class DeferredGraphSuffixBuilder : NoCopy{
     private mut GraphicsRuntime m_graphics;
     private Optional<mut IGpuTaskGraphPresentationContributor> m_presentationContributor;
     private Optional<mut IGpuTaskGraphOutputLayerContributor> m_outputLayerContributor;
+    private Optional<mut IDebugLineProvider> m_debugLineProvider;
 
     public DeferredGraphSuffixBuilder(
         mut GpuTaskGraph graph,
         mut RendererDeferredSystem deferredSystem,
         mut GraphicsRuntime graphics,
         in Optional<mut IGpuTaskGraphPresentationContributor> presentationContributor,
-        in Optional<mut IGpuTaskGraphOutputLayerContributor> outputLayerContributor
+        in Optional<mut IGpuTaskGraphOutputLayerContributor> outputLayerContributor,
+        in Optional<mut IDebugLineProvider> debugLineProvider
     ){
         this.m_graph = graph;
         this.m_deferredSystem = deferredSystem;
         this.m_graphics = graphics;
         this.m_presentationContributor = presentationContributor;
         this.m_outputLayerContributor = outputLayerContributor;
+        this.m_debugLineProvider = debugLineProvider;
     }
 
     [cpp_unwind]

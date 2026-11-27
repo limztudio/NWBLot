@@ -58,10 +58,13 @@ class LightSpaceCsgState{
     public CsgShadowSnapshot snapshot;
     public Vector<CsgShadowReceiverInput> receivers;
     public Vector<LightSpaceCsgInstanceGpu> instances;
+    public Vector<u32> instanceEntityIds;
     public Vector<BufferHandle> dynamicBounds;
     public Vector<u8> bytes;
     public Vector<Span<u32>> solidTriangleMasks;
     public u64 captureGeometryIdentity = 0u;
+    public u32 cutterByteOffset = 0u;
+    public u32 instanceByteOffset = 0u;
     public b8 captureGeometryTrusted = false;
     public b8 gathering = false;
     public b8 hardware = false;
@@ -105,11 +108,15 @@ void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in 
     state.snapshot.identity = 0u;
     state.snapshot.contentIdentity = 0u;
     state.captureGeometryIdentity = s_Fnv64OffsetBasis;
+    state.cutterByteOffset = 0u;
+    state.instanceByteOffset = 0u;
     state.captureGeometryTrusted = true;
     state.snapshot.receiverRanges.clear();
     state.snapshot.cutters.clear();
+    state.snapshot.cutterEntityIds.clear();
     state.receivers.clear();
     state.instances.clear();
+    state.instanceEntityIds.clear();
     state.dynamicBounds.clear();
     state.bytes.clear();
     state.solidTriangleMasks.clear();
@@ -117,6 +124,7 @@ void BeginLightSpaceCsgGather(mut LightSpaceCsgState state, mut World world, in 
         return;
     state.receivers.reserve(capacity);
     state.instances.reserve(capacity);
+    state.instanceEntityIds.reserve(capacity);
     state.dynamicBounds.reserve(capacity);
     state.solidTriangleMasks.reserve(capacity);
 }
@@ -202,6 +210,7 @@ void AppendLightSpaceCsgReceiverWithBounds(
         mesh.swBvhNodeHeapHandle.valid(),
         nodeSlot
     ));
+    state.instanceEntityIds.push_back(entity.id);
     state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
 
@@ -234,7 +243,9 @@ b8 FinishLightSpaceCsgGather(in CsgShapeRegistry registry, mut LightSpaceCsgStat
         state.snapshot.cutters,
         state.instances,
         state.solidTriangleMasks,
-        state.bytes
+        state.bytes,
+        state.cutterByteOffset,
+        state.instanceByteOffset
     ))
         return false;
     LightSpaceCaptureIdentityBuilder().updateCsgInstances(

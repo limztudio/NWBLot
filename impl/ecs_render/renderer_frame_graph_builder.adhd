@@ -205,7 +205,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     in DeferredGraphResourceImportResult graphResources = deferredGraphResources.value();
 
-    const ShadowPrepareGraphContext shadowPrepareContext(this.m_deferredLightingTaskGraph, this.m_graphics, this.m_meshSystem, this.m_raytracingSystem, this.m_shadowPreparePersistentState);
+    const ShadowPrepareGraphContext shadowPrepareContext(this.m_deferredLightingTaskGraph, this.m_graphics, this.m_meshSystem, this.m_raytracingSystem, this.m_shadowPreparePersistentState, this.m_instanceTransformPatchContributor);
     if(!this.m_shadowPrepareGraph.declareDeferredShadowPrepareTask(shadowPrepareContext, rayTracingShadowResources, rayTracingGraphResources, graphResources.currentBindlessSlots, graphResources.materialContextSlots,
         Span<GpuGraphResourceId>(traceGeometry.traceGeometry), Span<GpuGraphResourceId>(traceGeometry.softwareBvhBuildState), traceGeometry.softwareTraceResourcesPrepared, deferredTargets, shadowPrepareTimingTicket)){
         warning("RendererSystem: could not declare shared shadow-preparation packet");
@@ -606,9 +606,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
-    DeferredGraphSuffixBuilder suffixBuilder(this.m_deferredLightingTaskGraph, this.m_deferredSystem, this.m_graphics, this.m_preparedTaskGraphPresentationContributor, this.m_preparedTaskGraphOutputLayerContributor);
+    DeferredGraphSuffixBuilder suffixBuilder(this.m_deferredLightingTaskGraph, this.m_deferredSystem, this.m_graphics, this.m_preparedTaskGraphPresentationContributor, this.m_preparedTaskGraphOutputLayerContributor, this.m_debugLineProvider);
     DeferredGraphSuffixInputs suffixInputs(deferredTargets, presentationFrame, presentationFramebufferDesc);
     suffixInputs.opaqueColor = graphResources.opaqueColor;
+    suffixInputs.depth = graphResources.depth;
+    suffixInputs.viewProj = meshViewUpload.viewState.worldToClip;
     suffixInputs.avboitAccumColor = graphResources.avboitAccumColor;
     suffixInputs.avboitAccumExtinction = graphResources.avboitAccumExtinction;
     suffixInputs.avboitForegroundColor = graphResources.avboitForegroundColor;

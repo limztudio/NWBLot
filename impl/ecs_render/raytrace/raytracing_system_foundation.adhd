@@ -46,6 +46,7 @@ class RayTracingSceneGatherScratch : NoCopy{
     public Vector<RayTracingInstanceDesc> tlasInstances;
     public Vector<RayTracingAccelStructHandle> tlasInstanceBlases;
     public Vector<RayTracingInstanceWorldBounds> tlasInstanceWorldBounds;
+    public Vector<u32> tlasEntityIds;
     public Vector<SceneSwBvhInstanceGpu> swInstances;
     public Vector<SoftwareSceneRefitInstanceGpu> swSceneRefitInputs;
     public Vector<BufferHandle> swSceneRefitRoots;
@@ -71,6 +72,7 @@ class RayTracingSceneGatherScratch : NoCopy{
         this.meshSlotLookup.clear();
         this.tlasInstances.clear();
         this.tlasInstanceWorldBounds.clear();
+        this.tlasEntityIds.clear();
         this.swInstances.clear();
         this.swSceneRefitInputs.clear();
         this.swInstanceBvhPrimitives.clear();

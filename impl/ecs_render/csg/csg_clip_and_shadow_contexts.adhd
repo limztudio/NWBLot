@@ -409,6 +409,7 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     const usize byteCount = this.m_lightSpaceShadow.m_csg.bytes.size();
     mut BufferHandle buffer = this.m_rayTracingState.sceneBvh.m_csgTraceContextBuffer;
     mut GpuDescriptorHandle handle = this.m_rayTracingState.sceneBvh.m_csgTraceContextHeapHandle;
+    mut GpuDescriptorHandle uavHandle = this.m_rayTracingState.sceneBvh.m_csgTraceContextUavHeapHandle;
     u64 currentBytes = 0u;
     if(buffer.valid())
         currentBytes = buffer.deref().getCreationDescription().byteSize;
@@ -422,10 +423,12 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     if(!capacityResult.has_value())
         return false;
     const u64 capacity = capacityResult.value();
-    if(buffer.valid() && buffer.deref().getCreationDescription().byteSize >= byteCount)
-        return EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, false, heap, buffer.deref(), handle);
+    if(buffer.valid() && buffer.deref().getCreationDescription().byteSize >= byteCount){
+        return EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, false, heap, buffer.deref(), handle)
+            && EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, buffer.deref(), uavHandle);
+    }
     BufferDesc desc;
-    desc.setByteSize(capacity).setStructStride(size_of<u32>()).setCanHaveRawViews(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_CsgContextDebug)).enableAutomaticStateTracking(ResourceStates::Common);
+    desc.setByteSize(capacity).setStructStride(size_of<u32>()).setCanHaveRawViews(true).setCanHaveUAVs(true).setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_CsgContextDebug)).enableAutomaticStateTracking(ResourceStates::Common);
     auto replacementResult = this.m_graphics.createBuffer(desc);
     if(!replacementResult.has_value())
         return false;
@@ -434,11 +437,18 @@ b8 RendererRayTracingSystem::ensureCsgTraceContextResources(){
     if(!replacementHandle.has_value())
         return false;
     GpuDescriptorRetirementGuard retireReplacement(heap, replacementHandle.value());
+    const auto replacementUavHandle = RegisterHeapBuffer(heap, replacement.deref(), GpuDescriptorClass::StorageBuffer, true);
+    if(!replacementUavHandle.has_value())
+        return false;
+    GpuDescriptorRetirementGuard retireReplacementUav(heap, replacementUavHandle.value());
 
     RetireDescriptor(heap, handle);
+    RetireDescriptor(heap, uavHandle);
     buffer = replacement;
     handle = replacementHandle.value();
+    uavHandle = replacementUavHandle.value();
     this.m_rayTracingState.sceneBvh.m_acceptedCsgTraceContextValid = false;
+    retireReplacementUav.release();
     retireReplacement.release();
     return true;
 }

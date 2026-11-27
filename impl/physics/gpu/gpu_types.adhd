@@ -96,6 +96,9 @@ extern const u32 s_GpuJointFlagEnableTwistLimit;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_HAS_AUX")]
 extern const u32 s_GpuJointFlagHasAux;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_BROKEN")]
+extern const u32 s_GpuJointFlagBroken;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_WARM_START")]
 extern const u32 s_GpuSolverModeWarmStart;
 
@@ -113,6 +116,9 @@ extern const u32 s_GpuSolverModeExportImpulses;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_PROJECT")]
 extern const u32 s_GpuSolverModeProject;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_REFRESH_RESIDENT")]
+extern const u32 s_GpuSolverModeRefreshResident;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_WARM_START")]
 extern const u32 s_GpuSolverFlagWarmStart;
@@ -151,6 +157,12 @@ extern const u32 s_GpuBroadphasePairBytes;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_NARROWPHASE_MANIFOLD_BYTES")]
 extern const u32 s_GpuNarrowphaseManifoldBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MANIFOLD_FLAG_CPU_FALLBACK")]
+extern const u32 s_GpuManifoldFlagCpuFallback;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MANIFOLD_FLAG_SECONDARY")]
+extern const u32 s_GpuManifoldFlagSecondary;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_CONTACT_POINT_BYTES")]
 extern const u32 s_GpuContactPointBytes;
@@ -211,6 +223,18 @@ extern const u32 s_ShaderPhysicsShapeTypePlane;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_SEGMENT")]
 extern const u32 s_ShaderPhysicsShapeTypeSegment;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_COMPOUND")]
+extern const u32 s_ShaderPhysicsShapeTypeCompound;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_SCALED")]
+extern const u32 s_ShaderPhysicsShapeTypeScaled;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_CHAIN")]
+extern const u32 s_ShaderPhysicsShapeTypeChain;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_TYPE_SDF")]
+extern const u32 s_ShaderPhysicsShapeTypeSdf;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_TYPE_DISTANCE")]
 extern const u32 s_ShaderPhysicsJointTypeDistance;
@@ -287,6 +311,9 @@ extern const u32 s_ShaderPhysicsBodyFlagHasCustomMaxAngularVel;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_ALLOW_SLEEP")]
 extern const u32 s_ShaderPhysicsBodyFlagAllowSleep;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_BODY_FLAG_SLEEPING")]
+extern const u32 s_ShaderPhysicsBodyFlagSleeping;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_DENSE_COLOR_MASK")]
 extern const u32 s_GpuIslandDenseColorMask;
 
@@ -319,6 +346,9 @@ extern const u32 s_GpuContactAuxHasFrictionExt;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_HAS_CUSTOM_SCALE")]
 extern const u32 s_GpuContactAuxHasCustomScale;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_CONTACT_AUX_STRIDE_FLOAT4")]
+extern const u32 s_GpuContactAuxStrideFloat4;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_LBVH_MODE_COMPUTE_MORTON")]
 extern const u32 s_GpuLbvhModeComputeMorton;
@@ -422,6 +452,33 @@ extern const u32 s_GpuResPrepModeStoreWarmStart;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_PREP_MODE_WAKE_BODIES")]
 extern const u32 s_GpuResPrepModeWakeBodies;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_PREP_MODE_PROPAGATE_SLEEP_WAKE")]
+extern const u32 s_GpuResPrepModePropagateSleepWake;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_IS_SENSOR")]
+extern const u32 s_GpuMatFlagIsSensor;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_ENABLE_HIT_EVENTS")]
+extern const u32 s_GpuMatFlagEnableHitEvents;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_ENABLE_SENSOR_EVENTS")]
+extern const u32 s_GpuMatFlagEnableSensorEvents;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_ENABLE_CONTACT_EVENTS")]
+extern const u32 s_GpuMatFlagEnableContactEvents;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_HAS_ANISO_FRICTION")]
+extern const u32 s_GpuMatFlagHasAnisoFriction;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_HAS_SURFACE_VELOCITY")]
+extern const u32 s_GpuMatFlagHasSurfaceVelocity;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE")]
+extern const u32 s_GpuMatFlagWorldSpaceSurface;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_MAT_FLAG_CPU_SLEEPING")]
+extern const u32 s_GpuMatFlagCpuSleeping;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SHAPE_MATERIAL_BYTES")]
 extern const u32 s_GpuShapeMaterialBytes;
 
@@ -445,6 +502,18 @@ extern const u32 s_GpuEventBodyWake;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_EVENT_CPU_FALLBACK")]
 extern const u32 s_GpuEventCpuFallback;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_EVENT_CONTACT_ACTIVE")]
+extern const u32 s_GpuEventContactActive;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_EVENT_JOINT_BREAK")]
+extern const u32 s_GpuEventJointBreak;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH")]
+extern const u32 s_GpuEventFluidSplash;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EVENT_FLAG_CPU_SLEEP_WAKE")]
+extern const u32 s_GpuEventFlagCpuSleepWake;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_PREDICT")]
 extern const u32 s_GpuSubsysModeSoftPredict;
@@ -473,6 +542,24 @@ extern const u32 s_GpuSubsysModeApplyFluidBuoyancy;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_APPLY_EXPLOSION")]
 extern const u32 s_GpuSubsysModeApplyExplosion;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_BENDING_COLOR")]
+extern const u32 s_GpuSubsysModeSoftBendingColor;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_SELF_COLLIDE")]
+extern const u32 s_GpuSubsysModeSoftSelfCollide;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_AERO_DRAG")]
+extern const u32 s_GpuSubsysModeSoftAeroDrag;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_SHAPE_MATCH")]
+extern const u32 s_GpuSubsysModeSoftShapeMatch;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_DEFORM_MESH")]
+extern const u32 s_GpuSubsysModeSoftDeformMesh;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SUBSYS_MODE_SOFT_REDUCE_BOUNDS")]
+extern const u32 s_GpuSubsysModeSoftReduceBounds;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_PARTICLE_BYTES")]
 extern const u32 s_GpuSoftParticleBytes;
 
@@ -482,6 +569,9 @@ extern const u32 s_GpuSoftDistConstraintBytes;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_VOL_CONSTRAINT_BYTES")]
 extern const u32 s_GpuSoftVolConstraintBytes;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_BEND_CONSTRAINT_BYTES")]
+extern const u32 s_GpuSoftBendConstraintBytes;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_SOFT_BACKSTOP_BYTES")]
 extern const u32 s_GpuSoftBackstopBytes;
 
@@ -490,6 +580,9 @@ extern const u32 s_GpuForceFieldBytes;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_FLUID_VOLUME_BYTES")]
 extern const u32 s_GpuFluidVolumeBytes;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GERSTNER_WAVE_BYTES")]
+extern const u32 s_GpuGerstnerWaveBytes;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_RAYCAST_CLOSEST")]
 extern const u32 s_GpuQueryTypeRaycastClosest;
@@ -511,6 +604,12 @@ extern const u32 s_GpuQueryTypeOverlapPoint;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_SPHERE_CAST")]
 extern const u32 s_GpuQueryTypeSphereCast;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_SHAPE_CAST")]
+extern const u32 s_GpuQueryTypeShapeCast;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_TYPE_OVERLAP_SHAPE")]
+extern const u32 s_GpuQueryTypeOverlapShape;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_QUERY_FLAG_INCLUDE_SENSORS")]
 extern const u32 s_GpuQueryFlagIncludeSensors;
@@ -544,6 +643,12 @@ extern const u32 s_GpuExportModeStructuredTrs;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_MODE_PATCH_INSTANCE_BUFFER")]
 extern const u32 s_GpuExportModePatchInstanceBuffer;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_MODE_PATCH_AFFINE_3X4_OBJ_TO_WORLD")]
+extern const u32 s_GpuExportModePatchAffine3x4ObjToWorld;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_MODE_PATCH_AFFINE_3X4_WORLD_TO_OBJ")]
+extern const u32 s_GpuExportModePatchAffine3x4WorldToObj;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_EXPORT_SOURCE_BODY_POSE")]
 extern const u32 s_GpuExportSourceBodyPose;
@@ -723,6 +828,7 @@ class GpuPhysicsSpatialQueryResult{
     public f32x4 hitPointFraction(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 hitNormalDist(0.0f, 1.0f, 0.0f, 0.0f);
     public u32x4 hitIds(0u, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
+    public f32x4 hitTriBary(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 [align(16)]
@@ -737,6 +843,8 @@ class PhysicsBatchSpatialQueryPending{
     public QueueSubmissionToken token;
     public Vector<GpuPhysicsSpatialQuery> queries;
     public Vector<GpuPhysicsSpatialQueryAux> queryAux;
+    public Vector<ShapeProxy> cpuQueryShapes;
+    public Vector<Transform3D> cpuQueryTransforms;
     public u32 queryCount = 0u;
     public u32 maxHitsPerQuery = 0u;
     public u32 residentSyncCount = 0u;
@@ -764,6 +872,9 @@ class GpuPhysicsRenderTransformOut{
 class GpuPhysicsShapeMaterial{
     public f32x4 fricRestStatRoll(0.6f, 0.0f, 0.6f, 0.0f);
     public f32x4 tanFlagsThreshSlot(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 surfVelBodyId(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 fricDirAniso0(1.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 aniso1RestPad(1.0f, 1.0f, 0.0f, 0.0f);
 }
 
 [align(16)]
@@ -779,6 +890,7 @@ class GpuPhysicsEvent{
     public u32x4 header(0u, 0u, 0u, 0u);
     public f32x4 pointImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalApproach(0.0f, 1.0f, 0.0f, 0.0f);
+    public u32x4 bodyIds(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
 }
 
 [align(16)]
@@ -802,6 +914,12 @@ class GpuPhysicsSoftVolConstraint{
 }
 
 [align(16)]
+class GpuPhysicsSoftBendConstraint{
+    public u32x4 indices(0u, 0u, 0u, 0u);
+    public f32x4 restAngleCompLambdaPad(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+[align(16)]
 class GpuPhysicsSoftBackstop{
     public f32x4 centerMaxDist(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalRadiusIdx(0.0f, 1.0f, 0.0f, 0.0f);
@@ -812,9 +930,13 @@ class GpuPhysicsForceField{
     public f32x4 originOrDirStrength(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 axisRadius(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 minDistFalloffTurb(0.5f, 2.0f, 0.0f, 1.0f);
-    public f32x4 boundsMinType(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 boundsMaxFilter(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 boundsMinMeta(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 boundsMaxSuction(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 shapeCenterOrCapA(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 shapeRotOrCapB(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 shapeHalfExtentsExtra(1.0f, 1.0f, 1.0f, 0.0f);
     public f32x4 extraParams(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32x4 filterData(1u, 0xffffffffu, 0u, 0u);
 }
 
 [align(16)]
@@ -823,8 +945,18 @@ class GpuPhysicsFluidVolume{
     public f32x4 boundsMinShape(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 boundsMaxDensity(0.0f, 0.0f, 0.0f, 1000.0f);
     public f32x4 flowVelLinDrag(0.0f, 0.0f, 0.0f, 0.6f);
-    public f32x4 dragLiftWaveAmpFreq(0.5f, 0.2f, 0.0f, 0.0f);
-    public f32x4 waveSpeedTimeFilter(1.0f, 1.0f, 0.0f, 0.0f);
+    public f32x4 dragLiftWaveAmpFreq(0.0f, 0.2f, 0.0f, 1.0f);
+    public f32x4 waveSpeedAngAddedFlags(1.0f, 0.5f, 0.5f, 0.0f);
+    public f32x4 obbCenterSplash(0.0f, 0.0f, 0.0f, 1.5f);
+    public f32x4 obbRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32x4 obbHalfExtentsGerstner(1.0f, 1.0f, 1.0f, 0.0f);
+    public u32x4 filterData(1u, 0xffffffffu, 0u, 0u);
+}
+
+[align(16)]
+class GpuPhysicsFluidGerstnerWave{
+    public f32x4 directionAndSteepness(1.0f, 0.0f, 0.0f, 0.35f);
+    public f32x4 ampWavelenSpeedPhase(0.25f, 6.0f, 2.0f, 0.0f);
 }
 
 
@@ -857,9 +989,11 @@ static_assert(size_of<GpuPhysicsEvent>() == s_GpuEventBytes, "GpuPhysicsEvent la
 static_assert(size_of<GpuPhysicsSoftParticle>() == s_GpuSoftParticleBytes, "GpuPhysicsSoftParticle layout drifted from shader");
 static_assert(size_of<GpuPhysicsSoftDistConstraint>() == s_GpuSoftDistConstraintBytes, "GpuPhysicsSoftDistConstraint layout drifted from shader");
 static_assert(size_of<GpuPhysicsSoftVolConstraint>() == s_GpuSoftVolConstraintBytes, "GpuPhysicsSoftVolConstraint layout drifted from shader");
+static_assert(size_of<GpuPhysicsSoftBendConstraint>() == s_GpuSoftBendConstraintBytes, "GpuPhysicsSoftBendConstraint layout drifted from shader");
 static_assert(size_of<GpuPhysicsSoftBackstop>() == s_GpuSoftBackstopBytes, "GpuPhysicsSoftBackstop layout drifted from shader");
 static_assert(size_of<GpuPhysicsForceField>() == s_GpuForceFieldBytes, "GpuPhysicsForceField layout drifted from shader");
 static_assert(size_of<GpuPhysicsFluidVolume>() == s_GpuFluidVolumeBytes, "GpuPhysicsFluidVolume layout drifted from shader");
+static_assert(size_of<GpuPhysicsFluidGerstnerWave>() == s_GpuGerstnerWaveBytes, "GpuPhysicsFluidGerstnerWave layout drifted from shader");
 
 static_assert(offset_of<GpuPhysicsPushConstants>(itemCount) == 0u, "PushConstants.itemCount offset mismatch");
 static_assert(offset_of<GpuPhysicsPushConstants>(deltaTime) == 16u, "PushConstants.deltaTime offset mismatch");
@@ -927,12 +1061,17 @@ static_assert(offset_of<GpuPhysicsSpatialQuery>(params) == 32u, "SpatialQuery.pa
 static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitPointFraction) == 0u, "SpatialQueryResult.hitPointFraction offset mismatch");
 static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitNormalDist) == 16u, "SpatialQueryResult.hitNormalDist offset mismatch");
 static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitIds) == 32u, "SpatialQueryResult.hitIds offset mismatch");
+static_assert(offset_of<GpuPhysicsSpatialQueryResult>(hitTriBary) == 48u, "SpatialQueryResult.hitTriBary offset mismatch");
 static_assert(offset_of<GpuPhysicsRenderTransformBinding>(bodyDestFlags) == 0u, "RenderTransformBinding.bodyDestFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsRenderTransformBinding>(scalePad) == 16u, "RenderTransformBinding.scalePad offset mismatch");
 static_assert(offset_of<GpuPhysicsRenderTransformOut>(rotation) == 0u, "RenderTransformOut.rotation offset mismatch");
 static_assert(offset_of<GpuPhysicsRenderTransformOut>(translationFlags) == 16u, "RenderTransformOut.translationFlags offset mismatch");
 static_assert(offset_of<GpuPhysicsRenderTransformOut>(scaleEntityId) == 32u, "RenderTransformOut.scaleEntityId offset mismatch");
 static_assert(offset_of<GpuPhysicsRenderTransformOut>(linearVelSleep) == 48u, "RenderTransformOut.linearVelSleep offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeMaterial>(surfVelBodyId) == 32u, "ShapeMaterial.surfVelBodyId offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeMaterial>(fricDirAniso0) == 48u, "ShapeMaterial.fricDirAniso0 offset mismatch");
+static_assert(offset_of<GpuPhysicsShapeMaterial>(aniso1RestPad) == 64u, "ShapeMaterial.aniso1RestPad offset mismatch");
+static_assert(offset_of<GpuPhysicsEvent>(bodyIds) == 48u, "Event.bodyIds offset mismatch");
 
 static_assert(is_trivially_copyable<GpuPhysicsPushConstants>(), "GpuPhysicsPushConstants must stay trivially copyable");
 static_assert(is_trivially_copyable<GpuPhysicsBodyState>(), "GpuPhysicsBodyState must stay trivially copyable");
@@ -974,6 +1113,10 @@ static_assert(cast<u32>(ShapeType::TaperedCapsule) == s_ShaderPhysicsShapeTypeTa
 static_assert(cast<u32>(ShapeType::Heightfield) == s_ShaderPhysicsShapeTypeHeightfield, "ShapeType::Heightfield mismatch");
 static_assert(cast<u32>(ShapeType::Plane) == s_ShaderPhysicsShapeTypePlane, "ShapeType::Plane mismatch");
 static_assert(cast<u32>(ShapeType::Segment) == s_ShaderPhysicsShapeTypeSegment, "ShapeType::Segment mismatch");
+static_assert(cast<u32>(ShapeType::Compound) == s_ShaderPhysicsShapeTypeCompound, "ShapeType::Compound mismatch");
+static_assert(cast<u32>(ShapeType::Scaled) == s_ShaderPhysicsShapeTypeScaled, "ShapeType::Scaled mismatch");
+static_assert(cast<u32>(ShapeType::Chain) == s_ShaderPhysicsShapeTypeChain, "ShapeType::Chain mismatch");
+static_assert(cast<u32>(ShapeType::Sdf) == s_ShaderPhysicsShapeTypeSdf, "ShapeType::Sdf mismatch");
 static_assert(cast<u32>(JointType::Distance) == s_ShaderPhysicsJointTypeDistance, "JointType::Distance mismatch");
 static_assert(cast<u32>(JointType::Spherical) == s_ShaderPhysicsJointTypeSpherical, "JointType::Spherical mismatch");
 static_assert(cast<u32>(JointType::Revolute) == s_ShaderPhysicsJointTypeRevolute, "JointType::Revolute mismatch");
@@ -1003,6 +1146,8 @@ static_assert(s_GpuShapeFlagHasLocalTransform != 0u && (s_GpuShapeFlagHasLocalTr
 static_assert(s_GpuSolverFlagHasHitEvents != 0u && (s_GpuSolverFlagHasHitEvents & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep)) == 0u, "SolverFlag HasHitEvents distinct bit");
 static_assert(s_GpuSolverFlagIndirectSlice != 0u && (s_GpuSolverFlagIndirectSlice & (s_GpuSolverFlagWarmStart | s_GpuSolverFlagSerialLoop | s_GpuSolverFlagFirstSubstep | s_GpuSolverFlagHasHitEvents)) == 0u, "SolverFlag IndirectSlice distinct bit");
 static_assert(cast<u32>(BodyFlags::EnableSleep) == s_ShaderPhysicsBodyFlagAllowSleep, "BodyFlags::EnableSleep mismatch");
+static_assert((cast<u32>(BodyFlags::LastStepGpuSolved) & s_ShaderPhysicsBodyFlagSleeping) == 0u, "BodyFlags::LastStepGpuSolved collides with GPU sleeping bit");
+static_assert((cast<u32>(BodyFlags::JustWoke) & s_ShaderPhysicsBodyFlagSleeping) == 0u, "BodyFlags::JustWoke collides with GPU sleeping bit");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1113,6 +1258,33 @@ void AssignSoftBodyConstraintColors(
     }
 }
 
+void ScatterColoredSoftBodyConstraints<T>(
+    in Vector<u32> flatVerts,
+    in u32 stride,
+    in u32 particleCount,
+    in Vector<T> src,
+    mut Vector<T> outOrdered,
+    mut Vector<SoftBodyColorSlice> outSlices
+){
+    if(src.empty())
+        return;
+
+    Vector<u32> colors;
+    AssignSoftBodyConstraintColors(Span<u32>(flatVerts.data(), flatVerts.size()), stride, cast<u32>(src.size()), particleCount, colors, outSlices);
+    Vector<u32> writeOffsets;
+    writeOffsets.resize(outSlices.size());
+    for(usize c = 0u; c < outSlices.size(); ++c)
+        writeOffsets[c] = outSlices[c].offset;
+
+    outOrdered.resize(src.size());
+    for(usize i = 0u; i < src.size(); ++i){
+        const u32 c = colors[i];
+        const u32 dst = writeOffsets[c];
+        writeOffsets[c] = dst + 1u;
+        outOrdered[dst] = src[i];
+    }
+}
+
 void BuildSoftBodyDistanceConstraintColors(
     in SoftBody softBody,
     mut Vector<GpuPhysicsSoftDistConstraint> outOrdered,
@@ -1162,23 +1334,7 @@ void BuildSoftBodyDistanceConstraintColors(
         src.push_back(gc);
     }
 
-    if(src.empty())
-        return;
-
-    Vector<u32> colors;
-    AssignSoftBodyConstraintColors(Span<u32>(flatVerts.data(), flatVerts.size()), 2u, cast<u32>(src.size()), particleCount, colors, outSlices);
-    Vector<u32> writeOffsets;
-    writeOffsets.resize(outSlices.size());
-    for(usize c = 0u; c < outSlices.size(); ++c)
-        writeOffsets[c] = outSlices[c].offset;
-
-    outOrdered.resize(src.size());
-    for(usize i = 0u; i < src.size(); ++i){
-        const u32 c = colors[i];
-        const u32 dst = writeOffsets[c];
-        writeOffsets[c] = dst + 1u;
-        outOrdered[dst] = src[i];
-    }
+    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftDistConstraint>(flatVerts, 2u, particleCount, src, outOrdered, outSlices);
 }
 
 void BuildSoftBodyVolumeConstraintColors(
@@ -1224,23 +1380,53 @@ void BuildSoftBodyVolumeConstraintColors(
         src.push_back(gc);
     }
 
-    if(src.empty())
+    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftVolConstraint>(flatVerts, 4u, particleCount, src, outOrdered, outSlices);
+}
+
+void BuildSoftBodyBendingConstraintColors(
+    in SoftBody softBody,
+    mut Vector<GpuPhysicsSoftBendConstraint> outOrdered,
+    mut Vector<SoftBodyColorSlice> outSlices
+){
+    outOrdered.clear();
+    outSlices.clear();
+    const u32 particleCount = cast<u32>(softBody.particles.size());
+    if(particleCount < 4u || softBody.dihedralBendingConstraints.empty())
         return;
 
-    Vector<u32> colors;
-    AssignSoftBodyConstraintColors(Span<u32>(flatVerts.data(), flatVerts.size()), 4u, cast<u32>(src.size()), particleCount, colors, outSlices);
-    Vector<u32> writeOffsets;
-    writeOffsets.resize(outSlices.size());
-    for(usize c = 0u; c < outSlices.size(); ++c)
-        writeOffsets[c] = outSlices[c].offset;
+    Vector<u32> flatVerts;
+    Vector<GpuPhysicsSoftBendConstraint> src;
+    flatVerts.reserve(softBody.dihedralBendingConstraints.size() * 4u);
+    src.reserve(softBody.dihedralBendingConstraints.size());
 
-    outOrdered.resize(src.size());
-    for(usize i = 0u; i < src.size(); ++i){
-        const u32 c = colors[i];
-        const u32 dst = writeOffsets[c];
-        writeOffsets[c] = dst + 1u;
-        outOrdered[dst] = src[i];
+    for(usize i = 0u; i < softBody.dihedralBendingConstraints.size(); ++i){
+        in SoftBodyDihedralBendingConstraint dbc = softBody.dihedralBendingConstraints[i];
+        if(dbc.p0 >= particleCount || dbc.p1 >= particleCount || dbc.p2 >= particleCount || dbc.p3 >= particleCount)
+            continue;
+        if(dbc.p0 == dbc.p1 || dbc.p0 == dbc.p2 || dbc.p0 == dbc.p3 || dbc.p1 == dbc.p2 || dbc.p1 == dbc.p3 || dbc.p2 == dbc.p3)
+            continue;
+        in SoftBodyParticle pt0 = softBody.particles[dbc.p0];
+        in SoftBodyParticle pt1 = softBody.particles[dbc.p1];
+        in SoftBodyParticle pt2 = softBody.particles[dbc.p2];
+        in SoftBodyParticle pt3 = softBody.particles[dbc.p3];
+        if(
+            (pt0.isFixed || pt0.invMass <= 0.0f)
+            && (pt1.isFixed || pt1.invMass <= 0.0f)
+            && (pt2.isFixed || pt2.invMass <= 0.0f)
+            && (pt3.isFixed || pt3.invMass <= 0.0f)
+        )
+            continue;
+        flatVerts.push_back(dbc.p0);
+        flatVerts.push_back(dbc.p1);
+        flatVerts.push_back(dbc.p2);
+        flatVerts.push_back(dbc.p3);
+        GpuPhysicsSoftBendConstraint gc;
+        gc.indices = u32x4(dbc.p0, dbc.p1, dbc.p2, dbc.p3);
+        gc.restAngleCompLambdaPad = f32x4(dbc.restAngle, dbc.compliance, dbc.lambda, 0.0f);
+        src.push_back(gc);
     }
+
+    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftBendConstraint>(flatVerts, 4u, particleCount, src, outOrdered, outSlices);
 }
 
 GpuPhysicsForceField PackGpuForceField(in ForceField field){
@@ -1248,18 +1434,58 @@ GpuPhysicsForceField PackGpuForceField(in ForceField field){
     outField.originOrDirStrength = f32x4(field.originOrDirection.x, field.originOrDirection.y, field.originOrDirection.z, field.strength);
     outField.axisRadius = f32x4(field.axis.x, field.axis.y, field.axis.z, field.radius);
     outField.minDistFalloffTurb = f32x4(field.minDistance, field.falloffPower, field.turbulenceAmplitude, field.turbulenceFrequency);
-    outField.boundsMinType = f32x4(field.bounds.lowerBound.x, field.bounds.lowerBound.y, field.bounds.lowerBound.z, bit_cast<f32>(cast<u32>(field.type)));
     u32 enabledBounds = 0u;
     if(field.enabled)
         enabledBounds |= 1u;
     if(field.useBounds)
         enabledBounds |= 2u;
-    outField.boundsMaxFilter = f32x4(field.bounds.upperBound.x, field.bounds.upperBound.y, field.bounds.upperBound.z, bit_cast<f32>(enabledBounds));
-    outField.extraParams = f32x4(field.inwardSuction, 0.0f, 0.0f, 0.0f);
+    const u32 packedMeta =
+        (cast<u32>(field.type) & 0xffu)
+        | ((cast<u32>(field.shape) & 0xffu) << 8u)
+        | ((cast<u32>(field.falloffMode) & 0xffu) << 16u)
+        | ((enabledBounds & 0xffu) << 24u)
+    ;
+    outField.boundsMinMeta = f32x4(field.bounds.lowerBound.x, field.bounds.lowerBound.y, field.bounds.lowerBound.z, bit_cast<f32>(packedMeta));
+    outField.boundsMaxSuction = f32x4(field.bounds.upperBound.x, field.bounds.upperBound.y, field.bounds.upperBound.z, field.inwardSuction);
+    if(field.shape == ForceFieldShape::Capsule){
+        outField.shapeCenterOrCapA = f32x4(field.capsulePointA.x, field.capsulePointA.y, field.capsulePointA.z, Max(0.0f, field.capsuleRadius));
+        outField.shapeRotOrCapB = f32x4(field.capsulePointB.x, field.capsulePointB.y, field.capsulePointB.z, 0.0f);
+    }
+    else if(field.shape == ForceFieldShape::Sphere){
+        const VectorSingle sc = field.sphereShapeCenter();
+        f32 sr = field.radius;
+        if(sr <= 0.0f)
+            sr = Max(0.0f, field.obbHalfExtents.x);
+        outField.shapeCenterOrCapA = f32x4(sc.x, sc.y, sc.z, sr);
+        outField.shapeRotOrCapB = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+    else{
+        VectorSingle sc = VectorSingle(field.obbCenter, 0.0f);
+        if(field.shape != ForceFieldShape::Obb)
+            sc = field.sphereShapeCenter();
+        outField.shapeCenterOrCapA = f32x4(sc.x, sc.y, sc.z, 0.0f);
+        outField.shapeRotOrCapB = f32x4(SafeNormalizeQuat(VectorSingle(field.obbRotation)));
+    }
+    outField.shapeHalfExtentsExtra = f32x4(field.obbHalfExtents.x, field.obbHalfExtents.y, field.obbHalfExtents.z, 0.0f);
+    outField.extraParams = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    outField.filterData = u32x4(field.filter.categoryBits, field.filter.maskBits, bit_cast<u32>(field.filter.groupIndex), 0u);
     return outField;
 }
 
-GpuPhysicsFluidVolume PackGpuFluidVolume(in FluidVolume fluid){
+GpuPhysicsFluidGerstnerWave PackGpuFluidGerstnerWave(in FluidGerstnerWave w){
+    GpuPhysicsFluidGerstnerWave outW;
+    outW.directionAndSteepness = w.directionAndSteepness;
+    outW.ampWavelenSpeedPhase = f32x4(w.amplitude, w.wavelength, w.speed, w.phase);
+    return outW;
+}
+
+GpuPhysicsFluidVolume PackGpuFluidVolume(
+    in FluidVolume fluid,
+    in u32 gerstnerOffset,
+    in u32 gerstnerCount,
+    in f32 splashThreshold,
+    in u32 fluidIndex
+){
     GpuPhysicsFluidVolume outFluid;
     outFluid.surfaceNormalOffset = fluid.surfaceNormalOffset;
     outFluid.boundsMinShape = f32x4(fluid.bounds.lowerBound.x, fluid.bounds.lowerBound.y, fluid.bounds.lowerBound.z, bit_cast<f32>(cast<u32>(fluid.shape)));
@@ -1269,11 +1495,23 @@ GpuPhysicsFluidVolume PackGpuFluidVolume(in FluidVolume fluid){
     u32 enabledFlag = 0u;
     if(fluid.enabled)
         enabledFlag = 1u;
-    outFluid.waveSpeedTimeFilter = f32x4(fluid.waveSpeed, fluid.angularDrag, 0.0f, bit_cast<f32>(enabledFlag));
+    outFluid.waveSpeedAngAddedFlags = f32x4(fluid.waveSpeed, fluid.angularDrag, Max(0.0f, fluid.addedMassCoeff), bit_cast<f32>(enabledFlag));
+    outFluid.obbCenterSplash = f32x4(fluid.obbCenter.x, fluid.obbCenter.y, fluid.obbCenter.z, Max(0.0f, splashThreshold));
+    outFluid.obbRotation = f32x4(SafeNormalizeQuat(VectorSingle(fluid.obbRotation)));
+    const u32 gerstnerPack = (gerstnerOffset & 0xffffu) | ((gerstnerCount & 0xffffu) << 16u);
+    outFluid.obbHalfExtentsGerstner = f32x4(fluid.obbHalfExtents.x, fluid.obbHalfExtents.y, fluid.obbHalfExtents.z, bit_cast<f32>(gerstnerPack));
+    outFluid.filterData = u32x4(fluid.filter.categoryBits, fluid.filter.maskBits, bit_cast<u32>(fluid.filter.groupIndex), fluidIndex);
     return outFluid;
 }
 
-GpuPhysicsShapeMaterial PackGpuShapeMaterial(in Shape shape, in f32 hitEventThreshold, in u32 resBodySlot){
+GpuPhysicsShapeMaterial PackGpuShapeMaterial(
+    in Shape shape,
+    in f32 hitEventThreshold,
+    in u32 resBodySlot,
+    in VectorSingle worldRot,
+    in b8 isCpuSleeping,
+    in b8 preRotateToWorld
+){
     f32 statFric = shape.material.friction;
     if(shape.material.staticFriction >= 0.0f)
         statFric = shape.material.staticFriction;
@@ -1281,14 +1519,41 @@ GpuPhysicsShapeMaterial PackGpuShapeMaterial(in Shape shape, in f32 hitEventThre
         | ((cast<u32>(shape.material.restitutionCombineMode) & 7u) << 3u)
     ;
     if(shape.isSensor())
-        matFlags |= 64u;
+        matFlags |= s_GpuMatFlagIsSensor;
     if(shape.enableHitEvents())
-        matFlags |= 128u;
+        matFlags |= s_GpuMatFlagEnableHitEvents;
     if(shape.enableSensorEvents())
-        matFlags |= 256u;
+        matFlags |= s_GpuMatFlagEnableSensorEvents;
+    if(shape.enableContactEvents())
+        matFlags |= s_GpuMatFlagEnableContactEvents;
+    VectorSingle sv(shape.material.surfaceVelocity, 0.0f);
+    if(shape.material.surfaceVelocity.w != 0.0f){
+        matFlags |= s_GpuMatFlagHasSurfaceVelocity;
+        if(preRotateToWorld)
+            sv = Vector3Rotate(sv, worldRot);
+    }
+    VectorSingle fd(shape.material.frictionDirection, 0.0f);
+    VectorSingle aniso(0.0f);
+    if(shape.material.anisotropicFriction.w != 0.0f){
+        matFlags |= s_GpuMatFlagHasAnisoFriction;
+        aniso = Max(VectorSingle(shape.material.anisotropicFriction), VectorSingle(0.0f));
+        if(preRotateToWorld)
+            fd = Vector3Rotate(fd, worldRot);
+    }
+    else{
+        aniso = VectorSingle(1.0f, 1.0f, 1.0f, 0.0f);
+    }
+    if(preRotateToWorld)
+        matFlags |= s_GpuMatFlagWorldSpaceSurface;
+    if(isCpuSleeping)
+        matFlags |= s_GpuMatFlagCpuSleeping;
+
     GpuPhysicsShapeMaterial outMat;
     outMat.fricRestStatRoll = f32x4(shape.material.friction, shape.material.restitution, statFric, shape.material.rollingResistance);
     outMat.tanFlagsThreshSlot = f32x4(shape.material.tangentSpeed, bit_cast<f32>(matFlags), hitEventThreshold, bit_cast<f32>(resBodySlot));
+    outMat.surfVelBodyId = f32x4(sv.x, sv.y, sv.z, bit_cast<f32>(shape.bodyId));
+    outMat.fricDirAniso0 = f32x4(fd.x, fd.y, fd.z, aniso.x);
+    outMat.aniso1RestPad = f32x4(aniso.y, aniso.z, 0.0f, 0.0f);
     return outMat;
 }
 

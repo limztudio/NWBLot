@@ -10,6 +10,47 @@
 
 
 [cpp_unwind]
+b8 AppendTypedInstanceTransformPatch(
+    in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor,
+    in Span<u32> instanceEntityIds,
+    in GpuGraphResourceId targetBufferResource,
+    in GpuDescriptorHandle targetUavHeapHandle,
+    in u32 instanceStrideFloat4,
+    in GpuTaskGraphInstanceTransformPatchLayout layout,
+    in u32 baseFloat4Offset,
+    in Name passIdentityPrefix,
+    in b8 mergeWithPrevious,
+    in b8 allowMergeAcrossConsumerFrontier,
+    mut GpuTaskGraph graph,
+    mut GpuTaskId dependency
+){
+    if(!contributor.has_value() || instanceEntityIds.empty())
+        return true;
+    if(!targetBufferResource.valid() || !targetUavHeapHandle.valid())
+        return false;
+
+    GpuTaskGraphInstanceTransformPatchRequest request;
+    request.instanceBufferResource = targetBufferResource;
+    request.instanceBufferUavSlot = targetUavHeapHandle.slot();
+    request.instanceStrideFloat4 = instanceStrideFloat4;
+    request.baseFloat4Offset = baseFloat4Offset;
+    request.layout = layout;
+    request.passIdentityPrefix = passIdentityPrefix;
+    request.dependency = dependency;
+    request.mergeWithPrevious = mergeWithPrevious;
+    request.allowMergeAcrossConsumerFrontier = allowMergeAcrossConsumerFrontier;
+
+    const auto patchResult = contributor.value().declareInstanceTransformPatch(request, instanceEntityIds, graph);
+    if(!patchResult.has_value()){
+        dependency = GpuTaskId();
+        return false;
+    }
+    if(patchResult.value().valid())
+        dependency = patchResult.value();
+    return true;
+}
+
+[cpp_unwind]
 b8 AppendInstanceTransformPatch(
     in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor,
     in Span<InstanceGpuData> instances,
@@ -22,30 +63,26 @@ b8 AppendInstanceTransformPatch(
 ){
     if(!contributor.has_value() || instances.empty())
         return true;
-    if(!materialInstances.valid() || !frameBindings.instanceUavHeapHandle.valid())
-        return false;
 
     Vector<u32> instanceEntityIds;
     instanceEntityIds.reserve(instances.size());
     for(usize i = 0u; i < instances.size(); ++i)
         instanceEntityIds.push_back(instances[i].scale.w);
 
-    GpuTaskGraphInstanceTransformPatchRequest request;
-    request.instanceBufferResource = materialInstances;
-    request.instanceBufferUavSlot = frameBindings.instanceUavHeapHandle.slot();
-    request.instanceStrideFloat4 = cast<u32>(size_of<InstanceGpuData>() / size_of<f32x4>());
-    request.passIdentityPrefix = passIdentityPrefix;
-    request.dependency = dependency;
-    request.mergeWithPrevious = mergeWithPrevious;
-
-    const auto patchResult = contributor.value().declareInstanceTransformPatch(request, Span<u32>(instanceEntityIds.data(), instanceEntityIds.size()), graph);
-    if(!patchResult.has_value()){
-        dependency = GpuTaskId();
-        return false;
-    }
-    if(patchResult.value().valid())
-        dependency = patchResult.value();
-    return true;
+    return AppendTypedInstanceTransformPatch(
+        contributor,
+        Span<u32>(instanceEntityIds.data(), instanceEntityIds.size()),
+        materialInstances,
+        frameBindings.instanceUavHeapHandle,
+        cast<u32>(size_of<InstanceGpuData>() / size_of<f32x4>()),
+        GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs,
+        0u,
+        passIdentityPrefix,
+        mergeWithPrevious,
+        false,
+        graph,
+        dependency
+    );
 }
 
 

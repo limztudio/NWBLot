@@ -23,6 +23,11 @@ class BroadPhase{
         this.workerQueryStacks.clear();
     }
 
+    public void shiftOrigin(in VectorSingle negDelta){
+        for(usize i = 0u; i < s_TreeCount; ++i)
+            this.trees[i].shiftOrigin(negDelta);
+    }
+
     public void createProxyWithFlags(
         in BodyType bodyType,
         in Aabb3D aabb,

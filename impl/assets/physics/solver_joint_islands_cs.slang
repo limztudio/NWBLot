@@ -58,10 +58,8 @@ bool nwbPhysicsIslandJointsPass(
             for(uint j = startIdx; j < cnt; j += stepIdx){
                 if(passMode == NWB_PHYSICS_JOINT_PASS_WARM_START)
                     nwbPhysicsWarmStartSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot, flags);
-                else if(passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_BIAS)
-                    nwbPhysicsSolveSingleJoint(off + j, true, bodySimSlot, bodyStateSlot, jointSlot, h);
-                else if(passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_RELAX)
-                    nwbPhysicsSolveSingleJoint(off + j, false, bodySimSlot, bodyStateSlot, jointSlot, h);
+                else if(passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_BIAS || passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_RELAX)
+                    nwbPhysicsSolveSingleJoint(off + j, passMode == NWB_PHYSICS_JOINT_PASS_SOLVE_BIAS, bodySimSlot, bodyStateSlot, jointSlot, h);
                 else if(nwbPhysicsProjectSingleJoint(off + j, bodySimSlot, bodyStateSlot, jointSlot))
                     anyProj = true;
             }

@@ -109,6 +109,7 @@ class RtShadowState{
 
     public GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_shadowInstanceHeapHandle = GpuDescriptorHandleInvalid();
+    public GpuDescriptorHandle m_shadowInstanceUavHeapHandle = GpuDescriptorHandleInvalid();
     public GpuDescriptorHandle m_shadowMaterialTypedHeapHandle = GpuDescriptorHandleInvalid();
     public u32 m_shadowMeshCount = 0u;
     public u32 m_shadowMeshHeapHighWater = 0u;

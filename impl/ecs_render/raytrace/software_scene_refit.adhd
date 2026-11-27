@@ -28,7 +28,6 @@ extern const u32 s_ShaderSceneBvhRefitModeInitParents;
 [cpp_header("<impl/assets/graphics/bvh/scene_refit_constants.h>"), cpp_name("NWB_SCENE_BVH_REFIT_MODE_REFIT")]
 extern const u32 s_ShaderSceneBvhRefitModeRefit;
 
-const usize s_SoftwareSceneRefitInstanceGpuByteSize = 64u;
 type SoftwareSceneRefitHandle = Shared<SoftwareSceneRefitSnapshot>;
 
 
@@ -40,7 +39,7 @@ class SoftwareSceneBvhValidationPolicy{
         return instanceCount != 0u
             && meshNodeCount != 0u
             && meshNodeCount <= instanceCount
-            && instanceCount <= cast<usize>(u32.max) / s_SoftwareSceneRefitInstanceGpuByteSize
+            && instanceCount <= cast<usize>(u32.max) / cast<usize>(s_ShaderSceneBvhRefitInstanceBytes)
             && ComputeBinaryBvhNodeCount(instanceCount) == cast<usize>(nodeCount);
     }
 
@@ -170,6 +169,10 @@ class SoftwareSceneRefitResources : NoCopy{
         return true;
     }
 
+    public void invalidateInputUpload(){
+        this.m_inputUploadValid = false;
+    }
+
     public void invalidate(){
         this.m_snapshots.clear();
         mut Device device = this.m_graphics.getDevice();
@@ -273,8 +276,6 @@ class SoftwareSceneRefitResources : NoCopy{
             this.m_inputUavDescriptor = uavDescriptorResult.value();
             this.m_inputUploadValid = false;
         }
-        else if(!EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, this.m_inputBuffer.deref(), this.m_inputUavDescriptor))
-            return MakeUnexpected(Failure());
         if(!this.ensureU32StorageBuffer(nodeCount, Name(s_SoftwareSceneRefitParentsName), this.m_parentBuffer, this.m_parentDescriptor)
             || !this.ensureU32StorageBuffer(nodeCount, Name(s_SoftwareSceneRefitVisitsName), this.m_visitCounterBuffer, this.m_visitCounterDescriptor)
         )
@@ -386,7 +387,7 @@ class SoftwareSceneRefitTask{
             const BufferRange refitRange(0u, cast<u64>(snapshot.nodeCount) * size_of<u32>());
             mut Buffer parentBuffer = snapshot.parentBuffer.deref();
             mut Buffer visitCounterBuffer = snapshot.visitCounterBuffer.deref();
-            const SoftwareSceneRefitPushConstants initPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeInitParents);
+            const SoftwareSceneRefitPushConstants initPush = MakeSoftwareSceneRefitPushConstants(snapshot, s_ShaderSceneBvhRefitModeInitParents);
             commandList.setPushConstants(initPush);
             commandList.dispatch(groupCount, 1u, 1u);
 
@@ -397,7 +398,7 @@ class SoftwareSceneRefitTask{
             commandList.commitBarriers();
         }
 
-        const SoftwareSceneRefitPushConstants refitPush = MakeSoftwareSceneBvhRefitPushConstantsWrapper(snapshot, s_ShaderSceneBvhRefitModeRefit);
+        const SoftwareSceneRefitPushConstants refitPush = MakeSoftwareSceneRefitPushConstants(snapshot, s_ShaderSceneBvhRefitModeRefit);
         commandList.setPushConstants(refitPush);
         commandList.dispatch(groupCount, 1u, 1u);
         return true;
@@ -408,22 +409,21 @@ static_assert(align_of<SoftwareSceneRefitInstanceGpu>() >= 16u);
 static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_ShaderSceneBvhRefitInstanceBytes);
 static_assert(offset_of<SoftwareSceneRefitInstanceGpu>(meshNodeSlot) == s_ShaderSceneBvhRefitMeshSlotOffset);
 static_assert(size_of<SoftwareSceneRefitPushConstants>() == s_ShaderSceneBvhRefitPushBytes);
-static_assert(size_of<SoftwareSceneRefitInstanceGpu>() == s_SoftwareSceneRefitInstanceGpuByteSize);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SoftwareSceneRefitPushConstants MakeSoftwareSceneBvhRefitPushConstantsWrapper(in SoftwareSceneRefitSnapshot snapshot, in u32 passMode){
-    return MakeSoftwareSceneRefitPushConstants(
-        snapshot.nodeCount,
-        snapshot.sceneDescriptor.slot(),
-        snapshot.inputDescriptor.slot(),
-        cast<u32>(snapshot.inputs.size()),
-        snapshot.parentDescriptor.slot(),
-        snapshot.visitCounterDescriptor.slot(),
-        passMode
-    );
+SoftwareSceneRefitPushConstants MakeSoftwareSceneRefitPushConstants(in SoftwareSceneRefitSnapshot snapshot, in u32 passMode){
+    SoftwareSceneRefitPushConstants push;
+    push.nodeCount = snapshot.nodeCount;
+    push.sceneNodeSlot = snapshot.sceneDescriptor.slot();
+    push.instanceInputSlot = snapshot.inputDescriptor.slot();
+    push.instanceCount = cast<u32>(snapshot.inputs.size());
+    push.parentSlot = snapshot.parentDescriptor.slot();
+    push.visitCounterSlot = snapshot.visitCounterDescriptor.slot();
+    push.passMode = passMode;
+    return push;
 }
 
 Expected<SoftwareSceneRefitGraphTasks> DeclareSoftwareSceneRefit(

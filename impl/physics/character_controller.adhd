@@ -78,7 +78,9 @@ class CharacterControllerDef{
     public CharacterShapeType shapeType = CharacterShapeType::Capsule;
     public f32x4 boxHalfExtents(0.35f, 0.9f, 0.35f, 0.0f);
     public Filter filter;
+    [transient]
     public BodyId ignoreBodyId;
+    [transient]
     public ShapeId ignoreShapeId;
     public b8 hitSensors = false;
     public b8 stickToFloor = true;
@@ -448,22 +450,6 @@ class CharacterController{
         world.overlapShapeDetailedView(view, xf, this.def.filter, this.def.hitSensors, this.def.ignoreBodyId, this.def.ignoreShapeId, this.m_scratchHits);
     }
 
-    private ShapeCastHit castCapsule(in PhysicsWorld world, in VectorSingle fromPos, in VectorSingle delta)const{
-        Array<f32x3u, 8u> pts;
-        const ShapeProxyView view = this.makeShapeProxyView(0.0f, pts);
-        ShapeCastInput input;
-        input.originTransform = Transform3D(fromPos, this.effectiveProxyRotation());
-        input.translation = f32x4(delta, 0.0f);
-        input.radius = this.def.skinWidth;
-        input.filter = this.def.filter;
-        input.ignoreBodyId = this.def.ignoreBodyId;
-        input.ignoreShapeId = this.def.ignoreShapeId;
-        input.hitSensors = this.def.hitSensors;
-        input.hasRotation = false;
-        input.useCustomFilter = true;
-        return world.shapeCastClosestView(view, input);
-    }
-
     private void recordContactTo(
         in PhysicsWorld world,
         in ShapeId shapeId,
@@ -824,7 +810,7 @@ class CharacterController{
         }
         in Shape gShape = world.m_shapes[shapeId.index];
         this.groundMaterial = world.resolveShapeContactMaterial(gShape, triIdx);
-        if(this.groundMaterial.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(this.groundMaterial.surfaceVelocity))){
+        if(this.groundMaterial.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(this.groundMaterial.surfaceVelocity).xyz)){
             VectorSingle shapeRot(0.0f, 0.0f, 0.0f, 1.0f);
             if(this.groundBodyId.valid() && world.isValidBody(this.groundBodyId)){
                 const Expected<Transform3D> xfRes = world.tryGetBodyTransform(this.groundBodyId);
@@ -1372,7 +1358,7 @@ class CharacterController{
     public b8 canResizeBoxHalfExtents(in PhysicsWorld world, in VectorSingle newHalfExtents)const{
         if(this.def.shapeType != CharacterShapeType::Box)
             return false;
-        if(!IsFiniteVec3(newHalfExtents))
+        if(!IsFinite(newHalfExtents.xyz))
             return false;
         const VectorSingle clamped = VectorSingle(newHalfExtents, 0.0f);
         if(clamped.x < 0.05f || clamped.y < 0.05f || clamped.z < 0.05f)
@@ -1413,7 +1399,7 @@ class CharacterController{
     public b8 trySetBoxHalfExtents(mut PhysicsWorld world, in VectorSingle newHalfExtents){
         if(this.def.shapeType != CharacterShapeType::Box)
             return false;
-        if(!IsFiniteVec3(newHalfExtents))
+        if(!IsFinite(newHalfExtents.xyz))
             return false;
         const VectorSingle clamped = VectorSingle(newHalfExtents, 0.0f);
         if(clamped.x < 0.05f || clamped.y < 0.05f || clamped.z < 0.05f)
@@ -1600,9 +1586,6 @@ class CharacterController{
     }
 }
 
-b8 ResolveCharacterControllerPair(mut CharacterController a, mut CharacterController b){
-    return a.resolveAgainstOtherCharacter(b);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

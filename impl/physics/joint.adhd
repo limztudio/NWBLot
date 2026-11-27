@@ -275,13 +275,6 @@ void ApplyLinearImpulsePair(
     }
 }
 
-VectorSingle QuatFromAxisAngleUnit(in VectorSingle unitAxis, in f32 angle){
-    const f32 halfAngle = 0.5f * angle;
-    VectorSingle sinHalf(0.0f);
-    VectorSingle cosHalf(0.0f);
-    VectorSinCos(sinHalf, cosHalf, VectorSingle(halfAngle));
-    return VectorSingle(unitAxis * sinHalf.x, cosHalf.x);
-}
 
 f32 ComputeLimitImpulseStep(
     in f32 cErr,
@@ -323,7 +316,7 @@ VectorSingle ComputeWheelSteeredAxle(in JointConstraint jc, in VectorSingle qA, 
     const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, VectorSingle(jc.referenceRotation)));
     VectorSingle axleA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qTarget), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
     if(jc.steeringAngle != 0.0f)
-        axleA = SafeNormalizeVec3(Vector3Rotate(axleA, QuatFromAxisAngleUnit(suspAxis, jc.steeringAngle)), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+        axleA = SafeNormalizeVec3(Vector3Rotate(axleA, QuaternionRotationNormal(suspAxis, jc.steeringAngle)), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
     return axleA;
 }
 

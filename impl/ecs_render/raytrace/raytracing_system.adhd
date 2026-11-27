@@ -89,7 +89,6 @@ class RendererRayTracingSystem : NoCopy{
 
     public mut GraphicsRuntime graphics(){ return this.m_graphics; }
     public void setInstanceTransformPatchContributor(in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> contributor){ this.m_instanceTransformPatchContributor = contributor; }
-    public b8 hasInstanceTransformPatchContributor()const{ return this.m_instanceTransformPatchContributor.has_value(); }
 
     public void invalidateResources();
     public void releaseSceneTlasHeapHandle();
@@ -218,22 +217,6 @@ class RendererRayTracingSystem : NoCopy{
     public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources){
         return this.renderShadowVisibility(commandList, targets, deferredLightingResources, false, false, false, Optional<in LightSpaceShadowSnapshot>());
     }
-    public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold){
-        return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, false, false, Optional<in LightSpaceShadowSnapshot>());
-    }
-    public Expected<u32> renderShadowVisibility(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in b8 splitSoftTransparentFold, in b8 graphOwnsOpaqueTemporalMergeEntryStates){
-        return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, false, Optional<in LightSpaceShadowSnapshot>());
-    }
-    public Expected<u32> renderShadowVisibility(
-        mut CommandList commandList,
-        mut DeferredFrameTargets targets,
-        in DeferredLightingGraphResources deferredLightingResources,
-        in b8 splitSoftTransparentFold,
-        in b8 graphOwnsOpaqueTemporalMergeEntryStates,
-        in b8 splitOpaqueSoftResolve
-    ){
-        return this.renderShadowVisibility(commandList, targets, deferredLightingResources, splitSoftTransparentFold, graphOwnsOpaqueTemporalMergeEntryStates, splitOpaqueSoftResolve, Optional<in LightSpaceShadowSnapshot>());
-    }
     public Expected<GpuTaskId> declareShadowVisibilityTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -330,9 +313,6 @@ class RendererRayTracingSystem : NoCopy{
     );
     public b8 hasCausticWork(in MeshViewBufferSnapshot meshView)const;
     public b8 renderGpuBvhCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming);
-    public b8 renderGpuBvhCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets){
-        return this.renderGpuBvhCaustics(commandList, meshView, targets, Optional<mut Optional<GpuTimingMeasure>>());
-    }
     public b8 prepareHwCausticResources(mut DeferredFrameTargets targets);
     public Expected<GpuTaskId> declareHardwareCausticsTask(
         mut GpuTaskGraph graph,
@@ -347,9 +327,6 @@ class RendererRayTracingSystem : NoCopy{
         mut b8 causticProducerDispatched
     );
     public b8 renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets, in Optional<mut Optional<GpuTimingMeasure>> causticPhotonTiming);
-    public b8 renderHwCaustics(mut CommandList commandList, in MeshViewBufferSnapshot meshView, mut DeferredFrameTargets targets){
-        return this.renderHwCaustics(commandList, meshView, targets, Optional<mut Optional<GpuTimingMeasure>>());
-    }
     public Expected<GpuTaskId> declareCausticGeometryDownsampleTask(
         mut GpuTaskGraph graph,
         in GpuTaskDesc desc,
@@ -373,7 +350,6 @@ class RendererRayTracingSystem : NoCopy{
     public void dispatchCausticResolvePrepare(mut CommandList commandList, mut DeferredFrameTargets targets);
     public void dispatchCausticResolveWaveletPass(mut CommandList commandList, mut DeferredFrameTargets targets, in u32 passIndex);
     public void dispatchCausticResolveUpsample(mut CommandList commandList, mut DeferredFrameTargets targets);
-    public b8 hasHwCausticWork()const;
     public b8 hasHwCausticWork(in MeshViewBufferSnapshot meshView)const;
     public b8 hasSurfelWork()const{ return this.m_rayTracingState.surfelGi.m_surfelEnabled; }
     public b8 needsSurfelResourceInitialization()const{
@@ -435,9 +411,6 @@ class RendererRayTracingSystem : NoCopy{
         in b8 graphOwnsOpaqueToTransparentBoundary,
         in Optional<in LightSpaceShadowSnapshot> lightSpace
     );
-    public b8 renderSoftTransparentShadowTrace(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsOpaqueToTransparentBoundary){
-        return this.renderSoftTransparentShadowTrace(commandList, targets, deferredLightingResources, frameIndex, graphOwnsOpaqueToTransparentBoundary, Optional<in LightSpaceShadowSnapshot>());
-    }
     public b8 renderSoftTransparentShadowTemporalMerge(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsTransparentTemporalMergeEntryStates);
     public b8 renderSoftTransparentShadowFirstWavelet(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex, in b8 graphOwnsTransparentWaveletInputBoundary);
     public b8 renderSoftTransparentShadowFold(mut CommandList commandList, mut DeferredFrameTargets targets, in DeferredLightingGraphResources deferredLightingResources, in u32 frameIndex);
@@ -519,7 +492,6 @@ class RendererRayTracingSystem : NoCopy{
     private b8 hasCommonCausticWork(in MeshViewBufferSnapshot meshView)const;
     private void preflightLightSpaceShadowResources();
     private Expected<LightSpacePlan> buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights, mut u32 outDrawCount)const;
-    private Expected<LightSpacePlan> buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights)const;
     private void prepareLightSpaceShadows(in Span<SceneLightGpuData> lights);
     private b8 ensureRayTraceContextReadTracking(in b8 opticalCausticReader);
     private b8 ensureCsgTraceContextResources();

@@ -401,6 +401,155 @@ b8 BuildClosedCubeMesh(mut MeshShape outMesh, in f32 halfExtent){
     return outMesh.isClosed();
 }
 
+b8 VerifyPatchedTrsPair(
+    in Span<f32x4> patched,
+    in Transform3D xf0,
+    in Transform3D xf1,
+    in VectorSingle scale0,
+    in VectorSingle scale1,
+    in StringView errMsg
+){
+    if(
+        patched.size() < 7u
+        || ComputeQuatAbsDot(VectorSingle(patched[0u]), VectorSingle(xf0.rotation)) <= 0.999f
+        || ComputeVec3MaxDiff(VectorSingle(patched[1u]), VectorSingle(xf0.position)) >= 0.02f
+        || ComputeVec3MaxDiff(VectorSingle(patched[2u]), scale0) >= 1.0e-4f
+        || ComputeQuatAbsDot(VectorSingle(patched[4u]), VectorSingle(xf1.rotation)) <= 0.999f
+        || ComputeVec3MaxDiff(VectorSingle(patched[5u]), VectorSingle(xf1.position)) >= 0.02f
+        || ComputeVec3MaxDiff(VectorSingle(patched[6u]), scale1) >= 1.0e-4f
+    ){
+        error("PhysicsStressSmoke: {}", errMsg);
+        return false;
+    }
+    return true;
+}
+
+b8 ConfigureSmokeGpuResidentEcsWorld(
+    mut World world,
+    mut PhysicsSystem physSys,
+    in ActiveSceneSubsystemsRef activeSubsystems,
+    in StringView label
+){
+    physSys.setActiveSceneSubsystems(activeSubsystems);
+    if(!physSys.validateResources()){
+        error("PhysicsStressSmoke: {} PhysicsSystem GPU pipelines failed validation", label);
+        return false;
+    }
+
+    Entity cfgEnt = world.createEntity();
+    mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
+    cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+    cfg.backendMode = PhysicsBackendMode::GpuPreferred;
+    cfg.enableGpuCollision = true;
+    cfg.gpuResidentMode = true;
+    cfg.useGpuLbvhBroadphase = true;
+    cfg.gpuDispatchThreshold = 1u;
+    cfg.gpuWorkloadFraction = 1.0f;
+    cfg.interpolateTransforms = false;
+    cfg.dirty = true;
+    return true;
+}
+
+Entity SpawnSmokeGpuResidentBodyEntity(
+    mut World world,
+    in VectorSingle pos,
+    in VectorSingle linVel,
+    in b8 isBox,
+    in VectorSingle boxHalfExtents,
+    in f32 sphereRadius,
+    in u32 instanceIndex,
+    in VectorSingle localScale
+){
+    Entity ent = world.createEntity();
+    mut TransformComponent xf = ent.addComponent<TransformComponent>();
+    xf.position = f32x4(pos, 0.0f);
+    mut RigidBodyComponent rb = ent.addComponent<RigidBodyComponent>();
+    rb.type = BodyType::Dynamic;
+    rb.enableSleep = false;
+    rb.gravityScale = 0.0f;
+    rb.linearDamping = 0.0f;
+    rb.angularDamping = 0.0f;
+    rb.linearVelocity = f32x4(linVel, 0.0f);
+    mut ColliderComponent col = ent.addComponent<ColliderComponent>();
+    if(isBox){
+        col.primaryShape.shapeType = ShapeType::Hull;
+        col.primaryShape.isBox = true;
+        col.primaryShape.halfExtents = f32x4(boxHalfExtents, 0.0f);
+    }
+    else{
+        col.primaryShape.shapeType = ShapeType::Sphere;
+        col.primaryShape.isBox = false;
+        col.primaryShape.radius = sphereRadius;
+    }
+    mut GpuRenderTransformExportComponent exp = ent.addComponent<GpuRenderTransformExportComponent>();
+    exp.enabled = true;
+    exp.instanceIndex = instanceIndex;
+    exp.flags = 1u;
+    exp.localScale = f32x4(localScale, 0.0f);
+    return ent;
+}
+
+b8 AddSmokeBufferUploadTask(
+    mut GpuTaskGraph graph,
+    in BufferHandle buf,
+    in Span<u32> initWords,
+    in Name resId,
+    in StringView resLabel,
+    in Name taskId,
+    in StringView taskLabel,
+    in borrow GpuTaskId depTask,
+    in b8 mergeWithPrev,
+    mut GpuGraphResourceId outRes,
+    mut GpuTaskId outTask
+){
+    const auto blob = graph.copyUploadElements<u32>(initWords);
+    if(!blob.has_value()){
+        error("PhysicsStressSmoke: {} copyUploadElements failed", taskLabel);
+        return false;
+    }
+
+    GpuGraphResourceDesc resDesc;
+    resDesc
+        .setIdentity(resId)
+        .setMarkerLabel(resLabel)
+        .setType(GpuGraphResourceType::Buffer)
+        .setInitialState(ResourceStates::UnorderedAccess)
+        .setExternalFinalState(ResourceStates::UnorderedAccess)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    ;
+    const auto res = graph.importBuffer(buf, resDesc);
+    if(!res.has_value()){
+        error("PhysicsStressSmoke: {} importBuffer failed", taskLabel);
+        return false;
+    }
+    outRes = res.value();
+
+    GpuTaskSchedulingHint upSched;
+    upSched.cost = GpuTaskCostHint::Small;
+    upSched.overlapPreferred = false;
+    upSched.avoidQueueCrossing = true;
+    upSched.forceSubmissionBoundary = false;
+    upSched.allowPacketMerge = true;
+    upSched.mergeWithPrevious = mergeWithPrev;
+
+    GpuTaskDesc upDesc;
+    upDesc.setIdentity(taskId).setMarkerLabel(taskLabel).setScheduling(upSched);
+    if(depTask.valid())
+        upDesc.setDependency(depTask);
+
+    GpuUploadBufferTaskDesc up;
+    up.source = blob.value();
+    up.destination = outRes;
+    up.finalState = ResourceStates::UnorderedAccess;
+    const auto upTaskRes = graph.addUploadBufferTask(upDesc, up);
+    if(!upTaskRes.has_value()){
+        error("PhysicsStressSmoke: {} addUploadBufferTask failed", taskLabel);
+        return false;
+    }
+    outTask = upTaskRes.value();
+    return true;
+}
+
 b8 BuildGpuParityCoreScene(mut PhysicsWorld w, mut Vector<BodyId> outDynBodies){
     outDynBodies.clear();
     ShapeDef sd;
@@ -987,7 +1136,7 @@ b8 RunGpuParityResidentAndExportSubtest(mut GraphicsRuntime graphics, mut Physic
     Vector<BodyId> cpuBodies;
     Vector<BodyId> resBodies;
     const VectorSingle rotAxis = SafeNormalizeVec3(VectorSingle(0.0f, 1.0f, 0.5f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    const VectorSingle initRot = QuatFromAxisAngleUnit(rotAxis, 0.4f);
+    const VectorSingle initRot = QuaternionRotationNormal(rotAxis, 0.4f);
     for(u32 i = 0u; i < 4u; ++i){
         BodyDef bd;
         bd.type = BodyType::Dynamic;
@@ -1007,7 +1156,7 @@ b8 RunGpuParityResidentAndExportSubtest(mut GraphicsRuntime graphics, mut Physic
         resBodies.push_back(rb);
     }
 
-    const VectorSingle staticRot = QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.35f);
+    const VectorSingle staticRot = QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.35f);
     BodyDef staticDef;
     staticDef.type = BodyType::Static;
     staticDef.position = f32x4(-25.0f, -10.0f, 3.0f, 0.0f);
@@ -1093,26 +1242,12 @@ b8 RunGpuParityResidentAndExportSubtest(mut GraphicsRuntime graphics, mut Physic
     Vector<f32x4> patched;
     patched.resize(8u);
     const b8 readOk = exportOk && device.readMappedBuffer(targetSlot.buffer.deref(), patched);
-    if(targetSlot.descriptor.valid() && heap.isInitialized())
-        heap.free(targetSlot.descriptor);
-    targetSlot.descriptor = GpuDescriptorHandle();
-    targetSlot.buffer.reset();
+    ReleasePhysicsGpuBufferSlot(heap, targetSlot);
     if(!readOk){
         error("PhysicsStressSmoke: exportRenderTransformsToBuffer dispatch or readback failed");
         return false;
     }
-    if(
-        ComputeQuatAbsDot(VectorSingle(patched[0u]), VectorSingle(dynXf.rotation)) <= 0.999f
-        || ComputeVec3MaxDiff(VectorSingle(patched[1u]), VectorSingle(dynXf.position)) >= 0.02f
-        || ComputeVec3MaxDiff(VectorSingle(patched[2u]), VectorSingle(bindings[0u].scalePad)) >= 1.0e-4f
-        || ComputeQuatAbsDot(VectorSingle(patched[4u]), VectorSingle(stXf.rotation)) <= 0.999f
-        || ComputeVec3MaxDiff(VectorSingle(patched[5u]), VectorSingle(stXf.position)) >= 0.02f
-        || ComputeVec3MaxDiff(VectorSingle(patched[6u]), VectorSingle(bindings[1u].scalePad)) >= 1.0e-4f
-    ){
-        error("PhysicsStressSmoke: exportRenderTransformsToBuffer TRS patch mismatch");
-        return false;
-    }
-    return true;
+    return VerifyPatchedTrsPair(Span<f32x4>(patched), dynXf, stXf, VectorSingle(bindings[0u].scalePad), VectorSingle(bindings[1u].scalePad), "exportRenderTransformsToBuffer TRS patch mismatch");
 }
 
 b8 RunGpuParitySpatialQueriesSubtest(mut PhysicsGpuDispatcher gpuDispatcher){
@@ -1138,7 +1273,7 @@ b8 RunGpuParitySpatialQueriesSubtest(mut PhysicsGpuDispatcher gpuDispatcher){
     const ShapeId sCapsule = qWorld.createCapsuleShape(qWorld.createBody(bd).value(), sd, capShape.value()).value();
 
     bd.position = f32x4(12.0f, 0.0f, 0.0f, 0.0f);
-    bd.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.61f));
+    bd.rotation = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.61f));
     const ShapeId sBox = qWorld.createHullShape(qWorld.createBody(bd).value(), sd, boxHull.value()).value();
     bd.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -1529,7 +1664,15 @@ Expected<GpuTaskId> DeclareSmokePhysicsExportTask(
         return MakeUnexpected(Failure());
 
     GpuTaskId exportTaskId;
-    if(!gpuDispatcher.declareExportRenderTransformsTask(graph, world, bindings, importedRes.value(), targetUavSlot, 4u, s_GpuExportModePatchInstanceBuffer, 0u, Name("physics/smoke/export_tg"), false, false, GpuTaskId(), exportTaskId))
+    Array<PhysicsBatchExportTargetInput, 1u> singleTarget;
+    singleTarget[0u].targetResource = importedRes.value();
+    singleTarget[0u].targetUavSlot = targetUavSlot;
+    singleTarget[0u].instanceStrideFloat4 = 4u;
+    singleTarget[0u].exportMode = s_GpuExportModePatchInstanceBuffer;
+    singleTarget[0u].baseFloat4Offset = 0u;
+    singleTarget[0u].bindingOffset = 0u;
+    singleTarget[0u].bindingCount = cast<u32>(bindings.size());
+    if(!gpuDispatcher.declareBatchExportRenderTransformsTasks(graph, world, bindings, Span<PhysicsBatchExportTargetInput>(singleTarget.data(), 1u), Name("physics/smoke/export_tg"), false, false, GpuTaskId(), exportTaskId))
         return MakeUnexpected(Failure());
     return Expected<GpuTaskId>(exportTaskId);
 }
@@ -1595,17 +1738,7 @@ b8 RunGpuParityAsyncAndTaskGraphExportSubtest(mut GraphicsRuntime graphics, mut 
     if(ok){
         const Transform3D xf0 = w.tryGetBodyTransform(b0).value();
         const Transform3D xf1 = w.tryGetBodyTransform(b1).value();
-        if(
-            ComputeQuatAbsDot(VectorSingle(patched[0u]), VectorSingle(xf0.rotation)) <= 0.999f
-            || ComputeVec3MaxDiff(VectorSingle(patched[1u]), VectorSingle(xf0.position)) >= 0.02f
-            || ComputeVec3MaxDiff(VectorSingle(patched[2u]), VectorSingle(bindings[0u].scalePad)) >= 1.0e-4f
-            || ComputeQuatAbsDot(VectorSingle(patched[4u]), VectorSingle(xf1.rotation)) <= 0.999f
-            || ComputeVec3MaxDiff(VectorSingle(patched[5u]), VectorSingle(xf1.position)) >= 0.02f
-            || ComputeVec3MaxDiff(VectorSingle(patched[6u]), VectorSingle(bindings[1u].scalePad)) >= 1.0e-4f
-        ){
-            error("PhysicsStressSmoke: exportRenderTransformsToBufferAsync TRS mismatch");
-            ok = false;
-        }
+        ok = VerifyPatchedTrsPair(Span<f32x4>(patched), xf0, xf1, VectorSingle(bindings[0u].scalePad), VectorSingle(bindings[1u].scalePad), "exportRenderTransformsToBufferAsync TRS mismatch");
     }
     else{
         error("PhysicsStressSmoke: exportRenderTransformsToBufferAsync dispatch or readback failed");
@@ -1635,24 +1768,11 @@ b8 RunGpuParityAsyncAndTaskGraphExportSubtest(mut GraphicsRuntime graphics, mut 
         else{
             const Transform3D xf0 = w.tryGetBodyTransform(b0).value();
             const Transform3D xf1 = w.tryGetBodyTransform(b1).value();
-            if(
-                ComputeQuatAbsDot(VectorSingle(patched[0u]), VectorSingle(xf0.rotation)) <= 0.999f
-                || ComputeVec3MaxDiff(VectorSingle(patched[1u]), VectorSingle(xf0.position)) >= 0.02f
-                || ComputeVec3MaxDiff(VectorSingle(patched[2u]), VectorSingle(bindings[0u].scalePad)) >= 1.0e-4f
-                || ComputeQuatAbsDot(VectorSingle(patched[4u]), VectorSingle(xf1.rotation)) <= 0.999f
-                || ComputeVec3MaxDiff(VectorSingle(patched[5u]), VectorSingle(xf1.position)) >= 0.02f
-                || ComputeVec3MaxDiff(VectorSingle(patched[6u]), VectorSingle(bindings[1u].scalePad)) >= 1.0e-4f
-            ){
-                error("PhysicsStressSmoke: declareExportRenderTransformsTask TRS mismatch");
-                ok = false;
-            }
+            ok = VerifyPatchedTrsPair(Span<f32x4>(patched), xf0, xf1, VectorSingle(bindings[0u].scalePad), VectorSingle(bindings[1u].scalePad), "declareExportRenderTransformsTask TRS mismatch");
         }
     }
 
-    if(targetSlot.descriptor.valid() && heap.isInitialized())
-        heap.free(targetSlot.descriptor);
-    targetSlot.descriptor = GpuDescriptorHandle();
-    targetSlot.buffer.reset();
+    ReleasePhysicsGpuBufferSlot(heap, targetSlot);
     return ok;
 }
 
@@ -1968,69 +2088,11 @@ b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
     {
         World world(context.objectArena, context.cpuTasks);
         mut PhysicsSystem physSys = world.addSystem<PhysicsSystem>(world, graphics, context.assetManager, context.shaderPathResolver);
-        physSys.setActiveSceneSubsystems(activeSubsystems);
-        if(!physSys.validateResources()){
-            error("PhysicsStressSmoke: Wave4C PhysicsSystem GPU pipelines failed validation");
+        if(!ConfigureSmokeGpuResidentEcsWorld(world, physSys, activeSubsystems, "Wave4C"))
             return false;
-        }
 
-        Entity cfgEnt = world.createEntity();
-        {
-            mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
-            cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            cfg.backendMode = PhysicsBackendMode::GpuPreferred;
-            cfg.enableGpuCollision = true;
-            cfg.gpuResidentMode = true;
-            cfg.useGpuLbvhBroadphase = true;
-            cfg.gpuDispatchThreshold = 1u;
-            cfg.gpuWorkloadFraction = 1.0f;
-            cfg.interpolateTransforms = false;
-            cfg.dirty = true;
-        }
-
-        Entity e0 = world.createEntity();
-        {
-            mut TransformComponent xf = e0.addComponent<TransformComponent>();
-            xf.position = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
-            mut RigidBodyComponent rb = e0.addComponent<RigidBodyComponent>();
-            rb.type = BodyType::Dynamic;
-            rb.enableSleep = false;
-            rb.gravityScale = 0.0f;
-            rb.linearDamping = 0.0f;
-            rb.angularDamping = 0.0f;
-            rb.linearVelocity = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
-            mut ColliderComponent col = e0.addComponent<ColliderComponent>();
-            col.primaryShape.shapeType = ShapeType::Sphere;
-            col.primaryShape.isBox = false;
-            col.primaryShape.radius = 0.35f;
-            mut GpuRenderTransformExportComponent exp = e0.addComponent<GpuRenderTransformExportComponent>();
-            exp.enabled = true;
-            exp.instanceIndex = 0u;
-            exp.flags = 1u;
-            exp.localScale = f32x4(1.5f, 2.0f, 0.75f, 0.0f);
-        }
-
-        Entity e1 = world.createEntity();
-        {
-            mut TransformComponent xf = e1.addComponent<TransformComponent>();
-            xf.position = f32x4(5.0f, 2.0f, 0.0f, 0.0f);
-            mut RigidBodyComponent rb = e1.addComponent<RigidBodyComponent>();
-            rb.type = BodyType::Dynamic;
-            rb.enableSleep = false;
-            rb.gravityScale = 0.0f;
-            rb.linearDamping = 0.0f;
-            rb.angularDamping = 0.0f;
-            rb.linearVelocity = f32x4(2.0f, 0.0f, 0.0f, 0.0f);
-            mut ColliderComponent col = e1.addComponent<ColliderComponent>();
-            col.primaryShape.shapeType = ShapeType::Sphere;
-            col.primaryShape.isBox = false;
-            col.primaryShape.radius = 0.35f;
-            mut GpuRenderTransformExportComponent exp = e1.addComponent<GpuRenderTransformExportComponent>();
-            exp.enabled = true;
-            exp.instanceIndex = 1u;
-            exp.flags = 1u;
-            exp.localScale = f32x4(2.5f, 1.0f, 0.5f, 0.0f);
-        }
+        Entity e0 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.35f, 0u, VectorSingle(1.5f, 2.0f, 0.75f, 0.0f));
+        Entity e1 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(5.0f, 2.0f, 0.0f, 0.0f), VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.35f, 1u, VectorSingle(2.5f, 1.0f, 0.5f, 0.0f));
 
         const f32 dt = 1.0f / 60.0f;
         for(u32 s = 0u; s < 4u; ++s){
@@ -2084,108 +2146,46 @@ b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
 
             const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(
                 lambda[mut physSys, in entityIdSpan, in initWordSpan, in opaqueBuf, in avboitBuf, in opaqueUavSlot, in avboitUavSlot](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
-                    const auto opaqueBlob = graph.copyUploadElements<u32>(initWordSpan);
-                    const auto avboitBlob = graph.copyUploadElements<u32>(initWordSpan);
-                    if(!opaqueBlob.has_value() || !avboitBlob.has_value()){
-                        error("PhysicsStressSmoke: Wave4C copyUploadElements failed");
+                    GpuGraphResourceId opaqueRes;
+                    GpuGraphResourceId avboitRes;
+                    GpuTaskId upOpaqueTask;
+                    GpuTaskId upAvboitTask;
+                    const GpuTaskId noDep = GpuTaskId();
+                    if(
+                        !AddSmokeBufferUploadTask(graph, opaqueBuf, initWordSpan, Name("physics/smoke/wave4c_opaque_res"), "Wave4C Opaque Instances", Name("physics/smoke/wave4c_up_opaque"), "Wave4C Init Opaque", noDep, false, opaqueRes, upOpaqueTask)
+                        || !AddSmokeBufferUploadTask(graph, avboitBuf, initWordSpan, Name("physics/smoke/wave4c_avboit_res"), "Wave4C AVBOIT Instances", Name("physics/smoke/wave4c_up_avboit"), "Wave4C Init AVBOIT", upOpaqueTask, true, avboitRes, upAvboitTask)
+                    )
+                        return MakeUnexpected(Failure());
+
+                    Array<GpuTaskGraphInstanceTransformPatchRequest, 2u> reqs;
+                    reqs[0u].instanceBufferResource = opaqueRes;
+                    reqs[0u].instanceBufferUavSlot = opaqueUavSlot;
+                    reqs[0u].instanceStrideFloat4 = 6u;
+                    reqs[1u].instanceBufferResource = avboitRes;
+                    reqs[1u].instanceBufferUavSlot = avboitUavSlot;
+                    reqs[1u].instanceStrideFloat4 = 6u;
+                    Array<u32, 2u> offsets;
+                    offsets[0u] = 0u;
+                    offsets[1u] = 0u;
+                    Array<u32, 2u> counts;
+                    counts[0u] = cast<u32>(entityIdSpan.size());
+                    counts[1u] = cast<u32>(entityIdSpan.size());
+                    const auto patchedBatch = physSys.declareBatchInstanceTransformPatches(
+                        Span<GpuTaskGraphInstanceTransformPatchRequest>(reqs.data(), 2u),
+                        entityIdSpan,
+                        Span<u32>(offsets.data(), 2u),
+                        Span<u32>(counts.data(), 2u),
+                        Name("smoke.wave4c.physics_patch_batch"),
+                        upAvboitTask,
+                        true,
+                        false,
+                        graph
+                    );
+                    if(!patchedBatch.has_value()){
+                        error("PhysicsStressSmoke: Wave4C declareBatchInstanceTransformPatches failed");
                         return MakeUnexpected(Failure());
                     }
-
-                    GpuGraphResourceDesc opaqueDesc;
-                    opaqueDesc
-                        .setIdentity(Name("physics/smoke/wave4c_opaque_res"))
-                        .setMarkerLabel("Wave4C Opaque Instances")
-                        .setType(GpuGraphResourceType::Buffer)
-                        .setInitialState(ResourceStates::UnorderedAccess)
-                        .setExternalFinalState(ResourceStates::UnorderedAccess)
-                        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-                    ;
-                    GpuGraphResourceDesc avboitDesc;
-                    avboitDesc
-                        .setIdentity(Name("physics/smoke/wave4c_avboit_res"))
-                        .setMarkerLabel("Wave4C AVBOIT Instances")
-                        .setType(GpuGraphResourceType::Buffer)
-                        .setInitialState(ResourceStates::UnorderedAccess)
-                        .setExternalFinalState(ResourceStates::UnorderedAccess)
-                        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-                    ;
-                    const auto opaqueRes = graph.importBuffer(opaqueBuf, opaqueDesc);
-                    const auto avboitRes = graph.importBuffer(avboitBuf, avboitDesc);
-                    if(!opaqueRes.has_value() || !avboitRes.has_value()){
-                        error("PhysicsStressSmoke: Wave4C importBuffer failed (opaque={} avboit={})", opaqueRes.has_value(), avboitRes.has_value());
-                        return MakeUnexpected(Failure());
-                    }
-
-                    GpuTaskSchedulingHint uploadSched;
-                    uploadSched.cost = GpuTaskCostHint::Small;
-                    uploadSched.overlapPreferred = false;
-                    uploadSched.avoidQueueCrossing = true;
-                    uploadSched.forceSubmissionBoundary = false;
-                    uploadSched.allowPacketMerge = true;
-                    uploadSched.mergeWithPrevious = false;
-
-                    GpuTaskDesc upOpaqueDesc;
-                    upOpaqueDesc
-                        .setIdentity(Name("physics/smoke/wave4c_up_opaque"))
-                        .setMarkerLabel("Wave4C Init Opaque")
-                        .setScheduling(uploadSched)
-                    ;
-                    GpuUploadBufferTaskDesc upOpaque;
-                    upOpaque.source = opaqueBlob.value();
-                    upOpaque.destination = opaqueRes.value();
-                    upOpaque.finalState = ResourceStates::UnorderedAccess;
-                    const auto upOpaqueTask = graph.addUploadBufferTask(upOpaqueDesc, upOpaque);
-                    if(!upOpaqueTask.has_value()){
-                        error("PhysicsStressSmoke: Wave4C addUploadBufferTask opaque failed");
-                        return MakeUnexpected(Failure());
-                    }
-
-                    uploadSched.mergeWithPrevious = true;
-                    Array<GpuTaskId, 1u> upDeps;
-                    upDeps[0u] = upOpaqueTask.value();
-                    GpuTaskDesc upAvboitDesc;
-                    upAvboitDesc
-                        .setIdentity(Name("physics/smoke/wave4c_up_avboit"))
-                        .setMarkerLabel("Wave4C Init AVBOIT")
-                        .setScheduling(uploadSched)
-                        .setDependencies(Span<GpuTaskId>(upDeps))
-                    ;
-                    GpuUploadBufferTaskDesc upAvboit;
-                    upAvboit.source = avboitBlob.value();
-                    upAvboit.destination = avboitRes.value();
-                    upAvboit.finalState = ResourceStates::UnorderedAccess;
-                    const auto upAvboitTask = graph.addUploadBufferTask(upAvboitDesc, upAvboit);
-                    if(!upAvboitTask.has_value()){
-                        error("PhysicsStressSmoke: Wave4C addUploadBufferTask avboit failed");
-                        return MakeUnexpected(Failure());
-                    }
-
-                    GpuTaskGraphInstanceTransformPatchRequest reqOpaque;
-                    reqOpaque.instanceBufferResource = opaqueRes.value();
-                    reqOpaque.instanceBufferUavSlot = opaqueUavSlot;
-                    reqOpaque.instanceStrideFloat4 = 6u;
-                    reqOpaque.passIdentityPrefix = Name("smoke.opaque.physics_patch");
-                    reqOpaque.dependency = upAvboitTask.value();
-                    reqOpaque.mergeWithPrevious = true;
-                    const auto patchedOpaque = physSys.declareInstanceTransformPatch(reqOpaque, entityIdSpan, graph);
-                    if(!patchedOpaque.has_value()){
-                        error("PhysicsStressSmoke: Wave4C declareInstanceTransformPatch opaque failed");
-                        return MakeUnexpected(Failure());
-                    }
-
-                    GpuTaskGraphInstanceTransformPatchRequest reqAvboit;
-                    reqAvboit.instanceBufferResource = avboitRes.value();
-                    reqAvboit.instanceBufferUavSlot = avboitUavSlot;
-                    reqAvboit.instanceStrideFloat4 = 6u;
-                    reqAvboit.passIdentityPrefix = Name("smoke.avboit.physics_patch");
-                    reqAvboit.dependency = patchedOpaque.value();
-                    reqAvboit.mergeWithPrevious = true;
-                    const auto patchedAvboit = physSys.declareInstanceTransformPatch(reqAvboit, entityIdSpan, graph);
-                    if(!patchedAvboit.has_value()){
-                        error("PhysicsStressSmoke: Wave4C declareInstanceTransformPatch avboit failed");
-                        return MakeUnexpected(Failure());
-                    }
-                    return patchedAvboit;
+                    return patchedBatch;
                 },
                 graphicsQueue
             );
@@ -2230,10 +2230,8 @@ b8 RunGpuParityWave4CContributorAndSoftBodyMeshSubtest(
             }
         }
 
-        if(opaqueSlot.descriptor.valid() && heap.isInitialized())
-            heap.free(opaqueSlot.descriptor);
-        if(avboitSlot.descriptor.valid() && heap.isInitialized())
-            heap.free(avboitSlot.descriptor);
+        ReleasePhysicsGpuBufferSlot(heap, opaqueSlot);
+        ReleasePhysicsGpuBufferSlot(heap, avboitSlot);
         physSys.invalidateResources();
         world.taskScope().wait();
         if(!subOk)
@@ -2475,69 +2473,11 @@ b8 RunGpuParityWave5And6Subtest(
 
         World world(context.objectArena, context.cpuTasks);
         mut PhysicsSystem physSys = world.addSystem<PhysicsSystem>(world, graphics, context.assetManager, context.shaderPathResolver);
-        physSys.setActiveSceneSubsystems(activeSubsystems);
-        if(!physSys.validateResources()){
-            error("PhysicsStressSmoke: Wave6 PhysicsSystem pipelines failed validation");
+        if(!ConfigureSmokeGpuResidentEcsWorld(world, physSys, activeSubsystems, "Wave6"))
             return false;
-        }
 
-        Entity cfgEnt = world.createEntity();
-        {
-            mut PhysicsWorldConfigComponent cfg = cfgEnt.addComponent<PhysicsWorldConfigComponent>();
-            cfg.gravity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            cfg.backendMode = PhysicsBackendMode::GpuPreferred;
-            cfg.enableGpuCollision = true;
-            cfg.gpuResidentMode = true;
-            cfg.useGpuLbvhBroadphase = true;
-            cfg.gpuDispatchThreshold = 1u;
-            cfg.gpuWorkloadFraction = 1.0f;
-            cfg.interpolateTransforms = false;
-            cfg.dirty = true;
-        }
-
-        Entity e0 = world.createEntity();
-        {
-            mut TransformComponent xf = e0.addComponent<TransformComponent>();
-            xf.position = f32x4(2.0f, 3.0f, 0.0f, 0.0f);
-            mut RigidBodyComponent rb = e0.addComponent<RigidBodyComponent>();
-            rb.type = BodyType::Dynamic;
-            rb.enableSleep = false;
-            rb.gravityScale = 0.0f;
-            rb.linearDamping = 0.0f;
-            rb.angularDamping = 0.0f;
-            rb.linearVelocity = f32x4(3.0f, 0.0f, 0.0f, 0.0f);
-            mut ColliderComponent col = e0.addComponent<ColliderComponent>();
-            col.primaryShape.shapeType = ShapeType::Hull;
-            col.primaryShape.isBox = true;
-            col.primaryShape.halfExtents = f32x4(0.5f, 0.5f, 0.5f, 0.0f);
-            mut GpuRenderTransformExportComponent exp = e0.addComponent<GpuRenderTransformExportComponent>();
-            exp.enabled = true;
-            exp.instanceIndex = 0u;
-            exp.flags = 1u;
-            exp.localScale = f32x4(2.0f, 0.5f, 4.0f, 0.0f);
-        }
-
-        Entity e1 = world.createEntity();
-        {
-            mut TransformComponent xf = e1.addComponent<TransformComponent>();
-            xf.position = f32x4(-4.0f, 1.0f, 5.0f, 0.0f);
-            mut RigidBodyComponent rb = e1.addComponent<RigidBodyComponent>();
-            rb.type = BodyType::Dynamic;
-            rb.enableSleep = false;
-            rb.gravityScale = 0.0f;
-            rb.linearDamping = 0.0f;
-            rb.angularDamping = 0.0f;
-            rb.linearVelocity = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
-            mut ColliderComponent col = e1.addComponent<ColliderComponent>();
-            col.primaryShape.shapeType = ShapeType::Sphere;
-            col.primaryShape.isBox = false;
-            col.primaryShape.radius = 0.4f;
-            mut GpuRenderTransformExportComponent exp = e1.addComponent<GpuRenderTransformExportComponent>();
-            exp.enabled = true;
-            exp.instanceIndex = 1u;
-            exp.flags = 1u;
-            exp.localScale = f32x4(1.0f, 2.0f, 1.0f, 0.0f);
-        }
+        Entity e0 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(2.0f, 3.0f, 0.0f, 0.0f), VectorSingle(3.0f, 0.0f, 0.0f, 0.0f), true, VectorSingle(0.5f, 0.5f, 0.5f, 0.0f), 0.0f, 0u, VectorSingle(2.0f, 0.5f, 4.0f, 0.0f));
+        Entity e1 = SpawnSmokeGpuResidentBodyEntity(world, VectorSingle(-4.0f, 1.0f, 5.0f, 0.0f), VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), false, VectorSingle(0.0f), 0.4f, 1u, VectorSingle(1.0f, 2.0f, 1.0f, 0.0f));
 
         const f32 dt = 1.0f / 60.0f;
         for(u32 s = 0u; s < 3u; ++s){
@@ -2614,85 +2554,45 @@ b8 RunGpuParityWave5And6Subtest(
 
             const auto token = graphics.standaloneGraph().submitStandaloneTaskGraph(
                 lambda[mut physSys, in entityIdSpan, in objInitSpan, in invInitSpan, in objBuf, in invBuf, in objUavSlot, in invUavSlot](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
-                    const auto objBlob = graph.copyUploadElements<u32>(objInitSpan);
-                    const auto invBlob = graph.copyUploadElements<u32>(invInitSpan);
-                    if(!objBlob.has_value() || !invBlob.has_value())
+                    GpuGraphResourceId objRes;
+                    GpuGraphResourceId invRes;
+                    GpuTaskId upObjTask;
+                    GpuTaskId upInvTask;
+                    const GpuTaskId noDep = GpuTaskId();
+                    if(
+                        !AddSmokeBufferUploadTask(graph, objBuf, objInitSpan, Name("physics/smoke/wave6_obj_res"), "Wave6 ObjToWorld", Name("physics/smoke/wave6_up_obj"), "Wave6 Init Obj", noDep, false, objRes, upObjTask)
+                        || !AddSmokeBufferUploadTask(graph, invBuf, invInitSpan, Name("physics/smoke/wave6_inv_res"), "Wave6 WorldToObj", Name("physics/smoke/wave6_up_inv"), "Wave6 Init Inv", upObjTask, true, invRes, upInvTask)
+                    )
                         return MakeUnexpected(Failure());
 
-                    GpuGraphResourceDesc objDesc;
-                    objDesc
-                        .setIdentity(Name("physics/smoke/wave6_obj_res"))
-                        .setMarkerLabel("Wave6 ObjToWorld")
-                        .setType(GpuGraphResourceType::Buffer)
-                        .setInitialState(ResourceStates::UnorderedAccess)
-                        .setExternalFinalState(ResourceStates::UnorderedAccess)
-                        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-                    ;
-                    GpuGraphResourceDesc invDesc;
-                    invDesc
-                        .setIdentity(Name("physics/smoke/wave6_inv_res"))
-                        .setMarkerLabel("Wave6 WorldToObj")
-                        .setType(GpuGraphResourceType::Buffer)
-                        .setInitialState(ResourceStates::UnorderedAccess)
-                        .setExternalFinalState(ResourceStates::UnorderedAccess)
-                        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-                    ;
-                    const auto objRes = graph.importBuffer(objBuf, objDesc);
-                    const auto invRes = graph.importBuffer(invBuf, invDesc);
-                    if(!objRes.has_value() || !invRes.has_value())
-                        return MakeUnexpected(Failure());
-
-                    GpuTaskSchedulingHint upSched;
-                    upSched.cost = GpuTaskCostHint::Small;
-                    upSched.avoidQueueCrossing = true;
-                    upSched.allowPacketMerge = true;
-                    upSched.mergeWithPrevious = false;
-                    GpuTaskDesc upObjDesc;
-                    upObjDesc.setIdentity(Name("physics/smoke/wave6_up_obj")).setMarkerLabel("Wave6 Init Obj").setScheduling(upSched);
-                    GpuUploadBufferTaskDesc upObj;
-                    upObj.source = objBlob.value();
-                    upObj.destination = objRes.value();
-                    upObj.finalState = ResourceStates::UnorderedAccess;
-                    const auto upObjTask = graph.addUploadBufferTask(upObjDesc, upObj);
-                    if(!upObjTask.has_value())
-                        return MakeUnexpected(Failure());
-
-                    upSched.mergeWithPrevious = true;
-                    GpuTaskDesc upInvDesc;
-                    upInvDesc.setIdentity(Name("physics/smoke/wave6_up_inv")).setMarkerLabel("Wave6 Init Inv").setScheduling(upSched).setDependency(upObjTask.value());
-                    GpuUploadBufferTaskDesc upInv;
-                    upInv.source = invBlob.value();
-                    upInv.destination = invRes.value();
-                    upInv.finalState = ResourceStates::UnorderedAccess;
-                    const auto upInvTask = graph.addUploadBufferTask(upInvDesc, upInv);
-                    if(!upInvTask.has_value())
-                        return MakeUnexpected(Failure());
-
-                    GpuTaskGraphInstanceTransformPatchRequest reqObj;
-                    reqObj.instanceBufferResource = objRes.value();
-                    reqObj.instanceBufferUavSlot = objUavSlot;
-                    reqObj.instanceStrideFloat4 = 4u;
-                    reqObj.baseFloat4Offset = 0u;
-                    reqObj.layout = GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld;
-                    reqObj.passIdentityPrefix = Name("smoke.wave6.obj_patch");
-                    reqObj.dependency = upInvTask.value();
-                    reqObj.mergeWithPrevious = true;
-                    reqObj.allowMergeAcrossConsumerFrontier = true;
-                    const auto patchedObj = physSys.declareInstanceTransformPatch(reqObj, entityIdSpan, graph);
-                    if(!patchedObj.has_value())
-                        return MakeUnexpected(Failure());
-
-                    GpuTaskGraphInstanceTransformPatchRequest reqInv;
-                    reqInv.instanceBufferResource = invRes.value();
-                    reqInv.instanceBufferUavSlot = invUavSlot;
-                    reqInv.instanceStrideFloat4 = 6u;
-                    reqInv.baseFloat4Offset = 3u;
-                    reqInv.layout = GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject;
-                    reqInv.passIdentityPrefix = Name("smoke.wave6.inv_patch");
-                    reqInv.dependency = patchedObj.value();
-                    reqInv.mergeWithPrevious = true;
-                    reqInv.allowMergeAcrossConsumerFrontier = true;
-                    return physSys.declareInstanceTransformPatch(reqInv, entityIdSpan, graph);
+                    Array<GpuTaskGraphInstanceTransformPatchRequest, 2u> reqs;
+                    reqs[0u].instanceBufferResource = objRes;
+                    reqs[0u].instanceBufferUavSlot = objUavSlot;
+                    reqs[0u].instanceStrideFloat4 = 4u;
+                    reqs[0u].baseFloat4Offset = 0u;
+                    reqs[0u].layout = GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld;
+                    reqs[1u].instanceBufferResource = invRes;
+                    reqs[1u].instanceBufferUavSlot = invUavSlot;
+                    reqs[1u].instanceStrideFloat4 = 6u;
+                    reqs[1u].baseFloat4Offset = 3u;
+                    reqs[1u].layout = GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject;
+                    Array<u32, 2u> offsets;
+                    offsets[0u] = 0u;
+                    offsets[1u] = 0u;
+                    Array<u32, 2u> counts;
+                    counts[0u] = cast<u32>(entityIdSpan.size());
+                    counts[1u] = cast<u32>(entityIdSpan.size());
+                    return physSys.declareBatchInstanceTransformPatches(
+                        Span<GpuTaskGraphInstanceTransformPatchRequest>(reqs.data(), 2u),
+                        entityIdSpan,
+                        Span<u32>(offsets.data(), 2u),
+                        Span<u32>(counts.data(), 2u),
+                        Name("smoke.wave6.physics_patch_batch"),
+                        upInvTask,
+                        true,
+                        true,
+                        graph
+                    );
                 },
                 graphicsQueue
             );
@@ -2743,10 +2643,8 @@ b8 RunGpuParityWave5And6Subtest(
             }
         }
 
-        if(objSlot.descriptor.valid() && heap.isInitialized())
-            heap.free(objSlot.descriptor);
-        if(invSlot.descriptor.valid() && heap.isInitialized())
-            heap.free(invSlot.descriptor);
+        ReleasePhysicsGpuBufferSlot(heap, objSlot);
+        ReleasePhysicsGpuBufferSlot(heap, invSlot);
         physSys.invalidateResources();
         world.taskScope().wait();
         if(!ok)

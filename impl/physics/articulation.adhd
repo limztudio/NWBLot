@@ -201,7 +201,7 @@ MatrixSingle MulSkewRight(in MatrixSingle m, in VectorSingle r){
 }
 
 SpatialMat6 SpatialTransformInertiaC2P(in VectorSingle relPos, in VectorSingle relRot, in SpatialMat6 iaChild){
-    const MatrixSingle rMat = Matrix3FromQuaternion(relRot);
+    const MatrixSingle rMat = MatrixRotationQuaternion(relRot);
     const MatrixSingle rT = Matrix3Transpose(rMat);
     const MatrixSingle jr = Matrix3Mul(rMat, Matrix3Mul(Matrix3FromMat3(iaChild.tl), rT));
     const MatrixSingle cr = Matrix3Mul(rMat, Matrix3Mul(Matrix3FromMat3(iaChild.tr), rT));
@@ -281,7 +281,7 @@ SpatialVec SolveSpatial6x6Factor(in Spatial6x6Factor factor, in SpatialVec rhs){
     const VectorSingle rhs1 = VectorSingle(rhs.lin) - Matrix3MulVec(Matrix3FromMat3(factor.kMat), VectorSingle(rhs.ang));
     const VectorSingle y1 = Matrix3MulVec(Matrix3FromMat3(factor.invS), rhs1);
     const VectorSingle y0 = x0 - Matrix3MulVec(Matrix3FromMat3(factor.kT), y1);
-    if(!IsFiniteVec3(y0) || !IsFiniteVec3(y1))
+    if(!IsFinite(y0.xyz) || !IsFinite(y1.xyz))
         return SpatialVec();
     return SpatialVecMake(y0, y1);
 }
@@ -341,7 +341,7 @@ VectorSingle ArticulationQuatFromRotVec(in VectorSingle rotVec){
     if(angSq <= 1.0e-12f)
         return VectorSingle(0.0f, 0.0f, 0.0f, 1.0f);
     const f32 ang = Sqrt(VectorSingle(angSq)).x;
-    return QuatFromAxisAngleUnit(rotVec * (1.0f / ang), ang);
+    return QuaternionRotationNormal(rotVec * (1.0f / ang), ang);
 }
 
 VectorSingle ArticulationRotVecFromQuat(in VectorSingle qIn){
@@ -365,25 +365,13 @@ void DecomposeSwingTwistAroundAxis(
     mut f32 outSwingY,
     mut f32 outSwingZ
 ){
-    VectorSingle q = SafeNormalizeQuat(qIn);
-    if(q.w < 0.0f)
-        q = -q;
-    const VectorSingle qv(q.x, q.y, q.z, 0.0f);
-    const f32 proj = Vector3Dot(qv, twistAxis).x;
-    const VectorSingle projVec = twistAxis * proj;
-    const f32 twistLenSq = proj * proj + q.w * q.w;
+    VectorSingle qSwing(0.0f, 0.0f, 0.0f, 1.0f);
     VectorSingle qTwist(0.0f, 0.0f, 0.0f, 1.0f);
-    if(twistLenSq > 1.0e-12f)
-        qTwist = SafeNormalizeQuat(VectorSingle(projVec.x, projVec.y, projVec.z, q.w));
-    if(qTwist.w < 0.0f)
-        qTwist = -qTwist;
+    DecomposeSwingTwist(qIn, twistAxis, qSwing, qTwist);
     const f32 imagMag = Vector3Dot(VectorSingle(qTwist.x, qTwist.y, qTwist.z, 0.0f), twistAxis).x;
     outTwistAngle = 2.0f * ATan2(VectorSingle(Abs(VectorSingle(imagMag)).x), VectorSingle(Max(1.0e-6f, qTwist.w))).x;
     if(imagMag < 0.0f)
         outTwistAngle = -outTwistAngle;
-    VectorSingle qSwing = SafeNormalizeQuat(QuaternionMultiply(q, QuaternionConjugate(qTwist)));
-    if(qSwing.w < 0.0f)
-        qSwing = -qSwing;
     const VectorSingle rvSwing = ArticulationRotVecFromQuat(qSwing);
     outSwingY = Vector3Dot(rvSwing, swingAxisY).x;
     outSwingZ = Vector3Dot(rvSwing, swingAxisZ).x;
@@ -423,6 +411,7 @@ class ArticulationLinkDef{
     public f32 jointDamping = 0.0f;
     public f32 jointFriction = 0.0f;
     public f32 limitRestitution = 0.0f;
+    [transient]
     public BodyId proxyBodyId;
     public f32 screwPitch = 0.0f;
     public u8 limitDofMask = 0x7u;
@@ -532,14 +521,12 @@ class ArticulationContactConstraint{
     public f32 maxNormalImpulse = s_MaxF32;
     public f32x4 effSurfVel(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 lambdaN = 0.0f;
-    public f32 lambdaT = 0.0f;
     public f32 invHitMass = 0.0f;
     public SymMat3 invHitInertiaWorld;
     public f32x4 comHit(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 vHit(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 hitApproach = 0.0f;
     public b8 hitIsDynamic = false;
-    public b8 hitCanMove = false;
     public b8 emitHitEvent = false;
     public b8 isSelfCollision = false;
     public usize linkIdxB = s_NullIndex;
@@ -711,7 +698,6 @@ class Articulation{
     private Vector<f32x4> m_syncedQ3;
     private Vector<f32x4> m_syncedJointRot;
     private Vector<ShapeId> m_proxyShapesScratch;
-    private Vector<ShapeOverlapHit> m_overlapHitsScratch;
     private Vector<u32> m_broadphaseShapeScratch;
     private Vector<u32> m_broadphaseStampScratch;
     private u32 m_broadphaseQueryStamp = 1u;
@@ -739,7 +725,6 @@ class Articulation{
     private u32 m_sparseChainStampVal = 1u;
     private Vector<u32> m_sparseChainActiveStampScratch;
     private Vector<u32> m_impActiveLinksScratch;
-    private Vector<u32> m_sparseQueryOrderScratch;
     private Vector<f32x4> m_pgsUnitDqdScratch;
     private Vector<SpatialVec> m_pgsUnitDvScratch;
     private Vector<ArticulationPgsUnitMeta> m_mimicUnitMetaScratch;
@@ -824,7 +809,6 @@ class Articulation{
         this.m_syncedQ3.clear();
         this.m_syncedJointRot.clear();
         this.m_proxyShapesScratch.clear();
-        this.m_overlapHitsScratch.clear();
         this.m_broadphaseShapeScratch.clear();
         this.m_broadphaseStampScratch.clear();
         this.m_broadphaseQueryStamp = 1u;
@@ -852,7 +836,6 @@ class Articulation{
         this.m_sparseChainStampVal = 1u;
         this.m_sparseChainActiveStampScratch.clear();
         this.m_impActiveLinksScratch.clear();
-        this.m_sparseQueryOrderScratch.clear();
         this.m_pgsUnitDqdScratch.clear();
         this.m_pgsUnitDvScratch.clear();
         this.m_mimicUnitMetaScratch.clear();
@@ -1034,7 +1017,7 @@ class Articulation{
         if(d.jointType == ArticulationJointType::Universal){
             sub.dofCount = 2u;
             const f32 q1 = this.linkStates[idx].q3.y;
-            const VectorSingle qRot1 = QuatFromAxisAngleUnit(a1, q1);
+            const VectorSingle qRot1 = QuaternionRotationNormal(a1, q1);
             const VectorSingle c0 = SafeNormalizeVec3(Vector3InverseRotate(Vector3InverseRotate(a0, qRot1), qJC), a0);
             const VectorSingle c1 = SafeNormalizeVec3(Vector3InverseRotate(a1, qJC), a1);
             sub.cols[0u] = SpatialVecMake(c0, Cross(c0, pOffInChild));
@@ -1044,7 +1027,7 @@ class Articulation{
         if(d.jointType == ArticulationJointType::Planar){
             sub.dofCount = 3u;
             const f32 q2 = this.linkStates[idx].q3.z;
-            const VectorSingle qRot2 = QuatFromAxisAngleUnit(a2, q2);
+            const VectorSingle qRot2 = QuaternionRotationNormal(a2, q2);
             const VectorSingle c0 = SafeNormalizeVec3(Vector3InverseRotate(Vector3InverseRotate(a0, qRot2), qJC), a0);
             const VectorSingle c1 = SafeNormalizeVec3(Vector3InverseRotate(Vector3InverseRotate(a1, qRot2), qJC), a1);
             const VectorSingle c2 = SafeNormalizeVec3(Vector3InverseRotate(a2, qJC), a2);
@@ -1452,16 +1435,16 @@ class Articulation{
         VectorSingle a2(0.0f);
         this.resolveLinkBasis(idx, d, a0, a1, a2);
         if(d.jointType == ArticulationJointType::Revolute)
-            return Transform3D(VectorSingle(0.0f), QuatFromAxisAngleUnit(a0, s.q3.x));
+            return Transform3D(VectorSingle(0.0f), QuaternionRotationNormal(a0, s.q3.x));
         if(d.jointType == ArticulationJointType::Helical)
-            return Transform3D(a0 * (d.screwPitch * s.q3.x), QuatFromAxisAngleUnit(a0, s.q3.x));
+            return Transform3D(a0 * (d.screwPitch * s.q3.x), QuaternionRotationNormal(a0, s.q3.x));
         if(d.jointType == ArticulationJointType::Prismatic)
             return Transform3D(a0 * s.q3.x, VectorSingle(0.0f, 0.0f, 0.0f, 1.0f));
         if(d.jointType == ArticulationJointType::Universal){
-            const VectorSingle qRot = SafeNormalizeQuat(QuaternionMultiply(QuatFromAxisAngleUnit(a0, s.q3.x), QuatFromAxisAngleUnit(a1, s.q3.y)));
+            const VectorSingle qRot = SafeNormalizeQuat(QuaternionMultiply(QuaternionRotationNormal(a0, s.q3.x), QuaternionRotationNormal(a1, s.q3.y)));
             return Transform3D(VectorSingle(0.0f), qRot);
         }
-        return Transform3D(a0 * s.q3.x + a1 * s.q3.y, QuatFromAxisAngleUnit(a2, s.q3.z));
+        return Transform3D(a0 * s.q3.x + a1 * s.q3.y, QuaternionRotationNormal(a2, s.q3.z));
     }
 
     public void computeForwardKinematics(){
@@ -1881,10 +1864,6 @@ class Articulation{
 
         if(runSyncAndCache)
             this.commitDofStateOutputs();
-    }
-
-    private void computeForwardDynamicsAbaInternal(in VectorSingle gravityWorld, in f32 subDt){
-        this.computeForwardDynamicsAbaCore(gravityWorld, subDt, true, true);
     }
 
     public void computeForwardDynamicsABA(in VectorSingle gravityWorld){
@@ -2534,7 +2513,7 @@ class Articulation{
                         qUse = s.q;
                     else if(s.q3.x == 0.0f && s.q != 0.0f)
                         qUse = s.q;
-                    jXf = Transform3D(VectorSingle(0.0f), QuatFromAxisAngleUnit(a0, qUse));
+                    jXf = Transform3D(VectorSingle(0.0f), QuaternionRotationNormal(a0, qUse));
                 }
                 else if(d.jointType == ArticulationJointType::Helical){
                     f32 qUse = s.q3.x;
@@ -2542,7 +2521,7 @@ class Articulation{
                         qUse = s.q;
                     else if(s.q3.x == 0.0f && s.q != 0.0f)
                         qUse = s.q;
-                    jXf = Transform3D(a0 * (d.screwPitch * qUse), QuatFromAxisAngleUnit(a0, qUse));
+                    jXf = Transform3D(a0 * (d.screwPitch * qUse), QuaternionRotationNormal(a0, qUse));
                 }
                 else if(d.jointType == ArticulationJointType::Prismatic){
                     f32 qUse = s.q3.x;
@@ -2556,14 +2535,14 @@ class Articulation{
                     f32 q0Use = s.q3.x;
                     if(s.q != 0.0f && s.q3.x == 0.0f)
                         q0Use = s.q;
-                    const VectorSingle qRot = SafeNormalizeQuat(QuaternionMultiply(QuatFromAxisAngleUnit(a0, q0Use), QuatFromAxisAngleUnit(a1, s.q3.y)));
+                    const VectorSingle qRot = SafeNormalizeQuat(QuaternionMultiply(QuaternionRotationNormal(a0, q0Use), QuaternionRotationNormal(a1, s.q3.y)));
                     jXf = Transform3D(VectorSingle(0.0f), qRot);
                 }
                 else if(d.jointType == ArticulationJointType::Planar){
                     f32 q0Use = s.q3.x;
                     if(s.q != 0.0f && s.q3.x == 0.0f)
                         q0Use = s.q;
-                    jXf = Transform3D(a0 * q0Use + a1 * s.q3.y, QuatFromAxisAngleUnit(a2, s.q3.z));
+                    jXf = Transform3D(a0 * q0Use + a1 * s.q3.y, QuaternionRotationNormal(a2, s.q3.z));
                 }
                 else{
                     VectorSingle jRotQ = SafeNormalizeQuat(VectorSingle(s.jointRotation));
@@ -3399,7 +3378,7 @@ class Articulation{
                         invInertiaScaleA = Max(0.0f, ctx.invInertiaScaleA);
                         invInertiaScaleB = Max(0.0f, ctx.invInertiaScaleB);
                         maxNormalImp = Max(0.0f, ctx.maxNormalImpulse);
-                        if(ctx.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.surfaceVelocity)))
+                        if(ctx.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(ctx.surfaceVelocity).xyz))
                             effSurfVel = VectorSingle(ctx.surfaceVelocity, 0.0f);
                         else
                             effSurfVel = VectorSingle(0.0f);
@@ -3470,7 +3449,6 @@ class Articulation{
                         c.comHit = f32x4(comHit, 0.0f);
                         c.vHit = f32x4(vHitW, 0.0f);
                         c.hitIsDynamic = hitIsDynamic;
-                        c.hitCanMove = hitCanMove;
                         c.hitApproach = Max(0.0f, -vRelN);
                         c.emitHitEvent = (linkShape.enableHitEvents() || hitShape.enableHitEvents()) && (-vRelN >= world.m_def.hitEventThreshold);
                         this.m_contactConstraintsScratch.push_back(c);
@@ -4510,7 +4488,7 @@ class Articulation{
 
             if(modified){
                 const VectorSingle qSwingNew = ArticulationQuatFromRotVec(a1 * swingY + a2 * swingZ);
-                const VectorSingle qTwistNew = QuatFromAxisAngleUnit(a0, twist);
+                const VectorSingle qTwistNew = QuaternionRotationNormal(a0, twist);
                 s.jointRotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(qSwingNew, qTwistNew)));
                 const VectorSingle rvPost = ArticulationRotVecFromQuat(VectorSingle(s.jointRotation));
                 s.q3 = f32x4(Vector3Dot(rvPost, a0).x, Vector3Dot(rvPost, a1).x, Vector3Dot(rvPost, a2).x, 0.0f);
@@ -5033,10 +5011,6 @@ class Articulation{
         return true;
     }
 
-    public VectorSingle worldVelocityAtLinkPoint(in usize linkIdx, in VectorSingle worldPoint)const{
-        return this.linkPointWorldVelocity(linkIdx, worldPoint);
-    }
-
     public void applyWorldContactImpulse(in usize linkIdx, in VectorSingle worldPoint, in VectorSingle worldImpulse, in f32 invSubDt){
         const usize n = this.linkDefs.size();
         if(linkIdx >= n)
@@ -5208,40 +5182,11 @@ class Articulation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SolveArticulationPairwiseContacts(
-    mut Articulation artA,
-    mut Articulation artB,
-    mut PhysicsWorld world,
-    in f32 subDt
-){
-    artA.solvePairwiseContactsWith(artB, world, subDt);
-}
-
-VectorSingle QuatFromArticulationBasisCols(in VectorSingle c0, in VectorSingle c1, in VectorSingle c2){
-    const f32 m00 = c0.x; const f32 m01 = c1.x; const f32 m02 = c2.x;
-    const f32 m10 = c0.y; const f32 m11 = c1.y; const f32 m12 = c2.y;
-    const f32 m20 = c0.z; const f32 m21 = c1.z; const f32 m22 = c2.z;
-    const f32 tr = m00 + m11 + m22;
-    if(tr > 0.0f){
-        const f32 s = Sqrt(VectorSingle(tr + 1.0f)).x * 2.0f;
-        return SafeNormalizeQuat(VectorSingle((m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25f * s));
-    }
-    if(m00 > m11 && m00 > m22){
-        const f32 s = Sqrt(VectorSingle(Max(1.0e-6f, 1.0f + m00 - m11 - m22))).x * 2.0f;
-        return SafeNormalizeQuat(VectorSingle(0.25f * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s));
-    }
-    if(m11 > m22){
-        const f32 s = Sqrt(VectorSingle(Max(1.0e-6f, 1.0f + m11 - m00 - m22))).x * 2.0f;
-        return SafeNormalizeQuat(VectorSingle((m01 + m10) / s, 0.25f * s, (m12 + m21) / s, (m02 - m20) / s));
-    }
-    const f32 s = Sqrt(VectorSingle(Max(1.0e-6f, 1.0f + m22 - m00 - m11))).x * 2.0f;
-    return SafeNormalizeQuat(VectorSingle((m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s));
-}
 
 VectorSingle QuatFromUrdfRpy(in f32 roll, in f32 pitch, in f32 yaw){
-    const VectorSingle qX = QuatFromAxisAngleUnit(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), roll);
-    const VectorSingle qY = QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), pitch);
-    const VectorSingle qZ = QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), yaw);
+    const VectorSingle qX = QuaternionRotationNormal(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), roll);
+    const VectorSingle qY = QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), pitch);
+    const VectorSingle qZ = QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), yaw);
     return SafeNormalizeQuat(QuaternionMultiply(qZ, QuaternionMultiply(qY, qX)));
 }
 
@@ -5278,7 +5223,7 @@ b8 BuildArticulationFromSkeleton(
         d.jointType = ji.jointType;
         if(i == 0u)
             d.jointType = ArticulationJointType::Fixed;
-        d.parentToJoint = Transform3D(lp, QuatFromArticulationBasisCols(c0, c1, c2));
+        d.parentToJoint = Transform3D(lp, QuatFromBasisCols(c0, c1, c2));
         d.jointToChild = Transform3D();
         d.jointAxisLocal = ji.jointAxisLocal;
         d.jointAxisSecondaryLocal = ji.jointAxisSecondaryLocal;
@@ -5344,7 +5289,6 @@ class UrdfParsedJointData{
     public f32 lowerLimit = -s_Pi;
     public f32 upperLimit = s_Pi;
     public f32 effort = 1.0e6f;
-    public f32 velocityLimit = 0.0f;
     public f32 damping = 0.0f;
     public f32 friction = 0.0f;
     public b8 hasLimit = false;
@@ -5599,8 +5543,6 @@ b8 ParseUrdfArticulation(
                     hasLim = true;
                 if(UrdfExtractAttributeValue(tag, "effort", vs))
                     UrdfParseF32(vs, curJoint.effort);
-                if(UrdfExtractAttributeValue(tag, "velocity", vs))
-                    UrdfParseF32(vs, curJoint.velocityLimit);
                 curJoint.hasLimit = hasLim && (curJoint.jointType == ArticulationJointType::Revolute || curJoint.jointType == ArticulationJointType::Prismatic);
             }
             else if(tagName == "dynamics"){

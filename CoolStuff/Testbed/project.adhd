@@ -181,7 +181,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             if(this.m_physicsPaused && this.m_grabState.targetKind != TestbedGrabTargetKind::GizmoAxis)
                 ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
             else
-                UpdateTestbedPointerDragTarget(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_grabState);
+                UpdateTestbedPointerDragTarget(this.m_world, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_softBodyCentroidCache, this.m_grabState);
         }
         else if(!WantsUiPointer(this.m_world)){
             UpdateTestbedGizmoHover(this.m_world, this.m_selectedEntity, this.m_lastViewportW, this.m_lastViewportH, this.m_lastPointerX, this.m_lastPointerY, this.m_softBodyCentroidCache, this.m_grabState);
@@ -230,7 +230,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
             else if(act == 6u)
                 ApplySelectedEntityZeroVelocity(this.m_world, this.m_selectedEntity);
             else if(act == 7u)
-                FocusTestbedCameraOnEntity(this.m_world, this.m_selectedEntity, this.m_orbitYaw, this.m_orbitPitch, this.m_orbitDistance);
+                FocusTestbedCameraOnEntity(this.m_world, this.m_selectedEntity, this.m_softBodyCentroidCache, this.m_orbitYaw, this.m_orbitPitch, this.m_orbitDistance);
             else if(act == 8u){
                 ReleaseTestbedGrabWithWorld(this.m_world, this.m_grabState);
                 DeleteSelectedTestbedEntity(this.m_world, this.m_selectedEntity, this.m_showcaseRefs, this.m_physicsEntities, this.m_postSnapshotSpawnedEntities);
@@ -379,8 +379,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_world,
                 context,
                 this.m_softBodyCentroidCache,
-                this.m_physicsDebugScratch,
-                this.m_physicsScreenLines
+                this.m_physicsDebugScratch
             );
             if(this.m_lastDebugDrawStats.truncated != prevTruncated)
                 this.m_uiWindow.initialized = false;
@@ -503,16 +502,16 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 this.m_cameraMode,
                 this.resolveCameraTargetEntity(),
                 VectorSingle(mouseDelta.x, mouseDelta.y, 0.0f, 0.0f),
+                this.m_softBodyCentroidCache,
                 this.m_orbitYaw,
                 this.m_orbitPitch,
                 this.m_orbitDistance
             );
         }
 
-        VectorSingle cPos(0.0f);
         VectorSingle cFwd(0.0f, 0.0f, -1.0f, 0.0f);
         VectorSingle cRight(1.0f, 0.0f, 0.0f, 0.0f);
-        QueryMainCameraBasis(this.m_world, cPos, cFwd, cRight);
+        QueryMainCameraBasis(this.m_world, cFwd, cRight);
         this.m_camForwardCache = f32x4(cFwd, 0.0f);
         this.m_camRightCache = f32x4(cRight, 0.0f);
     }
@@ -525,44 +524,15 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
         DestroyInitialProjectWorld(this.m_context, this.m_world);
     }
 
-    private b8 appendCentisMsText(mut CompactString str, in f32 ms)const{
-        f32 clamped = 0.0f;
-        if(IsFinite(VectorSingle(ms)) && ms > 0.0f)
-            clamped = Min(ms, 99999.0f);
-        const u64 centis = cast<u64>(cast<f64>(clamped) * 100.0 + 0.5);
-        const u64 whole = centis / 100u;
-        const u64 frac = centis % 100u;
-        b8 ok = true;
-        AppendUnsignedU64Text(str, whole);
-        ok = str.append(".") && ok;
-        if(frac < 10u)
-            ok = str.append("0") && ok;
-        AppendUnsignedU64Text(str, frac);
-        return ok;
-    }
-
-    private b8 appendSignedCentisText(mut CompactString str, in f32 val)const{
-        f32 mag = val;
-        b8 ok = true;
-        if(!IsFinite(VectorSingle(val)))
-            return str.append("0.00");
-        if(val < 0.0f){
-            ok = str.append("-") && ok;
-            mag = -val;
-        }
-        ok = this.appendCentisMsText(str, mag) && ok;
-        return ok;
-    }
-
     private b8 formatPhaseLine(in TestbedPhysicsHudStats stats){
         b8 ok = this.m_cachedPhaseLine.assign("Phases: BP ");
-        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.broadphaseMs) && ok;
+        ok = AppendPhysicsDebugCentisText(this.m_cachedPhaseLine, Max(stats.broadphaseMs, 0.0f)) && ok;
         ok = this.m_cachedPhaseLine.append(" NP ") && ok;
-        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.narrowphaseMs) && ok;
+        ok = AppendPhysicsDebugCentisText(this.m_cachedPhaseLine, Max(stats.narrowphaseMs, 0.0f)) && ok;
         ok = this.m_cachedPhaseLine.append(" S ") && ok;
-        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.solveMs) && ok;
+        ok = AppendPhysicsDebugCentisText(this.m_cachedPhaseLine, Max(stats.solveMs, 0.0f)) && ok;
         ok = this.m_cachedPhaseLine.append(" CCD ") && ok;
-        ok = this.appendCentisMsText(this.m_cachedPhaseLine, stats.ccdMs) && ok;
+        ok = AppendPhysicsDebugCentisText(this.m_cachedPhaseLine, Max(stats.ccdMs, 0.0f)) && ok;
         return ok;
     }
 
@@ -725,8 +695,6 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                 const b8 needSplitLine = !this.m_hasCachedHudStats || countsChanged || stepCentis != this.m_cachedStepCentis;
                 if(needSplitLine){
                     this.m_cachedStepCentis = stepCentis;
-                    const u64 wholeMs = cast<u64>(stepCentis / 100);
-                    const u64 fracMs = cast<u64>(stepCentis % 100);
                     hudLinesOk = this.m_cachedSplitLine.assign("Split: CPU ") && hudLinesOk;
                     AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.cpuSolvedBodyCount));
                     hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
@@ -736,11 +704,7 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                     hudLinesOk = this.m_cachedSplitLine.append("b/") && hudLinesOk;
                     AppendUnsignedU64Text(this.m_cachedSplitLine, cast<u64>(stats.gpuSolvedIslandCount));
                     hudLinesOk = this.m_cachedSplitLine.append("i | ") && hudLinesOk;
-                    AppendUnsignedU64Text(this.m_cachedSplitLine, wholeMs);
-                    hudLinesOk = this.m_cachedSplitLine.append(".") && hudLinesOk;
-                    if(fracMs < 10u)
-                        hudLinesOk = this.m_cachedSplitLine.append("0") && hudLinesOk;
-                    AppendUnsignedU64Text(this.m_cachedSplitLine, fracMs);
+                    hudLinesOk = AppendPhysicsDebugCentisText(this.m_cachedSplitLine, cast<f32>(clampedStepMs)) && hudLinesOk;
                     hudLinesOk = this.m_cachedSplitLine.append(" ms") && hudLinesOk;
                 }
                 if(this.m_showPhysicsDebug)
@@ -1090,19 +1054,19 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
                         else
                             iOk = this.m_cachedTempLine.append(" Sleep") && iOk;
                         iOk = this.m_cachedTempLine.append("] m=") && iOk;
-                        iOk = this.appendCentisMsText(this.m_cachedTempLine, info.mass) && iOk;
+                        iOk = AppendPhysicsDebugCentisText(this.m_cachedTempLine, Max(info.mass, 0.0f)) && iOk;
                         iOk = this.m_cachedTempLine.append(" v=") && iOk;
-                        iOk = this.appendCentisMsText(this.m_cachedTempLine, info.speed) && iOk;
+                        iOk = AppendPhysicsDebugCentisText(this.m_cachedTempLine, Max(info.speed, 0.0f)) && iOk;
                     }
                     if(iOk)
                         declared = context.ui.label("ins_hdr", this.m_cachedTempLine.view()) && declared;
 
                     b8 pOk = this.m_cachedInspectPosLine.assign("Pos (");
-                    pOk = this.appendSignedCentisText(this.m_cachedInspectPosLine, info.position.x) && pOk;
+                    pOk = AppendPhysicsDebugCentisText(this.m_cachedInspectPosLine, info.position.x) && pOk;
                     pOk = this.m_cachedInspectPosLine.append(", ") && pOk;
-                    pOk = this.appendSignedCentisText(this.m_cachedInspectPosLine, info.position.y) && pOk;
+                    pOk = AppendPhysicsDebugCentisText(this.m_cachedInspectPosLine, info.position.y) && pOk;
                     pOk = this.m_cachedInspectPosLine.append(", ") && pOk;
-                    pOk = this.appendSignedCentisText(this.m_cachedInspectPosLine, info.position.z) && pOk;
+                    pOk = AppendPhysicsDebugCentisText(this.m_cachedInspectPosLine, info.position.z) && pOk;
                     pOk = this.m_cachedInspectPosLine.append(")") && pOk;
                     if(pOk)
                         declared = context.ui.label("ins_pos", this.m_cachedInspectPosLine.view()) && declared;
@@ -1228,7 +1192,6 @@ class Project : IProjectEntryCallbacks, IInputEventHandler, IProjectUiLayerPaint
     private PhysicsDebugDrawOptions m_physicsDebugOptions = PhysicsDebugDrawOptions();
     private PhysicsDebugDrawStats m_lastDebugDrawStats = PhysicsDebugDrawStats();
     private PhysicsDebugDrawScratch m_physicsDebugScratch = PhysicsDebugDrawScratch();
-    private Vector<PaintLineSegment> m_physicsScreenLines;
     private TestbedPhysicsHudStats m_cachedHudStats = TestbedPhysicsHudStats();
     private CompactString m_cachedStateLine;
     private CompactString m_cachedPhysicsLine;

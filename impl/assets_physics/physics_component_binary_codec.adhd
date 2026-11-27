@@ -67,6 +67,71 @@ const u16 s_WorldCfgFlagPublishEventsToMessageBus = 0x0400u;
 const u16 s_WorldCfgFlagPublishContinuousEventsToMessageBus = 0x0800u;
 
 
+b8 ValidateSixDofAxes(in Array<SixDofAxisConfig, 6u> axes){
+    for(usize k = 0u; k < 6u; ++k){
+        in SixDofAxisConfig cfg = axes[k];
+        if(cast<u8>(cfg.motion) >= cast<u8>(JointMotion::kCount))
+            return false;
+        if(!IsFinite(VectorSingle(cfg.lowerLimit, cfg.upperLimit, cfg.motorTargetVelocity, cfg.motorTargetPosition)))
+            return false;
+        if(!IsFinite(VectorSingle(cfg.maxMotorForce, cfg.springHertz, cfg.springDampingRatio, 0.0f)))
+            return false;
+        if(cfg.upperLimit < cfg.lowerLimit || cfg.maxMotorForce < 0.0f || cfg.springHertz < 0.0f || cfg.springDampingRatio < 0.0f)
+            return false;
+    }
+    return true;
+}
+
+void PackSixDofAxesBinary(
+    in Array<SixDofAxisConfig, 6u> axes,
+    mut Array<u8, 8u> outMotions,
+    mut Array<u8, 8u> outFlags,
+    mut Array<f32, 42u> outParams
+){
+    for(usize k = 0u; k < 6u; ++k){
+        in SixDofAxisConfig cfg = axes[k];
+        outMotions[k] = cast<u8>(cfg.motion);
+        u8 axisFlags = 0u;
+        if(cfg.enableMotor) axisFlags |= s_SixDofAxisFlagEnableMotor;
+        if(cfg.enableSpring) axisFlags |= s_SixDofAxisFlagEnableSpring;
+        outFlags[k] = axisFlags;
+        const usize pBase = k * 7u;
+        outParams[pBase + 0u] = cfg.lowerLimit;
+        outParams[pBase + 1u] = cfg.upperLimit;
+        outParams[pBase + 2u] = cfg.motorTargetVelocity;
+        outParams[pBase + 3u] = cfg.motorTargetPosition;
+        outParams[pBase + 4u] = cfg.maxMotorForce;
+        outParams[pBase + 5u] = cfg.springHertz;
+        outParams[pBase + 6u] = cfg.springDampingRatio;
+    }
+}
+
+b8 UnpackSixDofAxesBinary(
+    in Array<u8, 8u> motions,
+    in Array<u8, 8u> flags,
+    in Array<f32, 42u> params,
+    mut Array<SixDofAxisConfig, 6u> outAxes
+){
+    for(usize k = 0u; k < 6u; ++k){
+        if(motions[k] >= cast<u8>(JointMotion::kCount) || (flags[k] & 0xfcu) != 0u)
+            return false;
+        mut SixDofAxisConfig cfg = outAxes[k];
+        cfg.motion = cast<JointMotion>(motions[k]);
+        cfg.enableMotor = (flags[k] & s_SixDofAxisFlagEnableMotor) != 0u;
+        cfg.enableSpring = (flags[k] & s_SixDofAxisFlagEnableSpring) != 0u;
+        const usize pBase = k * 7u;
+        cfg.lowerLimit = params[pBase + 0u];
+        cfg.upperLimit = params[pBase + 1u];
+        cfg.motorTargetVelocity = params[pBase + 2u];
+        cfg.motorTargetPosition = params[pBase + 3u];
+        cfg.maxMotorForce = params[pBase + 4u];
+        cfg.springHertz = params[pBase + 5u];
+        cfg.springDampingRatio = params[pBase + 6u];
+    }
+    return true;
+}
+
+
 class PhysicsComponentBinaryCodec{
     private b8 validRigidBodyData(in RigidBodyComponent c)const{
         if(cast<u8>(c.type) > cast<u8>(BodyType::Dynamic))
@@ -358,17 +423,8 @@ class PhysicsComponentBinaryCodec{
             return false;
         if(s.type == JointType::Pulley && s.ratio <= 0.0f)
             return false;
-        for(usize k = 0u; k < 6u; ++k){
-            in SixDofAxisConfig cfg = s.sixDofAxes[k];
-            if(cast<u8>(cfg.motion) >= cast<u8>(JointMotion::kCount))
-                return false;
-            if(!IsFinite(VectorSingle(cfg.lowerLimit, cfg.upperLimit, cfg.motorTargetVelocity, cfg.motorTargetPosition)))
-                return false;
-            if(!IsFinite(VectorSingle(cfg.maxMotorForce, cfg.springHertz, cfg.springDampingRatio, 0.0f)))
-                return false;
-            if(cfg.upperLimit < cfg.lowerLimit || cfg.maxMotorForce < 0.0f || cfg.springHertz < 0.0f || cfg.springDampingRatio < 0.0f)
-                return false;
-        }
+        if(!ValidateSixDofAxes(s.sixDofAxes))
+            return false;
         for(usize pi = 0u; pi < j.pathPoints.size(); ++pi){
             if(!IsValidPositionVec3(VectorSingle(j.pathPoints[pi])))
                 return false;
@@ -507,10 +563,7 @@ class PhysicsComponentBinaryCodec{
         c.sleepThreshold = bin.sleepThreshold;
         c.maxAngularVelocity = bin.maxAngularVelocity;
         c.userData = bin.userData;
-        if(bin.entityTagHash == s_NameNone.hash())
-            c.entityTag = s_NameNone;
-        else
-            c.entityTag = Name(bin.entityTagHash);
+        c.entityTag = DecodeOptionalPhysicsName(bin.entityTagHash);
         c.customMass = bin.customMass;
         c.customCenterOfMass = bin.customCenterOfMass;
         c.customInertiaDiag = bin.customInertiaDiag;
@@ -715,34 +768,13 @@ class PhysicsComponentBinaryCodec{
         outEntry.frictionCombineMode = cast<MaterialCombineMode>(hdr.frictionCombineMode);
         outEntry.restitutionCombineMode = cast<MaterialCombineMode>(hdr.restitutionCombineMode);
         outEntry.userData = hdr.userData;
-        if(hdr.meshAssetHash == s_NameNone.hash())
-            outEntry.meshAsset.virtualPath = s_NameNone;
-        else
-            outEntry.meshAsset.virtualPath = Name(hdr.meshAssetHash);
-        if(hdr.materialAssetHash == s_NameNone.hash())
-            outEntry.materialAsset.virtualPath = s_NameNone;
-        else
-            outEntry.materialAsset.virtualPath = Name(hdr.materialAssetHash);
-        if(hdr.convexHullAssetHash == s_NameNone.hash())
-            outEntry.convexHullAsset.virtualPath = s_NameNone;
-        else
-            outEntry.convexHullAsset.virtualPath = Name(hdr.convexHullAssetHash);
-        if(hdr.compoundHullAssetHash == s_NameNone.hash())
-            outEntry.compoundHullAsset.virtualPath = s_NameNone;
-        else
-            outEntry.compoundHullAsset.virtualPath = Name(hdr.compoundHullAssetHash);
-        if(hdr.collisionMeshAssetHash == s_NameNone.hash())
-            outEntry.collisionMeshAsset.virtualPath = s_NameNone;
-        else
-            outEntry.collisionMeshAsset.virtualPath = Name(hdr.collisionMeshAssetHash);
-        if(hdr.heightfieldAssetHash == s_NameNone.hash())
-            outEntry.heightfieldAsset.virtualPath = s_NameNone;
-        else
-            outEntry.heightfieldAsset.virtualPath = Name(hdr.heightfieldAssetHash);
-        if(hdr.collisionLayerHash == s_NameNone.hash())
-            outEntry.collisionLayer = s_NameNone;
-        else
-            outEntry.collisionLayer = Name(hdr.collisionLayerHash);
+        outEntry.meshAsset.virtualPath = DecodeOptionalPhysicsName(hdr.meshAssetHash);
+        outEntry.materialAsset.virtualPath = DecodeOptionalPhysicsName(hdr.materialAssetHash);
+        outEntry.convexHullAsset.virtualPath = DecodeOptionalPhysicsName(hdr.convexHullAssetHash);
+        outEntry.compoundHullAsset.virtualPath = DecodeOptionalPhysicsName(hdr.compoundHullAssetHash);
+        outEntry.collisionMeshAsset.virtualPath = DecodeOptionalPhysicsName(hdr.collisionMeshAssetHash);
+        outEntry.heightfieldAsset.virtualPath = DecodeOptionalPhysicsName(hdr.heightfieldAssetHash);
+        outEntry.collisionLayer = DecodeOptionalPhysicsName(hdr.collisionLayerHash);
 
         if(!this.validColliderEntryHeaderFields(
             outEntry,
@@ -875,10 +907,7 @@ class PhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
 
-        if(rootHdr.entityTagHash == s_NameNone.hash())
-            c.entityTag = s_NameNone;
-        else
-            c.entityTag = Name(rootHdr.entityTagHash);
+        c.entityTag = DecodeOptionalPhysicsName(rootHdr.entityTagHash);
         c.extraShapes.resize(rootHdr.extraShapeCount);
         for(u32 i = 0u; i < rootHdr.extraShapeCount; ++i){
             if(!this.deserializeColliderEntry(payload, cursor, c.extraShapes[i])){
@@ -970,22 +999,7 @@ class PhysicsComponentBinaryCodec{
         bin.sixDofSwingLimitZ = s.sixDofSwingLimitZ;
         bin.pathPointCount = cast<u32>(j.pathPoints.size());
         bin.extraJointCount = extraJointCount;
-        for(usize k = 0u; k < 6u; ++k){
-            in SixDofAxisConfig cfg = s.sixDofAxes[k];
-            bin.sixDofMotions[k] = cast<u8>(cfg.motion);
-            u8 axisFlags = 0u;
-            if(cfg.enableMotor) axisFlags |= s_SixDofAxisFlagEnableMotor;
-            if(cfg.enableSpring) axisFlags |= s_SixDofAxisFlagEnableSpring;
-            bin.sixDofFlags[k] = axisFlags;
-            const usize pBase = k * 7u;
-            bin.sixDofParams[pBase + 0u] = cfg.lowerLimit;
-            bin.sixDofParams[pBase + 1u] = cfg.upperLimit;
-            bin.sixDofParams[pBase + 2u] = cfg.motorTargetVelocity;
-            bin.sixDofParams[pBase + 3u] = cfg.motorTargetPosition;
-            bin.sixDofParams[pBase + 4u] = cfg.maxMotorForce;
-            bin.sixDofParams[pBase + 5u] = cfg.springHertz;
-            bin.sixDofParams[pBase + 6u] = cfg.springDampingRatio;
-        }
+        PackSixDofAxesBinary(s.sixDofAxes, bin.sixDofMotions, bin.sixDofFlags, bin.sixDofParams);
         AppendPOD(outBinary, bin);
         return AppendBinaryVectorPayload(outBinary, Span<f32x4>(j.pathPoints.data(), j.pathPoints.size())).has_value();
     }
@@ -1079,32 +1093,13 @@ class PhysicsComponentBinaryCodec{
         s.slerpMaxTorque = bin.slerpMaxTorque;
         s.sixDofSwingLimitY = bin.sixDofSwingLimitY;
         s.sixDofSwingLimitZ = bin.sixDofSwingLimitZ;
-        if(bin.bodyEntityNameAHash == s_NameNone.hash())
-            outEntry.bodyEntityNameA = s_NameNone;
-        else
-            outEntry.bodyEntityNameA = Name(bin.bodyEntityNameAHash);
-        if(bin.bodyEntityNameBHash == s_NameNone.hash())
-            outEntry.bodyEntityNameB = s_NameNone;
-        else
-            outEntry.bodyEntityNameB = Name(bin.bodyEntityNameBHash);
+        outEntry.bodyEntityNameA = DecodeOptionalPhysicsName(bin.bodyEntityNameAHash);
+        outEntry.bodyEntityNameB = DecodeOptionalPhysicsName(bin.bodyEntityNameBHash);
         outEntry.userData = bin.userData;
         outExtraJointCount = bin.extraJointCount;
 
-        for(usize k = 0u; k < 6u; ++k){
-            if(bin.sixDofMotions[k] >= cast<u8>(JointMotion::kCount) || (bin.sixDofFlags[k] & 0xfcu) != 0u)
-                return false;
-            s.sixDofAxes[k].motion = cast<JointMotion>(bin.sixDofMotions[k]);
-            s.sixDofAxes[k].enableMotor = (bin.sixDofFlags[k] & s_SixDofAxisFlagEnableMotor) != 0u;
-            s.sixDofAxes[k].enableSpring = (bin.sixDofFlags[k] & s_SixDofAxisFlagEnableSpring) != 0u;
-            const usize pBase = k * 7u;
-            s.sixDofAxes[k].lowerLimit = bin.sixDofParams[pBase + 0u];
-            s.sixDofAxes[k].upperLimit = bin.sixDofParams[pBase + 1u];
-            s.sixDofAxes[k].motorTargetVelocity = bin.sixDofParams[pBase + 2u];
-            s.sixDofAxes[k].motorTargetPosition = bin.sixDofParams[pBase + 3u];
-            s.sixDofAxes[k].maxMotorForce = bin.sixDofParams[pBase + 4u];
-            s.sixDofAxes[k].springHertz = bin.sixDofParams[pBase + 5u];
-            s.sixDofAxes[k].springDampingRatio = bin.sixDofParams[pBase + 6u];
-        }
+        if(!UnpackSixDofAxesBinary(bin.sixDofMotions, bin.sixDofFlags, bin.sixDofParams, s.sixDofAxes))
+            return false;
         if(!ReadBinaryVectorPayload(payload, bin.pathPointCount, inOutCursor, outEntry.pathPoints).has_value())
             return false;
         return this.validJointEntry(outEntry);
@@ -1247,10 +1242,7 @@ class PhysicsComponentBinaryCodec{
         }
         PhysicsWorldConfigComponent w;
         w.gravity = bin.gravity;
-        if(bin.collisionLayerMatrixAssetHash == s_NameNone.hash())
-            w.collisionLayerMatrixAsset.virtualPath = s_NameNone;
-        else
-            w.collisionLayerMatrixAsset.virtualPath = Name(bin.collisionLayerMatrixAssetHash);
+        w.collisionLayerMatrixAsset.virtualPath = DecodeOptionalPhysicsName(bin.collisionLayerMatrixAssetHash);
         w.subStepCount = bin.subStepCount;
         w.maxSubStepsPerFrame = bin.maxSubStepsPerFrame;
         w.gpuDispatchThreshold = bin.gpuDispatchThreshold;
@@ -1327,10 +1319,7 @@ class PhysicsComponentBinaryCodec{
         PhysicsParentComponent p;
         p.inheritScale = (bin.flags & s_PhysicsParentFlagInheritScale) != 0u;
         p.attachColliderToParentBody = (bin.flags & s_PhysicsParentFlagAttachColliderToParent) != 0u;
-        if(bin.parentEntityNameHash == s_NameNone.hash())
-            p.parentEntityName = s_NameNone;
-        else
-            p.parentEntityName = Name(bin.parentEntityNameHash);
+        p.parentEntityName = DecodeOptionalPhysicsName(bin.parentEntityNameHash);
         if(!this.validPhysicsParentData(p)){
             error("PhysicsParentComponentAsset::loadComponentPayload failed: invalid parent component");
             return MakeUnexpected(Failure());

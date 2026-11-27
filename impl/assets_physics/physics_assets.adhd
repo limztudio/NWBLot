@@ -137,14 +137,6 @@ class CollisionLayerMatrixAsset{
     public b8 setLayersCollide(in u32 layerA, in u32 layerB, in b8 collide){
         return this.m_matrix.setLayersCollide(layerA, layerB, collide);
     }
-
-    public Filter makeFilter(in u32 layerIdx, in i32 groupIndex)const{
-        return this.m_matrix.makeFilter(layerIdx, groupIndex);
-    }
-
-    public Filter makeFilterByName(in Name layerName, in i32 groupIndex)const{
-        return this.m_matrix.makeFilterByName(layerName, groupIndex);
-    }
 }
 
 [asset("convex_hull")]

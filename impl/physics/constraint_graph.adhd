@@ -53,14 +53,14 @@ void AddContactToGraph(mut ConstraintGraph graph, in Vector<Body> bodies, mut Co
     if(!staticA && !staticB){
         const u32 avail = (~used) & 0x000fffffu;
         if(avail != 0u)
-            chosenColor = cast<usize>(CountTrailingZerosU32(avail));
+            chosenColor = cast<usize>(CountTrailingZeros(avail));
     }
     else{
         u32 avail = (~used) & 0x00700000u;
         if(avail == 0u)
             avail = (~used) & 0x000fffffu;
         if(avail != 0u)
-            chosenColor = cast<usize>(CountTrailingZerosU32(avail));
+            chosenColor = cast<usize>(CountTrailingZeros(avail));
     }
 
     mut GraphColor color = graph.colors[chosenColor];

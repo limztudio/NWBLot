@@ -10,6 +10,7 @@
 
 class SoftBodyParticle{
     public f32x4 position(0.0f, 0.0f, 0.0f, 0.0f);
+    [transient]
     public f32x4 prevPosition(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 velocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 externalForce(0.0f, 0.0f, 0.0f, 0.0f);
@@ -22,6 +23,7 @@ class SoftBodyDistanceConstraint{
     public u32 p1 = 0u;
     public f32 restLength = 0.0f;
     public f32 compliance = 0.0f;
+    [transient]
     public f32 lambda = 0.0f;
 }
 
@@ -30,6 +32,7 @@ class SoftBodyBendingConstraint{
     public u32 p1 = 0u;
     public f32 restLength = 0.0f;
     public f32 compliance = 1.0e-3f;
+    [transient]
     public f32 lambda = 0.0f;
 }
 
@@ -40,12 +43,14 @@ class SoftBodyVolumeConstraint{
     public u32 p3 = 0u;
     public f32 restVolume = 0.0f;
     public f32 compliance = 0.0f;
+    [transient]
     public f32 lambda = 0.0f;
     public f32 youngsModulus = 0.0f;
     public f32 poissonsRatio = 0.35f;
     public f32 plasticYield = 0.0f;
     public f32 plasticCreep = 0.0f;
     public f32 plasticMaxStrain = 0.5f;
+    [transient]
     public f32 devLambda = 0.0f;
     public f32x4 restCol0(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 restCol1(0.0f, 0.0f, 0.0f, 0.0f);
@@ -62,6 +67,7 @@ class SoftBodyTriangle{
 
 class SoftBodyAttachment{
     public u32 particleIndex = 0u;
+    [transient]
     public BodyId bodyId;
     public f32x4 localAnchor(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 compliance = 0.0f;
@@ -82,6 +88,7 @@ class SoftBodyDihedralBendingConstraint{
     public u32 p3 = 0u;
     public f32 restAngle = 0.0f;
     public f32 compliance = 1.0e-3f;
+    [transient]
     public f32 lambda = 0.0f;
 }
 
@@ -109,6 +116,7 @@ class SoftBodyTetherConstraint{
     public u32 particleIndex = 0u;
     public f32 maxDistance = 0.0f;
     public f32 compliance = 0.0f;
+    [transient]
     public f32 lambda = 0.0f;
 }
 
@@ -178,21 +186,6 @@ void ComputeSoftBodyTriangleBarycentrics(
     }
 }
 
-u64 MakeSoftBodyUndirectedEdgeKey(in u32 a, in u32 b){
-    u32 lo = a;
-    u32 hi = b;
-    if(b < a){
-        lo = b;
-        hi = a;
-    }
-    return (cast<u64>(lo) << 32u) | cast<u64>(hi);
-}
-
-u32 HashSoftBodyCellCoord(in i32 cx, in i32 cy, in i32 cz, in usize tableMask){
-    const u32 h = (cast<u32>(cx) * 73856093u) ^ (cast<u32>(cy) * 19349663u) ^ (cast<u32>(cz) * 83492791u);
-    return h & cast<u32>(tableMask);
-}
-
 void ComputeSoftBodyCellCoord(
     in VectorSingle p,
     in f32 invCell,
@@ -204,27 +197,6 @@ void ComputeSoftBodyCellCoord(
     outX = cast<i32>(fc.x);
     outY = cast<i32>(fc.y);
     outZ = cast<i32>(fc.z);
-}
-
-void ComputeSoftBodyCellBounds(
-    in VectorSingle bMin,
-    in VectorSingle bMax,
-    in f32 invCell,
-    mut i32 outMinX,
-    mut i32 outMinY,
-    mut i32 outMinZ,
-    mut i32 outMaxX,
-    mut i32 outMaxY,
-    mut i32 outMaxZ
-){
-    const VectorSingle fMin = VectorFloor(bMin * invCell);
-    const VectorSingle fMax = VectorFloor(bMax * invCell);
-    outMinX = cast<i32>(fMin.x);
-    outMinY = cast<i32>(fMin.y);
-    outMinZ = cast<i32>(fMin.z);
-    outMaxX = cast<i32>(fMax.x);
-    outMaxY = cast<i32>(fMax.y);
-    outMaxZ = cast<i32>(fMax.z);
 }
 
 class SoftBodyColImpulse{
@@ -309,15 +281,6 @@ void StepSoftBodyParticlesVelUpdateRange(
     }
 }
 
-class SoftBodyBvhNode{
-    public f32x4 bMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 bMax(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 left = s_NullIndex;
-    public u32 right = s_NullIndex;
-    public u32 primStart = 0u;
-    public u32 primCount = 0u;
-}
-
 class SoftBodySelfColPair{
     public u32 a = 0u;
     public u32 b = 0u;
@@ -331,132 +294,16 @@ class SoftBodySplitVertexOp{
     public f32x4 splitN(1.0f, 0.0f, 0.0f, 0.0f);
 }
 
-void BuildSoftBodyFlatBvh(
-    in Vector<f32x4> primMins,
-    in Vector<f32x4> primMaxs,
-    in usize primCount,
-    mut Vector<u32> outOrder,
-    mut Vector<SoftBodyBvhNode> outNodes
-){
-    outNodes.clear();
-    outOrder.resize(primCount);
-    if(primCount == 0u)
-        return;
-    for(usize i = 0u; i < primCount; ++i)
-        outOrder[i] = cast<u32>(i);
-    outNodes.reserve(primCount);
-    outNodes.push_back(SoftBodyBvhNode());
-
-    Array<u32, 64u> stackNode;
-    Array<usize, 64u> stackStart;
-    Array<usize, 64u> stackEnd;
-    usize sp = 0u;
-    stackNode[sp] = 0u;
-    stackStart[sp] = 0u;
-    stackEnd[sp] = primCount;
-    ++sp;
-
-    while(sp > 0u){
-        --sp;
-        const usize ni = cast<usize>(stackNode[sp]);
-        const usize bStart = stackStart[sp];
-        const usize bEnd = stackEnd[sp];
-        const u32 firstPrim = outOrder[bStart];
-        VectorSingle bMin = VectorSingle(primMins[firstPrim]);
-        VectorSingle bMax = VectorSingle(primMaxs[firstPrim]);
-        VectorSingle cMin = (bMin + bMax) * 0.5f;
-        VectorSingle cMax = cMin;
-        for(usize k = bStart + 1u; k < bEnd; ++k){
-            const u32 pIdx = outOrder[k];
-            const VectorSingle pMin = VectorSingle(primMins[pIdx]);
-            const VectorSingle pMax = VectorSingle(primMaxs[pIdx]);
-            const VectorSingle cen = (pMin + pMax) * 0.5f;
-            bMin = Min(bMin, pMin);
-            bMax = Max(bMax, pMax);
-            cMin = Min(cMin, cen);
-            cMax = Max(cMax, cen);
-        }
-        outNodes[ni].bMin = f32x4(bMin, 0.0f);
-        outNodes[ni].bMax = f32x4(bMax, 0.0f);
-
-        const usize count = bEnd - bStart;
-        if(count <= 4u || sp + 2u >= 64u){
-            outNodes[ni].left = s_NullIndex;
-            outNodes[ni].right = s_NullIndex;
-            outNodes[ni].primStart = cast<u32>(bStart);
-            outNodes[ni].primCount = cast<u32>(count);
-            continue;
-        }
-
-        const VectorSingle ext = cMax - cMin;
-        u32 axis = 0u;
-        f32 span = ext.x;
-        if(ext.y > span){
-            axis = 1u;
-            span = ext.y;
-        }
-        if(ext.z > span){
-            axis = 2u;
-            span = ext.z;
-        }
-
-        usize splitIdx = bStart + (count / 2u);
-        if(span > 1.0e-6f){
-            f32 splitVal = (cMin.x + cMax.x) * 0.5f;
-            if(axis == 1u) splitVal = (cMin.y + cMax.y) * 0.5f;
-            else if(axis == 2u) splitVal = (cMin.z + cMax.z) * 0.5f;
-            usize lo = bStart;
-            usize hi = bEnd;
-            while(lo < hi){
-                const u32 idxLo = outOrder[lo];
-                const VectorSingle cenLo = (VectorSingle(primMins[idxLo]) + VectorSingle(primMaxs[idxLo])) * 0.5f;
-                f32 cVal = cenLo.x;
-                if(axis == 1u) cVal = cenLo.y;
-                else if(axis == 2u) cVal = cenLo.z;
-                if(cVal < splitVal){
-                    ++lo;
-                }
-                else{
-                    --hi;
-                    const u32 tmp = outOrder[lo];
-                    outOrder[lo] = outOrder[hi];
-                    outOrder[hi] = tmp;
-                }
-            }
-            if(lo > bStart && lo < bEnd)
-                splitIdx = lo;
-        }
-
-        const u32 leftIdx = cast<u32>(outNodes.size());
-        outNodes.push_back(SoftBodyBvhNode());
-        const u32 rightIdx = cast<u32>(outNodes.size());
-        outNodes.push_back(SoftBodyBvhNode());
-        outNodes[ni].left = leftIdx;
-        outNodes[ni].right = rightIdx;
-        outNodes[ni].primStart = 0u;
-        outNodes[ni].primCount = 0u;
-
-        stackNode[sp] = rightIdx;
-        stackStart[sp] = splitIdx;
-        stackEnd[sp] = bEnd;
-        ++sp;
-        stackNode[sp] = leftIdx;
-        stackStart[sp] = bStart;
-        stackEnd[sp] = splitIdx;
-        ++sp;
-    }
-}
-
 void RefitSoftBodyFlatBvh(
     in Vector<f32x4> primMins,
     in Vector<f32x4> primMaxs,
     in Vector<u32> order,
-    mut Vector<SoftBodyBvhNode> nodes
+    mut Vector<FlatBvhNode> nodes
 ){
     const usize nodeCount = nodes.size();
     for(usize rev = 0u; rev < nodeCount; ++rev){
         const usize ni = nodeCount - 1u - rev;
-        mut SoftBodyBvhNode node = nodes[ni];
+        mut FlatBvhNode node = nodes[ni];
         if(node.left == s_NullIndex){
             const usize s = cast<usize>(node.primStart);
             const usize c = cast<usize>(node.primCount);
@@ -474,8 +321,8 @@ void RefitSoftBodyFlatBvh(
             node.bMax = f32x4(bMax, 0.0f);
         }
         else{
-            in SoftBodyBvhNode lNode = nodes[node.left];
-            in SoftBodyBvhNode rNode = nodes[node.right];
+            in FlatBvhNode lNode = nodes[node.left];
+            in FlatBvhNode rNode = nodes[node.right];
             node.bMin = f32x4(Min(VectorSingle(lNode.bMin), VectorSingle(rNode.bMin)), 0.0f);
             node.bMax = f32x4(Max(VectorSingle(lNode.bMax), VectorSingle(rNode.bMax)), 0.0f);
         }
@@ -526,7 +373,7 @@ void CollideSoftBodyParticlesRange(
     in PhysicsWorld worldRef,
     in Vector<SoftBodyCandShapeCache> candCache,
     in Vector<u32> candBvhOrder,
-    in Vector<SoftBodyBvhNode> candBvhNodes,
+    in Vector<FlatBvhNode> candBvhNodes,
     in f32 particleRadius,
     in f32 hStep,
     in f32 invDtCol,
@@ -569,7 +416,7 @@ void CollideSoftBodyParticlesRange(
         }
         if(!hasMovable)
             return;
-        in SoftBodyBvhNode rootNode = candBvhNodes[0u];
+        in FlatBvhNode rootNode = candBvhNodes[0u];
         if(!AabbOverlapsValues(cMin - rVec, cMax + rVec, VectorSingle(rootNode.bMin), VectorSingle(rootNode.bMax)))
             return;
     }
@@ -590,7 +437,7 @@ void CollideSoftBodyParticlesRange(
             ++sp;
             while(sp > 0u){
                 --sp;
-                in SoftBodyBvhNode node = candBvhNodes[bvhStack[sp]];
+                in FlatBvhNode node = candBvhNodes[bvhStack[sp]];
                 if(!AabbOverlapsValues(pMin, pMax, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                     continue;
                 if(node.left == s_NullIndex){
@@ -700,7 +547,7 @@ void ApplySoftBodyParticleCcdRange(
     in PhysicsWorld worldRef,
     in Vector<SoftBodyCandShapeCache> candCache,
     in Vector<u32> candBvhOrder,
-    in Vector<SoftBodyBvhNode> candBvhNodes,
+    in Vector<FlatBvhNode> candBvhNodes,
     in f32 particleRadius,
     in b8 enableParticleCcd,
     in usize startIdx,
@@ -738,7 +585,7 @@ void ApplySoftBodyParticleCcdRange(
             ++sp;
             while(sp > 0u){
                 --sp;
-                in SoftBodyBvhNode node = candBvhNodes[bvhStack[sp]];
+                in FlatBvhNode node = candBvhNodes[bvhStack[sp]];
                 f32 tNode = 0.0f;
                 if(!AabbRayCastValues(VectorSingle(node.bMin), VectorSingle(node.bMax), p0, rayInvDir, rayMask, bestFrac, tNode))
                     continue;
@@ -1108,7 +955,7 @@ void ExtractPolarRotationQuat(in MatrixSingle aMat, mut VectorSingle inOutQ){
     const VectorSingle col1(aMat[0u].y, aMat[1u].y, aMat[2u].y, 0.0f);
     const VectorSingle col2(aMat[0u].z, aMat[1u].z, aMat[2u].z, 0.0f);
     for(u32 it = 0u; it < 6u; ++it){
-        const MatrixSingle rMat = Matrix3FromQuaternion(q);
+        const MatrixSingle rMat = MatrixRotationQuaternion(q);
         const VectorSingle r0(rMat[0u].x, rMat[1u].x, rMat[2u].x, 0.0f);
         const VectorSingle r1(rMat[0u].y, rMat[1u].y, rMat[2u].y, 0.0f);
         const VectorSingle r2(rMat[0u].z, rMat[1u].z, rMat[2u].z, 0.0f);
@@ -1120,7 +967,7 @@ void ExtractPolarRotationQuat(in MatrixSingle aMat, mut VectorSingle inOutQ){
             break;
         const f32 invW = Rsqrt(VectorSingle(wSq)).x;
         const f32 w = wSq * invW;
-        const VectorSingle dq = QuatFromAxisAngleUnit(omega * invW, w);
+        const VectorSingle dq = QuaternionRotationNormal(omega * invW, w);
         q = SafeNormalizeQuat(QuaternionMultiply(dq, q));
     }
     inOutQ = q;
@@ -1171,7 +1018,9 @@ class SoftBody{
     public SoftBodyCageBinding cageBinding;
     public Vector<f32x4> restLocalPositions;
     public Vector<u32> particleSourceIndices;
+    [transient]
     public u64 topologyVersion = 0u;
+    [transient]
     public u64 deformVersion = 0u;
     public f32x4 windVelocity(0.0f, 0.0f, 0.0f, 0.0f);
     public f32 particleRadius = 0.03f;
@@ -1197,6 +1046,7 @@ class SoftBody{
     public b8 enableSleep = false;
     public f32 sleepLinearThreshold = 0.05f;
     public f32 sleepTimeThreshold = 0.5f;
+    [transient]
     public b8 isSleeping = false;
     public f32 pressureCoeff = 0.0f;
     public f32 restSurfaceVolume = 0.0f;
@@ -1219,7 +1069,7 @@ class SoftBody{
     private Vector<Vector<SoftBodyColImpulse>> m_scratchWorkerImpulses;
     private Vector<Vector<usize>> m_scratchWorkerChunkCandIdx;
     private Vector<u32> m_candBvhOrder;
-    private Vector<SoftBodyBvhNode> m_candBvhNodes;
+    private Vector<FlatBvhNode> m_candBvhNodes;
     private Vector<f32x4> m_candMinsScratch;
     private Vector<f32x4> m_candMaxsScratch;
     private Vector<u32> m_selfHashHeads;
@@ -1232,13 +1082,13 @@ class SoftBody{
     private Vector<u32> m_selfConnCountsScratch;
     private Vector<u32> m_selfConnCursorsScratch;
     private Vector<u32> m_selfTriBvhOrder;
-    private Vector<SoftBodyBvhNode> m_selfTriBvhNodes;
+    private Vector<FlatBvhNode> m_selfTriBvhNodes;
     private Vector<f32x4> m_selfTriMinsScratch;
     private Vector<f32x4> m_selfTriMaxsScratch;
     private usize m_selfTriBvhBuiltCount = 0u;
     private u64 m_selfTriBvhTopoVer = u64.max;
     private Vector<u32> m_selfEdgeBvhOrder;
-    private Vector<SoftBodyBvhNode> m_selfEdgeBvhNodes;
+    private Vector<FlatBvhNode> m_selfEdgeBvhNodes;
     private Vector<f32x4> m_selfEdgeMinsScratch;
     private Vector<f32x4> m_selfEdgeMaxsScratch;
     private usize m_selfEdgeBvhBuiltCount = 0u;
@@ -1285,7 +1135,9 @@ class SoftBody{
     private Aabb3D m_cachedStepQueryAabb;
     private b8 m_cachedStepQueryValid = false;
     private b8 m_worldSpaceBaked = false;
+    [transient]
     public Vector<SoftBodyTearEvent> stepTearEvents;
+    [transient]
     public Vector<SoftBodyImpactEvent> stepImpactEvents;
 
     public void wake(){
@@ -1296,14 +1148,6 @@ class SoftBody{
     public void setReferenceFrame(in VectorSingle refPos, in VectorSingle refRot){
         this.referenceFramePosition = f32x4(refPos, 0.0f);
         this.referenceFrameRotation = f32x4(SafeNormalizeQuat(refRot));
-    }
-
-    public b8 isPressureShellTorn()const{
-        return this.m_pressureShellTorn;
-    }
-
-    public void setPressureShellTorn(in b8 torn){
-        this.m_pressureShellTorn = torn;
     }
 
     public b8 isWorldSpaceBaked()const{
@@ -1787,7 +1631,7 @@ class SoftBody{
         ExtractPolarRotationQuat(aMat, rotQ);
         this.m_shapeMatchQuat = f32x4(rotQ);
 
-        const MatrixSingle rotT = Matrix3Transpose(Matrix3FromQuaternion(rotQ));
+        const MatrixSingle rotT = Matrix3Transpose(MatrixRotationQuaternion(rotQ));
         const VectorSingle rotC0 = VectorSingle(rotT[0u], 0.0f);
         const VectorSingle rotC1 = VectorSingle(rotT[1u], 0.0f);
         const VectorSingle rotC2 = VectorSingle(rotT[2u], 0.0f);
@@ -2018,7 +1862,7 @@ class SoftBody{
             this.m_candMaxsScratch.push_back(shape.aabb.upperBound);
         }
         if(this.m_scratchCandCache.size() > 8u)
-            BuildSoftBodyFlatBvh(this.m_candMinsScratch, this.m_candMaxsScratch, this.m_scratchCandCache.size(), this.m_candBvhOrder, this.m_candBvhNodes);
+            BuildFlatBvh(this.m_candMinsScratch, this.m_candMaxsScratch, this.m_scratchCandCache.size(), this.m_candBvhOrder, this.m_candBvhNodes);
     }
 
     private void refreshCandShapeVelocities(in PhysicsWorld world){
@@ -2086,10 +1930,6 @@ class SoftBody{
         }
         if(wj > 0.0f)
             pj.position = f32x4(VectorSingle(pj.position) + tanCorr * wj, 0.0f);
-    }
-
-    private void solveSingleAnisotropicCloth(in usize idx, in f32 invDt2){
-        SolveSoftBodyAnisotropicClothConstraint(this.anisotropicConstraints[idx], invDt2, this.particles);
     }
 
     private void solveTethers(in f32 invDt2){
@@ -2731,7 +2571,7 @@ class SoftBody{
                 ++sp;
                 while(sp > 0u){
                     --sp;
-                    in SoftBodyBvhNode node = this.m_candBvhNodes[bvhStack[sp]];
+                    in FlatBvhNode node = this.m_candBvhNodes[bvhStack[sp]];
                     if(!AabbOverlapsValues(cMin, cMax, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                         continue;
                     if(node.left == s_NullIndex){
@@ -3085,7 +2925,7 @@ class SoftBody{
             return;
         }
         if(this.m_selfTriBvhBuiltCount != triCount || this.m_selfTriBvhTopoVer != this.topologyVersion || this.m_selfTriBvhNodes.empty()){
-            BuildSoftBodyFlatBvh(this.m_selfTriMinsScratch, this.m_selfTriMaxsScratch, triCount, this.m_selfTriBvhOrder, this.m_selfTriBvhNodes);
+            BuildFlatBvh(this.m_selfTriMinsScratch, this.m_selfTriMaxsScratch, triCount, this.m_selfTriBvhOrder, this.m_selfTriBvhNodes);
             this.m_selfTriBvhBuiltCount = triCount;
             this.m_selfTriBvhTopoVer = this.topologyVersion;
         }
@@ -3128,7 +2968,7 @@ class SoftBody{
             return;
         }
         if(this.m_selfEdgeBvhBuiltCount != distCount || this.m_selfEdgeBvhTopoVer != this.topologyVersion || this.m_selfEdgeBvhNodes.empty()){
-            BuildSoftBodyFlatBvh(this.m_selfEdgeMinsScratch, this.m_selfEdgeMaxsScratch, distCount, this.m_selfEdgeBvhOrder, this.m_selfEdgeBvhNodes);
+            BuildFlatBvh(this.m_selfEdgeMinsScratch, this.m_selfEdgeMaxsScratch, distCount, this.m_selfEdgeBvhOrder, this.m_selfEdgeBvhNodes);
             this.m_selfEdgeBvhBuiltCount = distCount;
             this.m_selfEdgeBvhTopoVer = this.topologyVersion;
         }
@@ -3161,7 +3001,7 @@ class SoftBody{
             for(i32 dz = -1; dz <= 1; ++dz){
                 for(i32 dy = -1; dy <= 1; ++dy){
                     for(i32 dx = -1; dx <= 1; ++dx){
-                        const u32 slot = HashSoftBodyCellCoord(cx + dx, cy + dy, cz + dz, tableMask);
+                        const u32 slot = (cast<u32>(HashGridCellCoord3D(cast<i64>(cx + dx), cast<i64>(cy + dy), cast<i64>(cz + dz))) & cast<u32>(tableMask));
                         b8 alreadyProbed = false;
                         for(usize sIdx = 0u; sIdx < probedCount; ++sIdx){
                             if(probedSlots[sIdx] == slot){
@@ -3240,7 +3080,7 @@ class SoftBody{
             ++sp;
             while(sp > 0u){
                 --sp;
-                in SoftBodyBvhNode node = this.m_selfTriBvhNodes[bvhStack[sp]];
+                in FlatBvhNode node = this.m_selfTriBvhNodes[bvhStack[sp]];
                 if(!AabbOverlapsValues(qMin, qMax, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                     continue;
                 if(node.left == s_NullIndex){
@@ -3290,7 +3130,7 @@ class SoftBody{
             ++sp;
             while(sp > 0u){
                 --sp;
-                in SoftBodyBvhNode node = this.m_selfEdgeBvhNodes[bvhStack[sp]];
+                in FlatBvhNode node = this.m_selfEdgeBvhNodes[bvhStack[sp]];
                 if(!AabbOverlapsValues(minA, maxA, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                     continue;
                 if(node.left == s_NullIndex){
@@ -3354,7 +3194,7 @@ class SoftBody{
             this.m_selfCellX[pi] = cx;
             this.m_selfCellY[pi] = cy;
             this.m_selfCellZ[pi] = cz;
-            const u32 slot = HashSoftBodyCellCoord(cx, cy, cz, outTableMask);
+            const u32 slot = (cast<u32>(HashGridCellCoord3D(cast<i64>(cx), cast<i64>(cy), cast<i64>(cz))) & cast<u32>(outTableMask));
             this.m_selfHashNext[pi] = this.m_selfHashHeads[slot];
             this.m_selfHashHeads[slot] = cast<u32>(pi);
         }
@@ -3438,7 +3278,7 @@ class SoftBody{
                         for(i32 dz = -1; dz <= 1; ++dz){
                             for(i32 dy = -1; dy <= 1; ++dy){
                                 for(i32 dx = -1; dx <= 1; ++dx){
-                                    const u32 slot = HashSoftBodyCellCoord(cx + dx, cy + dy, cz + dz, tableMask);
+                                    const u32 slot = (cast<u32>(HashGridCellCoord3D(cast<i64>(cx + dx), cast<i64>(cy + dy), cast<i64>(cz + dz))) & cast<u32>(tableMask));
                                     b8 alreadyProbed = false;
                                     for(usize sIdx = 0u; sIdx < probedCount; ++sIdx){
                                         if(probedSlots[sIdx] == slot){
@@ -3510,7 +3350,7 @@ class SoftBody{
                     in Vector<SoftBodyParticle> partsRef = this.particles;
                     in Vector<SoftBodyTriangle> trisRef = this.surfaceTriangles;
                     in Vector<u32> orderRef = this.m_selfTriBvhOrder;
-                    in Vector<SoftBodyBvhNode> nodesRef = this.m_selfTriBvhNodes;
+                    in Vector<FlatBvhNode> nodesRef = this.m_selfTriBvhNodes;
                     in Vector<f32x4> tMinsRef = this.m_selfTriMinsScratch;
                     in Vector<f32x4> tMaxsRef = this.m_selfTriMaxsScratch;
                     in Vector<u32> connOffRef = this.m_selfConnOffsets;
@@ -3536,7 +3376,7 @@ class SoftBody{
                                 ++sp;
                                 while(sp > 0u){
                                     --sp;
-                                    in SoftBodyBvhNode node = nodesRef[bvhStack[sp]];
+                                    in FlatBvhNode node = nodesRef[bvhStack[sp]];
                                     if(!AabbOverlapsValues(qMin, qMax, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                                         continue;
                                     if(node.left == s_NullIndex){
@@ -3617,7 +3457,7 @@ class SoftBody{
                     in Vector<SoftBodyParticle> partsRef = this.particles;
                     in Vector<SoftBodyDistanceConstraint> distRef = this.distanceConstraints;
                     in Vector<u32> orderRef = this.m_selfEdgeBvhOrder;
-                    in Vector<SoftBodyBvhNode> nodesRef = this.m_selfEdgeBvhNodes;
+                    in Vector<FlatBvhNode> nodesRef = this.m_selfEdgeBvhNodes;
                     in Vector<f32x4> eMinsRef = this.m_selfEdgeMinsScratch;
                     in Vector<f32x4> eMaxsRef = this.m_selfEdgeMaxsScratch;
                     in Vector<u32> connOffRef = this.m_selfConnOffsets;
@@ -3650,7 +3490,7 @@ class SoftBody{
                                 ++sp;
                                 while(sp > 0u){
                                     --sp;
-                                    in SoftBodyBvhNode node = nodesRef[bvhStack[sp]];
+                                    in FlatBvhNode node = nodesRef[bvhStack[sp]];
                                     if(!AabbOverlapsValues(minA, maxA, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                                         continue;
                                     if(node.left == s_NullIndex){
@@ -3729,11 +3569,11 @@ class SoftBody{
     }
 
     private b8 isSoftBodyConstraintEdgeTorn(in u32 a, in u32 b)const{
-        return this.m_tornEdgeSetScratch.find(MakeSoftBodyUndirectedEdgeKey(a, b)) != this.m_tornEdgeSetScratch.end();
+        return this.m_tornEdgeSetScratch.find(PackUnorderedU32Pair(cast<isize>(a), cast<isize>(b))) != this.m_tornEdgeSetScratch.end();
     }
 
     private void recordTornEdge(in u32 a, in u32 b, in f32 restLen){
-        const u64 ek = MakeSoftBodyUndirectedEdgeKey(a, b);
+        const u64 ek = PackUnorderedU32Pair(cast<isize>(a), cast<isize>(b));
         if(this.m_tornEdgeSetScratch.find(ek) != this.m_tornEdgeSetScratch.end())
             return;
         this.m_tornEdgeSetScratch.insert_or_assign(ek, 1u);
@@ -4385,19 +4225,19 @@ class SoftBody{
                 this.m_activeTriEdgesScratch.clear();
                 for(usize ti = 0u; ti < this.surfaceTriangles.size(); ++ti){
                     in SoftBodyTriangle tri = this.surfaceTriangles[ti];
-                    this.m_activeTriEdgesScratch.insert_or_assign(MakeSoftBodyUndirectedEdgeKey(tri.p0, tri.p1), 1u);
-                    this.m_activeTriEdgesScratch.insert_or_assign(MakeSoftBodyUndirectedEdgeKey(tri.p1, tri.p2), 1u);
-                    this.m_activeTriEdgesScratch.insert_or_assign(MakeSoftBodyUndirectedEdgeKey(tri.p2, tri.p0), 1u);
+                    this.m_activeTriEdgesScratch.insert_or_assign(PackUnorderedU32Pair(cast<isize>(tri.p0), cast<isize>(tri.p1)), 1u);
+                    this.m_activeTriEdgesScratch.insert_or_assign(PackUnorderedU32Pair(cast<isize>(tri.p1), cast<isize>(tri.p2)), 1u);
+                    this.m_activeTriEdgesScratch.insert_or_assign(PackUnorderedU32Pair(cast<isize>(tri.p2), cast<isize>(tri.p0)), 1u);
                 }
                 usize keepDih = 0u;
                 for(usize di = 0u; di < this.dihedralBendingConstraints.size(); ++di){
                     in SoftBodyDihedralBendingConstraint dbc = this.dihedralBendingConstraints[di];
                     const b8 okDih = (
-                        this.m_activeTriEdgesScratch.find(MakeSoftBodyUndirectedEdgeKey(dbc.p0, dbc.p1)) != this.m_activeTriEdgesScratch.end()
-                        && this.m_activeTriEdgesScratch.find(MakeSoftBodyUndirectedEdgeKey(dbc.p0, dbc.p2)) != this.m_activeTriEdgesScratch.end()
-                        && this.m_activeTriEdgesScratch.find(MakeSoftBodyUndirectedEdgeKey(dbc.p1, dbc.p2)) != this.m_activeTriEdgesScratch.end()
-                        && this.m_activeTriEdgesScratch.find(MakeSoftBodyUndirectedEdgeKey(dbc.p0, dbc.p3)) != this.m_activeTriEdgesScratch.end()
-                        && this.m_activeTriEdgesScratch.find(MakeSoftBodyUndirectedEdgeKey(dbc.p1, dbc.p3)) != this.m_activeTriEdgesScratch.end()
+                        this.m_activeTriEdgesScratch.find(PackUnorderedU32Pair(cast<isize>(dbc.p0), cast<isize>(dbc.p1))) != this.m_activeTriEdgesScratch.end()
+                        && this.m_activeTriEdgesScratch.find(PackUnorderedU32Pair(cast<isize>(dbc.p0), cast<isize>(dbc.p2))) != this.m_activeTriEdgesScratch.end()
+                        && this.m_activeTriEdgesScratch.find(PackUnorderedU32Pair(cast<isize>(dbc.p1), cast<isize>(dbc.p2))) != this.m_activeTriEdgesScratch.end()
+                        && this.m_activeTriEdgesScratch.find(PackUnorderedU32Pair(cast<isize>(dbc.p0), cast<isize>(dbc.p3))) != this.m_activeTriEdgesScratch.end()
+                        && this.m_activeTriEdgesScratch.find(PackUnorderedU32Pair(cast<isize>(dbc.p1), cast<isize>(dbc.p3))) != this.m_activeTriEdgesScratch.end()
                     );
                     if(okDih){
                         if(keepDih != di)
@@ -4562,7 +4402,7 @@ class SoftBody{
                     f = (-linV) * (dampMag * invSpeed);
                 }
             }
-            if(IsFiniteVec3(f))
+            if(IsFinite(f.xyz))
                 pt.externalForce = f32x4(VectorSingle(pt.externalForce) + f, 0.0f);
         }
     }
@@ -4620,7 +4460,7 @@ class SoftBody{
                 const f32 effRatio = mass / (mass + addedM);
                 f = f * effRatio - worldGravity * (addedM * effRatio);
             }
-            if(IsFiniteVec3(f))
+            if(IsFinite(f.xyz))
                 pt.externalForce = f32x4(VectorSingle(pt.externalForce) + f, 0.0f);
         }
     }
@@ -5061,7 +4901,7 @@ class SoftBody{
             i32 cy = 0;
             i32 cz = 0;
             ComputeSoftBodyCellCoord(pB, invCell, cx, cy, cz);
-            const u32 slot = HashSoftBodyCellCoord(cx, cy, cz, tableMask);
+            const u32 slot = (cast<u32>(HashGridCellCoord3D(cast<i64>(cx), cast<i64>(cy), cast<i64>(cz))) & cast<u32>(tableMask));
             this.m_selfHashNext[ib] = this.m_selfHashHeads[slot];
             this.m_selfHashHeads[slot] = cast<u32>(ib);
         }
@@ -5085,7 +4925,7 @@ class SoftBody{
             for(i32 dz = -1; dz <= 1; ++dz){
                 for(i32 dy = -1; dy <= 1; ++dy){
                     for(i32 dx = -1; dx <= 1; ++dx){
-                        const u32 slot = HashSoftBodyCellCoord(cx + dx, cy + dy, cz + dz, tableMask);
+                        const u32 slot = (cast<u32>(HashGridCellCoord3D(cast<i64>(cx + dx), cast<i64>(cy + dy), cast<i64>(cz + dz))) & cast<u32>(tableMask));
                         b8 alreadyProbed = false;
                         for(usize si = 0u; si < probedCount; ++si){
                             if(probedSlots[si] == slot){
@@ -5275,7 +5115,7 @@ class SoftBody{
             ++sp;
             while(sp > 0u){
                 --sp;
-                in SoftBodyBvhNode node = this.m_selfTriBvhNodes[bvhStack[sp]];
+                in FlatBvhNode node = this.m_selfTriBvhNodes[bvhStack[sp]];
                 if(!AabbOverlapsValues(qMin, qMax, VectorSingle(node.bMin), VectorSingle(node.bMax)))
                     continue;
                 if(node.left == s_NullIndex){
@@ -5390,7 +5230,7 @@ class SoftBody{
                     in PhysicsWorld worldRef = world;
                     in Vector<SoftBodyCandShapeCache> candRef = this.m_scratchCandCache;
                     in Vector<u32> candOrderRef = this.m_candBvhOrder;
-                    in Vector<SoftBodyBvhNode> candNodesRef = this.m_candBvhNodes;
+                    in Vector<FlatBvhNode> candNodesRef = this.m_candBvhNodes;
                     if(curPCount >= s_SoftBodyParallelThreshold){
                         const b8 ccdEnabled = this.enableParticleCcd;
                         mut Vector<SoftBodyParticle> ccdPartsMut = this.particles;
@@ -5728,7 +5568,7 @@ void BuildDihedralBendingConstraintsFromTriangles(mut SoftBody sb, in f32 compli
             const u32 a = e0[ei];
             const u32 b = e1[ei];
             const u32 op = opp[ei];
-            const u64 key = MakeSoftBodyUndirectedEdgeKey(a, b);
+            const u64 key = PackUnorderedU32Pair(cast<isize>(a), cast<isize>(b));
             const auto found = edgeFirstOpp.find(key);
             if(found == edgeFirstOpp.end()){
                 edgeFirstOpp.insert_or_assign(key, op);
@@ -5822,13 +5662,6 @@ class SoftBodyMeshCreateParams{
     public b8 computeRestPositions = true;
 }
 
-u64 PackSoftBodyWeldCellKey(in i32 ix, in i32 iy, in i32 iz){
-    const u64 h0 = cast<u64>(cast<u32>(ix)) * 73856093ull;
-    const u64 h1 = cast<u64>(cast<u32>(iy)) * 19349663ull;
-    const u64 h2 = cast<u64>(cast<u32>(iz)) * 83492791ull;
-    return h0 ^ h1 ^ h2;
-}
-
 void AppendSoftBodyTriangleEdgeConstraint(
     in Span<SoftBodyParticle> particles,
     in u32 a,
@@ -5837,7 +5670,7 @@ void AppendSoftBodyTriangleEdgeConstraint(
     mut HashMap<u64, u8> seenEdges,
     mut Vector<SoftBodyDistanceConstraint> outDist
 ){
-    const u64 key = MakeSoftBodyUndirectedEdgeKey(a, b);
+    const u64 key = PackUnorderedU32Pair(cast<isize>(a), cast<isize>(b));
     if(seenEdges.find(key) != seenEdges.end())
         return;
     seenEdges.insert_or_assign(key, 1u);
@@ -5871,7 +5704,7 @@ void AppendSoftBodyTwoHopBendingConstraints(in HashMap<u64, u8> seenDistEdges, i
         e0[1u] = tri.p1; e1[1u] = tri.p2; opp[1u] = tri.p0;
         e0[2u] = tri.p2; e1[2u] = tri.p0; opp[2u] = tri.p1;
         for(usize ei = 0u; ei < 3u; ++ei){
-            const u64 edgeKey = MakeSoftBodyUndirectedEdgeKey(e0[ei], e1[ei]);
+            const u64 edgeKey = PackUnorderedU32Pair(cast<isize>(e0[ei]), cast<isize>(e1[ei]));
             const auto found = edgeFirstOpp.find(edgeKey);
             if(found == edgeFirstOpp.end()){
                 edgeFirstOpp.insert_or_assign(edgeKey, opp[ei]);
@@ -5881,7 +5714,7 @@ void AppendSoftBodyTwoHopBendingConstraints(in HashMap<u64, u8> seenDistEdges, i
             const u32 op1 = opp[ei];
             if(op0 == op1)
                 continue;
-            const u64 bendKey = MakeSoftBodyUndirectedEdgeKey(op0, op1);
+            const u64 bendKey = PackUnorderedU32Pair(cast<isize>(op0), cast<isize>(op1));
             if(seenDistEdges.find(bendKey) != seenDistEdges.end() || seenBendEdges.find(bendKey) != seenBendEdges.end())
                 continue;
             seenBendEdges.insert_or_assign(bendKey, 1u);
@@ -5954,7 +5787,7 @@ SoftBody CreateSoftBodyFromTriangles(
             for(i32 dz = -1; dz <= 1; ++dz){
                 for(i32 dy = -1; dy <= 1; ++dy){
                     for(i32 dx = -1; dx <= 1; ++dx){
-                        const u64 cellKey = PackSoftBodyWeldCellKey(cx + dx, cy + dy, cz + dz);
+                        const u64 cellKey = HashGridCellCoord3D(cast<i64>(cx + dx), cast<i64>(cy + dy), cast<i64>(cz + dz));
                         const auto headIt = cellHeads.find(cellKey);
                         if(headIt == cellHeads.end())
                             continue;
@@ -5984,7 +5817,7 @@ SoftBody CreateSoftBodyFromTriangles(
                 sb.particleSourceIndices.push_back(cast<u32>(i));
                 outSourcePositionToParticle[i] = newIdx;
 
-                const u64 selfKey = PackSoftBodyWeldCellKey(cx, cy, cz);
+                const u64 selfKey = HashGridCellCoord3D(cast<i64>(cx), cast<i64>(cy), cast<i64>(cz));
                 const auto selfIt = cellHeads.find(selfKey);
                 u32 prevHead = s_NullIndex;
                 if(selfIt != cellHeads.end())

@@ -242,7 +242,7 @@ b8 VerifyPhysicsStressWorldState(in PhysicsWorld world, in Span<BodyId> dynamicB
 
         const VectorSingle pos = VectorSingle(xf.value().position);
         const VectorSingle rot = VectorSingle(xf.value().rotation);
-        if(!IsValidPositionVec3(pos) || !IsFiniteQuat(rot) || !IsFiniteVec3(VectorSingle(lv.value())) || !IsFiniteVec3(VectorSingle(av.value())))
+        if(!IsValidPositionVec3(pos) || !IsFinite(rot) || !IsFinite(VectorSingle(lv.value()).xyz) || !IsFinite(VectorSingle(av.value()).xyz))
             return false;
         const VectorSingle absPos = VectorAbs(pos);
         if(absPos.x > 40.0f || absPos.z > 40.0f || pos.y < -5.0f || pos.y > 80.0f)

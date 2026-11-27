@@ -12,8 +12,14 @@
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_WORKGROUP_SIZE")]
 extern const u32 s_GpuWorkgroupSize;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_INVALID_INDEX")]
-extern const u32 s_GpuInvalidIndex;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_TABLE_SIZE")]
+extern const u32 s_GpuGridTableSize;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_JOINT_COLOR_COUNT")]
+extern const u32 s_ShaderGpuIslandJointColorCount;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_JOINT_OVERFLOW_COLOR_INDEX")]
+extern const u32 s_ShaderGpuIslandJointOverflowColorIndex;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SHAPE_FLAG_IS_BOX")]
 extern const u32 s_GpuShapeFlagIsBox;
@@ -95,9 +101,6 @@ extern const u32 s_GpuJointFlagEnableTwistLimit;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_HAS_AUX")]
 extern const u32 s_GpuJointFlagHasAux;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_FLAG_BROKEN")]
-extern const u32 s_GpuJointFlagBroken;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_MODE_WARM_START")]
 extern const u32 s_GpuSolverModeWarmStart;
@@ -680,8 +683,8 @@ class GpuPhysicsPushConstants{
     public f32 maxLinearVelocity = 0.0f;
     public f32 linearSlop = 0.0f;
     public f32x4 gravitySpeculative(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32x4 slots0(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
-    public u32x4 slots1(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+    public u32x4 slots0(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
+    public u32x4 slots1(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
 }
 
 [align(16)]
@@ -717,7 +720,7 @@ class GpuPhysicsShapeProxy{
     public f32x4 localCenterRadius(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localExtentOrP1(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localRotationOrMeta(0.0f, 0.0f, 0.0f, 1.0f);
-    public u32x4 bodyIndexTypeShape(s_GpuInvalidIndex, 0u, s_GpuInvalidIndex, 0u);
+    public u32x4 bodyIndexTypeShape(s_NullIndex, 0u, s_NullIndex, 0u);
     public u32x4 filterData(0u, 0u, 0u, 0u);
     public f32x4 localTransformPos(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 localTransformRot(0.0f, 0.0f, 0.0f, 1.0f);
@@ -725,7 +728,7 @@ class GpuPhysicsShapeProxy{
 
 [align(16)]
 class GpuPhysicsBroadphasePair{
-    public u32x4 indices(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+    public u32x4 indices(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
 }
 
 [align(16)]
@@ -775,7 +778,7 @@ class GpuPhysicsIslandSlice{
 
 [align(16)]
 class GpuPhysicsContactConstraint{
-    public u32x4 indicesCountFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+    public u32x4 indicesCountFlags(s_NullIndex, s_NullIndex, 0u, 0u);
     public f32x4 normalFriction(0.0f, 1.0f, 0.0f, 0.0f);
     public f32x4 tangent1Restitution(1.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 centerATwistMass(0.0f, 0.0f, 0.0f, 0.0f);
@@ -791,7 +794,7 @@ class GpuPhysicsContactConstraint{
 
 [align(16)]
 class GpuPhysicsJointConstraint{
-    public u32x4 indicesTypeFlags(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+    public u32x4 indicesTypeFlags(s_NullIndex, s_NullIndex, 0u, 0u);
     public f32x4 params0(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 qA0(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 qB0(0.0f, 0.0f, 0.0f, 1.0f);
@@ -823,14 +826,14 @@ class GpuPhysicsLbvhNode{
 class GpuPhysicsSpatialQuery{
     public f32x4 originMin(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 dirMax(0.0f, 1.0f, 0.0f, 0.0f);
-    public u32x4 params(0u, s_GpuInvalidIndex, 0u, 0u);
+    public u32x4 params(0u, s_NullIndex, 0u, 0u);
 }
 
 [align(16)]
 class GpuPhysicsSpatialQueryResult{
     public f32x4 hitPointFraction(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 hitNormalDist(0.0f, 1.0f, 0.0f, 0.0f);
-    public u32x4 hitIds(0u, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
+    public u32x4 hitIds(0u, s_NullIndex, s_NullIndex, 0u);
     public f32x4 hitTriBary(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -859,7 +862,7 @@ class PhysicsBatchSpatialQueryPending{
 
 [align(16)]
 class GpuPhysicsRenderTransformBinding{
-    public u32x4 bodyDestFlags(s_GpuInvalidIndex, 0u, 0u, 0u);
+    public u32x4 bodyDestFlags(s_NullIndex, 0u, 0u, 0u);
     public f32x4 scalePad(1.0f, 1.0f, 1.0f, 0.0f);
 }
 
@@ -882,7 +885,7 @@ class GpuPhysicsShapeMaterial{
 
 [align(16)]
 class GpuPhysicsWarmCacheEntry{
-    public u32x4 keyMeta(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+    public u32x4 keyMeta(s_NullIndex, s_NullIndex, 0u, 0u);
     public u32x4 featureIds(0u, 0u, 0u, 0u);
     public f32x4 normalImpulses(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 fricTwist(0.0f, 0.0f, 0.0f, 0.0f);
@@ -893,7 +896,7 @@ class GpuPhysicsEvent{
     public u32x4 header(0u, 0u, 0u, 0u);
     public f32x4 pointImpulse(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 normalApproach(0.0f, 1.0f, 0.0f, 0.0f);
-    public u32x4 bodyIds(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+    public u32x4 bodyIds(s_NullIndex, s_NullIndex, 0u, 0u);
 }
 
 [align(16)]
@@ -937,7 +940,6 @@ class GpuPhysicsForceField{
     public f32x4 shapeCenterOrCapA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 shapeRotOrCapB(0.0f, 0.0f, 0.0f, 1.0f);
     public f32x4 shapeHalfExtentsExtra(1.0f, 1.0f, 1.0f, 0.0f);
-    public f32x4 extraParams(0.0f, 0.0f, 0.0f, 0.0f);
     public u32x4 filterData(1u, 0xffffffffu, 0u, 0u);
 }
 
@@ -1227,7 +1229,7 @@ void AssignSoftBodyConstraintColors(
             }
             const u32 freeBits = ~usedBits;
             if(freeBits != 0u){
-                const u32 tz = cast<u32>(CountTrailingZerosU32(freeBits));
+                const u32 tz = cast<u32>(CountTrailingZeros(freeBits));
                 chosenColor = wi * 32u + tz;
                 found = true;
                 break;
@@ -1470,7 +1472,6 @@ GpuPhysicsForceField PackGpuForceField(in ForceField field){
         outField.shapeRotOrCapB = f32x4(SafeNormalizeQuat(VectorSingle(field.obbRotation)));
     }
     outField.shapeHalfExtentsExtra = f32x4(field.obbHalfExtents.x, field.obbHalfExtents.y, field.obbHalfExtents.z, 0.0f);
-    outField.extraParams = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     outField.filterData = u32x4(field.filter.categoryBits, field.filter.maskBits, bit_cast<u32>(field.filter.groupIndex), 0u);
     return outField;
 }

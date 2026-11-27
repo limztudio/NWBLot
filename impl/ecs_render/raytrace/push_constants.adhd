@@ -260,26 +260,6 @@ BvhBuildPushConstants MakeBvhRefitPushConstants(
     return pushConstants;
 }
 
-SoftwareSceneRefitPushConstants MakeSoftwareSceneRefitPushConstants(
-    in u32 nodeCount,
-    in u32 sceneNodeSlot,
-    in u32 instanceInputSlot,
-    in u32 instanceCount,
-    in u32 parentSlot,
-    in u32 visitCounterSlot,
-    in u32 passMode
-){
-    SoftwareSceneRefitPushConstants push;
-    push.nodeCount = nodeCount;
-    push.sceneNodeSlot = sceneNodeSlot;
-    push.instanceInputSlot = instanceInputSlot;
-    push.instanceCount = instanceCount;
-    push.parentSlot = parentSlot;
-    push.visitCounterSlot = visitCounterSlot;
-    push.passMode = passMode;
-    return push;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

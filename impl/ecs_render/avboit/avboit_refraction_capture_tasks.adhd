@@ -448,7 +448,7 @@ Expected<GpuTaskId> DeclareAvboitRefractionCapture(
     Vector<GpuTaskResourceUse> csgUses;
     if(hasCsg && !AppendRefractionCaptureCsg(graph, dependency, csgSystem, targets, csgFrameData, csgResources, frameBindings, csgUses))
         return MakeUnexpected(Failure());
-    if(!AppendInstanceTransformPatch(instanceTransformPatchContributor, instanceSpan, materialInstances, frameBindings, Name("render.avboit.refraction_capture.physics_patch"), true, graph, dependency))
+    if(!AppendInstanceTransformPatch(instanceTransformPatchContributor, instanceSpan, materialInstances, frameBindings, Name("render.avboit.refraction_capture.physics_patch"), graph, dependency))
         return MakeUnexpected(Failure());
     uploadedStreams.markMaterialUploaded(streamToken);
     if(hasCsg){

@@ -192,8 +192,6 @@ void CommandList::setMeshletState(const MeshletState& state){
                 return;
             VulkanDetail::CopyViewportStateCompact(m_currentMeshletState.viewport, state.viewport);
         }
-        else if(!explicitScissorsEqual)
-            VulkanDetail::CopyViewportStateCompact(m_currentMeshletState.viewport, state.viewport);
 
         const b8 blendConstantsChanged = !(m_currentMeshletState.blendConstantColor == state.blendConstantColor);
         const b8 dynamicStencilRefChanged = m_currentMeshletState.dynamicStencilRefValue != state.dynamicStencilRefValue;

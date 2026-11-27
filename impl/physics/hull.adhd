@@ -729,11 +729,7 @@ b8 DeduplicateConvexPoints(in Span<f32x4> inputPoints, mut Vector<f32x4> uniqueP
         for(isize cz = z0; cz <= z1 && !dup; ++cz){
             for(isize cy = y0; cy <= y1 && !dup; ++cy){
                 for(isize cx = x0; cx <= x1 && !dup; ++cx){
-                    const u64 key =
-                        (cast<u64>(cast<u32>(cx)) * 73856093u)
-                        ^ (cast<u64>(cast<u32>(cy)) * 19349663u)
-                        ^ (cast<u64>(cast<u32>(cz)) * 83492791u)
-                    ;
+                    const u64 key = HashGridCellCoord3D(cast<i64>(cx), cast<i64>(cy), cast<i64>(cz));
                     const auto it = cellHeads.find(key);
                     if(it == cellHeads.end())
                         continue;
@@ -754,11 +750,7 @@ b8 DeduplicateConvexPoints(in Span<f32x4> inputPoints, mut Vector<f32x4> uniqueP
             const isize qx = QuantizeDedupAxis(p.x);
             const isize qy = QuantizeDedupAxis(p.y);
             const isize qz = QuantizeDedupAxis(p.z);
-            const u64 homeKey =
-                (cast<u64>(cast<u32>(qx)) * 73856093u)
-                ^ (cast<u64>(cast<u32>(qy)) * 19349663u)
-                ^ (cast<u64>(cast<u32>(qz)) * 83492791u)
-            ;
+            const u64 homeKey = HashGridCellCoord3D(cast<i64>(qx), cast<i64>(qy), cast<i64>(qz));
             const auto homeIt = cellHeads.find(homeKey);
             if(homeIt == cellHeads.end()){
                 bucketNext.push_back(s_NullIndex);

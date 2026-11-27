@@ -333,18 +333,6 @@ Manifold CollideHullFaces(
     return m;
 }
 
-void QuatToBasisAxes(in VectorSingle q, mut VectorSingle outX, mut VectorSingle outY, mut VectorSingle outZ){
-    const VectorSingle q2 = q + q;
-    const VectorSingle qx = q2 * q.x;
-    const VectorSingle qy = q2 * q.y;
-    const VectorSingle qz = q2 * q.z;
-    const VectorSingle qw = q2 * q.w;
-
-    outX = VectorSingle(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
-    outY = VectorSingle(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
-    outZ = VectorSingle(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
-}
-
 void AppendClipBoxLocalIntersection(
     in ClipBoxLocalVertex prev,
     in ClipBoxLocalVertex cur,
@@ -1722,24 +1710,6 @@ Manifold CollideHullAndMesh(
     return primary;
 }
 
-void TransformLocalAabbValuesWithAbsAxes(
-    in VectorSingle bMin,
-    in VectorSingle bMax,
-    in VectorSingle relPosBtoA,
-    in VectorSingle relRotBtoA,
-    in VectorSingle absRotX,
-    in VectorSingle absRotY,
-    in VectorSingle absRotZ,
-    mut VectorSingle outMin,
-    mut VectorSingle outMax
-){
-    const VectorSingle cB = (bMin + bMax) * 0.5f;
-    const VectorSingle eB = (bMax - bMin) * 0.5f;
-    const VectorSingle cA = TransformPointValues(relPosBtoA, relRotBtoA, cB);
-    const VectorSingle eA = absRotX * eB.x + absRotY * eB.y + absRotZ * eB.z;
-    outMin = cA - eA;
-    outMax = cA + eA;
-}
 
 void CollideMeshesMulti(
     in MeshShape meshA,

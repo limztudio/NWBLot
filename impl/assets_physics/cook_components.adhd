@@ -281,27 +281,10 @@ b8 ReadPhysicsU32ArrayValue(
     outIndices.clear();
     outIndices.reserve(items.size());
     for(usize i = 0u; i < items.size(); ++i){
-        in MetascriptValue item = items[i];
-        if(item.isInteger()){
-            const i64 integerValue = item.asInteger();
-            if(integerValue < 0 || integerValue > cast<i64>(u32.max)){
-                error("{} '{}': field '{}' entries must be u32 integers", prefix, PathToString(file), field);
-                return false;
-            }
-            outIndices.push_back(cast<u32>(integerValue));
-            continue;
-        }
-        if(!item.isNumeric()){
-            error("{} '{}': field '{}' entries must be numeric integers", prefix, PathToString(file), field);
+        u32 value = 0u;
+        if(!ReadPhysicsU32Value(file, items[i], prefix, field, value))
             return false;
-        }
-        const f64 num = item.toDouble();
-        const VectorDouble numVec(num);
-        if(!IsFinite(numVec) || num < 0.0 || num > 4294967295.0 || VectorDoubleFloor(numVec).x != num){
-            error("{} '{}': field '{}' entries must be u32 integers", prefix, PathToString(file), field);
-            return false;
-        }
-        outIndices.push_back(cast<u32>(num));
+        outIndices.push_back(value);
     }
     return true;
 }
@@ -541,13 +524,41 @@ b8 ParsePhysicsSurfaceMaterialList(
     return true;
 }
 
-b8 ParseSurfaceMaterialList(
+b8 ReadPhysicsAssetRefValue<T>(
     in Path file,
-    in MetascriptValue listVal,
+    in MetascriptValue fieldVal,
     in StringView prefix,
-    mut Vector<SurfaceMaterial> outMaterials
+    in StringView key,
+    mut AssetRef<T> outRef
 ){
-    return ParsePhysicsSurfaceMaterialList(file, listVal, prefix, "heightfield_materials", outMaterials);
+    const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+    if(!refText.has_value())
+        return false;
+    const Expected<AssetRef<T>> assetRef = ParseReservedAssetRefText<T>(file, prefix, key, refText.value());
+    if(!assetRef.has_value())
+        return false;
+    outRef = assetRef.value();
+    return true;
+}
+
+b8 ParsePhysicsBodyTypeValue(
+    in Path file,
+    in MetascriptValue fieldVal,
+    in StringView prefix,
+    in StringView key,
+    mut BodyType outType
+){
+    const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, prefix, key);
+    if(!text.has_value())
+        return false;
+    if(text.value() == "static") outType = BodyType::Static;
+    else if(text.value() == "kinematic") outType = BodyType::Kinematic;
+    else if(text.value() == "dynamic") outType = BodyType::Dynamic;
+    else{
+        error("{} '{}': field '{}' must be 'static', 'kinematic', or 'dynamic'", prefix, PathToString(file), key);
+        return false;
+    }
+    return true;
 }
 
 Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Name virtualPath, in Path file, in MetascriptValue value){
@@ -559,19 +570,7 @@ Expected<RigidBodyComponentCookEntry> ParseRigidBodyComponentCookMetadata(in Nam
     b8 explicitCustomMaxAngVel = false;
     if(value.isMap()){
         if(!value.forEachMapEntry(lambda[in file, mut entry, mut explicitCustomMaxAngVel](in StringView key, in MetascriptValue fieldVal) -> b8{
-            if(key == "type"){
-                const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, "type");
-                if(!text.has_value())
-                    return false;
-                if(text.value() == "static") entry.component.type = BodyType::Static;
-                else if(text.value() == "kinematic") entry.component.type = BodyType::Kinematic;
-                else if(text.value() == "dynamic") entry.component.type = BodyType::Dynamic;
-                else{
-                    error("{} '{}': field 'type' must be 'static', 'kinematic', or 'dynamic'", s_RigidBodyComponentDiagnosticPrefix, PathToString(file));
-                    return false;
-                }
-                return true;
-            }
+            if(key == "type") return ParsePhysicsBodyTypeValue(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, entry.component.type);
             if(key == "linear_velocity" || key == "angular_velocity" || key == "custom_center_of_mass" || key == "custom_inertia_diag" || key == "custom_inertia_off_diag"){
                 VectorSingle v(0.0f);
                 if(!DecodePhysicsFloat3Value(file, fieldVal, s_RigidBodyComponentDiagnosticPrefix, key, v))
@@ -941,7 +940,7 @@ b8 ApplyColliderShapeField(
     if(key == "heightfield_thickness") return ReadPhysicsF32Value(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldThickness);
     if(key == "heightfield_flip_diagonal") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldFlipDiagonal);
     if(key == "heightfield_cell_holes") return true;
-    if(key == "heightfield_materials") return ParseSurfaceMaterialList(file, fieldVal, s_ColliderComponentDiagnosticPrefix, outEntry.heightfieldMaterials);
+    if(key == "heightfield_materials") return ParsePhysicsSurfaceMaterialList(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldMaterials);
     if(key == "heightfield_cell_material_indices") return ReadPhysicsU16ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldCellMaterialIndices);
     if(key == "is_chain") return ReadPhysicsBoolValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.isChain);
     if(key == "chain_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.chainPoints);
@@ -962,66 +961,12 @@ b8 ApplyColliderShapeField(
     if(key == "hull_points") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.hullPoints);
     if(key == "mesh_vertices") return ReadPhysicsFloat3ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.meshVertices);
     if(key == "mesh_indices") return ReadPhysicsU32ArrayValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.meshIndices);
-    if(key == "mesh_asset"){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!refText.has_value())
-            return false;
-        const Expected<AssetRef<Mesh>> assetRef = ParseReservedAssetRefText<Mesh>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-        if(!assetRef.has_value())
-            return false;
-        outEntry.meshAsset = assetRef.value();
-        return true;
-    }
-    if(key == "material_asset"){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!refText.has_value())
-            return false;
-        const Expected<AssetRef<PhysicsMaterialAsset>> assetRef = ParseReservedAssetRefText<PhysicsMaterialAsset>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-        if(!assetRef.has_value())
-            return false;
-        outEntry.materialAsset = assetRef.value();
-        return true;
-    }
-    if(key == "convex_hull_asset"){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!refText.has_value())
-            return false;
-        const Expected<AssetRef<ConvexHullAsset>> assetRef = ParseReservedAssetRefText<ConvexHullAsset>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-        if(!assetRef.has_value())
-            return false;
-        outEntry.convexHullAsset = assetRef.value();
-        return true;
-    }
-    if(key == "compound_hull_asset"){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!refText.has_value())
-            return false;
-        const Expected<AssetRef<CompoundHullAsset>> assetRef = ParseReservedAssetRefText<CompoundHullAsset>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-        if(!assetRef.has_value())
-            return false;
-        outEntry.compoundHullAsset = assetRef.value();
-        return true;
-    }
-    if(key == "collision_mesh_asset"){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!refText.has_value())
-            return false;
-        const Expected<AssetRef<CollisionMeshAsset>> assetRef = ParseReservedAssetRefText<CollisionMeshAsset>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-        if(!assetRef.has_value())
-            return false;
-        outEntry.collisionMeshAsset = assetRef.value();
-        return true;
-    }
-    if(key == "heightfield_asset"){
-        const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key);
-        if(!refText.has_value())
-            return false;
-        const Expected<AssetRef<HeightfieldAsset>> assetRef = ParseReservedAssetRefText<HeightfieldAsset>(file, s_ColliderComponentDiagnosticPrefix, key, refText.value());
-        if(!assetRef.has_value())
-            return false;
-        outEntry.heightfieldAsset = assetRef.value();
-        return true;
-    }
+    if(key == "mesh_asset") return ReadPhysicsAssetRefValue<Mesh>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.meshAsset);
+    if(key == "material_asset") return ReadPhysicsAssetRefValue<PhysicsMaterialAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.materialAsset);
+    if(key == "convex_hull_asset") return ReadPhysicsAssetRefValue<ConvexHullAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.convexHullAsset);
+    if(key == "compound_hull_asset") return ReadPhysicsAssetRefValue<CompoundHullAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.compoundHullAsset);
+    if(key == "collision_mesh_asset") return ReadPhysicsAssetRefValue<CollisionMeshAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.collisionMeshAsset);
+    if(key == "heightfield_asset") return ReadPhysicsAssetRefValue<HeightfieldAsset>(file, fieldVal, s_ColliderComponentDiagnosticPrefix, key, outEntry.heightfieldAsset);
     error("{} '{}': unsupported asset field '{}'", s_ColliderComponentDiagnosticPrefix, PathToString(file), key);
     return false;
 }
@@ -1131,6 +1076,27 @@ b8 ParseSixDofAxisConfigMap(in Path file, in MetascriptValue mapVal, in StringVi
         error("{} '{}': unsupported axis field '{}'", prefix, PathToString(file), key);
         return false;
     });
+}
+
+b8 ParseSixDofAxesList(in Path file, in MetascriptValue fieldVal, in StringView prefix, mut Array<SixDofAxisConfig, 6u> outAxes){
+    if(!fieldVal.isList()){
+        error("{} '{}': field 'six_dof_axes' must be a list of up to 6 axis maps", prefix, PathToString(file));
+        return false;
+    }
+    const Span<MetascriptValue> items = fieldVal.listView();
+    if(items.size() > 6u){
+        error("{} '{}': field 'six_dof_axes' accepts at most 6 entries", prefix, PathToString(file));
+        return false;
+    }
+    for(usize k = 0u; k < items.size(); ++k){
+        if(!items[k].isMap()){
+            error("{} '{}': 'six_dof_axes[{}]' must be a map", prefix, PathToString(file), k);
+            return false;
+        }
+        if(!ParseSixDofAxisConfigMap(file, items[k], prefix, outAxes[k]))
+            return false;
+    }
+    return true;
 }
 
 b8 ApplyJointEntryField(
@@ -1257,26 +1223,7 @@ b8 ApplyJointEntryField(
     }
     if(key == "six_dof_swing_limit_y") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.sixDofSwingLimitY);
     if(key == "six_dof_swing_limit_z") return ReadPhysicsF32Value(file, fieldVal, s_JointComponentDiagnosticPrefix, key, s.sixDofSwingLimitZ);
-    if(key == "six_dof_axes"){
-        if(!fieldVal.isList()){
-            error("{} '{}': field 'six_dof_axes' must be a list of up to 6 axis maps", s_JointComponentDiagnosticPrefix, PathToString(file));
-            return false;
-        }
-        const Span<MetascriptValue> items = fieldVal.listView();
-        if(items.size() > 6u){
-            error("{} '{}': field 'six_dof_axes' accepts at most 6 entries", s_JointComponentDiagnosticPrefix, PathToString(file));
-            return false;
-        }
-        for(usize k = 0u; k < items.size(); ++k){
-            if(!items[k].isMap()){
-                error("{} '{}': 'six_dof_axes[{}]' must be a map", s_JointComponentDiagnosticPrefix, PathToString(file), k);
-                return false;
-            }
-            if(!ParseSixDofAxisConfigMap(file, items[k], s_JointComponentDiagnosticPrefix, s.sixDofAxes[k]))
-                return false;
-        }
-        return true;
-    }
+    if(key == "six_dof_axes") return ParseSixDofAxesList(file, fieldVal, s_JointComponentDiagnosticPrefix, s.sixDofAxes);
     error("{} '{}': unsupported asset field '{}'", s_JointComponentDiagnosticPrefix, PathToString(file), key);
     return false;
 }
@@ -1363,16 +1310,7 @@ Expected<PhysicsWorldConfigComponentCookEntry> ParsePhysicsWorldConfigComponentC
             if(key == "max_sub_steps_per_frame") return ReadPhysicsU32Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.maxSubStepsPerFrame);
             if(key == "gpu_dispatch_threshold") return ReadPhysicsU32Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.gpuDispatchThreshold);
             if(key == "gpu_workload_fraction") return ReadPhysicsF32Value(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.gpuWorkloadFraction);
-            if(key == "collision_layer_matrix_asset"){
-                const Expected<StringView> refText = ReadPhysicsStringValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key);
-                if(!refText.has_value())
-                    return false;
-                const Expected<AssetRef<CollisionLayerMatrixAsset>> assetRef = ParseReservedAssetRefText<CollisionLayerMatrixAsset>(file, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, refText.value());
-                if(!assetRef.has_value())
-                    return false;
-                entry.component.collisionLayerMatrixAsset = assetRef.value();
-                return true;
-            }
+            if(key == "collision_layer_matrix_asset") return ReadPhysicsAssetRefValue<CollisionLayerMatrixAsset>(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.collisionLayerMatrixAsset);
             if(key == "enable_sleep") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableSleep);
             if(key == "enable_continuous") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableContinuous);
             if(key == "enable_contact_softening") return ReadPhysicsBoolValue(file, fieldVal, s_PhysicsWorldConfigComponentDiagnosticPrefix, key, entry.component.enableContactSoftening);

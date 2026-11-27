@@ -924,24 +924,12 @@ Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Name virtualPath,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Expected<PhysicsMaterialCookEntry> ParsePhysicsMaterialCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<PhysicsMaterialCookEntry>(root, virtualRoot, file, document, s_PhysicsMaterialDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<PhysicsMaterialCookEntry>{
-        return ParsePhysicsMaterialCookMetadata(path, file, value);
-    });
-}
-
 Expected<PhysicsMaterialAsset> BuildPhysicsMaterialAsset(in PhysicsMaterialCookEntry entry){
     PhysicsMaterialAsset asset(entry.virtualPath);
     asset.setMaterial(entry.material);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
-}
-
-Expected<CollisionLayerMatrixCookEntry> ParseCollisionLayerMatrixCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<CollisionLayerMatrixCookEntry>(root, virtualRoot, file, document, s_CollisionLayerMatrixDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<CollisionLayerMatrixCookEntry>{
-        return ParseCollisionLayerMatrixCookMetadata(path, file, value);
-    });
 }
 
 Expected<CollisionLayerMatrixAsset> BuildCollisionLayerMatrixAsset(in CollisionLayerMatrixCookEntry entry){
@@ -952,24 +940,12 @@ Expected<CollisionLayerMatrixAsset> BuildCollisionLayerMatrixAsset(in CollisionL
     return asset;
 }
 
-Expected<ConvexHullCookEntry> ParseConvexHullCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<ConvexHullCookEntry>(root, virtualRoot, file, document, s_ConvexHullDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<ConvexHullCookEntry>{
-        return ParseConvexHullCookMetadata(path, file, value);
-    });
-}
-
 Expected<ConvexHullAsset> BuildConvexHullAsset(in ConvexHullCookEntry entry){
     ConvexHullAsset asset(entry.virtualPath);
     asset.setHull(entry.hull);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
-}
-
-Expected<CompoundHullCookEntry> ParseCompoundHullCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<CompoundHullCookEntry>(root, virtualRoot, file, document, s_CompoundHullDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<CompoundHullCookEntry>{
-        return ParseCompoundHullCookMetadata(path, file, value);
-    });
 }
 
 Expected<CompoundHullAsset> BuildCompoundHullAsset(in CompoundHullCookEntry entry){
@@ -980,24 +956,12 @@ Expected<CompoundHullAsset> BuildCompoundHullAsset(in CompoundHullCookEntry entr
     return asset;
 }
 
-Expected<CollisionMeshCookEntry> ParseCollisionMeshCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<CollisionMeshCookEntry>(root, virtualRoot, file, document, s_CollisionMeshDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<CollisionMeshCookEntry>{
-        return ParseCollisionMeshCookMetadata(path, file, value);
-    });
-}
-
 Expected<CollisionMeshAsset> BuildCollisionMeshAsset(in CollisionMeshCookEntry entry){
     CollisionMeshAsset asset(entry.virtualPath);
     asset.setMesh(entry.mesh);
     if(!asset.validatePayload())
         return MakeUnexpected(Failure());
     return asset;
-}
-
-Expected<HeightfieldCookEntry> ParseHeightfieldCookMetadata(in Path root, in StringView virtualRoot, in Path file, in MetascriptDocument document){
-    return ParseCookMetadataDocument<HeightfieldCookEntry>(root, virtualRoot, file, document, s_HeightfieldDiagnosticPrefix, lambda[in file](in Name path, in MetascriptValue value) -> Expected<HeightfieldCookEntry>{
-        return ParseHeightfieldCookMetadata(path, file, value);
-    });
 }
 
 Expected<HeightfieldAsset> BuildHeightfieldAsset(in HeightfieldCookEntry entry){

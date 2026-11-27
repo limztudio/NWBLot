@@ -29,6 +29,16 @@ class PreparedSceneTlasBuild : NoCopy{
     private b8 m_performUpdate = false;
     private b8 m_ready = false;
 
+    private void finalizeCaptureMetadata(
+        in RendererRayTracingState state,
+        in u32 instanceCount,
+        in u64 staticSceneHash,
+        in u64 topologyHash,
+        in u64 patchMembershipSignature,
+        in b8 performUpdate,
+        in b8 useInstanceBuffer,
+        in b8 staticScene
+    );
     public b8 capture(
         in RendererRayTracingState state,
         in b8 staticScene,

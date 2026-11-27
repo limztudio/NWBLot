@@ -102,7 +102,6 @@ class FractureCollectionNode{
     public FractureChunkSpec chunk;
     public Vector<u32> childIndices;
     public b8 isLeaf = true;
-    public b8 isAnchored = false;
 }
 
 class FractureSpawnResult{
@@ -405,28 +404,6 @@ f32 NextFractureRandomUnit(mut u32 state){
     return cast<f32>(r & 0x00ffffffu) * (1.0f / 16777216.0f);
 }
 
-void BuildPlaneTangentBasis(in VectorSingle n, mut VectorSingle outU, mut VectorSingle outV){
-    VectorSingle axis(0.0f, 1.0f, 0.0f, 0.0f);
-    if(Abs(VectorSingle(n.y)).x > 0.9f)
-        axis = VectorSingle(1.0f, 0.0f, 0.0f, 0.0f);
-    outU = SafeNormalizeVec3(Cross(axis, n), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
-    outV = SafeNormalizeVec3(Cross(n, outU), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-}
-
-void ComputePolyhedronPtsBounds(
-    in Span<f32x4> verts,
-    mut VectorSingle outMin,
-    mut VectorSingle outMax
-){
-    outMin = VectorSingle(s_MaxF32);
-    outMax = VectorSingle(-s_MaxF32);
-    for(usize vi = 0u; vi < verts.size(); ++vi){
-        const VectorSingle vp = VectorSingle(verts[vi]);
-        outMin = Min(outMin, vp);
-        outMax = Max(outMax, vp);
-    }
-}
-
 void ExtractHullLocalVerticesAndEdges(
     in HullShape hull,
     mut Vector<f32x4> outVerts,
@@ -710,7 +687,7 @@ void ClipPolyhedronFacesByPlane(
 
         VectorSingle tU(0.0f);
         VectorSingle tV(0.0f);
-        BuildPlaneTangentBasis(planeN, tU, tV);
+        ComputeTangentBasis(planeN, tU, tV);
 
         const usize cnt = capPts.size();
         Vector<f32> angles;
@@ -904,14 +881,6 @@ Expected<FractureSlicePairResult> SliceConvexHullByPlane(
     return res;
 }
 
-void PushFractureUniqueSite(in VectorSingle cand, in f32 minSepSq, mut Vector<f32x4> outSites){
-    for(usize prevIdx = 0u; prevIdx < outSites.size(); ++prevIdx){
-        if(Vector3LengthSq(VectorSingle(cand - VectorSingle(outSites[prevIdx]), 0.0f)).x < minSepSq)
-            return;
-    }
-    outSites.push_back(f32x4(cand, 0.0f));
-}
-
 void GenerateRadialFractureSites(
     in HullShape sourceHull,
     in VectorSingle boxMin,
@@ -948,7 +917,7 @@ void GenerateRadialFractureSites(
                 boxMax - boxSpan * 0.04f
             );
             if(IsPointInsideConvexHullLocal(sourceHull, cand, 1.0e-3f))
-                PushFractureUniqueSite(cand, minSepSq, outSites);
+                PushUniqueNearPoint(cand, minSepSq, outSites);
         }
     }
 }
@@ -987,7 +956,7 @@ void GenerateSplinterFractureSites(
             if(IsPointInsideConvexHullLocal(sourceHull, cand, 1.0e-3f))
                 break;
         }
-        PushFractureUniqueSite(cand, minSepSq, outSites);
+        PushUniqueNearPoint(cand, minSepSq, outSites);
     }
 }
 
@@ -1028,7 +997,7 @@ void GenerateBrickFractureSites(
                 const f32 jz = (NextFractureRandomUnit(rng) - 0.5f) * 0.02f * boxSpan.z;
                 const VectorSingle cand(boxMin.x + boxSpan.x * fracX + jx, py + jy, pz + jz, 0.0f);
                 if(IsPointInsideConvexHullLocal(sourceHull, cand, 1.0e-3f))
-                    PushFractureUniqueSite(cand, minSepSq, outSites);
+                    PushUniqueNearPoint(cand, minSepSq, outSites);
             }
         }
     }
@@ -1177,7 +1146,7 @@ Expected<FractureResult> GenerateVoronoiFractureChunks(
     const f32 minChunkVol = Max(0.0f, params.minChunkVolumeRatio) * sourceVol;
     VectorSingle boxMin(0.0f);
     VectorSingle boxMax(0.0f);
-    ComputePolyhedronPtsBounds(Span<f32x4>(srcVerts), boxMin, boxMax);
+    ComputePointsAabbValues(Span<f32x4>(srcVerts), boxMin, boxMax);
 
     Vector<f32x4> sites;
     GenerateFractureSites(sourceHull, boxMin, boxMax, params, sites);
@@ -1447,7 +1416,7 @@ void EarClipAndAppendCapLoop(
 
     VectorSingle tU(0.0f);
     VectorSingle tV(0.0f);
-    BuildPlaneTangentBasis(capPlaneN, tU, tV);
+    ComputeTangentBasis(capPlaneN, tU, tV);
 
     VectorSingle capNormal = capPlaneN;
     if(reverseWinding)
@@ -1630,7 +1599,7 @@ void AppendClippedExteriorTri(
         return;
     VectorSingle tU(1.0f, 0.0f, 0.0f, 0.0f);
     VectorSingle tV(0.0f, 0.0f, 1.0f, 0.0f);
-    BuildPlaneTangentBasis(faceN, tU, tV);
+    ComputeTangentBasis(faceN, tU, tV);
     const u32 i0 = AppendFractureMeshVertex(p0, faceN, tU, uv0, mesh);
     const u32 i1 = AppendFractureMeshVertex(p1, faceN, tU, uv1, mesh);
     const u32 i2 = AppendFractureMeshVertex(p2, faceN, tU, uv2, mesh);

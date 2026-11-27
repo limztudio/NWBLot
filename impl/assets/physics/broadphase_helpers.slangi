@@ -32,12 +32,7 @@ bool nwbPhysicsShouldCollideFields(const uint4 metaA, const uint4 filterA, const
     if(!anyDynamic && !(anySensor && anyKinematic))
         return false;
 
-    const int groupA = asint(filterA.z);
-    const int groupB = asint(filterB.z);
-    if(groupA == groupB && groupA != 0)
-        return groupA > 0;
-
-    return ((filterA.x & filterB.y) != 0u) && ((filterB.x & filterA.y) != 0u);
+    return nwbPhysicsFiltersMatch(filterA.x, filterA.y, asint(filterA.z), filterB.x, filterB.y, asint(filterB.z));
 }
 
 uint nwbPhysicsBroadphasePairBucket(const uint4 metaA, const uint4 metaB){
@@ -107,6 +102,47 @@ void nwbPhysicsEmitBroadphasePair(
         const uint dstIdx = isBackward ? (maxPairs - 1u - writeIndex) : writeIndex;
         g_NwbPhysicsBroadphasePairBuffers[dstSlot][dstIdx] = pairOut;
     }
+}
+
+void nwbPhysicsEmitCanonicalBroadphasePairIfAllowed(
+    const uint idxA,
+    const uint4 metaA,
+    const uint idxB,
+    const uint4 metaB,
+    const uint nonCollideSlot,
+    const uint nonCollideMask,
+    const uint pairSlot,
+    const uint surfacePairSlot,
+    const uint counterSlot,
+    const uint maxPairs
+){
+    if(((metaA.w & metaB.w) & NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT) != 0u && ((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
+        return;
+    const bool aFirst = idxA < idxB;
+    const uint outA = aFirst ? idxA : idxB;
+    const uint outB = aFirst ? idxB : idxA;
+    const uint bodyOutA = aFirst ? metaA.x : metaB.x;
+    const uint bodyOutB = aFirst ? metaB.x : metaA.x;
+    nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsBroadphasePairBucket(metaA, metaB));
+}
+
+void nwbPhysicsTryEmitBroadphasePair(
+    const uint idxA,
+    const uint4 metaA,
+    const uint4 filterA,
+    const uint idxB,
+    const uint4 metaB,
+    const uint4 filterB,
+    const uint nonCollideSlot,
+    const uint nonCollideMask,
+    const uint pairSlot,
+    const uint surfacePairSlot,
+    const uint counterSlot,
+    const uint maxPairs
+){
+    if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
+        return;
+    nwbPhysicsEmitCanonicalBroadphasePairIfAllowed(idxA, metaA, idxB, metaB, nonCollideSlot, nonCollideMask, pairSlot, surfacePairSlot, counterSlot, maxPairs);
 }
 
 

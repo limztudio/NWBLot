@@ -248,6 +248,47 @@ class PhysicsDebugScreenProjector{
         return this.m_planes[idx];
     }
 
+    private void initProjectionCommon(
+        in TransformComponent cameraTransform,
+        in f32 nearMin,
+        in f32 nearVal,
+        in f32 farVal,
+        in f32 scaleX,
+        in f32 scaleY,
+        in f32 viewportWidth,
+        in f32 viewportHeight,
+        mut VectorSingle outRScaled,
+        mut VectorSingle outUScaled,
+        mut VectorSingle outForward,
+        mut f32 outNegDotRight,
+        mut f32 outNegDotUp,
+        mut f32 outNegDotForward
+    ){
+        const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
+        const VectorSingle right = basis[0u];
+        const VectorSingle up = basis[1u];
+        outForward = basis[2u];
+        const VectorSingle camPos = basis[3u];
+        outRScaled = right * scaleX;
+        outUScaled = up * scaleY;
+        outNegDotRight = -Vector3Dot(camPos, outRScaled).x;
+        outNegDotUp = -Vector3Dot(camPos, outUScaled).x;
+        outNegDotForward = -Vector3Dot(camPos, outForward).x;
+        this.m_projCol0 = f32x4(outRScaled.x, outUScaled.x, outForward.x, 0.0f);
+        this.m_projCol1 = f32x4(outRScaled.y, outUScaled.y, outForward.y, 0.0f);
+        this.m_projCol2 = f32x4(outRScaled.z, outUScaled.z, outForward.z, 0.0f);
+        this.m_projCol3 = f32x4(outNegDotRight, outNegDotUp, outNegDotForward, 0.0f);
+        this.m_zMin = nearVal;
+        this.m_hasFarPlane = IsFinite(VectorSingle(farVal)) && farVal > nearMin;
+        if(this.m_hasFarPlane)
+            this.m_zMax = farVal;
+        else
+            this.m_zMax = 0.0f;
+        const VectorSingle halfVp = VectorSingle(viewportWidth, viewportHeight, viewportWidth, viewportHeight) * 0.5f;
+        this.m_screenScale = f32x4(halfVp * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f));
+        this.m_screenBias = f32x4(halfVp);
+    }
+
     public void init(
         in TransformComponent cameraTransform,
         in CameraProjection projection,
@@ -264,29 +305,14 @@ class PhysicsDebugScreenProjector{
         ;
         if(!this.m_valid)
             return;
-        const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
-        const VectorSingle right = basis[0u];
-        const VectorSingle up = basis[1u];
-        const VectorSingle forward = basis[2u];
-        const VectorSingle camPos = basis[3u];
-        const VectorSingle rScaled = right * projection.projectionParams.x;
-        const VectorSingle uScaled = up * projection.projectionParams.y;
-        const f32 negDotRight = -Vector3Dot(camPos, rScaled).x;
-        const f32 negDotUp = -Vector3Dot(camPos, uScaled).x;
-        const f32 negDotForward = -Vector3Dot(camPos, forward).x;
-        this.m_projCol0 = f32x4(rScaled.x, uScaled.x, forward.x, 0.0f);
-        this.m_projCol1 = f32x4(rScaled.y, uScaled.y, forward.y, 0.0f);
-        this.m_projCol2 = f32x4(rScaled.z, uScaled.z, forward.z, 0.0f);
-        this.m_projCol3 = f32x4(negDotRight, negDotUp, negDotForward, 0.0f);
-        this.m_zMin = Max(projection.nearPlane, 0.01f);
-        this.m_hasFarPlane = IsFinite(VectorSingle(projection.farPlane)) && projection.farPlane > this.m_zMin;
-        if(this.m_hasFarPlane)
-            this.m_zMax = projection.farPlane;
-        else
-            this.m_zMax = 0.0f;
-        const VectorSingle halfVp = VectorSingle(viewportWidth, viewportHeight, viewportWidth, viewportHeight) * 0.5f;
-        this.m_screenScale = f32x4(halfVp * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f));
-        this.m_screenBias = f32x4(halfVp);
+        const f32 zMin = Max(projection.nearPlane, 0.01f);
+        VectorSingle rScaled(0.0f);
+        VectorSingle uScaled(0.0f);
+        VectorSingle forward(0.0f);
+        f32 negDotRight = 0.0f;
+        f32 negDotUp = 0.0f;
+        f32 negDotForward = 0.0f;
+        this.initProjectionCommon(cameraTransform, zMin, zMin, projection.farPlane, projection.projectionParams.x, projection.projectionParams.y, viewportWidth, viewportHeight, rScaled, uScaled, forward, negDotRight, negDotUp, negDotForward);
 
         this.m_planes[0u] = f32x4(forward, negDotForward - this.m_zMin);
         this.m_planes[1u] = NormalizeDebugFrustumPlane(rScaled + forward * 1.5f, negDotRight + 1.5f * negDotForward);
@@ -320,29 +346,13 @@ class PhysicsDebugScreenProjector{
         ;
         if(!this.m_valid)
             return;
-        const MatrixSingle basis = BuildSceneViewBasis(VectorSingle(cameraTransform.position), SafeNormalizeQuat(VectorSingle(cameraTransform.rotation)));
-        const VectorSingle right = basis[0u];
-        const VectorSingle up = basis[1u];
-        const VectorSingle forward = basis[2u];
-        const VectorSingle camPos = basis[3u];
-        const VectorSingle rScaled = right * (1.0f / halfWidth);
-        const VectorSingle uScaled = up * (1.0f / halfHeight);
-        const f32 negDotRight = -Vector3Dot(camPos, rScaled).x;
-        const f32 negDotUp = -Vector3Dot(camPos, uScaled).x;
-        const f32 negDotForward = -Vector3Dot(camPos, forward).x;
-        this.m_projCol0 = f32x4(rScaled.x, uScaled.x, forward.x, 0.0f);
-        this.m_projCol1 = f32x4(rScaled.y, uScaled.y, forward.y, 0.0f);
-        this.m_projCol2 = f32x4(rScaled.z, uScaled.z, forward.z, 0.0f);
-        this.m_projCol3 = f32x4(negDotRight, negDotUp, negDotForward, 0.0f);
-        this.m_zMin = nearPlane;
-        this.m_hasFarPlane = IsFinite(VectorSingle(farPlane)) && farPlane > this.m_zMin;
-        if(this.m_hasFarPlane)
-            this.m_zMax = farPlane;
-        else
-            this.m_zMax = 0.0f;
-        const VectorSingle halfVp = VectorSingle(viewportWidth, viewportHeight, viewportWidth, viewportHeight) * 0.5f;
-        this.m_screenScale = f32x4(halfVp * VectorSingle(1.0f, -1.0f, 1.0f, -1.0f));
-        this.m_screenBias = f32x4(halfVp);
+        VectorSingle rScaled(0.0f);
+        VectorSingle uScaled(0.0f);
+        VectorSingle forward(0.0f);
+        f32 negDotRight = 0.0f;
+        f32 negDotUp = 0.0f;
+        f32 negDotForward = 0.0f;
+        this.initProjectionCommon(cameraTransform, nearPlane, nearPlane, farPlane, 1.0f / halfWidth, 1.0f / halfHeight, viewportWidth, viewportHeight, rScaled, uScaled, forward, negDotRight, negDotUp, negDotForward);
 
         this.m_planes[0u] = f32x4(forward, negDotForward - this.m_zMin);
         this.m_planes[1u] = NormalizeDebugFrustumPlane(rScaled, negDotRight + 1.5f);
@@ -405,10 +415,6 @@ class PhysicsDebugScreenProjector{
 
     public VectorSingle projectPointToView(in VectorSingle worldP)const{
         return VectorSingle(this.m_projCol0) * worldP.x + VectorSingle(this.m_projCol1) * worldP.y + VectorSingle(this.m_projCol2) * worldP.z + VectorSingle(this.m_projCol3);
-    }
-
-    public VectorSingle projectDirToView(in VectorSingle worldDir)const{
-        return VectorSingle(this.m_projCol0) * worldDir.x + VectorSingle(this.m_projCol1) * worldDir.y + VectorSingle(this.m_projCol2) * worldDir.z;
     }
 
     public b8 projectViewSpaceSegment(
@@ -615,7 +621,6 @@ class PhysicsDebugDrawScratch{
     public Vector<u32> cachedBodyStamp;
     public Vector<PhysicsDebugLabel> worldLabels;
     public Vector<PhysicsDebugScreenLabel> projectedLabels;
-    public Vector<f32x4> indexedEdgeViewPts;
     public Vector<Transform3D> resolvedLinkXfsScratch;
     public Vector<Transform3D> ragdollTargetScratch;
     public HashMap<EntityID, EcsWorldPose> worldPoseCache;

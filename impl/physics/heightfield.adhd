@@ -2326,25 +2326,6 @@ void CollideConvexProxyAndHeightfieldWithRelativeMulti(
         ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
-Manifold CollideConvexProxyAndHeightfieldWithRelative(
-    in ShapeProxyView proxyA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in HeightfieldShape hfB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in VectorSingle localPosA,
-    in VectorSingle localRotA,
-    in VectorSingle worldUp,
-    in f32 maxDistance
-){
-    Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
-    Optional<TriangleFilterCallback> noFilter;
-    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
-    return primary;
-}
-
 void CollideConvexProxyAndHeightfieldMulti(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
@@ -2703,22 +2684,6 @@ void CollideHeightfieldAndMeshMulti(
     );
 }
 
-Manifold CollideHeightfieldAndMesh(
-    in HeightfieldShape hfA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in MeshShape meshB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
-    Optional<TriangleFilterCallback> noFilter;
-    CollideHeightfieldAndMeshMulti(hfA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
-    return primary;
-}
-
 void CollideHeightfieldsMulti(
     in HeightfieldShape hfA,
     in VectorSingle posA,
@@ -2761,22 +2726,6 @@ void CollideHeightfieldsMulti(
         outManifold,
         outExtraManifolds
     );
-}
-
-Manifold CollideHeightfields(
-    in HeightfieldShape hfA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in HeightfieldShape hfB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
-    Optional<TriangleFilterCallback> noFilter;
-    CollideHeightfieldsMulti(hfA, posA, rotA, hfB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
-    return primary;
 }
 
 

@@ -393,17 +393,6 @@ void EvaluateVhacdPartitionWithScratch(
     part.concavity = maxInteriorDepth / Max(rootDiag, 1.0e-4f);
 }
 
-void EvaluateVhacdPartition(
-    in f32 rootDiag,
-    in f32 hullRadius,
-    in usize maxHullVerts,
-    mut VhacdPartition part
-){
-    Vector<f32x4> rawVerts;
-    Vector<f32x4> samplePts;
-    EvaluateVhacdPartitionWithScratch(rootDiag, hullRadius, maxHullVerts, false, Aabb3D(), rawVerts, samplePts, part);
-}
-
 Expected<VhacdResult> ComputeConvexDecomposition(
     in Span<f32x4> vertices,
     in Span<u32> indices,
@@ -459,7 +448,9 @@ Expected<VhacdResult> ComputeConvexDecomposition(
     const f32 rootVol = Max(ComputeAabbBoxVolume(Aabb3D(rootMin, rootMax)), 1.0e-6f);
     const usize maxVerts = Max(cast<usize>(4u), Min(cast<usize>(params.maxVerticesPerHull), s_MaxHullVertices));
 
-    EvaluateVhacdPartition(rootDiag, params.hullRadius, maxVerts, root);
+    Vector<f32x4> rawVerts;
+    Vector<f32x4> samplePts;
+    EvaluateVhacdPartitionWithScratch(rootDiag, params.hullRadius, maxVerts, false, Aabb3D(), rawVerts, samplePts, root);
 
     u32 splitCap = params.maxConvexHulls;
     if(params.enableHullMerging)

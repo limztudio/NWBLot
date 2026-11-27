@@ -329,7 +329,7 @@ Transform3D BuildVehicleWheelWorldTransformVectors(
     in f32 suspLength,
     in f32 rotationAngle
 ){
-    const VectorSingle spinQ = QuatFromAxisAngleUnit(axleAxisNorm, rotationAngle);
+    const VectorSingle spinQ = QuaternionRotationNormal(axleAxisNorm, rotationAngle);
     const VectorSingle visRot = SafeNormalizeQuat(QuaternionMultiply(wheelRot, spinQ));
     const VectorSingle visPos = attachW + suspDirW * suspLength;
     return Transform3D(visPos, visRot);
@@ -376,7 +376,6 @@ class VehicleController{
     private Vector<f32x4> m_wheelRots;
     private Vector<f32x4> m_axleAxisNorm;
     private Vector<VehicleWheelCastResult> m_castResults;
-    private Vector<f32> m_cachedSteerAngles;
 
     public b8 attachTrailer(mut PhysicsWorld world, in BodyId inTrailerBodyId, in VectorSingle localHitchChassis, in VectorSingle localHitchTrailer, in f32 swingLimitRad){
         this.detachTrailer(world);
@@ -440,7 +439,6 @@ class VehicleController{
         this.m_suspDirW.resize(n);
         this.m_wheelRots.resize(n);
         this.m_castResults.resize(n);
-        this.m_cachedSteerAngles.resize(n, 0.0f);
     }
 
     public void init(in BodyId chassis, in VehicleEngineDef inEngine, in Span<VehicleWheelDef> wheels){
@@ -585,7 +583,6 @@ class VehicleController{
                         targetAngle = curAngle - maxDelta;
                 }
             }
-            this.m_cachedSteerAngles[i] = targetAngle;
             this.wheelStates[i].steerAngle = targetAngle;
         }
     }
@@ -603,7 +600,7 @@ class VehicleController{
         const f32 totalYaw = steerAngle + toeSigned;
         VectorSingle wheelRot = chassisRot;
         if(Abs(VectorSingle(totalYaw)).x >= 1.0e-5f){
-            const VectorSingle steerQ = QuatFromAxisAngleUnit(-suspDirW, totalYaw);
+            const VectorSingle steerQ = QuaternionRotationNormal(-suspDirW, totalYaw);
             wheelRot = SafeNormalizeQuat(QuaternionMultiply(steerQ, wheelRot));
         }
         if(Abs(VectorSingle(wDef.camberAngleRad)).x >= 1.0e-5f){
@@ -611,7 +608,7 @@ class VehicleController{
             if(wDef.attachmentPoint.x < -1.0e-4f)
                 cambSign = -1.0f;
             const VectorSingle fwdW = SafeNormalizeVec3(Vector3Rotate(VectorSingle(wDef.forwardAxis), wheelRot), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-            const VectorSingle camberQ = QuatFromAxisAngleUnit(fwdW, cambSign * wDef.camberAngleRad);
+            const VectorSingle camberQ = QuaternionRotationNormal(fwdW, cambSign * wDef.camberAngleRad);
             wheelRot = SafeNormalizeQuat(QuaternionMultiply(camberQ, wheelRot));
         }
         return wheelRot;
@@ -816,7 +813,7 @@ class VehicleController{
                     wState.groundMaterial = world.resolveShapeContactMaterial(gShape, castRes.hitTriangleIndex);
                     if(gShape.hasLocalTransform())
                         gShapeRot = SafeNormalizeQuat(QuaternionMultiply(gShapeRot, VectorSingle(gShape.localTransform.rotation)));
-                    if(wState.groundMaterial.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(wState.groundMaterial.surfaceVelocity)))
+                    if(wState.groundMaterial.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(wState.groundMaterial.surfaceVelocity).xyz))
                         gVel = gVel + Vector3Rotate(VectorSingle(wState.groundMaterial.surfaceVelocity, 0.0f), gShapeRot);
                 }
                 else{

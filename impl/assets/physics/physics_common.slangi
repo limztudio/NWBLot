@@ -235,7 +235,6 @@ struct NwbPhysicsGpuForceField{
     float4 shapeCenterOrCapA;
     float4 shapeRotOrCapB;
     float4 shapeHalfExtentsExtra;
-    float4 extraParams;
     uint4 filterData;
 };
 
@@ -394,10 +393,9 @@ void nwbPhysicsRotateSymMat3(const float4 q, const float4 loc0, const float2 loc
         return;
     }
 
-    const float4 loc1Pad = float4(loc1.x, loc1.y, 0.0f, 0.0f);
-    const float3 c0 = nwbPhysicsMulSymmetric3(loc0, loc1Pad, lx0);
-    const float3 c1 = nwbPhysicsMulSymmetric3(loc0, loc1Pad, lx1);
-    const float3 c2 = nwbPhysicsMulSymmetric3(loc0, loc1Pad, lx2);
+    const float3 c0 = nwbPhysicsMulSymmetric3(loc0, loc1, lx0);
+    const float3 c1 = nwbPhysicsMulSymmetric3(loc0, loc1, lx1);
+    const float3 c2 = nwbPhysicsMulSymmetric3(loc0, loc1, lx2);
 
     outW0 = float4(dot(lx0, c0), dot(lx0, c1), dot(lx0, c2), dot(lx1, c1));
     outW1 = float2(dot(lx1, c2), dot(lx2, c2));
@@ -869,7 +867,7 @@ void nwbPhysicsResolveShapeWorldPose(
     outRot = bodyRot;
 }
 
-float nwbPhysicsHfSelectLane(const float4 v, const uint lane){
+float nwbPhysicsSelectFloat4Lane(const float4 v, const uint lane){
     if(lane == 0u)
         return v.x;
     if(lane == 1u)
@@ -877,6 +875,201 @@ float nwbPhysicsHfSelectLane(const float4 v, const uint lane){
     if(lane == 2u)
         return v.z;
     return v.w;
+}
+
+void nwbPhysicsEmitEvent(
+    const uint prepCountersSlot,
+    const uint eventRingSlot,
+    const uint maxEvents,
+    const uint type,
+    const uint dataA,
+    const uint dataB,
+    const uint extraFlags,
+    const float4 pointImpulse,
+    const float4 normalApproach,
+    const uint4 bodyIds
+){
+    if(eventRingSlot == NWB_PHYSICS_INVALID_INDEX || prepCountersSlot == NWB_PHYSICS_INVALID_INDEX || maxEvents == 0u)
+        return;
+    uint evIdx = 0u;
+    InterlockedAdd(g_NwbPhysicsUintBuffers[prepCountersSlot][1u], 1u, evIdx);
+    if(evIdx < maxEvents){
+        NwbPhysicsGpuEvent ev;
+        ev.header = uint4(type, dataA, dataB, extraFlags);
+        ev.pointImpulse = pointImpulse;
+        ev.normalApproach = normalApproach;
+        ev.bodyIds = bodyIds;
+        g_NwbPhysicsEventBuffers[eventRingSlot][evIdx] = ev;
+    }
+    else{
+        InterlockedAdd(g_NwbPhysicsUintBuffers[prepCountersSlot][5u], 1u);
+    }
+}
+
+uint nwbPhysicsResolveCombineMode(const uint modeA, const uint modeB, const uint defaultMode){
+    if(modeA == modeB)
+        return modeA;
+    if(modeA == defaultMode)
+        return modeB;
+    if(modeB == defaultMode)
+        return modeA;
+    return (modeA >= modeB) ? modeA : modeB;
+}
+
+float nwbPhysicsCombineMaterialVal(const float a, const float b, const uint mode){
+    if(mode == 0u)
+        return 0.5f * (a + b);
+    if(mode == 1u)
+        return min(a, b);
+    if(mode == 2u)
+        return a * b;
+    if(mode == 3u)
+        return max(a, b);
+    return sqrt(max(a, 0.0f) * max(b, 0.0f));
+}
+
+bool nwbPhysicsFiltersMatch(const uint catA, const uint maskA, const int groupA, const uint catB, const uint maskB, const int groupB){
+    if(groupA != 0 && groupA == groupB)
+        return groupA > 0;
+    return ((catA & maskB) != 0u) && ((catB & maskA) != 0u);
+}
+
+uint nwbPhysicsHashCell(const int3 cell, const uint tableMask){
+    const uint hx = asuint(cell.x) * 73856093u;
+    const uint hy = asuint(cell.y) * 19349663u;
+    const uint hz = asuint(cell.z) * 83492791u;
+    return (hx ^ hy ^ hz) & tableMask;
+}
+
+float nwbPhysicsAabbDistSq(const float3 p, const float3 bMin, const float3 bMax){
+    const float3 d = max(float3(0.0f, 0.0f, 0.0f), max(bMin - p, p - bMax));
+    return dot(d, d);
+}
+
+[noinline]
+bool nwbPhysicsFindClosestPointInMeshBvh(
+    const uint nodeBase,
+    const uint triBase,
+    const uint meshNodeSlot,
+    const uint meshTriSlot,
+    const float3 localPoint,
+    const float initBestDistSq,
+    const bool checkRootBound,
+    const bool strictLess,
+    inout uint stack[NWB_PHYSICS_MESH_BVH_STACK_SIZE],
+    inout float stackDistSq[NWB_PHYSICS_MESH_BVH_STACK_SIZE],
+    out float3 outClosePt,
+    out float3 outDiff,
+    out float3 outTriCross,
+    out uint outLocalTriIdx,
+    out float outBestDistSq,
+    out float3 outTv0,
+    out float3 outTv1,
+    out float3 outTv2,
+    out bool outOverflow
+){
+    outClosePt = float3(0.0f, 0.0f, 0.0f);
+    outDiff = float3(0.0f, 0.0f, 0.0f);
+    outTriCross = float3(0.0f, 1.0f, 0.0f);
+    outLocalTriIdx = NWB_PHYSICS_INVALID_INDEX;
+    outBestDistSq = initBestDistSq;
+    outTv0 = float3(0.0f, 0.0f, 0.0f);
+    outTv1 = float3(0.0f, 0.0f, 0.0f);
+    outTv2 = float3(0.0f, 0.0f, 0.0f);
+    outOverflow = false;
+
+    float bestDistSq = initBestDistSq;
+    bool found = false;
+    uint sp = 0u;
+    if(checkRootBound){
+        const float4 rootN0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 0u];
+        const float4 rootN1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][nodeBase * 2u + 1u];
+        const float rootDistSq = nwbPhysicsAabbDistSq(localPoint, rootN0.xyz, rootN1.xyz);
+        if(rootDistSq <= bestDistSq){
+            stack[0] = 0u;
+            stackDistSq[0] = rootDistSq;
+            sp = 1u;
+        }
+    }
+    else{
+        stack[0] = 0u;
+        stackDistSq[0] = 0.0f;
+        sp = 1u;
+    }
+
+    while(sp > 0u){
+        --sp;
+        if(stackDistSq[sp] > bestDistSq || (strictLess && stackDistSq[sp] == bestDistSq))
+            continue;
+        const uint ni = stack[sp];
+        const float4 n0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 0u];
+        const float4 n1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + ni) * 2u + 1u];
+        const uint meta = asuint(n1.w);
+        if((meta & 0x80000000u) != 0u){
+            const uint firstTri = asuint(n0.w);
+            const uint triCount = meta & 0x7fffffffu;
+            for(uint ti = 0u; ti < triCount; ++ti){
+                const uint localTri = firstTri + ti;
+                const uint triIdx = triBase + localTri;
+                const float3 tv0 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 0u].xyz;
+                const float3 tv1 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 1u].xyz;
+                const float3 tv2 = g_NwbPhysicsFloat4Buffers[meshTriSlot][triIdx * 3u + 2u].xyz;
+                const float3 tMin = min(tv0, min(tv1, tv2));
+                const float3 tMax = max(tv0, max(tv1, tv2));
+                const float triBoxDistSq = nwbPhysicsAabbDistSq(localPoint, tMin, tMax);
+                if(triBoxDistSq > bestDistSq || (strictLess && triBoxDistSq == bestDistSq))
+                    continue;
+                const float3 closePt = nwbPhysicsClosestPointOnTriangle(localPoint, tv0, tv1, tv2);
+                const float3 diff = localPoint - closePt;
+                const float dSq = dot(diff, diff);
+                if(strictLess ? (dSq < bestDistSq) : (dSq <= bestDistSq)){
+                    bestDistSq = dSq;
+                    found = true;
+                    outClosePt = closePt;
+                    outDiff = diff;
+                    outTriCross = cross(tv1 - tv0, tv2 - tv0);
+                    outLocalTriIdx = localTri;
+                    outTv0 = tv0;
+                    outTv1 = tv1;
+                    outTv2 = tv2;
+                }
+            }
+        }
+        else{
+            const uint lIdx = asuint(n0.w);
+            const uint rIdx = meta & 0x7fffffffu;
+            const float4 ln0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 0u];
+            const float4 ln1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + lIdx) * 2u + 1u];
+            const float4 rn0 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 0u];
+            const float4 rn1 = g_NwbPhysicsFloat4Buffers[meshNodeSlot][(nodeBase + rIdx) * 2u + 1u];
+            const float dL = nwbPhysicsAabbDistSq(localPoint, ln0.xyz, ln1.xyz);
+            const float dR = nwbPhysicsAabbDistSq(localPoint, rn0.xyz, rn1.xyz);
+            const bool keepL = strictLess ? (dL < bestDistSq) : (dL <= bestDistSq);
+            const bool keepR = strictLess ? (dR < bestDistSq) : (dR <= bestDistSq);
+            if((keepL ? 1u : 0u) + (keepR ? 1u : 0u) + sp > NWB_PHYSICS_MESH_BVH_STACK_SIZE){
+                outOverflow = true;
+                return false;
+            }
+            if(keepL && keepR){
+                if(dL <= dR){
+                    stack[sp] = rIdx; stackDistSq[sp] = dR; ++sp;
+                    stack[sp] = lIdx; stackDistSq[sp] = dL; ++sp;
+                }
+                else{
+                    stack[sp] = lIdx; stackDistSq[sp] = dL; ++sp;
+                    stack[sp] = rIdx; stackDistSq[sp] = dR; ++sp;
+                }
+            }
+            else if(keepL){
+                stack[sp] = lIdx; stackDistSq[sp] = dL; ++sp;
+            }
+            else if(keepR){
+                stack[sp] = rIdx; stackDistSq[sp] = dR; ++sp;
+            }
+        }
+    }
+    outBestDistSq = bestDistSq;
+    return found;
 }
 
 float nwbPhysicsHfReadRawHeight(
@@ -888,7 +1081,7 @@ float nwbPhysicsHfReadRawHeight(
 ){
     const uint hIdx = row * cols + col;
     const float4 pack = g_NwbPhysicsFloat4Buffers[dataSlot][hfBase + 3u + (hIdx >> 2u)];
-    return nwbPhysicsHfSelectLane(pack, hIdx & 3u);
+    return nwbPhysicsSelectFloat4Lane(pack, hIdx & 3u);
 }
 
 bool nwbPhysicsHfIsCellHoleBitSet(
@@ -906,7 +1099,7 @@ bool nwbPhysicsHfIsCellHoleBitSet(
     const uint cellIdx = cz * (cols - 1u) + cx;
     const uint wordIdx = cellIdx >> 5u;
     const float4 pack = g_NwbPhysicsFloat4Buffers[dataSlot][holeBase + (wordIdx >> 2u)];
-    const uint word = asuint(nwbPhysicsHfSelectLane(pack, wordIdx & 3u));
+    const uint word = asuint(nwbPhysicsSelectFloat4Lane(pack, wordIdx & 3u));
     return (word & (1u << (cellIdx & 31u))) != 0u;
 }
 

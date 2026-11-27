@@ -16,10 +16,6 @@ extern class GpuTaskGraphInstanceTransformPatchRequest{
     u32 instanceStrideFloat4;
     u32 baseFloat4Offset;
     GpuTaskGraphInstanceTransformPatchLayout layout;
-    Name passIdentityPrefix;
-    GpuTaskId dependency;
-    b8 mergeWithPrevious;
-    b8 allowMergeAcrossConsumerFrontier;
 };
 
 [cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphInstanceTransformPatchContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
@@ -30,8 +26,6 @@ extern class IGpuTaskGraphInstanceTransformPatchContributor{
     b8 hasActiveInstanceTransformPatches()const;
     [cpp_flags(unwind)]
     u64 instanceTransformPatchMembershipSignature()const;
-    [cpp_flags(unwind)]
-    Expected<GpuTaskId> declareInstanceTransformPatch(in GpuTaskGraphInstanceTransformPatchRequest request, in Span<u32> instanceEntityIds, mut GpuTaskGraph graph);
     [cpp_flags(unwind)]
     Expected<GpuTaskId> declareBatchInstanceTransformPatches(
         in Span<GpuTaskGraphInstanceTransformPatchRequest> requests,

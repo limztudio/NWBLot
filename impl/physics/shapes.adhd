@@ -223,7 +223,6 @@ class MeshShape{
     }
 
     public b8 refitBvhWithCache(in Span<f32x4> newVertices, in u32 cacheGen, mut MeshRefitNeighborCache cache, mut Vector<u8> edgeFlagsScratch, mut Vector<u8> sharpVertsScratch);
-    public b8 refitBvh(in Span<f32x4> newVertices);
 }
 
 class CylinderShape{
@@ -792,14 +791,10 @@ void ComputeHullAabbValues(in HullShape hull, in VectorSingle xfPos, in VectorSi
         if(hull.boxRotation.x != 0.0f || hull.boxRotation.y != 0.0f || hull.boxRotation.z != 0.0f || hull.boxRotation.w != 1.0f)
             qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hull.boxRotation)));
 
-        const VectorSingle q2 = qBox + qBox;
-        const VectorSingle qx = q2 * qBox.x;
-        const VectorSingle qy = q2 * qBox.y;
-        const VectorSingle qz = q2 * qBox.z;
-        const VectorSingle qw = q2 * qBox.w;
-        const VectorSingle ax(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
-        const VectorSingle ay(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
-        const VectorSingle az(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
+        VectorSingle ax(0.0f);
+        VectorSingle ay(0.0f);
+        VectorSingle az(0.0f);
+        QuatToBasisAxes(qBox, ax, ay, az);
         const VectorSingle ext = hull.halfExtents();
         const VectorSingle extent = Abs(ax) * ext.x + Abs(ay) * ext.y + Abs(az) * ext.z + VectorSingle(r, r, r, 0.0f);
         outMin = worldCenter - extent;
@@ -883,12 +878,6 @@ isize FloorToIsize(in f32 v){
     if(cast<f32>(t) > v)
         return t - 1;
     return t;
-}
-
-u64 HashQuantizedWeldCell(in isize ix, in isize iy, in isize iz){
-    return (cast<u64>(ix) * cast<u64>(73856093u))
-        ^ (cast<u64>(iy) * cast<u64>(19349663u))
-        ^ (cast<u64>(iz) * cast<u64>(83492791u));
 }
 
 f32 MeshBvhBoxHalfArea(in VectorSingle bMin, in VectorSingle bMax){
@@ -1050,10 +1039,6 @@ u32 BuildAabbBvhRecursive(
     return nodeIdx;
 }
 
-u32 BuildMeshBvhRecursive(mut MeshShape mesh, in Span<Aabb3D> triAabbs, mut Vector<u32> triOrder, in usize beginIdx, in usize endIdx, in u32 depth){
-    return BuildAabbBvhRecursive(mesh.nodes, triAabbs, 4u, triOrder, beginIdx, endIdx, depth);
-}
-
 void WeldMeshVerticesByPosition(in Span<f32x4> vertices, mut Vector<u32> outWeldedVerts){
     outWeldedVerts.resize(vertices.size(), 0u);
     Vector<u32> nextSameCell;
@@ -1072,7 +1057,7 @@ void WeldMeshVerticesByPosition(in Span<f32x4> vertices, mut Vector<u32> outWeld
         for(isize dx = -1; dx <= 1 && !matched; ++dx){
             for(isize dy = -1; dy <= 1 && !matched; ++dy){
                 for(isize dz = -1; dz <= 1 && !matched; ++dz){
-                    const u64 nKey = HashQuantizedWeldCell(ix + dx, iy + dy, iz + dz);
+                    const u64 nKey = HashGridCellCoord3D(cast<i64>(ix + dx), cast<i64>(iy + dy), cast<i64>(iz + dz));
                     const auto foundBucket = weldBuckets.find(nKey);
                     if(foundBucket == weldBuckets.end())
                         continue;
@@ -1094,7 +1079,7 @@ void WeldMeshVerticesByPosition(in Span<f32x4> vertices, mut Vector<u32> outWeld
         }
         else{
             outWeldedVerts[vi] = cast<u32>(vi);
-            const u64 selfKey = HashQuantizedWeldCell(ix, iy, iz);
+            const u64 selfKey = HashGridCellCoord3D(cast<i64>(ix), cast<i64>(iy), cast<i64>(iz));
             const auto foundSelf = weldBuckets.find(selfKey);
             if(foundSelf == weldBuckets.end()){
                 weldBuckets.emplace(selfKey, cast<u32>(vi));
@@ -1127,9 +1112,7 @@ void ComputeMeshInternalEdgeFlags(
             const u32 b = vIds[(e + 1u) % 3u];
             if(a == b)
                 continue;
-            const u32 lo = Min(a, b);
-            const u32 hi = Max(a, b);
-            const u64 key = (cast<u64>(lo) << 32u) | cast<u64>(hi);
+            const u64 key = PackUnorderedU32Pair(cast<isize>(a), cast<isize>(b));
             const auto foundEdge = edgeMap.find(key);
             if(foundEdge == edgeMap.end()){
                 MeshEdgeAdjacency rec;
@@ -1344,9 +1327,7 @@ void PrepareMeshNeighborCache(in MeshShape mesh, in u32 cacheGen, mut MeshRefitN
             const u32 b = vIds[(e + 1u) % 3u];
             if(a == b)
                 continue;
-            const u32 lo = Min(a, b);
-            const u32 hi = Max(a, b);
-            const u64 key = (cast<u64>(lo) << 32u) | cast<u64>(hi);
+            const u64 key = PackUnorderedU32Pair(cast<isize>(a), cast<isize>(b));
             const auto foundEdge = edgeMap.find(key);
             if(foundEdge == edgeMap.end()){
                 MeshEdgeAdjacency rec;
@@ -1482,7 +1463,7 @@ Expected<MeshShape> MakeMeshShapeWithMaterials(
     for(usize i = 0u; i < triOrder.size(); ++i)
         triOrder[i] = cast<u32>(i);
 
-    BuildMeshBvhRecursive(mesh, Span<Aabb3D>(rawTriAabbs), triOrder, 0u, triOrder.size(), 0u);
+    BuildAabbBvhRecursive(mesh.nodes, Span<Aabb3D>(rawTriAabbs), 4u, triOrder, 0u, triOrder.size(), 0u);
 
     const u32 bvhCount = cast<u32>(mesh.nodes.size());
     u32 meta = bvhCount & 0x3fffffffu;
@@ -1720,13 +1701,6 @@ b8 MeshShape::refitBvhWithCache(
     return true;
 }
 
-b8 MeshShape::refitBvh(in Span<f32x4> newVertices){
-    MeshRefitNeighborCache localCache;
-    Vector<u8> edgeFlagsScratch;
-    Vector<u8> sharpVertsScratch;
-    return this.refitBvhWithCache(newVertices, 1u, localCache, edgeFlagsScratch, sharpVertsScratch);
-}
-
 Expected<MeshShape> MakeMeshShape(in Span<f32x4> vertices, in Span<u32> indices, in f32 radius){
     Vector<SurfaceMaterial> emptyMats;
     Vector<u16> emptyMatIdx;
@@ -1797,7 +1771,7 @@ Expected<TaperedCapsuleShape> MakeTaperedCapsuleShape(in VectorSingle center1, i
 }
 
 Expected<PlaneShape> MakePlaneShape(in VectorSingle normal, in f32 offset, in VectorSingle halfExtent){
-    if(!IsFiniteVec3(normal) || !IsFinite(VectorSingle(offset, halfExtent.x, halfExtent.z, 0.0f)))
+    if(!IsFinite(normal.xyz) || !IsFinite(VectorSingle(offset, halfExtent.x, halfExtent.z, 0.0f)))
         return MakeUnexpected(Failure());
     if(halfExtent.x < 0.0f || halfExtent.z < 0.0f || Abs(VectorSingle(offset)).x > s_HugeCoordinate)
         return MakeUnexpected(Failure());
@@ -2246,7 +2220,7 @@ class ScaledShape{
             this.scale.x > 0.0f
             && this.scale.y > 0.0f
             && this.scale.z > 0.0f
-            && IsFiniteVec3(VectorSingle(this.scale))
+            && IsFinite(VectorSingle(this.scale).xyz)
             && this.childType != ShapeType::Scaled
         ;
     }
@@ -2647,7 +2621,7 @@ Expected<CompoundShape> MakeCompoundShape(in Span<CompoundSubShape> inChildren, 
         CompoundSubShape sub = inChildren[i];
         const VectorSingle lPos(sub.localTransform.position);
         const VectorSingle lRot = SafeNormalizeQuat(VectorSingle(sub.localTransform.rotation));
-        if(!IsValidPositionVec3(lPos) || !IsFiniteQuat(VectorSingle(sub.localTransform.rotation)) || !IsFinite(VectorSingle(sub.density)) || sub.density < 0.0f)
+        if(!IsValidPositionVec3(lPos) || !IsFinite(VectorSingle(sub.localTransform.rotation)) || !IsFinite(VectorSingle(sub.density)) || sub.density < 0.0f)
             return MakeUnexpected(Failure());
         if(sub.type == ShapeType::Compound || sub.type == ShapeType::Scaled || sub.type == ShapeType::Mesh || sub.type == ShapeType::Heightfield || sub.type == ShapeType::Chain || sub.type == ShapeType::Sdf)
             return MakeUnexpected(Failure());
@@ -2670,9 +2644,6 @@ Expected<CompoundShape> MakeCompoundShape(in Span<CompoundSubShape> inChildren, 
     return compound;
 }
 
-void ComputeCompoundAabbValues(in CompoundShape compound, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
-    TransformLocalAabbValuesToWorld(VectorSingle(compound.localAabb.lowerBound), VectorSingle(compound.localAabb.upperBound), 0.0f, xfPos, xfRot, outMin, outMax);
-}
 
 MassData ComputeCompoundMass(in CompoundShape compound, in Vector<HullShape> hullShapes, in f32 density){
     MassData outMass;
@@ -2752,7 +2723,7 @@ f32 ComputeCompoundGeometricVolume(in CompoundShape compound, in Vector<HullShap
 }
 
 Expected<ScaledShape> MakeScaledShape(in ShapeType childType, in VectorSingle geom0, in VectorSingle geom1, in u32 childGeometryIndex, in VectorSingle rawScale){
-    if(childType == ShapeType::Scaled || !IsFiniteVec3(rawScale) || rawScale.x <= 1.0e-4f || rawScale.y <= 1.0e-4f || rawScale.z <= 1.0e-4f)
+    if(childType == ShapeType::Scaled || !IsFinite(rawScale.xyz) || rawScale.x <= 1.0e-4f || rawScale.y <= 1.0e-4f || rawScale.z <= 1.0e-4f)
         return MakeUnexpected(Failure());
     ScaledShape scaled;
     scaled.childType = childType;
@@ -2927,13 +2898,6 @@ Expected<ChainShape> MakeChainShape(
     return chain;
 }
 
-void ComputeChainAabbValues(in ChainShape chain, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
-    TransformLocalAabbValuesToWorld(VectorSingle(chain.localAabb.lowerBound), VectorSingle(chain.localAabb.upperBound), 0.0f, xfPos, xfRot, outMin, outMax);
-}
-
-void ComputeSdfAabbValues(in SdfShape sdf, in VectorSingle xfPos, in VectorSingle xfRot, mut VectorSingle outMin, mut VectorSingle outMax){
-    TransformLocalAabbValuesToWorld(VectorSingle(sdf.boundsMin, 0.0f), VectorSingle(sdf.boundsMax, 0.0f), sdf.margin, xfPos, xfRot, outMin, outMax);
-}
 
 f32 ComputeSdfVolume(in SdfShape sdf){
     if(!sdf.isValid())

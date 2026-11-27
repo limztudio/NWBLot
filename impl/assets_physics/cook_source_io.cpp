@@ -1315,6 +1315,31 @@ void DecodePng16RowToMaskBits(
     }
 }
 
+template<typename RowFn>
+[[nodiscard]] b8 ProcessPng16Rows(
+    const ParsedPng16& png,
+    const u32 rowCount,
+    Core::Alloc::ScratchArena& scratch,
+    RowFn&& onRow
+)noexcept{
+    const usize step = static_cast<usize>(png.channels) * 2u;
+    const usize rowBytes = static_cast<usize>(png.width) * step;
+    Vector<u8, Core::Alloc::ScratchArena> rowA(rowBytes, 0u, scratch);
+    Vector<u8, Core::Alloc::ScratchArena> rowB(rowBytes, 0u, scratch);
+    u8* prevPtr = rowA.data();
+    u8* currPtr = rowB.data();
+    const u8* src = static_cast<const u8*>(png.decompressed);
+
+    for(u32 y = 0u; y < rowCount; ++y){
+        const u8* rowSrc = src + static_cast<usize>(y) * (1u + rowBytes);
+        if(!UnfilterPng16Scanline(rowSrc[0], rowSrc + 1u, prevPtr, currPtr, rowBytes, step))
+            return false;
+        onRow(y, currPtr);
+        std::swap(prevPtr, currPtr);
+    }
+    return true;
+}
+
 
 };
 
@@ -1371,18 +1396,7 @@ b8 LoadHeightmapImageRaw(
         if(!dst)
             return false;
 
-        const usize step = static_cast<usize>(png.channels) * 2u;
-        const usize rowBytes = static_cast<usize>(png.width) * step;
-        Vector<u8, Core::Alloc::ScratchArena> rowA(rowBytes, 0u, scratch);
-        Vector<u8, Core::Alloc::ScratchArena> rowB(rowBytes, 0u, scratch);
-        u8* prevPtr = rowA.data();
-        u8* currPtr = rowB.data();
-        const u8* src = static_cast<const u8*>(png.decompressed);
-
-        for(u32 y = 0u; y < png.height; ++y){
-            const u8* rowSrc = src + static_cast<usize>(y) * (1u + rowBytes);
-            if(!__hidden_physics_cook_io::UnfilterPng16Scanline(rowSrc[0], rowSrc + 1u, prevPtr, currPtr, rowBytes, step))
-                return false;
+        const auto processOk = __hidden_physics_cook_io::ProcessPng16Rows(png, png.height, scratch, [&](const u32 y, const u8* currPtr){
             f32* dstRow = dst + static_cast<usize>(y) * static_cast<usize>(png.width);
             if(channelMode == 0u)
                 __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<0u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
@@ -1394,8 +1408,9 @@ b8 LoadHeightmapImageRaw(
                 __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<3u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
             else
                 __hidden_physics_cook_io::DispatchPng16HeightRowByChannels<4u>(png.channels, currPtr, png.width, heightMin, range, dstRow);
-            std::swap(prevPtr, currPtr);
-        }
+        });
+        if(!processOk)
+            return false;
         outCols = png.width;
         outRows = png.height;
         return true;
@@ -1629,18 +1644,7 @@ b8 LoadHeightmapHoleMaskRaw(
         if(!dst)
             return false;
 
-        const usize step = static_cast<usize>(png.channels) * 2u;
-        const usize rowBytes = static_cast<usize>(png.width) * step;
-        Vector<u8, Core::Alloc::ScratchArena> rowA(rowBytes, 0u, scratch);
-        Vector<u8, Core::Alloc::ScratchArena> rowB(rowBytes, 0u, scratch);
-        u8* prevPtr = rowA.data();
-        u8* currPtr = rowB.data();
-        const u8* src = static_cast<const u8*>(png.decompressed);
-
-        for(u32 cz = 0u; cz < cellRows; ++cz){
-            const u8* rowSrc = src + static_cast<usize>(cz) * (1u + rowBytes);
-            if(!__hidden_physics_cook_io::UnfilterPng16Scanline(rowSrc[0], rowSrc + 1u, prevPtr, currPtr, rowBytes, step))
-                return false;
+        const auto processOk = __hidden_physics_cook_io::ProcessPng16Rows(png, cellRows, scratch, [&](const u32 cz, const u8* currPtr){
             if(png.channels == 1u)
                 __hidden_physics_cook_io::DecodePng16RowToMaskBits<1u>(currPtr, cz, cellCols, threshold, dst);
             else if(png.channels == 2u)
@@ -1649,8 +1653,9 @@ b8 LoadHeightmapHoleMaskRaw(
                 __hidden_physics_cook_io::DecodePng16RowToMaskBits<3u>(currPtr, cz, cellCols, threshold, dst);
             else
                 __hidden_physics_cook_io::DecodePng16RowToMaskBits<4u>(currPtr, cz, cellCols, threshold, dst);
-            std::swap(prevPtr, currPtr);
-        }
+        });
+        if(!processOk)
+            return false;
         return true;
     }
 

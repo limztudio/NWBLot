@@ -25,14 +25,6 @@ const StringView s_PhysicsShaderJointIslandOnlyVariant = "NWB_PHYSICS_JOINT_ISLA
 const StringView s_PhysicsShaderQuerySimpleVariant = "NWB_PHYSICS_QUERY_PROFILE=0";
 const StringView s_PhysicsShaderQueryMeshVariant = "NWB_PHYSICS_QUERY_PROFILE=1";
 const StringView s_PhysicsShaderQueryShapeVariant = "NWB_PHYSICS_QUERY_PROFILE=2";
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_JOINT_COLOR_COUNT")]
-extern const u32 s_ShaderGpuIslandJointColorCount;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_JOINT_OVERFLOW_COLOR_INDEX")]
-extern const u32 s_ShaderGpuIslandJointOverflowColorIndex;
-
-const usize s_GpuJointColorCount = s_GraphColorCount;
-const usize s_GpuJointOverflowColorIndex = s_OverflowColorIndex;
 const usize s_GpuIslandJointColorCount = cast<usize>(s_ShaderGpuIslandJointColorCount);
 const usize s_GpuIslandJointOverflowColorIndex = cast<usize>(s_ShaderGpuIslandJointOverflowColorIndex);
 const usize s_SoftBodyGpuCacheSlotCount = 16u;
@@ -93,24 +85,24 @@ class PhysicsGpuBufferGroup{
     public BufferHandle lbvhRadixHistBuffer;
     public BufferHandle lbvhNodeBuffer;
     public BufferHandle lbvhMetaBuffer;
-    public u32 shapeAabbSlot = s_GpuInvalidIndex;
-    public u32 surfacePairSlot = s_GpuInvalidIndex;
-    public u32 nonCollideHashSlot = s_GpuInvalidIndex;
+    public u32 shapeAabbSlot = s_NullIndex;
+    public u32 surfacePairSlot = s_NullIndex;
+    public u32 nonCollideHashSlot = s_NullIndex;
     public u32 nonCollideHashMask = 0u;
-    public u32 lbvhMortonSlot = s_GpuInvalidIndex;
-    public u32 lbvhMortonTempSlot = s_GpuInvalidIndex;
-    public u32 lbvhRadixHistSlot = s_GpuInvalidIndex;
-    public u32 lbvhNodeSlot = s_GpuInvalidIndex;
-    public u32 lbvhMetaSlot = s_GpuInvalidIndex;
-    public u32 contactTotalImpulseSlot = s_GpuInvalidIndex;
+    public u32 lbvhMortonSlot = s_NullIndex;
+    public u32 lbvhMortonTempSlot = s_NullIndex;
+    public u32 lbvhRadixHistSlot = s_NullIndex;
+    public u32 lbvhNodeSlot = s_NullIndex;
+    public u32 lbvhMetaSlot = s_NullIndex;
+    public u32 contactTotalImpulseSlot = s_NullIndex;
     public u32x4 slots0;
     public u32x4 slots1;
     public u32x4 slots2;
 
     public PhysicsGpuBufferGroup(){
-        this.slots0 = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
-        this.slots1 = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
-        this.slots2 = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+        this.slots0 = u32x4(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
+        this.slots1 = u32x4(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
+        this.slots2 = u32x4(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
     }
 }
 
@@ -241,8 +233,8 @@ void RecordLbvhBuildCommands(
     if(useRadix)
         mortonItemCount = shapeCount;
 
-    const u32x4 lbvhSlots0 = u32x4(shapeAabbSlot, s_GpuInvalidIndex, mortonSlot, lbvhNodeSlot);
-    const u32x4 lbvhBuildSlots1 = u32x4(lbvhMetaSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
+    const u32x4 lbvhSlots0 = u32x4(shapeAabbSlot, s_NullIndex, mortonSlot, lbvhNodeSlot);
+    const u32x4 lbvhBuildSlots1 = u32x4(lbvhMetaSlot, s_NullIndex, s_NullIndex, 0u);
 
     if(useGpuBounds){
         GpuPhysicsPushConstants pushClear;
@@ -311,7 +303,7 @@ void RecordLbvhBuildCommands(
                     curDstSlot = mortonSlot;
                     curDstBuf = mortonBuffer;
                 }
-                const u32x4 radixSlots0 = u32x4(curSrcSlot, curDstSlot, radixHistSlot, s_GpuInvalidIndex);
+                const u32x4 radixSlots0 = u32x4(curSrcSlot, curDstSlot, radixHistSlot, s_NullIndex);
 
                 GpuPhysicsPushConstants pushHist;
                 pushHist.itemCount = shapeCount;
@@ -483,7 +475,7 @@ void BuildNonCollideBodyPairHashTable(
     }
 
     bodyIdToGpuSlot.clear();
-    bodyIdToGpuSlot.resize(world.m_bodies.size(), s_GpuInvalidIndex);
+    bodyIdToGpuSlot.resize(world.m_bodies.size(), s_NullIndex);
     for(usize i = 0u; i < staticBodyIds.size(); ++i){
         const u32 bId = staticBodyIds[i];
         if(bId < bodyIdToGpuSlot.size())
@@ -512,7 +504,7 @@ void BuildNonCollideBodyPairHashTable(
             continue;
         const u32 gA = bodyIdToGpuSlot[bA];
         const u32 gB = bodyIdToGpuSlot[bB];
-        if(gA == s_GpuInvalidIndex || gB == s_GpuInvalidIndex || gA == gB)
+        if(gA == s_NullIndex || gB == s_NullIndex || gA == gB)
             continue;
         pairLosScratch.push_back(Min(gA, gB));
         pairHisScratch.push_back(Max(gA, gB));
@@ -527,7 +519,7 @@ void BuildNonCollideBodyPairHashTable(
                 continue;
             const u32 gA = bodyIdToGpuSlot[bA];
             const u32 gB = bodyIdToGpuSlot[bB];
-            if(gA == s_GpuInvalidIndex || gB == s_GpuInvalidIndex || gA == gB)
+            if(gA == s_NullIndex || gB == s_NullIndex || gA == gB)
                 continue;
             pairLosScratch.push_back(Min(gA, gB));
             pairHisScratch.push_back(Max(gA, gB));
@@ -812,7 +804,7 @@ b8 RecordGpuCollisionUploads(
     const b8 uploadHulls = uploadStaticGeom && !hullVertices.empty();
     const b8 uploadNodes = uploadStaticGeom && !meshNodes.empty();
     const b8 uploadTris = uploadStaticGeom && !meshTris.empty();
-    const b8 uploadNonCollide = !nonCollideHash.empty() && buffers.nonCollideHashSlot != s_GpuInvalidIndex;
+    const b8 uploadNonCollide = !nonCollideHash.empty() && buffers.nonCollideHashSlot != s_NullIndex;
 
     if(uploadPoses)
         commands.setBufferState(buffers.bodySimBuffer.deref(), ResourceStates::CopyDest);
@@ -1118,7 +1110,7 @@ b8 RecordGpuBroadphaseAndNarrowphaseCore(
     pushInd.modeOrSecondaryCount = s_GpuBroadphaseModeFinalizeIndirect;
     pushInd.flags = maxPairs;
     pushInd.slots0 = bpSlots0;
-    pushInd.slots1 = u32x4(buffers.slots1.x, buffers.slots1.y, buffers.slots2.x, s_GpuInvalidIndex);
+    pushInd.slots1 = u32x4(buffers.slots1.x, buffers.slots1.y, buffers.slots2.x, s_NullIndex);
     commands.setPushConstants(pushInd);
     commands.dispatch(1u, 1u, 1u);
 
@@ -1240,7 +1232,7 @@ class PhysicsBulletToiTask{
         push.itemCount = this.pairCount;
         push.linearSlop = s_LinearSlop;
         push.slots0 = this.buffers.slots0;
-        push.slots1 = u32x4(this.buffers.slots1.x, this.buffers.slots2.y, this.buffers.slots2.z, s_GpuInvalidIndex);
+        push.slots1 = u32x4(this.buffers.slots1.x, this.buffers.slots2.y, this.buffers.slots2.z, s_NullIndex);
         commands.setPushConstants(push);
         commands.dispatch(ComputeDispatchGroups(this.pairCount), 1u, 1u);
 
@@ -1275,7 +1267,7 @@ class PhysicsSolverTask{
     public Array<PhysicsGpuColorSlice, s_GraphColorCount> colorSlices;
     public Array<u8, s_GraphColorCount> colorHasRestitution;
     public Span<GpuPhysicsJointConstraint> jointConstraints;
-    public Array<PhysicsGpuColorSlice, s_GpuJointColorCount> jointColorSlices;
+    public Array<PhysicsGpuColorSlice, s_GraphColorCount> jointColorSlices;
     public Span<GpuPhysicsIslandSlice> islandSlices;
     public Span<f32x4> rollingMasses;
     public f32x4 gravity;
@@ -1323,7 +1315,7 @@ class PhysicsSolverTask{
         in Array<PhysicsGpuColorSlice, s_GraphColorCount> slices,
         in Array<u8, s_GraphColorCount> restFlags,
         in Span<GpuPhysicsJointConstraint> joints,
-        in Array<PhysicsGpuColorSlice, s_GpuJointColorCount> jSlices,
+        in Array<PhysicsGpuColorSlice, s_GraphColorCount> jSlices,
         in Span<GpuPhysicsIslandSlice> islSlices,
         in Span<f32x4> rollMasses,
         in VectorSingle g,
@@ -1578,15 +1570,15 @@ class PhysicsSolverTask{
             return;
         }
 
-        const u32 overflowCount = this.jointColorSlices[s_GpuJointOverflowColorIndex].count;
-        const u32 overflowOffset = this.jointColorSlices[s_GpuJointOverflowColorIndex].offset;
+        const u32 overflowCount = this.jointColorSlices[s_OverflowColorIndex].count;
+        const u32 overflowOffset = this.jointColorSlices[s_OverflowColorIndex].offset;
         const b8 hasOverflow = overflowCount > 0u;
-        usize lastColor = s_GpuJointColorCount;
+        usize lastColor = s_GraphColorCount;
         if(hasOverflow){
-            lastColor = s_GpuJointOverflowColorIndex;
+            lastColor = s_OverflowColorIndex;
         }
         else{
-            for(usize c = s_GpuJointOverflowColorIndex; c > 0u; --c){
+            for(usize c = s_OverflowColorIndex; c > 0u; --c){
                 const usize ci = c - 1u;
                 if(this.jointColorSlices[ci].count > 0u){
                     lastColor = ci;
@@ -1595,7 +1587,7 @@ class PhysicsSolverTask{
             }
         }
 
-        for(usize c = 0u; c < s_GpuJointOverflowColorIndex; ++c){
+        for(usize c = 0u; c < s_OverflowColorIndex; ++c){
             const u32 count = this.jointColorSlices[c].count;
             if(count == 0u)
                 continue;
@@ -1916,8 +1908,8 @@ class PhysicsSolverTask{
             pushRes.itemCount = this.awakeCount;
             pushRes.itemOffset = 0u;
             pushRes.modeOrSecondaryCount = s_GpuResidentModeCommitStep;
-            pushRes.slots0 = u32x4(this.buffers.slots0.x, this.buffers.slots0.y, this.buffers.slots0.z, s_GpuInvalidIndex);
-            pushRes.slots1 = u32x4(0u, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushRes.slots0 = u32x4(this.buffers.slots0.x, this.buffers.slots0.y, this.buffers.slots0.z, s_NullIndex);
+            pushRes.slots1 = u32x4(0u, s_NullIndex, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushRes);
             commands.dispatch(ComputeDispatchGroups(this.awakeCount), 1u, 1u);
         }
@@ -2049,8 +2041,8 @@ class PhysicsResidentStepTask{
         push.deltaTime = this.dt;
         push.maxLinearVelocity = this.maxLinearVelocity;
         push.gravitySpeculative = this.gravity;
-        push.slots0 = u32x4(this.bodySimSlot, this.bodyStateSlot, this.bodyOutSlot, s_GpuInvalidIndex);
-        push.slots1 = u32x4(0u, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+        push.slots0 = u32x4(this.bodySimSlot, this.bodyStateSlot, this.bodyOutSlot, s_NullIndex);
+        push.slots1 = u32x4(0u, s_NullIndex, s_NullIndex, s_NullIndex);
         commands.setPushConstants(push);
         commands.dispatch(ComputeDispatchGroups(this.bodyCount), 1u, 1u);
 
@@ -2104,29 +2096,29 @@ class PhysicsResidentFullStepTask{
     public BufferHandle jointAuxBuffer;
     public BufferHandle jointImpulseOutBuffer;
 
-    public u32 solverBodySimSlot = s_GpuInvalidIndex;
-    public u32 bodyStateSlot = s_GpuInvalidIndex;
-    public u32 bodyOutSlot = s_GpuInvalidIndex;
-    public u32 shapeMatSlot = s_GpuInvalidIndex;
-    public u32 warmPrevSlot = s_GpuInvalidIndex;
-    public u32 warmNextSlot = s_GpuInvalidIndex;
-    public u32 rawConstraintSlot = s_GpuInvalidIndex;
-    public u32 constraintSlot = s_GpuInvalidIndex;
-    public u32 resRawContactAuxSlot = s_GpuInvalidIndex;
-    public u32 resContactAuxSlot = s_GpuInvalidIndex;
-    public u32 rawMetaFeatSlot = s_GpuInvalidIndex;
-    public u32 sortedMetaFeatSlot = s_GpuInvalidIndex;
-    public u32 contactTotalImpSlot = s_GpuInvalidIndex;
-    public u32 contactImpOutSlot = s_GpuInvalidIndex;
-    public u32 prepCountersSlot = s_GpuInvalidIndex;
-    public u32 colorMetaSlot = s_GpuInvalidIndex;
-    public u32 colorIndirectSlot = s_GpuInvalidIndex;
-    public u32 bodyMaskWakeSlot = s_GpuInvalidIndex;
-    public u32 eventRingSlot = s_GpuInvalidIndex;
-    public u32 jointConstraintSlot = s_GpuInvalidIndex;
-    public u32 jointRefreshMetaSlot = s_GpuInvalidIndex;
-    public u32 jointAuxSlot = s_GpuInvalidIndex;
-    public u32 jointImpulseOutSlot = s_GpuInvalidIndex;
+    public u32 solverBodySimSlot = s_NullIndex;
+    public u32 bodyStateSlot = s_NullIndex;
+    public u32 bodyOutSlot = s_NullIndex;
+    public u32 shapeMatSlot = s_NullIndex;
+    public u32 warmPrevSlot = s_NullIndex;
+    public u32 warmNextSlot = s_NullIndex;
+    public u32 rawConstraintSlot = s_NullIndex;
+    public u32 constraintSlot = s_NullIndex;
+    public u32 resRawContactAuxSlot = s_NullIndex;
+    public u32 resContactAuxSlot = s_NullIndex;
+    public u32 rawMetaFeatSlot = s_NullIndex;
+    public u32 sortedMetaFeatSlot = s_NullIndex;
+    public u32 contactTotalImpSlot = s_NullIndex;
+    public u32 contactImpOutSlot = s_NullIndex;
+    public u32 prepCountersSlot = s_NullIndex;
+    public u32 colorMetaSlot = s_NullIndex;
+    public u32 colorIndirectSlot = s_NullIndex;
+    public u32 bodyMaskWakeSlot = s_NullIndex;
+    public u32 eventRingSlot = s_NullIndex;
+    public u32 jointConstraintSlot = s_NullIndex;
+    public u32 jointRefreshMetaSlot = s_NullIndex;
+    public u32 jointAuxSlot = s_NullIndex;
+    public u32 jointImpulseOutSlot = s_NullIndex;
 
     public Span<GpuPhysicsBodyPose> staticPoses;
     public Span<GpuPhysicsBodyPose> sleepingPoses;
@@ -2144,7 +2136,7 @@ class PhysicsResidentFullStepTask{
     public Span<GpuPhysicsJointConstraint> jointConstraints;
     public Span<f32x4> jointRefreshMeta;
     public Span<f32x4> jointAux;
-    public Array<PhysicsGpuColorSlice, s_GpuJointColorCount> jointColorSlices;
+    public Array<PhysicsGpuColorSlice, s_GraphColorCount> jointColorSlices;
 
     public u32 hullUploadOffset = 0u;
     public u32 meshNodeUploadOffset = 0u;
@@ -2203,7 +2195,7 @@ class PhysicsResidentFullStepTask{
         in u32 baseFlags
     )const{
         const u32x4 solverSlots0 = u32x4(this.solverBodySimSlot, this.bodyStateSlot, this.bodyOutSlot, this.constraintSlot);
-        const u32x4 solverSlots1 = u32x4(s_GpuInvalidIndex, this.contactImpOutSlot, s_GpuInvalidIndex, this.colorMetaSlot);
+        const u32x4 solverSlots1 = u32x4(s_NullIndex, this.contactImpOutSlot, s_NullIndex, this.colorMetaSlot);
         const f32x4 solverGravitySpec = f32x4(bit_cast<f32>(this.contactTotalImpSlot), 0.0f, 0.0f, bit_cast<f32>(this.resContactAuxSlot));
         ComputeState conIndState;
         conIndState.setPipeline(this.pipeContacts.deref()).setIndirectParams(this.colorIndirectBuffer.deref());
@@ -2262,18 +2254,18 @@ class PhysicsResidentFullStepTask{
         jState.setPipeline(this.pipeJoints.deref());
         commands.setComputeState(jState);
 
-        f32 auxSlotFloat = bit_cast<f32>(s_GpuInvalidIndex);
-        if(this.hasJointAux && this.jointAuxSlot != s_GpuInvalidIndex)
+        f32 auxSlotFloat = bit_cast<f32>(s_NullIndex);
+        if(this.hasJointAux && this.jointAuxSlot != s_NullIndex)
             auxSlotFloat = bit_cast<f32>(this.jointAuxSlot);
 
         const u32x4 jointSlots0 = u32x4(this.solverBodySimSlot, this.bodyStateSlot, this.bodyOutSlot, this.jointRefreshMetaSlot);
-        const u32x4 jointSlots1 = u32x4(this.jointConstraintSlot, s_GpuInvalidIndex, this.jointImpulseOutSlot, s_GpuInvalidIndex);
-        const u32 overflowCount = this.jointColorSlices[s_GpuJointOverflowColorIndex].count;
-        const u32 overflowOffset = this.jointColorSlices[s_GpuJointOverflowColorIndex].offset;
+        const u32x4 jointSlots1 = u32x4(this.jointConstraintSlot, s_NullIndex, this.jointImpulseOutSlot, s_NullIndex);
+        const u32 overflowCount = this.jointColorSlices[s_OverflowColorIndex].count;
+        const u32 overflowOffset = this.jointColorSlices[s_OverflowColorIndex].offset;
         const b8 hasOverflow = overflowCount > 0u;
-        u32 lastColor = s_GpuJointOverflowColorIndex;
+        u32 lastColor = s_OverflowColorIndex;
         if(!hasOverflow){
-            for(u32 ci = s_GpuJointOverflowColorIndex; ci > 0u; --ci){
+            for(u32 ci = s_OverflowColorIndex; ci > 0u; --ci){
                 const u32 idx = ci - 1u;
                 if(this.jointColorSlices[idx].count > 0u){
                     lastColor = idx;
@@ -2282,7 +2274,7 @@ class PhysicsResidentFullStepTask{
             }
         }
 
-        for(u32 c = 0u; c < s_GpuJointOverflowColorIndex; ++c){
+        for(u32 c = 0u; c < s_OverflowColorIndex; ++c){
             const u32 count = this.jointColorSlices[c].count;
             if(count == 0u)
                 continue;
@@ -2476,8 +2468,8 @@ class PhysicsResidentFullStepTask{
             pushPreSync.itemOffset = 0u;
             pushPreSync.modeOrSecondaryCount = s_GpuResidentModeSyncPoses;
             pushPreSync.deltaTime = this.dt;
-            pushPreSync.slots0 = u32x4(this.solverBodySimSlot, s_GpuInvalidIndex, this.bodyOutSlot, this.colBufs.slots0.x);
-            pushPreSync.slots1 = u32x4(this.awakeBodyOffset, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushPreSync.slots0 = u32x4(this.solverBodySimSlot, s_NullIndex, this.bodyOutSlot, this.colBufs.slots0.x);
+            pushPreSync.slots1 = u32x4(this.awakeBodyOffset, s_NullIndex, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushPreSync);
             commands.dispatch(ComputeDispatchGroups(this.awakeCount), 1u, 1u);
 
@@ -2540,8 +2532,8 @@ class PhysicsResidentFullStepTask{
         {
             u32 clearCount = Max(this.awakeCount, 1u);
             u32 clearWarmCap = 0u;
-            u32 clearWarmNext = s_GpuInvalidIndex;
-            u32 clearCounterSlot = s_GpuInvalidIndex;
+            u32 clearWarmNext = s_NullIndex;
+            u32 clearCounterSlot = s_NullIndex;
             u32 clearMaxPairs = 0u;
             if(hasShapes){
                 if(this.clearWarmNext && this.warmCap > 0u){
@@ -2559,7 +2551,7 @@ class PhysicsResidentFullStepTask{
             pushClear.flags = clearWarmCap;
             pushClear.gravitySpeculative = f32x4(bit_cast<f32>(this.prevWarmGen), bit_cast<f32>(this.curWarmGen), 0.0f, 0.0f);
             pushClear.slots0 = u32x4(this.prepCountersSlot, this.colorMetaSlot, this.colorIndirectSlot, this.bodyMaskWakeSlot);
-            pushClear.slots1 = u32x4(clearWarmNext, clearCounterSlot, clearMaxPairs, s_GpuInvalidIndex);
+            pushClear.slots1 = u32x4(clearWarmNext, clearCounterSlot, clearMaxPairs, s_NullIndex);
             commands.setPushConstants(pushClear);
             commands.dispatch(ComputeDispatchGroups(clearCount), 1u, 1u);
 
@@ -2612,7 +2604,7 @@ class PhysicsResidentFullStepTask{
             pushPrefix.itemCount = 1u;
             pushPrefix.modeOrSecondaryCount = s_GpuResPrepModePrefixColors;
             pushPrefix.flags = this.maxPairs;
-            pushPrefix.slots0 = u32x4(this.prepCountersSlot, this.colorMetaSlot, this.colorIndirectSlot, s_GpuInvalidIndex);
+            pushPrefix.slots0 = u32x4(this.prepCountersSlot, this.colorMetaSlot, this.colorIndirectSlot, s_NullIndex);
             commands.setPushConstants(pushPrefix);
             commands.dispatch(1u, 1u, 1u);
 
@@ -2653,7 +2645,7 @@ class PhysicsResidentFullStepTask{
                     pushWakeCon.modeOrSecondaryCount = s_GpuResPrepModePropagateSleepWake;
                     pushWakeCon.flags = 0u;
                     pushWakeCon.slots0 = u32x4(this.constraintSlot, this.bodyStateSlot, this.bodyOutSlot, this.bodyMaskWakeSlot);
-                    pushWakeCon.slots1 = u32x4(this.prepCountersSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushWakeCon.slots1 = u32x4(this.prepCountersSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushWakeCon);
                     commands.dispatchIndirect(s_GpuResIndirectAllSlot * 12u);
                     commands.setBufferState(this.bodyMaskWakeBuffer.deref(), ResourceStates::UnorderedAccess);
@@ -2667,7 +2659,7 @@ class PhysicsResidentFullStepTask{
                     pushWakeJoint.modeOrSecondaryCount = s_GpuResPrepModePropagateSleepWake;
                     pushWakeJoint.flags = 2u;
                     pushWakeJoint.slots0 = u32x4(this.jointConstraintSlot, this.bodyStateSlot, this.bodyOutSlot, this.bodyMaskWakeSlot);
-                    pushWakeJoint.slots1 = u32x4(this.prepCountersSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushWakeJoint.slots1 = u32x4(this.prepCountersSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushWakeJoint);
                     commands.dispatch(ComputeDispatchGroups(this.jointCount), 1u, 1u);
                     commands.setBufferState(this.bodyMaskWakeBuffer.deref(), ResourceStates::UnorderedAccess);
@@ -2682,7 +2674,7 @@ class PhysicsResidentFullStepTask{
             pushWake.modeOrSecondaryCount = s_GpuResPrepModeWakeBodies;
             pushWake.flags = this.maxEvents;
             pushWake.slots0 = u32x4(this.solverBodySimSlot, this.bodyStateSlot, this.bodyMaskWakeSlot, this.prepCountersSlot);
-            pushWake.slots1 = u32x4(this.eventRingSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushWake.slots1 = u32x4(this.eventRingSlot, s_NullIndex, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushWake);
             commands.dispatch(ComputeDispatchGroups(this.awakeCount), 1u, 1u);
 
@@ -2704,7 +2696,7 @@ class PhysicsResidentFullStepTask{
             pushRefresh.modeOrSecondaryCount = s_GpuSolverModeRefreshResident;
             pushRefresh.flags = 0u;
             pushRefresh.slots0 = u32x4(this.solverBodySimSlot, this.bodyStateSlot, this.bodyOutSlot, this.jointRefreshMetaSlot);
-            pushRefresh.slots1 = u32x4(this.jointConstraintSlot, s_GpuInvalidIndex, this.jointImpulseOutSlot, s_GpuInvalidIndex);
+            pushRefresh.slots1 = u32x4(this.jointConstraintSlot, s_NullIndex, this.jointImpulseOutSlot, s_NullIndex);
             commands.setPushConstants(pushRefresh);
             commands.dispatch(ComputeDispatchGroups(this.jointCount), 1u, 1u);
 
@@ -2714,7 +2706,7 @@ class PhysicsResidentFullStepTask{
 
         const u32 bodyGroups = ComputeDispatchGroups(this.awakeCount);
         const u32x4 solverSlots0 = u32x4(this.solverBodySimSlot, this.bodyStateSlot, this.bodyOutSlot, this.constraintSlot);
-        const u32x4 solverSlots1 = u32x4(s_GpuInvalidIndex, this.contactImpOutSlot, s_GpuInvalidIndex, this.colorMetaSlot);
+        const u32x4 solverSlots1 = u32x4(s_NullIndex, this.contactImpOutSlot, s_NullIndex, this.colorMetaSlot);
         const f32x4 solverGravitySpec = f32x4(bit_cast<f32>(this.contactTotalImpSlot), 0.0f, 0.0f, bit_cast<f32>(this.resContactAuxSlot));
 
         for(u32 subStep = 0u; subStep < this.subStepCount; ++subStep){
@@ -2841,8 +2833,8 @@ class PhysicsResidentFullStepTask{
             jExpState.setPipeline(this.pipeJoints.deref());
             commands.setComputeState(jExpState);
 
-            f32 auxSlotFloat = bit_cast<f32>(s_GpuInvalidIndex);
-            if(this.hasJointAux && this.jointAuxSlot != s_GpuInvalidIndex)
+            f32 auxSlotFloat = bit_cast<f32>(s_NullIndex);
+            if(this.hasJointAux && this.jointAuxSlot != s_NullIndex)
                 auxSlotFloat = bit_cast<f32>(this.jointAuxSlot);
             GpuPhysicsPushConstants pushJExp;
             pushJExp.itemCount = this.jointCount;
@@ -2851,7 +2843,7 @@ class PhysicsResidentFullStepTask{
             pushJExp.flags = s_GpuSolverFlagHasHitEvents;
             pushJExp.invDeltaTime = invH;
             pushJExp.slots0 = u32x4(this.solverBodySimSlot, this.bodyStateSlot, this.bodyOutSlot, this.jointRefreshMetaSlot);
-            pushJExp.slots1 = u32x4(this.jointConstraintSlot, s_GpuInvalidIndex, this.jointImpulseOutSlot, s_GpuInvalidIndex);
+            pushJExp.slots1 = u32x4(this.jointConstraintSlot, s_NullIndex, this.jointImpulseOutSlot, s_NullIndex);
             pushJExp.gravitySpeculative = f32x4(bit_cast<f32>(this.eventRingSlot), bit_cast<f32>(this.prepCountersSlot), bit_cast<f32>(this.maxEvents), auxSlotFloat);
             commands.setPushConstants(pushJExp);
             commands.dispatch(ComputeDispatchGroups(this.jointCount), 1u, 1u);
@@ -2890,7 +2882,7 @@ class PhysicsResidentFullStepTask{
             pushSleepInit.modeOrSecondaryCount = s_GpuResPrepModePropagateSleepWake;
             pushSleepInit.flags = 4u;
             pushSleepInit.slots0 = u32x4(this.constraintSlot, this.bodyStateSlot, this.bodyOutSlot, this.bodyMaskWakeSlot);
-            pushSleepInit.slots1 = u32x4(this.prepCountersSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushSleepInit.slots1 = u32x4(this.prepCountersSlot, s_NullIndex, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushSleepInit);
             commands.dispatch(bodyGroups, 1u, 1u);
             commands.setBufferState(this.bodyMaskWakeBuffer.deref(), ResourceStates::UnorderedAccess);
@@ -2908,7 +2900,7 @@ class PhysicsResidentFullStepTask{
                     pushSleepCon.modeOrSecondaryCount = s_GpuResPrepModePropagateSleepWake;
                     pushSleepCon.flags = 1u;
                     pushSleepCon.slots0 = u32x4(this.constraintSlot, this.bodyStateSlot, this.bodyOutSlot, this.bodyMaskWakeSlot);
-                    pushSleepCon.slots1 = u32x4(this.prepCountersSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushSleepCon.slots1 = u32x4(this.prepCountersSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushSleepCon);
                     commands.dispatchIndirect(s_GpuResIndirectAllSlot * 12u);
                     commands.setBufferState(this.bodyMaskWakeBuffer.deref(), ResourceStates::UnorderedAccess);
@@ -2922,7 +2914,7 @@ class PhysicsResidentFullStepTask{
                     pushSleepJoint.modeOrSecondaryCount = s_GpuResPrepModePropagateSleepWake;
                     pushSleepJoint.flags = 3u;
                     pushSleepJoint.slots0 = u32x4(this.jointConstraintSlot, this.bodyStateSlot, this.bodyOutSlot, this.bodyMaskWakeSlot);
-                    pushSleepJoint.slots1 = u32x4(this.prepCountersSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushSleepJoint.slots1 = u32x4(this.prepCountersSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushSleepJoint);
                     commands.dispatch(ComputeDispatchGroups(this.jointCount), 1u, 1u);
                     commands.setBufferState(this.bodyMaskWakeBuffer.deref(), ResourceStates::UnorderedAccess);
@@ -2939,10 +2931,10 @@ class PhysicsResidentFullStepTask{
             f32 sleepTimeout = 0.0f;
             if(this.enableSleep)
                 sleepTimeout = this.timeToSleep;
-            u32 sleepMaskSlot = s_GpuInvalidIndex;
+            u32 sleepMaskSlot = s_NullIndex;
             if(this.enableSleep && (hasShapes || hasJoints))
                 sleepMaskSlot = this.bodyMaskWakeSlot;
-            u32 colPoseSlot = s_GpuInvalidIndex;
+            u32 colPoseSlot = s_NullIndex;
             if(hasShapes)
                 colPoseSlot = this.colBufs.slots0.x;
             GpuPhysicsPushConstants pushCommit;
@@ -3240,7 +3232,7 @@ class PhysicsBatchSpatialQueryTask{
         commands.setBufferState(this.queryBuffer.deref(), ResourceStates::CopyDest);
         if(this.hasAux && !this.queryAux.empty())
             commands.setBufferState(this.auxBuffer.deref(), ResourceStates::CopyDest);
-        if(this.queryShapeSlot != s_GpuInvalidIndex && !this.queryShapes.empty())
+        if(this.queryShapeSlot != s_NullIndex && !this.queryShapes.empty())
             commands.setBufferState(this.queryShapeBuffer.deref(), ResourceStates::CopyDest);
         commands.commitBarriers();
 
@@ -3298,7 +3290,7 @@ class PhysicsBatchSpatialQueryTask{
             if(!commands.tryWriteBuffer(this.auxBuffer.deref(), this.queryAux, 0u))
                 return false;
         }
-        if(this.queryShapeSlot != s_GpuInvalidIndex && !this.queryShapes.empty()){
+        if(this.queryShapeSlot != s_NullIndex && !this.queryShapes.empty()){
             if(!commands.tryWriteBuffer(this.queryShapeBuffer.deref(), this.queryShapes, 0u))
                 return false;
         }
@@ -3330,9 +3322,9 @@ class PhysicsBatchSpatialQueryTask{
         commands.setBufferState(this.resultBuffer.deref(), ResourceStates::UnorderedAccess);
         if(this.hasAux && !this.queryAux.empty())
             commands.setBufferState(this.auxBuffer.deref(), ResourceStates::UnorderedAccess);
-        if(this.multiHitSlot != s_GpuInvalidIndex)
+        if(this.multiHitSlot != s_NullIndex)
             commands.setBufferState(this.multiHitBuffer.deref(), ResourceStates::UnorderedAccess);
-        if(this.queryShapeSlot != s_GpuInvalidIndex && !this.queryShapes.empty())
+        if(this.queryShapeSlot != s_NullIndex && !this.queryShapes.empty())
             commands.setBufferState(this.queryShapeBuffer.deref(), ResourceStates::UnorderedAccess);
         commands.commitBarriers();
 
@@ -3353,8 +3345,8 @@ class PhysicsBatchSpatialQueryTask{
             pushSync.itemCount = this.residentSyncCount;
             pushSync.itemOffset = 0u;
             pushSync.modeOrSecondaryCount = s_GpuResidentModeSyncPoses;
-            pushSync.slots0 = u32x4(this.residentBodySimSlot, s_GpuInvalidIndex, this.residentBodyOutSlot, this.bodyPoseSlot);
-            pushSync.slots1 = u32x4(this.residentPoseOffset, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushSync.slots0 = u32x4(this.residentBodySimSlot, s_NullIndex, this.residentBodyOutSlot, this.bodyPoseSlot);
+            pushSync.slots1 = u32x4(this.residentPoseOffset, s_NullIndex, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushSync);
             commands.dispatch(ComputeDispatchGroups(this.residentSyncCount), 1u, 1u);
 
@@ -3378,8 +3370,8 @@ class PhysicsBatchSpatialQueryTask{
                 pushAabb.itemCount = this.updateAabbCount;
                 pushAabb.itemOffset = this.updateAabbOffset;
                 pushAabb.modeOrSecondaryCount = s_GpuBroadphaseModeUpdateAabbs;
-                pushAabb.slots0 = u32x4(this.bodyPoseSlot, this.shapeAabbSlot, this.shapeSlot, s_GpuInvalidIndex);
-                pushAabb.slots1 = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushAabb.slots0 = u32x4(this.bodyPoseSlot, this.shapeAabbSlot, this.shapeSlot, s_NullIndex);
+                pushAabb.slots1 = u32x4(s_NullIndex, s_NullIndex, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushAabb);
                 commands.dispatch(ComputeDispatchGroups(this.updateAabbCount), 1u, 1u);
 
@@ -3453,7 +3445,7 @@ class PhysicsBatchSpatialQueryTask{
             commands.dispatch(queryGroups, 1u, 1u);
         }
 
-        const b8 copyMulti = this.multiHitSlot != s_GpuInvalidIndex && this.maxHitsPerQuery > 0u && this.multiHitReadback.valid();
+        const b8 copyMulti = this.multiHitSlot != s_NullIndex && this.maxHitsPerQuery > 0u && this.multiHitReadback.valid();
         const b8 copyRes = this.resultReadback.valid();
         if(copyRes || copyMulti){
             if(copyRes){
@@ -3623,7 +3615,7 @@ b8 RecordExportRenderTransformsDispatchesBody(
         pushRes.modeOrSecondaryCount = exportMode;
         pushRes.flags = s_GpuExportSourceBodyOut;
         pushRes.slots0 = u32x4(bindingSlot, resOutSlot, resSimSlot, outSlot);
-        pushRes.slots1 = u32x4(strideFloat4, bindBase, s_GpuInvalidIndex, baseFloat4Offset);
+        pushRes.slots1 = u32x4(strideFloat4, bindBase, s_NullIndex, baseFloat4Offset);
         commands.setPushConstants(pushRes);
         commands.dispatch(ComputeDispatchGroups(resCount), 1u, 1u);
     }
@@ -3633,7 +3625,7 @@ b8 RecordExportRenderTransformsDispatchesBody(
         pushPose.itemOffset = poseCount;
         pushPose.modeOrSecondaryCount = exportMode;
         pushPose.flags = s_GpuExportSourceBodyPose;
-        pushPose.slots0 = u32x4(bindingSlot, poseSlot, s_GpuInvalidIndex, outSlot);
+        pushPose.slots0 = u32x4(bindingSlot, poseSlot, s_NullIndex, outSlot);
         pushPose.slots1 = u32x4(strideFloat4, bindBase + resCount, poseBase, baseFloat4Offset);
         commands.setPushConstants(pushPose);
         commands.dispatch(ComputeDispatchGroups(poseBindCount), 1u, 1u);
@@ -3686,7 +3678,7 @@ b8 RecordExportRenderTransformsDispatches(
 
 class PhysicsBatchExportTargetInput{
     public GpuGraphResourceId targetResource;
-    public u32 targetUavSlot = s_GpuInvalidIndex;
+    public u32 targetUavSlot = s_NullIndex;
     public u32 instanceStrideFloat4 = 4u;
     public u32 exportMode = s_GpuExportModePatchInstanceBuffer;
     public u32 baseFloat4Offset = 0u;
@@ -3695,7 +3687,7 @@ class PhysicsBatchExportTargetInput{
 }
 
 class PhysicsBatchExportTargetDispatch{
-    public u32 outSlot = s_GpuInvalidIndex;
+    public u32 outSlot = s_NullIndex;
     public u32 exportMode = s_GpuExportModePatchInstanceBuffer;
     public u32 strideFloat4 = 4u;
     public u32 bindBase = 0u;
@@ -3763,11 +3755,11 @@ class PhysicsExportRenderTransformsGraphPayload{
     public mut GpuDescriptorHeap heap;
     public mut PhysicsGpuExportSubmissionTracker tracker;
     public ComputePipelineHandle pipeline;
-    public u32 bindingSlot = s_GpuInvalidIndex;
-    public u32 resOutSlot = s_GpuInvalidIndex;
-    public u32 resSimSlot = s_GpuInvalidIndex;
+    public u32 bindingSlot = s_NullIndex;
+    public u32 resOutSlot = s_NullIndex;
+    public u32 resSimSlot = s_NullIndex;
     public u32 resBodyCount = 0u;
-    public u32 poseSlot = s_GpuInvalidIndex;
+    public u32 poseSlot = s_NullIndex;
     public FixedVector<PhysicsBatchExportTargetDispatch, 16u> dispatches;
     public u64 exportFrameStamp = 0u;
     public b8 requiresPrimaryGraphicsQueue = false;
@@ -3915,13 +3907,13 @@ class SoftBodyGpuDeformTarget{
     public BufferHandle meshletBoundsBuffer;
     public BufferHandle meshletLocalBoundsBuffer;
     public BufferHandle localBoundsBuffer;
-    public u32 positionUavSlot = s_GpuInvalidIndex;
-    public u32 normalUavSlot = s_GpuInvalidIndex;
-    public u32 tangentUavSlot = s_GpuInvalidIndex;
-    public u32 attributeUavSlot = s_GpuInvalidIndex;
-    public u32 meshletBoundsUavSlot = s_GpuInvalidIndex;
-    public u32 meshletLocalBoundsUavSlot = s_GpuInvalidIndex;
-    public u32 localBoundsUavSlot = s_GpuInvalidIndex;
+    public u32 positionUavSlot = s_NullIndex;
+    public u32 normalUavSlot = s_NullIndex;
+    public u32 tangentUavSlot = s_NullIndex;
+    public u32 attributeUavSlot = s_NullIndex;
+    public u32 meshletBoundsUavSlot = s_NullIndex;
+    public u32 meshletLocalBoundsUavSlot = s_NullIndex;
+    public u32 localBoundsUavSlot = s_NullIndex;
 }
 
 class SoftBodyGpuTopoCacheSlot{
@@ -4177,7 +4169,7 @@ class PhysicsGpuDispatcher{
     private u32 m_cachedResidentJointSubSteps = 0u;
     private u32 m_resJointCount = 0u;
     private b8 m_resJointHasAux = false;
-    private Array<PhysicsGpuColorSlice, s_GpuJointColorCount> m_resJointColorSlices;
+    private Array<PhysicsGpuColorSlice, s_GraphColorCount> m_resJointColorSlices;
     private Vector<GpuPhysicsJointConstraint> m_resJointsScratch;
     private Vector<f32x4> m_resJointRefreshMetaScratch;
     private Vector<f32x4> m_resJointAuxScratch;
@@ -4219,11 +4211,10 @@ class PhysicsGpuDispatcher{
     private Vector<f32x4> m_resToiQ0Scratch;
     private Vector<f32x4> m_softParticlePosScratch;
     private Vector<GpuPhysicsSoftParticleState> m_softParticleStateScratch;
-    private Vector<GpuPhysicsSoftBackstop> m_softBackstopsScratch;
     private Vector<GpuPhysicsSoftBackstop> m_softBackstopsGroupedScratch;
     private Vector<u32> m_softBsRangeScratch;
     private Vector<u32> m_softBsCursorScratch;
-    private Vector<GpuPhysicsFluidGerstnerWave> m_gerstnerWavesScratch;
+    private Vector<f32x4> m_gerstnerWavesScratch;
     private Vector<f32x4> m_softDeformXfScratch;
     private Vector<f32x4> m_envBodyFilterScratch;
     private Vector<GpuPhysicsForceField> m_forceFieldsScratch;
@@ -4449,7 +4440,7 @@ class PhysicsGpuDispatcher{
     private Vector<f32x2u> m_contactAnisoScalesScratch;
     private Vector<f32x4> m_gpuRollingMassScratch;
     private Vector<JointConstraint> m_flatGpuJointsScratch;
-    private Array<Vector<u32>, s_GpuJointColorCount> m_jointColorBucketsScratch;
+    private Array<Vector<u32>, s_GraphColorCount> m_jointColorBucketsScratch;
     private Vector<u32> m_bodyJointColorMaskScratch;
     private Vector<u8> m_hitFlagsScratch;
     private SolverWorkPartition m_partitionScratch;
@@ -4652,9 +4643,9 @@ class PhysicsGpuDispatcher{
 
     private void resetToiPackScratch(in usize bodyCount, in usize shapeCount, in usize totalPairCount){
         this.m_toiBodyToSlotScratch.clear();
-        this.m_toiBodyToSlotScratch.resize(bodyCount, s_GpuInvalidIndex);
+        this.m_toiBodyToSlotScratch.resize(bodyCount, s_NullIndex);
         this.m_toiShapeToSlotScratch.clear();
-        this.m_toiShapeToSlotScratch.resize(shapeCount, s_GpuInvalidIndex);
+        this.m_toiShapeToSlotScratch.resize(shapeCount, s_NullIndex);
         this.m_gpuSimsScratch.clear();
         this.m_gpuShapesScratch.clear();
         this.m_toiPairsScratch.clear();
@@ -4662,7 +4653,7 @@ class PhysicsGpuDispatcher{
     }
 
     private void packToiShapeSlot(in PhysicsWorld world, in u32 sId, in u32 bId){
-        if(this.m_toiShapeToSlotScratch[sId] != s_GpuInvalidIndex)
+        if(this.m_toiShapeToSlotScratch[sId] != s_NullIndex)
             return;
         this.m_toiShapeToSlotScratch[sId] = cast<u32>(this.m_gpuShapesScratch.size());
         u32 off = 0u;
@@ -4756,15 +4747,15 @@ class PhysicsGpuDispatcher{
         );
         outToiBufs.slots1 = u32x4(
             this.m_toiPairSlot.descriptor.slot(),
-            s_GpuInvalidIndex,
-            s_GpuInvalidIndex,
-            s_GpuInvalidIndex
+            s_NullIndex,
+            s_NullIndex,
+            s_NullIndex
         );
         outToiBufs.slots2 = u32x4(
-            s_GpuInvalidIndex,
+            s_NullIndex,
             this.m_hullVertexSlot.descriptor.slot(),
             this.m_toiManifoldSlot.descriptor.slot(),
-            s_GpuInvalidIndex
+            s_NullIndex
         );
         return true;
     }
@@ -4874,11 +4865,11 @@ class PhysicsGpuDispatcher{
         mut CommandList commands = this.m_computeCommandLists[this.m_computeCmdCursor].deref();
         commands.open();
         commands.setEnableAutomaticBarriers(false);
-        u32 poseDescSlot = s_GpuInvalidIndex;
+        u32 poseDescSlot = s_NullIndex;
         if(activePoseSlot.hasValidUav())
             poseDescSlot = activePoseSlot.descriptor.slot();
-        u32 resOutDesc = s_GpuInvalidIndex;
-        u32 resSimDesc = s_GpuInvalidIndex;
+        u32 resOutDesc = s_NullIndex;
+        u32 resSimDesc = s_NullIndex;
         if(this.m_bodyOutSlot.hasValidUav())
             resOutDesc = this.m_bodyOutSlot.descriptor.slot();
         if(this.m_solverBodySimSlot.hasValidUav())
@@ -4969,7 +4960,7 @@ class PhysicsGpuDispatcher{
         this.m_cachedResidentJointSubSteps = 0u;
         this.m_resJointCount = 0u;
         this.m_resJointHasAux = false;
-        for(usize rjc = 0u; rjc < s_GpuJointColorCount; ++rjc)
+        for(usize rjc = 0u; rjc < s_GraphColorCount; ++rjc)
             this.m_resJointColorSlices[rjc] = PhysicsGpuColorSlice();
         this.m_resJointsScratch.clear();
         this.m_resJointRefreshMetaScratch.clear();
@@ -5009,7 +5000,6 @@ class PhysicsGpuDispatcher{
         this.m_resToiQ0Scratch.clear();
         this.m_softParticlePosScratch.clear();
         this.m_softParticleStateScratch.clear();
-        this.m_softBackstopsScratch.clear();
         this.m_softBackstopsGroupedScratch.clear();
         this.m_softBsRangeScratch.clear();
         this.m_softBsCursorScratch.clear();
@@ -5098,7 +5088,7 @@ class PhysicsGpuDispatcher{
         this.m_gpuJointAuxOffsetsScratch.clear();
         this.m_gpuRollingMassScratch.clear();
         this.m_flatGpuJointsScratch.clear();
-        for(usize jc = 0u; jc < s_GpuJointColorCount; ++jc)
+        for(usize jc = 0u; jc < s_GraphColorCount; ++jc)
             this.m_jointColorBucketsScratch[jc].clear();
         this.m_bodyJointColorMaskScratch.clear();
         this.m_hitFlagsScratch.clear();
@@ -5431,10 +5421,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    public QueueSubmissionToken lastComputeToken()const{
-        return this.m_lastComputeToken;
-    }
-
     private b8 waitForLastCompute(mut Device device){
         if(!this.m_lastComputeToken.valid())
             return true;
@@ -5714,7 +5700,7 @@ class PhysicsGpuDispatcher{
         in Array<PhysicsGpuColorSlice, s_GraphColorCount> colorSlices,
         in Array<u8, s_GraphColorCount> colorHasRestitution,
         in Span<GpuPhysicsJointConstraint> joints,
-        in Array<PhysicsGpuColorSlice, s_GpuJointColorCount> jointColorSlices,
+        in Array<PhysicsGpuColorSlice, s_GraphColorCount> jointColorSlices,
         in Span<GpuPhysicsIslandSlice> islandSlices,
         in Span<f32x4> rollingMasses,
         in VectorSingle gravity,
@@ -6003,13 +5989,13 @@ class PhysicsGpuDispatcher{
             this.m_cachedHullVec4Count.resize(hullSlotCount, 0u);
             this.m_cachedMeshValid.resize(meshSlotCount, 0u);
             this.m_cachedMeshGen.resize(meshSlotCount, 0u);
-            this.m_cachedMeshNodeBase.resize(meshSlotCount, s_GpuInvalidIndex);
-            this.m_cachedMeshTriBase.resize(meshSlotCount, s_GpuInvalidIndex);
+            this.m_cachedMeshNodeBase.resize(meshSlotCount, s_NullIndex);
+            this.m_cachedMeshTriBase.resize(meshSlotCount, s_NullIndex);
             this.m_cachedMeshNodeVec4Count.resize(meshSlotCount, 0u);
             this.m_cachedMeshTriVec4Count.resize(meshSlotCount, 0u);
             this.m_cachedHfValid.resize(hfSlotCount, 0u);
             this.m_cachedHfGen.resize(hfSlotCount, 0u);
-            this.m_cachedHfOffset.resize(hfSlotCount, s_GpuInvalidIndex);
+            this.m_cachedHfOffset.resize(hfSlotCount, s_NullIndex);
             this.m_cachedHfMeta.resize(hfSlotCount, 0u);
             this.m_cachedHfVec4Count.resize(hfSlotCount, 0u);
 
@@ -6199,8 +6185,8 @@ class PhysicsGpuDispatcher{
                             this.m_cachedMeshTriVec4Count[gIdx] = addTriVec4s;
                         }
                         else{
-                            this.m_cachedMeshNodeBase[gIdx] = s_GpuInvalidIndex;
-                            this.m_cachedMeshTriBase[gIdx] = s_GpuInvalidIndex;
+                            this.m_cachedMeshNodeBase[gIdx] = s_NullIndex;
+                            this.m_cachedMeshTriBase[gIdx] = s_NullIndex;
                             this.m_cachedMeshNodeVec4Count[gIdx] = 0u;
                             this.m_cachedMeshTriVec4Count[gIdx] = 0u;
                         }
@@ -6280,7 +6266,7 @@ class PhysicsGpuDispatcher{
                             this.m_cachedHfVec4Count[gIdx] = cast<u32>(this.m_cachedHullData.size() - cast<usize>(hfOffset));
                         }
                         else{
-                            this.m_cachedHfOffset[gIdx] = s_GpuInvalidIndex;
+                            this.m_cachedHfOffset[gIdx] = s_NullIndex;
                             this.m_cachedHfMeta[gIdx] = 0u;
                             this.m_cachedHfVec4Count[gIdx] = 0u;
                         }
@@ -6550,7 +6536,7 @@ class PhysicsGpuDispatcher{
             const u32 bIdA = world.m_shapes[sIdA].bodyId;
             const u32 bIdB = world.m_shapes[sIdB].bodyId;
 
-            if(bodyToToiSlot[bIdA] == s_GpuInvalidIndex){
+            if(bodyToToiSlot[bIdA] == s_NullIndex){
                 bodyToToiSlot[bIdA] = cast<u32>(this.m_gpuSimsScratch.size());
                 in Body b = world.m_bodies[bIdA];
                 in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
@@ -6560,7 +6546,7 @@ class PhysicsGpuDispatcher{
                 gs.torqueAngularDamping = sim.rotation0;
                 this.m_gpuSimsScratch.push_back(gs);
             }
-            if(bodyToToiSlot[bIdB] == s_GpuInvalidIndex){
+            if(bodyToToiSlot[bIdB] == s_NullIndex){
                 bodyToToiSlot[bIdB] = cast<u32>(this.m_gpuSimsScratch.size());
                 in Body b = world.m_bodies[bIdB];
                 in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
@@ -6662,7 +6648,7 @@ class PhysicsGpuDispatcher{
                 }
                 else{
                     const ShapeProxy proxyB = MakeShapeProxyFromShape(sB, world.m_hullShapes, world.m_scaledShapes);
-                    const TimeOfImpactOutput toi = ComputeTimeOfImpact(proxyA, toiResults[bi].sweepA, proxyB, sweepB, toiResults[bi].bestT);
+                    const TimeOfImpactOutput toi = ComputeTimeOfImpactViews(MakeShapeProxyView(proxyA), toiResults[bi].sweepA, MakeShapeProxyView(proxyB), sweepB, toiResults[bi].bestT);
                     if(toi.hit() && !toi.initialOverlap() && toi.fraction() > 1.0e-5f && toi.fraction() < toiResults[bi].bestT){
                         candidateHit = true;
                         candidateFrac = toi.fraction();
@@ -6678,7 +6664,7 @@ class PhysicsGpuDispatcher{
                 candidatePt = VectorSingle(gm.anchorAFeature[0u].x, gm.anchorAFeature[0u].y, gm.anchorAFeature[0u].z, 0.0f);
                 if(sB.type == ShapeType::Mesh){
                     const u32 gpuTriIdx = bit_cast<u32>(gm.anchorAFeature[0u].w);
-                    if(gpuTriIdx != s_GpuInvalidIndex)
+                    if(gpuTriIdx != s_NullIndex)
                         candidateTriB = gpuTriIdx;
                 }
             }
@@ -6930,34 +6916,7 @@ class PhysicsGpuDispatcher{
                     if(this.m_hasAnyNonCollideJoints && sim.bodyId < this.m_nonCollideBodyFlagsScratch.size() && this.m_nonCollideBodyFlagsScratch[sim.bodyId] != 0u)
                         bodyExtraShapeFlags = s_GpuShapeFlagHasNonCollideJoint;
 
-                    u32 sId = body.headShapeId;
-                    while(sId != s_NullIndex){
-                        in Shape shape = world.m_shapes[sId];
-                        const u32 nextSId = shape.nextShapeId;
-                        if(shape.alive()){
-                            VectorSingle localMin(0.0f);
-                            VectorSingle localMax(0.0f);
-                            ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_chainShapes, world.m_sdfShapes, localMin, localMax);
-                            const VectorSingle localSpan = localMax - localMin;
-                            const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
-                            if(shapeExtent <= 10.0f){
-                                this.m_cachedStaticExtentAccum += Max(shapeExtent, 0.25f);
-                                ++this.m_cachedStaticExtentCount;
-                            }
-                            if(!this.m_cachedStaticHasComplex){
-                                if(HasShapeGpuComplexNarrowphase(shape, world.m_hullShapes))
-                                    this.m_cachedStaticHasComplex = true;
-                            }
-                            u32 dataOffset = 0u;
-                            u32 dataMeta = 0u;
-                            if(sId < this.m_shapeDataOffset.size()){
-                                dataOffset = this.m_shapeDataOffset[sId];
-                                dataMeta = this.m_shapeDataMeta[sId];
-                            }
-                            this.m_cachedStaticShapes.push_back(PackGpuShapeProxyWithLocalBounds(shape, body, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax, gpuBodyIdx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
-                        }
-                        sId = nextSId;
-                    }
+                    this.appendBodyShapesToGpuList(world, body, gpuBodyIdx, bodyExtraShapeFlags, this.m_cachedStaticShapes, this.m_cachedStaticExtentAccum, this.m_cachedStaticExtentCount, this.m_cachedStaticHasComplex);
                 }
 
                 this.m_staticPoseCacheValid = true;
@@ -7016,34 +6975,7 @@ class PhysicsGpuDispatcher{
                         if(this.m_hasAnyNonCollideJoints && sim.bodyId < this.m_nonCollideBodyFlagsScratch.size() && this.m_nonCollideBodyFlagsScratch[sim.bodyId] != 0u)
                             bodyExtraShapeFlags = s_GpuShapeFlagHasNonCollideJoint;
 
-                        u32 sId = body.headShapeId;
-                        while(sId != s_NullIndex){
-                            in Shape shape = world.m_shapes[sId];
-                            const u32 nextSId = shape.nextShapeId;
-                            if(shape.alive()){
-                                VectorSingle localMin(0.0f);
-                                VectorSingle localMax(0.0f);
-                                ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_chainShapes, world.m_sdfShapes, localMin, localMax);
-                                const VectorSingle localSpan = localMax - localMin;
-                                const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
-                                if(shapeExtent <= 10.0f){
-                                    this.m_cachedSleepingExtentAccum += Max(shapeExtent, 0.25f);
-                                    ++this.m_cachedSleepingExtentCount;
-                                }
-                                if(!this.m_cachedSleepingHasComplex){
-                                    if(HasShapeGpuComplexNarrowphase(shape, world.m_hullShapes))
-                                        this.m_cachedSleepingHasComplex = true;
-                                }
-                                u32 dataOffset = 0u;
-                                u32 dataMeta = 0u;
-                                if(sId < this.m_shapeDataOffset.size()){
-                                    dataOffset = this.m_shapeDataOffset[sId];
-                                    dataMeta = this.m_shapeDataMeta[sId];
-                                }
-                                this.m_cachedSleepingShapes.push_back(PackGpuShapeProxyWithLocalBounds(shape, body, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax, gpuBodyIdx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
-                            }
-                            sId = nextSId;
-                        }
+                        this.appendBodyShapesToGpuList(world, body, gpuBodyIdx, bodyExtraShapeFlags, this.m_cachedSleepingShapes, this.m_cachedSleepingExtentAccum, this.m_cachedSleepingExtentCount, this.m_cachedSleepingHasComplex);
                     }
                 }
 
@@ -7247,34 +7179,7 @@ class PhysicsGpuDispatcher{
                         u32 bodyExtraShapeFlags = 0u;
                         if(this.m_hasAnyNonCollideJoints && bodyId < this.m_nonCollideBodyFlagsScratch.size() && this.m_nonCollideBodyFlagsScratch[bodyId] != 0u)
                             bodyExtraShapeFlags = s_GpuShapeFlagHasNonCollideJoint;
-                        u32 sId = shapeBody.headShapeId;
-                        while(sId != s_NullIndex){
-                            in Shape shape = world.m_shapes[sId];
-                            const u32 nextSId = shape.nextShapeId;
-                            if(shape.alive()){
-                                VectorSingle localMin(0.0f);
-                                VectorSingle localMax(0.0f);
-                                ComputeShapeLocalAabbCachedValues(shape, world.m_hullShapes, world.m_hullLocalAabbs, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_chainShapes, world.m_sdfShapes, localMin, localMax);
-                                const VectorSingle localSpan = localMax - localMin;
-                                const f32 shapeExtent = Vector3MaxComponent(localSpan).x * 0.5f;
-                                if(shapeExtent <= 10.0f){
-                                    awakeExtentAccum += Max(shapeExtent, 0.25f);
-                                    ++awakeExtentCount;
-                                }
-                                if(!awakeHasComplex){
-                                    if(HasShapeGpuComplexNarrowphase(shape, world.m_hullShapes))
-                                        awakeHasComplex = true;
-                                }
-                                u32 dataOffset = 0u;
-                                u32 dataMeta = 0u;
-                                if(sId < this.m_shapeDataOffset.size()){
-                                    dataOffset = this.m_shapeDataOffset[sId];
-                                    dataMeta = this.m_shapeDataMeta[sId];
-                                }
-                                this.m_cachedAwakeShapes.push_back(PackGpuShapeProxyWithLocalBounds(shape, shapeBody, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, localMin, localMax, awakeBodyOffset + idx, sId, s_MaxAabbMargin, dataOffset, dataMeta, bodyExtraShapeFlags));
-                            }
-                            sId = nextSId;
-                        }
+                        this.appendBodyShapesToGpuList(world, shapeBody, awakeBodyOffset + idx, bodyExtraShapeFlags, this.m_cachedAwakeShapes, awakeExtentAccum, awakeExtentCount, awakeHasComplex);
                     }
                 }
 
@@ -7444,8 +7349,6 @@ class PhysicsGpuDispatcher{
                     this.m_cachedNonCollideSleepingBodyCount = sleepingBodyCount;
                     this.m_cachedNonCollideSolverSetCount = world.m_solverSets.size();
                 }
-                const u32 nonCollideMask = this.m_cachedNonCollideHashMask;
-                u32 nonCollideSlotDesc = s_GpuInvalidIndex;
                 Span<u32> nonCollideSpan;
                 if(!this.m_nonCollideHashScratch.empty()){
                     const u32 prevNcCap = this.m_nonCollideHashSlot.capacity;
@@ -7454,70 +7357,12 @@ class PhysicsGpuDispatcher{
                         return false;
                     if(!prevNcUavValid || this.m_nonCollideHashSlot.capacity != prevNcCap)
                         this.m_nonCollideGpuValid = false;
-                    nonCollideSlotDesc = this.m_nonCollideHashSlot.descriptor.slot();
                     if(!this.m_nonCollideGpuValid)
                         nonCollideSpan = Span<u32>(this.m_nonCollideHashScratch.data(), this.m_nonCollideHashScratch.size());
                 }
 
                 PhysicsGpuBufferGroup colBufs;
-                colBufs.bodySimBuffer = this.m_bodySimSlot.buffer;
-                colBufs.shapeBuffer = this.m_shapeSlot.buffer;
-                colBufs.shapeAabbBuffer = this.m_shapeAabbSlot.buffer;
-                colBufs.pairBuffer = this.m_pairSlot.buffer;
-                colBufs.surfacePairBuffer = this.m_surfacePairSlot.buffer;
-                colBufs.counterBuffer = this.m_counterSlot.buffer;
-                colBufs.counterReadback = this.m_counterSlot.readback;
-                colBufs.indirectArgsBuffer = this.m_indirectArgsSlot.buffer;
-                colBufs.gridBuffer = this.m_gridSlot.buffer;
-                colBufs.largeListBuffer = this.m_largeListSlot.buffer;
-                colBufs.hullVertexBuffer = this.m_hullVertexSlot.buffer;
-                colBufs.meshNodeBuffer = this.m_meshNodeSlot.buffer;
-                colBufs.meshTriBuffer = this.m_meshTriSlot.buffer;
-                colBufs.manifoldBuffer = this.m_manifoldSlot.buffer;
-                colBufs.manifoldReadback = this.m_manifoldSlot.readback;
-                colBufs.nonCollideHashBuffer = this.m_nonCollideHashSlot.buffer;
-                colBufs.lbvhMortonBuffer = this.m_lbvhMortonSlot.buffer;
-                colBufs.lbvhNodeBuffer = this.m_lbvhNodeSlot.buffer;
-                colBufs.shapeAabbSlot = this.m_shapeAabbSlot.descriptor.slot();
-                colBufs.surfacePairSlot = this.m_surfacePairSlot.descriptor.slot();
-                colBufs.nonCollideHashSlot = nonCollideSlotDesc;
-                colBufs.nonCollideHashMask = nonCollideMask;
-                if(useLbvhBroadphase){
-                    colBufs.lbvhMortonSlot = this.m_lbvhMortonSlot.descriptor.slot();
-                    colBufs.lbvhNodeSlot = this.m_lbvhNodeSlot.descriptor.slot();
-                    colBufs.lbvhMetaBuffer = this.m_lbvhMetaSlot.buffer;
-                    colBufs.lbvhMetaSlot = this.m_lbvhMetaSlot.descriptor.slot();
-                    if(useLbvhRadix){
-                        colBufs.lbvhMortonTempBuffer = this.m_lbvhMortonTempSlot.buffer;
-                        colBufs.lbvhMortonTempSlot = this.m_lbvhMortonTempSlot.descriptor.slot();
-                        colBufs.lbvhRadixHistBuffer = this.m_lbvhRadixHistSlot.buffer;
-                        colBufs.lbvhRadixHistSlot = this.m_lbvhRadixHistSlot.descriptor.slot();
-                    }
-                }
-                colBufs.slots0 = u32x4(
-                    this.m_bodySimSlot.descriptor.slot(),
-                    this.m_meshNodeSlot.descriptor.slot(),
-                    this.m_shapeSlot.descriptor.slot(),
-                    this.m_meshTriSlot.descriptor.slot()
-                );
-                u32 gridSlotDesc = s_GpuInvalidIndex;
-                u32 largeListDesc = s_GpuInvalidIndex;
-                if(!useLbvhBroadphase && shapeCount > 64u){
-                    gridSlotDesc = this.m_gridSlot.descriptor.slot();
-                    largeListDesc = this.m_largeListSlot.descriptor.slot();
-                }
-                colBufs.slots1 = u32x4(
-                    this.m_pairSlot.descriptor.slot(),
-                    this.m_counterSlot.descriptor.slot(),
-                    gridSlotDesc,
-                    largeListDesc
-                );
-                colBufs.slots2 = u32x4(
-                    this.m_indirectArgsSlot.descriptor.slot(),
-                    this.m_hullVertexSlot.descriptor.slot(),
-                    this.m_manifoldSlot.descriptor.slot(),
-                    s_GpuInvalidIndex
-                );
+                this.buildCollisionBufferGroup(useLbvhBroadphase, shapeCount, colBufs);
 
                 const u32 hullUpOff = this.m_hullUploadedCount;
                 const u32 nodeUpOff = this.m_meshNodeUploadedCount;
@@ -7656,15 +7501,13 @@ class PhysicsGpuDispatcher{
                             return false;
                         if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/large_list"), size_of<u32>(), shapeCount * 2u + 2u, false, false, this.m_largeListSlot))
                             return false;
-                        gridSlotDesc = this.m_gridSlot.descriptor.slot();
-                        largeListDesc = this.m_largeListSlot.descriptor.slot();
                         colBufs.gridBuffer = this.m_gridSlot.buffer;
                         colBufs.largeListBuffer = this.m_largeListSlot.buffer;
                         colBufs.slots1 = u32x4(
                             this.m_pairSlot.descriptor.slot(),
                             this.m_counterSlot.descriptor.slot(),
-                            gridSlotDesc,
-                            largeListDesc
+                            this.m_gridSlot.descriptor.slot(),
+                            this.m_largeListSlot.descriptor.slot()
                         );
                     }
                     if(!this.retryCollisionDispatchAndReadback(world, device, heap, colBufs, staticBodyCount, awakeBodyOffset, staticShapeCount, awakeShapeOffset, awakeShapeCount, shapeCount, maxPairs, gridTableSize, invCellSize, false, lbvhPaddedCount, lbvhSceneMin, lbvhInvExtent, hasComplexShapes, false, rawPairCount, bufferOverflow))
@@ -7696,14 +7539,14 @@ class PhysicsGpuDispatcher{
                     colBufs.slots1 = u32x4(
                         this.m_pairSlot.descriptor.slot(),
                         this.m_counterSlot.descriptor.slot(),
-                        gridSlotDesc,
-                        largeListDesc
+                        colBufs.slots1.z,
+                        colBufs.slots1.w
                     );
                     colBufs.slots2 = u32x4(
                         this.m_indirectArgsSlot.descriptor.slot(),
                         this.m_hullVertexSlot.descriptor.slot(),
                         this.m_manifoldSlot.descriptor.slot(),
-                        s_GpuInvalidIndex
+                        s_NullIndex
                     );
 
                     if(!this.retryCollisionDispatchAndReadback(world, device, heap, colBufs, staticBodyCount, awakeBodyOffset, staticShapeCount, awakeShapeOffset, awakeShapeCount, shapeCount, maxPairs, gridTableSize, invCellSize, effectiveUseLbvh, lbvhPaddedCount, lbvhSceneMin, lbvhInvExtent, hasComplexShapes, true, rawPairCount, bufferOverflow))
@@ -8006,7 +7849,8 @@ class PhysicsGpuDispatcher{
                         for(usize mi = 0u; mi < manifoldCount; ++mi){
                             const u32 cId = this.m_manifoldContactIdsScratch[mi];
                             if(cId != s_NullIndex){
-                                ApplyContactManifoldAndEvents(world, cId, this.m_resolvedManifoldsScratch[mi]);
+                                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> emptyExtras;
+                                ApplyContactManifoldWithExtrasAndEvents(world, cId, this.m_resolvedManifoldsScratch[mi], false, emptyExtras);
                                 if(!this.m_resolvedExtraManifoldsScratch[mi].empty() || hasExistingExtras)
                                     ApplyExtraManifoldsPreSolveAndEvents(world, cId, this.m_resolvedExtraManifoldsScratch[mi]);
                             }
@@ -8251,7 +8095,7 @@ class PhysicsGpuDispatcher{
             u32 jointCountsZ = 0u;
             u32 jointCountsW = 0u;
             if(si >= jointIslandBase && ps.jointCount > 0u){
-                Array<u8, s_GpuJointIslandMaxBodies> localBodyMask;
+                Array<u8, s_GpuIslandMaxBodies> localBodyMask;
                 for(u32 b = 0u; b < ps.bodyCount; ++b)
                     localBodyMask[b] = 0u;
                 Array<u32, s_GpuJointIslandMaxJoints> rawJointIds;
@@ -8267,14 +8111,14 @@ class PhysicsGpuDispatcher{
                     if(joint.enableProjection())
                         islFlags |= s_GpuIslandFlagHasProjection;
 
-                    u32 localBodyA = s_GpuInvalidIndex;
+                    u32 localBodyA = s_NullIndex;
                     in Body bA = world.m_bodies[joint.edges[0u].bodyId];
                     if(bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex && bA.localIndex < awakeToGpuSpan.size()){
                         const u32 slotA = awakeToGpuSpan[bA.localIndex];
                         if(slotA >= ps.bodyOffset && slotA < ps.bodyOffset + ps.bodyCount)
                             localBodyA = slotA - ps.bodyOffset;
                     }
-                    u32 localBodyB = s_GpuInvalidIndex;
+                    u32 localBodyB = s_NullIndex;
                     in Body bB = world.m_bodies[joint.edges[1u].bodyId];
                     if(bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex && bB.localIndex < awakeToGpuSpan.size()){
                         const u32 slotB = awakeToGpuSpan[bB.localIndex];
@@ -8283,19 +8127,19 @@ class PhysicsGpuDispatcher{
                     }
 
                     u32 usedMask = 0u;
-                    if(localBodyA != s_GpuInvalidIndex)
+                    if(localBodyA != s_NullIndex)
                         usedMask |= cast<u32>(localBodyMask[localBodyA]);
-                    if(localBodyB != s_GpuInvalidIndex)
+                    if(localBodyB != s_NullIndex)
                         usedMask |= cast<u32>(localBodyMask[localBodyB]);
 
                     usize assignedColor = s_GpuIslandJointOverflowColorIndex;
                     const u32 availMask = (~usedMask) & ((1u << cast<u32>(s_GpuIslandJointOverflowColorIndex)) - 1u);
                     if(availMask != 0u){
-                        assignedColor = cast<usize>(CountTrailingZerosU32(availMask));
+                        assignedColor = cast<usize>(CountTrailingZeros(availMask));
                         const u8 cBit = cast<u8>(1u << cast<u32>(assignedColor));
-                        if(localBodyA != s_GpuInvalidIndex)
+                        if(localBodyA != s_NullIndex)
                             localBodyMask[localBodyA] |= cBit;
-                        if(localBodyB != s_GpuInvalidIndex)
+                        if(localBodyB != s_NullIndex)
                             localBodyMask[localBodyB] |= cBit;
                     }
                     assignedColors[ji] = cast<u8>(assignedColor);
@@ -8364,11 +8208,11 @@ class PhysicsGpuDispatcher{
 
         const usize islandJointCount = this.m_partitionScratch.gpuIslandJointIds.size();
         const u32 colorJointOffset = cast<u32>(islandJointCount);
-        Array<PhysicsGpuColorSlice, s_GpuJointColorCount> jointColorSlices;
+        Array<PhysicsGpuColorSlice, s_GraphColorCount> jointColorSlices;
         u32 totalGpuJoints = colorJointOffset;
         b8 hasColorJointProjection = false;
         if(!this.m_partitionScratch.gpuColorOnlyJointIds.empty()){
-            for(usize c = 0u; c < s_GpuJointColorCount; ++c)
+            for(usize c = 0u; c < s_GraphColorCount; ++c)
                 this.m_jointColorBucketsScratch[c].clear();
             this.m_bodyJointColorMaskScratch.resize(gpuUploadCount);
             for(usize b = 0u; b < cast<usize>(gpuUploadCount); ++b)
@@ -8385,22 +8229,22 @@ class PhysicsGpuDispatcher{
                 in Body bB = world.m_bodies[bodyIdB];
                 const b8 activeDynA = (bA.type == BodyType::Dynamic && bA.setIndex == s_AwakeSetIndex);
                 const b8 activeDynB = (bB.type == BodyType::Dynamic && bB.setIndex == s_AwakeSetIndex);
-                u32 gpuSlotA = s_GpuInvalidIndex;
+                u32 gpuSlotA = s_NullIndex;
                 if(activeDynA && bA.localIndex < awakeToGpuSpan.size())
                     gpuSlotA = awakeToGpuSpan[bA.localIndex];
-                u32 gpuSlotB = s_GpuInvalidIndex;
+                u32 gpuSlotB = s_NullIndex;
                 if(activeDynB && bB.localIndex < awakeToGpuSpan.size())
                     gpuSlotB = awakeToGpuSpan[bB.localIndex];
 
-                usize assignedColor = s_GpuJointOverflowColorIndex;
+                usize assignedColor = s_OverflowColorIndex;
                 u32 usedMask = 0u;
                 if(gpuSlotA < gpuUploadCount)
                     usedMask |= this.m_bodyJointColorMaskScratch[gpuSlotA];
                 if(gpuSlotB < gpuUploadCount)
                     usedMask |= this.m_bodyJointColorMaskScratch[gpuSlotB];
-                const u32 availMask = (~usedMask) & ((1u << cast<u32>(s_GpuJointOverflowColorIndex)) - 1u);
+                const u32 availMask = (~usedMask) & ((1u << cast<u32>(s_OverflowColorIndex)) - 1u);
                 if(availMask != 0u){
-                    assignedColor = cast<usize>(CountTrailingZerosU32(availMask));
+                    assignedColor = cast<usize>(CountTrailingZeros(availMask));
                     const u32 cBit = 1u << cast<u32>(assignedColor);
                     if(gpuSlotA < gpuUploadCount)
                         this.m_bodyJointColorMaskScratch[gpuSlotA] |= cBit;
@@ -8412,7 +8256,7 @@ class PhysicsGpuDispatcher{
             const usize colorJointCount = this.m_partitionScratch.gpuColorOnlyJointIds.size();
             this.m_colorJointOrderScratch.clear();
             this.m_colorJointOrderScratch.reserve(colorJointCount);
-            for(usize c = 0u; c < s_GpuJointColorCount; ++c){
+            for(usize c = 0u; c < s_GraphColorCount; ++c){
                 jointColorSlices[c].offset = totalGpuJoints;
                 jointColorSlices[c].count = cast<u32>(this.m_jointColorBucketsScratch[c].size());
                 for(usize ji = 0u; ji < this.m_jointColorBucketsScratch[c].size(); ++ji)
@@ -8422,7 +8266,7 @@ class PhysicsGpuDispatcher{
         }
         else{
             this.m_colorJointOrderScratch.clear();
-            for(usize c = 0u; c < s_GpuJointColorCount; ++c){
+            for(usize c = 0u; c < s_GraphColorCount; ++c){
                 jointColorSlices[c].offset = totalGpuJoints;
                 jointColorSlices[c].count = 0u;
             }
@@ -8748,7 +8592,7 @@ class PhysicsGpuDispatcher{
         }
 
         this.m_gpuJointAuxOffsetsScratch.clear();
-        this.m_gpuJointAuxOffsetsScratch.resize(totalGpuJoints, s_GpuInvalidIndex);
+        this.m_gpuJointAuxOffsetsScratch.resize(totalGpuJoints, s_NullIndex);
         b8 hasJointAux = false;
         b8 needJointAuxReadback = false;
         for(u32 ji = 0u; ji < totalGpuJoints; ++ji){
@@ -8757,7 +8601,7 @@ class PhysicsGpuDispatcher{
                 jointId = this.m_partitionScratch.gpuIslandJointIds[ji];
             else
                 jointId = this.m_colorJointOrderScratch[ji - colorJointOffset];
-            u32 auxOff = s_GpuInvalidIndex;
+            u32 auxOff = s_NullIndex;
             AppendGpuJointAuxData(
                 world.m_joints[jointId],
                 world.m_jointExtraData,
@@ -8777,7 +8621,7 @@ class PhysicsGpuDispatcher{
                 const u32 jOff = gs.jointFlags.x;
                 const u32 jEnd = jOff + gs.jointFlags.y;
                 for(u32 ji = jOff; ji < jEnd; ++ji){
-                    if(ji < totalGpuJoints && this.m_gpuJointAuxOffsetsScratch[ji] != s_GpuInvalidIndex){
+                    if(ji < totalGpuJoints && this.m_gpuJointAuxOffsetsScratch[ji] != s_NullIndex){
                         this.m_gpuIslandSlicesScratch[si].jointFlags.z |= s_GpuIslandFlagHasJointAux;
                         break;
                     }
@@ -8811,7 +8655,7 @@ class PhysicsGpuDispatcher{
             return this.finishStepLocallyOnCpu(world, dt, subStepCount, h, invH, jointDefaultHertz, pairCount, useGpuCollision, cpuScheduler);
         if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/joint_impulse_outputs"), s_GpuJointImpulseOutBytes, Max(totalGpuJoints, 1u), false, true, this.m_jointImpulseOutSlot))
             return this.finishStepLocallyOnCpu(world, dt, subStepCount, h, invH, jointDefaultHertz, pairCount, useGpuCollision, cpuScheduler);
-        u32 rollingSlotDesc = s_GpuInvalidIndex;
+        u32 rollingSlotDesc = s_NullIndex;
         BufferHandle rollingRb;
         if(!this.m_gpuRollingMassScratch.empty()){
             const u32 rollingCount = cast<u32>(this.m_gpuRollingMassScratch.size());
@@ -8836,9 +8680,9 @@ class PhysicsGpuDispatcher{
         solverBufs.jointImpulseOutBuffer = this.m_jointImpulseOutSlot.buffer;
         solverBufs.islandSliceBuffer = this.m_islandSliceSlot.buffer;
         solverBufs.contactTotalImpulseSlot = this.m_contactTotalImpulseSlot.descriptor.slot();
-        if(rollingSlotDesc != s_GpuInvalidIndex)
+        if(rollingSlotDesc != s_NullIndex)
             solverBufs.rollingMassBuffer = this.m_rollingMassSlot.buffer;
-        u32 islSlotDesc = s_GpuInvalidIndex;
+        u32 islSlotDesc = s_NullIndex;
         if(totalIslandCount > 0u)
             islSlotDesc = this.m_islandSliceSlot.descriptor.slot();
         solverBufs.slots0 = u32x4(
@@ -9065,7 +8909,7 @@ class PhysicsGpuDispatcher{
                     jointId = this.m_colorJointOrderScratch[ji - colorJointOffset];
                 PrepareJointConstraintWithExtra(world.m_bodies, world.m_solverSets, world.m_joints[jointId], jointDefaultHertz, h, world.m_enableWarmStarting, world.m_jointExtraData, this.m_flatGpuJointsScratch[ji]);
             }
-            if(PrepareColorContactConstraints(world, this.m_partitionScratch.gpuColorContactIds, h, cpuScheduler, this.m_cpuColorConstraintsScratch)){
+            if(PrepareColorContactConstraintsWithCache(world, this.m_partitionScratch.gpuColorContactIds, h, cpuScheduler, this.m_cpuColorConstraintsScratch, world.m_cpuScratch.colorConstraintCaches)){
                 if(SolvePartitionSubStepsCpu(world, gpuReplayIndices, this.m_cpuColorConstraintsScratch, this.m_flatGpuJointsScratch, dt, subStepCount, cpuScheduler))
                     StoreSolvedPartitionImpulsesAndEventsCpu(world, this.m_cpuColorConstraintsScratch, this.m_flatGpuJointsScratch, invH, this.m_brokenJointIdsScratch);
             }
@@ -9374,7 +9218,7 @@ class PhysicsGpuDispatcher{
             if(hasJointAux){
                 for(u32 ji = 0u; ji < totalGpuJoints; ++ji){
                     const u32 auxOff = this.m_gpuJointAuxOffsetsScratch[ji];
-                    if(auxOff == s_GpuInvalidIndex)
+                    if(auxOff == s_NullIndex)
                         continue;
                     u32 jointId = 0u;
                     if(ji < colorJointOffset)
@@ -9481,7 +9325,7 @@ class PhysicsGpuDispatcher{
                 this.m_cachedResidentAwakeVersion = world.m_solverSets[s_AwakeSetIndex].membershipVersion;
                 this.m_cachedResidentPoseVersion = world.m_poseMutationVersion;
                 this.m_residentBodyIdToSlotScratch.clear();
-                this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_GpuInvalidIndex);
+                this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_NullIndex);
                 this.m_residentSlotToBodyIdScratch.resize(gpuUploadCount);
                 for(u32 g = 0u; g < gpuUploadCount; ++g){
                     const u32 aIdx = this.m_partitionScratch.gpuAwakeIndices[g];
@@ -9537,9 +9381,7 @@ class PhysicsGpuDispatcher{
     private void buildCollisionBufferGroup(
         in b8 useLbvh,
         in u32 shapeCount,
-        mut PhysicsGpuBufferGroup outBufs,
-        mut u32 outGridSlotDesc,
-        mut u32 outLargeListDesc
+        mut PhysicsGpuBufferGroup outBufs
     )const{
         outBufs = PhysicsGpuBufferGroup();
         outBufs.bodySimBuffer = this.m_bodySimSlot.buffer;
@@ -9587,23 +9429,23 @@ class PhysicsGpuDispatcher{
             this.m_shapeSlot.descriptor.slot(),
             this.m_meshTriSlot.descriptor.slot()
         );
-        outGridSlotDesc = s_GpuInvalidIndex;
-        outLargeListDesc = s_GpuInvalidIndex;
+        u32 gridSlotDesc = s_NullIndex;
+        u32 largeListDesc = s_NullIndex;
         if(!useLbvh && shapeCount > 64u){
-            outGridSlotDesc = this.m_gridSlot.descriptor.slot();
-            outLargeListDesc = this.m_largeListSlot.descriptor.slot();
+            gridSlotDesc = this.m_gridSlot.descriptor.slot();
+            largeListDesc = this.m_largeListSlot.descriptor.slot();
         }
         outBufs.slots1 = u32x4(
             this.m_pairSlot.descriptor.slot(),
             this.m_counterSlot.descriptor.slot(),
-            outGridSlotDesc,
-            outLargeListDesc
+            gridSlotDesc,
+            largeListDesc
         );
         outBufs.slots2 = u32x4(
             this.m_indirectArgsSlot.descriptor.slot(),
             this.m_hullVertexSlot.descriptor.slot(),
             this.m_manifoldSlot.descriptor.slot(),
-            s_GpuInvalidIndex
+            s_NullIndex
         );
     }
 
@@ -9695,7 +9537,7 @@ class PhysicsGpuDispatcher{
         this.m_resJointRefreshMetaScratch.clear();
         this.m_resJointAuxScratch.clear();
         this.m_resJointScratchIds.clear();
-        for(usize c = 0u; c < s_GpuJointColorCount; ++c){
+        for(usize c = 0u; c < s_GraphColorCount; ++c){
             this.m_resJointColorSlices[c] = PhysicsGpuColorSlice();
             this.m_jointColorBucketsScratch[c].clear();
         }
@@ -9715,24 +9557,24 @@ class PhysicsGpuDispatcher{
             in Body bB = world.m_bodies[bodyIdB];
             if(!bA.alive || !bB.alive)
                 continue;
-            u32 resSlotA = s_GpuInvalidIndex;
+            u32 resSlotA = s_NullIndex;
             if(cast<usize>(bodyIdA) < this.m_residentBodyIdToSlotScratch.size())
                 resSlotA = this.m_residentBodyIdToSlotScratch[bodyIdA];
-            u32 resSlotB = s_GpuInvalidIndex;
+            u32 resSlotB = s_NullIndex;
             if(cast<usize>(bodyIdB) < this.m_residentBodyIdToSlotScratch.size())
                 resSlotB = this.m_residentBodyIdToSlotScratch[bodyIdB];
             if(resSlotA >= awakeCount && resSlotB >= awakeCount)
                 continue;
 
-            usize assignedColor = s_GpuJointOverflowColorIndex;
+            usize assignedColor = s_OverflowColorIndex;
             u32 usedMask = 0u;
             if(resSlotA < awakeCount)
                 usedMask |= this.m_bodyJointColorMaskScratch[resSlotA];
             if(resSlotB < awakeCount)
                 usedMask |= this.m_bodyJointColorMaskScratch[resSlotB];
-            const u32 availMask = (~usedMask) & ((1u << cast<u32>(s_GpuJointOverflowColorIndex)) - 1u);
+            const u32 availMask = (~usedMask) & ((1u << cast<u32>(s_OverflowColorIndex)) - 1u);
             if(availMask != 0u){
-                assignedColor = cast<usize>(CountTrailingZerosU32(availMask));
+                assignedColor = cast<usize>(CountTrailingZeros(availMask));
                 const u32 cBit = 1u << cast<u32>(assignedColor);
                 if(resSlotA < awakeCount)
                     this.m_bodyJointColorMaskScratch[resSlotA] |= cBit;
@@ -9743,7 +9585,7 @@ class PhysicsGpuDispatcher{
         }
 
         u32 runningOffset = 0u;
-        for(usize c = 0u; c < s_GpuJointColorCount; ++c){
+        for(usize c = 0u; c < s_GraphColorCount; ++c){
             const u32 bucketCnt = cast<u32>(this.m_jointColorBucketsScratch[c].size());
             this.m_resJointColorSlices[c].offset = runningOffset;
             this.m_resJointColorSlices[c].count = bucketCnt;
@@ -9783,7 +9625,7 @@ class PhysicsGpuDispatcher{
                 world.m_enableWarmStarting,
                 gjc
             );
-            u32 auxOff = s_GpuInvalidIndex;
+            u32 auxOff = s_NullIndex;
             AppendGpuJointAuxData(
                 joint,
                 world.m_jointExtraData,
@@ -9804,10 +9646,10 @@ class PhysicsGpuDispatcher{
             in BodySim simA = world.m_solverSets[bodyA.setIndex].sims[bodyA.localIndex];
             in BodySim simB = world.m_solverSets[bodyB.setIndex].sims[bodyB.localIndex];
             VectorSingle m0Vec = joint.localAnchorA();
-            if(gjc.indicesTypeFlags.x == s_GpuInvalidIndex)
+            if(gjc.indicesTypeFlags.x == s_NullIndex)
                 m0Vec = simA.center();
             VectorSingle m1Vec = joint.localAnchorB();
-            if(gjc.indicesTypeFlags.y == s_GpuInvalidIndex)
+            if(gjc.indicesTypeFlags.y == s_NullIndex)
                 m1Vec = simB.center();
             VectorSingle groundA(0.0f);
             VectorSingle groundB(0.0f);
@@ -9823,6 +9665,83 @@ class PhysicsGpuDispatcher{
             this.m_resJointRefreshMetaScratch[mBase + 3u] = f32x4(groundB.x, groundB.y, groundB.z, joint.invMassScaleA);
             this.m_resJointRefreshMetaScratch[mBase + 4u] = f32x4(bit_cast<f32>(bodyIdA), bit_cast<f32>(bodyIdB), joint.invMassScaleB, 0.0f);
         }
+    }
+
+    private b8 executeResidentFreeBodiesStep(
+        in Span<GpuPhysicsBodySim> initSimsSpan,
+        in Span<GpuPhysicsBodyState> initStatesSpan,
+        in u32 awakeCount,
+        in u32 subStepCount,
+        in f32 dt,
+        in u64 awakeVersion,
+        in b8 hasLiveResidentBodies,
+        in b8 readbackToWorld,
+        in Timer tStepStart,
+        mut GraphicsRuntime graphics,
+        mut Device device,
+        mut GpuDescriptorHeap heap,
+        mut PhysicsWorld world
+    ){
+        if(readbackToWorld){
+            if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/body_outputs_rb"), s_GpuBodyOutBytes, awakeCount, this.m_bodyOutSlot))
+                return false;
+        }
+        if(!this.ensureComputeCommandList(device))
+            return false;
+        PendingRecordingLease heapLease = heap.acquirePendingRecordingLease();
+        if(!heapLease.valid())
+            return false;
+
+        const Timer tDispatchStart = TimerNow();
+        mut CommandList commands = this.m_computeCommandLists[this.m_computeCmdCursor].deref();
+        commands.open();
+        commands.setEnableAutomaticBarriers(false);
+        const PhysicsResidentStepTask task(
+            heap,
+            this.m_gpuResidentStepPipeline,
+            this.m_solverBodySimSlot.buffer,
+            this.m_bodyStateSlot.buffer,
+            this.m_bodyOutSlot.buffer,
+            this.m_bodyOutSlot.readback,
+            initSimsSpan,
+            initStatesSpan,
+            this.m_solverBodySimSlot.descriptor.slot(),
+            this.m_bodyStateSlot.descriptor.slot(),
+            this.m_bodyOutSlot.descriptor.slot(),
+            awakeCount,
+            subStepCount,
+            dt,
+            world.m_def.maxLinearVelocity,
+            VectorSingle(world.m_def.gravity),
+            !hasLiveResidentBodies,
+            readbackToWorld
+        );
+        const b8 recorded = task.recordCommands(commands);
+        const auto token = this.submitComputeCommandList(device, commands, recorded);
+        if(!token.has_value())
+            return false;
+        world.m_lastStats.gpuDispatchMs = DurationInMS<f32>(TimerNow(), tDispatchStart);
+        if(readbackToWorld){
+            if(!this.readbackResidentOutputsAndApplyToWorld(device, world, awakeCount))
+                return false;
+        }
+        ++world.m_stepPoseVersion;
+
+        this.m_gpuResidentValid = true;
+        this.m_gpuResidentDirtyCpu = !readbackToWorld;
+        this.m_gpuResidentBodyCount = awakeCount;
+        if(!hasLiveResidentBodies)
+            ++this.m_residentStepStamp;
+        this.m_cachedResidentWorldIndex = world.m_worldIndex;
+        this.m_cachedResidentWorldGen = world.m_worldGeneration;
+        this.m_cachedResidentAwakeStamp = world.m_awakeSetStamp;
+        this.m_cachedResidentAwakeVersion = awakeVersion;
+        this.m_cachedResidentPoseVersion = world.m_poseMutationVersion;
+
+        MarkAwakeDynamicLastStepGpuSolvedFlags(world);
+        world.m_lastStats.solveMs = DurationInMS<f32>(TimerNow(), tStepStart);
+        RecordWorldStepStats(world, 0u, 0u, awakeCount, 0u, 0u, ExecutionBackendUsed::Gpu);
+        return true;
     }
 
     public b8 stepGpuResidentBodies(
@@ -9920,7 +9839,7 @@ class PhysicsGpuDispatcher{
             this.m_gpuSimsScratch.resize(awakeCount);
             this.m_solverStatesScratch.resize(awakeCount);
             this.m_residentBodyIdToSlotScratch.clear();
-            this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_GpuInvalidIndex);
+            this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_NullIndex);
             this.m_residentSlotToBodyIdScratch.resize(awakeCount);
             this.m_resAwakeToGpuIdentityScratch.resize(awakeCount);
             for(u32 idx = 0u; idx < awakeCount; ++idx){
@@ -9944,67 +9863,21 @@ class PhysicsGpuDispatcher{
             this.m_cachedResidentTopologyVersion = world.m_topologyVersion;
             if(!hasLiveResidentBodies)
                 world.m_lastStats.gpuUploadMs = DurationInMS<f32>(TimerNow(), tStepStart);
-
-            if(readbackToWorld){
-                if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/body_outputs_rb"), s_GpuBodyOutBytes, awakeCount, this.m_bodyOutSlot))
-                    return false;
-            }
-            if(!this.ensureComputeCommandList(device))
-                return false;
-            PendingRecordingLease heapLease = heap.acquirePendingRecordingLease();
-            if(!heapLease.valid())
-                return false;
-
-            const Timer tDispatchStart = TimerNow();
-            mut CommandList commands = this.m_computeCommandLists[this.m_computeCmdCursor].deref();
-            commands.open();
-            commands.setEnableAutomaticBarriers(false);
-            const PhysicsResidentStepTask task(
-                heap,
-                this.m_gpuResidentStepPipeline,
-                this.m_solverBodySimSlot.buffer,
-                this.m_bodyStateSlot.buffer,
-                this.m_bodyOutSlot.buffer,
-                this.m_bodyOutSlot.readback,
+            return this.executeResidentFreeBodiesStep(
                 initSimsSpan,
                 initStatesSpan,
-                this.m_solverBodySimSlot.descriptor.slot(),
-                this.m_bodyStateSlot.descriptor.slot(),
-                this.m_bodyOutSlot.descriptor.slot(),
                 awakeCount,
                 subStepCount,
                 dt,
-                world.m_def.maxLinearVelocity,
-                VectorSingle(world.m_def.gravity),
-                !hasLiveResidentBodies,
-                readbackToWorld
+                awakeVersion,
+                hasLiveResidentBodies,
+                readbackToWorld,
+                tStepStart,
+                graphics,
+                device,
+                heap,
+                world
             );
-            const b8 recorded = task.recordCommands(commands);
-            const auto token = this.submitComputeCommandList(device, commands, recorded);
-            if(!token.has_value())
-                return false;
-            world.m_lastStats.gpuDispatchMs = DurationInMS<f32>(TimerNow(), tDispatchStart);
-            if(readbackToWorld){
-                if(!this.readbackResidentOutputsAndApplyToWorld(device, world, awakeCount))
-                    return false;
-            }
-            ++world.m_stepPoseVersion;
-
-            this.m_gpuResidentValid = true;
-            this.m_gpuResidentDirtyCpu = !readbackToWorld;
-            this.m_gpuResidentBodyCount = awakeCount;
-            if(!hasLiveResidentBodies)
-                ++this.m_residentStepStamp;
-            this.m_cachedResidentWorldIndex = world.m_worldIndex;
-            this.m_cachedResidentWorldGen = world.m_worldGeneration;
-            this.m_cachedResidentAwakeStamp = world.m_awakeSetStamp;
-            this.m_cachedResidentAwakeVersion = awakeVersion;
-            this.m_cachedResidentPoseVersion = world.m_poseMutationVersion;
-
-            MarkAwakeDynamicLastStepGpuSolvedFlags(world);
-            world.m_lastStats.solveMs = DurationInMS<f32>(TimerNow(), tStepStart);
-            RecordWorldStepStats(world, 0u, 0u, awakeCount, 0u, 0u, ExecutionBackendUsed::Gpu);
-            return true;
         }
 
         const u32 maxEvents = Max(1024u, this.m_resMaxEventsMin);
@@ -10214,8 +10087,6 @@ class PhysicsGpuDispatcher{
                 return false;
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/counters"), size_of<u32>(), 7u, false, false, this.m_counterSlot))
                 return false;
-            if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/counters_rb"), size_of<u32>(), 7u, this.m_counterSlot))
-                return false;
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/indirect_args"), size_of<u32>(), 15u, true, false, this.m_indirectArgsSlot))
                 return false;
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/shapes"), s_GpuShapeProxyBytes, totalShapeCount, false, false, this.m_shapeSlot))
@@ -10388,71 +10259,26 @@ class PhysicsGpuDispatcher{
         if(!hasShapes && this.m_resJointCount == 0u){
             this.m_resCollisionSetupValid = false;
             this.m_cachedResidentTopologyVersion = world.m_topologyVersion;
-            if(readbackToWorld){
-                if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/body_outputs_rb"), s_GpuBodyOutBytes, awakeCount, this.m_bodyOutSlot))
-                    return false;
-            }
-            if(!this.ensureComputeCommandList(device))
-                return false;
-            PendingRecordingLease heapLease = heap.acquirePendingRecordingLease();
-            if(!heapLease.valid())
-                return false;
-            const Timer tDispatchStart = TimerNow();
-            mut CommandList commands = this.m_computeCommandLists[this.m_computeCmdCursor].deref();
-            commands.open();
-            commands.setEnableAutomaticBarriers(false);
-            const PhysicsResidentStepTask task(
-                heap,
-                this.m_gpuResidentStepPipeline,
-                this.m_solverBodySimSlot.buffer,
-                this.m_bodyStateSlot.buffer,
-                this.m_bodyOutSlot.buffer,
-                this.m_bodyOutSlot.readback,
+            return this.executeResidentFreeBodiesStep(
                 initSimsSpan,
                 initStatesSpan,
-                this.m_solverBodySimSlot.descriptor.slot(),
-                this.m_bodyStateSlot.descriptor.slot(),
-                this.m_bodyOutSlot.descriptor.slot(),
                 awakeCount,
                 subStepCount,
                 dt,
-                world.m_def.maxLinearVelocity,
-                VectorSingle(world.m_def.gravity),
-                !hasLiveResidentBodies,
-                readbackToWorld
+                awakeVersion,
+                hasLiveResidentBodies,
+                readbackToWorld,
+                tStepStart,
+                graphics,
+                device,
+                heap,
+                world
             );
-            const b8 recorded = task.recordCommands(commands);
-            const auto token = this.submitComputeCommandList(device, commands, recorded);
-            if(!token.has_value())
-                return false;
-            world.m_lastStats.gpuDispatchMs = DurationInMS<f32>(TimerNow(), tDispatchStart);
-            if(readbackToWorld){
-                if(!this.readbackResidentOutputsAndApplyToWorld(device, world, awakeCount))
-                    return false;
-            }
-            ++world.m_stepPoseVersion;
-            this.m_gpuResidentValid = true;
-            this.m_gpuResidentDirtyCpu = !readbackToWorld;
-            this.m_gpuResidentBodyCount = awakeCount;
-            if(!hasLiveResidentBodies)
-                ++this.m_residentStepStamp;
-            this.m_cachedResidentWorldIndex = world.m_worldIndex;
-            this.m_cachedResidentWorldGen = world.m_worldGeneration;
-            this.m_cachedResidentAwakeStamp = world.m_awakeSetStamp;
-            this.m_cachedResidentAwakeVersion = awakeVersion;
-            this.m_cachedResidentPoseVersion = world.m_poseMutationVersion;
-            MarkAwakeDynamicLastStepGpuSolvedFlags(world);
-            world.m_lastStats.solveMs = DurationInMS<f32>(TimerNow(), tStepStart);
-            RecordWorldStepStats(world, 0u, 0u, awakeCount, 0u, 0u, ExecutionBackendUsed::Gpu);
-            return true;
         }
 
         PhysicsGpuBufferGroup colBufs;
-        if(hasShapes){
-            u32 unusedGridSlot = s_GpuInvalidIndex;
-            u32 unusedLargeSlot = s_GpuInvalidIndex;
-            this.buildCollisionBufferGroup(this.m_resUseLbvh, this.m_resTotalShapeCount, colBufs, unusedGridSlot, unusedLargeSlot);
-        }
+        if(hasShapes)
+            this.buildCollisionBufferGroup(this.m_resUseLbvh, this.m_resTotalShapeCount, colBufs);
 
         u32 warmPow2 = 0u;
         u32 tmpWarm = this.m_resWarmCap;
@@ -10859,14 +10685,14 @@ class PhysicsGpuDispatcher{
             && this.m_gpuResidentStepPipeline.valid()
         ){
             this.m_toiBodyToSlotScratch.clear();
-            this.m_toiBodyToSlotScratch.resize(resCount, s_GpuInvalidIndex);
+            this.m_toiBodyToSlotScratch.resize(resCount, s_NullIndex);
             this.m_resBulletInputScratch.clear();
             this.m_resBulletInputScratch.resize(bulletCount);
             for(usize bi = 0u; bi < bulletCount; ++bi){
                 const u32 rSlot = this.m_toiBulletAwakeIndicesScratch[bi];
                 if(rSlot < resCount)
                     this.m_toiBodyToSlotScratch[rSlot] = cast<u32>(bi);
-                this.m_resBulletInputScratch[bi] = u32x4(rSlot, 0u, 0u, s_GpuInvalidIndex);
+                this.m_resBulletInputScratch[bi] = u32x4(rSlot, 0u, 0u, s_NullIndex);
             }
 
             this.m_resBulletShapeIdxScratch.clear();
@@ -10885,7 +10711,7 @@ class PhysicsGpuDispatcher{
                 if(rSlot >= resCount)
                     continue;
                 const u32 bi = this.m_toiBodyToSlotScratch[rSlot];
-                if(bi == s_GpuInvalidIndex)
+                if(bi == s_NullIndex)
                     continue;
                 if(this.m_resBulletInputScratch[bi].z == 0u){
                     this.m_resBulletInputScratch[bi].y = cast<u32>(this.m_resBulletShapeIdxScratch.size());
@@ -11051,17 +10877,17 @@ class PhysicsGpuDispatcher{
                 this.m_bodySimSlot.descriptor.slot(),
                 this.m_toiBodySimSlot.descriptor.slot()
             );
-            pushBuildSims.slots1 = u32x4(this.m_resBodyMaxRadiusSlot.descriptor.slot(), s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushBuildSims.slots1 = u32x4(this.m_resBodyMaxRadiusSlot.descriptor.slot(), s_NullIndex, s_NullIndex, s_NullIndex);
             commandsFast.setPushConstants(pushBuildSims);
             commandsFast.dispatch(ComputeDispatchGroups(this.m_resAwakeBodyOffset + resCount), 1u, 1u);
 
             commandsFast.setBufferState(this.m_toiBodySimSlot.buffer.deref(), ResourceStates::UnorderedAccess);
             commandsFast.commitBarriers();
 
-            u32 lbvhNodeDesc = s_GpuInvalidIndex;
+            u32 lbvhNodeDesc = s_NullIndex;
             if(this.m_resUseLbvh && this.m_lbvhNodeSlot.hasValidUav())
                 lbvhNodeDesc = this.m_lbvhNodeSlot.descriptor.slot();
-            u32 nonCollideDesc = s_GpuInvalidIndex;
+            u32 nonCollideDesc = s_NullIndex;
             if(this.m_hasAnyNonCollideJoints && this.m_nonCollideHashSlot.hasValidUav())
                 nonCollideDesc = this.m_nonCollideHashSlot.descriptor.slot();
 
@@ -11090,7 +10916,7 @@ class PhysicsGpuDispatcher{
                 this.m_resBulletInputSlot.descriptor.slot(),
                 this.m_resBulletShapeIdxSlot.descriptor.slot(),
                 this.m_toiCounterSlot.descriptor.slot(),
-                s_GpuInvalidIndex
+                s_NullIndex
             );
             commandsFast.setPushConstants(pushEmitPairs);
             commandsFast.dispatch(cast<u32>(bulletCount), 1u, 1u);
@@ -11106,8 +10932,8 @@ class PhysicsGpuDispatcher{
             pushFinToiInd.slots0 = u32x4(
                 this.m_toiCounterSlot.descriptor.slot(),
                 this.m_toiIndirectSlot.descriptor.slot(),
-                s_GpuInvalidIndex,
-                s_GpuInvalidIndex
+                s_NullIndex,
+                s_NullIndex
             );
             commandsFast.setPushConstants(pushFinToiInd);
             commandsFast.dispatch(1u, 1u, 1u);
@@ -11120,9 +10946,9 @@ class PhysicsGpuDispatcher{
             toiIndState.setPipeline(this.m_bulletToiPipeline.deref()).setIndirectParams(this.m_toiIndirectSlot.buffer.deref());
             commandsFast.setComputeState(toiIndState);
 
-            u32 meshNodeDesc = s_GpuInvalidIndex;
-            u32 meshTriDesc = s_GpuInvalidIndex;
-            u32 hullVertDesc = s_GpuInvalidIndex;
+            u32 meshNodeDesc = s_NullIndex;
+            u32 meshTriDesc = s_NullIndex;
+            u32 hullVertDesc = s_NullIndex;
             if(this.m_meshNodeSlot.hasValidUav())
                 meshNodeDesc = this.m_meshNodeSlot.descriptor.slot();
             if(this.m_meshTriSlot.hasValidUav())
@@ -11143,8 +10969,8 @@ class PhysicsGpuDispatcher{
 
             commandsFast.setComputeState(resToiState);
 
-            u32 fastPrepCounterDesc = s_GpuInvalidIndex;
-            u32 fastEventRingDesc = s_GpuInvalidIndex;
+            u32 fastPrepCounterDesc = s_NullIndex;
+            u32 fastEventRingDesc = s_NullIndex;
             u32 fastMaxEvents = 0u;
             if((this.m_resCollisionSetupValid || this.m_resJointCount > 0u) && this.m_resPrepCountersSlot.hasValidUav() && this.m_resEventRingSlot.hasValidUav() && this.m_resMaxEvents > 0u){
                 fastPrepCounterDesc = this.m_resPrepCountersSlot.descriptor.slot();
@@ -11180,7 +11006,7 @@ class PhysicsGpuDispatcher{
             commandsFast.setBufferState(this.m_solverBodySimSlot.buffer.deref(), ResourceStates::UnorderedAccess);
             commandsFast.setBufferState(this.m_bodyStateSlot.buffer.deref(), ResourceStates::UnorderedAccess);
             commandsFast.setBufferState(this.m_bodyOutSlot.buffer.deref(), ResourceStates::UnorderedAccess);
-            if(fastPrepCounterDesc != s_GpuInvalidIndex){
+            if(fastPrepCounterDesc != s_NullIndex){
                 commandsFast.setBufferState(this.m_resPrepCountersSlot.buffer.deref(), ResourceStates::UnorderedAccess);
                 commandsFast.setBufferState(this.m_resEventRingSlot.buffer.deref(), ResourceStates::UnorderedAccess);
             }
@@ -11191,8 +11017,8 @@ class PhysicsGpuDispatcher{
             pushSyncFast.itemOffset = 0u;
             pushSyncFast.modeOrSecondaryCount = s_GpuResidentModeSyncPoses;
             pushSyncFast.deltaTime = dt;
-            pushSyncFast.slots0 = u32x4(this.m_solverBodySimSlot.descriptor.slot(), s_GpuInvalidIndex, this.m_bodyOutSlot.descriptor.slot(), this.m_bodySimSlot.descriptor.slot());
-            pushSyncFast.slots1 = u32x4(this.m_resAwakeBodyOffset, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushSyncFast.slots0 = u32x4(this.m_solverBodySimSlot.descriptor.slot(), s_NullIndex, this.m_bodyOutSlot.descriptor.slot(), this.m_bodySimSlot.descriptor.slot());
+            pushSyncFast.slots1 = u32x4(this.m_resAwakeBodyOffset, s_NullIndex, s_NullIndex, s_NullIndex);
             commandsFast.setPushConstants(pushSyncFast);
             commandsFast.dispatch(ComputeDispatchGroups(resCount), 1u, 1u);
 
@@ -11395,7 +11221,7 @@ class PhysicsGpuDispatcher{
             const u32 bIdA = world.m_shapes[sIdA].bodyId;
             const u32 bIdB = world.m_shapes[sIdB].bodyId;
 
-            if(bodyToToiSlot[bIdA] == s_GpuInvalidIndex){
+            if(bodyToToiSlot[bIdA] == s_NullIndex){
                 bodyToToiSlot[bIdA] = cast<u32>(this.m_gpuSimsScratch.size());
                 in Body b = world.m_bodies[bIdA];
                 in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
@@ -11407,12 +11233,12 @@ class PhysicsGpuDispatcher{
                 gs.torqueAngularDamping = resQ0[rSlot];
                 this.m_gpuSimsScratch.push_back(gs);
             }
-            if(bodyToToiSlot[bIdB] == s_GpuInvalidIndex){
+            if(bodyToToiSlot[bIdB] == s_NullIndex){
                 bodyToToiSlot[bIdB] = cast<u32>(this.m_gpuSimsScratch.size());
                 in Body b = world.m_bodies[bIdB];
                 in BodySim sim = world.m_solverSets[b.setIndex].sims[b.localIndex];
                 GpuPhysicsBodySim gs = PackGpuBodySim(b, sim);
-                u32 rSlotB = s_GpuInvalidIndex;
+                u32 rSlotB = s_NullIndex;
                 if(bIdB < this.m_residentBodyIdToSlotScratch.size())
                     rSlotB = this.m_residentBodyIdToSlotScratch[bIdB];
                 if(b.type != BodyType::Static && rSlotB < resCount){
@@ -11534,8 +11360,8 @@ class PhysicsGpuDispatcher{
         commands.setComputeState(resState);
         heap.bindCompute(commands, this.m_gpuResidentStepPipeline.deref());
 
-        u32 fbPrepCounterDesc = s_GpuInvalidIndex;
-        u32 fbEventRingDesc = s_GpuInvalidIndex;
+        u32 fbPrepCounterDesc = s_NullIndex;
+        u32 fbEventRingDesc = s_NullIndex;
         u32 fbMaxEvents = 0u;
         if((this.m_resCollisionSetupValid || this.m_resJointCount > 0u) && this.m_resPrepCountersSlot.hasValidUav() && this.m_resEventRingSlot.hasValidUav() && this.m_resMaxEvents > 0u){
             fbPrepCounterDesc = this.m_resPrepCountersSlot.descriptor.slot();
@@ -11571,7 +11397,7 @@ class PhysicsGpuDispatcher{
         commands.setBufferState(this.m_solverBodySimSlot.buffer.deref(), ResourceStates::UnorderedAccess);
         commands.setBufferState(this.m_bodyStateSlot.buffer.deref(), ResourceStates::UnorderedAccess);
         commands.setBufferState(this.m_bodyOutSlot.buffer.deref(), ResourceStates::UnorderedAccess);
-        if(fbPrepCounterDesc != s_GpuInvalidIndex){
+        if(fbPrepCounterDesc != s_NullIndex){
             commands.setBufferState(this.m_resPrepCountersSlot.buffer.deref(), ResourceStates::UnorderedAccess);
             commands.setBufferState(this.m_resEventRingSlot.buffer.deref(), ResourceStates::UnorderedAccess);
         }
@@ -11586,8 +11412,8 @@ class PhysicsGpuDispatcher{
             pushSync.itemOffset = 0u;
             pushSync.modeOrSecondaryCount = s_GpuResidentModeSyncPoses;
             pushSync.deltaTime = dt;
-            pushSync.slots0 = u32x4(this.m_solverBodySimSlot.descriptor.slot(), s_GpuInvalidIndex, this.m_bodyOutSlot.descriptor.slot(), this.m_bodySimSlot.descriptor.slot());
-            pushSync.slots1 = u32x4(this.m_resAwakeBodyOffset, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushSync.slots0 = u32x4(this.m_solverBodySimSlot.descriptor.slot(), s_NullIndex, this.m_bodyOutSlot.descriptor.slot(), this.m_bodySimSlot.descriptor.slot());
+            pushSync.slots1 = u32x4(this.m_resAwakeBodyOffset, s_NullIndex, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushSync);
             commands.dispatch(ComputeDispatchGroups(resCount), 1u, 1u);
 
@@ -11615,7 +11441,7 @@ class PhysicsGpuDispatcher{
         in u32 awakeSetIdx
     ){
         this.m_queryBodyIdToGpuSlotScratch.clear();
-        this.m_queryBodyIdToGpuSlotScratch.resize(world.m_bodies.size(), s_GpuInvalidIndex);
+        this.m_queryBodyIdToGpuSlotScratch.resize(world.m_bodies.size(), s_NullIndex);
         for(usize i = 0u; i < this.m_cachedQueryStaticBodyIds.size(); ++i){
             const u32 bId = this.m_cachedQueryStaticBodyIds[i];
             if(cast<usize>(bId) < this.m_queryBodyIdToGpuSlotScratch.size())
@@ -11686,9 +11512,9 @@ class PhysicsGpuDispatcher{
             return false;
         if(shape.isSensor() && !hitSensors)
             return false;
-        if(rawIgnoreShapeId != s_GpuInvalidIndex && shapeIdx == rawIgnoreShapeId)
+        if(rawIgnoreShapeId != s_NullIndex && shapeIdx == rawIgnoreShapeId)
             return false;
-        if(rawIgnoreBodyId != s_GpuInvalidIndex && bodyId == rawIgnoreBodyId)
+        if(rawIgnoreBodyId != s_NullIndex && bodyId == rawIgnoreBodyId)
             return false;
         if(!ShouldCollideFilters(qFilter, shape.filter))
             return false;
@@ -11725,17 +11551,17 @@ class PhysicsGpuDispatcher{
         else if((qFlags & s_GpuQueryFlagUseGroupIndex) != 0u)
             qFilter.groupIndex = cast<i32>(cast<i16>((qFlags >> 16u) & 0xffffu));
 
-        u32 rawIgnoreBodyId = s_GpuInvalidIndex;
-        u32 rawIgnoreShapeId = s_GpuInvalidIndex;
+        u32 rawIgnoreBodyId = s_NullIndex;
+        u32 rawIgnoreShapeId = s_NullIndex;
         if(hasAuxEntry){
             rawIgnoreBodyId = auxEntry.ignoreBodyId;
             rawIgnoreShapeId = auxEntry.ignoreShapeId;
         }
         BodyId ignoreBodyObj;
-        if(rawIgnoreBodyId != s_GpuInvalidIndex)
+        if(rawIgnoreBodyId != s_NullIndex)
             ignoreBodyObj = world.makeBodyId(rawIgnoreBodyId);
         ShapeId ignoreShapeObj;
-        if(rawIgnoreShapeId != s_GpuInvalidIndex)
+        if(rawIgnoreShapeId != s_NullIndex)
             ignoreShapeObj = world.makeShapeId(rawIgnoreShapeId);
 
         const b8 hitSensors = (qFlags & s_GpuQueryFlagIncludeSensors) != 0u;
@@ -11745,7 +11571,7 @@ class PhysicsGpuDispatcher{
         GpuPhysicsSpatialQueryResult cpuRes;
         cpuRes.hitPointFraction = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         cpuRes.hitNormalDist = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        cpuRes.hitIds = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+        cpuRes.hitIds = u32x4(s_NullIndex, s_NullIndex, 0u, 0u);
         cpuRes.hitTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
         u32 writtenMultiHits = 0u;
 
@@ -11770,8 +11596,8 @@ class PhysicsGpuDispatcher{
             f32 bestFrac = 1.0f;
             VectorSingle bestPt(0.0f);
             VectorSingle bestN(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             f32x4 bestTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
             u32 totalHits = 0u;
 
@@ -11782,7 +11608,7 @@ class PhysicsGpuDispatcher{
                     in RayCastHit rHit = this.m_queryFallbackRayHitsScratch[hi];
                     if(!rHit.hit)
                         continue;
-                    u32 hBodyId = s_GpuInvalidIndex;
+                    u32 hBodyId = s_NullIndex;
                     if(rHit.shapeId.index < world.m_shapes.size())
                         hBodyId = world.m_shapes[rHit.shapeId.index].bodyId;
                     const VectorSingle hPt(rHit.point);
@@ -11894,8 +11720,8 @@ class PhysicsGpuDispatcher{
             f32 bestDistSq = s_MaxF32;
             VectorSingle bestCenter(0.0f);
             VectorSingle bestDiff(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             u32 totalHits = 0u;
 
             for(usize hi = 0u; hi < this.m_queryFallbackAabbShapesScratch.size(); ++hi){
@@ -11987,13 +11813,13 @@ class PhysicsGpuDispatcher{
             f32 bestDistSq = s_MaxF32;
             VectorSingle bestPoint(0.0f);
             VectorSingle bestNormal(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             u32 totalHits = 0u;
 
             for(usize hi = 0u; hi < this.m_queryFallbackSphereHitsScratch.size(); ++hi){
                 in ShapeOverlapHit ov = this.m_queryFallbackSphereHitsScratch[hi];
-                u32 hBodyId = s_GpuInvalidIndex;
+                u32 hBodyId = s_NullIndex;
                 if(ov.shapeId.index < world.m_shapes.size())
                     hBodyId = world.m_shapes[ov.shapeId.index].bodyId;
                 const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(ov.pointB, 0.0f) - spCenter, 0.0f)).x;
@@ -12084,8 +11910,8 @@ class PhysicsGpuDispatcher{
             f32 bestDist = maxDist;
             VectorSingle bestPt(0.0f);
             VectorSingle bestN(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             f32x4 bestTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
             u32 totalHits = 0u;
 
@@ -12207,8 +12033,8 @@ class PhysicsGpuDispatcher{
             world.overlapPoint(pt, qFilter, hitSensors, ignoreBodyObj, ignoreShapeObj, nonResFilter, this.m_queryFallbackAabbShapesScratch);
 
             b8 foundBest = false;
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             u32 totalHits = 0u;
 
             for(usize hi = 0u; hi < this.m_queryFallbackAabbShapesScratch.size(); ++hi){
@@ -12321,8 +12147,8 @@ class PhysicsGpuDispatcher{
             f32 bestFrac = 1.0f;
             VectorSingle bestPt(0.0f);
             VectorSingle bestN(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             f32x4 bestTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
             u32 totalHits = 0u;
 
@@ -12333,7 +12159,7 @@ class PhysicsGpuDispatcher{
                     in ShapeCastHit scHit = this.m_queryFallbackShapeCastHitsScratch[hi];
                     if(!scHit.hit)
                         continue;
-                    u32 hBodyId = s_GpuInvalidIndex;
+                    u32 hBodyId = s_NullIndex;
                     if(scHit.shapeId.index < world.m_shapes.size())
                         hBodyId = world.m_shapes[scHit.shapeId.index].bodyId;
                     const f32 tScaled = scHit.fraction * maxFrac;
@@ -12480,14 +12306,14 @@ class PhysicsGpuDispatcher{
             f32 bestDistSq = s_MaxF32;
             VectorSingle bestPoint(0.0f);
             VectorSingle bestNormal(0.0f, 1.0f, 0.0f, 0.0f);
-            u32 bestShapeIdx = s_GpuInvalidIndex;
-            u32 bestBodyId = s_GpuInvalidIndex;
+            u32 bestShapeIdx = s_NullIndex;
+            u32 bestBodyId = s_NullIndex;
             f32x4 bestTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
             u32 totalHits = 0u;
 
             for(usize hi = 0u; hi < this.m_queryFallbackSphereHitsScratch.size(); ++hi){
                 in ShapeOverlapHit ov = this.m_queryFallbackSphereHitsScratch[hi];
-                u32 hBodyId = s_GpuInvalidIndex;
+                u32 hBodyId = s_NullIndex;
                 if(ov.shapeId.index < world.m_shapes.size())
                     hBodyId = world.m_shapes[ov.shapeId.index].bodyId;
                 const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(ov.pointB, 0.0f) - qPos, 0.0f)).x;
@@ -12849,14 +12675,14 @@ class PhysicsGpuDispatcher{
         if(!EnsurePhysicsGpuComputeReadbackBuffer(graphics, device, this.m_lastComputeToken, Name("physics/gpu/spatial_query_results_rb"), s_GpuSpatialQueryResultBytes, queryCount, this.m_spatialQueryResultSlot))
             return pending;
 
-        u32 auxSlotDesc = s_GpuInvalidIndex;
+        u32 auxSlotDesc = s_NullIndex;
         if(hasAuxUpload){
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/spatial_query_aux"), cast<u32>(size_of<GpuPhysicsSpatialQueryAux>()), queryCount, false, false, this.m_spatialQueryAuxSlot))
                 return pending;
             auxSlotDesc = this.m_spatialQueryAuxSlot.descriptor.slot();
         }
 
-        u32 multiHitSlotDesc = s_GpuInvalidIndex;
+        u32 multiHitSlotDesc = s_NullIndex;
         if(useMultiHit){
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/spatial_query_multi_hits"), s_GpuSpatialQueryResultBytes, queryCount * maxHitsPerQuery, false, false, this.m_spatialQueryMultiHitSlot))
                 return pending;
@@ -12864,7 +12690,7 @@ class PhysicsGpuDispatcher{
                 return pending;
             multiHitSlotDesc = this.m_spatialQueryMultiHitSlot.descriptor.slot();
         }
-        u32 queryShapeSlotDesc = s_GpuInvalidIndex;
+        u32 queryShapeSlotDesc = s_NullIndex;
         Span<GpuPhysicsShapeProxy> queryShapesUploadSpan;
         if(!queryShapes.empty()){
             if(!EnsurePhysicsGpuComputeStorageBuffer(graphics, device, heap, this.m_lastComputeToken, Name("physics/gpu/spatial_query_shapes"), s_GpuShapeProxyBytes, queryCount, false, false, this.m_spatialQueryShapeSlot))
@@ -12872,10 +12698,10 @@ class PhysicsGpuDispatcher{
             this.m_queryShapeUploadScratch.resize(queryCount);
             for(u32 qi = 0u; qi < queryCount; ++qi){
                 GpuPhysicsShapeProxy qs;
-                qs.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
+                qs.bodyIndexTypeShape = u32x4(s_NullIndex, s_NullIndex, s_NullIndex, 0u);
                 if(cast<usize>(qi) < queryShapes.size()){
                     qs = queryShapes[qi];
-                    if(qs.bodyIndexTypeShape.y == s_ShaderPhysicsShapeTypeHull && qs.filterData.w != s_GpuInvalidIndex)
+                    if(qs.bodyIndexTypeShape.y == s_ShaderPhysicsShapeTypeHull && qs.filterData.w != s_NullIndex)
                         qs.filterData.w += extraHullUpOff;
                 }
                 this.m_queryShapeUploadScratch[qi] = qs;
@@ -12885,11 +12711,11 @@ class PhysicsGpuDispatcher{
         }
 
         u32 lbvhPaddedCount = 0u;
-        u32 lbvhMortonDesc = s_GpuInvalidIndex;
-        u32 lbvhMortonTempDesc = s_GpuInvalidIndex;
-        u32 lbvhRadixHistDesc = s_GpuInvalidIndex;
-        u32 lbvhNodeDesc = s_GpuInvalidIndex;
-        u32 lbvhMetaDesc = s_GpuInvalidIndex;
+        u32 lbvhMortonDesc = s_NullIndex;
+        u32 lbvhMortonTempDesc = s_NullIndex;
+        u32 lbvhRadixHistDesc = s_NullIndex;
+        u32 lbvhNodeDesc = s_NullIndex;
+        u32 lbvhMetaDesc = s_NullIndex;
         VectorSingle sceneMin(0.0f);
         VectorSingle invExtent(1.0f);
         Span<GpuPhysicsBodyPose> staticPoseSpan;
@@ -12921,7 +12747,7 @@ class PhysicsGpuDispatcher{
                 this.m_cachedQueryAwakeShapes.clear();
                 if(residentDirtyActive){
                     for(u32 resSlot = 0u; resSlot < resSyncCount; ++resSlot){
-                        u32 bodyId = s_GpuInvalidIndex;
+                        u32 bodyId = s_NullIndex;
                         if(cast<usize>(resSlot) < this.m_residentSlotToBodyIdScratch.size())
                             bodyId = this.m_residentSlotToBodyIdScratch[resSlot];
                         if(bodyId >= world.m_bodies.size())
@@ -13100,17 +12926,17 @@ class PhysicsGpuDispatcher{
             this.m_queryAuxUploadScratch.resize(queryCount);
             for(u32 qi = 0u; qi < queryCount; ++qi){
                 GpuPhysicsSpatialQueryAux mapped;
-                mapped.ignoreBodyId = s_GpuInvalidIndex;
-                mapped.ignoreShapeId = s_GpuInvalidIndex;
+                mapped.ignoreBodyId = s_NullIndex;
+                mapped.ignoreShapeId = s_NullIndex;
                 mapped.groupIndex = 0;
                 mapped.pad = 0u;
                 if(cast<usize>(qi) < queryAux.size()){
                     mapped = queryAux[qi];
-                    if(mapped.ignoreBodyId != s_GpuInvalidIndex){
+                    if(mapped.ignoreBodyId != s_NullIndex){
                         if(cast<usize>(mapped.ignoreBodyId) < this.m_queryBodyIdToGpuSlotScratch.size())
                             mapped.ignoreBodyId = this.m_queryBodyIdToGpuSlotScratch[mapped.ignoreBodyId];
                         else
-                            mapped.ignoreBodyId = s_GpuInvalidIndex;
+                            mapped.ignoreBodyId = s_NullIndex;
                     }
                 }
                 this.m_queryAuxUploadScratch[qi] = mapped;
@@ -13137,8 +12963,8 @@ class PhysicsGpuDispatcher{
         if(this.m_cachedMeshTris.size() > cast<usize>(triUpOff))
             meshTriSpan = Span<f32x4>(this.m_cachedMeshTris.data() + cast<usize>(triUpOff), this.m_cachedMeshTris.size() - cast<usize>(triUpOff));
 
-        u32 resSyncSimDesc = s_GpuInvalidIndex;
-        u32 resSyncOutDesc = s_GpuInvalidIndex;
+        u32 resSyncSimDesc = s_NullIndex;
+        u32 resSyncOutDesc = s_NullIndex;
         if(residentDirtyActive){
             resSyncSimDesc = this.m_solverBodySimSlot.descriptor.slot();
             resSyncOutDesc = this.m_bodyOutSlot.descriptor.slot();
@@ -13309,13 +13135,6 @@ class PhysicsGpuDispatcher{
         return this.submitBatchSpatialQueriesAsyncWithShapes(world, queries, queryAux, Span<GpuPhysicsShapeProxy>(), Span<f32x4>(), Span<ShapeProxy>(), Span<Transform3D>(), maxHitsPerQuery);
     }
 
-    public PhysicsBatchSpatialQueryPending submitBatchSpatialQueriesAsync(
-        in PhysicsWorld world,
-        in Span<GpuPhysicsSpatialQuery> queries
-    ){
-        return this.submitBatchSpatialQueriesAsyncWithShapes(world, queries, Span<GpuPhysicsSpatialQueryAux>(), Span<GpuPhysicsShapeProxy>(), Span<f32x4>(), Span<ShapeProxy>(), Span<Transform3D>(), 0u);
-    }
-
     public b8 collectBatchSpatialQueries(
         in PhysicsWorld world,
         mut PhysicsBatchSpatialQueryPending pending,
@@ -13398,7 +13217,7 @@ class PhysicsGpuDispatcher{
                     GpuPhysicsSpatialQueryResult emptySlot;
                     emptySlot.hitPointFraction = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                     emptySlot.hitNormalDist = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-                    emptySlot.hitIds = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+                    emptySlot.hitIds = u32x4(s_NullIndex, s_NullIndex, 0u, 0u);
                     emptySlot.hitTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
                     const usize baseOff = cast<usize>(qi) * cast<usize>(pending.maxHitsPerQuery);
                     for(u32 mi = 0u; mi < pending.maxHitsPerQuery; ++mi)
@@ -13461,7 +13280,7 @@ class PhysicsGpuDispatcher{
                     GpuPhysicsSpatialQueryResult emptySlot;
                     emptySlot.hitPointFraction = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                     emptySlot.hitNormalDist = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-                    emptySlot.hitIds = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, 0u);
+                    emptySlot.hitIds = u32x4(s_NullIndex, s_NullIndex, 0u, 0u);
                     emptySlot.hitTriBary = PackQueryHitTriBary(s_NullIndex, f32x2u(0.0f, 0.0f));
                     for(u32 mi = validMultiCount; mi < pending.maxHitsPerQuery; ++mi)
                         outMultiHits[baseOff + cast<usize>(mi)] = emptySlot;
@@ -13554,7 +13373,7 @@ class PhysicsGpuDispatcher{
 
             GpuPhysicsShapeProxy gp = PackQueryShapeProxy(qp, extraR, sci.originTransform, this.m_queryHullTempScratch);
             if(sci.hasRotation)
-                gp.bodyIndexTypeShape.y = s_GpuInvalidIndex;
+                gp.bodyIndexTypeShape.y = s_NullIndex;
 
             this.m_queryBatchQueriesScratch.push_back(q);
             this.m_queryBatchAuxScratch.push_back(aux);
@@ -13678,7 +13497,7 @@ class PhysicsGpuDispatcher{
                 outMaxDstCount = b.bodyDestFlags.y + 1u;
             if(residentActive && cast<usize>(bodyId) < this.m_residentBodyIdToSlotScratch.size()){
                 const u32 resSlot = this.m_residentBodyIdToSlotScratch[bodyId];
-                if(resSlot != s_GpuInvalidIndex && resSlot < this.m_gpuResidentBodyCount){
+                if(resSlot != s_NullIndex && resSlot < this.m_gpuResidentBodyCount){
                     b.bodyDestFlags.x = resSlot;
                     this.m_exportResBindingsScratch.push_back(b);
                     continue;
@@ -13850,7 +13669,7 @@ class PhysicsGpuDispatcher{
             outToken = this.m_lastComputeToken;
             return true;
         }
-        if(!targetBuffer.valid() || targetUavSlot == s_GpuInvalidIndex || instanceStrideFloat4 < 3u)
+        if(!targetBuffer.valid() || targetUavSlot == s_NullIndex || instanceStrideFloat4 < 3u)
             return false;
         if(!this.validateResources() || !this.isReady())
             return false;
@@ -14052,10 +13871,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    public b8 prepareRenderExportCapacity(in u32 maxBindingCount){
-        return this.beginRenderExportFrame(maxBindingCount, maxBindingCount);
-    }
-
     public b8 hasAnyLiveResidentBodies(in PhysicsWorld world)const{
         return this.m_gpuResidentValid
             && this.m_gpuResidentBodyCount > 0u
@@ -14093,13 +13908,7 @@ class PhysicsGpuDispatcher{
         if(cast<usize>(bodyIndex) >= this.m_residentBodyIdToSlotScratch.size())
             return false;
         const u32 resSlot = this.m_residentBodyIdToSlotScratch[bodyIndex];
-        return resSlot != s_GpuInvalidIndex && resSlot < this.m_gpuResidentBodyCount;
-    }
-
-    public b8 hasLiveResidentBody(in PhysicsWorld world, in u32 bodyIndex)const{
-        if(!this.hasAnyLiveResidentBodies(world))
-            return false;
-        return this.hasLiveResidentBodyFast(bodyIndex);
+        return resSlot != s_NullIndex && resSlot < this.m_gpuResidentBodyCount;
     }
 
     public b8 isGpuResidentDirtyCpu()const{
@@ -14239,7 +14048,7 @@ class PhysicsGpuDispatcher{
             in PhysicsBatchExportTargetInput t = targets[ti];
             if(t.bindingCount == 0u)
                 continue;
-            if(!t.targetResource.valid() || t.targetUavSlot == s_GpuInvalidIndex || t.instanceStrideFloat4 < 3u)
+            if(!t.targetResource.valid() || t.targetUavSlot == s_NullIndex || t.instanceStrideFloat4 < 3u)
                 return false;
             if(t.bindingOffset > cast<u32>(packedBindings.size()) || t.bindingCount > cast<u32>(packedBindings.size()) - t.bindingOffset)
                 return false;
@@ -14436,8 +14245,8 @@ class PhysicsGpuDispatcher{
             chainDep = upTaskRes.value();
         }
 
-        u32 resOutDesc = s_GpuInvalidIndex;
-        u32 resSimDesc = s_GpuInvalidIndex;
+        u32 resOutDesc = s_NullIndex;
+        u32 resSimDesc = s_NullIndex;
         if(totalResCount > 0u){
             if(this.m_bodyOutSlot.hasValidUav()){
                 resOutDesc = this.m_bodyOutSlot.descriptor.slot();
@@ -14489,7 +14298,7 @@ class PhysicsGpuDispatcher{
             }
         }
 
-        u32 poseDescSlot = s_GpuInvalidIndex;
+        u32 poseDescSlot = s_NullIndex;
         if(totalPoseBindCount > 0u && totalPoseCount > 0u && activePoseSlot.hasValidUav()){
             poseDescSlot = activePoseSlot.descriptor.slot();
             GpuGraphResourceId poseRes;
@@ -14578,46 +14387,6 @@ class PhysicsGpuDispatcher{
         return true;
     }
 
-    public b8 declareExportRenderTransformsTask(
-        mut GpuTaskGraph graph,
-        in PhysicsWorld world,
-        in Span<GpuPhysicsRenderTransformBinding> bindings,
-        in GpuGraphResourceId targetResource,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4,
-        in u32 exportMode,
-        in u32 baseFloat4Offset,
-        in Name passIdentityPrefix,
-        in b8 mergeWithPrevious,
-        in b8 allowMergeAcrossConsumerFrontier,
-        in GpuTaskId dependency,
-        mut GpuTaskId outTaskId
-    ){
-        if(bindings.empty()){
-            outTaskId = dependency;
-            return true;
-        }
-        Array<PhysicsBatchExportTargetInput, 1u> singleTarget;
-        singleTarget[0u].targetResource = targetResource;
-        singleTarget[0u].targetUavSlot = targetUavSlot;
-        singleTarget[0u].instanceStrideFloat4 = instanceStrideFloat4;
-        singleTarget[0u].exportMode = exportMode;
-        singleTarget[0u].baseFloat4Offset = baseFloat4Offset;
-        singleTarget[0u].bindingOffset = 0u;
-        singleTarget[0u].bindingCount = cast<u32>(bindings.size());
-        return this.declareBatchExportRenderTransformsTasks(
-            graph,
-            world,
-            bindings,
-            Span<PhysicsBatchExportTargetInput>(singleTarget.data(), 1u),
-            passIdentityPrefix,
-            mergeWithPrevious,
-            allowMergeAcrossConsumerFrontier,
-            dependency,
-            outTaskId
-        );
-    }
-
     private b8 ensureResidentBodyBuffers(
         mut PhysicsWorld world,
         mut GraphicsRuntime graphics,
@@ -14658,7 +14427,7 @@ class PhysicsGpuDispatcher{
         this.m_solverStatesScratch.resize(awakeCount);
         this.m_outBodiesScratch.resize(awakeCount);
         this.m_residentBodyIdToSlotScratch.clear();
-        this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_GpuInvalidIndex);
+        this.m_residentBodyIdToSlotScratch.resize(world.m_bodies.size(), s_NullIndex);
         this.m_residentSlotToBodyIdScratch.resize(awakeCount);
         for(u32 idx = 0u; idx < awakeCount; ++idx){
             in BodySim sim = awakeSet.sims[idx];
@@ -14962,7 +14731,6 @@ class PhysicsGpuDispatcher{
         this.m_forceFieldsScratch.clear();
         this.m_fluidVolumesScratch.clear();
         this.m_gerstnerWavesScratch.clear();
-        Vector<f32x4> gerstnerWaveVec4s;
         f32 timeSec = 0.0f;
         if(env.has_value()){
             in PhysicsEnvironment envRef = env.value();
@@ -14973,7 +14741,7 @@ class PhysicsGpuDispatcher{
             }
             AppendFluidGerstnerWaves(
                 Span<FluidVolume>(envRef.fluids),
-                gerstnerWaveVec4s,
+                this.m_gerstnerWavesScratch,
                 this.m_fluidVolumesScratch,
                 0.0f,
                 true,
@@ -15018,7 +14786,7 @@ class PhysicsGpuDispatcher{
                     in Body body = world.m_bodies[sim.bodyId];
                     if(!body.alive)
                         continue;
-                    u32 poseIdx = s_GpuInvalidIndex;
+                    u32 poseIdx = s_NullIndex;
                     const VectorSingle bPos(sim.transform.position);
                     const VectorSingle bRot(sim.transform.rotation);
                     u32 sId = body.headShapeId;
@@ -15029,7 +14797,7 @@ class PhysicsGpuDispatcher{
                             VectorSingle shMax(0.0f);
                             ComputeShapeWorldAabbValues(shape, bPos, bRot, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_chainShapes, world.m_sdfShapes, shMin, shMax);
                             if(AabbOverlapsValues(sbQueryMin, sbQueryMax, shMin, shMax)){
-                                if(poseIdx == s_GpuInvalidIndex){
+                                if(poseIdx == s_NullIndex){
                                     poseIdx = cast<u32>(this.m_softWorldPosesScratch.size());
                                     this.m_softWorldPosesScratch.push_back(PackGpuBodyPose(sim));
                                 }
@@ -15056,7 +14824,7 @@ class PhysicsGpuDispatcher{
         const u32 backstopCount = cast<u32>(this.m_softBackstopsGroupedScratch.size());
         const u32 fieldCount = cast<u32>(this.m_forceFieldsScratch.size());
         const u32 fluidCount = cast<u32>(this.m_fluidVolumesScratch.size());
-        const u32 waveVec4Count = cast<u32>(gerstnerWaveVec4s.size());
+        const u32 waveVec4Count = cast<u32>(this.m_gerstnerWavesScratch.size());
         const u32 worldShapeCount = cast<u32>(this.m_softWorldShapesScratch.size());
         const u32 surfTriCount = cast<u32>(tCache.surfTris.size());
 
@@ -15085,13 +14853,13 @@ class PhysicsGpuDispatcher{
                 && dRef.meshletBoundsBuffer.valid()
                 && dRef.meshletLocalBoundsBuffer.valid()
                 && dRef.localBoundsBuffer.valid()
-                && dRef.positionUavSlot != s_GpuInvalidIndex
-                && dRef.normalUavSlot != s_GpuInvalidIndex
-                && dRef.tangentUavSlot != s_GpuInvalidIndex
-                && dRef.attributeUavSlot != s_GpuInvalidIndex
-                && dRef.meshletBoundsUavSlot != s_GpuInvalidIndex
-                && dRef.meshletLocalBoundsUavSlot != s_GpuInvalidIndex
-                && dRef.localBoundsUavSlot != s_GpuInvalidIndex
+                && dRef.positionUavSlot != s_NullIndex
+                && dRef.normalUavSlot != s_NullIndex
+                && dRef.tangentUavSlot != s_NullIndex
+                && dRef.attributeUavSlot != s_NullIndex
+                && dRef.meshletBoundsUavSlot != s_NullIndex
+                && dRef.meshletLocalBoundsUavSlot != s_NullIndex
+                && dRef.localBoundsUavSlot != s_NullIndex
             ){
                 hasDeformTarget = true;
                 target = dRef;
@@ -15475,7 +15243,7 @@ class PhysicsGpuDispatcher{
             this.abortComputeCommandList(commands);
             return false;
         }
-        if(waveVec4Count > 0u && !commands.tryWriteBuffer(this.m_gerstnerWaveSlot.buffer.deref(), Span<f32x4>(gerstnerWaveVec4s), 0u)){
+        if(waveVec4Count > 0u && !commands.tryWriteBuffer(this.m_gerstnerWaveSlot.buffer.deref(), Span<f32x4>(this.m_gerstnerWavesScratch), 0u)){
             this.abortComputeCommandList(commands);
             return false;
         }
@@ -15642,64 +15410,64 @@ class PhysicsGpuDispatcher{
 
         const u32 pSlot = this.m_softParticlePosSlot.descriptor.slot();
         const u32 stateSlot = this.m_softParticleStateSlot.descriptor.slot();
-        u32 scHeadSlot = s_GpuInvalidIndex;
-        u32 scNextSlot = s_GpuInvalidIndex;
+        u32 scHeadSlot = s_NullIndex;
+        u32 scNextSlot = s_NullIndex;
         if(wantSelfCollide){
             scHeadSlot = this.m_softScHeadSlot.descriptor.slot();
             scNextSlot = this.m_softScNextSlot.descriptor.slot();
         }
-        u32 distSlot = s_GpuInvalidIndex;
+        u32 distSlot = s_NullIndex;
         if(distCount > 0u)
             distSlot = tCache.distConSlot.descriptor.slot();
-        u32 volSlot = s_GpuInvalidIndex;
+        u32 volSlot = s_NullIndex;
         if(volCount > 0u)
             volSlot = tCache.volConSlot.descriptor.slot();
-        u32 bendSlot = s_GpuInvalidIndex;
+        u32 bendSlot = s_NullIndex;
         if(bendCount > 0u)
             bendSlot = tCache.bendConSlot.descriptor.slot();
-        u32 bsSlot = s_GpuInvalidIndex;
-        u32 bsRangeSlot = s_GpuInvalidIndex;
+        u32 bsSlot = s_NullIndex;
+        u32 bsRangeSlot = s_NullIndex;
         if(backstopCount > 0u){
             bsSlot = this.m_softBackstopSlot.descriptor.slot();
             bsRangeSlot = this.m_softBsRangeSlot.descriptor.slot();
         }
-        u32 adjRangeSlot = s_GpuInvalidIndex;
-        u32 adjListSlot = s_GpuInvalidIndex;
+        u32 adjRangeSlot = s_NullIndex;
+        u32 adjListSlot = s_NullIndex;
         if(wantSelfCollide){
             adjRangeSlot = tCache.adjRangeSlot.descriptor.slot();
             if(!tCache.adjList.empty())
                 adjListSlot = tCache.adjListSlot.descriptor.slot();
         }
-        u32 aeroRangeSlot = s_GpuInvalidIndex;
-        u32 aeroListSlot = s_GpuInvalidIndex;
-        u32 surfTriSlot = s_GpuInvalidIndex;
+        u32 aeroRangeSlot = s_NullIndex;
+        u32 aeroListSlot = s_NullIndex;
+        u32 surfTriSlot = s_NullIndex;
         if(wantAero && surfTriCount > 0u){
             aeroRangeSlot = tCache.aeroRangeSlot.descriptor.slot();
             if(!tCache.aeroList.empty())
                 aeroListSlot = tCache.aeroListSlot.descriptor.slot();
             surfTriSlot = tCache.surfTriSlot.descriptor.slot();
         }
-        u32 restRelSlot = s_GpuInvalidIndex;
-        u32 shapeOutSlot = s_GpuInvalidIndex;
+        u32 restRelSlot = s_NullIndex;
+        u32 shapeOutSlot = s_NullIndex;
         if(wantShapeMatch){
             restRelSlot = tCache.restRelSlot.descriptor.slot();
             shapeOutSlot = tCache.shapeOutSlot.descriptor.slot();
         }
-        u32 fieldSlot = s_GpuInvalidIndex;
+        u32 fieldSlot = s_NullIndex;
         if(fieldCount > 0u)
             fieldSlot = this.m_forceFieldSlot.descriptor.slot();
-        u32 fluidSlot = s_GpuInvalidIndex;
+        u32 fluidSlot = s_NullIndex;
         if(fluidCount > 0u)
             fluidSlot = this.m_fluidVolumeSlot.descriptor.slot();
-        u32 gerstnerSlot = s_GpuInvalidIndex;
+        u32 gerstnerSlot = s_NullIndex;
         if(waveVec4Count > 0u)
             gerstnerSlot = this.m_gerstnerWaveSlot.descriptor.slot();
-        u32 worldShapeSlot = s_GpuInvalidIndex;
-        u32 worldPoseSlot = s_GpuInvalidIndex;
-        u32 worldAabbSlot = s_GpuInvalidIndex;
-        u32 hullSlot = s_GpuInvalidIndex;
-        u32 meshNodeSlot = s_GpuInvalidIndex;
-        u32 meshTriSlot = s_GpuInvalidIndex;
+        u32 worldShapeSlot = s_NullIndex;
+        u32 worldPoseSlot = s_NullIndex;
+        u32 worldAabbSlot = s_NullIndex;
+        u32 hullSlot = s_NullIndex;
+        u32 meshNodeSlot = s_NullIndex;
+        u32 meshTriSlot = s_NullIndex;
         if(worldShapeCount > 0u){
             worldShapeSlot = this.m_softWorldShapeSlot.descriptor.slot();
             worldPoseSlot = this.m_softWorldPoseSlot.descriptor.slot();
@@ -15738,7 +15506,7 @@ class PhysicsGpuDispatcher{
                 pushPred.linearSlop = timeSec;
                 pushPred.gravitySpeculative = gravityAndRad;
                 pushPred.slots0 = u32x4(pSlot, fieldSlot, fluidSlot, stateSlot);
-                pushPred.slots1 = u32x4(gerstnerSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushPred.slots1 = u32x4(gerstnerSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushPred);
                 commands.dispatch(pGroups, 1u, 1u);
             }
@@ -15756,7 +15524,7 @@ class PhysicsGpuDispatcher{
                 pushAero.maxLinearVelocity = softBody.liftCoeff;
                 pushAero.gravitySpeculative = f32x4(softBody.windVelocity.x, softBody.windVelocity.y, softBody.windVelocity.z, 0.0f);
                 pushAero.slots0 = u32x4(pSlot, aeroRangeSlot, aeroListSlot, surfTriSlot);
-                pushAero.slots1 = u32x4(stateSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushAero.slots1 = u32x4(stateSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushAero);
                 commands.dispatch(pGroups, 1u, 1u);
             }
@@ -15766,7 +15534,7 @@ class PhysicsGpuDispatcher{
                 pushReset.itemCount = distCount;
                 pushReset.modeOrSecondaryCount = s_GpuSubsysModeSoftResetLambdas;
                 pushReset.flags = 0u;
-                pushReset.slots0 = u32x4(distSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushReset.slots0 = u32x4(distSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushReset);
                 commands.dispatch(ComputeDispatchGroups(distCount), 1u, 1u);
             }
@@ -15775,7 +15543,7 @@ class PhysicsGpuDispatcher{
                 pushResetV.itemCount = volCount;
                 pushResetV.modeOrSecondaryCount = s_GpuSubsysModeSoftResetLambdas;
                 pushResetV.flags = 1u;
-                pushResetV.slots0 = u32x4(volSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushResetV.slots0 = u32x4(volSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushResetV);
                 commands.dispatch(ComputeDispatchGroups(volCount), 1u, 1u);
             }
@@ -15784,7 +15552,7 @@ class PhysicsGpuDispatcher{
                 pushResetB.itemCount = bendCount;
                 pushResetB.modeOrSecondaryCount = s_GpuSubsysModeSoftResetLambdas;
                 pushResetB.flags = 2u;
-                pushResetB.slots0 = u32x4(bendSlot, s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushResetB.slots0 = u32x4(bendSlot, s_NullIndex, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushResetB);
                 commands.dispatch(ComputeDispatchGroups(bendCount), 1u, 1u);
             }
@@ -15809,7 +15577,7 @@ class PhysicsGpuDispatcher{
                     pushDc.itemOffset = sl.offset;
                     pushDc.modeOrSecondaryCount = s_GpuSubsysModeSoftDistanceColor;
                     pushDc.deltaTime = invDt2;
-                    pushDc.slots0 = u32x4(pSlot, distSlot, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushDc.slots0 = u32x4(pSlot, distSlot, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushDc);
                     commands.dispatch(ComputeDispatchGroups(sl.count), 1u, 1u);
 
@@ -15826,7 +15594,7 @@ class PhysicsGpuDispatcher{
                     pushVc.itemOffset = sl.offset;
                     pushVc.modeOrSecondaryCount = s_GpuSubsysModeSoftVolumeColor;
                     pushVc.deltaTime = invDt2;
-                    pushVc.slots0 = u32x4(pSlot, volSlot, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushVc.slots0 = u32x4(pSlot, volSlot, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushVc);
                     commands.dispatch(ComputeDispatchGroups(sl.count), 1u, 1u);
 
@@ -15843,7 +15611,7 @@ class PhysicsGpuDispatcher{
                     pushBc.itemOffset = sl.offset;
                     pushBc.modeOrSecondaryCount = s_GpuSubsysModeSoftBendingColor;
                     pushBc.deltaTime = invDt2;
-                    pushBc.slots0 = u32x4(pSlot, bendSlot, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushBc.slots0 = u32x4(pSlot, bendSlot, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushBc);
                     commands.dispatch(ComputeDispatchGroups(sl.count), 1u, 1u);
 
@@ -15856,7 +15624,7 @@ class PhysicsGpuDispatcher{
                     pushBs.itemCount = particleCount;
                     pushBs.modeOrSecondaryCount = s_GpuSubsysModeSoftBackstopCollide;
                     pushBs.flags = 0u;
-                    pushBs.slots0 = u32x4(pSlot, bsSlot, bsRangeSlot, s_GpuInvalidIndex);
+                    pushBs.slots0 = u32x4(pSlot, bsSlot, bsRangeSlot, s_NullIndex);
                     commands.setPushConstants(pushBs);
                     commands.dispatch(pGroups, 1u, 1u);
 
@@ -15882,7 +15650,7 @@ class PhysicsGpuDispatcher{
                     pushScIns.flags = 0u;
                     pushScIns.deltaTime = selfMinDist;
                     pushScIns.slots0 = u32x4(pSlot, adjRangeSlot, adjListSlot, scHeadSlot);
-                    pushScIns.slots1 = u32x4(scNextSlot, scTableSize - 1u, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushScIns.slots1 = u32x4(scNextSlot, scTableSize - 1u, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushScIns);
                     commands.dispatch(pGroups, 1u, 1u);
 
@@ -15897,7 +15665,7 @@ class PhysicsGpuDispatcher{
                     pushSc.deltaTime = selfMinDist;
                     pushSc.invDeltaTime = selfStiff;
                     pushSc.slots0 = u32x4(pSlot, adjRangeSlot, adjListSlot, scHeadSlot);
-                    pushSc.slots1 = u32x4(scNextSlot, scTableSize - 1u, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                    pushSc.slots1 = u32x4(scNextSlot, scTableSize - 1u, s_NullIndex, s_NullIndex);
                     commands.setPushConstants(pushSc);
                     commands.dispatch(pGroups, 1u, 1u);
 
@@ -15930,7 +15698,7 @@ class PhysicsGpuDispatcher{
                         pushSm0.itemCount = particleCount;
                         pushSm0.modeOrSecondaryCount = s_GpuSubsysModeSoftShapeMatch;
                         pushSm0.flags = 0u;
-                        pushSm0.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_GpuInvalidIndex);
+                        pushSm0.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_NullIndex);
                         commands.setPushConstants(pushSm0);
                         commands.dispatch(1u, 1u, 1u);
 
@@ -15944,7 +15712,7 @@ class PhysicsGpuDispatcher{
                         pushSm2.itemOffset = wgCount;
                         pushSm2.modeOrSecondaryCount = s_GpuSubsysModeSoftShapeMatch;
                         pushSm2.flags = 2u;
-                        pushSm2.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_GpuInvalidIndex);
+                        pushSm2.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_NullIndex);
                         commands.setPushConstants(pushSm2);
                         commands.dispatch(wgCount, 1u, 1u);
 
@@ -15955,7 +15723,7 @@ class PhysicsGpuDispatcher{
                         pushSm3.itemCount = wgCount;
                         pushSm3.modeOrSecondaryCount = s_GpuSubsysModeSoftShapeMatch;
                         pushSm3.flags = 3u;
-                        pushSm3.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_GpuInvalidIndex);
+                        pushSm3.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_NullIndex);
                         commands.setPushConstants(pushSm3);
                         commands.dispatch(1u, 1u, 1u);
 
@@ -15968,7 +15736,7 @@ class PhysicsGpuDispatcher{
                     pushSm1.modeOrSecondaryCount = s_GpuSubsysModeSoftShapeMatch;
                     pushSm1.flags = 1u;
                     pushSm1.deltaTime = shapeStiff;
-                    pushSm1.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_GpuInvalidIndex);
+                    pushSm1.slots0 = u32x4(pSlot, restRelSlot, shapeOutSlot, s_NullIndex);
                     commands.setPushConstants(pushSm1);
                     commands.dispatch(pGroups, 1u, 1u);
 
@@ -15982,7 +15750,7 @@ class PhysicsGpuDispatcher{
                 pushVel.itemCount = particleCount;
                 pushVel.modeOrSecondaryCount = s_GpuSubsysModeSoftVelUpdate;
                 pushVel.deltaTime = invH;
-                pushVel.slots0 = u32x4(pSlot, stateSlot, s_GpuInvalidIndex, s_GpuInvalidIndex);
+                pushVel.slots0 = u32x4(pSlot, stateSlot, s_NullIndex, s_NullIndex);
                 commands.setPushConstants(pushVel);
                 commands.dispatch(pGroups, 1u, 1u);
 
@@ -15992,9 +15760,9 @@ class PhysicsGpuDispatcher{
         }
 
         if(hasDeformTarget){
-            u32 vertMapSlot = s_GpuInvalidIndex;
-            u32 cagePartSlot = s_GpuInvalidIndex;
-            u32 cageBarySlot = s_GpuInvalidIndex;
+            u32 vertMapSlot = s_NullIndex;
+            u32 cagePartSlot = s_NullIndex;
+            u32 cageBarySlot = s_NullIndex;
             if(target.useCage){
                 cagePartSlot = dCache.cagePartSlot.descriptor.slot();
                 cageBarySlot = dCache.cageBarySlot.descriptor.slot();
@@ -16005,15 +15773,15 @@ class PhysicsGpuDispatcher{
             const u32 xfConstSlot = this.m_softDeformXfConstSlot.descriptor.slot();
             const u32 triIdxSlot = dCache.triIdxSlot.descriptor.slot();
             const u32 vertTriRangeSlot = dCache.vertTriRangeSlot.descriptor.slot();
-            u32 vertTriListSlot = s_GpuInvalidIndex;
+            u32 vertTriListSlot = s_NullIndex;
             if(!target.vertTriList.empty())
                 vertTriListSlot = dCache.vertTriListSlot.descriptor.slot();
-            u32 uvSlot = s_GpuInvalidIndex;
+            u32 uvSlot = s_NullIndex;
             if(target.hasUv0 && target.uv0Padded.size() == cast<usize>(target.renderVertexCount))
                 uvSlot = dCache.uvSlot.descriptor.slot();
             const u32 meshletMetaSlot = dCache.meshletMetaSlot.descriptor.slot();
             const u32 meshletVertSlot = dCache.meshletVertSlot.descriptor.slot();
-            u32 meshletTriSlot = s_GpuInvalidIndex;
+            u32 meshletTriSlot = s_NullIndex;
             if(!target.meshletTriList.empty())
                 meshletTriSlot = dCache.meshletTriSlot.descriptor.slot();
 
@@ -16025,7 +15793,7 @@ class PhysicsGpuDispatcher{
             pushDef0.modeOrSecondaryCount = s_GpuSubsysModeSoftDeformMesh;
             pushDef0.flags = 0u;
             pushDef0.slots0 = u32x4(pSlot, vertMapSlot, xfConstSlot, target.positionUavSlot);
-            pushDef0.slots1 = u32x4(cagePartSlot, cageBarySlot, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushDef0.slots1 = u32x4(cagePartSlot, cageBarySlot, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushDef0);
             commands.dispatch(vGroups, 1u, 1u);
 
@@ -16037,7 +15805,7 @@ class PhysicsGpuDispatcher{
             pushDef1.modeOrSecondaryCount = s_GpuSubsysModeSoftDeformMesh;
             pushDef1.flags = 1u;
             pushDef1.slots0 = u32x4(target.positionUavSlot, vertTriRangeSlot, vertTriListSlot, triIdxSlot);
-            pushDef1.slots1 = u32x4(uvSlot, target.normalUavSlot, target.tangentUavSlot, s_GpuInvalidIndex);
+            pushDef1.slots1 = u32x4(uvSlot, target.normalUavSlot, target.tangentUavSlot, s_NullIndex);
             commands.setPushConstants(pushDef1);
             commands.dispatch(vGroups, 1u, 1u);
 
@@ -16049,7 +15817,7 @@ class PhysicsGpuDispatcher{
             pushDef2.itemCount = target.cornerCount;
             pushDef2.modeOrSecondaryCount = s_GpuSubsysModeSoftDeformMesh;
             pushDef2.flags = 2u;
-            pushDef2.slots0 = u32x4(triIdxSlot, target.normalUavSlot, target.attributeUavSlot, s_GpuInvalidIndex);
+            pushDef2.slots0 = u32x4(triIdxSlot, target.normalUavSlot, target.attributeUavSlot, s_NullIndex);
             commands.setPushConstants(pushDef2);
             commands.dispatch(cGroups, 1u, 1u);
 
@@ -16058,7 +15826,7 @@ class PhysicsGpuDispatcher{
             pushBnd0.modeOrSecondaryCount = s_GpuSubsysModeSoftReduceBounds;
             pushBnd0.flags = 0u;
             pushBnd0.slots0 = u32x4(target.positionUavSlot, meshletMetaSlot, meshletVertSlot, meshletTriSlot);
-            pushBnd0.slots1 = u32x4(triIdxSlot, target.meshletBoundsUavSlot, target.meshletLocalBoundsUavSlot, s_GpuInvalidIndex);
+            pushBnd0.slots1 = u32x4(triIdxSlot, target.meshletBoundsUavSlot, target.meshletLocalBoundsUavSlot, s_NullIndex);
             commands.setPushConstants(pushBnd0);
             commands.dispatch(target.meshletCount, 1u, 1u);
 
@@ -16069,7 +15837,7 @@ class PhysicsGpuDispatcher{
             pushBnd1.itemCount = target.meshletCount;
             pushBnd1.modeOrSecondaryCount = s_GpuSubsysModeSoftReduceBounds;
             pushBnd1.flags = 1u;
-            pushBnd1.slots0 = u32x4(target.meshletLocalBoundsUavSlot, target.localBoundsUavSlot, s_GpuInvalidIndex, s_GpuInvalidIndex);
+            pushBnd1.slots0 = u32x4(target.meshletLocalBoundsUavSlot, target.localBoundsUavSlot, s_NullIndex, s_NullIndex);
             commands.setPushConstants(pushBnd1);
             commands.dispatch(1u, 1u, 1u);
 
@@ -16195,10 +15963,10 @@ class PhysicsGpuDispatcher{
             this.m_forceFieldsScratch.push_back(PackGpuForceField(env.forceFields[i]));
 
         this.m_fluidVolumesScratch.clear();
-        Vector<f32x4> gerstnerWaveVec4s;
+        this.m_gerstnerWavesScratch.clear();
         AppendFluidGerstnerWaves(
             Span<FluidVolume>(env.fluids),
-            gerstnerWaveVec4s,
+            this.m_gerstnerWavesScratch,
             this.m_fluidVolumesScratch,
             env.splashImpulseThreshold,
             false,
@@ -16207,7 +15975,7 @@ class PhysicsGpuDispatcher{
 
         const u32 fieldCount = cast<u32>(this.m_forceFieldsScratch.size());
         const u32 fluidCount = cast<u32>(this.m_fluidVolumesScratch.size());
-        const u32 waveVec4Count = cast<u32>(gerstnerWaveVec4s.size());
+        const u32 waveVec4Count = cast<u32>(this.m_gerstnerWavesScratch.size());
         if(fieldCount == 0u && fluidCount == 0u)
             return true;
 
@@ -16336,7 +16104,7 @@ class PhysicsGpuDispatcher{
                 this.abortComputeCommandList(commands);
                 return false;
             }
-            if(waveVec4Count > 0u && !commands.tryWriteBuffer(this.m_gerstnerWaveSlot.buffer.deref(), Span<f32x4>(gerstnerWaveVec4s), 0u)){
+            if(waveVec4Count > 0u && !commands.tryWriteBuffer(this.m_gerstnerWaveSlot.buffer.deref(), Span<f32x4>(this.m_gerstnerWavesScratch), 0u)){
                 this.abortComputeCommandList(commands);
                 return false;
             }
@@ -16373,7 +16141,7 @@ class PhysicsGpuDispatcher{
         const f32 invDt = 1.0f / dt;
         const u32 bodyGroups = ComputeDispatchGroups(awakeCount);
         const f32x4 gravityVec(world.m_def.gravity.x, world.m_def.gravity.y, world.m_def.gravity.z, 0.0f);
-        u32 bodyFilterSlot = s_GpuInvalidIndex;
+        u32 bodyFilterSlot = s_NullIndex;
         if(bodyFilterVec4Count > 0u)
             bodyFilterSlot = this.m_envBodyFilterSlot.descriptor.slot();
 
@@ -16395,11 +16163,11 @@ class PhysicsGpuDispatcher{
         }
 
         if(fluidCount > 0u){
-            u32 gerstnerSlot = s_GpuInvalidIndex;
+            u32 gerstnerSlot = s_NullIndex;
             if(waveVec4Count > 0u)
                 gerstnerSlot = this.m_gerstnerWaveSlot.descriptor.slot();
-            u32 splashEventSlot = s_GpuInvalidIndex;
-            u32 splashCounterSlot = s_GpuInvalidIndex;
+            u32 splashEventSlot = s_NullIndex;
+            u32 splashCounterSlot = s_NullIndex;
             if(wantSplashEvents){
                 splashEventSlot = this.m_envSplashEventSlot.descriptor.slot();
                 splashCounterSlot = this.m_envSplashCounterSlot.descriptor.slot();
@@ -16541,7 +16309,7 @@ class PhysicsGpuDispatcher{
         commands.setComputeState(state);
         heap.bindCompute(commands, this.m_gpuSubsystemsPipeline.deref());
 
-        u32 bodyFilterSlot = s_GpuInvalidIndex;
+        u32 bodyFilterSlot = s_NullIndex;
         if(bodyFilterVec4Count > 0u)
             bodyFilterSlot = this.m_envBodyFilterSlot.descriptor.slot();
 
@@ -17172,7 +16940,7 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBounds(
         outProxy.localRotationOrMeta = f32x4(bit_cast<f32>(metaW), 0.0f, 0.0f, 1.0f);
     }
     else if(shape.type == ShapeType::Heightfield){
-        filterW = s_GpuInvalidIndex;
+        filterW = s_NullIndex;
         metaW = 0u;
         VectorSingle rawMin = localMin;
         VectorSingle rawMax = localMax;
@@ -17198,8 +16966,8 @@ GpuPhysicsShapeProxy PackGpuShapeProxyWithLocalBounds(
         outProxy.localRotationOrMeta = f32x4(bit_cast<f32>(metaW), 0.0f, 0.0f, 1.0f);
     }
     else{
-        filterW = s_GpuInvalidIndex;
-        metaW = s_GpuInvalidIndex;
+        filterW = s_NullIndex;
+        metaW = s_NullIndex;
         const VectorSingle center = (localMin + localMax) * 0.5f;
         const VectorSingle extents = Max((localMax - localMin) * 0.5f, VectorSingle(0.0f));
         outProxy.localCenterRadius = f32x4(center.x, center.y, center.z, 0.0f);
@@ -17411,7 +17179,7 @@ GpuPhysicsShapeProxy PackGpuShapeProxy(
 
 u32 RemapAwakeIndexToGpu(in u32 awakeIdx, in Span<u32> awakeToGpuSlot){
     if(awakeIdx == s_NullIndex || awakeIdx >= awakeToGpuSlot.size())
-        return s_GpuInvalidIndex;
+        return s_NullIndex;
     return awakeToGpuSlot[awakeIdx];
 }
 
@@ -17444,7 +17212,7 @@ MatrixSingle ResolveGpuBodyEffectiveInvInertia(
 
 f32x4 PackQueryHitTriBary(in u32 triIdx, in f32x2u bary){
     if(triIdx == s_NullIndex)
-        return f32x4(0.0f, 0.0f, 0.0f, bit_cast<f32>(s_GpuInvalidIndex));
+        return f32x4(0.0f, 0.0f, 0.0f, bit_cast<f32>(s_NullIndex));
     return f32x4(bary.x, bary.y, Max(1.0f - bary.x - bary.y, 0.0f), bit_cast<f32>(triIdx));
 }
 
@@ -17455,11 +17223,11 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
     mut Vector<f32x4> extraHullVerts
 ){
     GpuPhysicsShapeProxy gp;
-    gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, s_GpuInvalidIndex, 0u);
+    gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_NullIndex, s_NullIndex, 0u);
     gp.localCenterRadius = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     gp.localExtentOrP1 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     gp.localRotationOrMeta = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
-    gp.filterData = u32x4(0u, 0u, 0u, s_GpuInvalidIndex);
+    gp.filterData = u32x4(0u, 0u, 0u, s_NullIndex);
     gp.localTransformPos = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
     const VectorSingle normQ = SafeNormalizeQuat(VectorSingle(xf.rotation));
     gp.localTransformRot = f32x4(normQ);
@@ -17477,7 +17245,7 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
             return gp;
         gp.localCenterRadius = f32x4(queryProxy.param0.x, queryProxy.param0.y, queryProxy.param0.z, effR);
         gp.localExtentOrP1 = f32x4(queryProxy.param0.w, queryProxy.param1.x, 0.0f, 0.0f);
-        gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_ShaderPhysicsShapeTypeCylinder, s_GpuInvalidIndex, s_GpuShapeFlagHasLocalTransform);
+        gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_ShaderPhysicsShapeTypeCylinder, s_NullIndex, s_GpuShapeFlagHasLocalTransform);
         return gp;
     }
     if(queryProxy.kind == ProxyKind::Cone){
@@ -17485,7 +17253,7 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
             return gp;
         gp.localCenterRadius = f32x4(queryProxy.param0.x, queryProxy.param0.y, queryProxy.param0.z, effR);
         gp.localExtentOrP1 = f32x4(queryProxy.param0.w, queryProxy.param1.x, 0.0f, 0.0f);
-        gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_ShaderPhysicsShapeTypeCone, s_GpuInvalidIndex, s_GpuShapeFlagHasLocalTransform);
+        gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_ShaderPhysicsShapeTypeCone, s_NullIndex, s_GpuShapeFlagHasLocalTransform);
         return gp;
     }
     if(queryProxy.kind == ProxyKind::TaperedCapsule){
@@ -17494,7 +17262,7 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
         gp.localCenterRadius = f32x4(queryProxy.param0.x, queryProxy.param0.y, queryProxy.param0.z, effR);
         gp.localExtentOrP1 = f32x4(queryProxy.param1.x, queryProxy.param1.y, queryProxy.param1.z, 0.0f);
         gp.localRotationOrMeta = f32x4(queryProxy.param0.w, queryProxy.param1.w, 0.0f, 1.0f);
-        gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_ShaderPhysicsShapeTypeTaperedCapsule, s_GpuInvalidIndex, s_GpuShapeFlagHasLocalTransform);
+        gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_ShaderPhysicsShapeTypeTaperedCapsule, s_NullIndex, s_GpuShapeFlagHasLocalTransform);
         return gp;
     }
 
@@ -17504,7 +17272,7 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
     if(ptCount == 1u){
         const VectorSingle p0 = VectorSingle(queryProxy.points[0u], 0.0f) * sc;
         gp.localCenterRadius = f32x4(p0.x, p0.y, p0.z, effR);
-        gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_ShaderPhysicsShapeTypeSphere, s_GpuInvalidIndex, s_GpuShapeFlagHasLocalTransform);
+        gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_ShaderPhysicsShapeTypeSphere, s_NullIndex, s_GpuShapeFlagHasLocalTransform);
         return gp;
     }
     if(ptCount == 2u){
@@ -17512,7 +17280,7 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
         const VectorSingle p1 = VectorSingle(queryProxy.points[1u], 0.0f) * sc;
         gp.localCenterRadius = f32x4(p0.x, p0.y, p0.z, effR);
         gp.localExtentOrP1 = f32x4(p1.x, p1.y, p1.z, 0.0f);
-        gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_ShaderPhysicsShapeTypeCapsule, s_GpuInvalidIndex, s_GpuShapeFlagHasLocalTransform);
+        gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_ShaderPhysicsShapeTypeCapsule, s_NullIndex, s_GpuShapeFlagHasLocalTransform);
         return gp;
     }
 
@@ -17525,7 +17293,7 @@ GpuPhysicsShapeProxy PackQueryShapeProxy(
     gp.localCenterRadius = f32x4(0.0f, 0.0f, 0.0f, effR);
     gp.localRotationOrMeta = f32x4(bit_cast<f32>(vCount), 0.0f, 0.0f, 1.0f);
     gp.filterData = u32x4(0u, 0u, 0u, relOffset);
-    gp.bodyIndexTypeShape = u32x4(s_GpuInvalidIndex, s_ShaderPhysicsShapeTypeHull, s_GpuInvalidIndex, s_GpuShapeFlagHasLocalTransform);
+    gp.bodyIndexTypeShape = u32x4(s_NullIndex, s_ShaderPhysicsShapeTypeHull, s_NullIndex, s_GpuShapeFlagHasLocalTransform);
     return gp;
 }
 
@@ -17590,7 +17358,7 @@ u8 PrepareGpuContactConstraintWithManifoldDirect(
     outAnisoScales = f32x2u(1.0f, 1.0f);
     const u32 pointCount = Min(manifold.rollingImpulseMeta.w & 0xffu, cast<u32>(s_MaxManifoldPoints));
     if(pointCount == 0u){
-        outGc.indicesCountFlags = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, s_GpuInvalidIndex);
+        outGc.indicesCountFlags = u32x4(s_NullIndex, s_NullIndex, 0u, s_NullIndex);
         return 0u;
     }
 
@@ -17602,7 +17370,7 @@ u8 PrepareGpuContactConstraintWithManifoldDirect(
         bA.setIndex >= sets.size() || bA.localIndex >= sets[bA.setIndex].sims.size()
         || bB.setIndex >= sets.size() || bB.localIndex >= sets[bB.setIndex].sims.size()
     ){
-        outGc.indicesCountFlags = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, 0u, s_GpuInvalidIndex);
+        outGc.indicesCountFlags = u32x4(s_NullIndex, s_NullIndex, 0u, s_NullIndex);
         return 0u;
     }
 
@@ -17874,7 +17642,7 @@ u8 PrepareGpuContactConstraintWithManifoldDirect(
         RemapAwakeIndexToGpu(indexA, awakeToGpuSlot),
         RemapAwakeIndexToGpu(indexB, awakeToGpuSlot),
         pointCount,
-        s_GpuInvalidIndex
+        s_NullIndex
     );
     outGc.normalFriction = f32x4(n, contact.friction);
     outGc.tangent1Restitution = f32x4(t1, restitution);
@@ -17946,7 +17714,7 @@ void PrepareGpuJointConstraintDirect(
     const u32 bodyIdA = joint.edges[0u].bodyId;
     const u32 bodyIdB = joint.edges[1u].bodyId;
     if(bodyIdA >= bodies.size() || bodyIdB >= bodies.size()){
-        outGjc.indicesTypeFlags = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, cast<u32>(joint.type), 0u);
+        outGjc.indicesTypeFlags = u32x4(s_NullIndex, s_NullIndex, cast<u32>(joint.type), 0u);
         return;
     }
 
@@ -17956,7 +17724,7 @@ void PrepareGpuJointConstraintDirect(
         bodyA.setIndex >= sets.size() || bodyA.localIndex >= sets[bodyA.setIndex].sims.size()
         || bodyB.setIndex >= sets.size() || bodyB.localIndex >= sets[bodyB.setIndex].sims.size()
     ){
-        outGjc.indicesTypeFlags = u32x4(s_GpuInvalidIndex, s_GpuInvalidIndex, cast<u32>(joint.type), 0u);
+        outGjc.indicesTypeFlags = u32x4(s_NullIndex, s_NullIndex, cast<u32>(joint.type), 0u);
         return;
     }
 
@@ -18092,7 +17860,7 @@ void PrepareGpuJointConstraintDirect(
     VectorSingle refRot = VectorSingle(joint.referenceRotation);
     if(joint.type == JointType::Wheel && joint.steeringAngle != 0.0f){
         const VectorSingle steerAxis = SafeNormalizeVec3(VectorSingle(joint.localAxisA(), 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-        refRot = SafeNormalizeQuat(QuaternionMultiply(QuatFromAxisAngleUnit(steerAxis, joint.steeringAngle), refRot));
+        refRot = SafeNormalizeQuat(QuaternionMultiply(QuaternionRotationNormal(steerAxis, joint.steeringAngle), refRot));
     }
 
     outGjc.indicesTypeFlags = u32x4(
@@ -18138,7 +17906,7 @@ void AppendGpuJointAuxData(
     mut b8 inOutHasAux,
     mut b8 inOutNeedReadback
 ){
-    u32 auxOff = s_GpuInvalidIndex;
+    u32 auxOff = s_NullIndex;
     if(joint.type == JointType::Revolute){
         const VectorSingle qA0 = SafeNormalizeQuat(VectorSingle(inOutGjc.qA0));
         const VectorSingle qB0 = SafeNormalizeQuat(VectorSingle(inOutGjc.qB0));
@@ -18246,7 +18014,7 @@ void AppendGpuJointAuxData(
         }
     }
     outAuxOffset = auxOff;
-    if(auxOff != s_GpuInvalidIndex){
+    if(auxOff != s_NullIndex){
         inOutHasAux = true;
         inOutGjc.projectionParams.z = bit_cast<f32>(auxOff);
         inOutGjc.indicesTypeFlags.w |= s_GpuJointFlagHasAux;
@@ -18463,11 +18231,11 @@ void ConvertGpuManifoldToCpu(
         }
     }
     else if(shapeA.type == ShapeType::Mesh || shapeA.type == ShapeType::Heightfield){
-        if(packedTri != s_GpuInvalidIndex)
+        if(packedTri != s_NullIndex)
             outManifold.materialTriangleA = packedTri;
     }
     else if(shapeB.type == ShapeType::Mesh || shapeB.type == ShapeType::Heightfield){
-        if(packedTri != s_GpuInvalidIndex)
+        if(packedTri != s_NullIndex)
             outManifold.materialTriangleB = packedTri;
     }
 
@@ -18660,12 +18428,12 @@ void FillResidentShapeMaterialsScratch(
         in Shape shape = world.m_shapes[sId];
         if(!shape.alive())
             continue;
-        u32 resBodySlot = s_GpuInvalidIndex;
+        u32 resBodySlot = s_NullIndex;
         if(cast<usize>(shape.bodyId) < residentBodyIdToSlot.size())
             resBodySlot = residentBodyIdToSlot[shape.bodyId];
         VectorSingle worldRot(0.0f, 0.0f, 0.0f, 1.0f);
         b8 isCpuSleeping = false;
-        b8 preRotateToWorld = (resBodySlot == s_GpuInvalidIndex);
+        b8 preRotateToWorld = (resBodySlot == s_NullIndex);
         if(cast<usize>(shape.bodyId) < world.m_bodies.size()){
             in Body b = world.m_bodies[shape.bodyId];
             if(b.alive && b.setIndex < world.m_solverSets.size() && b.localIndex < world.m_solverSets[b.setIndex].sims.size()){

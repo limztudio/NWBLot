@@ -475,11 +475,6 @@ CausticResolveActivitySnapshot RendererRayTracingSystem::causticResolveActivityS
     return activity;
 }
 
-b8 RendererRayTracingSystem::hasHwCausticWork()const{
-    const MeshViewBufferSnapshot meshView = this.m_meshSystem.meshViewBufferSnapshot();
-    return this.hasHwCausticWork(meshView);
-}
-
 b8 RendererRayTracingSystem::hasHwCausticWork(in MeshViewBufferSnapshot meshView)const{
     in RtCausticState caustics = this.m_rayTracingState.caustics;
     b8 pipelineReady = caustics.m_hwCausticPipeline.valid();

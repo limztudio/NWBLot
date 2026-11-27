@@ -8,6 +8,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Name DecodeOptionalPhysicsName(in NameHash hash){
+    if(hash == s_NameNone.hash())
+        return s_NameNone;
+    return Name(hash);
+}
+
+
 [serialize]
 class PhysicsSurfaceMaterialBinary{
     public f32x4 surfaceVelocity(0.0f, 0.0f, 0.0f, 0.0f);
@@ -316,10 +323,7 @@ class PhysicsAssetBinaryCodec{
         }
         CollisionLayerMatrix matrix;
         for(u32 i = 0u; i < s_MaxCollisionLayers; ++i){
-            if(bin.layerNameHashes[i] == s_NameNone.hash())
-                matrix.layerNames[i] = s_NameNone;
-            else
-                matrix.layerNames[i] = Name(bin.layerNameHashes[i]);
+            matrix.layerNames[i] = DecodeOptionalPhysicsName(bin.layerNameHashes[i]);
             matrix.layerMasks[i] = bin.layerMasks[i];
         }
         if(!this.validCollisionLayerMatrix(matrix)){

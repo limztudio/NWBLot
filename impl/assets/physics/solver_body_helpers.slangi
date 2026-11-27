@@ -337,79 +337,14 @@ void nwbPhysicsApplyGyroscopicStep(
         return;
     const float3 wLocal = nwbPhysicsQuatInvRotate(w, q);
 
-    const float a11 = invInertiaLocal0.x;
-    const float a12 = invInertiaLocal0.y;
-    const float a13 = invInertiaLocal0.z;
-    const float a22 = invInertiaLocal0.w;
-    const float a23 = invInertiaLocal1.x;
-    const float a33 = invInertiaLocal1.y;
-    const float c11 = a22 * a33 - a23 * a23;
-    const float c12 = a13 * a23 - a12 * a33;
-    const float c13 = a12 * a23 - a13 * a22;
-    const float detInv = a11 * c11 + a12 * c12 + a13 * c13;
-    const float c22 = a11 * a33 - a13 * a13;
-    const float c23 = a12 * a13 - a11 * a23;
-    const float c33 = a11 * a22 - a12 * a12;
-
-    float3 i0 = float3(0.0f, 0.0f, 0.0f);
-    float3 i1 = float3(0.0f, 0.0f, 0.0f);
-    float3 i2 = float3(0.0f, 0.0f, 0.0f);
-    const float tr = a11 + a22 + a33;
-    const float s2 = c11 + c22 + c33;
-    const float detTol = max(1.0e-30f, 1.0e-6f * abs(tr * s2) + 1.0e-12f * abs(tr * tr * tr));
-    if(abs(detInv) > detTol){
-        const float invDet = 1.0f / detInv;
-        i0 = float3(c11, c12, c13) * invDet;
-        i1 = float3(c12, c22, c23) * invDet;
-        i2 = float3(c13, c23, c33) * invDet;
-    }
-    else{
-        bool solvedPseudoinv = false;
-        if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
-            float nx = c11;
-            float ny = c12;
-            float nz = c13;
-            float bestDiag = abs(c11);
-            if(abs(c22) > bestDiag){
-                bestDiag = abs(c22);
-                nx = c12;
-                ny = c22;
-                nz = c23;
-            }
-            if(abs(c33) > bestDiag){
-                nx = c13;
-                ny = c23;
-                nz = c33;
-            }
-            const float nLenSq = nx * nx + ny * ny + nz * nz;
-            if(nLenSq > 1.0e-30f){
-                const float invNLen = rsqrt(nLenSq);
-                nx *= invNLen;
-                ny *= invNLen;
-                nz *= invNLen;
-                const float invS2 = 1.0f / s2;
-                if(isfinite(invS2)){
-                    i0 = float3(tr * (1.0f - nx * nx) - a11, tr * (-nx * ny) - a12, tr * (-nx * nz) - a13) * invS2;
-                    i1 = float3(tr * (-nx * ny) - a12, tr * (1.0f - ny * ny) - a22, tr * (-ny * nz) - a23) * invS2;
-                    i2 = float3(tr * (-nx * nz) - a13, tr * (-ny * nz) - a23, tr * (1.0f - nz * nz) - a33) * invS2;
-                    solvedPseudoinv = true;
-                }
-            }
-        }
-        if(!solvedPseudoinv){
-            if(tr > 1.0e-15f){
-                const float invTrSq = 1.0f / (tr * tr);
-                if(isfinite(invTrSq)){
-                    i0 = float3(a11, a12, a13) * invTrSq;
-                    i1 = float3(a12, a22, a23) * invTrSq;
-                    i2 = float3(a13, a23, a33) * invTrSq;
-                    solvedPseudoinv = true;
-                }
-            }
-        }
-        if(!solvedPseudoinv)
-            return;
-    }
+    float4 invI0;
+    float2 invI1;
+    nwbPhysicsInvertSymmetric3(invInertiaLocal0, invInertiaLocal1, invI0, invI1);
+    if(invI0.x == 0.0f && invI0.w == 0.0f && invI1.y == 0.0f && invI0.y == 0.0f && invI0.z == 0.0f && invI1.x == 0.0f)
+        return;
+    const float3 i0 = float3(invI0.x, invI0.y, invI0.z);
+    const float3 i1 = float3(invI0.y, invI0.w, invI1.x);
+    const float3 i2 = float3(invI0.z, invI1.x, invI1.y);
 
     const float3 iOmega = float3(dot(i0, wLocal), dot(i1, wLocal), dot(i2, wLocal));
     const float3 residual = cross(wLocal, iOmega) * h;
@@ -533,18 +468,6 @@ void nwbPhysicsIntegrateBodyPositionWithMaxAng(
     deltaRot = nwbPhysicsIntegrateDeltaQuat(deltaRot, w, h);
 }
 
-void nwbPhysicsIntegrateBodyPositionValues(
-    const float3 v,
-    const float h,
-    const float maxAngSpeed,
-    inout float3 w,
-    inout uint flags,
-    inout float3 deltaPos,
-    inout float4 deltaRot
-){
-    nwbPhysicsIntegrateBodyPositionWithMaxAng(v, h, maxAngSpeed, w, flags, deltaPos, deltaRot);
-}
-
 NwbPhysicsGpuBodyOut nwbPhysicsBuildBodyOutFields(
     const float3 pos,
     const float4 rot,
@@ -648,7 +571,7 @@ void nwbPhysicsIntegrateBodyPosition(const uint bodySimSlot, const uint bodyStat
     ;
     const float defaultMaxAng = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION / h) : 0.0f;
     const float maxAngSpeed = nwbPhysicsResolveBodyMaxAngSpeed(flags, customMaxAng, defaultMaxAng);
-    nwbPhysicsIntegrateBodyPositionValues(v, h, maxAngSpeed, w, flags, deltaPos, deltaRot);
+    nwbPhysicsIntegrateBodyPositionWithMaxAng(v, h, maxAngSpeed, w, flags, deltaPos, deltaRot);
     if(any(w != prevW))
         nwbPhysicsWriteBodyVelocityFields(bodyStateSlot, idx, v, w);
     if(flags != prevFlags)
@@ -758,6 +681,7 @@ void nwbPhysicsIntegrateIslandBodyVelocity(
     const bool hasGyro = (flags & NWB_PHYSICS_BODY_FLAG_GYROSCOPIC) != 0u;
     const bool hasCustomMaxAng = (flags & NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL) != 0u;
     const bool needSim = hasGyro || hasCustomMaxAng || (hasDeltaRot && hasTorque);
+    float customMaxAng = 0.0f;
     if(needSim){
         const NwbPhysicsGpuBodySim gSim = g_NwbPhysicsBodySimBuffers[bodySimSlot][globalBodyIdx];
         float4 curRot = gSim.rotation;
@@ -768,7 +692,7 @@ void nwbPhysicsIntegrateIslandBodyVelocity(
                 float4 curI0;
                 float2 curI1;
                 nwbPhysicsRotateSymMat3(curRot, gSim.invInertiaLocal0, gSim.invInertiaLocal1.xy, curI0, curI1);
-                w += h * nwbPhysicsMulSymmetric3(curI0, float4(curI1.x, curI1.y, 0.0f, 0.0f), gSim.torqueAngularDamping.xyz);
+                w += h * nwbPhysicsMulSymmetric3(curI0, curI1, gSim.torqueAngularDamping.xyz);
             }
             else{
                 w += dwStep;
@@ -777,32 +701,23 @@ void nwbPhysicsIntegrateIslandBodyVelocity(
         if(hasGyro)
             nwbPhysicsApplyGyroscopicStep(curRot, gSim.invInertiaLocal0, gSim.invInertiaLocal1.xy, h, w);
         w *= angDampScale;
-
-        v = nwbPhysicsApplyLinearLocks(v, flags);
-        w = nwbPhysicsApplyAngularLocks(w, flags);
-
-        const float vLenSq = dot(v, v);
-        if(vLenSq > maxLinearVelocity * maxLinearVelocity && vLenSq > 1.0e-12f){
-            v *= maxLinearVelocity * rsqrt(vLenSq);
-            flags |= NWB_PHYSICS_BODY_FLAG_IS_SPEED_CAPPED;
-        }
-        const float defaultMaxAng = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION / h) : 0.0f;
-        const float customMaxAng = hasCustomMaxAng ? gSim.invInertiaLocal1.w : 0.0f;
-        nwbPhysicsClampBodyAngVel(nwbPhysicsResolveBodyMaxAngSpeed(flags, customMaxAng, defaultMaxAng), w, flags);
+        if(hasCustomMaxAng)
+            customMaxAng = gSim.invInertiaLocal1.w;
     }
     else{
         w = (w + dwStep) * angDampScale;
-        v = nwbPhysicsApplyLinearLocks(v, flags);
-        w = nwbPhysicsApplyAngularLocks(w, flags);
-
-        const float vLenSq = dot(v, v);
-        if(vLenSq > maxLinearVelocity * maxLinearVelocity && vLenSq > 1.0e-12f){
-            v *= maxLinearVelocity * rsqrt(vLenSq);
-            flags |= NWB_PHYSICS_BODY_FLAG_IS_SPEED_CAPPED;
-        }
-        const float defaultMaxAng = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION / h) : 0.0f;
-        nwbPhysicsClampBodyAngVel(nwbPhysicsResolveBodyMaxAngSpeed(flags, 0.0f, defaultMaxAng), w, flags);
     }
+
+    v = nwbPhysicsApplyLinearLocks(v, flags);
+    w = nwbPhysicsApplyAngularLocks(w, flags);
+
+    const float vLenSq = dot(v, v);
+    if(vLenSq > maxLinearVelocity * maxLinearVelocity && vLenSq > 1.0e-12f){
+        v *= maxLinearVelocity * rsqrt(vLenSq);
+        flags |= NWB_PHYSICS_BODY_FLAG_IS_SPEED_CAPPED;
+    }
+    const float defaultMaxAng = h > 0.0f ? (NWB_PHYSICS_MAX_ROTATION / h) : 0.0f;
+    nwbPhysicsClampBodyAngVel(nwbPhysicsResolveBodyMaxAngSpeed(flags, customMaxAng, defaultMaxAng), w, flags);
 
     if(flags != prevFlags)
         g_NwbPhysicsLdsFlags[tid] = flags;
@@ -812,9 +727,10 @@ void nwbPhysicsIntegrateIslandBodyVelocity(
 
 void nwbPhysicsIntegrateIslandBodyPosition(const uint bodySimSlot, const uint globalBodyIdx, const uint tid, const float h, const float defaultMaxAngSpeed){
     uint flags = g_NwbPhysicsLdsFlags[tid];
-    float maxAngSpeed = ((flags & NWB_PHYSICS_BODY_FLAG_ALLOW_FAST_ROTATION) == 0u) ? defaultMaxAngSpeed : -1.0f;
-    if((flags & NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL) != 0u)
-        maxAngSpeed = g_NwbPhysicsBodySimBuffers[bodySimSlot][globalBodyIdx].invInertiaLocal1.w;
+    const float customMaxAng = ((flags & NWB_PHYSICS_BODY_FLAG_HAS_CUSTOM_MAX_ANGULAR_VEL) != 0u)
+        ? g_NwbPhysicsBodySimBuffers[bodySimSlot][globalBodyIdx].invInertiaLocal1.w
+        : 0.0f;
+    const float maxAngSpeed = nwbPhysicsResolveBodyMaxAngSpeed(flags, customMaxAng, defaultMaxAngSpeed);
     float3 deltaPos = g_NwbPhysicsLdsDeltaPos[tid];
     float4 deltaRot = g_NwbPhysicsLdsDeltaRot[tid];
     float3 w = g_NwbPhysicsLdsAngVel[tid];
@@ -905,7 +821,7 @@ NwbPhysicsGpuBodyOut nwbPhysicsSolveFreeBodyAndReturnOut(
                     float4 curI0;
                     float2 curI1;
                     nwbPhysicsRotateSymMat3(curRot, outSim.invInertiaLocal0, outSim.invInertiaLocal1.xy, curI0, curI1);
-                    w += h * nwbPhysicsMulSymmetric3(curI0, float4(curI1.x, curI1.y, 0.0f, 0.0f), torque);
+                    w += h * nwbPhysicsMulSymmetric3(curI0, curI1, torque);
                 }
                 else{
                     w += dwStep;

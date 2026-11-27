@@ -8,13 +8,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/bit.h>"), cpp_name("::CountTrailingZeros")]
-extern i32 CountTrailingZerosU32(in u32 value);
-
-SymMat3 ZeroSymMat3(){
-    return SymMat3();
-}
-
 SymMat3 SymMat3FromMatrix3(in MatrixSingle m){
     return SymMat3(m[0u].x, m[0u].y, m[0u].z, m[1u].y, m[1u].z, m[2u].z);
 }
@@ -34,16 +27,8 @@ VectorSingle SymMat3MulVec(in SymMat3 m, in VectorSingle v){
     return c0 * v.x + c1 * v.y + c2 * v.z;
 }
 
-b8 IsFiniteVec3(in VectorSingle v){
-    return IsFinite(v.xyz);
-}
-
-b8 IsFiniteQuat(in VectorSingle q){
-    return IsFinite(q);
-}
-
 b8 IsValidPositionVec3(in VectorSingle v){
-    if(!IsFiniteVec3(v))
+    if(!IsFinite(v.xyz))
         return false;
     return Vector3LessOrEqual(Abs(v), VectorSingle(s_HugeCoordinate));
 }
@@ -57,7 +42,7 @@ VectorSingle SafeNormalizeVec3(in VectorSingle v, in VectorSingle fallback){
 }
 
 VectorSingle SafeNormalizeQuat(in VectorSingle q){
-    if(!IsFiniteQuat(q))
+    if(!IsFinite(q))
         return QuaternionIdentity();
     const VectorSingle lenSq = Vector4LengthSq(q);
     if(IsFinite(lenSq) && lenSq.x > s_NormalizeEpsilonSq)
@@ -159,10 +144,6 @@ VectorSingle Matrix3SolveLinear(in MatrixSingle m, in VectorSingle b){
     const VectorSingle c1 = Cross(r2, r0);
     const VectorSingle c2 = Cross(r0, r1);
     return VectorSingle((c0 * b.x + c1 * b.y + c2 * b.z) * invDet, 0.0f);
-}
-
-MatrixSingle Matrix3FromQuaternion(in VectorSingle q){
-    return MatrixRotationQuaternion(q);
 }
 
 VectorSingle Matrix3MulVec(in MatrixSingle m, in VectorSingle v){
@@ -391,14 +372,10 @@ void TransformLocalAabbValuesToWorld(
     VectorSingle worldCenter = VectorSingle(xfPos, 0.0f);
     if(localCenter.x != 0.0f || localCenter.y != 0.0f || localCenter.z != 0.0f)
         worldCenter = TransformPointValues(xfPos, xfRot, localCenter);
-    const VectorSingle q2 = xfRot + xfRot;
-    const VectorSingle qx = q2 * xfRot.x;
-    const VectorSingle qy = q2 * xfRot.y;
-    const VectorSingle qz = q2 * xfRot.z;
-    const VectorSingle qw = q2 * xfRot.w;
-    const VectorSingle ax(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
-    const VectorSingle ay(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
-    const VectorSingle az(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
+    VectorSingle ax(0.0f);
+    VectorSingle ay(0.0f);
+    VectorSingle az(0.0f);
+    QuatToBasisAxes(xfRot, ax, ay, az);
     const VectorSingle worldExtent = Abs(ax) * localExtent.x + Abs(ay) * localExtent.y + Abs(az) * localExtent.z + VectorSingle(radius, radius, radius, 0.0f);
     outMin = VectorSingle(worldCenter - worldExtent, 0.0f);
     outMax = VectorSingle(worldCenter + worldExtent, 0.0f);
@@ -579,6 +556,214 @@ class BvhMetricSpillStack<const usize FixedCap> : NoCopy{
         outNodeIdx = entry.nodeIdx;
         outMetric = entry.metric;
         return true;
+    }
+}
+
+void QuatToBasisAxes(in VectorSingle q, mut VectorSingle outX, mut VectorSingle outY, mut VectorSingle outZ){
+    const VectorSingle q2 = q + q;
+    const VectorSingle qx = q2 * q.x;
+    const VectorSingle qy = q2 * q.y;
+    const VectorSingle qz = q2 * q.z;
+    const VectorSingle qw = q2 * q.w;
+
+    outX = VectorSingle(1.0f - (qy.y + qz.z), qx.y + qw.z, qx.z - qw.y, 0.0f);
+    outY = VectorSingle(qx.y - qw.z, 1.0f - (qx.x + qz.z), qy.z + qw.x, 0.0f);
+    outZ = VectorSingle(qx.z + qw.y, qy.z - qw.x, 1.0f - (qx.x + qy.y), 0.0f);
+}
+
+void TransformLocalAabbValuesWithAbsAxes(
+    in VectorSingle bMin,
+    in VectorSingle bMax,
+    in VectorSingle relPosBtoA,
+    in VectorSingle relRotBtoA,
+    in VectorSingle absRotX,
+    in VectorSingle absRotY,
+    in VectorSingle absRotZ,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax
+){
+    const VectorSingle cB = (bMin + bMax) * 0.5f;
+    const VectorSingle eB = (bMax - bMin) * 0.5f;
+    const VectorSingle cA = TransformPointValues(relPosBtoA, relRotBtoA, cB);
+    const VectorSingle eA = absRotX * eB.x + absRotY * eB.y + absRotZ * eB.z;
+    outMin = cA - eA;
+    outMax = cA + eA;
+}
+
+void TransformAabbValuesWithBasis(
+    in VectorSingle lMin,
+    in VectorSingle lMax,
+    in VectorSingle origin,
+    in VectorSingle ax0,
+    in VectorSingle ax1,
+    in VectorSingle ax2,
+    in VectorSingle absAx0,
+    in VectorSingle absAx1,
+    in VectorSingle absAx2,
+    mut VectorSingle outMin,
+    mut VectorSingle outMax
+){
+    const VectorSingle c = (lMin + lMax) * 0.5f;
+    const VectorSingle h = (lMax - lMin) * 0.5f;
+    const VectorSingle worldC = origin + ax0 * c.x + ax1 * c.y + ax2 * c.z;
+    const VectorSingle worldH = absAx0 * h.x + absAx1 * h.y + absAx2 * h.z;
+    outMin = worldC - worldH;
+    outMax = worldC + worldH;
+}
+
+VectorSingle QuatFromBasisCols(in VectorSingle c0, in VectorSingle c1, in VectorSingle c2){
+    return SafeNormalizeQuat(QuaternionRotationMatrix(Transpose(MatrixSingle(c0, c1, c2))));
+}
+
+u64 HashGridCellCoord3D(in i64 cx, in i64 cy, in i64 cz){
+    return (cast<u64>(cx) * cast<u64>(73856093u))
+        ^ (cast<u64>(cy) * cast<u64>(19349663u))
+        ^ (cast<u64>(cz) * cast<u64>(83492791u));
+}
+
+void ComputePointsAabbValues(in Span<f32x4> pts, mut VectorSingle outMin, mut VectorSingle outMax){
+    outMin = VectorSingle(s_MaxF32);
+    outMax = VectorSingle(-s_MaxF32);
+    for(usize vi = 0u; vi < pts.size(); ++vi){
+        const VectorSingle vp(pts[vi], 0.0f);
+        outMin = Min(outMin, vp);
+        outMax = Max(outMax, vp);
+    }
+}
+
+VectorSingle ClosestPointOnSegmentValues(in VectorSingle p, in VectorSingle a, in VectorSingle b, mut f32 outT){
+    const VectorSingle ab = VectorSingle(b - a, 0.0f);
+    const f32 lenSq = Vector3LengthSq(ab).x;
+    if(lenSq <= s_NormalizeEpsilonSq){
+        outT = 0.0f;
+        return a;
+    }
+    outT = Clamp(Vector3Dot(VectorSingle(p - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
+    return a + ab * outT;
+}
+
+class FlatBvhNode{
+    public f32x4 bMin(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 bMax(0.0f, 0.0f, 0.0f, 0.0f);
+    public u32 left = s_NullIndex;
+    public u32 right = s_NullIndex;
+    public u32 primStart = 0u;
+    public u32 primCount = 0u;
+}
+
+void BuildFlatBvh(
+    in Vector<f32x4> primMins,
+    in Vector<f32x4> primMaxs,
+    in usize primCount,
+    mut Vector<u32> outOrder,
+    mut Vector<FlatBvhNode> outNodes
+){
+    outNodes.clear();
+    outOrder.resize(primCount);
+    if(primCount == 0u)
+        return;
+    for(usize i = 0u; i < primCount; ++i)
+        outOrder[i] = cast<u32>(i);
+    outNodes.reserve(primCount);
+    outNodes.push_back(FlatBvhNode());
+
+    Array<u32, 64u> stackNode;
+    Array<usize, 64u> stackStart;
+    Array<usize, 64u> stackEnd;
+    usize sp = 0u;
+    stackNode[sp] = 0u;
+    stackStart[sp] = 0u;
+    stackEnd[sp] = primCount;
+    ++sp;
+
+    while(sp > 0u){
+        --sp;
+        const usize ni = cast<usize>(stackNode[sp]);
+        const usize bStart = stackStart[sp];
+        const usize bEnd = stackEnd[sp];
+        const u32 firstPrim = outOrder[bStart];
+        VectorSingle bMin = VectorSingle(primMins[firstPrim]);
+        VectorSingle bMax = VectorSingle(primMaxs[firstPrim]);
+        VectorSingle cMin = (bMin + bMax) * 0.5f;
+        VectorSingle cMax = cMin;
+        for(usize k = bStart + 1u; k < bEnd; ++k){
+            const u32 pIdx = outOrder[k];
+            const VectorSingle pMin = VectorSingle(primMins[pIdx]);
+            const VectorSingle pMax = VectorSingle(primMaxs[pIdx]);
+            const VectorSingle cen = (pMin + pMax) * 0.5f;
+            bMin = Min(bMin, pMin);
+            bMax = Max(bMax, pMax);
+            cMin = Min(cMin, cen);
+            cMax = Max(cMax, cen);
+        }
+        outNodes[ni].bMin = f32x4(bMin, 0.0f);
+        outNodes[ni].bMax = f32x4(bMax, 0.0f);
+
+        const usize count = bEnd - bStart;
+        if(count <= 4u || sp + 2u >= 64u){
+            outNodes[ni].left = s_NullIndex;
+            outNodes[ni].right = s_NullIndex;
+            outNodes[ni].primStart = cast<u32>(bStart);
+            outNodes[ni].primCount = cast<u32>(count);
+            continue;
+        }
+
+        const VectorSingle ext = cMax - cMin;
+        u32 axis = 0u;
+        f32 span = ext.x;
+        if(ext.y > span){
+            axis = 1u;
+            span = ext.y;
+        }
+        if(ext.z > span){
+            axis = 2u;
+            span = ext.z;
+        }
+
+        usize splitIdx = bStart + (count / 2u);
+        if(span > 1.0e-6f){
+            f32 splitVal = (cMin.x + cMax.x) * 0.5f;
+            if(axis == 1u) splitVal = (cMin.y + cMax.y) * 0.5f;
+            else if(axis == 2u) splitVal = (cMin.z + cMax.z) * 0.5f;
+            usize lo = bStart;
+            usize hi = bEnd;
+            while(lo < hi){
+                const u32 idxLo = outOrder[lo];
+                const VectorSingle cenLo = (VectorSingle(primMins[idxLo]) + VectorSingle(primMaxs[idxLo])) * 0.5f;
+                f32 cVal = cenLo.x;
+                if(axis == 1u) cVal = cenLo.y;
+                else if(axis == 2u) cVal = cenLo.z;
+                if(cVal < splitVal){
+                    ++lo;
+                }
+                else{
+                    --hi;
+                    const u32 tmp = outOrder[lo];
+                    outOrder[lo] = outOrder[hi];
+                    outOrder[hi] = tmp;
+                }
+            }
+            if(lo > bStart && lo < bEnd)
+                splitIdx = lo;
+        }
+
+        const u32 leftIdx = cast<u32>(outNodes.size());
+        outNodes.push_back(FlatBvhNode());
+        const u32 rightIdx = cast<u32>(outNodes.size());
+        outNodes.push_back(FlatBvhNode());
+        outNodes[ni].left = leftIdx;
+        outNodes[ni].right = rightIdx;
+        outNodes[ni].primStart = 0u;
+        outNodes[ni].primCount = 0u;
+
+        stackNode[sp] = rightIdx;
+        stackStart[sp] = splitIdx;
+        stackEnd[sp] = bEnd;
+        ++sp;
+        stackNode[sp] = leftIdx;
+        stackStart[sp] = bStart;
+        stackEnd[sp] = splitIdx;
+        ++sp;
     }
 }
 

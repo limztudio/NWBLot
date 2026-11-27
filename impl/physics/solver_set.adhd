@@ -803,7 +803,8 @@ b8 ComputeUnscaledShapeLocalAabbValues(
     }
     if(shapeType == ShapeType::Sdf){
         if(geometryIndex < sdfShapes.size()){
-            ComputeSdfAabbValues(sdfShapes[geometryIndex], zeroPos, identRot, outMin, outMax);
+            in SdfShape sdf = sdfShapes[geometryIndex];
+            TransformLocalAabbValuesToWorld(VectorSingle(sdf.boundsMin, 0.0f), VectorSingle(sdf.boundsMax, 0.0f), sdf.margin, zeroPos, identRot, outMin, outMax);
             return true;
         }
         return false;
@@ -877,7 +878,8 @@ void ComputeShapeWorldAabbValues(
     }
     if(shape.type == ShapeType::Compound){
         if(shape.geometryIndex < compoundShapes.size()){
-            ComputeCompoundAabbValues(compoundShapes[shape.geometryIndex], effPos, effRot, outMin, outMax);
+            in CompoundShape compound = compoundShapes[shape.geometryIndex];
+            TransformLocalAabbValuesToWorld(VectorSingle(compound.localAabb.lowerBound), VectorSingle(compound.localAabb.upperBound), 0.0f, effPos, effRot, outMin, outMax);
             return;
         }
         outMin = VectorSingle(0.0f);
@@ -886,7 +888,8 @@ void ComputeShapeWorldAabbValues(
     }
     if(shape.type == ShapeType::Chain){
         if(shape.geometryIndex < chainShapes.size()){
-            ComputeChainAabbValues(chainShapes[shape.geometryIndex], effPos, effRot, outMin, outMax);
+            in ChainShape chain = chainShapes[shape.geometryIndex];
+            TransformLocalAabbValuesToWorld(VectorSingle(chain.localAabb.lowerBound), VectorSingle(chain.localAabb.upperBound), 0.0f, effPos, effRot, outMin, outMax);
             return;
         }
         outMin = VectorSingle(0.0f);
@@ -895,7 +898,8 @@ void ComputeShapeWorldAabbValues(
     }
     if(shape.type == ShapeType::Sdf){
         if(shape.geometryIndex < sdfShapes.size()){
-            ComputeSdfAabbValues(sdfShapes[shape.geometryIndex], effPos, effRot, outMin, outMax);
+            in SdfShape sdf = sdfShapes[shape.geometryIndex];
+            TransformLocalAabbValuesToWorld(VectorSingle(sdf.boundsMin, 0.0f), VectorSingle(sdf.boundsMax, 0.0f), sdf.margin, effPos, effRot, outMin, outMax);
             return;
         }
         outMin = VectorSingle(0.0f);
@@ -1324,7 +1328,7 @@ Manifold CollidePlaneAndMeshRaw(
         }
     }
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+        ReduceSinglePlaneMeshCandidates(nAtoB, candidates, false, m);
     return m;
 }
 
@@ -1454,7 +1458,7 @@ Manifold CollidePlaneAndHeightfieldRaw(
             }
         }
         if(!candidates.empty())
-            ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+            ReduceSinglePlaneMeshCandidates(nAtoB, candidates, false, m);
         return m;
     }
 
@@ -1507,7 +1511,7 @@ Manifold CollidePlaneAndHeightfieldRaw(
         }
     }
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+        ReduceSinglePlaneMeshCandidates(nAtoB, candidates, false, m);
     return m;
 }
 
@@ -3368,10 +3372,6 @@ f32 CombineMaterialFriction(in f32 a, in f32 b){
     return Sqrt(VectorSingle(clamped.x * clamped.y)).x;
 }
 
-f32 CombineMaterialRollingResistance(in f32 a, in f32 b){
-    return Max(a, b);
-}
-
 MaterialCombineMode ResolveMaterialCombineMode(
     in MaterialCombineMode a,
     in MaterialCombineMode b,
@@ -3416,7 +3416,7 @@ void CombineResolvedSurfaceMaterialsValues(
 
     outContact.friction = CombineMaterialWithMode(Max(matA.friction, 0.0f), Max(matB.friction, 0.0f), fricMode);
     outContact.restitution = Max(CombineMaterialWithMode(matA.restitution, matB.restitution, restMode), 0.0f);
-    outContact.rollingResistance = CombineMaterialRollingResistance(matA.rollingResistance, matB.rollingResistance);
+    outContact.rollingResistance = Max(matA.rollingResistance, matB.rollingResistance);
     outContact.tangentSpeed = matA.tangentSpeed + matB.tangentSpeed;
 
     f32 statA = matA.staticFriction;

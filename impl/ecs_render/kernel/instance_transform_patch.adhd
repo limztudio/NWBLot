@@ -28,18 +28,29 @@ b8 AppendTypedInstanceTransformPatch(
     if(!targetBufferResource.valid() || !targetUavHeapHandle.valid())
         return false;
 
-    GpuTaskGraphInstanceTransformPatchRequest request;
-    request.instanceBufferResource = targetBufferResource;
-    request.instanceBufferUavSlot = targetUavHeapHandle.slot();
-    request.instanceStrideFloat4 = instanceStrideFloat4;
-    request.baseFloat4Offset = baseFloat4Offset;
-    request.layout = layout;
-    request.passIdentityPrefix = passIdentityPrefix;
-    request.dependency = dependency;
-    request.mergeWithPrevious = mergeWithPrevious;
-    request.allowMergeAcrossConsumerFrontier = allowMergeAcrossConsumerFrontier;
+    Array<GpuTaskGraphInstanceTransformPatchRequest, 1u> requests;
+    requests[0u].instanceBufferResource = targetBufferResource;
+    requests[0u].instanceBufferUavSlot = targetUavHeapHandle.slot();
+    requests[0u].instanceStrideFloat4 = instanceStrideFloat4;
+    requests[0u].baseFloat4Offset = baseFloat4Offset;
+    requests[0u].layout = layout;
 
-    const auto patchResult = contributor.value().declareInstanceTransformPatch(request, instanceEntityIds, graph);
+    Array<u32, 1u> offsets;
+    offsets[0u] = 0u;
+    Array<u32, 1u> counts;
+    counts[0u] = cast<u32>(instanceEntityIds.size());
+
+    const auto patchResult = contributor.value().declareBatchInstanceTransformPatches(
+        Span<GpuTaskGraphInstanceTransformPatchRequest>(requests.data(), 1u),
+        instanceEntityIds,
+        Span<u32>(offsets.data(), 1u),
+        Span<u32>(counts.data(), 1u),
+        passIdentityPrefix,
+        dependency,
+        mergeWithPrevious,
+        allowMergeAcrossConsumerFrontier,
+        graph
+    );
     if(!patchResult.has_value()){
         dependency = GpuTaskId();
         return false;
@@ -55,7 +66,6 @@ b8 AppendInstanceTransformPatch(
     in GpuGraphResourceId materialInstances,
     in MeshFrameBindingSnapshot frameBindings,
     in Name passIdentityPrefix,
-    in b8 mergeWithPrevious,
     mut GpuTaskGraph graph,
     mut GpuTaskId dependency
 ){
@@ -76,7 +86,7 @@ b8 AppendInstanceTransformPatch(
         GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs,
         0u,
         passIdentityPrefix,
-        mergeWithPrevious,
+        true,
         false,
         graph,
         dependency

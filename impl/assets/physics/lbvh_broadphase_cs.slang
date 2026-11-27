@@ -108,16 +108,7 @@ void nwbPhysicsLbvhTestLeaf(
         return;
     const uint4 metaB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].bodyIndexTypeShape;
     const uint4 filterB = g_NwbPhysicsShapeProxyBuffers[shapeSlot][idxB].filterData;
-    if(!nwbPhysicsShouldCollideFields(metaA, filterA, metaB, filterB))
-        return;
-    if(((metaA.w & metaB.w) & NWB_PHYSICS_SHAPE_FLAG_HAS_NONCOLLIDE_JOINT) != 0u && ((metaA.w | metaB.w) & NWB_PHYSICS_SHAPE_FLAG_SENSOR) == 0u && nwbPhysicsIsNonCollidingBodyPair(nonCollideSlot, nonCollideMask, metaA.x, metaB.x))
-        return;
-
-    const uint outA = idxA < idxB ? idxA : idxB;
-    const uint outB = idxA < idxB ? idxB : idxA;
-    const uint bodyOutA = idxA < idxB ? metaA.x : metaB.x;
-    const uint bodyOutB = idxA < idxB ? metaB.x : metaA.x;
-    nwbPhysicsEmitBroadphasePair(pairSlot, surfacePairSlot, counterSlot, maxPairs, outA, outB, bodyOutA, bodyOutB, nwbPhysicsBroadphasePairBucket(metaA, metaB));
+    nwbPhysicsTryEmitBroadphasePair(idxA, metaA, filterA, idxB, metaB, filterB, nonCollideSlot, nonCollideMask, pairSlot, surfacePairSlot, counterSlot, maxPairs);
 }
 
 [require(spvGroupNonUniform, spvGroupNonUniformBallot)]

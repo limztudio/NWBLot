@@ -378,7 +378,6 @@ Expected<TransparentCsgIntervalProducerResult> TransparentCsgIntervalBuilder::de
                 inputs.resources.materialInstances,
                 inputs.frameBindings,
                 Name("render.avboit.transparent_csg.physics_patch"),
-                true,
                 this.m_graph,
                 result.uploadTask
             )){

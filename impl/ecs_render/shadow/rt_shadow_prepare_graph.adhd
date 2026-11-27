@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/kernel/task_graph_barrier_task.adhd>
-#include <impl/ecs_render/kernel/instance_transform_patch.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
 
 
@@ -283,8 +282,6 @@ b8 AppendShadowPrepareBatchPatchTarget(
     in u32 strideFloat4,
     in GpuTaskGraphInstanceTransformPatchLayout layout,
     in u32 baseFloat4Offset,
-    in Name identityPrefix,
-    in GpuTaskId dependency,
     mut FixedVector<GpuTaskGraphInstanceTransformPatchRequest, 5u> patchRequests,
     mut FixedVector<u32, 5u> entityIdOffsets,
     mut FixedVector<u32, 5u> entityIdCounts,
@@ -329,10 +326,6 @@ b8 AppendShadowPrepareBatchPatchTarget(
     req.instanceStrideFloat4 = strideFloat4;
     req.baseFloat4Offset = baseFloat4Offset;
     req.layout = layout;
-    req.passIdentityPrefix = identityPrefix;
-    req.dependency = dependency;
-    req.mergeWithPrevious = true;
-    req.allowMergeAcrossConsumerFrontier = true;
     patchRequests.push_back(req);
     entityIdOffsets.push_back(offset);
     entityIdCounts.push_back(count);
@@ -353,8 +346,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     mut GpuTimingSubmissionTicket timingTicket
 ){
 
-    this.m_deferredShadowPrepareSceneRefitTask = GpuTaskId();
-    this.m_sceneBvhRefitInputsUploadTask = GpuTaskId();
     this.resetShadowPrepareTaskState();
     if(
         !deferredTargets.valid()
@@ -451,8 +442,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
                 4u,
                 GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld,
                 0u,
-                Name("shadow.prepare.tlas.physics_patch"),
-                shadowPrepareDependency,
                 patchRequests,
                 entityIdOffsets,
                 entityIdCounts,
@@ -468,8 +457,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
             cast<u32>(size_of<InstanceGpuData>() / size_of<f32x4>()),
             GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs,
             0u,
-            Name("shadow.prepare.shadow_instances.physics_patch"),
-            shadowPrepareDependency,
             patchRequests,
             entityIdOffsets,
             entityIdCounts,
@@ -484,8 +471,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
             4u,
             GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
             0u,
-            Name("shadow.prepare.scene_bvh_instances.physics_patch"),
-            shadowPrepareDependency,
             patchRequests,
             entityIdOffsets,
             entityIdCounts,
@@ -501,8 +486,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
                 6u,
                 GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
                 context.rayTracing.preparedCsgCutterByteOffset() / 16u + 1u,
-                Name("shadow.prepare.csg_cutters.physics_patch"),
-                shadowPrepareDependency,
                 patchRequests,
                 entityIdOffsets,
                 entityIdCounts,
@@ -517,8 +500,6 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
                 6u,
                 GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
                 context.rayTracing.preparedCsgInstanceByteOffset() / 16u,
-                Name("shadow.prepare.csg_instances.physics_patch"),
-                shadowPrepareDependency,
                 patchRequests,
                 entityIdOffsets,
                 entityIdCounts,
@@ -651,6 +632,8 @@ void ShadowPrepareGraphCoordinator::resetShadowPrepareUploadTaskState(){
 
 void ShadowPrepareGraphCoordinator::resetShadowPrepareTaskState(){
     this.m_deferredShadowPrepareTask = GpuTaskId();
+    this.m_deferredShadowPrepareSceneRefitTask = GpuTaskId();
+    this.m_sceneBvhRefitInputsUploadTask = GpuTaskId();
     this.m_deferredShadowPrepareSoftwareBvhBuildFirstTask = GpuTaskId();
     this.m_deferredShadowPrepareSoftwareBvhBuildLastTask = GpuTaskId();
     this.m_deferredShadowPrepareAccelStructFinalizeTask = GpuTaskId();

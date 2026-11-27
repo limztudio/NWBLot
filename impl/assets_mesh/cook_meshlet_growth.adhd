@@ -242,6 +242,7 @@ b8 BuildCookMeshlets(
             vertexRefs,
             outMeshletPrimitiveIndices,
             localSourceVertexRefs,
+            true,
             current,
             outMeshletPositionStreamRefs,
             outMeshletAttributeStreamRefs,

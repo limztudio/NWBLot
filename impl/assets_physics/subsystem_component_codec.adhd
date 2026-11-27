@@ -599,10 +599,20 @@ class GpuRenderTransformExportComponentBinary{
 
 
 class SubsystemPhysicsComponentBinaryCodec{
-    private Name decodeOptionalName(in NameHash h)const{
-        if(h == s_NameNone.hash())
-            return s_NameNone;
-        return Name(h);
+    private void appendNameHashList(in Vector<Name> names, mut Vector<u8> outBinary)const{
+        for(usize ni = 0u; ni < names.size(); ++ni)
+            AppendPOD(outBinary, names[ni].hash());
+    }
+
+    private b8 readNameHashList(in Span<u8> payload, in u32 count, mut usize cursor, mut Vector<Name> outNames)const{
+        outNames.resize(count);
+        for(u32 ni = 0u; ni < count; ++ni){
+            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
+            if(!hRes.has_value())
+                return false;
+            outNames[ni] = DecodeOptionalPhysicsName(hRes.value());
+        }
+        return true;
     }
 
     private b8 validBodyDefData(in BodyDef b)const{
@@ -712,7 +722,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         CharacterControllerComponent c;
-        c.collisionLayer = this.decodeOptionalName(bin.collisionLayerHash);
+        c.collisionLayer = DecodeOptionalPhysicsName(bin.collisionLayerHash);
         c.def.up = bin.up;
         c.def.boxHalfExtents = bin.boxHalfExtents;
         c.def.shapeType = cast<CharacterShapeType>(bin.shapeType);
@@ -987,8 +997,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             wb.flags = wFlags;
             AppendPOD(outBinary, wb);
         }
-        for(usize ni = 0u; ni < v.wheelEntityNames.size(); ++ni)
-            AppendPOD(outBinary, v.wheelEntityNames[ni].hash());
+        this.appendNameHashList(v.wheelEntityNames, outBinary);
         for(usize ti = 0u; ti < eng.torqueCurvePoints.size(); ++ti){
             VehicleTorqueCurvePointBinary tp;
             tp.rpm = eng.torqueCurvePoints[ti].x;
@@ -1033,7 +1042,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         VehicleComponent v;
-        v.collisionLayer = this.decodeOptionalName(bin.collisionLayerHash);
+        v.collisionLayer = DecodeOptionalPhysicsName(bin.collisionLayerHash);
         v.engine.gearCount = bin.gearCount;
         v.input.requestedGear = bin.requestedGear;
         v.engine.maxTorque = bin.maxTorque;
@@ -1122,13 +1131,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             w.handbrakeAffected = (wb.flags & s_VehicleWheelFlagHandbrakeAffected) != 0u;
             w.useSweptCast = (wb.flags & s_VehicleWheelFlagUseSweptCast) != 0u;
         }
-        v.wheelEntityNames.resize(bin.wheelNameCount);
-        for(u32 ni = 0u; ni < bin.wheelNameCount; ++ni){
-            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
-            if(!hRes.has_value())
-                return MakeUnexpected(Failure());
-            v.wheelEntityNames[ni] = this.decodeOptionalName(hRes.value());
-        }
+        if(!this.readNameHashList(payload, bin.wheelNameCount, cursor, v.wheelEntityNames))
+            return MakeUnexpected(Failure());
         for(u32 ti = 0u; ti < bin.torqueCurvePointCount; ++ti){
             const Expected<VehicleTorqueCurvePointBinary> tpRes = ReadPOD<VehicleTorqueCurvePointBinary>(payload, cursor);
             if(!tpRes.has_value())
@@ -1139,7 +1143,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         const Expected<u32> wjCountRes = ReadPOD<u32>(payload, cursor);
         if(!skelHashRes.has_value() || !wjCountRes.has_value())
             return MakeUnexpected(Failure());
-        v.skeletonEntityName = this.decodeOptionalName(skelHashRes.value());
+        v.skeletonEntityName = DecodeOptionalPhysicsName(skelHashRes.value());
         const u32 wheelJointCount = wjCountRes.value();
         if(cast<u64>(wheelJointCount) * cast<u64>(size_of<u32>()) != cast<u64>(payload.size() - cursor)){
             error("VehicleComponentAsset::loadComponentPayload failed: trailing wheel joint bytes");
@@ -1347,18 +1351,8 @@ class SubsystemPhysicsComponentBinaryCodec{
                 return false;
             if(b.swingLimitY < 0.0f || b.swingLimitZ < 0.0f || b.twistMin > b.twistMax || b.motorMaxTorque < 0.0f || b.motorHertz < 0.0f || b.motorDamping < 0.0f)
                 return false;
-            for(usize ai = 0u; ai < 6u; ++ai){
-                in SixDofAxisConfig ax = b.sixDofAxes[ai];
-                if(cast<u8>(ax.motion) > cast<u8>(JointMotion::Locked))
-                    return false;
-                if(!IsFinite(VectorSingle(ax.lowerLimit, ax.upperLimit, ax.motorTargetVelocity, ax.motorTargetPosition))
-                    || !IsFinite(VectorSingle(ax.maxMotorForce, ax.springHertz, ax.springDampingRatio, 0.0f)))
-                    return false;
-                if(ax.maxMotorForce < 0.0f || ax.springHertz < 0.0f || ax.springDampingRatio < 0.0f)
-                    return false;
-                if(ax.lowerLimit > ax.upperLimit)
-                    return false;
-            }
+            if(!ValidateSixDofAxes(b.sixDofAxes))
+                return false;
         }
         for(usize pi = 0u; pi < r.targetPose.size(); ++pi){
             in Transform3D xf = r.targetPose[pi];
@@ -1382,22 +1376,6 @@ class SubsystemPhysicsComponentBinaryCodec{
             return true;
         error("RagdollComponentAsset::validatePayload failed: invalid ragdoll config for '{}'", virtualPath.resolvedText());
         return false;
-    }
-
-    private void appendNameHashList(in Vector<Name> names, mut Vector<u8> outBinary)const{
-        for(usize ni = 0u; ni < names.size(); ++ni)
-            AppendPOD(outBinary, names[ni].hash());
-    }
-
-    private b8 readNameHashList(in Span<u8> payload, in u32 count, mut usize cursor, mut Vector<Name> outNames)const{
-        outNames.resize(count);
-        for(u32 ni = 0u; ni < count; ++ni){
-            const Expected<NameHash> hRes = ReadPOD<NameHash>(payload, cursor);
-            if(!hRes.has_value())
-                return false;
-            outNames[ni] = this.decodeOptionalName(hRes.value());
-        }
-        return true;
     }
 
     public b8 appendRagdollValidated(in RagdollComponent r, mut Vector<u8> outBinary)const{
@@ -1521,22 +1499,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             if(b.useSolverMotors) eFlags |= s_RagdollBoneExtraFlagUseSolverMotors;
             bb.extraFlags = eFlags;
             bb.shapeType = cast<u8>(b.shapeType);
-            for(u32 ai = 0u; ai < 6u; ++ai){
-                in SixDofAxisConfig ax = b.sixDofAxes[ai];
-                bb.sixDofMotions[ai] = cast<u8>(ax.motion);
-                u8 aFlags = 0u;
-                if(ax.enableMotor) aFlags |= s_SixDofAxisFlagEnableMotor;
-                if(ax.enableSpring) aFlags |= s_SixDofAxisFlagEnableSpring;
-                bb.sixDofFlags[ai] = aFlags;
-                const u32 pBase = ai * 7u;
-                bb.sixDofParams[pBase + 0u] = ax.lowerLimit;
-                bb.sixDofParams[pBase + 1u] = ax.upperLimit;
-                bb.sixDofParams[pBase + 2u] = ax.motorTargetVelocity;
-                bb.sixDofParams[pBase + 3u] = ax.motorTargetPosition;
-                bb.sixDofParams[pBase + 4u] = ax.maxMotorForce;
-                bb.sixDofParams[pBase + 5u] = ax.springHertz;
-                bb.sixDofParams[pBase + 6u] = ax.springDampingRatio;
-            }
+            PackSixDofAxesBinary(b.sixDofAxes, bb.sixDofMotions, bb.sixDofFlags, bb.sixDofParams);
             AppendPOD(outBinary, bb);
             this.appendFixedHullVertices(Span<f32x4>(b.hullVertices.data(), b.hullVertices.size()), outBinary);
             for(usize ei = 0u; ei < b.extraShapes.size(); ++ei){
@@ -1621,7 +1584,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         RagdollComponent r;
-        r.collisionLayer = this.decodeOptionalName(hdr.collisionLayerHash);
+        r.collisionLayer = DecodeOptionalPhysicsName(hdr.collisionLayerHash);
         r.driveStrengthMultiplier = hdr.driveStrengthMultiplier;
         r.enabled = (hdr.flags & s_RagdollFlagEnabled) != 0u;
         r.kinematic = (hdr.flags & s_RagdollFlagKinematic) != 0u;
@@ -1704,22 +1667,8 @@ class SubsystemPhysicsComponentBinaryCodec{
             b.motorDamping = bb.motorDamping;
             b.useSixDof = (bb.extraFlags & s_RagdollBoneExtraFlagUseSixDof) != 0u;
             b.useSolverMotors = (bb.extraFlags & s_RagdollBoneExtraFlagUseSolverMotors) != 0u;
-            for(u32 ai = 0u; ai < 6u; ++ai){
-                if((bb.sixDofFlags[ai] & 0xfcu) != 0u)
-                    return MakeUnexpected(Failure());
-                mut SixDofAxisConfig ax = b.sixDofAxes[ai];
-                ax.motion = cast<JointMotion>(bb.sixDofMotions[ai]);
-                ax.enableMotor = (bb.sixDofFlags[ai] & s_SixDofAxisFlagEnableMotor) != 0u;
-                ax.enableSpring = (bb.sixDofFlags[ai] & s_SixDofAxisFlagEnableSpring) != 0u;
-                const u32 pBase = ai * 7u;
-                ax.lowerLimit = bb.sixDofParams[pBase + 0u];
-                ax.upperLimit = bb.sixDofParams[pBase + 1u];
-                ax.motorTargetVelocity = bb.sixDofParams[pBase + 2u];
-                ax.motorTargetPosition = bb.sixDofParams[pBase + 3u];
-                ax.maxMotorForce = bb.sixDofParams[pBase + 4u];
-                ax.springHertz = bb.sixDofParams[pBase + 5u];
-                ax.springDampingRatio = bb.sixDofParams[pBase + 6u];
-            }
+            if(!UnpackSixDofAxesBinary(bb.sixDofMotions, bb.sixDofFlags, bb.sixDofParams, b.sixDofAxes))
+                return MakeUnexpected(Failure());
             if(!this.readFixedHullVertices(payload, bb.hullVertexCount, cursor, b.hullVertices))
                 return MakeUnexpected(Failure());
             b.extraShapes.clear();
@@ -1788,7 +1737,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         const Expected<u32> bjCountRes = ReadPOD<u32>(payload, cursor);
         if(!skelHashRes.has_value() || !bjCountRes.has_value())
             return MakeUnexpected(Failure());
-        r.skeletonEntityName = this.decodeOptionalName(skelHashRes.value());
+        r.skeletonEntityName = DecodeOptionalPhysicsName(skelHashRes.value());
         const u32 boneJointCount = bjCountRes.value();
         if(cast<u64>(boneJointCount) * cast<u64>(size_of<u32>()) > cast<u64>(payload.size() - cursor))
             return MakeUnexpected(Failure());
@@ -1889,7 +1838,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         FluidVolumeComponent f;
-        f.collisionLayer = this.decodeOptionalName(bin.collisionLayerHash);
+        f.collisionLayer = DecodeOptionalPhysicsName(bin.collisionLayerHash);
         f.volume.shape = cast<FluidVolumeShape>(bin.shape);
         f.volume.surfaceNormalOffset = bin.surfaceNormalOffset;
         f.volume.bounds = Aabb3D(VectorSingle(bin.boundsLower), VectorSingle(bin.boundsUpper));
@@ -1994,7 +1943,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         ForceFieldComponent ff;
-        ff.collisionLayer = this.decodeOptionalName(bin.collisionLayerHash);
+        ff.collisionLayer = DecodeOptionalPhysicsName(bin.collisionLayerHash);
         ff.field.type = cast<ForceFieldType>(bin.fieldType);
         ff.field.bounds = Aabb3D(VectorSingle(bin.boundsLower), VectorSingle(bin.boundsUpper));
         ff.field.originOrDirection = bin.originOrDirection;
@@ -2345,7 +2294,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         ArticulationComponent a;
-        a.collisionLayer = this.decodeOptionalName(hdr.collisionLayerHash);
+        a.collisionLayer = DecodeOptionalPhysicsName(hdr.collisionLayerHash);
         a.subSteps = hdr.subSteps;
         a.contactFilter.categoryBits = hdr.contactFilterCategoryBits;
         a.contactFilter.maskBits = hdr.contactFilterMaskBits;
@@ -2472,7 +2421,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         const Expected<u32> linkJointCntRes = ReadPOD<u32>(payload, cursor);
         if(!skelHashRes.has_value() || !linkNameCntRes.has_value() || !linkJointCntRes.has_value())
             return MakeUnexpected(Failure());
-        a.skeletonEntityName = this.decodeOptionalName(skelHashRes.value());
+        a.skeletonEntityName = DecodeOptionalPhysicsName(skelHashRes.value());
         const u32 linkNameCount = linkNameCntRes.value();
         const u32 linkJointCount = linkJointCntRes.value();
         const u64 tailNameBytes = cast<u64>(linkNameCount) * cast<u64>(size_of<NameHash>());
@@ -2852,7 +2801,7 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         SoftBodyComponent sb;
-        sb.collisionLayer = this.decodeOptionalName(hdr.collisionLayerHash);
+        sb.collisionLayer = DecodeOptionalPhysicsName(hdr.collisionLayerHash);
         mut SoftBody s = sb.softBody;
         s.windVelocity = hdr.windVelocity;
         s.particleRadius = hdr.particleRadius;

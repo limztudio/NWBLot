@@ -35,6 +35,68 @@ extern class InMemoryAssetManagerFixture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void AppendClosedCubeVerticesIndices(in f32 halfExtent, mut Vector<f32x4> outVerts, mut Vector<u32> outIndices){
+    outVerts.push_back(f32x4(-halfExtent, -halfExtent, -halfExtent, 0.0f));
+    outVerts.push_back(f32x4( halfExtent, -halfExtent, -halfExtent, 0.0f));
+    outVerts.push_back(f32x4( halfExtent,  halfExtent, -halfExtent, 0.0f));
+    outVerts.push_back(f32x4(-halfExtent,  halfExtent, -halfExtent, 0.0f));
+    outVerts.push_back(f32x4(-halfExtent, -halfExtent,  halfExtent, 0.0f));
+    outVerts.push_back(f32x4( halfExtent, -halfExtent,  halfExtent, 0.0f));
+    outVerts.push_back(f32x4( halfExtent,  halfExtent,  halfExtent, 0.0f));
+    outVerts.push_back(f32x4(-halfExtent,  halfExtent,  halfExtent, 0.0f));
+    outIndices.push_back(0u); outIndices.push_back(2u); outIndices.push_back(1u);
+    outIndices.push_back(0u); outIndices.push_back(3u); outIndices.push_back(2u);
+    outIndices.push_back(4u); outIndices.push_back(5u); outIndices.push_back(6u);
+    outIndices.push_back(4u); outIndices.push_back(6u); outIndices.push_back(7u);
+    outIndices.push_back(0u); outIndices.push_back(4u); outIndices.push_back(7u);
+    outIndices.push_back(0u); outIndices.push_back(7u); outIndices.push_back(3u);
+    outIndices.push_back(1u); outIndices.push_back(2u); outIndices.push_back(6u);
+    outIndices.push_back(1u); outIndices.push_back(6u); outIndices.push_back(5u);
+    outIndices.push_back(3u); outIndices.push_back(7u); outIndices.push_back(6u);
+    outIndices.push_back(3u); outIndices.push_back(6u); outIndices.push_back(2u);
+    outIndices.push_back(0u); outIndices.push_back(1u); outIndices.push_back(5u);
+    outIndices.push_back(0u); outIndices.push_back(5u); outIndices.push_back(4u);
+}
+
+Expected<MeshShape> BuildClosedCubeMesh(in f32 halfExtent){
+    Vector<f32x4> verts;
+    Vector<u32> idx;
+    AppendClosedCubeVerticesIndices(halfExtent, verts, idx);
+    return MakeMeshShape(Span<f32x4>(verts.data(), verts.size()), Span<u32>(idx.data(), idx.size()), 0.0f);
+}
+
+Expected<MeshShape> BuildQuadMeshFloor(in f32 halfSize, in f32 radius, in b8 flipWinding){
+    Array<f32x4, 4u> verts;
+    verts[0u] = f32x4(-halfSize, 0.0f, -halfSize, 0.0f);
+    verts[1u] = f32x4(-halfSize, 0.0f,  halfSize, 0.0f);
+    verts[2u] = f32x4( halfSize, 0.0f,  halfSize, 0.0f);
+    verts[3u] = f32x4( halfSize, 0.0f, -halfSize, 0.0f);
+    Array<u32, 6u> idx;
+    if(flipWinding){
+        idx[0u] = 0u; idx[1u] = 3u; idx[2u] = 2u;
+        idx[3u] = 0u; idx[4u] = 2u; idx[5u] = 1u;
+    }
+    else{
+        idx[0u] = 0u; idx[1u] = 1u; idx[2u] = 2u;
+        idx[3u] = 0u; idx[4u] = 2u; idx[5u] = 3u;
+    }
+    return MakeMeshShape(Span<f32x4>(verts.data(), verts.size()), Span<u32>(idx.data(), idx.size()), radius);
+}
+
+void VerifyComponentPaddingRejection(in IComponent asset, mut IComponent badAsset, in usize expectedSize, in usize padOffset){
+    Vector<u8> bytes0;
+    Vector<u8> bytes1;
+    ASSERT_TRUE(asset.serializeComponentPayload(bytes0));
+    ASSERT_TRUE(asset.serializeComponentPayload(bytes1));
+    EXPECT_EQ(bytes0.size(), expectedSize);
+    ASSERT_EQ(bytes0.size(), bytes1.size());
+    for(usize i = 0u; i < bytes0.size(); ++i)
+        EXPECT_EQ(bytes0[i], bytes1[i]);
+    Vector<u8> corrupt = bytes0;
+    corrupt[padOffset] = 1u;
+    EXPECT_FALSE(badAsset.loadComponentPayload(corrupt));
+}
+
 void VerifyPhysicsEdgeCases_GenerationalHandleInvalidationAndReuse(){
     PhysicsWorld physWorld;
 
@@ -1106,16 +1168,7 @@ void VerifyPhysicsEdgeCases_TriangleMeshBvhAndExactQueries(){
     PhysicsWorld physWorld;
     CpuTaskScheduler scheduler(1u);
 
-    Array<f32x4, 4u> verts;
-    verts[0u] = f32x4(-5.0f, 0.0f, -5.0f, 0.0f);
-    verts[1u] = f32x4(-5.0f, 0.0f, 5.0f, 0.0f);
-    verts[2u] = f32x4(5.0f, 0.0f, 5.0f, 0.0f);
-    verts[3u] = f32x4(5.0f, 0.0f, -5.0f, 0.0f);
-    Array<u32, 6u> indices;
-    indices[0u] = 0u; indices[1u] = 1u; indices[2u] = 2u;
-    indices[3u] = 0u; indices[4u] = 2u; indices[5u] = 3u;
-
-    const MeshShape quadMesh = MakeMeshShape(Span<f32x4>(verts.data(), verts.size()), Span<u32>(indices.data(), indices.size()), 0.02f).value();
+    const MeshShape quadMesh = BuildQuadMeshFloor(5.0f, 0.02f, false).value();
 
     BodyDef dynTryBd;
     dynTryBd.type = BodyType::Dynamic;
@@ -1626,8 +1679,8 @@ void VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence(){
 
             Array<Vector<ContactConstraint>, s_GraphColorCount> cpuCons;
             Array<Vector<ContactConstraint>, s_GraphColorCount> gpuCons;
-            ASSERT_TRUE(PrepareColorContactConstraints(worldSplit, part.cpuColorContactIds, h, scheduler, cpuCons));
-            ASSERT_TRUE(PrepareColorContactConstraints(worldSplit, part.gpuColorContactIds, h, scheduler, gpuCons));
+            ASSERT_TRUE(PrepareColorContactConstraintsWithCache(worldSplit, part.cpuColorContactIds, h, scheduler, cpuCons, worldSplit.m_cpuScratch.colorConstraintCaches));
+            ASSERT_TRUE(PrepareColorContactConstraintsWithCache(worldSplit, part.gpuColorContactIds, h, scheduler, gpuCons, worldSplit.m_cpuScratch.colorConstraintCaches));
 
             const VectorSingle contactHertz(worldSplit.m_def.contactHertz);
             const VectorSingle defaultHertz(30.0f);
@@ -2142,16 +2195,7 @@ void VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation(){
 
 
 void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
-    Vector<f32x4> quadVerts;
-    quadVerts.push_back(f32x4(-2.0f, 0.0f, -2.0f, 0.0f));
-    quadVerts.push_back(f32x4(-2.0f, 0.0f, 2.0f, 0.0f));
-    quadVerts.push_back(f32x4(2.0f, 0.0f, 2.0f, 0.0f));
-    quadVerts.push_back(f32x4(2.0f, 0.0f, -2.0f, 0.0f));
-    Vector<u32> quadIdx;
-    quadIdx.push_back(0u); quadIdx.push_back(1u); quadIdx.push_back(2u);
-    quadIdx.push_back(0u); quadIdx.push_back(2u); quadIdx.push_back(3u);
-
-    const Expected<MeshShape> quadRes = MakeMeshShape(Span<f32x4>(quadVerts.data(), quadVerts.size()), Span<u32>(quadIdx.data(), quadIdx.size()), 0.0f);
+    const Expected<MeshShape> quadRes = BuildQuadMeshFloor(2.0f, 0.0f, false);
     ASSERT_TRUE(quadRes.has_value());
     in MeshShape quadMesh = quadRes.value();
     EXPECT_FALSE(quadMesh.isClosed());
@@ -2173,31 +2217,7 @@ void VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh(){
     ASSERT_GE(hullSeamManifold.pointCount(), 1u);
     EXPECT_NEAR(hullSeamManifold.normal().y, -1.0f, 1.0e-3f);
 
-    Vector<f32x4> cubeVerts;
-    cubeVerts.push_back(f32x4(-1.0f, -1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(1.0f, -1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(1.0f, 1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(-1.0f, 1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(-1.0f, -1.0f, 1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(1.0f, -1.0f, 1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(1.0f, 1.0f, 1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(-1.0f, 1.0f, 1.0f, 0.0f));
-
-    Vector<u32> cubeIdx;
-    cubeIdx.push_back(0u); cubeIdx.push_back(2u); cubeIdx.push_back(1u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(3u); cubeIdx.push_back(2u);
-    cubeIdx.push_back(4u); cubeIdx.push_back(5u); cubeIdx.push_back(6u);
-    cubeIdx.push_back(4u); cubeIdx.push_back(6u); cubeIdx.push_back(7u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(4u); cubeIdx.push_back(7u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(7u); cubeIdx.push_back(3u);
-    cubeIdx.push_back(1u); cubeIdx.push_back(2u); cubeIdx.push_back(6u);
-    cubeIdx.push_back(1u); cubeIdx.push_back(6u); cubeIdx.push_back(5u);
-    cubeIdx.push_back(3u); cubeIdx.push_back(7u); cubeIdx.push_back(6u);
-    cubeIdx.push_back(3u); cubeIdx.push_back(6u); cubeIdx.push_back(2u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(1u); cubeIdx.push_back(5u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(5u); cubeIdx.push_back(4u);
-
-    const Expected<MeshShape> cubeMeshRes = MakeMeshShape(Span<f32x4>(cubeVerts.data(), cubeVerts.size()), Span<u32>(cubeIdx.data(), cubeIdx.size()), 0.0f);
+    const Expected<MeshShape> cubeMeshRes = BuildClosedCubeMesh(1.0f);
     ASSERT_TRUE(cubeMeshRes.has_value());
     in MeshShape closedMesh = cubeMeshRes.value();
     EXPECT_TRUE(closedMesh.isClosed());
@@ -2825,29 +2845,7 @@ void VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents(){
     pairWorld.consumePendingEndEvents(pendingCEnds, pendingSEnds);
     EXPECT_GE(pendingCEnds.size(), cast<usize>(1u));
 
-    Vector<f32x4> cubeVerts;
-    cubeVerts.push_back(f32x4(-1.0f, -1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4( 1.0f, -1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4( 1.0f,  1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(-1.0f,  1.0f, -1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(-1.0f, -1.0f,  1.0f, 0.0f));
-    cubeVerts.push_back(f32x4( 1.0f, -1.0f,  1.0f, 0.0f));
-    cubeVerts.push_back(f32x4( 1.0f,  1.0f,  1.0f, 0.0f));
-    cubeVerts.push_back(f32x4(-1.0f,  1.0f,  1.0f, 0.0f));
-    Vector<u32> cubeIdx;
-    cubeIdx.push_back(0u); cubeIdx.push_back(2u); cubeIdx.push_back(1u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(3u); cubeIdx.push_back(2u);
-    cubeIdx.push_back(4u); cubeIdx.push_back(5u); cubeIdx.push_back(6u);
-    cubeIdx.push_back(4u); cubeIdx.push_back(6u); cubeIdx.push_back(7u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(4u); cubeIdx.push_back(7u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(7u); cubeIdx.push_back(3u);
-    cubeIdx.push_back(1u); cubeIdx.push_back(2u); cubeIdx.push_back(6u);
-    cubeIdx.push_back(1u); cubeIdx.push_back(6u); cubeIdx.push_back(5u);
-    cubeIdx.push_back(3u); cubeIdx.push_back(7u); cubeIdx.push_back(6u);
-    cubeIdx.push_back(3u); cubeIdx.push_back(6u); cubeIdx.push_back(2u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(1u); cubeIdx.push_back(5u);
-    cubeIdx.push_back(0u); cubeIdx.push_back(5u); cubeIdx.push_back(4u);
-    const MeshShape closedCube = MakeMeshShape(Span<f32x4>(cubeVerts.data(), cubeVerts.size()), Span<u32>(cubeIdx.data(), cubeIdx.size()), 0.0f).value();
+    const MeshShape closedCube = BuildClosedCubeMesh(1.0f).value();
     ASSERT_TRUE(closedCube.isClosed());
     PhysicsWorld interiorWorld;
     interiorWorld.setWorldDef(pWd);
@@ -3093,64 +3091,20 @@ void VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp(){
         LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
 
         RigidBodyComponentAsset rbAsset(Name("physics/pad_rb"));
-        Vector<u8> rb0;
-        Vector<u8> rb1;
-        ASSERT_TRUE(rbAsset.serializeComponentPayload(rb0));
-        ASSERT_TRUE(rbAsset.serializeComponentPayload(rb1));
-        EXPECT_EQ(rb0.size(), size_of<RigidBodyComponentPayloadBinary>());
-        ASSERT_EQ(rb0.size(), rb1.size());
-        for(usize i = 0u; i < rb0.size(); ++i)
-            EXPECT_EQ(rb0[i], rb1[i]);
-        Vector<u8> rbCorrupt = rb0;
-        const usize rbPadOffset = offset_of<RigidBodyComponentPayloadBinary>(reserved1);
-        rbCorrupt[rbPadOffset] = 1u;
         RigidBodyComponentAsset rbBad(Name("physics/pad_rb"));
-        EXPECT_FALSE(rbBad.loadComponentPayload(rbCorrupt));
+        VerifyComponentPaddingRejection(rbAsset, rbBad, size_of<RigidBodyComponentPayloadBinary>(), offset_of<RigidBodyComponentPayloadBinary>(reserved1));
 
         ColliderComponentAsset colAsset(Name("physics/pad_col"));
-        Vector<u8> col0;
-        Vector<u8> col1;
-        ASSERT_TRUE(colAsset.serializeComponentPayload(col0));
-        ASSERT_TRUE(colAsset.serializeComponentPayload(col1));
-        EXPECT_EQ(col0.size(), size_of<ColliderComponentPayloadHeaderBinary>() + size_of<ColliderShapeEntryHeaderBinary>());
-        ASSERT_EQ(col0.size(), col1.size());
-        for(usize i = 0u; i < col0.size(); ++i)
-            EXPECT_EQ(col0[i], col1[i]);
-        Vector<u8> colCorrupt = col0;
-        const usize colPadOffset = size_of<ColliderComponentPayloadHeaderBinary>() + offset_of<ColliderShapeEntryHeaderBinary>(reserved5);
-        colCorrupt[colPadOffset] = 1u;
         ColliderComponentAsset colBad(Name("physics/pad_col"));
-        EXPECT_FALSE(colBad.loadComponentPayload(colCorrupt));
+        VerifyComponentPaddingRejection(colAsset, colBad, size_of<ColliderComponentPayloadHeaderBinary>() + size_of<ColliderShapeEntryHeaderBinary>(), size_of<ColliderComponentPayloadHeaderBinary>() + offset_of<ColliderShapeEntryHeaderBinary>(reserved5));
 
         JointComponentAsset jAsset(Name("physics/pad_joint"));
-        Vector<u8> j0;
-        Vector<u8> j1;
-        ASSERT_TRUE(jAsset.serializeComponentPayload(j0));
-        ASSERT_TRUE(jAsset.serializeComponentPayload(j1));
-        EXPECT_EQ(j0.size(), size_of<JointComponentPayloadBinary>());
-        ASSERT_EQ(j0.size(), j1.size());
-        for(usize i = 0u; i < j0.size(); ++i)
-            EXPECT_EQ(j0[i], j1[i]);
-        Vector<u8> jCorrupt = j0;
-        const usize jPadOffset = offset_of<JointComponentPayloadBinary>(reserved1);
-        jCorrupt[jPadOffset] = 1u;
         JointComponentAsset jBad(Name("physics/pad_joint"));
-        EXPECT_FALSE(jBad.loadComponentPayload(jCorrupt));
+        VerifyComponentPaddingRejection(jAsset, jBad, size_of<JointComponentPayloadBinary>(), offset_of<JointComponentPayloadBinary>(reserved1));
 
         PhysicsWorldConfigComponentAsset cfgAsset(Name("physics/pad_cfg"));
-        Vector<u8> cfg0;
-        Vector<u8> cfg1;
-        ASSERT_TRUE(cfgAsset.serializeComponentPayload(cfg0));
-        ASSERT_TRUE(cfgAsset.serializeComponentPayload(cfg1));
-        EXPECT_EQ(cfg0.size(), size_of<PhysicsWorldConfigComponentPayloadBinary>());
-        ASSERT_EQ(cfg0.size(), cfg1.size());
-        for(usize i = 0u; i < cfg0.size(); ++i)
-            EXPECT_EQ(cfg0[i], cfg1[i]);
-        Vector<u8> cfgCorrupt = cfg0;
-        const usize cfgPadOffset = offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved0);
-        cfgCorrupt[cfgPadOffset] = 1u;
         PhysicsWorldConfigComponentAsset cfgBad(Name("physics/pad_cfg"));
-        EXPECT_FALSE(cfgBad.loadComponentPayload(cfgCorrupt));
+        VerifyComponentPaddingRejection(cfgAsset, cfgBad, size_of<PhysicsWorldConfigComponentPayloadBinary>(), offset_of<PhysicsWorldConfigComponentPayloadBinary>(reserved0));
     }
 
     {
@@ -3847,37 +3801,8 @@ void VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases(){
     }
 
     {
-        Vector<f32x4> outerVerts;
-        Vector<f32x4> innerVerts;
-        Array<f32x4, 8u> unitCube;
-        unitCube[0u] = f32x4(-1.0f, -1.0f, -1.0f, 0.0f);
-        unitCube[1u] = f32x4(1.0f, -1.0f, -1.0f, 0.0f);
-        unitCube[2u] = f32x4(1.0f, 1.0f, -1.0f, 0.0f);
-        unitCube[3u] = f32x4(-1.0f, 1.0f, -1.0f, 0.0f);
-        unitCube[4u] = f32x4(-1.0f, -1.0f, 1.0f, 0.0f);
-        unitCube[5u] = f32x4(1.0f, -1.0f, 1.0f, 0.0f);
-        unitCube[6u] = f32x4(1.0f, 1.0f, 1.0f, 0.0f);
-        unitCube[7u] = f32x4(-1.0f, 1.0f, 1.0f, 0.0f);
-        for(u32 vi = 0u; vi < 8u; ++vi){
-            outerVerts.push_back(f32x4(unitCube[vi].x * 3.0f, unitCube[vi].y * 3.0f, unitCube[vi].z * 3.0f, 0.0f));
-            innerVerts.push_back(f32x4(unitCube[vi].x * 0.5f, unitCube[vi].y * 0.5f, unitCube[vi].z * 0.5f, 0.0f));
-        }
-        Vector<u32> cubeIdx;
-        cubeIdx.push_back(0u); cubeIdx.push_back(2u); cubeIdx.push_back(1u);
-        cubeIdx.push_back(0u); cubeIdx.push_back(3u); cubeIdx.push_back(2u);
-        cubeIdx.push_back(4u); cubeIdx.push_back(5u); cubeIdx.push_back(6u);
-        cubeIdx.push_back(4u); cubeIdx.push_back(6u); cubeIdx.push_back(7u);
-        cubeIdx.push_back(0u); cubeIdx.push_back(4u); cubeIdx.push_back(7u);
-        cubeIdx.push_back(0u); cubeIdx.push_back(7u); cubeIdx.push_back(3u);
-        cubeIdx.push_back(1u); cubeIdx.push_back(2u); cubeIdx.push_back(6u);
-        cubeIdx.push_back(1u); cubeIdx.push_back(6u); cubeIdx.push_back(5u);
-        cubeIdx.push_back(3u); cubeIdx.push_back(7u); cubeIdx.push_back(6u);
-        cubeIdx.push_back(3u); cubeIdx.push_back(6u); cubeIdx.push_back(2u);
-        cubeIdx.push_back(0u); cubeIdx.push_back(1u); cubeIdx.push_back(5u);
-        cubeIdx.push_back(0u); cubeIdx.push_back(5u); cubeIdx.push_back(4u);
-
-        const MeshShape outerMesh = MakeMeshShape(Span<f32x4>(outerVerts.data(), outerVerts.size()), Span<u32>(cubeIdx.data(), cubeIdx.size()), 0.0f).value();
-        const MeshShape innerMesh = MakeMeshShape(Span<f32x4>(innerVerts.data(), innerVerts.size()), Span<u32>(cubeIdx.data(), cubeIdx.size()), 0.0f).value();
+        const MeshShape outerMesh = BuildClosedCubeMesh(3.0f).value();
+        const MeshShape innerMesh = BuildClosedCubeMesh(0.5f).value();
         ASSERT_TRUE(outerMesh.isClosed());
         ASSERT_TRUE(innerMesh.isClosed());
 
@@ -4441,7 +4366,7 @@ void VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot(){
         BodyDef steepBd;
         steepBd.type = BodyType::Static;
         steepBd.position = f32x4(-3.0f, 1.0f, 0.0f, 0.0f);
-        steepBd.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), -1.0471975f));
+        steepBd.rotation = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), -1.0471975f));
         const BodyId steepId = world.createBody(steepBd).value();
         ASSERT_TRUE(world.createHullShape(steepId, ShapeDef(), MakeBoxHull(2.0f, 0.25f, 2.0f, 0.0f).value()).has_value());
 
@@ -4587,7 +4512,7 @@ void VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot(){
 
         Array<Transform3D, 2u> targets;
         targets[0u] = Transform3D(VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), QuaternionIdentity());
-        targets[1u] = Transform3D(VectorSingle(0.0f, 2.8f, 0.0f, 0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.35f));
+        targets[1u] = Transform3D(VectorSingle(0.0f, 2.8f, 0.0f, 0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.35f));
 
         for(u32 i = 0u; i < 30u; ++i){
             rag.driveToPose(world, Span<Transform3D>(targets.data(), 2u), 1.0f, dt);
@@ -4838,15 +4763,7 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         hullTrunc.pop_back();
         EXPECT_FALSE(hullLoaded.loadBinary(hullTrunc));
 
-        Vector<f32x4> mVerts;
-        mVerts.push_back(f32x4(-2.0f, 0.0f, -2.0f, 0.0f));
-        mVerts.push_back(f32x4( 2.0f, 0.0f, -2.0f, 0.0f));
-        mVerts.push_back(f32x4( 2.0f, 0.0f,  2.0f, 0.0f));
-        mVerts.push_back(f32x4(-2.0f, 0.0f,  2.0f, 0.0f));
-        Vector<u32> mIdx;
-        mIdx.push_back(0u); mIdx.push_back(1u); mIdx.push_back(2u);
-        mIdx.push_back(0u); mIdx.push_back(2u); mIdx.push_back(3u);
-        const Expected<MeshShape> meshRes = MakeMeshShape(Span<f32x4>(mVerts), Span<u32>(mIdx), 0.01f);
+        const Expected<MeshShape> meshRes = BuildQuadMeshFloor(2.0f, 0.01f, true);
         ASSERT_TRUE(meshRes.has_value());
         CollisionMeshAsset meshAsset(Name("physics/edge_mesh"));
         meshAsset.setMesh(meshRes.value());
@@ -5208,15 +5125,7 @@ void VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases(){
         BodyDef meshBd;
         meshBd.type = BodyType::Static;
         const BodyId meshBody = meshWorld.createBody(meshBd).value();
-        Vector<f32x4> mv;
-        mv.push_back(f32x4(-1.0f, 0.0f, -1.0f, 0.0f));
-        mv.push_back(f32x4( 1.0f, 0.0f, -1.0f, 0.0f));
-        mv.push_back(f32x4( 1.0f, 0.0f,  1.0f, 0.0f));
-        mv.push_back(f32x4(-1.0f, 0.0f,  1.0f, 0.0f));
-        Vector<u32> mi;
-        mi.push_back(0u); mi.push_back(1u); mi.push_back(2u);
-        mi.push_back(0u); mi.push_back(2u); mi.push_back(3u);
-        ASSERT_TRUE(meshWorld.createMeshShape(meshBody, ShapeDef(), MakeMeshShape(Span<f32x4>(mv), Span<u32>(mi), 0.0f).value()).has_value());
+        ASSERT_TRUE(meshWorld.createMeshShape(meshBody, ShapeDef(), BuildQuadMeshFloor(1.0f, 0.0f, true).value()).has_value());
         PhysicsDebugDrawOptions dedupOpts;
         dedupOpts.drawContacts = false;
         dedupOpts.drawJoints = false;
@@ -5239,7 +5148,6 @@ void VerifyPhysicsEdgeCases_Wave5Through8EdgeCases(){
         Vector<u8> payload;
         ASSERT_TRUE(codec.serializeRigidBody(RigidBodyComponent(), payload));
         EXPECT_EQ(payload.size(), cast<usize>(192u));
-        EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), cast<usize>(752u));
         ASSERT_TRUE(codec.serializeCollider(ColliderComponent(), payload));
         EXPECT_EQ(payload.size(), size_of<ColliderComponentPayloadHeaderBinary>() + size_of<ColliderShapeEntryHeaderBinary>());
         ASSERT_TRUE(codec.serializeJoint(JointComponent(), payload));
@@ -5834,7 +5742,7 @@ void VerifyPhysicsEdgeCases_Phase2ACoreFixesAndFeatures(){
         bd.linearDamping = 0.0f;
         bd.angularDamping = 0.0f;
         bd.motionLocks = cast<u32>(BodyFlags::LockAngularY);
-        bd.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), 0.4f));
+        bd.rotation = f32x4(QuaternionRotationNormal(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), 0.4f));
         const BodyId bId = world.createBody(bd).value();
         ASSERT_TRUE(world.createHullShape(bId, ShapeDef(), MakeBoxHull(1.0f, 0.5f, 0.3f, 0.0f).value()).has_value());
 
@@ -5950,7 +5858,7 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         const BodyId stBody = pw.createBody(stBd).value();
 
         ShapeDef plSd;
-        plSd.localTransform = Transform3D(VectorSingle(1.0f, 2.0f, -1.0f, 0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_Pi * 0.5f));
+        plSd.localTransform = Transform3D(VectorSingle(1.0f, 2.0f, -1.0f, 0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_Pi * 0.5f));
         const ShapeId plShape = pw.createPlaneShape(stBody, plSd, MakePlaneShape(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.5f, VectorSingle(2.0f, 0.0f, 3.0f, 0.0f)).value()).value();
         const GpuPhysicsShapeProxy plProxy = PackGpuShapeProxy(pw.m_shapes[plShape.index], pw.m_bodies[stBody.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, 0u, plShape.index, 0.0f, 0u, 0u);
         EXPECT_NEAR(plProxy.localCenterRadius.x, 0.5f, 1.0e-4f);
@@ -6031,7 +5939,7 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         EXPECT_EQ(decSingleSwap.materialTriangleB, 42u);
 
         GpuPhysicsNarrowphaseManifold gmSingleInv = gmSingle;
-        gmSingleInv.normalPad = f32x4(0.0f, 1.0f, 0.0f, bit_cast<f32>(s_GpuInvalidIndex));
+        gmSingleInv.normalPad = f32x4(0.0f, 1.0f, 0.0f, bit_cast<f32>(s_NullIndex));
         Manifold decSingleInv;
         ConvertGpuManifoldToCpu(gmSingleInv, simRef, simRef, pw.m_shapes[sphShape.index], pw.m_shapes[meshNoLoc.index], false, decSingleInv);
         EXPECT_EQ(decSingleInv.materialTriangleB, s_NullIndex);
@@ -6129,7 +6037,7 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         PrepareGpuJointConstraintDirect(pw.m_bodies, pw.m_solverSets, pw.m_joints[sphId.index], pw.m_jointExtraData, Span<u32>(awakeToGpu), 30.0f, h, true, sphGjc);
         EXPECT_NEAR(sphGjc.limitImpulses.w, -3.0f, 1.0e-5f);
         EXPECT_NEAR(sphGjc.inertiaScaleSwingRatio.z, 0.5f, 1.0e-5f);
-        sphGjc.qB0 = f32x4(QuatFromAxisAngleUnit(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), 0.7f));
+        sphGjc.qB0 = f32x4(QuaternionRotationNormal(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), 0.7f));
         GpuPhysicsJointImpulseOut sphImp;
         sphImp.limitImpulses = f32x4(0.0f, 0.0f, 0.0f, -2.5f);
         Vector<u32> brokenIds;
@@ -6162,10 +6070,6 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
 
 void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
     {
-        EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), cast<usize>(752u));
-        EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(reserved5), cast<usize>(744u));
-        EXPECT_EQ(size_of<VehicleComponentBinary>(), cast<usize>(224u));
-        EXPECT_EQ(size_of<ArticulationComponentBinary>(), cast<usize>(128u));
         EXPECT_EQ(size_of<SoftBodyAttachmentBinary>(), cast<usize>(96u));
         EXPECT_EQ(offset_of<SoftBodyAttachmentBinary>(reserved0), cast<usize>(88u));
 
@@ -6469,7 +6373,7 @@ void VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems(){
         GpuPhysicsSpatialQuery q;
         q.originMin = f32x4(0.0f, 2.0f, 0.0f, 0.0f);
         q.dirMax = f32x4(0.0f, -1.0f, 0.0f, 5.0f);
-        q.params = u32x4(0u, s_GpuInvalidIndex, 0xffffu, 1u);
+        q.params = u32x4(0u, s_NullIndex, 0xffffu, 1u);
         queries.push_back(q);
         EXPECT_FALSE(physSys.dispatchGpuBatchSpatialQueries(Span<GpuPhysicsSpatialQuery>(queries.data(), queries.size()), qRes));
         ASSERT_TRUE(physSys.restoreWorldSnapshot(snap));
@@ -6659,8 +6563,6 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
         EXPECT_EQ(size_of<FluidVolumeComponentBinary>(), cast<usize>(176u));
         EXPECT_EQ(size_of<ForceFieldComponentBinary>(), cast<usize>(176u));
         EXPECT_EQ(size_of<HeightfieldHeaderBinary>(), cast<usize>(80u));
-        EXPECT_EQ(size_of<ColliderShapeEntryHeaderBinary>(), cast<usize>(752u));
-        EXPECT_EQ(offset_of<ColliderShapeEntryHeaderBinary>(reserved5), cast<usize>(744u));
 
         PhysicsAssetBinaryCodec assetCodec;
         PhysicsComponentBinaryCodec compCodec;
@@ -7226,7 +7128,7 @@ void VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset(){
 
         Array<Transform3D, 2u> drvTgt;
         drvTgt[0u] = Transform3D(VectorSingle(0.0f, 2.0f, 0.0f, 0.0f), QuaternionIdentity());
-        drvTgt[1u] = Transform3D(VectorSingle(0.0f, 2.8f, 0.0f, 0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.5f));
+        drvTgt[1u] = Transform3D(VectorSingle(0.0f, 2.8f, 0.0f, 0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.5f));
         rag.driveToPose(world, Span<Transform3D>(drvTgt.data(), 2u), 1.0f, dt);
         StepPhysicsWorld(world, dt, 1u, scheduler);
         EXPECT_GT(world.tryGetAngularVelocity(rag.boneBodies[1u]).value().z, 0.05f);
@@ -7998,7 +7900,7 @@ void VerifyPhysicsEdgeCases_Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture(){
         BodyDef rotBd;
         rotBd.type = BodyType::Dynamic;
         rotBd.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        rotBd.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_Pi * 0.25f));
+        rotBd.rotation = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_Pi * 0.25f));
         const BodyId rotId = bw.createBody(rotBd).value();
         ASSERT_TRUE(bw.createHullShape(rotId, ShapeDef(), unitHull).has_value());
 
@@ -8009,29 +7911,7 @@ void VerifyPhysicsEdgeCases_Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture(){
         EXPECT_NEAR(hullSub.submergedVolume, 0.5f, 0.01f);
         EXPECT_NEAR(hullSub.centerOfBuoyancy.y, -0.2357f, 0.02f);
 
-        Vector<f32x4> mv;
-        mv.push_back(f32x4(-0.5f, -0.5f, -0.5f, 0.0f));
-        mv.push_back(f32x4( 0.5f, -0.5f, -0.5f, 0.0f));
-        mv.push_back(f32x4( 0.5f,  0.5f, -0.5f, 0.0f));
-        mv.push_back(f32x4(-0.5f,  0.5f, -0.5f, 0.0f));
-        mv.push_back(f32x4(-0.5f, -0.5f,  0.5f, 0.0f));
-        mv.push_back(f32x4( 0.5f, -0.5f,  0.5f, 0.0f));
-        mv.push_back(f32x4( 0.5f,  0.5f,  0.5f, 0.0f));
-        mv.push_back(f32x4(-0.5f,  0.5f,  0.5f, 0.0f));
-        Vector<u32> mi;
-        mi.push_back(0u); mi.push_back(2u); mi.push_back(1u);
-        mi.push_back(0u); mi.push_back(3u); mi.push_back(2u);
-        mi.push_back(4u); mi.push_back(5u); mi.push_back(6u);
-        mi.push_back(4u); mi.push_back(6u); mi.push_back(7u);
-        mi.push_back(0u); mi.push_back(1u); mi.push_back(5u);
-        mi.push_back(0u); mi.push_back(5u); mi.push_back(4u);
-        mi.push_back(2u); mi.push_back(7u); mi.push_back(6u);
-        mi.push_back(2u); mi.push_back(3u); mi.push_back(7u);
-        mi.push_back(0u); mi.push_back(4u); mi.push_back(7u);
-        mi.push_back(0u); mi.push_back(7u); mi.push_back(3u);
-        mi.push_back(1u); mi.push_back(2u); mi.push_back(6u);
-        mi.push_back(1u); mi.push_back(6u); mi.push_back(5u);
-        const MeshShape closedCube = MakeMeshShape(Span<f32x4>(mv), Span<u32>(mi), 0.0f).value();
+        const MeshShape closedCube = BuildClosedCubeMesh(0.5f).value();
         ASSERT_TRUE(closedCube.isClosed());
         BodyDef meshBd;
         meshBd.type = BodyType::Static;
@@ -8247,7 +8127,7 @@ void VerifyPhysicsEdgeCases_Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture(){
         lv.push_back(f32x4(1.0f, 1.0f, 1.0f, 0.0f));
         lv.push_back(f32x4(1.0f, 2.0f, 1.0f, 0.0f));
         lv.push_back(f32x4(0.0f, 2.0f, 1.0f, 0.0f));
-        const VectorSingle lRot = QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.52f);
+        const VectorSingle lRot = QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.52f);
         for(usize i = 0u; i < lv.size(); ++i)
             lv[i] = f32x4(Vector3Rotate(VectorSingle(lv[i]), lRot), 0.0f);
         Vector<u32> li;
@@ -8397,7 +8277,7 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
             jd.settings.sixDofAxes[ax].motion = JointMotion::Free;
         const JointId jId = jw.createJoint(jd).value();
 
-        const VectorSingle targetQ = QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.7f);
+        const VectorSingle targetQ = QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.7f);
         EXPECT_FALSE(jw.setJointSlerpDrive(jId, true, -2.0f, 1.0f, 40.0f));
         EXPECT_TRUE(jw.setJointSlerpDrive(jId, true, 12.0f, 1.0f, 80.0f));
         EXPECT_TRUE(jw.setJointTargetOrientation(jId, targetQ));
@@ -8672,8 +8552,8 @@ void VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot(){
 
         Array<Transform3D, 3u> targetXfs;
         targetXfs[0u] = ragW.tryGetBodyTransform(rag.boneBodies[0u]).value();
-        targetXfs[1u] = Transform3D(VectorSingle(0.0f, 4.6f, 0.0f, 0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.5f));
-        targetXfs[2u] = Transform3D(VectorSingle(0.0f, 5.1f, 0.0f, 0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.5f));
+        targetXfs[1u] = Transform3D(VectorSingle(0.0f, 4.6f, 0.0f, 0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.5f));
+        targetXfs[2u] = Transform3D(VectorSingle(0.0f, 5.1f, 0.0f, 0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.5f));
 
         for(u32 st = 0u; st < 15u; ++st){
             rag.driveToPose(ragW, Span<Transform3D>(targetXfs.data(), 3u), 1.0f, dt);
@@ -9417,7 +9297,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             hfCol.primaryShape.heightfieldCols = 3u;
             hfCol.primaryShape.heightfieldHeights.resize(9u, 0.0f);
             hfCol.primaryShape.heightfieldFlipDiagonal = true;
-            hfCol.primaryShape.heightfieldCellHoles.resize(4u, 0u);
+            hfCol.primaryShape.heightfieldCellHoles.resize(1u, 0u);
             hfCol.primaryShape.heightfieldCellHoles[0u] = 1u;
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
@@ -9446,26 +9326,7 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
             vhCol.primaryShape.vhacdEnableArbitraryPlanes = true;
             vhCol.primaryShape.vhacdEnableHullMerging = false;
             vhCol.primaryShape.vhacdMergeVolumeTolerance = 0.01f;
-            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, -1.0f, -1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, -1.0f, -1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, 1.0f, -1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, 1.0f, -1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, -1.0f, 1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, -1.0f, 1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(1.0f, 1.0f, 1.0f, 0.0f));
-            vhCol.primaryShape.meshVertices.push_back(f32x4(-1.0f, 1.0f, 1.0f, 0.0f));
-            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(1u);
-            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(2u);
-            vhCol.primaryShape.meshIndices.push_back(4u); vhCol.primaryShape.meshIndices.push_back(5u); vhCol.primaryShape.meshIndices.push_back(6u);
-            vhCol.primaryShape.meshIndices.push_back(4u); vhCol.primaryShape.meshIndices.push_back(6u); vhCol.primaryShape.meshIndices.push_back(7u);
-            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(1u); vhCol.primaryShape.meshIndices.push_back(5u);
-            vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(5u); vhCol.primaryShape.meshIndices.push_back(4u);
-            vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(7u);
-            vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(7u); vhCol.primaryShape.meshIndices.push_back(6u);
-            vhCol.primaryShape.meshIndices.push_back(1u); vhCol.primaryShape.meshIndices.push_back(2u); vhCol.primaryShape.meshIndices.push_back(6u);
-            vhCol.primaryShape.meshIndices.push_back(1u); vhCol.primaryShape.meshIndices.push_back(6u); vhCol.primaryShape.meshIndices.push_back(5u);
-            vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(0u); vhCol.primaryShape.meshIndices.push_back(4u);
-            vhCol.primaryShape.meshIndices.push_back(3u); vhCol.primaryShape.meshIndices.push_back(4u); vhCol.primaryShape.meshIndices.push_back(7u);
+            AppendClosedCubeVerticesIndices(1.0f, vhCol.primaryShape.meshVertices, vhCol.primaryShape.meshIndices);
         }
         ASSERT_TRUE(tw.world.tick(dt).has_value());
         EXPECT_TRUE(vhEnt.getComponent<ColliderComponent>().runtimeShapeId.valid());
@@ -9958,47 +9819,6 @@ void VerifyPhysicsEdgeCases_Wave3AEcsPhysicsSyncBridgesSnapshotEvents(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ADHD_GTEST(PhysicsEdgeCases, GenerationalHandleInvalidationAndReuse, VerifyPhysicsEdgeCases_GenerationalHandleInvalidationAndReuse)
-NWB_ADHD_GTEST(PhysicsEdgeCases, DegenerateAndInvalidGeometryRejection, VerifyPhysicsEdgeCases_DegenerateAndInvalidGeometryRejection)
-NWB_ADHD_GTEST(PhysicsEdgeCases, BoxStackStabilityAndSleeping, VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping)
-NWB_ADHD_GTEST(PhysicsEdgeCases, IslandSplitOnContactBreak, VerifyPhysicsEdgeCases_IslandSplitOnContactBreak)
-NWB_ADHD_GTEST(PhysicsEdgeCases, ConstraintGraphOverflowColor23, VerifyPhysicsEdgeCases_ConstraintGraphOverflowColor23)
-NWB_ADHD_GTEST(PhysicsEdgeCases, SpeculativeContactAndFastImpact, VerifyPhysicsEdgeCases_SpeculativeContactAndFastImpact)
-NWB_ADHD_GTEST(PhysicsEdgeCases, RayCastAndShapeCastEdgeCases, VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases)
-NWB_ADHD_GTEST(PhysicsEdgeCases, GpuLayoutAndEcsCpuFallbackContract, VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract)
-NWB_ADHD_GTEST(PhysicsEdgeCases, SphereBounceAccuracyAndNoMidAirFreeze, VerifyPhysicsEdgeCases_SphereBounceAccuracyAndNoMidAirFreeze)
-NWB_ADHD_GTEST(PhysicsEdgeCases, CoupledTowerImpactAndCoplanarGjk, VerifyPhysicsEdgeCases_CoupledTowerImpactAndCoplanarGjk)
-NWB_ADHD_GTEST(PhysicsEdgeCases, SleepingStackWakeupAndSensorEvents, VerifyPhysicsEdgeCases_SleepingStackWakeupAndSensorEvents)
-NWB_ADHD_GTEST(PhysicsEdgeCases, BodyMutatorsGyroAndRotationClamp, VerifyPhysicsEdgeCases_BodyMutatorsGyroAndRotationClamp)
-NWB_ADHD_GTEST(PhysicsEdgeCases, JointConstraints3D, VerifyPhysicsEdgeCases_JointConstraints3D)
-NWB_ADHD_GTEST(PhysicsEdgeCases, BulletToiContinuousAndCallbacks, VerifyPhysicsEdgeCases_BulletToiContinuousAndCallbacks)
-NWB_ADHD_GTEST(PhysicsEdgeCases, TriangleMeshBvhAndExactQueries, VerifyPhysicsEdgeCases_TriangleMeshBvhAndExactQueries)
-NWB_ADHD_GTEST(PhysicsEdgeCases, ShapeMutatorsCustomMassAndExtendedJoints, VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints)
-NWB_ADHD_GTEST(PhysicsEdgeCases, HybridCpuGpuSolverPartitionAndEquivalence, VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence)
-NWB_ADHD_GTEST(PhysicsEdgeCases, SphericalConeImpulseAndBreakTorque, VerifyPhysicsEdgeCases_SphericalConeImpulseAndBreakTorque)
-NWB_ADHD_GTEST(PhysicsEdgeCases, KinematicTargetSensorToggleAndJointMutators, VerifyPhysicsEdgeCases_KinematicTargetSensorToggleAndJointMutators)
-NWB_ADHD_GTEST(PhysicsEdgeCases, ParallelComponentSolverAndEcsSystem, VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem)
-NWB_ADHD_GTEST(PhysicsEdgeCases, InvalidAssetPathPreservesPhysicsComponentsOnReload, VerifyPhysicsEdgeCases_InvalidAssetPathPreservesPhysicsComponentsOnReload)
-NWB_ADHD_GTEST(PhysicsEdgeCases, ComponentAssetsBinaryRoundTripAndValidation, VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation)
-NWB_ADHD_GTEST(PhysicsEdgeCases, MeshInternalEdgesClosedVolumeAndDualMesh, VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh)
-NWB_ADHD_GTEST(PhysicsEdgeCases, WakeupsEventsGettersPreSolveAndHullMerge, VerifyPhysicsEdgeCases_WakeupsEventsGettersPreSolveAndHullMerge)
-NWB_ADHD_GTEST(PhysicsEdgeCases, EcsHierarchyInterpolationNamedJointsAndQueries, VerifyPhysicsEdgeCases_EcsHierarchyInterpolationNamedJointsAndQueries)
-NWB_ADHD_GTEST(PhysicsEdgeCases, CoreCollisionLocksJointsAndEvents, VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents)
-NWB_ADHD_GTEST(PhysicsEdgeCases, GpuStructParityAndAssetParentCodec, VerifyPhysicsEdgeCases_GpuStructParityAndAssetParentCodec)
-NWB_ADHD_GTEST(PhysicsEdgeCases, EcsLifecycleHierarchyAndDebugDraw, VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw)
-NWB_ADHD_GTEST(PhysicsEdgeCases, BinaryPaddingMotorScaleAndFilterNoOp, VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp)
-NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeSolverLocksToiAndQueries, VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries)
-NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeEcsSyncAndLifecycle, VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle)
-NWB_ADHD_GTEST(PhysicsEdgeCases, AuditFixesAndParityEdgeCases, VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases)
-NWB_ADHD_GTEST(PhysicsEdgeCases, AuditV4ParityAndLifecycle, VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Wave4HighLevelSubsystemsAndSnapshot, VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Wave6And7EcsAssetsAndDebugDrawEdgeCases, VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Wave5Through8EdgeCases, VerifyPhysicsEdgeCases_Wave5Through8EdgeCases)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2ACoreFixesAndFeatures, VerifyPhysicsEdgeCases_Phase2ACoreFixesAndFeatures)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2BGpuParityAndPacking, VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2C1EcsAssetsAndSubsystems, VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2C2SubsystemFeaturesAndHeightfieldAsset, VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset)
-NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2DDebugDrawAndSingleStep, VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep)
 void VerifyPhysicsEdgeCases_Wave3AAssetsPhysicsCodecsAndCompoundHull(){
     CapturingLogger logger = CapturingLogger();
     LoggerRegistrationGuard loggerGuard(logger, LoggerBreakPolicy::BreakOnFatal);
@@ -11103,7 +10923,7 @@ void VerifyPhysicsEdgeCases_Wave4BPhysicsCrossEngineBridges(){
         }
         {
             mut SkeletonPoseComponent spDrive = skelMapEnt.getComponent<SkeletonPoseComponent>();
-            spDrive.localJoints[1u] = SkeletonJointMatrix(MatrixAffineTransformation(VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), VectorSingle(0.0f), QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.78539816f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
+            spDrive.localJoints[1u] = SkeletonJointMatrix(MatrixAffineTransformation(VectorSingle(1.0f, 1.0f, 1.0f, 0.0f), VectorSingle(0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 0.78539816f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)));
         }
         for(u32 stepIdx = 0u; stepIdx < 20u; ++stepIdx)
             ASSERT_TRUE(tw.world.tick(dt).has_value());
@@ -11886,7 +11706,7 @@ void VerifyPhysicsEdgeCases_Wave4CGpuExportAndSoftBodyMesh(){
     {
         TransformComponent worldXf;
         worldXf.position = f32x4(10.0f, -2.0f, 5.0f, 0.0f);
-        worldXf.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.5f));
+        worldXf.rotation = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.5f));
         worldXf.scale = f32x4(2.0f, 0.5f, 1.5f, 0.0f);
 
         Vector<f32x3u> expectedLocal;
@@ -12036,15 +11856,7 @@ void VerifyPhysicsEdgeCases_Wave2CoreShapesSolverSnapshot(){
         EXPECT_EQ(scHit.shapeId.index, scShapeId.index);
         EXPECT_NEAR(scHit.point.x, 5.0f, 0.05f);
 
-        Vector<f32x4> quadVerts;
-        quadVerts.push_back(f32x4(-1.0f, 0.0f, -1.0f, 0.0f));
-        quadVerts.push_back(f32x4(-1.0f, 0.0f,  1.0f, 0.0f));
-        quadVerts.push_back(f32x4( 1.0f, 0.0f,  1.0f, 0.0f));
-        quadVerts.push_back(f32x4( 1.0f, 0.0f, -1.0f, 0.0f));
-        Vector<u32> quadIndices;
-        quadIndices.push_back(0u); quadIndices.push_back(1u); quadIndices.push_back(2u);
-        quadIndices.push_back(0u); quadIndices.push_back(2u); quadIndices.push_back(3u);
-        const MeshGeometryId quadGeom = world.createMeshGeometry(MakeMeshShape(Span<f32x4>(quadVerts.data(), quadVerts.size()), Span<u32>(quadIndices.data(), quadIndices.size()), 0.0f).value()).value();
+        const MeshGeometryId quadGeom = world.createMeshGeometry(BuildQuadMeshFloor(1.0f, 0.0f, false).value()).value();
 
         BodyDef scMeshBd;
         scMeshBd.type = BodyType::Static;
@@ -12120,29 +11932,7 @@ void VerifyPhysicsEdgeCases_Wave2CoreShapesSolverSnapshot(){
         EXPECT_TRUE(richWorld.enableBlockSolver());
         EXPECT_TRUE(richWorld.enableShockPropagation());
 
-        Vector<f32x4> boxVerts;
-        boxVerts.push_back(f32x4(-1.0f, -1.0f, -1.0f, 0.0f));
-        boxVerts.push_back(f32x4( 1.0f, -1.0f, -1.0f, 0.0f));
-        boxVerts.push_back(f32x4( 1.0f,  1.0f, -1.0f, 0.0f));
-        boxVerts.push_back(f32x4(-1.0f,  1.0f, -1.0f, 0.0f));
-        boxVerts.push_back(f32x4(-1.0f, -1.0f,  1.0f, 0.0f));
-        boxVerts.push_back(f32x4( 1.0f, -1.0f,  1.0f, 0.0f));
-        boxVerts.push_back(f32x4( 1.0f,  1.0f,  1.0f, 0.0f));
-        boxVerts.push_back(f32x4(-1.0f,  1.0f,  1.0f, 0.0f));
-        Vector<u32> boxIdx;
-        boxIdx.push_back(0u); boxIdx.push_back(2u); boxIdx.push_back(1u);
-        boxIdx.push_back(0u); boxIdx.push_back(3u); boxIdx.push_back(2u);
-        boxIdx.push_back(4u); boxIdx.push_back(5u); boxIdx.push_back(6u);
-        boxIdx.push_back(4u); boxIdx.push_back(6u); boxIdx.push_back(7u);
-        boxIdx.push_back(0u); boxIdx.push_back(1u); boxIdx.push_back(5u);
-        boxIdx.push_back(0u); boxIdx.push_back(5u); boxIdx.push_back(4u);
-        boxIdx.push_back(3u); boxIdx.push_back(6u); boxIdx.push_back(2u);
-        boxIdx.push_back(3u); boxIdx.push_back(7u); boxIdx.push_back(6u);
-        boxIdx.push_back(0u); boxIdx.push_back(7u); boxIdx.push_back(3u);
-        boxIdx.push_back(0u); boxIdx.push_back(4u); boxIdx.push_back(7u);
-        boxIdx.push_back(1u); boxIdx.push_back(2u); boxIdx.push_back(6u);
-        boxIdx.push_back(1u); boxIdx.push_back(6u); boxIdx.push_back(5u);
-        const MeshShape cubeMesh = MakeMeshShape(Span<f32x4>(boxVerts.data(), boxVerts.size()), Span<u32>(boxIdx.data(), boxIdx.size()), 0.0f).value();
+        const MeshShape cubeMesh = BuildClosedCubeMesh(1.0f).value();
 
         const SdfGeometryId sdfGeom = richWorld.createSdfGeometryFromMesh(cubeMesh, 12u, 12u, 12u, 0.25f, 0.02f).value();
         BodyDef sdfBd;
@@ -12161,15 +11951,7 @@ void VerifyPhysicsEdgeCases_Wave2CoreShapesSolverSnapshot(){
         EXPECT_EQ(sdfHit.shapeId.index, sdfShapeId.index);
         EXPECT_NEAR(sdfHit.point.y, 1.0f, 0.15f);
 
-        Vector<f32x4> bigFloorVerts;
-        bigFloorVerts.push_back(f32x4(-5.0f, 0.0f, -5.0f, 0.0f));
-        bigFloorVerts.push_back(f32x4(-5.0f, 0.0f,  5.0f, 0.0f));
-        bigFloorVerts.push_back(f32x4( 5.0f, 0.0f,  5.0f, 0.0f));
-        bigFloorVerts.push_back(f32x4( 5.0f, 0.0f, -5.0f, 0.0f));
-        Vector<u32> bigFloorIdx;
-        bigFloorIdx.push_back(0u); bigFloorIdx.push_back(1u); bigFloorIdx.push_back(2u);
-        bigFloorIdx.push_back(0u); bigFloorIdx.push_back(2u); bigFloorIdx.push_back(3u);
-        const MeshShape bigFloorMesh = MakeMeshShape(Span<f32x4>(bigFloorVerts.data(), bigFloorVerts.size()), Span<u32>(bigFloorIdx.data(), bigFloorIdx.size()), 0.0f).value();
+        const MeshShape bigFloorMesh = BuildQuadMeshFloor(5.0f, 0.0f, false).value();
 
         BodyDef meshFloorBd;
         meshFloorBd.type = BodyType::Static;
@@ -12543,7 +12325,7 @@ void VerifyPhysicsEdgeCases_Wave3SubsystemsPartAEdgeCases(){
         sphereLinks[1u].upperLimits = f32x4( 0.4f,  0.35f,  0.55f, 0.0f);
         sphereLinks[1u].enableDrive = true;
         sphereLinks[1u].useQuatDrive = true;
-        sphereLinks[1u].driveTargetQuat = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.2f));
+        sphereLinks[1u].driveTargetQuat = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.2f));
         sphereLinks[1u].driveStiffness = 80.0f;
         sphereLinks[1u].driveDamping = 8.0f;
         sphereLinks[2u].parentIndex = 1u;
@@ -12583,7 +12365,7 @@ void VerifyPhysicsEdgeCases_Wave3SubsystemsPartAEdgeCases(){
         BodyDef steepBd;
         steepBd.type = BodyType::Static;
         steepBd.position = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        steepBd.rotation = f32x4(QuatFromAxisAngleUnit(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 1.05f));
+        steepBd.rotation = f32x4(QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), 1.05f));
         const BodyId steepBody = ccW.createBody(steepBd).value();
         const ShapeId steepShape = ccW.createHullShape(steepBody, ShapeDef(), MakeBoxHull(6.0f, 0.25f, 6.0f, 0.0f).value()).value();
 
@@ -12755,8 +12537,6 @@ void VerifyPhysicsEdgeCases_Wave4SubsystemsPartBEdgeCases(){
         g1.originOrDirection = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
         g1.strength = 20.0f;
         ForceField g2 = g1;
-        g2.originOrDirection = f32x4(0.0f, 1.0f, 0.0f, 0.0f);
-        g2.strength = 20.0f;
         env.forceFields.push_back(g1);
         env.forceFields.push_back(g2);
 
@@ -12936,7 +12716,7 @@ void VerifyPhysicsEdgeCases_Wave54ContactsPathsClustersAndQueries(){
     EXPECT_NEAR(packedValid.z, 0.25f, 1.0e-6f);
     EXPECT_EQ(bit_cast<u32>(packedValid.w), 9u);
     const f32x4 packedInvalid = PackQueryHitTriBary(s_NullIndex, f32x2u(0.5f, 0.5f));
-    EXPECT_EQ(bit_cast<u32>(packedInvalid.w), s_GpuInvalidIndex);
+    EXPECT_EQ(bit_cast<u32>(packedInvalid.w), s_NullIndex);
 
     {
         PhysicsWorld pw;
@@ -12949,7 +12729,7 @@ void VerifyPhysicsEdgeCases_Wave54ContactsPathsClustersAndQueries(){
         const BodyId bB = pw.createBody(bdB).value();
 
         Vector<u32> awakeToGpu;
-        awakeToGpu.resize(2u, s_GpuInvalidIndex);
+        awakeToGpu.resize(2u, s_NullIndex);
         awakeToGpu[pw.m_bodies[bB.index].localIndex] = 0u;
 
         JointDef openJd;
@@ -13022,7 +12802,7 @@ void VerifyPhysicsEdgeCases_Wave54ContactsPathsClustersAndQueries(){
 
         cylProxy.scaleMinMargin = f32x4(2.0f, 1.0f, 1.0f, 0.0f);
         const GpuPhysicsShapeProxy badCyl = PackQueryShapeProxy(cylProxy, 0.0f, Transform3D(), extraVerts);
-        EXPECT_EQ(badCyl.bodyIndexTypeShape.y, s_GpuInvalidIndex);
+        EXPECT_EQ(badCyl.bodyIndexTypeShape.y, s_NullIndex);
 
         ShapeProxy hullProxy;
         hullProxy.kind = ProxyKind::PointCloud;
@@ -13040,6 +12820,47 @@ void VerifyPhysicsEdgeCases_Wave54ContactsPathsClustersAndQueries(){
     }
 }
 
+NWB_ADHD_GTEST(PhysicsEdgeCases, GenerationalHandleInvalidationAndReuse, VerifyPhysicsEdgeCases_GenerationalHandleInvalidationAndReuse)
+NWB_ADHD_GTEST(PhysicsEdgeCases, DegenerateAndInvalidGeometryRejection, VerifyPhysicsEdgeCases_DegenerateAndInvalidGeometryRejection)
+NWB_ADHD_GTEST(PhysicsEdgeCases, BoxStackStabilityAndSleeping, VerifyPhysicsEdgeCases_BoxStackStabilityAndSleeping)
+NWB_ADHD_GTEST(PhysicsEdgeCases, IslandSplitOnContactBreak, VerifyPhysicsEdgeCases_IslandSplitOnContactBreak)
+NWB_ADHD_GTEST(PhysicsEdgeCases, ConstraintGraphOverflowColor23, VerifyPhysicsEdgeCases_ConstraintGraphOverflowColor23)
+NWB_ADHD_GTEST(PhysicsEdgeCases, SpeculativeContactAndFastImpact, VerifyPhysicsEdgeCases_SpeculativeContactAndFastImpact)
+NWB_ADHD_GTEST(PhysicsEdgeCases, RayCastAndShapeCastEdgeCases, VerifyPhysicsEdgeCases_RayCastAndShapeCastEdgeCases)
+NWB_ADHD_GTEST(PhysicsEdgeCases, GpuLayoutAndEcsCpuFallbackContract, VerifyPhysicsEdgeCases_GpuLayoutAndEcsCpuFallbackContract)
+NWB_ADHD_GTEST(PhysicsEdgeCases, SphereBounceAccuracyAndNoMidAirFreeze, VerifyPhysicsEdgeCases_SphereBounceAccuracyAndNoMidAirFreeze)
+NWB_ADHD_GTEST(PhysicsEdgeCases, CoupledTowerImpactAndCoplanarGjk, VerifyPhysicsEdgeCases_CoupledTowerImpactAndCoplanarGjk)
+NWB_ADHD_GTEST(PhysicsEdgeCases, SleepingStackWakeupAndSensorEvents, VerifyPhysicsEdgeCases_SleepingStackWakeupAndSensorEvents)
+NWB_ADHD_GTEST(PhysicsEdgeCases, BodyMutatorsGyroAndRotationClamp, VerifyPhysicsEdgeCases_BodyMutatorsGyroAndRotationClamp)
+NWB_ADHD_GTEST(PhysicsEdgeCases, JointConstraints3D, VerifyPhysicsEdgeCases_JointConstraints3D)
+NWB_ADHD_GTEST(PhysicsEdgeCases, BulletToiContinuousAndCallbacks, VerifyPhysicsEdgeCases_BulletToiContinuousAndCallbacks)
+NWB_ADHD_GTEST(PhysicsEdgeCases, TriangleMeshBvhAndExactQueries, VerifyPhysicsEdgeCases_TriangleMeshBvhAndExactQueries)
+NWB_ADHD_GTEST(PhysicsEdgeCases, ShapeMutatorsCustomMassAndExtendedJoints, VerifyPhysicsEdgeCases_ShapeMutatorsCustomMassAndExtendedJoints)
+NWB_ADHD_GTEST(PhysicsEdgeCases, HybridCpuGpuSolverPartitionAndEquivalence, VerifyPhysicsEdgeCases_HybridCpuGpuSolverPartitionAndEquivalence)
+NWB_ADHD_GTEST(PhysicsEdgeCases, SphericalConeImpulseAndBreakTorque, VerifyPhysicsEdgeCases_SphericalConeImpulseAndBreakTorque)
+NWB_ADHD_GTEST(PhysicsEdgeCases, KinematicTargetSensorToggleAndJointMutators, VerifyPhysicsEdgeCases_KinematicTargetSensorToggleAndJointMutators)
+NWB_ADHD_GTEST(PhysicsEdgeCases, ParallelComponentSolverAndEcsSystem, VerifyPhysicsEdgeCases_ParallelComponentSolverAndEcsSystem)
+NWB_ADHD_GTEST(PhysicsEdgeCases, InvalidAssetPathPreservesPhysicsComponentsOnReload, VerifyPhysicsEdgeCases_InvalidAssetPathPreservesPhysicsComponentsOnReload)
+NWB_ADHD_GTEST(PhysicsEdgeCases, ComponentAssetsBinaryRoundTripAndValidation, VerifyPhysicsEdgeCases_ComponentAssetsBinaryRoundTripAndValidation)
+NWB_ADHD_GTEST(PhysicsEdgeCases, MeshInternalEdgesClosedVolumeAndDualMesh, VerifyPhysicsEdgeCases_MeshInternalEdgesClosedVolumeAndDualMesh)
+NWB_ADHD_GTEST(PhysicsEdgeCases, WakeupsEventsGettersPreSolveAndHullMerge, VerifyPhysicsEdgeCases_WakeupsEventsGettersPreSolveAndHullMerge)
+NWB_ADHD_GTEST(PhysicsEdgeCases, EcsHierarchyInterpolationNamedJointsAndQueries, VerifyPhysicsEdgeCases_EcsHierarchyInterpolationNamedJointsAndQueries)
+NWB_ADHD_GTEST(PhysicsEdgeCases, CoreCollisionLocksJointsAndEvents, VerifyPhysicsEdgeCases_CoreCollisionLocksJointsAndEvents)
+NWB_ADHD_GTEST(PhysicsEdgeCases, GpuStructParityAndAssetParentCodec, VerifyPhysicsEdgeCases_GpuStructParityAndAssetParentCodec)
+NWB_ADHD_GTEST(PhysicsEdgeCases, EcsLifecycleHierarchyAndDebugDraw, VerifyPhysicsEdgeCases_EcsLifecycleHierarchyAndDebugDraw)
+NWB_ADHD_GTEST(PhysicsEdgeCases, BinaryPaddingMotorScaleAndFilterNoOp, VerifyPhysicsEdgeCases_BinaryPaddingMotorScaleAndFilterNoOp)
+NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeSolverLocksToiAndQueries, VerifyPhysicsEdgeCases_PostMergeSolverLocksToiAndQueries)
+NWB_ADHD_GTEST(PhysicsEdgeCases, PostMergeEcsSyncAndLifecycle, VerifyPhysicsEdgeCases_PostMergeEcsSyncAndLifecycle)
+NWB_ADHD_GTEST(PhysicsEdgeCases, AuditFixesAndParityEdgeCases, VerifyPhysicsEdgeCases_AuditFixesAndParityEdgeCases)
+NWB_ADHD_GTEST(PhysicsEdgeCases, AuditV4ParityAndLifecycle, VerifyPhysicsEdgeCases_AuditV4ParityAndLifecycle)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Wave4HighLevelSubsystemsAndSnapshot, VerifyPhysicsEdgeCases_Wave4HighLevelSubsystemsAndSnapshot)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Wave6And7EcsAssetsAndDebugDrawEdgeCases, VerifyPhysicsEdgeCases_Wave6And7EcsAssetsAndDebugDrawEdgeCases)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Wave5Through8EdgeCases, VerifyPhysicsEdgeCases_Wave5Through8EdgeCases)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2ACoreFixesAndFeatures, VerifyPhysicsEdgeCases_Phase2ACoreFixesAndFeatures)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2BGpuParityAndPacking, VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2C1EcsAssetsAndSubsystems, VerifyPhysicsEdgeCases_Phase2C1EcsAssetsAndSubsystems)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2C2SubsystemFeaturesAndHeightfieldAsset, VerifyPhysicsEdgeCases_Phase2C2SubsystemFeaturesAndHeightfieldAsset)
+NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2DDebugDrawAndSingleStep, VerifyPhysicsEdgeCases_Phase2DDebugDrawAndSingleStep)
 NWB_ADHD_GTEST(PhysicsEdgeCases, Phase2BGpuResidentSubsystemsAndColoring, VerifyPhysicsEdgeCases_Phase2BGpuResidentSubsystemsAndColoring)
 NWB_ADHD_GTEST(PhysicsEdgeCases, Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture, VerifyPhysicsEdgeCases_Wave2ASubsystemsSoftBodyBuoyancyVhacdFracture)
 NWB_ADHD_GTEST(PhysicsEdgeCases, Wave2BVehicleRagdollCharacterArticulationSnapshot, VerifyPhysicsEdgeCases_Wave2BVehicleRagdollCharacterArticulationSnapshot)

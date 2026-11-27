@@ -136,27 +136,7 @@ class DynamicTree{
         return !AabbContainsValues(lower - hVec, upper + hVec, curMin, curMax);
     }
 
-    public void moveProxyUnchecked(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
-        if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
-            return;
-
-        const VectorSingle lower0(aabb.lowerBound);
-        const VectorSingle upper0(aabb.upperBound);
-        const f32 margin = ComputeAabbMarginValues(lower0, upper0);
-        const VectorSingle mVec(margin, margin, margin, 0.0f);
-        const VectorSingle fattenedLower = lower0 - mVec;
-        const VectorSingle fattenedUpper = upper0 + mVec;
-        const VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
-        const VectorSingle dNeg = VectorLess(d, VectorSingle(0.0f));
-        const VectorSingle lower = VectorSelect(fattenedLower, fattenedLower + d, dNeg);
-        const VectorSingle upper = VectorSelect(fattenedUpper + d, fattenedUpper, dNeg);
-
-        this.removeLeaf(proxyId);
-        this.m_nodes[proxyId].setAabbValues(lower, upper);
-        this.insertLeaf(proxyId);
-    }
-
-    public b8 moveProxy(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
+    private b8 moveProxyInternal(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement, in b8 checkContained){
         if(proxyId >= this.m_nodes.size() || !this.m_nodes[proxyId].isLeaf())
             return false;
 
@@ -166,12 +146,14 @@ class DynamicTree{
         const VectorSingle mVec(margin, margin, margin, 0.0f);
         const VectorSingle fattenedLower = lower0 - mVec;
         const VectorSingle fattenedUpper = upper0 + mVec;
-        const VectorSingle hugeVec(4.0f * margin, 4.0f * margin, 4.0f * margin, 0.0f);
-        in TreeNode curNode = this.m_nodes[proxyId];
-        const VectorSingle curMin(curNode.aabbMinUser, 0.0f);
-        const VectorSingle curMax(curNode.aabbMaxCategory, 0.0f);
-        if(AabbContainsValues(curMin, curMax, lower0, upper0) && AabbContainsValues(fattenedLower - hugeVec, fattenedUpper + hugeVec, curMin, curMax))
-            return false;
+        if(checkContained){
+            const VectorSingle hugeVec(4.0f * margin, 4.0f * margin, 4.0f * margin, 0.0f);
+            in TreeNode curNode = this.m_nodes[proxyId];
+            const VectorSingle curMin(curNode.aabbMinUser, 0.0f);
+            const VectorSingle curMax(curNode.aabbMaxCategory, 0.0f);
+            if(AabbContainsValues(curMin, curMax, lower0, upper0) && AabbContainsValues(fattenedLower - hugeVec, fattenedUpper + hugeVec, curMin, curMax))
+                return false;
+        }
 
         const VectorSingle d = VectorSingle(displacement, 0.0f) * 2.0f;
         const VectorSingle dNeg = VectorLess(d, VectorSingle(0.0f));
@@ -182,6 +164,14 @@ class DynamicTree{
         this.m_nodes[proxyId].setAabbValues(lower, upper);
         this.insertLeaf(proxyId);
         return true;
+    }
+
+    public void moveProxyUnchecked(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
+        this.moveProxyInternal(proxyId, aabb, displacement, false);
+    }
+
+    public b8 moveProxy(in u32 proxyId, in Aabb3D aabb, in VectorSingle displacement){
+        return this.moveProxyInternal(proxyId, aabb, displacement, true);
     }
 
     public b8 isMoved(in u32 proxyId)const{
@@ -280,51 +270,16 @@ class DynamicTree{
     }
 
     public void queryAabbFiltered<Callback>(in Aabb3D queryBox, in u32 maskBits, in u8 requiredNodeFlags, in Callback callback)const{
-        if(this.m_root == s_NullIndex || maskBits == 0u)
-            return;
-
-        in TreeNode rootNode = this.m_nodes[this.m_root];
-        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
-            return;
-        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
-            return;
-        const VectorSingle queryMin(queryBox.lowerBound);
-        const VectorSingle queryMax(queryBox.upperBound);
-        if(!AabbOverlapsValues(VectorSingle(rootNode.aabbMinUser, 0.0f), VectorSingle(rootNode.aabbMaxCategory, 0.0f), queryMin, queryMax))
-            return;
-        if(rootNode.isLeaf()){
-            callback(this.m_root, rootNode.userData());
-            return;
-        }
-
-        BvhSpillStack<u32, 64u> stack;
-        stack.push(this.m_root);
-        u32 nodeId = 0u;
-        while(stack.pop(nodeId)){
-            in TreeNode node = this.m_nodes[nodeId];
-            Array<u32, 2u> children;
-            children[0u] = node.child1;
-            children[1u] = node.child2;
-            for(usize ci = 0u; ci < 2u; ++ci){
-                const u32 childIdx = children[ci];
-                if(childIdx == s_NullIndex)
-                    continue;
-                in TreeNode child = this.m_nodes[childIdx];
-                if(
-                    (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
-                    && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
-                    && AabbOverlapsValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxCategory, 0.0f), queryMin, queryMax)
-                ){
-                    if(child.isLeaf()){
-                        if(!callback(childIdx, child.userData()))
-                            return;
-                    }
-                    else{
-                        stack.push(childIdx);
-                    }
-                }
-            }
-        }
+        Vector<u32> spillScratch;
+        this.queryAabbFilteredMovedScratch(
+            queryBox,
+            maskBits,
+            requiredNodeFlags,
+            lambda[in callback](in u32 proxyId, in u32 userData, in b8 moved) -> b8{
+                return callback(proxyId, userData);
+            },
+            spillScratch
+        );
     }
 
     public void queryAabbFilteredScratch<Callback>(
@@ -432,63 +387,7 @@ class DynamicTree{
         in u8 requiredNodeFlags,
         in Callback callback
     )const{
-        if(this.m_root == s_NullIndex || maskBits == 0u || initialMaxFraction <= 0.0f)
-            return;
-
-        in TreeNode rootNode = this.m_nodes[this.m_root];
-        if(maskBits != u32.max && (rootNode.categoryBits() & maskBits) == 0u)
-            return;
-        if(requiredNodeFlags != 0u && (rootNode.nodeFlags & requiredNodeFlags) == 0u)
-            return;
-
-        f32 maxFraction = initialMaxFraction;
-        VectorSingle invDir(0.0f);
-        u32 parallelMask = 0u;
-        ComputeRayCastSlabValues(translation, invDir, parallelMask);
-        f32 rootTMin = 0.0f;
-        if(!AabbRayCastValues(VectorSingle(rootNode.aabbMinUser, 0.0f), VectorSingle(rootNode.aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, rootTMin))
-            return;
-        if(rootNode.isLeaf()){
-            callback(this.m_root, rootNode.userData(), maxFraction);
-            return;
-        }
-
-        BvhMetricSpillStack<256u> stack;
-        stack.push(this.m_root, rootTMin);
-        u32 nodeId = 0u;
-        f32 poppedTMin = 0.0f;
-        while(stack.pop(nodeId, poppedTMin)){
-            if(poppedTMin > maxFraction)
-                continue;
-
-            in TreeNode node = this.m_nodes[nodeId];
-            if(node.isLeaf()){
-                maxFraction = callback(nodeId, node.userData(), maxFraction);
-                if(maxFraction <= 0.0f)
-                    return;
-            }
-            else{
-                Array<u32, 2u> children;
-                children[0u] = node.child1;
-                children[1u] = node.child2;
-                Array<b8, 2u> hits;
-                Array<f32, 2u> tMins;
-                for(usize ci = 0u; ci < 2u; ++ci){
-                    hits[ci] = false;
-                    tMins[ci] = 0.0f;
-                    const u32 childIdx = children[ci];
-                    if(childIdx != s_NullIndex){
-                        in TreeNode child = this.m_nodes[childIdx];
-                        if(
-                            (maskBits == u32.max || (child.categoryBits() & maskBits) != 0u)
-                            && (requiredNodeFlags == 0u || (child.nodeFlags & requiredNodeFlags) != 0u)
-                        )
-                            hits[ci] = AabbRayCastValues(VectorSingle(child.aabbMinUser, 0.0f), VectorSingle(child.aabbMaxCategory, 0.0f), origin, invDir, parallelMask, maxFraction, tMins[ci]);
-                    }
-                }
-                stack.pushOrderedPair(node.child1, hits[0u], tMins[0u], node.child2, hits[1u], tMins[1u]);
-            }
-        }
+        this.shapeCastFiltered(origin, VectorSingle(0.0f), translation, maskBits, initialMaxFraction, requiredNodeFlags, callback);
     }
 
     public void shapeCastFiltered<Callback>(

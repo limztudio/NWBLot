@@ -9,25 +9,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbPhysicsSubsysFilterPairMatch(const uint4 a, const uint4 b){
-    const int gA = asint(a.z);
-    const int gB = asint(b.z);
-    if(gA != 0 && gA == gB)
-        return gA > 0;
-    return ((a.x & b.y) != 0u) && ((b.x & a.y) != 0u);
-}
-
 bool nwbPhysicsSubsysBodyMatchesFilter(const uint bodyFilterSlot, const uint bodyIdx, const uint4 targetFilter){
     if(bodyFilterSlot == NWB_PHYSICS_INVALID_INDEX)
         return true;
     const uint4 bf = asuint(g_NwbPhysicsFloat4Buffers[bodyFilterSlot][bodyIdx]);
-    if(nwbPhysicsSubsysFilterPairMatch(bf, targetFilter))
+    if(nwbPhysicsFiltersMatch(bf.x, bf.y, asint(bf.z), targetFilter.x, targetFilter.y, asint(targetFilter.z)))
         return true;
     const uint extraCnt = bf.w & 0xffu;
     const uint extraOff = bf.w >> 8u;
     [loop] for(uint ei = 0u; ei < extraCnt; ++ei){
         const uint4 ef = asuint(g_NwbPhysicsFloat4Buffers[bodyFilterSlot][extraOff + ei]);
-        if(nwbPhysicsSubsysFilterPairMatch(ef, targetFilter))
+        if(nwbPhysicsFiltersMatch(ef.x, ef.y, asint(ef.z), targetFilter.x, targetFilter.y, asint(targetFilter.z)))
             return true;
     }
     return false;
@@ -633,19 +625,17 @@ bool nwbPhysicsSubsysCollideParticleShape(
 
     if(sType == NWB_PHYSICS_SHAPE_TYPE_HEIGHTFIELD && hullSlot != NWB_PHYSICS_INVALID_INDEX && sp.filterData.w != NWB_PHYSICS_INVALID_INDEX){
         const uint hfBase = sp.filterData.w;
-        const float4 hdr0 = g_NwbPhysicsFloat4Buffers[hullSlot][hfBase + 0u];
-        const float4 hdr1 = g_NwbPhysicsFloat4Buffers[hullSlot][hfBase + 1u];
-        const float4 hdr2 = g_NwbPhysicsFloat4Buffers[hullSlot][hfBase + 2u];
-        const float3 hfOrg = hdr0.xyz;
-        const float sx = hdr1.x;
-        const float sy = hdr1.y;
-        const float sz = hdr1.z;
-        const uint cols = asuint(hdr2.x);
-        const uint rows = asuint(hdr2.y);
-        const uint hfFlags = asuint(hdr2.z);
-        const float thick = max(hdr2.w, 0.0f);
-        if(cols < 2u || rows < 2u || sx <= 0.0f || sz <= 0.0f)
+        NwbPhysicsHfHeader hf;
+        if(!nwbPhysicsHfLoadHeader(hullSlot, hfBase, hf))
             return false;
+        const float3 hfOrg = hf.origin;
+        const float sx = hf.sx;
+        const float sy = hf.sy;
+        const float sz = hf.sz;
+        const uint cols = hf.cols;
+        const uint rows = hf.rows;
+        const uint hfFlags = hf.flags;
+        const float thick = max(hf.thickness, 0.0f);
         const int maxCellX = int(cols - 2u);
         const int maxCellZ = int(rows - 2u);
         const int minCx = max(0, int(floor((lp.x - pRadius - hfOrg.x) / sx)));
@@ -708,7 +698,7 @@ bool nwbPhysicsSubsysCollideParticleShape(
         const float3 qMin = lp - rVec;
         const float3 qMax = lp + rVec;
 
-        uint stack[32];
+        uint stack[NWB_PHYSICS_MESH_BVH_STACK_SIZE];
         uint spIdx = 1u;
         stack[0] = 0u;
         float bestDistSq = rSqLimit;
@@ -743,7 +733,7 @@ bool nwbPhysicsSubsysCollideParticleShape(
                     }
                 }
             }
-            else if(spIdx + 2u <= 32u){
+            else if(spIdx + 2u <= NWB_PHYSICS_MESH_BVH_STACK_SIZE){
                 stack[spIdx++] = asuint(n0.w);
                 stack[spIdx++] = meta & 0x7fffffffu;
             }
@@ -777,32 +767,6 @@ groupshared float3 s_SoftVec2[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
 groupshared float s_SoftScalar0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
 groupshared uint s_SoftUint0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
 groupshared float3 s_SoftCenter;
-
-void nwbPhysicsSubsysEmitFluidSplashEvent(
-    const uint prepCounterSlot,
-    const uint eventRingSlot,
-    const uint maxEvents,
-    const uint fluidIndex,
-    const uint bodySlot,
-    const float subFrac,
-    const float impactSpeed,
-    const float impactImpulse,
-    const float3 cob,
-    const float3 surfN
-){
-    if(eventRingSlot == NWB_PHYSICS_INVALID_INDEX || prepCounterSlot == NWB_PHYSICS_INVALID_INDEX || maxEvents == 0u)
-        return;
-    uint evIdx = 0u;
-    InterlockedAdd(g_NwbPhysicsUintBuffers[prepCounterSlot][1u], 1u, evIdx);
-    if(evIdx < maxEvents){
-        NwbPhysicsGpuEvent ev;
-        ev.header = uint4(NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH, bodySlot, fluidIndex, 1u);
-        ev.pointImpulse = float4(cob, subFrac);
-        ev.normalApproach = float4(surfN, impactSpeed);
-        ev.bodyIds = uint4(bodySlot, fluidIndex, asuint(impactImpulse), 0u);
-        g_NwbPhysicsEventBuffers[eventRingSlot][evIdx] = ev;
-    }
-}
 
 [require(spvGroupNonUniform, spvGroupNonUniformArithmetic)]
 void nwbPhysicsSubsysReduceMinMaxAndUintSum(
@@ -1055,11 +1019,6 @@ void nwbPhysicsSubsysSolveShapeMatchQuat(
     g_NwbPhysicsFloat4Buffers[shapeOutSlot][1] = q;
 }
 
-uint nwbPhysicsSubsysSoftHashCell(const int3 cell, const uint tableMask){
-    const uint h = (uint(cell.x) * 73856093u) ^ (uint(cell.y) * 19349663u) ^ (uint(cell.z) * 83492791u);
-    return h & tableMask;
-}
-
 
 [require(spvGroupNonUniform, spvGroupNonUniformArithmetic)]
 [numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
@@ -1172,7 +1131,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int3 selfCell = int3(floor(selfPos * invCell));
 
         if(flags == 0u){
-            const uint h = nwbPhysicsSubsysSoftHashCell(selfCell, tableMask);
+            const uint h = nwbPhysicsHashCell(selfCell, tableMask);
             uint prevHead = NWB_PHYSICS_INVALID_INDEX;
             InterlockedExchange(g_NwbPhysicsUintBuffers[headSlot][h], tid, prevHead);
             g_NwbPhysicsUintBuffers[nextSlot][tid] = prevHead;
@@ -1200,7 +1159,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         for(int dz = -1; dz <= 1; ++dz){
             for(int dy = -1; dy <= 1; ++dy){
                 for(int dx = -1; dx <= 1; ++dx){
-                    const uint h = nwbPhysicsSubsysSoftHashCell(selfCell + int3(dx, dy, dz), tableMask);
+                    const uint h = nwbPhysicsHashCell(selfCell + int3(dx, dy, dz), tableMask);
                     bool seen = false;
                     for(uint vb = 0u; vb < visitedCount; ++vb){
                         if(visitedBuckets[vb] == h){
@@ -2184,7 +2143,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             const float impactImpulse = bodyMass * impactSpeed;
             const float splashThr = fl.obbCenterSplash.w;
             if(splashThr > 0.0f && subFrac > 0.01f && impactImpulse >= splashThr)
-                nwbPhysicsSubsysEmitFluidSplashEvent(prepCounterSlot, eventRingSlot, maxEvents, fl.filterData.w, tid, subFrac, impactSpeed, impactImpulse, sim.positionInvMass.xyz, localSurfN);
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH, tid, fl.filterData.w, 1u, float4(sim.positionInvMass.xyz, subFrac), float4(localSurfN, impactSpeed), uint4(tid, fl.filterData.w, asuint(impactImpulse), 0u));
         }
         if(any(addForce != float3(0.0f, 0.0f, 0.0f)) || any(addTorque != float3(0.0f, 0.0f, 0.0f))){
             g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].forceLinearDamping.xyz = sim.forceLinearDamping.xyz + addForce;

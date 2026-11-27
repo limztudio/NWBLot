@@ -321,11 +321,6 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in 
     );
 }
 
-Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(in Span<SceneLightGpuData> lights)const{
-    u32 drawCount = 0u;
-    return this.buildLightSpaceShadowPlan(lights, drawCount);
-}
-
 void RendererRayTracingSystem::prepareLightSpaceShadows(in Span<SceneLightGpuData> lights){
     mut LightSpaceShadowState state = this.m_lightSpaceShadow;
     mut LightSpaceShadowSnapshot snapshot = state.m_snapshot;

@@ -70,98 +70,44 @@ b8 HasActiveShadowCsgRange(in CsgShadowReceiverRangeGpu range){
     return (range.flags & s_CsgRayReceiverActive) != 0u;
 }
 
-void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDrawState drawState, in CsgFrameReceiverLookup receiverLookup, in CsgShapeRegistry shapeRegistry, mut CsgShadowSnapshot snapshot, mut CsgShadowReceiverRangeGpu range, mut b8 anyCutterSyncFromTransform){
+void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDrawState drawState, in CsgFrameReceiverLookup receiverLookup, mut CsgShadowSnapshot snapshot, mut CsgShadowReceiverRangeGpu range, mut b8 anyCutterSyncFromTransform){
     const VectorSingle receiverMin = VectorSingle(receiver.worldMin);
     const VectorSingle receiverMax = VectorSingle(receiver.worldMax);
     const b8 boundsCanCull = receiver.boundsValid && AabbValid(receiverMin, receiverMax);
     range.firstCutter = cast<u32>(snapshot.cutters.size());
-    if(receiverLookup.hasPrecomputedCutters()){
-        for(in CsgPrecomputedCutter cutter : receiverLookup.precomputedReceiverCutters(drawState)){
-            if(!cutter.valid || !cutter.boundsResolved)
-                continue;
-            if(boundsCanCull && cutter.finiteBounds && !AabbIntersects(receiverMin, receiverMax, VectorSingle(cutter.boundsMin), VectorSingle(cutter.boundsMax)))
-                continue;
-
-            const MatrixSingle shapeToWorld = MatrixSingle(cutter.shapeToWorld);
-            const MatrixSingle worldToShape = MatrixSingle(cutter.worldToShape);
-            const Span<u8> parameters(cutter.parameterBytes);
-            CsgSnapshotIdentityBuilder().updateShadowCutterSnapshotHashes(
-                cutter.entity,
-                cutter.shapeType,
-                worldToShape,
-                shapeToWorld,
-                parameters,
-                snapshot.contentIdentity,
-                snapshot.identity
-            );
-            const usize prevCutterCount = snapshot.cutters.size();
-            AppendShadowCutterRecord(
-                cutter.hasShaderModule,
-                cutter.shapeName,
-                worldToShape,
-                shapeToWorld,
-                parameters,
-                range,
-                snapshot.cutters
-            );
-            if(snapshot.cutters.size() > prevCutterCount){
-                u32 cutterEntityId = u32.max;
-                if(cutter.syncFromTransform){
-                    cutterEntityId = cutter.entity.id;
-                    anyCutterSyncFromTransform = true;
-                }
-                snapshot.cutterEntityIds.push_back(cutterEntityId);
-            }
-        }
-        FinalizeShadowReceiverCuttersRange(range, snapshot.cutters);
-        snapshot.cutterEntityIds.resize(snapshot.cutters.size());
-        return;
-    }
-    for(in auto record : receiverLookup.receiverCutters(drawState)){
-        assert(record.has_value());
-        if(!record.has_value())
+    assert(receiverLookup.hasPrecomputedCutters());
+    for(in CsgPrecomputedCutter cutter : receiverLookup.precomputedReceiverCutters(drawState)){
+        if(!cutter.valid || !cutter.boundsResolved)
             continue;
-        in CsgCutterComponent cutter = record.value().cutter;
-        const auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
-        if(!shapeType.has_value())
-            continue;
-        const auto parameters = TryResolveCsgCutterParameterBytes(shapeType.value().desc.parameterByteSize, shapeType.value().desc.defaultParameterBytes, cutter.parameterBytes);
-        if(!parameters.has_value())
+        if(boundsCanCull && cutter.finiteBounds && !AabbIntersects(receiverMin, receiverMax, VectorSingle(cutter.boundsMin), VectorSingle(cutter.boundsMax)))
             continue;
 
-        MatrixSingle worldToShape = MatrixIdentity();
-        MatrixSingle shapeToWorld = MatrixIdentity();
-        receiverLookup.resolveCutterTransforms(record.value(), worldToShape, shapeToWorld);
-
-        const auto bounds = shapeRegistry.buildShapeBounds(shapeType.value().id, shapeToWorld, parameters.value());
-        if(!bounds.has_value())
-            continue;
-        if(boundsCanCull && bounds.value().finiteBounds && !AabbIntersects(receiverMin, receiverMax, LoadFloat(bounds.value().minBounds), LoadFloat(bounds.value().maxBounds)))
-            continue;
-
+        const MatrixSingle shapeToWorld = MatrixSingle(cutter.shapeToWorld);
+        const MatrixSingle worldToShape = MatrixSingle(cutter.worldToShape);
+        const Span<u8> parameters(cutter.parameterBytes);
         CsgSnapshotIdentityBuilder().updateShadowCutterSnapshotHashes(
-            record.value().entity,
+            cutter.entity,
             cutter.shapeType,
             worldToShape,
             shapeToWorld,
-            parameters.value(),
+            parameters,
             snapshot.contentIdentity,
             snapshot.identity
         );
         const usize prevCutterCount = snapshot.cutters.size();
         AppendShadowCutterRecord(
-            shapeType.value().desc.shaderModule != s_NameNone,
-            shapeType.value().desc.name,
+            cutter.hasShaderModule,
+            cutter.shapeName,
             worldToShape,
             shapeToWorld,
-            parameters.value(),
+            parameters,
             range,
             snapshot.cutters
         );
         if(snapshot.cutters.size() > prevCutterCount){
             u32 cutterEntityId = u32.max;
             if(cutter.syncFromTransform){
-                cutterEntityId = record.value().entity.id;
+                cutterEntityId = cutter.entity.id;
                 anyCutterSyncFromTransform = true;
             }
             snapshot.cutterEntityIds.push_back(cutterEntityId);
@@ -216,7 +162,7 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
         mut CsgShadowReceiverRangeGpu range = outSnapshot.receiverRanges[index];
         range = CsgShadowReceiverRangeGpu();
         if(drawStates[index].active){
-            AppendReceiverCutters(receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range, anyCutterSyncFromTransform);
+            AppendReceiverCutters(receiver, drawStates[index], receiverLookup, outSnapshot, range, anyCutterSyncFromTransform);
             outSnapshot.hasCsg = outSnapshot.hasCsg || HasActiveShadowCsgRange(range);
         }
         CsgSnapshotIdentityBuilder().updateShadowReceiverSnapshotRangeHashes(range, outSnapshot.contentIdentity, outSnapshot.identity);

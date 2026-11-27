@@ -6,6 +6,7 @@
 #include <impl/ecs_mesh/runtime/buffer_upload.adhd>
 #include <impl/ecs_mesh/soft_body/cpu_mesh.adhd>
 #include <impl/ecs_physics/subsystem_components.adhd>
+#include <impl/ecs_scene/hierarchy.adhd>
 #include <impl/physics/gpu/gpu_dispatcher.adhd>
 
 
@@ -182,7 +183,7 @@ u64 ComputeSoftBodyDeformSignature(in SoftBody sb, in TransformComponent xf){
 TransformComponent ResolveSoftBodyEntityWorldTransform(
     in World world,
     in EntityID entity,
-    mut Vector<TransformComponent> localChainScratch,
+    mut Vector<LocalTransformComponent> localChainScratch,
     mut Vector<u8> inheritScaleScratch
 ){
     TransformComponent outXf;
@@ -208,11 +209,7 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
             break;
         }
         in LocalTransformComponent lxf = world.getComponent<LocalTransformComponent>(cur);
-        TransformComponent stepXf;
-        stepXf.position = lxf.position;
-        stepXf.rotation = lxf.rotation;
-        stepXf.scale = lxf.scale;
-        localChainScratch.push_back(stepXf);
+        localChainScratch.push_back(lxf);
         u8 inh = 0u;
         if(sp.inheritScale)
             inh = 1u;
@@ -227,26 +224,13 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
         return outXf;
     }
 
-    VectorSingle accPos(rootXf.position.x, rootXf.position.y, rootXf.position.z, 0.0f);
-    VectorSingle accRot = SafeNormalizeQuat(VectorSingle(rootXf.rotation));
-    VectorSingle accScale(rootXf.scale.x, rootXf.scale.y, rootXf.scale.z, 0.0f);
+    rootXf.rotation = f32x4(SafeNormalizeSceneQuaternion(VectorSingle(rootXf.rotation)));
     for(usize idx = localChainScratch.size(); idx > 0u; --idx){
-        in TransformComponent loc = localChainScratch[idx - 1u];
-        const b8 inh = (inheritScaleScratch[idx - 1u] != 0u);
-        const VectorSingle locPos(loc.position.x, loc.position.y, loc.position.z, 0.0f);
-        const VectorSingle locRot = SafeNormalizeQuat(VectorSingle(loc.rotation));
-        const VectorSingle locScale(loc.scale.x, loc.scale.y, loc.scale.z, 0.0f);
-        accPos = TransformPointValues(accPos, accRot, locPos * accScale);
-        accRot = SafeNormalizeQuat(QuaternionMultiply(accRot, locRot));
-        if(inh)
-            accScale = accScale * locScale;
-        else
-            accScale = locScale;
+        TransformComponent composed;
+        ComposeSceneWorldTransformNormalizedParent(rootXf, localChainScratch[idx - 1u], inheritScaleScratch[idx - 1u] != 0u, composed);
+        rootXf = composed;
     }
-    outXf.position = f32x4(accPos, 0.0f);
-    outXf.rotation = f32x4(accRot);
-    outXf.scale = f32x4(accScale, 0.0f);
-    return outXf;
+    return rootXf;
 }
 
 Expected<BufferHandle, BufferSetupFailure> CreateSoftBodyRuntimeBuffer(
@@ -489,7 +473,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     private Array<Vector<SoftBodyRuntimeMeshGpuBuffers>, 3u> m_retiredGpuBuffers;
     private u32 m_retiredRingSlot = 0u;
     private b8 m_syncedInUpdate = false;
-    private Vector<TransformComponent> m_localChainScratch;
+    private Vector<LocalTransformComponent> m_localChainScratch;
     private Vector<u8> m_inheritScaleScratch;
     private Vector<EntityID> m_staleEntities;
     private Vector<GpuTaskId> m_uploadTasksScratch;
@@ -517,12 +501,6 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     public ~SoftBodyMeshSystem(){
         this.invalidateResources();
         this.m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(this);
-    }
-
-    public void setGpuDeformOverride(in EntityID entity, in SoftBodyGpuDeformOverride overrideData){
-        if(!entity.valid())
-            return;
-        this.m_gpuOverrides.insert_or_assign(entity, overrideData);
     }
 
     public void clearGpuDeformOverride(in EntityID entity){
@@ -650,11 +628,11 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         if(!this.m_syncedInUpdate)
             this.syncEntities();
         this.m_syncedInUpdate = false;
-        return this.uploadPendingBatches(true, true);
+        return this.uploadPendingBatches();
     }
 
     public void render(in FramebufferPtr framebuffer)override{
-        if(!this.uploadPendingBatches(true, true))
+        if(!this.uploadPendingBatches())
             warning("SoftBodyMeshSystem: skipped runtime mesh upload because standalone graph submission failed");
     }
 
@@ -842,12 +820,12 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             this.syncSingleEntity(Get<0>(row), Get<1>(row));
     }
 
-    private b8 uploadPendingBatches(in b8 uploadTopologies, in b8 uploadDeformations){
+    private b8 uploadPendingBatches(){
         b8 hasPending = false;
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
             if(!it.value().cpu.topologyValid || !it.value().gpu.valid())
                 continue;
-            if((uploadTopologies && it.value().pendingTopologyUpload) || (uploadDeformations && it.value().pendingDeformUpload)){
+            if(it.value().pendingTopologyUpload || it.value().pendingDeformUpload){
                 hasPending = true;
                 break;
             }
@@ -864,7 +842,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         mut Vector<GpuTaskId> uploadTasksScratch = this.m_uploadTasksScratch;
         const GpuPhysicalQueueId graphicsQueue = this.m_graphics.getDevice().getPrimaryPhysicalQueue(CommandQueue::Graphics);
         const Expected<QueueSubmissionToken> uploaded = this.m_graphics.standaloneGraph().submitStandaloneTaskGraph(
-            lambda[in entriesRef, in batchReadyName, in uploadTopologies, in uploadDeformations, mut uploadTasksScratch](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+            lambda[in entriesRef, in batchReadyName, mut uploadTasksScratch](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
                 uploadTasksScratch.clear();
                 uploadTasksScratch.reserve(entriesRef.size() * 15u);
 
@@ -872,11 +850,11 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                     if(!it.value().cpu.topologyValid || !it.value().gpu.valid())
                         continue;
 
-                    if(uploadTopologies && it.value().pendingTopologyUpload){
+                    if(it.value().pendingTopologyUpload){
                         if(!DeclareSoftBodyTopologyUploads(graph, it.value(), uploadTasksScratch))
                             return MakeUnexpected(Failure());
                     }
-                    else if(uploadDeformations && it.value().pendingDeformUpload){
+                    else if(it.value().pendingDeformUpload){
                         if(!DeclareSoftBodyDynamicUploads(graph, it.value(), uploadTasksScratch))
                             return MakeUnexpected(Failure());
                     }
@@ -900,10 +878,8 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             return false;
 
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
-            if(uploadTopologies && it.value().pendingTopologyUpload)
-                it.value().pendingTopologyUpload = false;
-            if(uploadDeformations && it.value().pendingDeformUpload)
-                it.value().pendingDeformUpload = false;
+            it.value().pendingTopologyUpload = false;
+            it.value().pendingDeformUpload = false;
         }
         return true;
     }

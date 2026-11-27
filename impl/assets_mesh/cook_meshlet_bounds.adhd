@@ -177,6 +177,7 @@ b8 FlushBuiltMeshlet(
     in Span<MeshVertexRef> vertexRefs,
     in Span<u8> primitiveIndices,
     in Span<u32> localSourceVertexRefs,
+    in b8 buildBounds,
     mut MeshletDesc inOutCurrent,
     mut Vector<MeshletPositionStreamRef> inOutPositionRefs,
     mut Vector<MeshletAttributeStreamRef> inOutAttributeRefs,
@@ -206,7 +207,8 @@ b8 FlushBuiltMeshlet(
     for(in MeshletLocalVertexRef ref : localVertexRefs)
         inOutLocalVertexRefs.push_back(ref);
     inOutMeshlets.push_back(inOutCurrent);
-    inOutMeshletBounds.push_back(BuildMeshletBounds(positions, inOutPositionRefs, inOutLocalVertexRefs, primitiveIndices, inOutCurrent));
+    if(buildBounds)
+        inOutMeshletBounds.push_back(BuildMeshletBounds(positions, inOutPositionRefs, inOutLocalVertexRefs, primitiveIndices, inOutCurrent));
     return true;
 }
 

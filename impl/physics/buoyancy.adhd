@@ -66,71 +66,6 @@ class FluidGerstnerWave{
 
 type FluidSurfaceCallback = Func<64u, f32x4(in VectorSingle, in f32)>;
 
-VectorSingle ClosestPointOnSegment3D(in VectorSingle p, in VectorSingle a, in VectorSingle b, mut f32 outT){
-    const VectorSingle ab = b - a;
-    const f32 lenSq = Vector3LengthSq(VectorSingle(ab, 0.0f)).x;
-    if(lenSq <= 1.0e-12f){
-        outT = 0.0f;
-        return a;
-    }
-    outT = Clamp(Vector3Dot(p - a, ab).x / lenSq, 0.0f, 1.0f);
-    return a + ab * outT;
-}
-
-VectorSingle ClosestPointOnTriangle3D(in VectorSingle p, in VectorSingle a, in VectorSingle b, in VectorSingle c){
-    const VectorSingle ab = b - a;
-    const VectorSingle ac = c - a;
-    const VectorSingle ap = p - a;
-    const f32 d1 = Vector3Dot(ab, ap).x;
-    const f32 d2 = Vector3Dot(ac, ap).x;
-    if(d1 <= 0.0f && d2 <= 0.0f)
-        return a;
-
-    const VectorSingle bp = p - b;
-    const f32 d3 = Vector3Dot(ab, bp).x;
-    const f32 d4 = Vector3Dot(ac, bp).x;
-    if(d3 >= 0.0f && d4 <= d3)
-        return b;
-
-    const f32 vc = d1 * d4 - d3 * d2;
-    if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f){
-        const f32 v = d1 / Max(1.0e-12f, d1 - d3);
-        return a + ab * v;
-    }
-
-    const VectorSingle cp = p - c;
-    const f32 d5 = Vector3Dot(ab, cp).x;
-    const f32 d6 = Vector3Dot(ac, cp).x;
-    if(d6 >= 0.0f && d5 <= d6)
-        return c;
-
-    const f32 vb = d5 * d2 - d1 * d6;
-    if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f){
-        const f32 w = d2 / Max(1.0e-12f, d2 - d6);
-        return a + ac * w;
-    }
-
-    const f32 va = d3 * d6 - d5 * d4;
-    if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f){
-        const f32 w = (d4 - d3) / Max(1.0e-12f, (d4 - d3) + (d5 - d6));
-        return b + (c - b) * w;
-    }
-
-    const f32 denom = 1.0f / Max(1.0e-12f, va + vb + vc);
-    const f32 vBary = vb * denom;
-    const f32 wBary = vc * denom;
-    return a + ab * vBary + ac * wBary;
-}
-
-class FluidBvhNode{
-    public f32x4 bMin(0.0f, 0.0f, 0.0f, 0.0f);
-    public f32x4 bMax(0.0f, 0.0f, 0.0f, 0.0f);
-    public u32 left = s_NullIndex;
-    public u32 right = s_NullIndex;
-    public u32 primStart = 0u;
-    public u32 primCount = 0u;
-}
-
 class FluidGerstnerSoaBlock{
     public f32x4 dirX(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 dirY(0.0f, 0.0f, 0.0f, 0.0f);
@@ -191,122 +126,6 @@ f32 FluidPointAabbDistSq(in VectorSingle p, in VectorSingle bMin, in VectorSingl
     return Vector3LengthSq(VectorSingle(p - clamped, 0.0f)).x;
 }
 
-void BuildFluidBvh(
-    in Vector<f32x4> primMins,
-    in Vector<f32x4> primMaxs,
-    in usize primCount,
-    mut Vector<u32> outOrder,
-    mut Vector<FluidBvhNode> outNodes
-){
-    outNodes.clear();
-    outOrder.resize(primCount);
-    if(primCount == 0u)
-        return;
-    for(usize i = 0u; i < primCount; ++i)
-        outOrder[i] = cast<u32>(i);
-    outNodes.reserve(primCount);
-    outNodes.push_back(FluidBvhNode());
-
-    Array<u32, 64u> stackNode;
-    Array<usize, 64u> stackStart;
-    Array<usize, 64u> stackEnd;
-    usize sp = 0u;
-    stackNode[sp] = 0u;
-    stackStart[sp] = 0u;
-    stackEnd[sp] = primCount;
-    ++sp;
-
-    while(sp > 0u){
-        --sp;
-        const usize ni = cast<usize>(stackNode[sp]);
-        const usize bStart = stackStart[sp];
-        const usize bEnd = stackEnd[sp];
-        const u32 firstPrim = outOrder[bStart];
-        VectorSingle bMin = VectorSingle(primMins[firstPrim]);
-        VectorSingle bMax = VectorSingle(primMaxs[firstPrim]);
-        VectorSingle cMin = (bMin + bMax) * 0.5f;
-        VectorSingle cMax = cMin;
-        for(usize k = bStart + 1u; k < bEnd; ++k){
-            const u32 pIdx = outOrder[k];
-            const VectorSingle pMin = VectorSingle(primMins[pIdx]);
-            const VectorSingle pMax = VectorSingle(primMaxs[pIdx]);
-            const VectorSingle cen = (pMin + pMax) * 0.5f;
-            bMin = Min(bMin, pMin);
-            bMax = Max(bMax, pMax);
-            cMin = Min(cMin, cen);
-            cMax = Max(cMax, cen);
-        }
-        outNodes[ni].bMin = f32x4(bMin, 0.0f);
-        outNodes[ni].bMax = f32x4(bMax, 0.0f);
-
-        const usize count = bEnd - bStart;
-        if(count <= 4u || sp + 2u >= 64u){
-            outNodes[ni].left = s_NullIndex;
-            outNodes[ni].right = s_NullIndex;
-            outNodes[ni].primStart = cast<u32>(bStart);
-            outNodes[ni].primCount = cast<u32>(count);
-            continue;
-        }
-
-        const VectorSingle ext = cMax - cMin;
-        u32 axis = 0u;
-        f32 span = ext.x;
-        if(ext.y > span){
-            axis = 1u;
-            span = ext.y;
-        }
-        if(ext.z > span){
-            axis = 2u;
-            span = ext.z;
-        }
-
-        usize splitIdx = bStart + (count / 2u);
-        if(span > 1.0e-6f){
-            f32 splitVal = (cMin.x + cMax.x) * 0.5f;
-            if(axis == 1u) splitVal = (cMin.y + cMax.y) * 0.5f;
-            else if(axis == 2u) splitVal = (cMin.z + cMax.z) * 0.5f;
-            usize lo = bStart;
-            usize hi = bEnd;
-            while(lo < hi){
-                const u32 idxLo = outOrder[lo];
-                const VectorSingle cenLo = (VectorSingle(primMins[idxLo]) + VectorSingle(primMaxs[idxLo])) * 0.5f;
-                f32 cVal = cenLo.x;
-                if(axis == 1u) cVal = cenLo.y;
-                else if(axis == 2u) cVal = cenLo.z;
-                if(cVal < splitVal){
-                    ++lo;
-                }
-                else{
-                    --hi;
-                    const u32 tmp = outOrder[lo];
-                    outOrder[lo] = outOrder[hi];
-                    outOrder[hi] = tmp;
-                }
-            }
-            if(lo > bStart && lo < bEnd)
-                splitIdx = lo;
-        }
-
-        const u32 leftIdx = cast<u32>(outNodes.size());
-        outNodes.push_back(FluidBvhNode());
-        const u32 rightIdx = cast<u32>(outNodes.size());
-        outNodes.push_back(FluidBvhNode());
-        outNodes[ni].left = leftIdx;
-        outNodes[ni].right = rightIdx;
-        outNodes[ni].primStart = 0u;
-        outNodes[ni].primCount = 0u;
-
-        stackNode[sp] = rightIdx;
-        stackStart[sp] = splitIdx;
-        stackEnd[sp] = bEnd;
-        ++sp;
-        stackNode[sp] = leftIdx;
-        stackStart[sp] = bStart;
-        stackEnd[sp] = splitIdx;
-        ++sp;
-    }
-}
-
 class FluidVolume{
     public FluidVolumeShape shape = FluidVolumeShape::HalfSpacePlane;
     public f32x4 surfaceNormalOffset(0.0f, 1.0f, 0.0f, 0.0f);
@@ -351,7 +170,7 @@ class FluidVolume{
     private f32x4 m_cachedLocalAabbMin(0.0f, 0.0f, 0.0f, 0.0f);
     private f32x4 m_cachedLocalAabbMax(0.0f, 0.0f, 0.0f, 0.0f);
     private Vector<u32> m_cachedBvhOrder;
-    private Vector<FluidBvhNode> m_cachedBvhNodes;
+    private Vector<FlatBvhNode> m_cachedBvhNodes;
     private Vector<f32x4> m_cachedBvhPrimMins;
     private Vector<f32x4> m_cachedBvhPrimMaxs;
     private b8 m_cachedBvhValid = false;
@@ -498,7 +317,7 @@ class FluidVolume{
                         this.m_cachedBvhPrimMins[ti] = f32x4(Min(v0, Min(v1, v2)), 0.0f);
                         this.m_cachedBvhPrimMaxs[ti] = f32x4(Max(v0, Max(v1, v2)), 0.0f);
                     }
-                    BuildFluidBvh(this.m_cachedBvhPrimMins, this.m_cachedBvhPrimMaxs, triCount, this.m_cachedBvhOrder, this.m_cachedBvhNodes);
+                    BuildFlatBvh(this.m_cachedBvhPrimMins, this.m_cachedBvhPrimMaxs, triCount, this.m_cachedBvhOrder, this.m_cachedBvhNodes);
                     this.m_cachedBvhValid = true;
                     this.m_cachedBvhShape = cast<u8>(FluidVolumeShape::Mesh);
                     this.m_cachedBvhCount = triCount;
@@ -545,7 +364,7 @@ class FluidVolume{
                         this.m_cachedBvhPrimMins[si] = f32x4(Min(a, b), 0.0f);
                         this.m_cachedBvhPrimMaxs[si] = f32x4(Max(a, b), 0.0f);
                     }
-                    BuildFluidBvh(this.m_cachedBvhPrimMins, this.m_cachedBvhPrimMaxs, segCount, this.m_cachedBvhOrder, this.m_cachedBvhNodes);
+                    BuildFlatBvh(this.m_cachedBvhPrimMins, this.m_cachedBvhPrimMaxs, segCount, this.m_cachedBvhOrder, this.m_cachedBvhNodes);
                     this.m_cachedBvhValid = true;
                     this.m_cachedBvhShape = cast<u8>(FluidVolumeShape::SplineRiver);
                     this.m_cachedBvhCount = segCount;
@@ -967,7 +786,7 @@ class FluidVolume{
                 ++sp;
                 while(sp > 0u){
                     --sp;
-                    in FluidBvhNode node = this.m_cachedBvhNodes[bvhStack[sp]];
+                    in FlatBvhNode node = this.m_cachedBvhNodes[bvhStack[sp]];
                     const b8 canHitRay = (pL.x >= node.bMin.x && pL.x <= node.bMax.x && pL.z >= node.bMin.z && pL.z <= node.bMax.z && node.bMax.y > pL.y);
                     const f32 boxDSq = FluidPointAabbDistSq(pL, VectorSingle(node.bMin), VectorSingle(node.bMax));
                     if(!canHitRay && boxDSq >= minDistSq)
@@ -991,7 +810,7 @@ class FluidVolume{
                             const VectorSingle v1(this.meshVertices[i1], 0.0f);
                             const VectorSingle v2(this.meshVertices[i2], 0.0f);
                             if(triBoxDSq < minDistSq){
-                                const VectorSingle cp = ClosestPointOnTriangle3D(pL, v0, v1, v2);
+                                const VectorSingle cp = ClosestPointOnTriangleLocal(pL, v0, v1, v2);
                                 const f32 dSq = Vector3LengthSq(VectorSingle(pL - cp, 0.0f)).x;
                                 if(dSq < minDistSq){
                                     minDistSq = dSq;
@@ -1034,7 +853,7 @@ class FluidVolume{
                     const VectorSingle v0(this.meshVertices[i0], 0.0f);
                     const VectorSingle v1(this.meshVertices[i1], 0.0f);
                     const VectorSingle v2(this.meshVertices[i2], 0.0f);
-                    const VectorSingle cp = ClosestPointOnTriangle3D(pL, v0, v1, v2);
+                    const VectorSingle cp = ClosestPointOnTriangleLocal(pL, v0, v1, v2);
                     const f32 dSq = Vector3LengthSq(VectorSingle(pL - cp, 0.0f)).x;
                     if(dSq < minDistSq){
                         minDistSq = dSq;
@@ -1093,7 +912,7 @@ class FluidVolume{
                 ++sp;
                 while(sp > 0u){
                     --sp;
-                    in FluidBvhNode node = this.m_cachedBvhNodes[bvhStack[sp]];
+                    in FlatBvhNode node = this.m_cachedBvhNodes[bvhStack[sp]];
                     if(FluidPointAabbDistSq(p, VectorSingle(node.bMin), VectorSingle(node.bMax)) >= bestSegDistSq)
                         continue;
                     if(node.left == s_NullIndex){
@@ -1103,7 +922,7 @@ class FluidVolume{
                             const VectorSingle a(this.riverPoints[si], 0.0f);
                             const VectorSingle b(this.riverPoints[si + 1u], 0.0f);
                             f32 segT = 0.0f;
-                            const VectorSingle cp = ClosestPointOnSegment3D(p, a, b, segT);
+                            const VectorSingle cp = ClosestPointOnSegmentValues(p, a, b, segT);
                             const f32 dSq = Vector3LengthSq(VectorSingle(p - cp, 0.0f)).x;
                             if(dSq < bestSegDistSq){
                                 bestSegDistSq = dSq;
@@ -1131,7 +950,7 @@ class FluidVolume{
                     const VectorSingle a(this.riverPoints[si], 0.0f);
                     const VectorSingle b(this.riverPoints[si + 1u], 0.0f);
                     f32 segT = 0.0f;
-                    const VectorSingle cp = ClosestPointOnSegment3D(p, a, b, segT);
+                    const VectorSingle cp = ClosestPointOnSegmentValues(p, a, b, segT);
                     const f32 dSq = Vector3LengthSq(VectorSingle(p - cp, 0.0f)).x;
                     if(dSq < bestSegDistSq){
                         bestSegDistSq = dSq;
@@ -1265,18 +1084,6 @@ class FluidVolume{
         this.computeSurfaceTangentBasis(surfNorm, t1, t2);
         return this.signedDepthWithWaveBasis(p, surfNorm, t1, t2, timeSec);
     }
-
-    public f32 signedDepthWithNormal(in VectorSingle p, in VectorSingle surfNorm)const{
-        return this.signedDepthWithNormalAtTime(p, surfNorm, 0.0f);
-    }
-
-    public f32 signedDepth(in VectorSingle p)const{
-        if(this.shape == FluidVolumeShape::HalfSpacePlane || this.shape == FluidVolumeShape::GerstnerOcean){
-            const VectorSingle n = this.normalizedSurfaceNormal();
-            return this.signedDepthWithNormalAtTime(p, n, 0.0f);
-        }
-        return this.signedDepthWithNormalAtTime(p, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.0f);
-    }
 }
 
 class ForceField{
@@ -1353,7 +1160,7 @@ class ForceField{
         }
         if(this.shape == ForceFieldShape::Capsule){
             f32 segT = 0.0f;
-            const VectorSingle cp = ClosestPointOnSegment3D(pos, VectorSingle(this.capsulePointA, 0.0f), VectorSingle(this.capsulePointB, 0.0f), segT);
+            const VectorSingle cp = ClosestPointOnSegmentValues(pos, VectorSingle(this.capsulePointA, 0.0f), VectorSingle(this.capsulePointB, 0.0f), segT);
             const f32 cr = Max(0.0f, this.capsuleRadius);
             return Vector3LengthSq(VectorSingle(pos - cp, 0.0f)).x <= cr * cr;
         }
@@ -2657,31 +2464,6 @@ void GatherDynamicEnvironmentCandidateBodyIds(
     );
 }
 
-void ComputeVec4ListLocalAabb(in Span<f32x4> pts, mut VectorSingle outMin, mut VectorSingle outMax){
-    VectorSingle bMin(pts[0u], 0.0f);
-    VectorSingle bMax = bMin;
-    for(usize vi = 1u; vi < pts.size(); ++vi){
-        const VectorSingle p(pts[vi], 0.0f);
-        bMin = Min(bMin, p);
-        bMax = Max(bMax, p);
-    }
-    outMin = bMin;
-    outMax = bMax;
-}
-
-Aabb3D TransformLocalAabbToWorld(in VectorSingle xPos, in VectorSingle xRot, in VectorSingle localMin, in VectorSingle localMax, in VectorSingle padVec){
-    const VectorSingle cL = (localMin + localMax) * 0.5f;
-    const VectorSingle heL = Max((localMax - localMin) * 0.5f, VectorSingle(0.0f));
-    const VectorSingle cW = TransformPointValues(xPos, xRot, cL);
-    const MatrixSingle rotT = Matrix3Transpose(Matrix3FromQuaternion(xRot));
-    const VectorSingle wHe =
-        Abs(VectorSingle(rotT[0u], 0.0f)) * heL.x
-        + Abs(VectorSingle(rotT[1u], 0.0f)) * heL.y
-        + Abs(VectorSingle(rotT[2u], 0.0f)) * heL.z
-        + padVec;
-    return Aabb3D(cW - wHe, cW + wHe);
-}
-
 b8 TryBuildFluidQueryAabb(in FluidVolume fluid, in VectorSingle surfNorm, mut Aabb3D outQueryBox){
     if(fluid.hasSurfaceCallback())
         return false;
@@ -2711,7 +2493,10 @@ b8 TryBuildFluidQueryAabb(in FluidVolume fluid, in VectorSingle surfNorm, mut Aa
         const VectorSingle c = VectorSingle(fluid.obbCenter, 0.0f);
         const VectorSingle r = fluid.normalizedObbRotation();
         const VectorSingle he = Max(VectorSingle(fluid.obbHalfExtents, 0.0f), VectorSingle(1.0e-3f, 1.0e-3f, 1.0e-3f, 0.0f));
-        outQueryBox = TransformLocalAabbToWorld(c, r, -he, he, VectorSingle(wavePad, wavePad, wavePad, 0.0f));
+        VectorSingle oMin(0.0f);
+        VectorSingle oMax(0.0f);
+        TransformLocalAabbValuesToWorld(-he, he, wavePad, c, r, oMin, oMax);
+        outQueryBox = Aabb3D(oMin, oMax);
         return true;
     }
     if(fluid.shape == FluidVolumeShape::ConvexHull){
@@ -2723,8 +2508,11 @@ b8 TryBuildFluidQueryAabb(in FluidVolume fluid, in VectorSingle surfNorm, mut Aa
         VectorSingle hMin(0.0f);
         VectorSingle hMax(0.0f);
         if(!fluid.tryGetCachedLocalAabb(cast<u8>(FluidVolumeShape::ConvexHull), fluid.hullVertices.size(), hullSig, hMin, hMax))
-            ComputeVec4ListLocalAabb(Span<f32x4>(fluid.hullVertices), hMin, hMax);
-        outQueryBox = TransformLocalAabbToWorld(xPos, xRot, hMin, hMax, VectorZero());
+            ComputePointsAabbValues(Span<f32x4>(fluid.hullVertices), hMin, hMax);
+        VectorSingle wMin(0.0f);
+        VectorSingle wMax(0.0f);
+        TransformLocalAabbValuesToWorld(hMin, hMax, 0.0f, xPos, xRot, wMin, wMax);
+        outQueryBox = Aabb3D(wMin, wMax);
         return true;
     }
     if(fluid.shape == FluidVolumeShape::Mesh){
@@ -2736,8 +2524,11 @@ b8 TryBuildFluidQueryAabb(in FluidVolume fluid, in VectorSingle surfNorm, mut Aa
         VectorSingle mMin(0.0f);
         VectorSingle mMax(0.0f);
         if(!fluid.tryGetCachedLocalAabb(cast<u8>(FluidVolumeShape::Mesh), fluid.meshVertices.size(), vertSig, mMin, mMax))
-            ComputeVec4ListLocalAabb(Span<f32x4>(fluid.meshVertices), mMin, mMax);
-        outQueryBox = TransformLocalAabbToWorld(xPos, xRot, mMin, mMax, VectorZero());
+            ComputePointsAabbValues(Span<f32x4>(fluid.meshVertices), mMin, mMax);
+        VectorSingle wMin(0.0f);
+        VectorSingle wMax(0.0f);
+        TransformLocalAabbValuesToWorld(mMin, mMax, 0.0f, xPos, xRot, wMin, wMax);
+        outQueryBox = Aabb3D(wMin, wMax);
         return true;
     }
     if(fluid.shape == FluidVolumeShape::SplineRiver){
@@ -2747,7 +2538,7 @@ b8 TryBuildFluidQueryAabb(in FluidVolume fluid, in VectorSingle surfNorm, mut Aa
         VectorSingle bMin(0.0f);
         VectorSingle bMax(0.0f);
         if(!fluid.tryGetCachedLocalAabb(cast<u8>(FluidVolumeShape::SplineRiver), fluid.riverPoints.size(), riverSig, bMin, bMax))
-            ComputeVec4ListLocalAabb(Span<f32x4>(fluid.riverPoints), bMin, bMax);
+            ComputePointsAabbValues(Span<f32x4>(fluid.riverPoints), bMin, bMax);
         const f32 pad = Max(Max(0.1f, fluid.riverHalfWidth), Max(0.1f, fluid.riverDepth)) + wavePad;
         const VectorSingle padV(pad, pad, pad, 0.0f);
         outQueryBox = Aabb3D(bMin - padV, bMax + padV);
@@ -2953,23 +2744,7 @@ b8 ComputeFluidBodyWrenchWithSubmersion(
 
     outForce = totalForce;
     outTorque = totalTorque;
-    return IsFiniteVec3(totalForce) && IsFiniteVec3(totalTorque);
-}
-
-b8 ComputeFluidBodyWrenchDirect(
-    in PhysicsWorld world,
-    in BodySim sim,
-    in BodyState state,
-    in FluidVolume fluid,
-    in VectorSingle surfNorm,
-    in VectorSingle grav,
-    in f32 timeSec,
-    in f32 invDt,
-    mut VectorSingle outForce,
-    mut VectorSingle outTorque
-){
-    FluidSubmersionResult unusedSub;
-    return ComputeFluidBodyWrenchWithSubmersion(world, sim, state, fluid, surfNorm, grav, timeSec, invDt, outForce, outTorque, unusedSub);
+    return IsFinite(totalForce.xyz) && IsFinite(totalTorque.xyz);
 }
 
 b8 ComputeForceFieldBodyForceDirectWithGravFlag(
@@ -3227,21 +3002,7 @@ b8 ComputeForceFieldBodyForceDirectWithGravFlag(
 
     outForce = VectorSingle(appliedForce, 0.0f);
     outTorque = VectorSingle(appliedTorque, 0.0f);
-    return IsFiniteVec3(outForce) && IsFiniteVec3(outTorque);
-}
-
-b8 ComputeForceFieldBodyForceDirect(
-    in PhysicsWorld world,
-    in BodySim sim,
-    in BodyState state,
-    in ForceField field,
-    in VectorSingle hoistedDir,
-    in f32 timeSec,
-    in f32 invDt,
-    mut VectorSingle outForce,
-    mut VectorSingle outTorque
-){
-    return ComputeForceFieldBodyForceDirectWithGravFlag(world, sim, state, field, hoistedDir, timeSec, invDt, true, outForce, outTorque);
+    return IsFinite(outForce.xyz) && IsFinite(outTorque.xyz);
 }
 
 const usize s_BuoyancyParallelThreshold = 64u;
@@ -3511,37 +3272,6 @@ void PrepareFluidEnvironmentCandidatesInternal(
     }
     FlushEnvironmentWakeQueue(world);
     outWorkCount = origAwakeCount;
-}
-
-void PrepareFluidEnvironmentCandidatesWithSamples(
-    in FluidVolume fluid,
-    in VectorSingle surfNorm,
-    in VectorSingle grav,
-    in f32 timeSec,
-    in f32 invDt,
-    in Aabb3D queryBox,
-    in b8 useBroadphase,
-    mut PhysicsWorld world,
-    mut Vector<FluidCandidateSample> outWokenSamples,
-    mut usize outWorkCount
-){
-    FluidReconcileScratch unusedScratch;
-    PrepareFluidEnvironmentCandidatesInternal(fluid, surfNorm, grav, timeSec, invDt, queryBox, useBroadphase, true, false, 0u, world, outWokenSamples, unusedScratch, outWorkCount);
-}
-
-void PrepareFluidEnvironmentCandidates(
-    in FluidVolume fluid,
-    in VectorSingle surfNorm,
-    in VectorSingle grav,
-    in f32 timeSec,
-    in f32 invDt,
-    in Aabb3D queryBox,
-    in b8 useBroadphase,
-    mut PhysicsWorld world,
-    mut usize outWorkCount
-){
-    FluidReconcileScratch unusedScratch;
-    PrepareFluidEnvironmentCandidatesInternal(fluid, surfNorm, grav, timeSec, invDt, queryBox, useBroadphase, false, false, 0u, world, unusedScratch.wokenSamples, unusedScratch, outWorkCount);
 }
 
 void PrepareForceFieldEnvironmentCandidatesWithGravStamps(

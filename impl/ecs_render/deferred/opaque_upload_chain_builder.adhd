@@ -95,7 +95,6 @@ class OpaqueUploadChainBuilder : NoCopy{
             inputs.materialInstances,
             inputs.frameBindings,
             Name("render.graphics_prefix.opaque.physics_patch"),
-            true,
             this.m_graph,
             dependency
         ))

@@ -360,8 +360,6 @@ void CommandList::setGraphicsState(const GraphicsState& state){
                 return;
             VulkanDetail::CopyViewportStateCompact(m_currentGraphicsState.viewport, state.viewport);
         }
-        else if(!explicitScissorsEqual)
-            VulkanDetail::CopyViewportStateCompact(m_currentGraphicsState.viewport, state.viewport);
 
         const b8 blendConstantsChanged = !(m_currentGraphicsState.blendConstantColor == state.blendConstantColor);
         const b8 dynamicStencilRefChanged = m_currentGraphicsState.dynamicStencilRefValue != state.dynamicStencilRefValue;
@@ -619,7 +617,11 @@ b8 CommandList::beginDynamicRenderingDefault(Framebuffer& framebuffer){
         return true;
     }
 
-    const RenderPassParameters params{};
+    RenderPassParameters params{};
+    if(framebuffer.m_desc.depthAttachment.isReadOnly){
+        params.depthAttachmentActions.storeAction = RenderPassStoreAction::None;
+        params.stencilAttachmentActions.storeAction = RenderPassStoreAction::None;
+    }
     return beginDynamicRendering(framebuffer, params);
 }
 

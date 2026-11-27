@@ -114,10 +114,7 @@ void PreparedSceneTlasBuild::confirm(mut RendererRayTracingState state){
     RayTracingBuildPolicy().publishConfirmedSceneTlasBuild(storageValid, this.m_static && !this.m_useInstanceBuffer, this.m_staticSceneHash, state.sceneBvh.m_tlasStaticSceneHash, state.sceneBvh.m_tlasStaticSceneHashValid, state.sceneBvh.m_tlasBackingFresh);
     if(storageValid){
         state.sceneBvh.m_tlasBuildAccepted = true;
-        if(this.m_useInstanceBuffer)
-            state.sceneBvh.m_tlasAcceptedInstanceCount = this.m_instanceCount;
-        else
-            state.sceneBvh.m_tlasAcceptedInstanceCount = cast<u32>(this.m_instances.size());
+        state.sceneBvh.m_tlasAcceptedInstanceCount = this.m_instanceCount;
         state.sceneBvh.m_tlasTopologyHash = this.m_topologyHash;
         state.sceneBvh.m_tlasWasGpuPatched = this.m_useInstanceBuffer;
         if(this.m_performUpdate)
@@ -445,6 +442,30 @@ b8 RendererRayTracingSystem::prepareMeshBlasResources(mut MeshRayTracingResource
     return true;
 }
 
+void PreparedSceneTlasBuild::finalizeCaptureMetadata(
+    in RendererRayTracingState state,
+    in u32 instanceCount,
+    in u64 staticSceneHash,
+    in u64 topologyHash,
+    in u64 patchMembershipSignature,
+    in b8 performUpdate,
+    in b8 useInstanceBuffer,
+    in b8 staticScene
+){
+    this.m_tlas = state.sceneBvh.m_tlas;
+    this.m_backingBuffer = state.sceneBvh.m_tlas.deref().getBackingBufferHandle();
+    this.m_heapHandle = state.sceneBvh.m_tlasHeapHandle;
+    this.m_maxInstances = state.sceneBvh.m_tlasMaxInstances;
+    this.m_instanceCount = instanceCount;
+    this.m_staticSceneHash = staticSceneHash;
+    this.m_topologyHash = topologyHash;
+    this.m_patchMembershipSignature = patchMembershipSignature;
+    this.m_performUpdate = performUpdate;
+    this.m_useInstanceBuffer = useInstanceBuffer;
+    this.m_static = staticScene;
+    this.m_ready = true;
+}
+
 b8 PreparedSceneTlasBuild::capture(
     in RendererRayTracingState state,
     in b8 staticScene,
@@ -469,16 +490,7 @@ b8 PreparedSceneTlasBuild::capture(
         this.m_instances.push_back(instances[index]);
         this.m_blases.push_back(blas);
     }
-    this.m_tlas = state.sceneBvh.m_tlas;
-    this.m_backingBuffer = state.sceneBvh.m_tlas.deref().getBackingBufferHandle();
-    this.m_heapHandle = state.sceneBvh.m_tlasHeapHandle;
-    this.m_maxInstances = state.sceneBvh.m_tlasMaxInstances;
-    this.m_staticSceneHash = staticSceneHash;
-    this.m_topologyHash = topologyHash;
-    this.m_patchMembershipSignature = 0u;
-    this.m_performUpdate = performUpdate;
-    this.m_static = staticScene;
-    this.m_ready = true;
+    this.finalizeCaptureMetadata(state, cast<u32>(instances.size()), staticSceneHash, topologyHash, 0u, performUpdate, false, staticScene);
     return true;
 }
 
@@ -518,20 +530,9 @@ b8 PreparedSceneTlasBuild::captureFromInstanceBuffer(
         this.m_blases.push_back(blas);
         this.m_instanceEntityIds.push_back(instanceEntityIds[index]);
     }
-    this.m_tlas = state.sceneBvh.m_tlas;
-    this.m_backingBuffer = state.sceneBvh.m_tlas.deref().getBackingBufferHandle();
     this.m_instanceBuffer = state.sceneBvh.m_tlasInstanceBuffer;
-    this.m_heapHandle = state.sceneBvh.m_tlasHeapHandle;
     this.m_instanceUavHeapHandle = state.sceneBvh.m_tlasInstanceUavHeapHandle;
-    this.m_maxInstances = state.sceneBvh.m_tlasMaxInstances;
-    this.m_instanceCount = cast<u32>(instances.size());
-    this.m_staticSceneHash = staticSceneHash;
-    this.m_topologyHash = topologyHash;
-    this.m_patchMembershipSignature = patchMembershipSignature;
-    this.m_performUpdate = performUpdate;
-    this.m_useInstanceBuffer = true;
-    this.m_static = staticScene;
-    this.m_ready = true;
+    this.finalizeCaptureMetadata(state, cast<u32>(instances.size()), staticSceneHash, topologyHash, patchMembershipSignature, performUpdate, true, staticScene);
     return true;
 }
 
@@ -556,38 +557,30 @@ Expected<Optional<GpuUploadBlobId>> PreparedSceneTlasBuild::retainUpload(in Rend
 }
 
 b8 PreparedSceneTlasBuild::record(mut RendererRayTracingState state, mut CommandList commandList){
-    RayTracingAccelStructBuildFlags buildFlags = RayTracingAccelStructBuildFlags::AllowUpdate | RayTracingAccelStructBuildFlags::PreferFastTrace;
-    if(this.m_performUpdate)
-        buildFlags |= RayTracingAccelStructBuildFlags::PerformUpdate;
-
-    if(this.m_useInstanceBuffer){
-        const usize instanceCount = cast<usize>(this.m_instanceCount);
-        if(!this.m_ready || instanceCount == 0u || this.m_blases.size() != instanceCount || !this.m_instanceBuffer.valid() || !this.storageMatches(state) || !IsPreparedSceneTlasStorageReady(state, instanceCount)){
-            warning("RendererSystem: frozen scene TLAS instance-buffer build no longer matches preflight storage");
-            return false;
-        }
-        for(usize index = 0u; index < instanceCount; ++index){
-            if(!this.m_blases[index].valid()){
-                warning("RendererSystem: frozen scene TLAS build lost a referenced BLAS");
-                return false;
-            }
-        }
-        commandList.buildTopLevelAccelStructFromBuffer(this.m_tlas.deref(), this.m_instanceBuffer.deref(), cast<u64>(0u), instanceCount, buildFlags);
-        return true;
-    }
-
-    if(!this.m_ready || this.m_instances.empty() || this.m_instances.size() != this.m_blases.size() || !this.storageMatches(state) || !IsPreparedSceneTlasStorageReady(state, this.m_instances.size())){
+    const usize instanceCount = cast<usize>(this.m_instanceCount);
+    b8 validInputs = this.m_ready && instanceCount != 0u && this.m_blases.size() == instanceCount && this.storageMatches(state) && IsPreparedSceneTlasStorageReady(state, instanceCount);
+    if(this.m_useInstanceBuffer)
+        validInputs = validInputs && this.m_instanceBuffer.valid();
+    else
+        validInputs = validInputs && this.m_instances.size() == instanceCount;
+    if(!validInputs){
         warning("RendererSystem: frozen scene TLAS build no longer matches preflight storage");
         return false;
     }
-    for(usize index = 0u; index < this.m_instances.size(); ++index){
-        if(!this.m_blases[index].valid() || this.m_instances[index].bottomLevelIdentity() != this.m_blases[index].identity()){
+    for(usize index = 0u; index < instanceCount; ++index){
+        if(!this.m_blases[index].valid() || (!this.m_useInstanceBuffer && this.m_instances[index].bottomLevelIdentity() != this.m_blases[index].identity())){
             warning("RendererSystem: frozen scene TLAS build lost a referenced BLAS");
             return false;
         }
     }
 
-    commandList.buildTopLevelAccelStruct(this.m_tlas.deref(), this.m_instances, buildFlags);
+    RayTracingAccelStructBuildFlags buildFlags = RayTracingAccelStructBuildFlags::AllowUpdate | RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(this.m_performUpdate)
+        buildFlags |= RayTracingAccelStructBuildFlags::PerformUpdate;
+    if(this.m_useInstanceBuffer)
+        commandList.buildTopLevelAccelStructFromBuffer(this.m_tlas.deref(), this.m_instanceBuffer.deref(), cast<u64>(0u), instanceCount, buildFlags);
+    else
+        commandList.buildTopLevelAccelStruct(this.m_tlas.deref(), this.m_instances, buildFlags);
     return true;
 }
 

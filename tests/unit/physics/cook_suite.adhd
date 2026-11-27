@@ -163,7 +163,6 @@ b8 WriteTestTetrahedronGlb(in Path filePath){
 
 b8 ParseAssetValueFromScript(
     in StringView scriptText,
-    mut HeapStorage testArena,
     mut MetascriptDocument outDoc,
     mut MetascriptValue outValue
 ){
@@ -194,7 +193,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         for(usize i = 0u; i < badVehicleScripts.size(); ++i){
             MetascriptDocument doc(testArena);
             MetascriptValue val(testArena);
-            ASSERT_TRUE(ParseAssetValueFromScript(badVehicleScripts[i], testArena, doc, val));
+            ASSERT_TRUE(ParseAssetValueFromScript(badVehicleScripts[i], doc, val));
             const u32 beforeErr = logger.errorCount();
             EXPECT_FALSE(ParseVehicleComponentCookMetadata(vPath, metaFile, val).has_value());
             EXPECT_GT(logger.errorCount(), beforeErr);
@@ -209,7 +208,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         for(usize i = 0u; i < badRagdollScripts.size(); ++i){
             MetascriptDocument doc(testArena);
             MetascriptValue val(testArena);
-            ASSERT_TRUE(ParseAssetValueFromScript(badRagdollScripts[i], testArena, doc, val));
+            ASSERT_TRUE(ParseAssetValueFromScript(badRagdollScripts[i], doc, val));
             const u32 beforeErr = logger.errorCount();
             EXPECT_FALSE(ParseRagdollComponentCookMetadata(vPath, metaFile, val).has_value());
             EXPECT_GT(logger.errorCount(), beforeErr);
@@ -223,7 +222,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         for(usize i = 0u; i < badArtScripts.size(); ++i){
             MetascriptDocument doc(testArena);
             MetascriptValue val(testArena);
-            ASSERT_TRUE(ParseAssetValueFromScript(badArtScripts[i], testArena, doc, val));
+            ASSERT_TRUE(ParseAssetValueFromScript(badArtScripts[i], doc, val));
             const u32 beforeErr = logger.errorCount();
             EXPECT_FALSE(ParseArticulationComponentCookMetadata(vPath, metaFile, val).has_value());
             EXPECT_GT(logger.errorCount(), beforeErr);
@@ -242,7 +241,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         for(usize i = 0u; i < badSbScripts.size(); ++i){
             MetascriptDocument doc(testArena);
             MetascriptValue val(testArena);
-            ASSERT_TRUE(ParseAssetValueFromScript(badSbScripts[i], testArena, doc, val));
+            ASSERT_TRUE(ParseAssetValueFromScript(badSbScripts[i], doc, val));
             const u32 beforeErr = logger.errorCount();
             EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, val).has_value());
             EXPECT_GT(logger.errorCount(), beforeErr);
@@ -254,7 +253,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
             "collider_component asset;\nasset.shape_type = \"mesh\";\nasset.is_box = 0;\nasset.compound_hull_asset = \"project/physics/my_compound\";\nasset.vhacd_max_hulls = 12;\nasset.vhacd_max_recursion_depth = 5;\nasset.vhacd_concavity_threshold = 0.04;\nasset.vhacd_max_vertices_per_hull = 24;\nasset.vhacd_min_volume_ratio = 0.01;\nasset.vhacd_enable_arbitrary_planes = 0;\nasset.vhacd_enable_hull_merging = 0;\nasset.vhacd_merge_volume_tolerance = 0.12;\n";
         MetascriptDocument docA(testArena);
         MetascriptValue valA(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(colScriptA, testArena, docA, valA));
+        ASSERT_TRUE(ParseAssetValueFromScript(colScriptA, docA, valA));
         const auto colResA = ParseColliderComponentCookMetadata(vPath, metaFile, valA);
         ASSERT_TRUE(colResA.has_value());
         in ColliderShapeEntry cA = colResA.value().component.primaryShape;
@@ -272,7 +271,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
             "collider_component asset;\nasset.shape_type = \"heightfield\";\nasset.heightfield_rows = 3;\nasset.heightfield_cols = 3;\nasset.heightfield_heights = [0,0,0,0,0,0,0,0,0];\nasset.heightfield_flip_diagonal = 1;\nasset.heightfield_cell_holes = [[1, 0]];\n";
         MetascriptDocument docHfP(testArena);
         MetascriptValue valHfP(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(colHfPairs, testArena, docHfP, valHfP));
+        ASSERT_TRUE(ParseAssetValueFromScript(colHfPairs, docHfP, valHfP));
         const auto colHfPRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfP);
         ASSERT_TRUE(colHfPRes.has_value());
         EXPECT_TRUE(colHfPRes.value().component.primaryShape.heightfieldFlipDiagonal);
@@ -283,7 +282,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
             "collider_component asset;\nasset.shape_type = \"heightfield\";\nasset.heightfield_rows = 3;\nasset.heightfield_cols = 3;\nasset.heightfield_heights = [0,0,0,0,0,0,0,0,0];\nasset.heightfield_cell_holes = [0, 1, 0, 1];\n";
         MetascriptDocument docHfF(testArena);
         MetascriptValue valHfF(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(colHfFlat, testArena, docHfF, valHfF));
+        ASSERT_TRUE(ParseAssetValueFromScript(colHfFlat, docHfF, valHfF));
         const auto colHfFRes = ParseColliderComponentCookMetadata(vPath, metaFile, valHfF);
         ASSERT_TRUE(colHfFRes.has_value());
         ASSERT_EQ(colHfFRes.value().component.primaryShape.heightfieldCellHoles.size(), cast<usize>(1u));
@@ -293,7 +292,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
             "joint_component asset;\nasset.type = \"six_dof\";\nasset.enable_twist_limit = 1;\nasset.enable_slerp_drive = 1;\nasset.target_orientation_euler_degrees = [0.0, 90.0, 0.0];\nasset.slerp_hertz = 6.5;\nasset.slerp_damping_ratio = 0.85;\nasset.slerp_max_torque = 120.0;\nasset.six_dof_swing_limit_mode = \"cone\";\nasset.six_dof_swing_limit_y = 0.6;\nasset.six_dof_swing_limit_z = 0.45;\n";
         MetascriptDocument docJ(testArena);
         MetascriptValue valJ(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(jointScript, testArena, docJ, valJ));
+        ASSERT_TRUE(ParseAssetValueFromScript(jointScript, docJ, valJ));
         const auto jRes = ParseJointComponentCookMetadata(vPath, metaFile, valJ);
         ASSERT_TRUE(jRes.has_value());
         in JointSettings jOut = jRes.value().component.primaryJoint.settings;
@@ -312,21 +311,21 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
     {
         const StringView ccScript = "character_controller_component asset; asset.collision_layer = \"layer_cc\";";
         MetascriptDocument docCc(testArena); MetascriptValue valCc(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(ccScript, testArena, docCc, valCc));
+        ASSERT_TRUE(ParseAssetValueFromScript(ccScript, docCc, valCc));
         const auto ccRes = ParseCharacterControllerComponentCookMetadata(vPath, metaFile, valCc);
         ASSERT_TRUE(ccRes.has_value());
         EXPECT_EQ(ccRes.value().component.collisionLayer, Name("layer_cc"));
 
         const StringView fvScript = "fluid_volume_component asset; asset.collision_layer = \"layer_fv\";";
         MetascriptDocument docFv(testArena); MetascriptValue valFv(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(fvScript, testArena, docFv, valFv));
+        ASSERT_TRUE(ParseAssetValueFromScript(fvScript, docFv, valFv));
         const auto fvRes = ParseFluidVolumeComponentCookMetadata(vPath, metaFile, valFv);
         ASSERT_TRUE(fvRes.has_value());
         EXPECT_EQ(fvRes.value().component.collisionLayer, Name("layer_fv"));
 
         const StringView ffScript = "force_field_component asset; asset.collision_layer = \"layer_ff\";";
         MetascriptDocument docFf(testArena); MetascriptValue valFf(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(ffScript, testArena, docFf, valFf));
+        ASSERT_TRUE(ParseAssetValueFromScript(ffScript, docFf, valFf));
         const auto ffRes = ParseForceFieldComponentCookMetadata(vPath, metaFile, valFf);
         ASSERT_TRUE(ffRes.has_value());
         EXPECT_EQ(ffRes.value().component.collisionLayer, Name("layer_ff"));
@@ -334,7 +333,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView vehScript =
             "vehicle_component asset;\nasset.collision_layer = \"layer_veh\";\nasset.center_differential_mode = \"locked\";\nasset.axle_differential_mode = \"open\";\nasset.torque_curve_points = [[1000.0, 220.0], [4500.0, 410.0]];\nasset.wheels = [{ \"anti_roll_pair_index\": 1 }, { \"anti_roll_pair_index\": 0 }];\n";
         MetascriptDocument docVeh(testArena); MetascriptValue valVeh(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(vehScript, testArena, docVeh, valVeh));
+        ASSERT_TRUE(ParseAssetValueFromScript(vehScript, docVeh, valVeh));
         const auto vehRes = ParseVehicleComponentCookMetadata(vPath, metaFile, valVeh);
         ASSERT_TRUE(vehRes.has_value());
         EXPECT_EQ(vehRes.value().component.collisionLayer, Name("layer_veh"));
@@ -346,7 +345,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView ragScript =
             "ragdoll_component asset;\nasset.collision_layer = \"layer_rag\";\nasset.bones = [\n  {\n    \"shape_type\": \"sphere\",\n    \"sphere\": { \"center\": [0.0, 0.0, 0.0], \"radius\": 0.3 },\n    \"extra_shapes\": [{ \"shape_type\": \"box\", \"box_half_extents\": [0.1, 0.2, 0.1], \"local_offset\": [0.1, 0.0, 0.0] }]\n  },\n  {\n    \"parent_index\": 0,\n    \"shape_type\": \"hull\",\n    \"hull_vertices\": [[0.0, 0.0, 0.0], [0.2, 0.0, 0.0], [0.0, 0.2, 0.0], [0.0, 0.0, 0.2]]\n  }\n];\nasset.disabled_self_collision_pairs = [[0, 1]];\n";
         MetascriptDocument docRag(testArena); MetascriptValue valRag(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(ragScript, testArena, docRag, valRag));
+        ASSERT_TRUE(ParseAssetValueFromScript(ragScript, docRag, valRag));
         const auto ragRes = ParseRagdollComponentCookMetadata(vPath, metaFile, valRag);
         ASSERT_TRUE(ragRes.has_value());
         EXPECT_EQ(ragRes.value().component.collisionLayer, Name("layer_rag"));
@@ -360,7 +359,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView artScript =
             "articulation_component asset;\nasset.collision_layer = \"layer_art\";\nasset.links = [\n  { \"joint_type\": \"fixed\", \"use_full_inertia_tensor\": 1, \"inertia_tensor\": [0.2, 0.01, 0.02, 0.3, 0.03, 0.4] },\n  { \"parent_index\": 0, \"joint_type\": \"universal\", \"joint_axis_local\": [1.0, 0.0, 0.0], \"joint_axis_secondary_local\": [0.0, 1.0, 0.0] },\n  { \"parent_index\": 1, \"joint_type\": \"spherical\" }\n];\nasset.mimic_constraints = [{ \"link_index\": 1, \"dof_index\": 0, \"target_link_index\": 2, \"target_dof_index\": 0, \"gear_ratio\": 0.5 }];\nasset.tendon_constraints = [{ \"link_indices\": [1, 2], \"dof_indices\": [0, 0], \"coefficients\": [1.0, -1.0] }];\nasset.loop_constraints = [{ \"link_index_a\": 0, \"link_index_b\": 2, \"lock_orientation\": 1 }];\n";
         MetascriptDocument docArt(testArena); MetascriptValue valArt(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(artScript, testArena, docArt, valArt));
+        ASSERT_TRUE(ParseAssetValueFromScript(artScript, docArt, valArt));
         const auto artRes = ParseArticulationComponentCookMetadata(vPath, metaFile, valArt);
         ASSERT_TRUE(artRes.has_value());
         EXPECT_EQ(artRes.value().component.collisionLayer, Name("layer_art"));
@@ -376,7 +375,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView sbManualScript =
             "soft_body_component asset;\nasset.collision_layer = \"layer_sb\";\nasset.particles = [{ \"position\": [0.0, 0.0, 0.0] }, { \"position\": [1.0, 0.0, 0.0] }, { \"position\": [0.0, 1.0, 0.0] }, { \"position\": [0.0, 0.0, 1.0] }];\nasset.dihedral_bending_constraints = [{ \"p0\": 0, \"p1\": 1, \"p2\": 2, \"p3\": 3, \"rest_angle\": 0.25 }];\nasset.goal_constraints = [{ \"particle_index\": 0, \"target_position\": [1.0, 2.0, 3.0], \"stiffness\": 0.75 }];\nasset.volume_constraints = [{\n  \"p0\": 0, \"p1\": 1, \"p2\": 2, \"p3\": 3, \"rest_volume\": 1.0,\n  \"youngs_modulus\": 5000.0, \"poissons_ratio\": 0.35,\n  \"plastic_yield\": 0.05, \"plastic_creep\": 0.2, \"plastic_max_strain\": 0.6,\n  \"rest_col0\": [1.0, 0.0, 0.0], \"rest_col1\": [0.0, 1.0, 0.0], \"rest_col2\": [0.0, 0.0, 1.0]\n}];\n";
         MetascriptDocument docSbM(testArena); MetascriptValue valSbM(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(sbManualScript, testArena, docSbM, valSbM));
+        ASSERT_TRUE(ParseAssetValueFromScript(sbManualScript, docSbM, valSbM));
         const auto sbMRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, valSbM);
         ASSERT_TRUE(sbMRes.has_value());
         EXPECT_EQ(sbMRes.value().component.collisionLayer, Name("layer_sb"));
@@ -389,7 +388,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView clothScript =
             "soft_body_component asset;\nasset.damping = 0.12;\nasset.lift_coeff = 0.45;\nasset.cloth_grid = {\n  \"rows\": 3, \"cols\": 3, \"spacing\": 0.5,\n  \"origin\": [0.0, 2.0, 0.0], \"fixed_particles\": [0, 2]\n};\n";
         MetascriptDocument docCloth(testArena); MetascriptValue valCloth(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(clothScript, testArena, docCloth, valCloth));
+        ASSERT_TRUE(ParseAssetValueFromScript(clothScript, docCloth, valCloth));
         const auto clothRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, valCloth);
         ASSERT_TRUE(clothRes.has_value());
         in SoftBody clothSb = clothRes.value().component.softBody;
@@ -404,7 +403,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView tetraScript =
             "soft_body_component asset;\nasset.damping = 0.08;\nasset.tetrahedral_box = { \"center\": [0.0, 1.0, 0.0], \"half_extents\": [0.5, 0.5, 0.5], \"fixed_particles\": [0] };\n";
         MetascriptDocument docTetra(testArena); MetascriptValue valTetra(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(tetraScript, testArena, docTetra, valTetra));
+        ASSERT_TRUE(ParseAssetValueFromScript(tetraScript, docTetra, valTetra));
         const auto tetraRes = ParseSoftBodyComponentCookMetadata(vPath, metaFile, valTetra);
         ASSERT_TRUE(tetraRes.has_value());
         in SoftBody tetraSb = tetraRes.value().component.softBody;
@@ -415,12 +414,12 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
 
         const StringView badCombo1 = "soft_body_component asset; asset.particles = [{ \"position\": [0.0, 0.0, 0.0] }]; asset.cloth_grid = { \"rows\": 2, \"cols\": 2 };";
         MetascriptDocument docBc1(testArena); MetascriptValue valBc1(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(badCombo1, testArena, docBc1, valBc1));
+        ASSERT_TRUE(ParseAssetValueFromScript(badCombo1, docBc1, valBc1));
         EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, valBc1).has_value());
 
         const StringView badCombo2 = "soft_body_component asset; asset.cloth_grid = { \"rows\": 2, \"cols\": 2 }; asset.tetrahedral_box = { \"half_extents\": [0.5, 0.5, 0.5] };";
         MetascriptDocument docBc2(testArena); MetascriptValue valBc2(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(badCombo2, testArena, docBc2, valBc2));
+        ASSERT_TRUE(ParseAssetValueFromScript(badCombo2, docBc2, valBc2));
         EXPECT_FALSE(ParseSoftBodyComponentCookMetadata(vPath, metaFile, valBc2).has_value());
     }
 
@@ -428,7 +427,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView col4B =
             "collider_component asset;\nasset.shape_type = \"hull\";\nasset.is_box = 0;\nasset.sync_csg_cuts = 1;\nasset.use_mesh_component_fallback = 1;\nasset.extra_shapes = [{ \"shape_type\": \"mesh\", \"is_box\": 0, \"sync_csg_cuts\": 1, \"use_mesh_component_fallback\": 1 }];\n";
         MetascriptDocument docCol4B(testArena); MetascriptValue valCol4B(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(col4B, testArena, docCol4B, valCol4B));
+        ASSERT_TRUE(ParseAssetValueFromScript(col4B, docCol4B, valCol4B));
         const auto resCol4B = ParseColliderComponentCookMetadata(vPath, metaFile, valCol4B);
         ASSERT_TRUE(resCol4B.has_value());
         EXPECT_TRUE(resCol4B.value().component.primaryShape.syncCsgCuts);
@@ -440,7 +439,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView cfg4B =
             "physics_world_config_component asset;\nasset.publish_events_to_message_bus = 1;\nasset.publish_continuous_events_to_message_bus = 1;\n";
         MetascriptDocument docCfg4B(testArena); MetascriptValue valCfg4B(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(cfg4B, testArena, docCfg4B, valCfg4B));
+        ASSERT_TRUE(ParseAssetValueFromScript(cfg4B, docCfg4B, valCfg4B));
         const auto resCfg4B = ParsePhysicsWorldConfigComponentCookMetadata(vPath, metaFile, valCfg4B);
         ASSERT_TRUE(resCfg4B.has_value());
         EXPECT_TRUE(resCfg4B.value().component.publishEventsToMessageBus);
@@ -449,7 +448,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView veh4B =
             "vehicle_component asset;\nasset.skeleton_entity = \"veh_skel\";\nasset.wheel_joint_indices = [2, 3];\nasset.write_back_to_skeleton = 1;\n";
         MetascriptDocument docVeh4B(testArena); MetascriptValue valVeh4B(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(veh4B, testArena, docVeh4B, valVeh4B));
+        ASSERT_TRUE(ParseAssetValueFromScript(veh4B, docVeh4B, valVeh4B));
         const auto resVeh4B = ParseVehicleComponentCookMetadata(vPath, metaFile, valVeh4B);
         ASSERT_TRUE(resVeh4B.has_value());
         EXPECT_EQ(resVeh4B.value().component.skeletonEntityName, Name("veh_skel"));
@@ -461,7 +460,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView rag4B =
             "ragdoll_component asset;\nasset.skeleton_entity = \"rag_skel\";\nasset.bone_joint_indices = [0, 2];\nasset.drive_from_skeleton = 1;\nasset.write_back_to_skeleton = 1;\nasset.auto_generate_from_skeleton = 1;\n";
         MetascriptDocument docRag4B(testArena); MetascriptValue valRag4B(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(rag4B, testArena, docRag4B, valRag4B));
+        ASSERT_TRUE(ParseAssetValueFromScript(rag4B, docRag4B, valRag4B));
         const auto resRag4B = ParseRagdollComponentCookMetadata(vPath, metaFile, valRag4B);
         ASSERT_TRUE(resRag4B.has_value());
         EXPECT_EQ(resRag4B.value().component.skeletonEntityName, Name("rag_skel"));
@@ -474,7 +473,7 @@ void VerifyPhysicsCook_SubsystemDiagnosticsNewFieldsAndGenerators(){
         const StringView art4B =
             "articulation_component asset;\nasset.link_entity_names = [\"link_0\", \"link_1\"];\nasset.skeleton_entity = \"art_skel\";\nasset.link_joint_indices = [1, 4];\nasset.write_back_to_skeleton = 1;\nasset.write_back_link_transforms = 0;\n";
         MetascriptDocument docArt4B(testArena); MetascriptValue valArt4B(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript(art4B, testArena, docArt4B, valArt4B));
+        ASSERT_TRUE(ParseAssetValueFromScript(art4B, docArt4B, valArt4B));
         const auto resArt4B = ParseArticulationComponentCookMetadata(vPath, metaFile, valArt4B);
         ASSERT_TRUE(resArt4B.has_value());
         ASSERT_EQ(resArt4B.value().component.linkEntityNames.size(), cast<usize>(2u));
@@ -545,7 +544,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
     {
         const Path hullNwbPath = tempRoot / "hull_nwb.nwb";
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript("convex_hull asset; asset.source_mesh = \"cube.nwb\";", testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript("convex_hull asset; asset.source_mesh = \"cube.nwb\";", doc, val));
         const auto entryRes = ParseConvexHullCookMetadata(Name("tests/physics/hull_nwb"), hullNwbPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildConvexHullAsset(entryRes.value());
@@ -556,7 +555,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
     {
         const Path hullObjPath = tempRoot / "hull_obj.nwb";
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript("convex_hull asset; asset.source_mesh = \"lshape.obj\";", testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript("convex_hull asset; asset.source_mesh = \"lshape.obj\";", doc, val));
         const auto entryRes = ParseConvexHullCookMetadata(Name("tests/physics/hull_obj"), hullObjPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildConvexHullAsset(entryRes.value());
@@ -566,7 +565,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
     {
         const Path meshObjPath = tempRoot / "mesh_obj.nwb";
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript("collision_mesh asset; asset.source_mesh = \"lshape.obj\";", testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript("collision_mesh asset; asset.source_mesh = \"lshape.obj\";", doc, val));
         const auto entryRes = ParseCollisionMeshCookMetadata(Name("tests/physics/mesh_obj"), meshObjPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildCollisionMeshAsset(entryRes.value());
@@ -577,7 +576,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
     {
         const Path meshGlbPath = tempRoot / "mesh_glb.nwb";
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
-        ASSERT_TRUE(ParseAssetValueFromScript("collision_mesh asset; asset.source_mesh = \"tri.glb\";", testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript("collision_mesh asset; asset.source_mesh = \"tri.glb\";", doc, val));
         const auto entryRes = ParseCollisionMeshCookMetadata(Name("tests/physics/mesh_glb"), meshGlbPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildCollisionMeshAsset(entryRes.value());
@@ -590,7 +589,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
         const StringView compScript =
             "compound_hull asset;\nasset.source_mesh = \"lshape.obj\";\nasset.vhacd_max_hulls = 4;\nasset.vhacd_concavity_threshold = 0.01;\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(compScript, testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript(compScript, doc, val));
         const auto entryRes = ParseCompoundHullCookMetadata(Name("tests/physics/lshape_compound"), compPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildCompoundHullAsset(entryRes.value());
@@ -608,7 +607,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
         const StringView hfRawScript =
             "heightfield asset;\nasset.source_heightmap = \"grid.r16\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 16;\nasset.height_min = 0.0;\nasset.height_max = 10.0;\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(hfRawScript, testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRawScript, doc, val));
         const auto entryRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw"), hfRawPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildHeightfieldAsset(entryRes.value());
@@ -626,7 +625,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
         const StringView hfRaw8Script =
             "heightfield asset;\nasset.source_heightmap = \"grid_u8.raw\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 8;\nasset.height_min = -4.0;\nasset.height_max = 6.0;\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw8Script, testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw8Script, doc, val));
         const auto entryRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw8"), hfRaw8Path, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildHeightfieldAsset(entryRes.value());
@@ -641,7 +640,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument docLe(testArena); MetascriptValue valLe(testArena);
         const StringView hfRaw32LeScript =
             "heightfield asset;\nasset.source_heightmap = \"grid_u32_le.raw\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 32;\nasset.raw_float = 0;\nasset.raw_big_endian = 0;\nasset.height_min = 0.0;\nasset.height_max = 15.0;\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw32LeScript, testArena, docLe, valLe));
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw32LeScript, docLe, valLe));
         const auto entryLeRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw32_le"), hfRaw32LePath, valLe);
         ASSERT_TRUE(entryLeRes.has_value());
         const auto builtLe = BuildHeightfieldAsset(entryLeRes.value());
@@ -653,7 +652,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument docBe(testArena); MetascriptValue valBe(testArena);
         const StringView hfRaw32BeScript =
             "heightfield asset;\nasset.source_heightmap = \"grid_u32_be.r32\";\nasset.cols = 4;\nasset.rows = 4;\nasset.raw_bits = 32;\nasset.raw_float = 0;\nasset.raw_big_endian = 1;\nasset.height_min = 0.0;\nasset.height_max = 15.0;\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw32BeScript, testArena, docBe, valBe));
+        ASSERT_TRUE(ParseAssetValueFromScript(hfRaw32BeScript, docBe, valBe));
         const auto entryBeRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_raw32_be"), hfRaw32BePath, valBe);
         ASSERT_TRUE(entryBeRes.has_value());
         const auto builtBe = BuildHeightfieldAsset(entryBeRes.value());
@@ -667,7 +666,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument doc(testArena); MetascriptValue val(testArena);
         const StringView hfPngScript =
             "heightfield asset;\nasset.source_heightmap = \"grid16.png\";\nasset.hole_mask_image = \"holes16.png\";\nasset.hole_mask_threshold = 0.5;\nasset.flip_diagonal = 1;\nasset.height_min = -2.0;\nasset.height_max = 8.0;\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(hfPngScript, testArena, doc, val));
+        ASSERT_TRUE(ParseAssetValueFromScript(hfPngScript, doc, val));
         const auto entryRes = ParseHeightfieldCookMetadata(Name("tests/physics/hf_png"), hfPngPath, val);
         ASSERT_TRUE(entryRes.has_value());
         const auto built = BuildHeightfieldAsset(entryRes.value());
@@ -687,7 +686,7 @@ void VerifyPhysicsCook_OfflineMeshCompoundHullAndHeightmapSources(){
         MetascriptDocument depDoc(testArena); MetascriptValue depVal(testArena);
         const StringView depScript =
             "collider_component asset;\nasset.compound_hull_asset = \"project/physics/lshape_compound\";\nasset.extra_shapes = [{ \"compound_hull_asset\": \"project/physics/extra_compound\" }];\n";
-        ASSERT_TRUE(ParseAssetValueFromScript(depScript, testArena, depDoc, depVal));
+        ASSERT_TRUE(ParseAssetValueFromScript(depScript, depDoc, depVal));
         const auto depRes = ParseColliderDepEntry(Name("tests/physics/col_dep"), tempRoot / "col_dep.nwb", depVal);
         ASSERT_TRUE(depRes.has_value());
         EXPECT_EQ(depRes.value().compoundHullAsset.name(), Name("project/physics/lshape_compound"));

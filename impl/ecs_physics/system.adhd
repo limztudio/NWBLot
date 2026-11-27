@@ -23,39 +23,19 @@ type EcsFluidSplashCallback = Func<64u, void(in EcsFluidSplashEvent)>;
 type EcsFractureEventCallback = Func<64u, void(in EcsFractureEvent)>;
 
 
-Transform3D InterpolatePhysicsTransform(in Transform3D prevXf, in Transform3D currXf, in f32 alpha){
-    const f32 clampedAlpha = Clamp(alpha, 0.0f, 1.0f);
-    if(clampedAlpha >= 1.0f - 1.0e-6f)
-        return currXf;
-    VectorSingle q0 = SafeNormalizeQuat(VectorSingle(prevXf.rotation));
-    VectorSingle q1 = SafeNormalizeQuat(VectorSingle(currXf.rotation));
-    if(Vector4Dot(q0, q1).x < 0.0f)
-        q1 = -q1;
-    const VectorSingle tVec(clampedAlpha);
-    const VectorSingle pos = Lerp(VectorSingle(prevXf.position), VectorSingle(currXf.position), tVec);
-    const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
-    return Transform3D(pos, rot);
+void AppendEventSpan<T>(in Span<T> src, mut Vector<T> dst){
+    if(src.empty())
+        return;
+    dst.reserve(dst.size() + src.size());
+    for(usize i = 0u; i < src.size(); ++i)
+        dst.push_back(src[i]);
 }
 
-
-void SiftDownEntityIds(mut Vector<EntityID> items, in usize start, in usize count){
-    usize root = start;
-    while(root * 2u + 1u < count){
-        const usize left = root * 2u + 1u;
-        usize swapIdx = root;
-        if(items[swapIdx].id < items[left].id)
-            swapIdx = left;
-        const usize right = left + 1u;
-        if(right < count && items[swapIdx].id < items[right].id)
-            swapIdx = right;
-        if(swapIdx == root)
-            return;
-        const EntityID tmp = items[root];
-        items[root] = items[swapIdx];
-        items[swapIdx] = tmp;
-        root = swapIdx;
-    }
+void PublishEventSpan<T>(in Vector<T> src, mut World world){
+    for(usize i = 0u; i < src.size(); ++i)
+        world.postMessage(src[i]);
 }
+
 
 void CollectSortedEntities<T>(mut World world, mut Vector<EntityID> outEntities){
     outEntities.clear();
@@ -63,17 +43,9 @@ void CollectSortedEntities<T>(mut World world, mut Vector<EntityID> outEntities)
     outEntities.reserve(view.candidateCount());
     for(in auto row : view)
         outEntities.push_back(Get<0>(row));
-    const usize n = outEntities.size();
-    if(n <= 1u)
-        return;
-    for(usize k = n / 2u; k > 0u; --k)
-        SiftDownEntityIds(outEntities, k - 1u, n);
-    for(usize endIdx = n - 1u; endIdx > 0u; --endIdx){
-        const EntityID top = outEntities[0u];
-        outEntities[0u] = outEntities[endIdx];
-        outEntities[endIdx] = top;
-        SiftDownEntityIds(outEntities, 0u, endIdx);
-    }
+    SortSequence<EntityID>(outEntities, lambda[](in EntityID lhs, in EntityID rhs) -> b8{
+        return lhs.id < rhs.id;
+    });
 }
 
 [system("physics")]
@@ -135,10 +107,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     private Vector<EcsBodyWakeEvent> m_ecsBodyWakeEvents;
     private Vector<EcsJointBreakEvent> m_ecsJointBreakEvents;
     private Vector<GpuPhysicsEvent> m_gpuResidentEventsScratch;
-    private HashMap<u64, u64> m_prevGpuResidentContactPairs;
-    private HashMap<u64, u64> m_currGpuResidentContactPairs;
-    private HashMap<u64, u64> m_prevGpuResidentSensorPairs;
-    private HashMap<u64, u64> m_currGpuResidentSensorPairs;
+    private HashSet<u64> m_prevGpuResidentContactPairs;
+    private HashSet<u64> m_currGpuResidentContactPairs;
+    private HashSet<u64> m_prevGpuResidentSensorPairs;
+    private HashSet<u64> m_currGpuResidentSensorPairs;
     private Vector<u32> m_pendingCpuWakeBodiesScratch;
     private f32 m_accumulator = 0.0f;
     private f32 m_interpolationAlpha = 1.0f;
@@ -258,75 +230,16 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
     }
 
     private void appendLastStepEvents(){
-        const Span<BodyMoveEvent> moves = this.m_physicsWorld.bodyMoveEvents();
-        if(!moves.empty()){
-            this.m_frameBodyMoveEvents.reserve(this.m_frameBodyMoveEvents.size() + moves.size());
-            for(usize i = 0u; i < moves.size(); ++i)
-                this.m_frameBodyMoveEvents.push_back(moves[i]);
-        }
-
-        const Span<ContactBeginTouchEvent> cBegins = this.m_physicsWorld.contactBeginEvents();
-        if(!cBegins.empty()){
-            this.m_frameContactBeginEvents.reserve(this.m_frameContactBeginEvents.size() + cBegins.size());
-            for(usize i = 0u; i < cBegins.size(); ++i)
-                this.m_frameContactBeginEvents.push_back(cBegins[i]);
-        }
-
-        const Span<ContactEndTouchEvent> cEnds = this.m_physicsWorld.contactEndEvents();
-        if(!cEnds.empty()){
-            this.m_frameContactEndEvents.reserve(this.m_frameContactEndEvents.size() + cEnds.size());
-            for(usize i = 0u; i < cEnds.size(); ++i)
-                this.m_frameContactEndEvents.push_back(cEnds[i]);
-        }
-
-        const Span<ContactPersistEvent> cPersists = this.m_physicsWorld.contactPersistEvents();
-        if(!cPersists.empty()){
-            this.m_frameContactPersistEvents.reserve(this.m_frameContactPersistEvents.size() + cPersists.size());
-            for(usize i = 0u; i < cPersists.size(); ++i)
-                this.m_frameContactPersistEvents.push_back(cPersists[i]);
-        }
-
-        const Span<ContactHitEvent> cHits = this.m_physicsWorld.contactHitEvents();
-        if(!cHits.empty()){
-            this.m_frameContactHitEvents.reserve(this.m_frameContactHitEvents.size() + cHits.size());
-            for(usize i = 0u; i < cHits.size(); ++i)
-                this.m_frameContactHitEvents.push_back(cHits[i]);
-        }
-
-        const Span<SensorBeginTouchEvent> sBegins = this.m_physicsWorld.sensorBeginEvents();
-        if(!sBegins.empty()){
-            this.m_frameSensorBeginEvents.reserve(this.m_frameSensorBeginEvents.size() + sBegins.size());
-            for(usize i = 0u; i < sBegins.size(); ++i)
-                this.m_frameSensorBeginEvents.push_back(sBegins[i]);
-        }
-
-        const Span<SensorEndTouchEvent> sEnds = this.m_physicsWorld.sensorEndEvents();
-        if(!sEnds.empty()){
-            this.m_frameSensorEndEvents.reserve(this.m_frameSensorEndEvents.size() + sEnds.size());
-            for(usize i = 0u; i < sEnds.size(); ++i)
-                this.m_frameSensorEndEvents.push_back(sEnds[i]);
-        }
-
-        const Span<SensorStayEvent> sStays = this.m_physicsWorld.sensorStayEvents();
-        if(!sStays.empty()){
-            this.m_frameSensorStayEvents.reserve(this.m_frameSensorStayEvents.size() + sStays.size());
-            for(usize i = 0u; i < sStays.size(); ++i)
-                this.m_frameSensorStayEvents.push_back(sStays[i]);
-        }
-
-        const Span<BodyWakeEvent> bWakes = this.m_physicsWorld.bodyWakeEvents();
-        if(!bWakes.empty()){
-            this.m_frameBodyWakeEvents.reserve(this.m_frameBodyWakeEvents.size() + bWakes.size());
-            for(usize i = 0u; i < bWakes.size(); ++i)
-                this.m_frameBodyWakeEvents.push_back(bWakes[i]);
-        }
-
-        const Span<JointBreakEvent> jBreaks = this.m_physicsWorld.jointBreakEvents();
-        if(!jBreaks.empty()){
-            this.m_frameJointBreakEvents.reserve(this.m_frameJointBreakEvents.size() + jBreaks.size());
-            for(usize i = 0u; i < jBreaks.size(); ++i)
-                this.m_frameJointBreakEvents.push_back(jBreaks[i]);
-        }
+        AppendEventSpan(this.m_physicsWorld.bodyMoveEvents(), this.m_frameBodyMoveEvents);
+        AppendEventSpan(this.m_physicsWorld.contactBeginEvents(), this.m_frameContactBeginEvents);
+        AppendEventSpan(this.m_physicsWorld.contactEndEvents(), this.m_frameContactEndEvents);
+        AppendEventSpan(this.m_physicsWorld.contactPersistEvents(), this.m_frameContactPersistEvents);
+        AppendEventSpan(this.m_physicsWorld.contactHitEvents(), this.m_frameContactHitEvents);
+        AppendEventSpan(this.m_physicsWorld.sensorBeginEvents(), this.m_frameSensorBeginEvents);
+        AppendEventSpan(this.m_physicsWorld.sensorEndEvents(), this.m_frameSensorEndEvents);
+        AppendEventSpan(this.m_physicsWorld.sensorStayEvents(), this.m_frameSensorStayEvents);
+        AppendEventSpan(this.m_physicsWorld.bodyWakeEvents(), this.m_frameBodyWakeEvents);
+        AppendEventSpan(this.m_physicsWorld.jointBreakEvents(), this.m_frameJointBreakEvents);
     }
 
     private EntityID resolveEcsEventBodyEntity(in BodyId bodyId, in b8 topoTrusted)const{
@@ -500,47 +413,27 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         if(!this.publishEventsToMessageBus())
             return;
         this.ensureEcsFrameEventsPopulated();
-        for(usize i = 0u; i < this.m_ecsContactBeginEvents.size(); ++i)
-            world.postMessage(this.m_ecsContactBeginEvents[i]);
-        for(usize i = 0u; i < this.m_ecsContactEndEvents.size(); ++i)
-            world.postMessage(this.m_ecsContactEndEvents[i]);
-        for(usize i = 0u; i < this.m_ecsContactHitEvents.size(); ++i)
-            world.postMessage(this.m_ecsContactHitEvents[i]);
-        for(usize i = 0u; i < this.m_ecsSensorBeginEvents.size(); ++i)
-            world.postMessage(this.m_ecsSensorBeginEvents[i]);
-        for(usize i = 0u; i < this.m_ecsSensorEndEvents.size(); ++i)
-            world.postMessage(this.m_ecsSensorEndEvents[i]);
-        for(usize i = 0u; i < this.m_ecsBodyWakeEvents.size(); ++i)
-            world.postMessage(this.m_ecsBodyWakeEvents[i]);
-        for(usize i = 0u; i < this.m_ecsJointBreakEvents.size(); ++i)
-            world.postMessage(this.m_ecsJointBreakEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameCharacterGroundEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameCharacterGroundEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameVehicleStateEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameVehicleStateEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameSoftBodyTearEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameSoftBodyTearEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameFluidVolumeEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameFluidVolumeEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameCharacterEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameCharacterEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameVehicleTelemetryEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameVehicleTelemetryEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameFluidSplashEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameFluidSplashEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameSoftBodyConstraintTearEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameSoftBodyConstraintTearEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameSoftBodyImpactEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameSoftBodyImpactEvents[i]);
-        for(usize i = 0u; i < this.m_syncScratch.frameFractureEvents.size(); ++i)
-            world.postMessage(this.m_syncScratch.frameFractureEvents[i]);
+        PublishEventSpan(this.m_ecsContactBeginEvents, world);
+        PublishEventSpan(this.m_ecsContactEndEvents, world);
+        PublishEventSpan(this.m_ecsContactHitEvents, world);
+        PublishEventSpan(this.m_ecsSensorBeginEvents, world);
+        PublishEventSpan(this.m_ecsSensorEndEvents, world);
+        PublishEventSpan(this.m_ecsBodyWakeEvents, world);
+        PublishEventSpan(this.m_ecsJointBreakEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameCharacterGroundEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameVehicleStateEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameSoftBodyTearEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameFluidVolumeEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameCharacterEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameVehicleTelemetryEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameFluidSplashEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameSoftBodyConstraintTearEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameSoftBodyImpactEvents, world);
+        PublishEventSpan(this.m_syncScratch.frameFractureEvents, world);
         if(this.publishContinuousEventsToMessageBus()){
-            for(usize i = 0u; i < this.m_ecsBodyMoveEvents.size(); ++i)
-                world.postMessage(this.m_ecsBodyMoveEvents[i]);
-            for(usize i = 0u; i < this.m_ecsContactPersistEvents.size(); ++i)
-                world.postMessage(this.m_ecsContactPersistEvents[i]);
-            for(usize i = 0u; i < this.m_ecsSensorStayEvents.size(); ++i)
-                world.postMessage(this.m_ecsSensorStayEvents[i]);
+            PublishEventSpan(this.m_ecsBodyMoveEvents, world);
+            PublishEventSpan(this.m_ecsContactPersistEvents, world);
+            PublishEventSpan(this.m_ecsSensorStayEvents, world);
         }
     }
 
@@ -938,15 +831,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         if(bodyId.index < cast<u32>(this.m_bodyTransformSnapshots.size()) && bodyId.index < cast<u32>(this.m_bodyTransformSnapshotMeta.size())){
             if(EcsSnapshotMetaMatches(this.m_bodyTransformSnapshotMeta[bodyId.index], bodyId.generation)){
                 in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyId.index];
-                const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
-                VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
-                VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
-                if(Vector4Dot(q0, q1).x < 0.0f)
-                    q1 = -q1;
-                const VectorSingle tVec(alpha);
-                const VectorSingle pos = Lerp(VectorSingle(snap.prevTransform.position), VectorSingle(snap.currTransform.position), tVec);
-                const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
-                return Transform3D(pos, rot);
+                return InterpolatePhysicsTransform(snap.prevTransform, snap.currTransform, this.m_interpolationAlpha);
             }
         }
         return this.m_physicsWorld.tryGetBodyTransform(bodyId);
@@ -971,15 +856,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             && EcsSnapshotMetaMatches(this.m_bodyTransformSnapshotMeta[bodyIdx], bodyGen)
         ){
             in EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[bodyIdx];
-            const f32 alpha = Clamp(this.m_interpolationAlpha, 0.0f, 1.0f);
-            VectorSingle q0 = SafeNormalizeQuat(VectorSingle(snap.prevTransform.rotation));
-            VectorSingle q1 = SafeNormalizeQuat(VectorSingle(snap.currTransform.rotation));
-            if(Vector4Dot(q0, q1).x < 0.0f)
-                q1 = -q1;
-            const VectorSingle tVec(alpha);
-            const VectorSingle pos = Lerp(VectorSingle(snap.prevTransform.position), VectorSingle(snap.currTransform.position), tVec);
-            const VectorSingle rot = SafeNormalizeQuat(Lerp(q0, q1, tVec));
-            return Transform3D(pos, rot);
+            return InterpolatePhysicsTransform(snap.prevTransform, snap.currTransform, this.m_interpolationAlpha);
         }
         return physicsXf;
     }
@@ -2745,6 +2622,9 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_syncScratch.staticBodyPoseCache.clear();
         this.m_syncScratch.colliderScaleCache.clear();
         this.m_syncScratch.syncedParentNames.clear();
+        this.m_syncScratch.subsystemBoundTargetNameCache.clear();
+        this.m_syncScratch.subsystemSkeletonTargetNameCache.clear();
+        this.m_syncScratch.softBodyAttachmentNameCache.clear();
         this.m_syncScratch.pendingWriteBackBodyIndices.clear();
         this.m_syncScratch.prevAwakeWriteBackBodyIndices.clear();
         this.m_syncScratch.nextAwakeWriteBackBodyIndices.clear();
@@ -2881,52 +2761,16 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_lastStepTopologyVersion = 0u;
     }
 
-    private void collectEcsExportBindings(){
+    public b8 exportRenderTransforms(mut Vector<GpuPhysicsRenderTransformOut> outTransforms){
         const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
         if(hasAnyPhysicsParents)
             this.m_syncScratch.writeBackPoseCache.clear();
         const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
-        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_bodyIndexToEntity, hasAnyPhysicsParents, bodyHandlesTrusted, this.m_syncScratch.writeBackPoseCache, this.m_physicsWorld, this.m_exportBindingsScratch);
-    }
-
-    public b8 exportRenderTransforms(mut Vector<GpuPhysicsRenderTransformOut> outTransforms){
-        this.collectEcsExportBindings();
+        CollectEcsGpuRenderTransformBindings(this.m_world, this.m_entityRecords, this.m_bodyIndexToEntity, hasAnyPhysicsParents, bodyHandlesTrusted, this.m_syncScratch.writeBackPoseCache, this.m_physicsWorld, this.m_gpuDispatcher, this.m_exportBindingsScratch);
         return this.m_gpuDispatcher.exportRenderTransforms(
             this.m_physicsWorld,
             Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
             outTransforms
-        );
-    }
-
-    public b8 exportRenderTransformsToBuffer(
-        mut BufferHandle targetBuffer,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4
-    ){
-        this.collectEcsExportBindings();
-        return this.m_gpuDispatcher.exportRenderTransformsToBuffer(
-            this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
-            targetBuffer,
-            targetUavSlot,
-            instanceStrideFloat4
-        );
-    }
-
-    public b8 exportRenderTransformsToBufferAsync(
-        mut BufferHandle targetBuffer,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4,
-        mut QueueSubmissionToken outToken
-    ){
-        this.collectEcsExportBindings();
-        return this.m_gpuDispatcher.exportRenderTransformsToBufferAsync(
-            this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
-            targetBuffer,
-            targetUavSlot,
-            instanceStrideFloat4,
-            outToken
         );
     }
 
@@ -2987,59 +2831,6 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
 
     public u64 instanceTransformPatchMembershipSignature()const override{
         return this.m_activeInstanceTransformPatchMembershipSig;
-    }
-
-    public Expected<GpuTaskId> declareInstanceTransformPatch(
-        in GpuTaskGraphInstanceTransformPatchRequest request,
-        in Span<u32> instanceEntityIds,
-        mut GpuTaskGraph graph
-    )override{
-        if(!this.m_hasActiveInstanceTransformPatches)
-            return Expected<GpuTaskId>(request.dependency);
-
-        u32 exportMode = s_GpuExportModePatchInstanceBuffer;
-        if(request.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld)
-            exportMode = s_GpuExportModePatchAffine3x4ObjToWorld;
-        else if(request.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject)
-            exportMode = s_GpuExportModePatchAffine3x4WorldToObj;
-        else if(request.layout != GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs)
-            return MakeUnexpected(Failure());
-
-        const b8 hasAnyPhysicsParents = RefreshPhysicsHierarchyCache(this.m_world, this.m_syncScratch);
-        const b8 bodyHandlesTrusted = this.m_syncScratch.hasSyncedTopologyVersion && (this.m_physicsWorld.m_topologyVersion == this.m_syncScratch.lastSyncedTopologyVersion);
-        CollectEcsPassGpuRenderTransformBindings(
-            instanceEntityIds,
-            this.m_entityRecords,
-            this.m_bodyIndexToEntity,
-            hasAnyPhysicsParents,
-            bodyHandlesTrusted,
-            this.m_physicsWorld,
-            this.m_gpuDispatcher,
-            this.m_world,
-            this.m_syncScratch.writeBackPoseCache,
-            this.m_exportBindingsScratch
-        );
-        if(this.m_exportBindingsScratch.empty())
-            return Expected<GpuTaskId>(request.dependency);
-
-        GpuTaskId outTaskId;
-        if(!this.m_gpuDispatcher.declareExportRenderTransformsTask(
-            graph,
-            this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
-            request.instanceBufferResource,
-            request.instanceBufferUavSlot,
-            request.instanceStrideFloat4,
-            exportMode,
-            request.baseFloat4Offset,
-            request.passIdentityPrefix,
-            request.mergeWithPrevious,
-            request.allowMergeAcrossConsumerFrontier,
-            request.dependency,
-            outTaskId
-        ))
-            return MakeUnexpected(Failure());
-        return Expected<GpuTaskId>(outTaskId);
     }
 
     public Expected<GpuTaskId> declareBatchInstanceTransformPatches(
@@ -3152,38 +2943,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         return Expected<GpuTaskId>(outTaskId);
     }
 
-    public b8 declareExportRenderTransformsTask(
-        mut GpuTaskGraph graph,
-        in GpuGraphResourceId targetResource,
-        in u32 targetUavSlot,
-        in u32 instanceStrideFloat4,
-        in u32 exportMode,
-        in u32 baseFloat4Offset,
-        in Name passIdentityPrefix,
-        in b8 mergeWithPrevious,
-        in b8 allowMergeAcrossConsumerFrontier,
-        in GpuTaskId dependency,
-        mut GpuTaskId outTaskId
-    ){
-        this.collectEcsExportBindings();
-        return this.m_gpuDispatcher.declareExportRenderTransformsTask(
-            graph,
-            this.m_physicsWorld,
-            Span<GpuPhysicsRenderTransformBinding>(this.m_exportBindingsScratch.data(), this.m_exportBindingsScratch.size()),
-            targetResource,
-            targetUavSlot,
-            instanceStrideFloat4,
-            exportMode,
-            baseFloat4Offset,
-            passIdentityPrefix,
-            mergeWithPrevious,
-            allowMergeAcrossConsumerFrontier,
-            dependency,
-            outTaskId
-        );
-    }
-
-    private void processGpuResidentStepEvents(mut World world){
+    private void processGpuResidentStepEvents(){
         this.m_physicsWorld.m_inStep = true;
         this.m_physicsWorld.m_bodyMoveEvents.clear();
         this.m_physicsWorld.m_contactBeginEvents.clear();
@@ -3216,8 +2976,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                     hiS = sA;
                 }
                 const u64 pairKey = (cast<u64>(loS) << 32u) | cast<u64>(hiS);
-                const u64 bodiesVal = (cast<u64>(ev.bodyIds.x) << 32u) | cast<u64>(ev.bodyIds.y);
-                this.m_currGpuResidentContactPairs.insert_or_assign(pairKey, bodiesVal);
+                this.m_currGpuResidentContactPairs.emplace(pairKey);
             }
             else if(evType == s_GpuEventSensorOverlap){
                 const u32 sA = ev.header.y;
@@ -3235,8 +2994,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                     visitorId = sA;
                 }
                 const u64 pairKey = (cast<u64>(sensorId) << 32u) | cast<u64>(visitorId);
-                const u64 bodiesVal = (cast<u64>(ev.bodyIds.x) << 32u) | cast<u64>(ev.bodyIds.y);
-                this.m_currGpuResidentSensorPairs.insert_or_assign(pairKey, bodiesVal);
+                this.m_currGpuResidentSensorPairs.emplace(pairKey);
             }
             else if(evType == s_GpuEventContactHit){
                 ContactHitEvent hitEv;
@@ -3309,8 +3067,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             }
         }
 
-        for(in auto kv : this.m_currGpuResidentContactPairs){
-            const u64 k = kv.first;
+        for(in u64 k : this.m_currGpuResidentContactPairs){
             const u32 loS = cast<u32>((k >> 32u) & 0xffffffffu);
             const u32 hiS = cast<u32>(k & 0xffffffffu);
             if(this.m_prevGpuResidentContactPairs.find(k) == this.m_prevGpuResidentContactPairs.end()){
@@ -3326,8 +3083,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 this.m_physicsWorld.m_contactPersistEvents.push_back(ev);
             }
         }
-        for(in auto kv : this.m_prevGpuResidentContactPairs){
-            const u64 k = kv.first;
+        for(in u64 k : this.m_prevGpuResidentContactPairs){
             if(this.m_currGpuResidentContactPairs.find(k) == this.m_currGpuResidentContactPairs.end()){
                 const u32 loS = cast<u32>((k >> 32u) & 0xffffffffu);
                 const u32 hiS = cast<u32>(k & 0xffffffffu);
@@ -3339,8 +3095,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         }
         this.m_prevGpuResidentContactPairs.swap(this.m_currGpuResidentContactPairs);
 
-        for(in auto kv : this.m_currGpuResidentSensorPairs){
-            const u64 k = kv.first;
+        for(in u64 k : this.m_currGpuResidentSensorPairs){
             const u32 sId = cast<u32>((k >> 32u) & 0xffffffffu);
             const u32 vId = cast<u32>(k & 0xffffffffu);
             if(this.m_prevGpuResidentSensorPairs.find(k) == this.m_prevGpuResidentSensorPairs.end()){
@@ -3356,8 +3111,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 this.m_physicsWorld.m_sensorStayEvents.push_back(ev);
             }
         }
-        for(in auto kv : this.m_prevGpuResidentSensorPairs){
-            const u64 k = kv.first;
+        for(in u64 k : this.m_prevGpuResidentSensorPairs){
             if(this.m_currGpuResidentSensorPairs.find(k) == this.m_currGpuResidentSensorPairs.end()){
                 const u32 sId = cast<u32>((k >> 32u) & 0xffffffffu);
                 const u32 vId = cast<u32>(k & 0xffffffffu);
@@ -3686,7 +3440,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 usedGpuResidentNoReadback = true;
                 this.m_gpuDispatcher.stepGpuBulletToiResident(this.m_physicsWorld, fixedDt);
                 if(this.m_gpuDispatcher.readbackGpuResidentEvents(this.m_physicsWorld, this.m_gpuResidentEventsScratch))
-                    this.processGpuResidentStepEvents(world);
+                    this.processGpuResidentStepEvents();
             }
             else{
                 usedGpuResidentNoReadback = false;

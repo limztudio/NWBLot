@@ -2752,11 +2752,11 @@ b8 ValidateRestoredPhysicsWorld(in PhysicsWorld tmp){
         in ScaledShape sc = tmp.m_scaledShapes[si];
         if(
             sc.childType == ShapeType::Scaled
-            || !IsFiniteVec3(VectorSingle(sc.scale))
+            || !IsFinite(VectorSingle(sc.scale).xyz)
             || sc.scale.x <= 0.0f
             || sc.scale.y <= 0.0f
             || sc.scale.z <= 0.0f
-            || !IsFiniteVec3(VectorSingle(sc.invScale))
+            || !IsFinite(VectorSingle(sc.invScale).xyz)
         )
             return false;
         if(sc.childType == ShapeType::Hull && sc.childGeometryIndex >= hullCap)
@@ -6191,10 +6191,6 @@ b8 ReadPhysicsSubsystemsPayload(in Span<u8> bytes, mut SnapshotByteReader r, mut
     return true;
 }
 
-void CommitRestoredPhysicsSubsystems(in PhysicsSubsystemsBundle tmp, mut PhysicsSubsystemsBundle bundle){
-    bundle = tmp;
-}
-
 b8 SerializePhysicsSubsystemsSnapshot(in PhysicsSubsystemsBundle bundle, mut Vector<u8> outBytes){
     outBytes.clear();
     outBytes.reserve(EstimatePhysicsSubsystemsSnapshotSize(bundle));
@@ -6215,7 +6211,7 @@ b8 RestorePhysicsSubsystemsSnapshot(in Span<u8> bytes, mut PhysicsSubsystemsBund
         return false;
     if(r.cursor != payloadEnd)
         return false;
-    CommitRestoredPhysicsSubsystems(tmp, bundle);
+    bundle = tmp;
     return true;
 }
 
@@ -6264,7 +6260,7 @@ b8 RestoreFullPhysicsSnapshot(in Span<u8> bytes, mut PhysicsWorld world, mut Phy
         return false;
 
     CommitRestoredPhysicsWorld(tmpWorld, world);
-    CommitRestoredPhysicsSubsystems(tmpBundle, bundle);
+    bundle = tmpBundle;
     return true;
 }
 

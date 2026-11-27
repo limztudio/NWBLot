@@ -47,11 +47,6 @@ class RendererDeferredSystem : NoCopy{
     public b8 createDeferredLightingResources();
     public b8 createDeferredLightingPipeline();
     public Expected<GpuTaskId> declareDeferredLightingTask(mut GpuTaskGraph graph, in GpuTaskDesc desc, in b8 useLaggedLightingHistory, mut DeferredFrameTargets targets, mut GpuTimingSubmissionTicket timingTicket);
-
-    public b8 renderDeferredLighting(mut CommandList commandList, mut DeferredFrameTargets targets){
-        return this.renderDeferredLighting(commandList, targets, false);
-    }
-
     public b8 renderDeferredLighting(mut CommandList commandList, mut DeferredFrameTargets targets, in b8 useLaggedLightingHistory);
     public Expected<DeferredFrameTargets> createDeferredFrameTargets(in u32 width, in u32 height);
     public b8 createDeferredFrameTargetResources(mut DeferredFrameTargets targets, mut RhiSampler avboitLinearSampler);

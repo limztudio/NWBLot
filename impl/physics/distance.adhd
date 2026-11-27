@@ -1560,15 +1560,6 @@ TimeOfImpactOutput ComputeTimeOfImpactViews(
     return ComputeTimeOfImpactViewsWithPadding(proxyA, sweepA, proxyB, sweepB, tMax, 0.25f * s_LinearSlop, 0.5f * s_LinearSlop);
 }
 
-TimeOfImpactOutput ComputeTimeOfImpact(
-    in ShapeProxy proxyA,
-    in Sweep3D sweepA,
-    in ShapeProxy proxyB,
-    in Sweep3D sweepB,
-    in f32 tMax
-){
-    return ComputeTimeOfImpactViews(MakeShapeProxyView(proxyA), sweepA, MakeShapeProxyView(proxyB), sweepB, tMax);
-}
 
 TimeOfImpactOutput ComputeSensorTimeOfImpactViews(
     in ShapeProxyView proxyA,
@@ -1637,19 +1628,6 @@ LocalRayHit RayCastTriangleDetailed(
     return hit;
 }
 
-LocalRayHit RayCastTriangle(
-    in VectorSingle v0,
-    in VectorSingle v1,
-    in VectorSingle v2,
-    in VectorSingle origin,
-    in VectorSingle translation,
-    in f32 maxFraction
-){
-    f32 u = 0.0f;
-    f32 v = 0.0f;
-    return RayCastTriangleDetailed(v0, v1, v2, origin, translation, maxFraction, false, u, v);
-}
-
 VectorSingle ClosestPointOnTriangleLocal(in VectorSingle p, in VectorSingle a, in VectorSingle b, in VectorSingle c){
     const VectorSingle ab = VectorSingle(b - a, 0.0f);
     const VectorSingle ac = VectorSingle(c - a, 0.0f);
@@ -1668,7 +1646,7 @@ VectorSingle ClosestPointOnTriangleLocal(in VectorSingle p, in VectorSingle a, i
 
     const f32 vc = d1 * d4 - d3 * d2;
     if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f){
-        const f32 v = d1 / (d1 - d3);
+        const f32 v = d1 / Max(1.0e-12f, d1 - d3);
         return a + ab * v;
     }
 
@@ -1680,17 +1658,17 @@ VectorSingle ClosestPointOnTriangleLocal(in VectorSingle p, in VectorSingle a, i
 
     const f32 vb = d5 * d2 - d1 * d6;
     if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f){
-        const f32 w = d2 / (d2 - d6);
+        const f32 w = d2 / Max(1.0e-12f, d2 - d6);
         return a + ac * w;
     }
 
     const f32 va = d3 * d6 - d5 * d4;
     if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f){
-        const f32 w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        const f32 w = (d4 - d3) / Max(1.0e-12f, (d4 - d3) + (d5 - d6));
         return b + VectorSingle(c - b, 0.0f) * w;
     }
 
-    const f32 denom = 1.0f / (va + vb + vc);
+    const f32 denom = 1.0f / Max(1.0e-12f, va + vb + vc);
     const f32 v = vb * denom;
     const f32 w = vc * denom;
     return a + ab * v + ac * w;
@@ -1750,13 +1728,18 @@ u32 CountClosedMeshRayParityHitsFiltered(
                 if(hasTriFilter && !triFilter.value()(shapeId, ti))
                     continue;
                 in MeshTriangle tri = mesh.triangles[ti];
-                const LocalRayHit h = RayCastTriangle(
+                f32 unusedTriU = 0.0f;
+                f32 unusedTriV = 0.0f;
+                const LocalRayHit h = RayCastTriangleDetailed(
                     VectorSingle(tri.v0.x, tri.v0.y, tri.v0.z, 0.0f),
                     VectorSingle(tri.v1.x, tri.v1.y, tri.v1.z, 0.0f),
                     VectorSingle(tri.v2.x, tri.v2.y, tri.v2.z, 0.0f),
                     localPoint,
                     rayDir,
-                    1.0f
+                    1.0f,
+                    false,
+                    unusedTriU,
+                    unusedTriV
                 );
                 if(h.hit() && h.fraction() > 1.0e-6f)
                     ++parityHits;
@@ -2204,8 +2187,8 @@ LocalRayHit ShapeCastMeshViewDetailed(
     return best;
 }
 
-LocalRayHit ShapeCastMeshView(
-    in ShapeProxyView queryProxy,
+LocalRayHit ShapeCastMesh(
+    in ShapeProxy queryProxy,
     in VectorSingle queryPos,
     in VectorSingle queryRot,
     in VectorSingle translation,
@@ -2217,20 +2200,7 @@ LocalRayHit ShapeCastMeshView(
     u32 triIdx = s_NullIndex;
     f32x2u bary(0.0f, 0.0f);
     Optional<TriangleFilterCallback> noFilter;
-    return ShapeCastMeshViewDetailed(queryProxy, queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction, ShapeId(), noFilter, triIdx, bary);
-}
-
-LocalRayHit ShapeCastMesh(
-    in ShapeProxy queryProxy,
-    in VectorSingle queryPos,
-    in VectorSingle queryRot,
-    in VectorSingle translation,
-    in MeshShape mesh,
-    in VectorSingle meshPos,
-    in VectorSingle meshRot,
-    in f32 maxFraction
-){
-    return ShapeCastMeshView(MakeShapeProxyView(queryProxy), queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction);
+    return ShapeCastMeshViewDetailed(MakeShapeProxyView(queryProxy), queryPos, queryRot, translation, mesh, meshPos, meshRot, maxFraction, ShapeId(), noFilter, triIdx, bary);
 }
 
 TimeOfImpactOutput ComputeMeshTimeOfImpactViewsPrecomputed(

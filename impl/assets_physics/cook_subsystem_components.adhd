@@ -144,19 +144,7 @@ b8 ParsePhysicsBodyDefMap(in Path file, in MetascriptValue mapVal, in StringView
     }
     u32 rotFieldCount = 0u;
     return mapVal.forEachMapEntry(lambda[in file, in prefix, mut outDef, mut rotFieldCount](in StringView key, in MetascriptValue fieldVal) -> b8{
-        if(key == "type"){
-            const Expected<StringView> text = ReadPhysicsStringValue(file, fieldVal, prefix, key);
-            if(!text.has_value())
-                return false;
-            if(text.value() == "static") outDef.type = BodyType::Static;
-            else if(text.value() == "kinematic") outDef.type = BodyType::Kinematic;
-            else if(text.value() == "dynamic") outDef.type = BodyType::Dynamic;
-            else{
-                error("{} '{}': field 'type' must be 'static', 'kinematic', or 'dynamic'", prefix, PathToString(file));
-                return false;
-            }
-            return true;
-        }
+        if(key == "type") return ParsePhysicsBodyTypeValue(file, fieldVal, prefix, key, outDef.type);
         if(key == "position"){
             VectorSingle v(0.0f);
             if(!DecodePhysicsFloat3Value(file, fieldVal, prefix, key, v))
@@ -712,26 +700,7 @@ b8 ParseRagdollBoneMap(in Path file, in MetascriptValue mapVal, mut RagdollBoneD
         if(key == "motor_damping") return ReadPhysicsF32Value(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.motorDamping);
         if(key == "use_six_dof") return ReadPhysicsBoolValue(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.useSixDof);
         if(key == "use_solver_motors") return ReadPhysicsBoolValue(file, fieldVal, s_RagdollComponentDiagnosticPrefix, key, outBone.useSolverMotors);
-        if(key == "six_dof_axes"){
-            if(!fieldVal.isList()){
-                error("{} '{}': field 'six_dof_axes' must be a list of up to 6 axis maps", s_RagdollComponentDiagnosticPrefix, PathToString(file));
-                return false;
-            }
-            const Span<MetascriptValue> items = fieldVal.listView();
-            if(items.size() > 6u){
-                error("{} '{}': field 'six_dof_axes' accepts at most 6 entries", s_RagdollComponentDiagnosticPrefix, PathToString(file));
-                return false;
-            }
-            for(usize ai = 0u; ai < items.size(); ++ai){
-                if(!items[ai].isMap()){
-                    error("{} '{}': 'six_dof_axes[{}]' must be a map", s_RagdollComponentDiagnosticPrefix, PathToString(file), ai);
-                    return false;
-                }
-                if(!ParseSixDofAxisConfigMap(file, items[ai], s_RagdollComponentDiagnosticPrefix, outBone.sixDofAxes[ai]))
-                    return false;
-            }
-            return true;
-        }
+        if(key == "six_dof_axes") return ParseSixDofAxesList(file, fieldVal, s_RagdollComponentDiagnosticPrefix, outBone.sixDofAxes);
         error("{} '{}': unsupported bone field '{}'", s_RagdollComponentDiagnosticPrefix, PathToString(file), key);
         return false;
     });

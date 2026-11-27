@@ -16,14 +16,6 @@ class ManifoldConstraintPoint{
     public f32 restitutionImpulse = 0.0f;
     public f32 normalMass = 0.0f;
 
-    public VectorSingle rA()const{
-        return VectorSingle(this.rABaseSep, 0.0f);
-    }
-
-    public VectorSingle rB()const{
-        return VectorSingle(this.rBRelVel, 0.0f);
-    }
-
     public f32 relativeVelocity()const{
         return this.rBRelVel.w;
     }
@@ -66,26 +58,6 @@ class ContactConstraint{
 
     public VectorSingle normal()const{
         return VectorSingle(this.normalFriction, 0.0f);
-    }
-
-    public f32 friction()const{
-        return this.normalFriction.w;
-    }
-
-    public f32 restitution()const{
-        return this.tangent1Restitution.w;
-    }
-
-    public VectorSingle centerA()const{
-        return VectorSingle(this.centerATwistMass, 0.0f);
-    }
-
-    public f32 twistMass()const{
-        return this.centerATwistMass.w;
-    }
-
-    public VectorSingle centerB()const{
-        return VectorSingle(this.centerBTwistImpulse, 0.0f);
     }
 
     public f32 twistImpulse()const{
@@ -778,38 +750,6 @@ void PrepareContactConstraintWithCache(
         enableWarmStarting,
         outConstraint,
         outCache
-    );
-}
-
-void PrepareContactConstraint(
-    in Vector<Body> bodies,
-    in Vector<SolverSet> sets,
-    in Contact contact,
-    in Softness dynamicSoftness,
-    in Softness staticSoftness,
-    in f32 contactHertz,
-    in f32 contactDampingRatio,
-    in f32 h,
-    in b8 enableContactSoftening,
-    in b8 enableWarmStarting,
-    mut ContactConstraint outConstraint
-){
-    ContactConstraintStepCache unusedCache;
-    PrepareContactConstraintCore(
-        bodies,
-        sets,
-        contact,
-        contact.manifold,
-        dynamicSoftness,
-        staticSoftness,
-        contactHertz,
-        contactDampingRatio,
-        h,
-        enableContactSoftening,
-        enableWarmStarting,
-        false,
-        outConstraint,
-        unusedCache
     );
 }
 
@@ -1801,9 +1741,6 @@ void StoreContactConstraintImpulsesToManifold(in ContactConstraint c, mut Manifo
     }
 }
 
-void StoreContactConstraintImpulses(in ContactConstraint c, mut Contact contact){
-    StoreContactConstraintImpulsesToManifold(c, contact.manifold);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -191,39 +191,6 @@ void ExtractBoneInertiaPair(in PhysicsWorld world, in BodyId bodyId, mut f32 out
     outLocalInertia = Mat3(VectorSingle(0.5f, 0.0f, 0.0f, 0.0f), VectorSingle(0.0f, 0.5f, 0.0f, 0.0f), VectorSingle(0.0f, 0.0f, 0.5f, 0.0f));
 }
 
-u64 PackRagdollBonePairKey(in u32 a, in u32 b){
-    if(a <= b)
-        return (cast<u64>(a) << 32u) | cast<u64>(b);
-    return (cast<u64>(b) << 32u) | cast<u64>(a);
-}
-
-VectorSingle QuatFromRagdollBasisCols(in VectorSingle c0, in VectorSingle c1, in VectorSingle c2){
-    const f32 m00 = c0.x;
-    const f32 m01 = c1.x;
-    const f32 m02 = c2.x;
-    const f32 m10 = c0.y;
-    const f32 m11 = c1.y;
-    const f32 m12 = c2.y;
-    const f32 m20 = c0.z;
-    const f32 m21 = c1.z;
-    const f32 m22 = c2.z;
-    const f32 trace = m00 + m11 + m22;
-    if(trace > 0.0f){
-        const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + trace));
-        return SafeNormalizeQuat(VectorSingle((m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25f * s));
-    }
-    if(m00 >= m11 && m00 >= m22){
-        const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + m00 - m11 - m22));
-        return SafeNormalizeQuat(VectorSingle(0.25f * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s));
-    }
-    if(m11 >= m22){
-        const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + m11 - m00 - m22));
-        return SafeNormalizeQuat(VectorSingle((m01 + m10) / s, 0.25f * s, (m12 + m21) / s, (m02 - m20) / s));
-    }
-    const f32 s = 2.0f * Sqrt(Max(1.0e-8f, 1.0f + m22 - m00 - m11));
-    return SafeNormalizeQuat(VectorSingle((m02 + m20) / s, (m12 + m21) / s, 0.25f * s, (m10 - m01) / s));
-}
-
 b8 AttachRagdollShape(
     mut PhysicsWorld world,
     in BodyId bodyId,
@@ -469,7 +436,7 @@ class RagdollInstance{
         if(!exceptions.empty()){
             excKeys.reserve(exceptions.size());
             for(usize ei = 0u; ei < exceptions.size(); ++ei)
-                excKeys.emplace(PackRagdollBonePairKey(exceptions[ei].boneA, exceptions[ei].boneB));
+                excKeys.emplace(PackUnorderedU32Pair(cast<isize>(exceptions[ei].boneA), cast<isize>(exceptions[ei].boneB)));
         }
         HashSet<u64> keptKeys;
         usize writeIdx = 0u;
@@ -489,7 +456,7 @@ class RagdollInstance{
                 this.disabledSelfCollisionPairs[writeIdx] = p;
                 ++writeIdx;
                 if(p.boneA < n && p.boneB < n)
-                    keptKeys.emplace(PackRagdollBonePairKey(p.boneA, p.boneB));
+                    keptKeys.emplace(PackUnorderedU32Pair(cast<isize>(p.boneA), cast<isize>(p.boneB)));
             }
         }
         this.disabledSelfCollisionPairs.resize(writeIdx);
@@ -1209,7 +1176,7 @@ class RagdollInstance{
 
             VectorSingle effAlphaTorque = Matrix3SolveLinear(invEffMat, desiredAlpha);
             if(Abs(MatrixLinearDeterminantV(invEffMat)).x <= 1.0e-30f){
-                const MatrixSingle rChild = Matrix3FromQuaternion(curQ);
+                const MatrixSingle rChild = MatrixRotationQuaternion(curQ);
                 const MatrixSingle iWorldChild = Matrix3Mul(Matrix3Mul(rChild, Matrix3FromMat3(this.m_boneLocalInertias[i])), Matrix3Transpose(rChild));
                 effAlphaTorque = Matrix3MulVec(iWorldChild, desiredAlpha);
             }
@@ -1253,7 +1220,7 @@ Expected<Vector<RagdollBoneDef>> BuildRagdollBonesFromSkeleton(
 
     const VectorSingle rootPos = VectorSingle(rootTransform.position);
     const VectorSingle rootRot = SafeNormalizeQuat(VectorSingle(rootTransform.rotation));
-    if(!IsValidPositionVec3(rootPos) || !IsFiniteQuat(rootRot))
+    if(!IsValidPositionVec3(rootPos) || !IsFinite(rootRot))
         return MakeUnexpected(Failure());
 
     Vector<Transform3D> localXfs;
@@ -1273,7 +1240,7 @@ Expected<Vector<RagdollBoneDef>> BuildRagdollBonesFromSkeleton(
         const VectorSingle rawC1(r0.y, r1.y, r2.y, 0.0f);
         const VectorSingle c1 = SafeNormalizeVec3(rawC1 - c0 * Vector3Dot(c0, rawC1).x, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         const VectorSingle c2 = SafeNormalizeVec3(Cross(c0, c1), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
-        localXfs[i] = Transform3D(lp, QuatFromRagdollBasisCols(c0, c1, c2));
+        localXfs[i] = Transform3D(lp, QuatFromBasisCols(c0, c1, c2));
     }
 
     Vector<u8> resolved;

@@ -353,6 +353,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources(){
     this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid = false;
     this.m_rayTracingState.sceneBvh.m_tlasInstanceUploadValid = false;
     this.m_rayTracingState.sceneBvh.m_sceneSwBvhStaticSceneHashValid = false;
+    this.m_sceneSwBvhRefit.invalidateInputUpload();
     this.m_rayTracingState.shadow.m_hwShadowMaterialContextHashValid = false;
     this.m_rayTracingState.shadow.m_swShadowMaterialContextHashValid = false;
     this.m_rayTracingState.sceneBvh.m_acceptedRayTraceMaterialContextSlotsValid = false;
@@ -454,7 +455,6 @@ void RendererRayTracingSystem::invalidateResources(){
     this.invalidatePreparedShadowTraceGeometryBuffers();
     this.m_hardwareOpticalScene.invalidate();
     this.m_softwareOpticalScene.invalidate();
-    this.m_preparedSceneSwBvhRefit.reset();
     this.m_sceneSwBvhRefit.invalidate();
     this.releaseSceneTlasHeapHandle();
     this.releaseCausticEmissionTargetHeapHandle();

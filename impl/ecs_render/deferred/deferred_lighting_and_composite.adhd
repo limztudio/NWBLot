@@ -472,20 +472,8 @@ b8 RendererDeferredSystem::ensureDeferredDebugLineVertexBuffer(in usize required
     if(!heap.isInitialized())
         return false;
 
-    usize nextCapacity = s_DeferredDebugLineInitialVertexCapacity;
-    if(this.m_deferredState.m_debugLineVertexCapacity > 0u){
-        nextCapacity = this.m_deferredState.m_debugLineVertexCapacity;
-        while(nextCapacity < requiredVertices){
-            if(nextCapacity > usize.max / 2u){
-                nextCapacity = requiredVertices;
-                break;
-            }
-            nextCapacity *= 2u;
-        }
-    }
-    if(nextCapacity < requiredVertices)
-        nextCapacity = requiredVertices;
-    if(nextCapacity > usize.max / size_of<GpuDebugLineVertex>())
+    const usize nextCapacity = NextGrowingCapacity(this.m_deferredState.m_debugLineVertexCapacity, requiredVertices, s_DeferredDebugLineInitialVertexCapacity);
+    if(nextCapacity < requiredVertices || nextCapacity > usize.max / size_of<GpuDebugLineVertex>())
         return false;
 
     BufferDesc vbDesc;
@@ -598,6 +586,39 @@ void RecordDeferredDebugLineDraw(
     commandList.draw(drawArgs);
 }
 
+b8 ExecuteDeferredDebugLineRenderPass(
+    mut CommandList commandList,
+    mut GpuDescriptorHeap heap,
+    mut Framebuffer framebuffer,
+    mut GraphicsPipeline primaryPipeline,
+    in u32 primaryCount,
+    mut GraphicsPipeline overlayPipeline,
+    in u32 overlayCount,
+    in u32 overlayFirstVertex,
+    in b8 withDepth,
+    in DeferredDebugLinePushConstants pushConstants
+){
+    RenderPassParameters renderPassParameters;
+    renderPassParameters.colorAttachmentActions[0u].loadAction = RenderPassLoadAction::Load;
+    renderPassParameters.colorAttachmentActions[0u].storeAction = RenderPassStoreAction::Store;
+    if(withDepth){
+        renderPassParameters.depthAttachmentActions.loadAction = RenderPassLoadAction::Load;
+        renderPassParameters.depthAttachmentActions.storeAction = RenderPassStoreAction::None;
+    }
+    commandList.beginRenderPass(framebuffer, renderPassParameters);
+    if(!commandList.isRenderPassActive())
+        return false;
+
+    ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(framebuffer.getFramebufferInfo().getViewport());
+    RecordDeferredDebugLineDraw(commandList, heap, primaryPipeline, framebuffer, viewportState, pushConstants, primaryCount, 0u);
+    if(overlayCount > 0u)
+        RecordDeferredDebugLineDraw(commandList, heap, overlayPipeline, framebuffer, viewportState, pushConstants, overlayCount, overlayFirstVertex);
+
+    commandList.endRenderPass();
+    return !commandList.isRenderPassActive();
+}
+
 b8 RendererDeferredSystem::renderDeferredDebugLines(
     mut CommandList commandList,
     mut DeferredFrameTargets targets,
@@ -620,40 +641,31 @@ b8 RendererDeferredSystem::renderDeferredDebugLines(
 
     mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
     if(depthVertexCount == 0u){
-        mut Framebuffer colorOnlyFramebuffer = targets.compositeFramebuffer.deref();
-        RenderPassParameters renderPassParameters;
-        renderPassParameters.colorAttachmentActions[0u].loadAction = RenderPassLoadAction::Load;
-        renderPassParameters.colorAttachmentActions[0u].storeAction = RenderPassStoreAction::Store;
-        commandList.beginRenderPass(colorOnlyFramebuffer, renderPassParameters);
-        if(!commandList.isRenderPassActive())
-            return false;
-
-        ViewportState viewportState;
-        viewportState.addViewportAndScissorRect(colorOnlyFramebuffer.getFramebufferInfo().getViewport());
-        RecordDeferredDebugLineDraw(commandList, heap, this.m_deferredState.m_debugLineOverlayColorOnlyPipeline.deref(), colorOnlyFramebuffer, viewportState, pushConstants, overlayVertexCount, 0u);
-        commandList.endRenderPass();
-        return !commandList.isRenderPassActive();
+        return ExecuteDeferredDebugLineRenderPass(
+            commandList,
+            heap,
+            targets.compositeFramebuffer.deref(),
+            this.m_deferredState.m_debugLineOverlayColorOnlyPipeline.deref(),
+            overlayVertexCount,
+            this.m_deferredState.m_debugLineOverlayPipeline.deref(),
+            0u,
+            0u,
+            false,
+            pushConstants
+        );
     }
-
-    mut Framebuffer debugFramebuffer = targets.compositeDebugFramebuffer.deref();
-    RenderPassParameters renderPassParameters;
-    renderPassParameters.colorAttachmentActions[0u].loadAction = RenderPassLoadAction::Load;
-    renderPassParameters.colorAttachmentActions[0u].storeAction = RenderPassStoreAction::Store;
-    renderPassParameters.depthAttachmentActions.loadAction = RenderPassLoadAction::Load;
-    renderPassParameters.depthAttachmentActions.storeAction = RenderPassStoreAction::None;
-    commandList.beginRenderPass(debugFramebuffer, renderPassParameters);
-    if(!commandList.isRenderPassActive())
-        return false;
-
-    ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(debugFramebuffer.getFramebufferInfo().getViewport());
-
-    RecordDeferredDebugLineDraw(commandList, heap, this.m_deferredState.m_debugLineDepthPipeline.deref(), debugFramebuffer, viewportState, pushConstants, depthVertexCount, 0u);
-    if(overlayVertexCount > 0u)
-        RecordDeferredDebugLineDraw(commandList, heap, this.m_deferredState.m_debugLineOverlayPipeline.deref(), debugFramebuffer, viewportState, pushConstants, overlayVertexCount, depthVertexCount);
-
-    commandList.endRenderPass();
-    return !commandList.isRenderPassActive();
+    return ExecuteDeferredDebugLineRenderPass(
+        commandList,
+        heap,
+        targets.compositeDebugFramebuffer.deref(),
+        this.m_deferredState.m_debugLineDepthPipeline.deref(),
+        depthVertexCount,
+        this.m_deferredState.m_debugLineOverlayPipeline.deref(),
+        overlayVertexCount,
+        depthVertexCount,
+        true,
+        pushConstants
+    );
 }
 
 RayTracingLightingClassification ClassifyDeferredSceneLights(in Span<f32> importance, in u32 refractiveInstanceCount, mut Span<SceneLightGpuData> lights, in u32 lightCount){
@@ -738,32 +750,24 @@ Expected<Optional<GpuTaskId>> RendererDeferredSystem::declareDeferredDebugLinesT
     if(!this.ensureDeferredDebugLineVertexBuffer(totalVertices))
         return MakeUnexpected(Failure());
 
-    GpuUploadBlobId vertsBlob;
-    if(overlayVerts.empty()){
-        const auto blobRes = graph.copyUploadElements<GpuDebugLineVertex>(depthVerts);
-        if(!blobRes.has_value())
-            return MakeUnexpected(Failure());
-        vertsBlob = blobRes.value();
+    Span<GpuDebugLineVertex> uploadSpan = depthVerts;
+    if(depthVerts.empty()){
+        uploadSpan = overlayVerts;
     }
-    else if(depthVerts.empty()){
-        const auto blobRes = graph.copyUploadElements<GpuDebugLineVertex>(overlayVerts);
-        if(!blobRes.has_value())
-            return MakeUnexpected(Failure());
-        vertsBlob = blobRes.value();
-    }
-    else{
+    else if(!overlayVerts.empty()){
         this.m_deferredState.m_debugLineCombinedScratch.clear();
         this.m_deferredState.m_debugLineCombinedScratch.reserve(totalVertices);
         for(usize i = 0u; i < depthVerts.size(); ++i)
             this.m_deferredState.m_debugLineCombinedScratch.push_back(depthVerts[i]);
         for(usize i = 0u; i < overlayVerts.size(); ++i)
             this.m_deferredState.m_debugLineCombinedScratch.push_back(overlayVerts[i]);
-
-        const auto blobRes = graph.copyUploadElements<GpuDebugLineVertex>(Span<GpuDebugLineVertex>(this.m_deferredState.m_debugLineCombinedScratch.data(), totalVertices));
-        if(!blobRes.has_value())
-            return MakeUnexpected(Failure());
-        vertsBlob = blobRes.value();
+        uploadSpan = Span<GpuDebugLineVertex>(this.m_deferredState.m_debugLineCombinedScratch.data(), totalVertices);
     }
+
+    const auto blobRes = graph.copyUploadElements<GpuDebugLineVertex>(uploadSpan);
+    if(!blobRes.has_value())
+        return MakeUnexpected(Failure());
+    const GpuUploadBlobId vertsBlob = blobRes.value();
 
     const auto debugVertsResourceResult = ImportExternalBuffer(
         graph,

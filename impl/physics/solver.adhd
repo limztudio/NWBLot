@@ -2464,7 +2464,7 @@ void PopulatePreSolveContextFromContactAndManifold(in PhysicsWorld world, in Con
 
 void ApplyPreSolveContextToContactAndManifold(in PreSolveContext ctx, in VectorSingle posA, in VectorSingle posB, mut Contact c, mut Manifold newM){
     const VectorSingle ctxN = VectorSingle(ctx.normal);
-    if(IsFiniteVec3(ctxN) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
+    if(IsFinite(ctxN.xyz) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
         newM.setNormal(SafeNormalizeVec3(ctxN, newM.normal()));
     if(IsFinite(VectorSingle(ctx.friction)) && ctx.friction >= 0.0f)
         c.friction = ctx.friction;
@@ -2504,7 +2504,7 @@ void ApplyPreSolveContextToContactAndManifold(in PreSolveContext ctx, in VectorS
         || c.maxNormalImpulse < s_MaxF32 * 0.5f
     )
         c.flags |= cast<u32>(ContactFlags::HasCustomSolverScale);
-    if(ctx.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.surfaceVelocity))){
+    if(ctx.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(ctx.surfaceVelocity).xyz)){
         c.surfaceVelocity = ctx.surfaceVelocity;
         c.flags |= cast<u32>(ContactFlags::HasSurfaceVelocity);
     }
@@ -2512,7 +2512,7 @@ void ApplyPreSolveContextToContactAndManifold(in PreSolveContext ctx, in VectorS
         c.surfaceVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
         c.flags &= ~cast<u32>(ContactFlags::HasSurfaceVelocity);
     }
-    if(ctx.anisotropicFriction.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.anisotropicFriction)) && IsFiniteVec3(VectorSingle(ctx.frictionDirection))){
+    if(ctx.anisotropicFriction.w != 0.0f && IsFinite(VectorSingle(ctx.anisotropicFriction).xyz) && IsFinite(VectorSingle(ctx.frictionDirection).xyz)){
         c.anisotropicFriction = ctx.anisotropicFriction;
         c.frictionDirection = f32x4(SafeNormalizeVec3(VectorSingle(ctx.frictionDirection, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)), 0.0f);
         c.flags |= cast<u32>(ContactFlags::HasAnisotropicFriction);
@@ -2543,7 +2543,7 @@ void ApplyPreSolveContextToContactAndManifold(in PreSolveContext ctx, in VectorS
         }
         if(IsFinite(VectorSingle(ctx.points[p].w)))
             newM.points[keptCount].pointSeparation.w = ctx.points[p].w;
-        if((ctx.modifyPointPositions || p >= origCount) && IsFiniteVec3(VectorSingle(ctx.points[p]))){
+        if((ctx.modifyPointPositions || p >= origCount) && IsFinite(VectorSingle(ctx.points[p]).xyz)){
             const VectorSingle worldPt(ctx.points[p], 0.0f);
             f32 sep = newM.points[keptCount].separation();
             if(!IsFinite(VectorSingle(sep)))
@@ -2842,10 +2842,6 @@ void ApplyContactManifoldWithExtrasAndEvents(mut PhysicsWorld world, in u32 cId,
     FinalizeContactTouchingWakeGraphAndEvents(world, cId, wasTouching, hasAnyPoint, isTouching);
 }
 
-void ApplyContactManifoldAndEvents(mut PhysicsWorld world, in u32 cId, in Manifold evaluatedManifold){
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> emptyExtras;
-    ApplyContactManifoldWithExtrasAndEvents(world, cId, evaluatedManifold, false, emptyExtras);
-}
 
 void ApplyExtraManifoldsPreSolveAndEvents(mut PhysicsWorld world, in u32 cId, in FixedVector<Manifold, s_MaxExtraManifoldsPerContact> evaluatedExtras){
     b8 extraSurvives = false;
@@ -3956,7 +3952,7 @@ VectorSingle ApplyGyroscopicTorqueStep(in Span<Body> bodies, in BodySim sim, in 
     const MatrixSingle skewIOmega = Matrix3SkewSymmetric(iOmega);
     const MatrixSingle jacobian = Matrix3Add(iLocal, Matrix3Scale(Matrix3Sub(Matrix3Mul(skewW, iLocal), skewIOmega), h));
     const VectorSingle deltaW = Matrix3SolveLinear(jacobian, -residual);
-    if(IsFiniteVec3(deltaW))
+    if(IsFinite(deltaW.xyz))
         return Vector3Rotate(wLocal + deltaW, curRot);
     return w;
 }
@@ -4069,10 +4065,6 @@ void IntegrateBodyStatePosition(in BodySim sim, in f32 h, in f32 defaultMaxAngSp
     }
     state.setDeltaPosition(state.deltaPosition() + v * h);
     state.deltaRotation = f32x4(IntegrateDeltaQuaternion(VectorSingle(state.deltaRotation), w, h));
-}
-
-void IntegrateBodyPositionsAt(in Vector<BodySim> sims, in f32 h, in f32 defaultMaxAngSpeed, in usize idx, mut Vector<BodyState> states){
-    IntegrateBodyStatePosition(sims[idx], h, defaultMaxAngSpeed, states[idx]);
 }
 
 void BuildMovingKinematicSubstepTable(
@@ -4604,9 +4596,9 @@ b8 EvaluateBulletToiPreSolve(
         if(!keep || !ctx.enabled || !ctx.isPointEnabled(0u))
             return false;
         const VectorSingle ctxN = VectorSingle(ctx.normal);
-        if(IsFiniteVec3(ctxN) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
+        if(IsFinite(ctxN.xyz) && Vector3LengthSq(VectorSingle(ctxN, 0.0f)).x > s_NormalizeEpsilonSq)
             inOutNormal = SafeNormalizeVec3(ctxN, inOutNormal);
-        if(IsFiniteVec3(VectorSingle(ctx.points[0u])) && ctx.modifyPointPositions)
+        if(IsFinite(VectorSingle(ctx.points[0u]).xyz) && ctx.modifyPointPositions)
             inOutPoint = VectorSingle(ctx.points[0u], 0.0f);
         if(IsFinite(VectorSingle(ctx.points[0u].w)))
             outMat.separation = ctx.points[0u].w;
@@ -4634,11 +4626,11 @@ b8 EvaluateBulletToiPreSolve(
             outMat.invInertiaScaleB = ctx.invInertiaScaleB;
         if(IsFinite(VectorSingle(ctx.maxNormalImpulse)) && ctx.maxNormalImpulse >= 0.0f)
             outMat.maxNormalImpulse = ctx.maxNormalImpulse;
-        if(ctx.surfaceVelocity.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.surfaceVelocity)))
+        if(ctx.surfaceVelocity.w != 0.0f && IsFinite(VectorSingle(ctx.surfaceVelocity).xyz))
             outMat.surfaceVelocity = ctx.surfaceVelocity;
         else
             outMat.surfaceVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-        if(ctx.anisotropicFriction.w != 0.0f && IsFiniteVec3(VectorSingle(ctx.anisotropicFriction)) && IsFiniteVec3(VectorSingle(ctx.frictionDirection))){
+        if(ctx.anisotropicFriction.w != 0.0f && IsFinite(VectorSingle(ctx.anisotropicFriction).xyz) && IsFinite(VectorSingle(ctx.frictionDirection).xyz)){
             outMat.anisotropicFriction = ctx.anisotropicFriction;
             outMat.frictionDirection = f32x4(SafeNormalizeVec3(VectorSingle(ctx.frictionDirection, 0.0f), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f)), 0.0f);
         }
@@ -5433,28 +5425,14 @@ void EmitPostSolveContextForManifold(in PhysicsWorld world, in Contact c, in Man
     world.m_postSolveCallback.value()(ctx);
 }
 
-void AppendUniqueU32Bounded(mut Vector<u32> items, in u32 val, in usize cap, mut b8 outAdded){
-    outAdded = false;
+b8 CanAppendUniqueU32(in Span<u32> items, in u32 val, in usize cap){
+    if(items.size() >= cap)
+        return false;
     for(usize i = 0u; i < items.size(); ++i){
         if(items[i] == val)
-            return;
+            return false;
     }
-    if(items.size() >= cap)
-        return;
-    items.push_back(val);
-    outAdded = true;
-}
-
-void AppendUniqueU32Fixed(mut FixedVector<u32, 64u> items, in u32 val, in usize cap, mut b8 outAdded){
-    outAdded = false;
-    for(usize i = 0u; i < items.size(); ++i){
-        if(items[i] == val)
-            return;
-    }
-    if(items.size() >= cap)
-        return;
-    items.push_back(val);
-    outAdded = true;
+    return true;
 }
 
 void SolveBulletToiCoupledJoints(
@@ -5482,16 +5460,15 @@ void SolveBulletToiCoupledJoints(
     FixedVector<u32, 64u> queueBodyIds;
     mut Vector<u32> toiJointIds = world.m_cpuScratch.bulletToiJointIds;
     toiJointIds.clear();
-    b8 added = false;
     if(rootBodyIdA < world.m_bodies.size() && world.m_bodies[rootBodyIdA].alive && world.m_bodies[rootBodyIdA].type == BodyType::Dynamic){
-        AppendUniqueU32Fixed(visitedBodyIds, rootBodyIdA, maxCompBodies, added);
-        if(added)
-            queueBodyIds.push_back(rootBodyIdA);
+        visitedBodyIds.push_back(rootBodyIdA);
+        queueBodyIds.push_back(rootBodyIdA);
     }
     if(rootBodyIdB < world.m_bodies.size() && world.m_bodies[rootBodyIdB].alive && world.m_bodies[rootBodyIdB].type == BodyType::Dynamic){
-        AppendUniqueU32Fixed(visitedBodyIds, rootBodyIdB, maxCompBodies, added);
-        if(added)
+        if(CanAppendUniqueU32(Span<u32>(visitedBodyIds.data(), visitedBodyIds.size()), rootBodyIdB, maxCompBodies)){
+            visitedBodyIds.push_back(rootBodyIdB);
             queueBodyIds.push_back(rootBodyIdB);
+        }
     }
 
     usize qHead = 0u;
@@ -5513,12 +5490,13 @@ void SolveBulletToiCoupledJoints(
             if(!bOther.alive || bOther.setIndex == s_DisabledSetIndex)
                 continue;
 
-            AppendUniqueU32Bounded(toiJointIds, jId, maxCompJoints, added);
+            if(CanAppendUniqueU32(Span<u32>(toiJointIds), jId, maxCompJoints))
+                toiJointIds.push_back(jId);
             if(bOther.type == BodyType::Dynamic){
                 if(world.m_bodies[otherBodyId].setIndex >= 3u)
                     WakeBodyWithGraph(world.m_graph, world.m_bodies, world.m_islands, world.m_solverSets, world.m_freeSolverSetIds, world.m_contacts, otherBodyId);
-                AppendUniqueU32Fixed(visitedBodyIds, otherBodyId, maxCompBodies, added);
-                if(added){
+                if(CanAppendUniqueU32(Span<u32>(visitedBodyIds.data(), visitedBodyIds.size()), otherBodyId, maxCompBodies)){
+                    visitedBodyIds.push_back(otherBodyId);
                     queueBodyIds.push_back(otherBodyId);
                     if(otherBodyId != rootBodyIdA && otherBodyId != rootBodyIdB){
                         mut Body bMut = world.m_bodies[otherBodyId];
@@ -6360,10 +6338,6 @@ void EmitContinuousSensorPassThroughPairsForSet(mut PhysicsWorld world, in Span<
     }
 }
 
-void EmitContinuousSensorPassThroughPairs(mut PhysicsWorld world){
-    EmitContinuousSensorPassThroughPairsForSet(world, Span<u32>());
-}
-
 void ResolveSortedBulletToiResultsForStep(mut PhysicsWorld world, in Span<BulletToiQueryResult> results, in f32 dt){
     usize awakeCount = world.m_solverSets[s_AwakeSetIndex].sims.size();
     mut Vector<f32> remFracs = world.m_cpuScratch.bulletRemFracs;
@@ -6600,7 +6574,7 @@ void EmitContinuousSensorPassThroughEvents(mut PhysicsWorld world){
     if(world.m_sensorEventShapeCount == 0u || !HasMovedFastOrBulletBody(world))
         return;
     world.ensureCpuBroadphaseSynced();
-    EmitContinuousSensorPassThroughPairs(world);
+    EmitContinuousSensorPassThroughPairsForSet(world, Span<u32>());
 }
 
 void SolveBulletContinuousCpuWithScheduler(mut PhysicsWorld world, in f32 dt, mut CpuTaskScheduler cpuScheduler){
@@ -7128,104 +7102,6 @@ void SplitDirtyAwakeIslands(mut PhysicsWorld world){
     }
 }
 
-b8 PrepareColorContactConstraints(
-    in PhysicsWorld world,
-    in Array<Vector<u32>, s_GraphColorCount> colorContactIds,
-    in f32 h,
-    mut CpuTaskScheduler cpuScheduler,
-    mut Array<Vector<ContactConstraint>, s_GraphColorCount> outConstraints
-){
-    const f32 contactHertz = world.m_def.contactHertz;
-    const f32 contactDampingRatio = world.m_def.contactDampingRatio;
-    const b8 enableContactSoftening = world.m_def.enableContactSoftening;
-    const Softness dynamicSoftness = MakeSoftness(contactHertz, contactDampingRatio, h);
-    const Softness staticSoftness = MakeSoftness(2.0f * contactHertz, contactDampingRatio, h);
-
-    in PhysicsWorld worldRef = world;
-    in Array<Vector<u32>, s_GraphColorCount> colorContactIdsRef = colorContactIds;
-
-    Array<usize, s_GraphColorCount> colorStarts;
-    usize totalContacts = 0u;
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        colorStarts[c] = totalContacts;
-        const usize cCount = colorContactIds[c].size();
-        outConstraints[c].resize(cCount);
-        totalContacts += cCount;
-    }
-    if(totalContacts == 0u)
-        return true;
-
-    if(cpuScheduler.isParallelEnabled() && totalContacts >= s_CpuPrepareContactThreshold){
-        in Array<usize, s_GraphColorCount> colorStartsRef = colorStarts;
-        const usize grain = ComputePhysicsGrain(cpuScheduler, totalContacts, cast<usize>(32u));
-        const usize chunkCount = (totalContacts + grain - 1u) / grain;
-        const auto res = cpuScheduler.parallelFor(
-            0u,
-            chunkCount,
-            1u,
-            lambda[in worldRef, in colorContactIdsRef, in colorStartsRef, in totalContacts, in grain, in dynamicSoftness, in staticSoftness, in contactHertz, in contactDampingRatio, in h, in enableContactSoftening, mut outConstraints](in usize chunkIdx) -> void{
-                const usize startFlat = chunkIdx * grain;
-                const usize endFlat = Min(startFlat + grain, totalContacts);
-                usize c = ResolveColorSlotIndex(colorStartsRef, startFlat);
-                usize idx = startFlat - colorStartsRef[c];
-                usize cEnd = totalContacts;
-                if(c + 1u < s_GraphColorCount)
-                    cEnd = colorStartsRef[c + 1u];
-                for(usize flatIdx = startFlat; flatIdx < endFlat; ++flatIdx){
-                    while(flatIdx >= cEnd && c + 1u < s_GraphColorCount){
-                        ++c;
-                        idx = 0u;
-                        if(c + 1u < s_GraphColorCount)
-                            cEnd = colorStartsRef[c + 1u];
-                        else
-                            cEnd = totalContacts;
-                    }
-                    const u32 contactId = colorContactIdsRef[c][idx];
-                    PrepareContactConstraint(
-                        worldRef.m_bodies,
-                        worldRef.m_solverSets,
-                        worldRef.m_contacts[contactId],
-                        dynamicSoftness,
-                        staticSoftness,
-                        contactHertz,
-                        contactDampingRatio,
-                        h,
-                        enableContactSoftening,
-                        worldRef.m_enableWarmStarting,
-                        outConstraints[c][idx]
-                    );
-                    ++idx;
-                }
-            },
-            CpuTaskOptions()
-        );
-        if(!res.has_value())
-            return false;
-        return true;
-    }
-
-    for(usize c = 0u; c < s_GraphColorCount; ++c){
-        const usize cCount = colorContactIds[c].size();
-        for(usize idx = 0u; idx < cCount; ++idx){
-            const u32 contactId = colorContactIds[c][idx];
-            PrepareContactConstraint(
-                world.m_bodies,
-                world.m_solverSets,
-                world.m_contacts[contactId],
-                dynamicSoftness,
-                staticSoftness,
-                contactHertz,
-                contactDampingRatio,
-                h,
-                enableContactSoftening,
-                world.m_enableWarmStarting,
-                outConstraints[c][idx]
-            );
-        }
-    }
-    return true;
-}
-
 b8 PrepareColorContactConstraintsFromSpansWithCache(
     in PhysicsWorld world,
     in Array<Span<u32>, s_GraphColorCount> colorContactSpans,
@@ -7377,14 +7253,10 @@ void EmitContactHitEventForManifold(in PhysicsWorld world, in ContactConstraint 
     }
 }
 
-void EmitContactHitEventIfNeeded(mut PhysicsWorld world, in ContactConstraint cc, in Contact contact){
-    EmitContactHitEventForManifold(world, cc, contact, contact.manifold, world.m_contactHitEvents);
-}
-
 void StoreContactConstraintImpulsesAndHitEvents(mut PhysicsWorld world, in ContactConstraint cc){
     mut Contact contact = world.m_contacts[cc.contactId];
-    StoreContactConstraintImpulses(cc, contact);
-    EmitContactHitEventIfNeeded(world, cc, contact);
+    StoreContactConstraintImpulsesToManifold(cc, contact.manifold);
+    EmitContactHitEventForManifold(world, cc, contact, contact.manifold, world.m_contactHitEvents);
 }
 
 void EmitJointBreakEventIfNeeded(
@@ -7501,7 +7373,7 @@ void StoreSolvedPartitionImpulsesAndEventsCpu(
             for(usize k = 0u; k < hSlots.size(); ++k){
                 const CpuContactSlotRef slot = hSlots[k];
                 in ContactConstraint cc = colorConstraints[slot.color][slot.index];
-                EmitContactHitEventIfNeeded(world, cc, world.m_contacts[cc.contactId]);
+                EmitContactHitEventForManifold(world, cc, world.m_contacts[cc.contactId], world.m_contacts[cc.contactId].manifold, world.m_contactHitEvents);
             }
         }
     }
@@ -7571,21 +7443,14 @@ b8 IsTinyBulletComponent(in SolverComponentInfo comp){
     return comp.hasBullet && comp.bodyCount <= 2u;
 }
 
-u32 CountColorBits(in u32 mask){
-    u32 x = mask - ((mask >> 1u) & 0x55555555u);
-    x = (x & 0x33333333u) + ((x >> 2u) & 0x33333333u);
-    x = (x + (x >> 4u)) & 0x0f0f0f0fu;
-    return (x * 0x01010101u) >> 24u;
-}
-
 u32 ResolveComponentGpuAffinityTier(in SolverComponentInfo comp){
     if(comp.hasOverflowContact || IsTinyBulletComponent(comp))
         return 5u;
-    if(!comp.hasAwakeKinematic && comp.jointCount == 0u && (comp.contactCount == 0u || (comp.bodyCount <= s_GpuContactIslandMaxBodies && comp.contactCount <= s_GpuContactIslandMaxContacts)))
+    if(!comp.hasAwakeKinematic && comp.jointCount == 0u && (comp.contactCount == 0u || (comp.bodyCount <= s_GpuIslandMaxBodies && comp.contactCount <= s_GpuContactIslandMaxContacts)))
         return 0u;
     if(!comp.hasAwakeKinematic && comp.jointCount == 0u && comp.contactCount > 0u && comp.bodyCount <= s_GpuLargeContactIslandMaxBodies && comp.contactCount <= s_GpuLargeContactIslandMaxContacts)
         return 1u;
-    if(!comp.hasAwakeKinematic && comp.jointCount > 0u && comp.bodyCount <= s_GpuJointIslandMaxBodies && comp.contactCount <= s_GpuJointIslandMaxContacts && comp.jointCount <= s_GpuJointIslandMaxJoints)
+    if(!comp.hasAwakeKinematic && comp.jointCount > 0u && comp.bodyCount <= s_GpuIslandMaxBodies && comp.contactCount <= s_GpuJointIslandMaxContacts && comp.jointCount <= s_GpuJointIslandMaxJoints)
         return 2u;
     if(comp.jointCount == 0u && comp.maxDynamicColor <= 3u)
         return 3u;
@@ -7938,7 +7803,7 @@ void BuildSolverWorkPartitionWithColorContacts(
         mut SolverComponentInfo comp = components[ci];
         comp.workScore = comp.bodyCount + comp.contactCount * 2u + comp.jointCount * 3u;
         comp.affinityTier = ResolveComponentGpuAffinityTier(comp);
-        comp.colorBitCount = CountColorBits(comp.colorMask);
+        comp.colorBitCount = cast<u32>(CountSetBits(comp.colorMask));
         totalWork += comp.workScore;
     }
 
@@ -8039,7 +7904,7 @@ void BuildSolverWorkPartitionWithColorContacts(
                 gpuCompKind[ci] = 4u;
                 sortedFreeComps.push_back(ci);
             }
-            else if(!comp.hasAwakeKinematic && comp.jointCount == 0u && comp.contactCount > 0u && comp.bodyCount <= s_GpuContactIslandMaxBodies && comp.contactCount <= s_GpuContactIslandMaxContacts){
+            else if(!comp.hasAwakeKinematic && comp.jointCount == 0u && comp.contactCount > 0u && comp.bodyCount <= s_GpuIslandMaxBodies && comp.contactCount <= s_GpuContactIslandMaxContacts){
                 gpuCompKind[ci] = 1u;
                 sortedContactIslands.push_back(ci);
             }
@@ -8047,7 +7912,7 @@ void BuildSolverWorkPartitionWithColorContacts(
                 gpuCompKind[ci] = 5u;
                 sortedLargeContactIslands.push_back(ci);
             }
-            else if(!comp.hasAwakeKinematic && comp.jointCount > 0u && comp.jointCount <= s_GpuJointIslandMaxJoints && comp.bodyCount <= s_GpuJointIslandMaxBodies && comp.contactCount <= s_GpuJointIslandMaxContacts){
+            else if(!comp.hasAwakeKinematic && comp.jointCount > 0u && comp.jointCount <= s_GpuJointIslandMaxJoints && comp.bodyCount <= s_GpuIslandMaxBodies && comp.contactCount <= s_GpuJointIslandMaxContacts){
                 gpuCompKind[ci] = 2u;
                 sortedJointIslands.push_back(ci);
             }
@@ -8107,7 +7972,7 @@ void BuildSolverWorkPartitionWithColorContacts(
     PackComponentsIntoIslandBins(
         components,
         sortedContactIslands,
-        s_GpuContactIslandMaxBodies,
+        s_GpuIslandMaxBodies,
         s_GpuContactIslandMaxContacts,
         0u,
         0u,
@@ -8147,7 +8012,7 @@ void BuildSolverWorkPartitionWithColorContacts(
     PackComponentsIntoIslandBins(
         components,
         sortedJointIslands,
-        s_GpuJointIslandMaxBodies,
+        s_GpuIslandMaxBodies,
         s_GpuJointIslandMaxContacts,
         s_GpuJointIslandMaxJoints,
         outPartition.gpuContactIslandCount + outPartition.gpuLargeContactIslandCount,
@@ -9104,7 +8969,7 @@ void SolveSingleComponentBatchCpu(
         }
 
         for(u32 bi = bodyStart; bi < bodyEnd; ++bi)
-            IntegrateBodyPositionsAt(sims, h, defaultMaxAngSpeed, cast<usize>(compBodyIndices[bi]), states);
+            IntegrateBodyStatePosition(sims[cast<usize>(compBodyIndices[bi])], h, defaultMaxAngSpeed, states[cast<usize>(compBodyIndices[bi])]);
 
         const u32 postStage = subStep + 1u;
         for(u32 ci = contactStart; ci < contactEnd; ++ci){
@@ -9146,7 +9011,7 @@ void SolveSingleComponentBatchCpu(
         mut ContactConstraint cc = colorConstraints[ref.color][ref.index];
         ApplyRestitutionContactConstraintCached(states, cc, colorCaches[ref.color][ref.index], restThresh);
         mut Contact contact = world.m_contacts[cc.contactId];
-        StoreContactConstraintImpulses(cc, contact);
+        StoreContactConstraintImpulsesToManifold(cc, contact.manifold);
         if(checkHitEvents && (contact.flags & hitEvtBit) != 0u){
             f32 maxApproach = 0.0f;
             u32 maxApproachIdx = 0u;
@@ -9854,7 +9719,7 @@ b8 SolvePartitionSubStepsCpuImpl(
                 bodyCount,
                 grain,
                 lambda[in sims, mut states, in awakeSpan, in h, in defaultMaxAngSpeed](in usize idx) -> void{
-                    IntegrateBodyPositionsAt(sims, h, defaultMaxAngSpeed, cast<usize>(awakeSpan[idx]), states);
+                    IntegrateBodyStatePosition(sims[cast<usize>(awakeSpan[idx])], h, defaultMaxAngSpeed, states[cast<usize>(awakeSpan[idx])]);
                 },
                 CpuTaskOptions()
             );
@@ -9863,7 +9728,7 @@ b8 SolvePartitionSubStepsCpuImpl(
         }
         else{
             for(usize idx = 0u; idx < bodyCount; ++idx)
-                IntegrateBodyPositionsAt(sims, h, defaultMaxAngSpeed, cast<usize>(awakeIndices[idx]), states);
+                IntegrateBodyStatePosition(sims[cast<usize>(awakeIndices[idx])], h, defaultMaxAngSpeed, states[cast<usize>(awakeIndices[idx])]);
         }
 
         for(usize c = 0u; c < s_OverflowColorIndex; ++c){
@@ -10128,7 +9993,7 @@ void SolveSingleComponentFusedCpu(
             SolveJointConstraintCachedWithExtraWithKinematics(states, localJoints[i], localJointCaches[i], h, true, world.m_jointExtraData, movingKinSlots, movingKinStates, kinStride, subStep);
 
         for(u32 bi = bodyStart; bi < bodyEnd; ++bi)
-            IntegrateBodyPositionsAt(sims, h, defaultMaxAngSpeed, cast<usize>(compBodyIndices[bi]), states);
+            IntegrateBodyStatePosition(sims[cast<usize>(compBodyIndices[bi])], h, defaultMaxAngSpeed, states[cast<usize>(compBodyIndices[bi])]);
 
         const u32 postStage = subStep + 1u;
         for(usize i = 0u; i < conCnt; ++i)
@@ -10176,7 +10041,7 @@ void SolveSingleComponentFusedCpu(
         mut ContactConstraint cc = localConstraints[i];
         ApplyRestitutionContactConstraintCached(states, cc, localCaches[i], restThresh);
         mut Contact contact = world.m_contacts[cc.contactId];
-        StoreContactConstraintImpulses(cc, contact);
+        StoreContactConstraintImpulsesToManifold(cc, contact.manifold);
         if(checkHitEvents && (contact.flags & hitEvtBit) != 0u){
             f32 maxApproach = 0.0f;
             u32 maxApproachIdx = 0u;

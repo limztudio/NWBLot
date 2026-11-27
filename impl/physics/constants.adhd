@@ -41,20 +41,14 @@ extern const u32 s_ShaderPhysicsMaxHullEdges;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_TOI_MAX_ITERATIONS")]
 extern const u32 s_ShaderPhysicsTimeOfImpactMaxIterations;
 
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_GPU_GRID_TABLE_SIZE")]
-extern const u32 s_GpuGridTableSize;
-
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_INVALID_INDEX")]
 extern const u32 s_NullIndex;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_BODIES")]
-extern const u32 s_GpuContactIslandMaxBodies;
+extern const u32 s_GpuIslandMaxBodies;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_CONTACTS")]
 extern const u32 s_GpuContactIslandMaxContacts;
-
-[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_ISLAND_MAX_BODIES")]
-extern const u32 s_GpuJointIslandMaxBodies;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_JOINT_ISLAND_MAX_CONTACTS")]
 extern const u32 s_GpuJointIslandMaxContacts;
@@ -93,7 +87,8 @@ const usize s_MaxHullVertices = cast<usize>(s_ShaderPhysicsMaxHullVertices);
 const usize s_MaxHullFaceVertices = 16u;
 const usize s_MaxHullFaces = cast<usize>(s_ShaderPhysicsMaxHullFaces);
 const usize s_MaxHullEdges = cast<usize>(s_ShaderPhysicsMaxHullEdges);
-const f32 s_PlaneHalfExtentDefault = 1.0e4f;
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_PLANE_HALF_EXTENT_DEFAULT")]
+extern const f32 s_PlaneHalfExtentDefault;
 const f32 s_FinitePlaneThickness = 0.05f;
 const f32 s_FinitePlaneHalfThickness = 0.025f;
 const usize s_GjkMaxIterations = 20u;

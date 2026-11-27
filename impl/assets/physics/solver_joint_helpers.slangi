@@ -968,21 +968,24 @@ void nwbPhysicsCheckResidentJointBreak(
     zeroImp.limitImpulses = float4(0.0f, 0.0f, 0.0f, 0.0f);
     g_NwbPhysicsJointImpulseOutBuffers[outSlot][jointIdx] = zeroImp;
 
-    uint evIdx = 0u;
-    InterlockedAdd(g_NwbPhysicsUintBuffers[prepCountersSlot][1u], 1u, evIdx);
-    if(evIdx < maxEvents){
-        const float4 m0 = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 0u];
-        const float4 m4 = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 4u];
-        NwbPhysicsGpuEvent ev;
-        ev.header = uint4(NWB_PHYSICS_GPU_EVENT_JOINT_BREAK, asuint(m0.w), indicesTypeFlags.x, indicesTypeFlags.y);
-        ev.pointImpulse = float4(rA0, peakForce);
-        ev.normalApproach = float4(0.0f, 1.0f, 0.0f, peakTorque);
-        ev.bodyIds = uint4(asuint(m4.x), asuint(m4.y), jointIdx, 0u);
-        g_NwbPhysicsEventBuffers[eventRingSlot][evIdx] = ev;
+    float4 m0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 m4 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if(eventRingSlot != NWB_PHYSICS_INVALID_INDEX && prepCountersSlot != NWB_PHYSICS_INVALID_INDEX && maxEvents > 0u){
+        m0 = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 0u];
+        m4 = g_NwbPhysicsFloat4Buffers[metaSlot][metaBase + 4u];
     }
-    else{
-        InterlockedAdd(g_NwbPhysicsUintBuffers[prepCountersSlot][5u], 1u);
-    }
+    nwbPhysicsEmitEvent(
+        prepCountersSlot,
+        eventRingSlot,
+        maxEvents,
+        NWB_PHYSICS_GPU_EVENT_JOINT_BREAK,
+        asuint(m0.w),
+        indicesTypeFlags.x,
+        indicesTypeFlags.y,
+        float4(rA0, peakForce),
+        float4(0.0f, 1.0f, 0.0f, peakTorque),
+        uint4(asuint(m4.x), asuint(m4.y), jointIdx, 0u)
+    );
 }
 
 [noinline]

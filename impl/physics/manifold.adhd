@@ -178,14 +178,6 @@ u32 MakeFeatureId(in u8 owner1, in u8 index1, in u8 owner2, in u8 index2){
     return (cast<u32>(owner1) << 24u) | (cast<u32>(index1) << 16u) | (cast<u32>(owner2) << 8u) | cast<u32>(index2);
 }
 
-VectorSingle ClosestPointOnSegmentVec(in VectorSingle a, in VectorSingle b, in VectorSingle p){
-    const VectorSingle ab = VectorSingle(b - a, 0.0f);
-    const f32 lenSq = Vector3LengthSq(ab).x;
-    if(lenSq <= s_NormalizeEpsilonSq)
-        return a;
-    const f32 t = Clamp(Vector3Dot(VectorSingle(p - a, 0.0f), ab).x / lenSq, 0.0f, 1.0f);
-    return a + ab * t;
-}
 
 void ClosestPointsBetweenSegments(
     in VectorSingle p1,
@@ -247,10 +239,6 @@ void ClosestPointsBetweenSegments(
     outC2 = p2 + d2 * t;
 }
 
-VectorSingle ClampVec3ToHalfExtents(in VectorSingle p, in VectorSingle h){
-    return Clamp(p, -h, h);
-}
-
 Manifold CollideSpheres(
     in SphereShape sphereA,
     in VectorSingle posA,
@@ -298,7 +286,8 @@ Manifold CollideSphereAndCapsule(
     const VectorSingle pA = TransformPointValues(posA, rotA, sphereA.center());
     const VectorSingle b1 = TransformPointValues(posB, rotB, capsuleB.center1());
     const VectorSingle b2 = TransformPointValues(posB, rotB, capsuleB.center2Vec());
-    const VectorSingle qB = ClosestPointOnSegmentVec(b1, b2, pA);
+    f32 segT = 0.0f;
+    const VectorSingle qB = ClosestPointOnSegmentValues(pA, b1, b2, segT);
 
     const VectorSingle d = VectorSingle(qB - pA, 0.0f);
     const f32 distSq = Vector3LengthSq(d).x;
@@ -434,7 +423,7 @@ Manifold CollideSphereAndHull(
             qBox = SafeNormalizeQuat(QuaternionMultiply(qBox, VectorSingle(hullB.boxRotation)));
         const VectorSingle localS = Vector3InverseRotate(VectorSingle(worldSphereC - cBox, 0.0f), qBox);
         const VectorSingle hBox = hullB.halfExtents();
-        const VectorSingle clamped = ClampVec3ToHalfExtents(localS, hBox);
+        const VectorSingle clamped = Clamp(localS, -hBox, hBox);
         const VectorSingle deltaLocal = VectorSingle(localS - clamped, 0.0f);
         const f32 distSq = Vector3LengthSq(deltaLocal).x;
         const f32 maxD = totalR + maxDistance;
@@ -624,10 +613,10 @@ void ClosestPointSegmentToBoxLocal(
     }
 
     outSegPt = l0;
-    outBoxPt = ClampVec3ToHalfExtents(l0, hBox);
+    outBoxPt = Clamp(l0, -hBox, hBox);
     outDistSq = Vector3LengthSq(VectorSingle(outSegPt - outBoxPt, 0.0f)).x;
 
-    const VectorSingle bp1 = ClampVec3ToHalfExtents(l1, hBox);
+    const VectorSingle bp1 = Clamp(l1, -hBox, hBox);
     const f32 dSq1 = Vector3LengthSq(VectorSingle(l1 - bp1, 0.0f)).x;
     if(dSq1 < outDistSq){
         outDistSq = dSq1;
@@ -676,7 +665,7 @@ void ClosestPointSegmentToBoxLocal(
             candT = Clamp(-num / denom, ta, tb);
 
         const VectorSingle sp = l0 + d * candT;
-        const VectorSingle bp = ClampVec3ToHalfExtents(sp, hBox);
+        const VectorSingle bp = Clamp(sp, -hBox, hBox);
         const f32 dSq = Vector3LengthSq(VectorSingle(sp - bp, 0.0f)).x;
         if(dSq < outDistSq){
             outDistSq = dSq;
@@ -1812,19 +1801,6 @@ Manifold CollideCapsuleAndMeshFiltered(
     return m;
 }
 
-Manifold CollideCapsuleAndMesh(
-    in CapsuleShape capA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in MeshShape meshB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance
-){
-    Optional<TriangleFilterCallback> noFilter;
-    return CollideCapsuleAndMeshFiltered(capA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter);
-}
-
 void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
     const u32 newCount = newManifold.pointCount();
     const u32 oldCount = oldManifold.pointCount();
@@ -2093,14 +2069,6 @@ void ReduceSinglePlaneMeshCandidates(
             c.featureId
         );
     }
-}
-
-void ReduceMeshCandidatesAndWriteManifold(
-    in VectorSingle normal,
-    in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
-    mut Manifold outManifold
-){
-    ReduceSinglePlaneMeshCandidates(normal, candidates, false, outManifold);
 }
 
 void ReduceMeshCandidatesMultiManifold(
@@ -2607,7 +2575,7 @@ Manifold CollideConvexProxyViewsFromGjk(
         return m;
     }
 
-    ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+    ReduceSinglePlaneMeshCandidates(nAtoB, candidates, false, m);
     return m;
 }
 
@@ -2826,7 +2794,7 @@ Manifold CollideConvexProxyVsPlane(
                 const f32 sep = dist - proxyA.radius;
                 if(sep <= maxDistance){
                     PushMeshCandidate((wA + closestOnSlab) * 0.5f, wA - posA, closestOnSlab - posB, edgeNAtoB, sep, MakeFeatureId(5u, 0u, 6u, 0u), candidates);
-                    ReduceMeshCandidatesAndWriteManifold(edgeNAtoB, candidates, m);
+                    ReduceSinglePlaneMeshCandidates(edgeNAtoB, candidates, false, m);
                 }
             }
             return m;
@@ -2849,7 +2817,7 @@ Manifold CollideConvexProxyVsPlane(
     }
 
     if(!candidates.empty()){
-        ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+        ReduceSinglePlaneMeshCandidates(nAtoB, candidates, false, m);
         return m;
     }
 

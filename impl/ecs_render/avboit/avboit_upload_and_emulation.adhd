@@ -354,7 +354,6 @@ Expected<b8> DeclareAvboitMaterialUploads(
         inputs.resources.materialInstances,
         inputs.frameBindings,
         ResolveAvboitPhysicsTransformPatchPrefix(phase),
-        true,
         graph,
         inOutUploadTask
     )){

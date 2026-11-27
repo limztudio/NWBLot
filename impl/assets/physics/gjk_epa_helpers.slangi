@@ -384,6 +384,21 @@ void nwbPhysicsSupportCachedOrTri(
     outPt = nwbPhysicsSupportCached(cache, hullVertexSlot, worldDir, outIdx);
 }
 
+NwbPhysicsGpuSupportCache nwbPhysicsMakeEmptySupportCache(){
+    NwbPhysicsGpuSupportCache cache;
+    cache.shapeType = 0u;
+    cache.vCount = 0u;
+    cache.vOffset = 0u;
+    cache.isBox = false;
+    cache.p0OrCenter = float3(0.0f, 0.0f, 0.0f);
+    cache.p1OrExtent = float3(0.0f, 0.0f, 0.0f);
+    cache.axX = float3(1.0f, 0.0f, 0.0f);
+    cache.axY = float3(0.0f, 1.0f, 0.0f);
+    cache.axZ = float3(0.0f, 0.0f, 1.0f);
+    cache.extraParams = float2(0.0f, 0.0f);
+    return cache;
+}
+
 [noinline]
 bool nwbPhysicsRunGjkDistanceCached(
     const NwbPhysicsGpuSupportCache cacheA,
@@ -396,8 +411,7 @@ bool nwbPhysicsRunGjkDistanceCached(
     const float3 bv0,
     const float3 bv1,
     const float3 bv2,
-    const uint hullVertexSlotA,
-    const uint hullVertexSlotB,
+    const uint hullVertexSlot,
     out float3 outPtA,
     out float3 outPtB,
     out float outDist,
@@ -419,8 +433,8 @@ bool nwbPhysicsRunGjkDistanceCached(
     }
 
     uint sCount = 1u;
-    nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlotA, triA, av0, av1, av2, float3(1.0f, 0.0f, 0.0f), sIdxA[0], sWA[0]);
-    nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlotB, triB, bv0, bv1, bv2, float3(-1.0f, 0.0f, 0.0f), sIdxB[0], sWB[0]);
+    nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlot, triA, av0, av1, av2, float3(1.0f, 0.0f, 0.0f), sIdxA[0], sWA[0]);
+    nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlot, triB, bv0, bv1, bv2, float3(-1.0f, 0.0f, 0.0f), sIdxB[0], sWB[0]);
     sW[0] = sWB[0] - sWA[0];
     sU[0] = 1.0f;
 
@@ -451,8 +465,8 @@ bool nwbPhysicsRunGjkDistanceCached(
         uint idxB = 0u;
         float3 wA = float3(0.0f, 0.0f, 0.0f);
         float3 wB = float3(0.0f, 0.0f, 0.0f);
-        nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlotA, triA, av0, av1, av2, -d, idxA, wA);
-        nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlotB, triB, bv0, bv1, bv2, d, idxB, wB);
+        nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlot, triA, av0, av1, av2, -d, idxA, wA);
+        nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlot, triB, bv0, bv1, bv2, d, idxB, wB);
 
         bool dup = false;
         if(idxA < 0x8000u && idxB < 0x8000u){
@@ -489,110 +503,6 @@ bool nwbPhysicsRunGjkDistanceCached(
     outPtB = pB;
     outDist = sqrt(max(0.0f, dot(pB - pA, pB - pA)));
     return true;
-}
-
-
-bool nwbPhysicsRunGjkDistanceCached(
-    const NwbPhysicsGpuSupportCache cacheA,
-    const bool triA,
-    const float3 av0,
-    const float3 av1,
-    const float3 av2,
-    const NwbPhysicsGpuSupportCache cacheB,
-    const bool triB,
-    const float3 bv0,
-    const float3 bv1,
-    const float3 bv2,
-    const uint hullVertexSlot,
-    out float3 outPtA,
-    out float3 outPtB,
-    out float outDist,
-    out bool outHitDeep
-){
-    return nwbPhysicsRunGjkDistanceCached(
-        cacheA, triA, av0, av1, av2,
-        cacheB, triB, bv0, bv1, bv2,
-        hullVertexSlot, hullVertexSlot,
-        outPtA, outPtB, outDist, outHitDeep
-    );
-}
-
-bool nwbPhysicsRunGjkDistance(
-    const NwbPhysicsGpuShapeProxy proxyA,
-    const float3 originA,
-    const float4 rotA,
-    const NwbPhysicsGpuShapeProxy proxyB,
-    const float3 originB,
-    const float4 rotB,
-    const bool triB,
-    const float3 tv0,
-    const float3 tv1,
-    const float3 tv2,
-    const uint hullVertexSlotA,
-    const uint hullVertexSlotB,
-    out float3 outPtA,
-    out float3 outPtB,
-    out float outDist,
-    out bool outHitDeep
-){
-    const NwbPhysicsGpuSupportCache cacheA = nwbPhysicsBuildSupportCache(proxyA, originA, rotA);
-    NwbPhysicsGpuSupportCache cacheB;
-    cacheB.shapeType = 0u;
-    cacheB.vCount = 0u;
-    cacheB.vOffset = 0u;
-    cacheB.isBox = false;
-    cacheB.p0OrCenter = float3(0.0f, 0.0f, 0.0f);
-    cacheB.p1OrExtent = float3(0.0f, 0.0f, 0.0f);
-    cacheB.axX = float3(1.0f, 0.0f, 0.0f);
-    cacheB.axY = float3(0.0f, 1.0f, 0.0f);
-    cacheB.axZ = float3(0.0f, 0.0f, 1.0f);
-    cacheB.extraParams = float2(0.0f, 0.0f);
-    if(!triB)
-        cacheB = nwbPhysicsBuildSupportCache(proxyB, originB, rotB);
-    return nwbPhysicsRunGjkDistanceCached(
-        cacheA,
-        false,
-        float3(0.0f, 0.0f, 0.0f),
-        float3(0.0f, 0.0f, 0.0f),
-        float3(0.0f, 0.0f, 0.0f),
-        cacheB,
-        triB,
-        tv0,
-        tv1,
-        tv2,
-        hullVertexSlotA,
-        hullVertexSlotB,
-        outPtA,
-        outPtB,
-        outDist,
-        outHitDeep
-    );
-}
-
-bool nwbPhysicsRunGjkDistance(
-    const NwbPhysicsGpuShapeProxy proxyA,
-    const float3 originA,
-    const float4 rotA,
-    const NwbPhysicsGpuShapeProxy proxyB,
-    const float3 originB,
-    const float4 rotB,
-    const bool triB,
-    const float3 tv0,
-    const float3 tv1,
-    const float3 tv2,
-    const uint hullVertexSlot,
-    out float3 outPtA,
-    out float3 outPtB,
-    out float outDist,
-    out bool outHitDeep
-){
-    return nwbPhysicsRunGjkDistance(
-        proxyA, originA, rotA,
-        proxyB, originB, rotB,
-        triB, tv0, tv1, tv2,
-        hullVertexSlot, hullVertexSlot,
-        outPtA, outPtB, outDist, outHitDeep
-    );
 }
 
 #if NWB_PHYSICS_ENABLE_EPA
@@ -632,8 +542,7 @@ float3 nwbPhysicsEpaSupportPair(
     const float3 bv0,
     const float3 bv1,
     const float3 bv2,
-    const uint hullVertexSlotA,
-    const uint hullVertexSlotB,
+    const uint hullVertexSlot,
     const float3 dir,
     out float3 outWA
 ){
@@ -641,8 +550,8 @@ float3 nwbPhysicsEpaSupportPair(
     uint idxB = 0u;
     float3 ptA = float3(0.0f, 0.0f, 0.0f);
     float3 ptB = float3(0.0f, 0.0f, 0.0f);
-    nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlotA, triA, av0, av1, av2, dir, idxA, ptA);
-    nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlotB, triB, bv0, bv1, bv2, -dir, idxB, ptB);
+    nwbPhysicsSupportCachedOrTri(cacheA, hullVertexSlot, triA, av0, av1, av2, dir, idxA, ptA);
+    nwbPhysicsSupportCachedOrTri(cacheB, hullVertexSlot, triB, bv0, bv1, bv2, -dir, idxB, ptB);
     outWA = ptA;
     return ptA - ptB;
 }
@@ -693,8 +602,7 @@ bool nwbPhysicsRunEpaCached(
     const float3 bv0,
     const float3 bv1,
     const float3 bv2,
-    const uint hullVertexSlotA,
-    const uint hullVertexSlotB,
+    const uint hullVertexSlot,
     const float3 hintNormalAtoB,
     out float3 outNormalAtoB,
     out float3 outPtA,
@@ -710,10 +618,10 @@ bool nwbPhysicsRunEpaCached(
     float3 wAs[NWB_PHYSICS_EPA_MAX_VERTS];
 
     const float3 d0 = nwbPhysicsSafeNormal(hintNormalAtoB, float3(0.0f, 1.0f, 0.0f));
-    verts[0] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, d0, wAs[0]);
+    verts[0] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, d0, wAs[0]);
 
     float3 d1 = (dot(verts[0], verts[0]) > 1.0e-10f) ? nwbPhysicsSafeNormal(-verts[0], -d0) : -d0;
-    verts[1] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, d1, wAs[1]);
+    verts[1] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, d1, wAs[1]);
     float3 e01 = verts[1] - verts[0];
     if(dot(e01, e01) <= 1.0e-10f){
         float3 bU1;
@@ -722,7 +630,7 @@ bool nwbPhysicsRunEpaCached(
         const float3 altDirs1[3] = { -d0, bU1, bU2 };
         [loop]
         for(uint ai = 0u; ai < 3u; ++ai){
-            verts[1] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, altDirs1[ai], wAs[1]);
+            verts[1] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, altDirs1[ai], wAs[1]);
             e01 = verts[1] - verts[0];
             if(dot(e01, e01) > 1.0e-10f)
                 break;
@@ -741,7 +649,7 @@ bool nwbPhysicsRunEpaCached(
     bool foundP2 = false;
     [loop]
     for(uint ci = 0u; ci < 4u; ++ci){
-        verts[2] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, candDirs2[ci], wAs[2]);
+        verts[2] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, candDirs2[ci], wAs[2]);
         const float3 triArea = cross(e01, verts[2] - verts[0]);
         if(dot(triArea, triArea) > 1.0e-10f){
             foundP2 = true;
@@ -755,9 +663,9 @@ bool nwbPhysicsRunEpaCached(
     const float3 rawN012 = cross(e01, e02);
     const float3 n012 = nwbPhysicsSafeNormal(rawN012, d0);
     const float3 d3 = (dot(n012, -verts[0]) >= 0.0f) ? n012 : -n012;
-    verts[3] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, d3, wAs[3]);
+    verts[3] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, d3, wAs[3]);
     if(abs(dot(n012, verts[3] - verts[0])) <= 1.0e-7f){
-        verts[3] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, -d3, wAs[3]);
+        verts[3] = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, -d3, wAs[3]);
         if(abs(dot(n012, verts[3] - verts[0])) <= 1.0e-7f)
             return false;
     }
@@ -794,7 +702,7 @@ bool nwbPhysicsRunEpaCached(
         const float3 oldV = verts[oppIdx];
         const float3 oldWA = wAs[oppIdx];
         float3 wANew = float3(0.0f, 0.0f, 0.0f);
-        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, worstNorm, wANew);
+        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, worstNorm, wANew);
         if(dot(worstNorm, pNew - verts[nwbPhysicsEpaFaceI0(worstPack)]) <= 1.0e-6f)
             break;
 
@@ -850,7 +758,7 @@ bool nwbPhysicsRunEpaCached(
 
         const float3 bestNorm = faceNormalDist[bestIdx].xyz;
         float3 wANew = float3(0.0f, 0.0f, 0.0f);
-        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlotA, hullVertexSlotB, bestNorm, wANew);
+        const float3 pNew = nwbPhysicsEpaSupportPair(cacheA, triA, av0, av1, av2, cacheB, triB, bv0, bv1, bv2, hullVertexSlot, bestNorm, wANew);
         const float pProj = dot(bestNorm, pNew);
         if(pProj - bestDist <= max(1.0e-4f, 1.0e-4f * max(bestDist, 0.0f)))
             break;
@@ -982,32 +890,6 @@ bool nwbPhysicsRunEpaCached(
     outPtA = wAs[wfI0] * bary.x + wAs[wfI1] * bary.y + wAs[wfI2] * bary.z;
     outPtB = outPtA - pWin;
     return true;
-}
-
-bool nwbPhysicsRunEpaCached(
-    const NwbPhysicsGpuSupportCache cacheA,
-    const bool triA,
-    const float3 av0,
-    const float3 av1,
-    const float3 av2,
-    const NwbPhysicsGpuSupportCache cacheB,
-    const bool triB,
-    const float3 bv0,
-    const float3 bv1,
-    const float3 bv2,
-    const uint hullVertexSlot,
-    const float3 hintNormalAtoB,
-    out float3 outNormalAtoB,
-    out float3 outPtA,
-    out float3 outPtB,
-    out float outDepth
-){
-    return nwbPhysicsRunEpaCached(
-        cacheA, triA, av0, av1, av2,
-        cacheB, triB, bv0, bv1, bv2,
-        hullVertexSlot, hullVertexSlot,
-        hintNormalAtoB, outNormalAtoB, outPtA, outPtB, outDepth
-    );
 }
 
 #endif

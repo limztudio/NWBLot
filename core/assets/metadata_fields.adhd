@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::MetadataStringField"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/assets/metadata_fields.h>"), cpp_name("::NWB::Core::Assets::MetadataStringField"), cpp_flags(binary_serializable, brace_init)]
 extern class MetadataStringField{
     StringView text;
     b8 present;

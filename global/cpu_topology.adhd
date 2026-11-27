@@ -13,7 +13,7 @@ extern enum CpuAffinity : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/cpu_topology.h>"), cpp_name("::CpuWorkerPlacement"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<global/cpu_topology.h>"), cpp_name("::CpuWorkerPlacement"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class CpuWorkerPlacement{
     CpuAffinity affinity;
     u32 logicalProcessorIndex;

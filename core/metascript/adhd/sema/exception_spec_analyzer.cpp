@@ -36,7 +36,7 @@ namespace __hidden_adhd_exception_spec_analyzer{
 }
 
 [[nodiscard]] b8 ExternClassHasSafeTrivialDefault(const ClassDecl& cls)noexcept{
-    return cls.isSmallValue || cls.isBorrowView || cls.isBinarySerializable || cls.emitsBraceFieldInit;
+    return !cls.isAbstract && (cls.isNothrowDefaultConstructible || cls.isSmallValue || cls.isBorrowView || cls.isBinarySerializable || cls.emitsBraceFieldInit);
 }
 
 [[nodiscard]] b8 IsProvenNothrowBuiltinConstructibleType(const MStringView baseType, const SymbolTable& symbols)noexcept{
@@ -45,7 +45,7 @@ namespace __hidden_adhd_exception_spec_analyzer{
     if(BuiltinTypeSemantics::IsScalarType(baseType) || SymbolTable::IsSimdType(baseType) || FindBuiltinEnum(baseType) != nullptr)
         return true;
     if(const BuiltinObjectTypeInfo* obj = FindBuiltinObjectType(baseType))
-        return !obj->isAbstract && (obj->isSelfDefaulted || obj->isSmallValue || obj->isBorrowView || obj->isBinarySerializable || obj->emitsBraceFieldInit);
+        return !obj->isAbstract && (obj->isNothrowDefaultConstructible || obj->isSmallValue || obj->isBorrowView || obj->isBinarySerializable || obj->emitsBraceFieldInit);
     if(const BuiltinGenericTypeInfo* generic = FindBuiltinGenericType(baseType)){
         return generic->isCopyMoveConstructible
             || generic->isSmallValue
@@ -56,12 +56,6 @@ namespace __hidden_adhd_exception_spec_analyzer{
             || (generic->isArenaBacked && generic->isSelfDefaulted);
     }
     return false;
-}
-
-[[nodiscard]] const ClassDecl* FindPolymorphicSdkInterface(const SymbolTable& symbols, const MStringView baseName)noexcept{
-    if(const ClassDecl* sdk = symbols.findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase)
-        return sdk;
-    return FindBuiltinPolymorphicInterfaceDecl(baseName);
 }
 
 [[nodiscard]] b8 HasPolymorphicSdkMatchingNothrow(const ClassDecl& sdk, const MethodDecl& method, const SymbolTable& symbols)noexcept{
@@ -87,7 +81,7 @@ namespace __hidden_adhd_exception_spec_analyzer{
         if(!baseType)
             continue;
         const MStringView baseName = symbols.resolveBaseTypeName(baseType->name);
-        if(const ClassDecl* sdk = FindPolymorphicSdkInterface(symbols, baseName)){
+        if(const ClassDecl* sdk = symbols.findPolymorphicSdkInterface(baseName)){
             if(HasPolymorphicSdkMatchingNothrow(*sdk, method, symbols))
                 return true;
             continue;
@@ -113,7 +107,7 @@ namespace __hidden_adhd_exception_spec_analyzer{
 
     if(!cls.systemTypeName.empty()){
         if(const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System)){
-            if(const ClassDecl* sdk = FindPolymorphicSdkInterface(symbols, sysContract->implicitInterfaceAdhdName)){
+            if(const ClassDecl* sdk = symbols.findPolymorphicSdkInterface(sysContract->implicitInterfaceAdhdName)){
                 if(HasPolymorphicSdkMatchingNothrow(*sdk, method, symbols))
                     return true;
             }
@@ -939,15 +933,8 @@ void ExceptionSpecAnalyzer::analyze(TranslationUnit& unit)const{
     for(ClassDecl* cls : unit.classes){
         if(!cls)
             continue;
-        if(cls->isExtern){
-            if(!cls->isPolymorphicBase){
-                for(MethodDecl* m : cls->methods){
-                    if(m)
-                        m->allowsCppUnwind = !m->isNothrowExtern;
-                }
-            }
+        if(cls->isExtern)
             continue;
-        }
 
         const b8 hasRole = __hidden_adhd_exception_spec_analyzer::HasRoleContract(*cls);
         b8 hasNonTrivialInterfaceBase = false;
@@ -1000,10 +987,8 @@ void ExceptionSpecAnalyzer::analyze(TranslationUnit& unit)const{
     for(MethodDecl* fn : unit.freeFunctions){
         if(!fn)
             continue;
-        if(fn->isExtern){
-            fn->allowsCppUnwind = !fn->isNothrowExtern;
+        if(fn->isExtern)
             continue;
-        }
         if(!fn->exceptionProbes.empty()){
             __hidden_adhd_exception_spec_analyzer::ResetStmtLambdas(fn->body);
             continue;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest"), cpp_flags(binary_serializable, brace_init, equality_switch)]
 extern class Sha256Digest{
     Array<u8, 32u> bytes;
 };

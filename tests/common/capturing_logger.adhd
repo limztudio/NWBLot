@@ -5,9 +5,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/utf8_log_sink.h>"), cpp_name("::NWB::Tests::Utf8LogSink"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<tests/common/utf8_log_sink.h>"), cpp_name("::NWB::Tests::Utf8LogSink")]
 extern class Utf8LogSink{
-    [cpp_flags(unwind)] void receive(in StringView text, in LogType kind);
+    void receive(in StringView text, in LogType kind);
 };
 
 

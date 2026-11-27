@@ -133,7 +133,7 @@ b8 TypeChecker::checkCallExpr(ClassDecl* ownerClass, const Span<const ScopedVarI
                 constructedRef.templateArgs = expr.callTemplateArgs;
                 if(TypeLayoutAnalyzer(m_symbols).isNonRootMotherArenaType(constructedRef)){
                     b8 callerPassedArena = false;
-                    if(!targetCallable && !(ctorCls->isExtern && ctorCls->arenaCtorMode == 1u)){
+                    if(!targetCallable && !(ctorCls->isExtern && ctorCls->arenaCtorMode == ArenaCtorMode::First)){
                         if(DoesSynthesizedClassCtorPassArena(*ctorCls, baseCallee, callArgCount, argTypeHints.empty() ? MStringView{} : argTypeHints[0]))
                             callerPassedArena = true;
                     }

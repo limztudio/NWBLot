@@ -144,6 +144,7 @@ struct BuiltinObjectTypeInfo{
     u32 byteAlign;
     b8 isArenaBacked;
     b8 isSelfDefaulted;
+    b8 isNothrowDefaultConstructible;
     b8 isSmallValue;
     b8 isBorrowView;
     b8 isBinarySerializable;
@@ -159,6 +160,7 @@ struct BuiltinObjectTypeInfo{
     b8 isAssignable;
     b8 isAbstract;
     b8 isPolymorphicBase;
+    b8 isEmptyBase;
     u8 formatArgWrapKind;
     Span<const TemplateParamDecl> templateParams{};
 };

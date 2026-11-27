@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NWB::Core::ECS::EntityID"), cpp_flags(self_defaulted, small_value, binary_serializable, equality_switch)]
+[cpp_name("::NWB::Core::ECS::EntityID"), cpp_flags(small_value, binary_serializable, equality_switch)]
 extern class EntityID{
     u32 id;
     u32 index(...)const;

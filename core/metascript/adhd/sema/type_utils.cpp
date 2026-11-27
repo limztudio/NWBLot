@@ -2,20 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "../cache_utils.h"
+#include "../clang/cpp_extern_trait_resolver.h"
 #include <core/metascript/adhd/ast/builtin_type_semantics.h>
 #include <core/metascript/adhd/ast/operator_semantics.h>
 #include <core/metascript/adhd/parser/decl_parser.h>
 #include <core/metascript/arena_names.h>
 #include <core/metascript/literal_decoder.h>
 
-#include <global/atomic.h>
-#include <global/environment.h>
 #include <global/filesystem.h>
 #include <global/hash_utils.h>
-
-#if !defined(FOUNDATION_PLATFORM_WINDOWS)
-#include <unistd.h>
-#endif
 
 #include "type_utils.h"
 
@@ -37,7 +33,7 @@ namespace __hidden_adhd_type_utils{
 
 inline constexpr BuiltinObjectTypeInfo s_BuiltinObjectTypes[] = {
 #define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaCtorMode, isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind, requiredHeader) \
-    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, static_cast<u8>(arenaCtorMode), isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind },
+    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, (!isAbstract && (isSelfDefaulted || isSmallValue || isBorrowView || isBinarySerializable || emitsBraceFieldInit)), isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, static_cast<u8>(arenaCtorMode), isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, false, formatArgWrapKind },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
@@ -443,7 +439,8 @@ private:
     struct WatchedPreludeFile{
         MString relativePath;
         u64 fileSize = 0u;
-        i64 mtimeTicks = 0;
+        u64 mtimeLow = 0u;
+        u64 mtimeHigh = 0u;
         b8 fromProjectRoot = false;
 
 
@@ -459,7 +456,7 @@ private:
     };
 
     static inline constexpr u32 s_BinaryCacheMagic = 0x4E574250u;
-    static inline constexpr u32 s_BinaryCacheVersion = 4u;
+    static inline constexpr u32 s_BinaryCacheVersion = 8u;
 
     [[nodiscard]] static u64 ComputeBinaryCacheSchemaSignature()noexcept{
         u64 sig = s_Fnv64OffsetBasis;
@@ -493,52 +490,13 @@ private:
         return sig;
     }
 
-    [[nodiscard]] static b8 QueryDiskFileStat(const ::Path<MetaArena>& diskPath, u64& outSize, i64& outMtimeTicks)noexcept{
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        WIN32_FILE_ATTRIBUTE_DATA attrData{};
-        if(!GetFileAttributesExW(diskPath.c_str(), GetFileExInfoStandard, &attrData))
-            return false;
-        if((attrData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
-            return false;
-        outSize = (static_cast<u64>(attrData.nFileSizeHigh) << 32u) | static_cast<u64>(attrData.nFileSizeLow);
-        outMtimeTicks = static_cast<i64>((static_cast<u64>(attrData.ftLastWriteTime.dwHighDateTime) << 32u) | static_cast<u64>(attrData.ftLastWriteTime.dwLowDateTime));
-        return true;
-#else
-        struct stat status{};
-        if(::stat(diskPath.c_str(), &status) != 0 || !S_ISREG(status.st_mode))
-            return false;
-        outSize = static_cast<u64>(status.st_size);
-        outMtimeTicks = static_cast<i64>(status.st_mtime) * 1000000000ll;
-#if defined(__APPLE__)
-        outMtimeTicks += static_cast<i64>(status.st_mtimespec.tv_nsec);
-#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200809L
-        outMtimeTicks += static_cast<i64>(status.st_mtim.tv_nsec);
-#endif
-        return true;
-#endif
-    }
-
     [[nodiscard]] static ::Path<MetaArena> ResolvePreludeCachePath(MetaArena& arena){
         u64 rootHash = s_Fnv64OffsetBasis;
 #if defined(NWB_PROJECT_SOURCE_DIR)
         rootHash = UpdateFnv64TextExact(rootHash, MStringView(NWB_PROJECT_SOURCE_DIR));
 #endif
         const MString fileName = StringFormat(arena, "nwb_adhd_prelude_{:016x}_v{}.bin", rootHash, s_BinaryCacheVersion);
-
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        wchar tempBuf[MAX_PATH + 2u] = {};
-        const DWORD len = GetTempPathW(static_cast<DWORD>(MAX_PATH + 1u), tempBuf);
-        if(len > 0u && len <= MAX_PATH){
-            ::Path<MetaArena> dir(arena, TStringView(tempBuf, static_cast<usize>(len)));
-            return dir / ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
-        }
-        return ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
-#else
-        const auto envTmp = ReadEnvironmentVariable(arena, "TMPDIR");
-        const MStringView dirText = (envTmp && *envTmp && !(*envTmp)->empty()) ? MStringView((*envTmp)->data(), (*envTmp)->size()) : MStringView("/tmp");
-        ::Path<MetaArena> dir(arena, dirText);
-        return dir / ::Path<MetaArena>(arena, MStringView(fileName.data(), fileName.size()));
-#endif
+        return CacheDetail::ResolveTempCachePath(arena, MStringView(fileName.data(), fileName.size()));
     }
 
     [[nodiscard]] static b8 BuildProjectCandidatePath(const MStringView relativePath, const b8 fromProjectRoot, MetaArena& arena, ::Path<MetaArena>& outDiskPath){
@@ -566,7 +524,7 @@ private:
     public:
         explicit PreludeBinaryWriter(MetaArena& arena)
             : m_arena(arena)
-            , m_bytes(arena)
+            , m_buffer(arena)
             , m_stringBlob(arena)
             , m_stringOffsets(0, MStringViewHash(), EqualTo<MStringView>(), arena)
             , m_ownedKeys(arena)
@@ -575,25 +533,9 @@ private:
 
     public:
         template<typename T>
-        void writeValue(const T& val){
-            static_assert(IsTriviallyCopyable_V<T>, "writeValue requires trivially copyable type");
-            const u8* ptr = reinterpret_cast<const u8*>(&val);
-            m_bytes.insert(m_bytes.end(), ptr, ptr + sizeof(T));
-        }
-
-        void writeBool(const b8 val){
-            const u8 b = val ? 1u : 0u;
-            writeValue(b);
-        }
-
-        void writeRawString(const MStringView sv){
-            const u32 len = static_cast<u32>(sv.size());
-            writeValue(len);
-            if(len > 0u){
-                const u8* ptr = reinterpret_cast<const u8*>(sv.data());
-                m_bytes.insert(m_bytes.end(), ptr, ptr + len);
-            }
-        }
+        void writeValue(const T& val){ m_buffer.writeValue(val); }
+        void writeBool(const b8 val){ m_buffer.writeBool(val); }
+        void writeRawString(const MStringView sv){ m_buffer.writeRawString(sv); }
 
         void writeString(const MStringView sv){
             if(sv.empty()){
@@ -616,13 +558,13 @@ private:
             writeValue(ref);
         }
 
-        [[nodiscard]] const Vector<u8, MetaArena>& payloadBytes()const noexcept{ return m_bytes; }
+        [[nodiscard]] const Vector<u8, MetaArena>& payloadBytes()const noexcept{ return m_buffer.bytes(); }
         [[nodiscard]] const MString& stringBlob()const noexcept{ return m_stringBlob; }
 
 
     private:
         MetaArena& m_arena;
-        Vector<u8, MetaArena> m_bytes;
+        CacheDetail::BinaryBufferWriter m_buffer;
         MString m_stringBlob;
         HashMap<MStringView, SerializedStringRef, MetaArena, MStringViewHash> m_stringOffsets;
         MVector<GlobalUniquePtr<MString>> m_ownedKeys;
@@ -631,44 +573,18 @@ private:
     class PreludeBinaryReader final{
     public:
         PreludeBinaryReader(const u8* data, const usize size)noexcept
-            : m_data(data)
-            , m_size(size)
+            : m_buffer(data, size)
         {}
 
 
     public:
-        [[nodiscard]] b8 hasRemaining(const usize byteCount)const noexcept{
-            return m_cursor <= m_size && byteCount <= (m_size - m_cursor);
-        }
+        [[nodiscard]] b8 hasRemaining(const usize byteCount)const noexcept{ return m_buffer.hasRemaining(byteCount); }
 
         template<typename T>
-        [[nodiscard]] b8 readValue(T& outVal)noexcept{
-            static_assert(IsTriviallyCopyable_V<T>, "readValue requires trivially copyable type");
-            if(!hasRemaining(sizeof(T)))
-                return false;
-            FOUNDATION_MEMCPY(&outVal, sizeof(T), m_data + m_cursor, sizeof(T));
-            m_cursor += sizeof(T);
-            return true;
-        }
+        [[nodiscard]] b8 readValue(T& outVal)noexcept{ return m_buffer.readValue(outVal); }
 
-        [[nodiscard]] b8 readBool(b8& outVal)noexcept{
-            u8 b = 0u;
-            if(!readValue(b))
-                return false;
-            outVal = (b != 0u);
-            return true;
-        }
-
-        [[nodiscard]] b8 readRawStringView(MStringView& outView)noexcept{
-            u32 len = 0u;
-            if(!readValue(len))
-                return false;
-            if(!hasRemaining(len))
-                return false;
-            outView = MStringView(reinterpret_cast<const char*>(m_data + m_cursor), len);
-            m_cursor += len;
-            return true;
-        }
+        [[nodiscard]] b8 readBool(b8& outVal)noexcept{ return m_buffer.readBool(outVal); }
+        [[nodiscard]] b8 readRawStringView(MStringView& outView)noexcept{ return m_buffer.readRawStringView(outView); }
 
         [[nodiscard]] b8 readStringRef(const MString& blob, MStringView& outView)noexcept{
             SerializedStringRef ref{};
@@ -684,22 +600,12 @@ private:
             return true;
         }
 
-        [[nodiscard]] b8 readBytes(void* dst, const usize byteCount)noexcept{
-            if(!hasRemaining(byteCount))
-                return false;
-            if(byteCount > 0u)
-                FOUNDATION_MEMCPY(dst, byteCount, m_data + m_cursor, byteCount);
-            m_cursor += byteCount;
-            return true;
-        }
-
-        [[nodiscard]] b8 atEnd()const noexcept{ return m_cursor == m_size; }
+        [[nodiscard]] b8 readBytes(void* dst, const usize byteCount)noexcept{ return m_buffer.readBytes(dst, byteCount); }
+        [[nodiscard]] b8 atEnd()const noexcept{ return m_buffer.atEnd(); }
 
 
     private:
-        const u8* m_data = nullptr;
-        usize m_size = 0u;
-        usize m_cursor = 0u;
+        CacheDetail::BinaryBufferReader m_buffer;
     };
 
 
@@ -860,8 +766,9 @@ private:
             if(!watchedList)
                 return;
             u64 fileSize = 0u;
-            i64 mtimeTicks = 0;
-            if(!QueryDiskFileStat(diskPath, fileSize, mtimeTicks))
+            u64 mtimeLow = 0u;
+            u64 mtimeHigh = 0u;
+            if(!CacheDetail::QueryDiskFileStamp(diskPath, fileSize, mtimeLow, mtimeHigh))
                 return;
             for(const WatchedPreludeFile& existing : watchedList->files){
                 if(existing.fromProjectRoot == fromRoot && existing.relativePath == relativePath)
@@ -870,14 +777,16 @@ private:
             WatchedPreludeFile entry(watchedList->arena);
             entry.relativePath.assign(relativePath.data(), relativePath.size());
             entry.fileSize = fileSize;
-            entry.mtimeTicks = mtimeTicks;
+            entry.mtimeLow = mtimeLow;
+            entry.mtimeHigh = mtimeHigh;
             entry.fromProjectRoot = fromRoot;
             watchedList->files.push_back(Move(entry));
         };
 
-        const auto tryReadPath = [&](const MStringView pathText, const b8 fromRoot) -> b8{
-            const TString<MetaArena> nativePath = ConvertString(arena, pathText);
-            const ::Path<MetaArena> diskPath(arena, TStringView(nativePath.data(), nativePath.size()));
+        const auto tryReadCandidate = [&](const b8 fromRoot) -> b8{
+            ::Path<MetaArena> diskPath(arena);
+            if(!BuildProjectCandidatePath(relativePath, fromRoot, arena, diskPath))
+                return false;
             outText.clear();
             if(!ReadTextFile(diskPath, outText))
                 return false;
@@ -885,20 +794,7 @@ private:
             return true;
         };
 
-#if defined(NWB_PROJECT_SOURCE_DIR)
-        {
-            const MStringView root = NWB_PROJECT_SOURCE_DIR;
-            if(!root.empty()){
-                MString fullPath(root.data(), root.size(), arena);
-                if(fullPath.back() != '/' && fullPath.back() != '\\')
-                    fullPath.push_back('/');
-                fullPath.append(relativePath.data(), relativePath.size());
-                if(tryReadPath(MStringView(fullPath.data(), fullPath.size()), true))
-                    return true;
-            }
-        }
-#endif
-        return tryReadPath(relativePath, false);
+        return tryReadCandidate(true) || tryReadCandidate(false);
     }
 
     template<typename InfoT>
@@ -1212,6 +1108,7 @@ private:
             obj.byteAlign = cls->hasExplicitLayout ? static_cast<u32>(cls->totalAlign) : 8u;
             obj.isArenaBacked = cls->isArenaOwner;
             obj.isSelfDefaulted = cls->isSelfDefaulted;
+            obj.isNothrowDefaultConstructible = cls->isNothrowDefaultConstructible;
             obj.isSmallValue = cls->isSmallValue;
             obj.isBorrowView = cls->isBorrowView;
             obj.isBinarySerializable = cls->isBinarySerializable;
@@ -1227,6 +1124,7 @@ private:
             obj.isAssignable = cls->isCopyAssignable;
             obj.isAbstract = cls->isAbstract;
             obj.isPolymorphicBase = cls->isPolymorphicBase;
+            obj.isEmptyBase = cls->isEmptyBase;
             obj.formatArgWrapKind = 0u;
             obj.templateParams = cloneTemplateParams(cls->templateParams);
 
@@ -1277,7 +1175,7 @@ private:
                 rm.synthesizeTypeRef = true;
                 rm.isMutating = !method->isConst;
                 rm.returnsReference = method->returnsReference || (method->returnType && method->returnType->refMode != ParamPassingMode::None);
-                rm.allowsCppUnwind = cls->isPolymorphicBase ? method->allowsCppUnwind : !method->isNothrowExtern;
+                rm.allowsCppUnwind = method->allowsCppUnwind;
 
                 const usize rmIdx = m_receiverMethods.size();
                 m_receiverMethods.push_back(rm);
@@ -1290,7 +1188,7 @@ private:
                     for(BuiltinFunctionArgRule::Enum& r : sig.argRules)
                         r = BuiltinFunctionArgRule::Any;
                     sig.arity = static_cast<u8>(method->params.size());
-                    sig.allowsCppUnwind = cls->isPolymorphicBase ? method->allowsCppUnwind : !method->isNothrowExtern;
+                    sig.allowsCppUnwind = method->allowsCppUnwind;
                     for(usize pi = 0u; pi < method->params.size(); ++pi){
                         sig.argRules[pi] = resolveArgRule(method->params[pi]);
                         if(method->params[pi].cppConstReference)
@@ -1445,7 +1343,7 @@ private:
             info.returnsBorrowedView = fn->returnsBorrowedView;
             info.rejectsSimdStorage = false;
             info.returnsReference = fn->returnsReference || (fn->returnType && fn->returnType->refMode != ParamPassingMode::None);
-            info.allowsCppUnwind = !fn->isNothrowExtern;
+            info.allowsCppUnwind = fn->allowsCppUnwind;
             for(BuiltinFunctionArgRule::Enum& r : info.argRules)
                 r = BuiltinFunctionArgRule::Any;
             for(usize pi = 0u; pi < info.arity; ++pi){
@@ -1574,24 +1472,31 @@ private:
             return false;
         if(magic != s_BinaryCacheMagic || version != s_BinaryCacheVersion || schemaSig != ComputeBinaryCacheSchemaSignature())
             return false;
-        if(watchedCount < 2u || watchedCount > 4096u)
+        if(watchedCount < 2u || watchedCount > 16384u)
             return false;
 
         ::Path<MetaArena> candidateDiskPath(scratchArena);
         for(u32 wi = 0u; wi < watchedCount; ++wi){
             MStringView relPath;
             u64 expectedSize = 0u;
-            i64 expectedMtime = 0;
+            u64 expectedMtimeLow = 0u;
+            u64 expectedMtimeHigh = 0u;
             b8 fromRoot = false;
-            if(!reader.readRawStringView(relPath) || !reader.readValue(expectedSize) || !reader.readValue(expectedMtime) || !reader.readBool(fromRoot))
+            if(!reader.readRawStringView(relPath)
+                || !reader.readValue(expectedSize)
+                || !reader.readValue(expectedMtimeLow)
+                || !reader.readValue(expectedMtimeHigh)
+                || !reader.readBool(fromRoot)
+            )
                 return false;
             if(!BuildProjectCandidatePath(relPath, fromRoot, scratchArena, candidateDiskPath))
                 return false;
             u64 actualSize = 0u;
-            i64 actualMtime = 0;
-            if(!QueryDiskFileStat(candidateDiskPath, actualSize, actualMtime))
+            u64 actualMtimeLow = 0u;
+            u64 actualMtimeHigh = 0u;
+            if(!CacheDetail::QueryDiskFileStamp(candidateDiskPath, actualSize, actualMtimeLow, actualMtimeHigh))
                 return false;
-            if(actualSize != expectedSize || actualMtime != expectedMtime)
+            if(actualSize != expectedSize || actualMtimeLow != expectedMtimeLow || actualMtimeHigh != expectedMtimeHigh)
                 return false;
         }
 
@@ -1718,6 +1623,7 @@ private:
                 || !reader.readValue(obj.byteAlign)
                 || !reader.readBool(obj.isArenaBacked)
                 || !reader.readBool(obj.isSelfDefaulted)
+                || !reader.readBool(obj.isNothrowDefaultConstructible)
                 || !reader.readBool(obj.isSmallValue)
                 || !reader.readBool(obj.isBorrowView)
                 || !reader.readBool(obj.isBinarySerializable)
@@ -1733,6 +1639,7 @@ private:
                 || !reader.readBool(obj.isAssignable)
                 || !reader.readBool(obj.isAbstract)
                 || !reader.readBool(obj.isPolymorphicBase)
+                || !reader.readBool(obj.isEmptyBase)
                 || !reader.readValue(obj.formatArgWrapKind)
                 || !reader.readValue(tplListIdx)
             ){
@@ -2154,6 +2061,7 @@ private:
             writer.writeValue(obj.byteAlign);
             writer.writeBool(obj.isArenaBacked);
             writer.writeBool(obj.isSelfDefaulted);
+            writer.writeBool(obj.isNothrowDefaultConstructible);
             writer.writeBool(obj.isSmallValue);
             writer.writeBool(obj.isBorrowView);
             writer.writeBool(obj.isBinarySerializable);
@@ -2169,6 +2077,7 @@ private:
             writer.writeBool(obj.isAssignable);
             writer.writeBool(obj.isAbstract);
             writer.writeBool(obj.isPolymorphicBase);
+            writer.writeBool(obj.isEmptyBase);
             writer.writeValue(obj.formatArgWrapKind);
             i32 tplListIdx = -1;
             if(!obj.templateParams.empty()){
@@ -2335,7 +2244,8 @@ private:
         for(const WatchedPreludeFile& wf : watchedList.files){
             headerWriter.writeRawString(MStringView(wf.relativePath.data(), wf.relativePath.size()));
             headerWriter.writeValue(wf.fileSize);
-            headerWriter.writeValue(wf.mtimeTicks);
+            headerWriter.writeValue(wf.mtimeLow);
+            headerWriter.writeValue(wf.mtimeHigh);
             headerWriter.writeBool(wf.fromProjectRoot);
         }
         const MString& blob = writer.stringBlob();
@@ -2353,26 +2263,7 @@ private:
         fullImage.insert(fullImage.end(), payloadBytes.begin(), payloadBytes.end());
 
         const ::Path<MetaArena> cachePath = ResolvePreludeCachePath(scratchArena);
-        static Atomic<u64> s_TmpSeq{ 0u };
-        const u64 seq = s_TmpSeq.fetch_add(1u, MemoryOrder::relaxed);
-#if defined(FOUNDATION_PLATFORM_WINDOWS)
-        const u64 pid = static_cast<u64>(GetCurrentProcessId());
-        const u64 tid = static_cast<u64>(GetCurrentThreadId());
-#else
-        const u64 pid = static_cast<u64>(::getpid());
-        const u64 tid = 0u;
-#endif
-        const MString tmpName = StringFormat(scratchArena, "{}.tmp.{}.{}.{}", PathToGenericString<MChar>(scratchArena, cachePath), pid, tid, seq);
-        const ::Path<MetaArena> tmpPath(scratchArena, MStringView(tmpName.data(), tmpName.size()));
-        if(!WriteBinaryFile(tmpPath, fullImage)){
-            if(const auto removed = RemoveFile(tmpPath); !removed || !*removed)
-                return;
-            return;
-        }
-        if(!RenamePath(tmpPath, cachePath)){
-            if(const auto removed = RemoveFile(tmpPath); !removed || !*removed)
-                return;
-        }
+        CacheDetail::WriteBinaryFileAtomic(scratchArena, cachePath, fullImage);
     }
 
     void load(){
@@ -2421,6 +2312,82 @@ private:
                 source = preprocessor.includedFileAtOffset(static_cast<usize>(token.data() - activeSource.data()));
             recordLoadError(source, errors, "unable to parse declarations");
             return;
+        }
+
+        {
+            MVector<MString> extraHeaders(parseArena);
+            MStringMap<u8> seenExtraHeaders(parseArena);
+            const auto addExtraHeader = [&](const MStringView raw){
+                if(!raw.empty())
+                    CacheDetail::AddExistingUnique(extraHeaders, seenExtraHeaders, MString(raw.data(), raw.size(), parseArena));
+            };
+            addExtraHeader(MStringView("global/global.h"));
+            addExtraHeader(MStringView("core/global.h"));
+            for(const WatchedPreludeFile& wf : watchedList.files){
+                const MStringView rel(wf.relativePath.data(), wf.relativePath.size());
+                if(!rel.ends_with(ContractSemantics::s_AdhdExtension))
+                    continue;
+                MString hdrRel(rel.substr(0u, rel.size() - ContractSemantics::s_AdhdExtension.size()), parseArena);
+                hdrRel.append(".h");
+                ::Path<MetaArena> diskPath(parseArena);
+                if(BuildProjectCandidatePath(MStringView(hdrRel.data(), hdrRel.size()), wf.fromProjectRoot, parseArena, diskPath)){
+                    if(const auto exists = FileExists(diskPath); exists && *exists)
+                        addExtraHeader(MStringView(hdrRel.data(), hdrRel.size()));
+                }
+            }
+
+            MVector<MString> preludeDefines(parseArena);
+            preludeDefines.emplace_back("NWB_COOK=1", parseArena);
+
+            MVector<MString> includedCppHeaders(parseArena);
+            CppExternTraitResolveOptions traitOpts;
+            traitOpts.extraHeaders = Span<const MString>(extraHeaders.data(), extraHeaders.size());
+            traitOpts.defines = Span<const MString>(preludeDefines.data(), preludeDefines.size());
+            traitOpts.enableAutoProjectIncludes = true;
+            traitOpts.useDiskCache = false;
+            traitOpts.outProjectIncludedFiles = &includedCppHeaders;
+            CppExternTraitResolver::ResolveTranslationUnitTraits(traitOpts, parseArena, parseUnit);
+
+            MString projectRootNorm(parseArena);
+#if defined(NWB_PROJECT_SOURCE_DIR)
+            projectRootNorm = CacheDetail::NormalizeSlashes(parseArena, MStringView(NWB_PROJECT_SOURCE_DIR));
+            while(projectRootNorm.size() > 1u && projectRootNorm.back() == '/')
+                projectRootNorm.pop_back();
+#endif
+            MStringMap<u8> seenWatched(parseArena);
+            for(const WatchedPreludeFile& wf : watchedList.files)
+                seenWatched.emplace(wf.relativePath, 1u);
+
+            for(const MString& absCppPath : includedCppHeaders){
+                MStringView relView(absCppPath.data(), absCppPath.size());
+                b8 fromRoot = false;
+                if(!projectRootNorm.empty() && relView.size() > projectRootNorm.size() + 1u
+                    && relView.starts_with(MStringView(projectRootNorm.data(), projectRootNorm.size()))
+                    && relView[projectRootNorm.size()] == '/'
+                ){
+                    relView = relView.substr(projectRootNorm.size() + 1u);
+                    fromRoot = true;
+                }
+                if(seenWatched.find(relView) != seenWatched.end())
+                    continue;
+                ::Path<MetaArena> diskPath(parseArena);
+                if(!BuildProjectCandidatePath(relView, fromRoot, parseArena, diskPath))
+                    continue;
+                u64 fileSize = 0u;
+                u64 mtimeLow = 0u;
+                u64 mtimeHigh = 0u;
+                if(!CacheDetail::QueryDiskFileStamp(diskPath, fileSize, mtimeLow, mtimeHigh))
+                    continue;
+                MString storedRel(relView.data(), relView.size(), parseArena);
+                seenWatched.emplace(storedRel, 1u);
+                WatchedPreludeFile wf(parseArena);
+                wf.relativePath = Move(storedRel);
+                wf.fileSize = fileSize;
+                wf.mtimeLow = mtimeLow;
+                wf.mtimeHigh = mtimeHigh;
+                wf.fromProjectRoot = fromRoot;
+                watchedList.files.push_back(Move(wf));
+            }
         }
 
         loadEnums(parseUnit.enums);
@@ -2502,14 +2469,14 @@ b8 HasBuiltinEnumEntry(const MStringView enumName, const MStringView entryName)n
 b8 IsArenaFirstCtorType(const MStringView name)noexcept{
     return __hidden_adhd_type_utils::MatchObjectOrGenericType(
         name,
-        [](const BuiltinObjectTypeInfo& info)noexcept{ return info.arenaCtorMode == 1u; },
+        [](const BuiltinObjectTypeInfo& info)noexcept{ return info.arenaCtorMode == ArenaCtorMode::First; },
         [](const BuiltinGenericTypeInfo& genericInfo)noexcept{ return genericInfo.arenaFirstInCtor; }
     );
 }
 
 b8 OmitsArenaInCtorType(const MStringView name)noexcept{
     if(const BuiltinObjectTypeInfo* info = FindBuiltinObjectType(name))
-        return info->arenaCtorMode == 2u;
+        return info->arenaCtorMode == ArenaCtorMode::Omit;
     return false;
 }
 

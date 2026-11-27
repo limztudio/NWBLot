@@ -27,7 +27,7 @@ extern b8 PublishTestVolume(in StagedDirectoryPaths paths, in Path directory, in
 extern Expected<UniquePtr<IFilesystem>> CreateWithFactory<Factory>(mut HeapStorage storage, in VolumeMountDesc desc);
 [cpp_header("<tests/unit/filesystem/volume_sdk.h>"), cpp_name("::NWB::Tests::FilesystemSdk::s_WarningsEnabled")]
 extern const b8 s_FilesystemWarnings;
-[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeHeaderDisk"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeHeaderDisk"), cpp_flags(binary_serializable)]
 extern class VolumeHeaderDisk{
     Array<i8, 8u> magic;
     u64 segmentSize;
@@ -36,7 +36,7 @@ extern class VolumeHeaderDisk{
     u64 indexBytes;
     u64 nextFreeOffset;
 };
-[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeIndexEntryDisk"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/volume_storage_detail.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemVolumeDetail::VolumeIndexEntryDisk"), cpp_flags(binary_serializable, brace_init)]
 extern class VolumeIndexEntryDisk{
     NameHash hash;
     u64 offset;

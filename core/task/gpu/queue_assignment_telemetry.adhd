@@ -15,7 +15,7 @@ extern enum GpuTaskQueueAssignmentAcceptance : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentTelemetryTracker"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskGraphQueueAssignmentTelemetryTracker")]
 extern class GpuTaskGraphQueueAssignmentTelemetryTracker{
     b8 update(in GpuTaskGraphDeclarationReadView declarations, in GpuTaskGraphQueueAssignments assignments, in GpuCompiledGraphReadView compiledPlan, in GpuGraphSubmissionTransaction transaction, in Name allocationLog);
     b8 updateWithScratch(in GpuTaskGraphDeclarationReadView declarations, in GpuTaskGraphQueueAssignments assignments, in GpuCompiledGraphReadView compiledPlan, in GpuGraphSubmissionTransaction transaction, mut auto scratch);
@@ -23,7 +23,7 @@ extern class GpuTaskGraphQueueAssignmentTelemetryTracker{
     void reset(...);
 };
 
-[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentTelemetry"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/queue_assignment_telemetry.h>"), cpp_name("::NWB::Core::GpuTaskQueueAssignmentTelemetry"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskQueueAssignmentTelemetry{
     GpuTaskQueueAssignment assignment;
     GpuPhysicalQueueId acceptedQueue;

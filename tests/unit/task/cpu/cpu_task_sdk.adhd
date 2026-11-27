@@ -25,11 +25,11 @@ extern Expected<CpuTaskHandle, CpuTaskAdmissionError> SubmitNullDependencies(mut
 extern Expected<CpuTaskHandle, CpuTaskAdmissionError> SubmitAfter(mut CpuTaskScope scope, in auto action, in CpuTaskOptions options, in CpuTaskHandle dependency);
 [cpp_header("<tests/unit/task/cpu/cpu_task_sdk.h>"), cpp_name("::NWB::Tests::CpuTaskSdk::VerifyCheckedScopeDrainOnAdmissionFailure")]
 extern b8 VerifyCheckedScopeDrainOnAdmissionFailure();
-[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(polymorphic_base)]
+[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks")]
 extern class ProjectShutdownListener{
-    [cpp_flags(unwind)] void onShutdown();
+    void onShutdown();
 };
-[cpp_header("<loader/callback_shutdown.h>"), cpp_name("::NWB::LoaderDetail::CallbackShutdownGuard"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<loader/callback_shutdown.h>"), cpp_name("::NWB::LoaderDetail::CallbackShutdownGuard")]
 extern class LoaderShutdownGuard{
     void activate();
 };

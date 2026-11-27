@@ -15,13 +15,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/fbx_to_nwb/ufbx_fixture.h>"), cpp_name("::NWB::Tests::FbxSkinCases::NodeStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/fbx_to_nwb/ufbx_fixture.h>"), cpp_name("::NWB::Tests::FbxSkinCases::NodeStorage")]
 extern class NodeStorage{
     UfbxNode view()const;
     void setName(in StringView name);
 };
 
-[cpp_header("<tests/integration/fbx_to_nwb/ufbx_fixture.h>"), cpp_name("::NWB::Tests::FbxSkinCases::SkinStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/fbx_to_nwb/ufbx_fixture.h>"), cpp_name("::NWB::Tests::FbxSkinCases::SkinStorage")]
 extern class SkinStorage{
     UfbxSkin view()const;
 };

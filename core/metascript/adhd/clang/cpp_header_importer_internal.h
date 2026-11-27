@@ -7,6 +7,7 @@
 
 #include "cpp_header_importer.h"
 
+#include "../cache_utils.h"
 #include "../ast/builtin_type_semantics.h"
 #include "../ast/keyword_semantics.h"
 #include "../ast/operator_semantics.h"
@@ -218,10 +219,16 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] MString NormalizeSlashes(MetaArena& arena, MStringView raw);
+using CacheDetail::NormalizeSlashes;
 [[nodiscard]] b8 StartsWithCaseInsensitivePrefix(MStringView fullPath, MStringView prefix)noexcept;
 [[nodiscard]] Expr* AllocateSignedIntegerLiteral(MetaArena& arena, long long val);
 [[nodiscard]] MString ConsumeClangString(MetaArena& arena, CXString cxStr);
+[[nodiscard]] b8 IsClangCursorNothrow(CXCursor cursor)noexcept;
+[[nodiscard]] b8 IsClangTypeConstLValueRef(CXType type)noexcept;
+[[nodiscard]] b8 HasDefaultInitializerExpr(CXCursor parmCursor)noexcept;
+void VisitDirectChildren(CXCursor parent, MVector<CXCursor>& outChildren);
+[[nodiscard]] MStringView MapCppOperatorSpelling(MStringView spelling)noexcept;
+void CollectCallableParamCursors(MetaArena& arena, CXCursor cursor, b8 isTemplate, MVector<CXCursor>& outParams);
 [[nodiscard]] TypeRef* CloneTypeRefDeep(MetaArena& arena, const TypeRef* src);
 [[nodiscard]] TypeRef* RewriteTemplateTypeRefName(MetaArena& arena, TypeRef* ref, MStringView oldName, MStringView newName);
 [[nodiscard]] MStringView MapRawBuiltinScalarKind(CXTypeKind kind)noexcept;
@@ -239,6 +246,69 @@ void AppendExternAttributes(MString& out, MStringView requiredHeader, MStringVie
 void AppendTypeRefExternText(MString& out, const TypeRef& type, b8 includeRefMode);
 void AppendMethodExternSignature(MString& out, const MethodDecl& m, MStringView indent, b8 includeHeader);
 [[nodiscard]] MString BuildFreeFunctionSigKey(MetaArena& arena, const MethodDecl& decl);
+
+using CacheDetail::CachedFileStamp;
+using CacheDetail::QueryFileStamp;
+using CacheDetail::VerifyCachedFileStamps;
+using CacheDetail::AddExistingUnique;
+void BuildClangArguments(
+    MetaArena& arena,
+    const CppHeaderImportOptions& options,
+    MVector<MString>& argStorage,
+    MVector<MString>& normalizedIncludeRoots,
+    MVector<const char*>& outArgPtrs
+);
+[[nodiscard]] MString BuildVirtualTuPath(MetaArena& arena);
+void CollectTranslationUnitInclusions(
+    MetaArena& arena,
+    CXTranslationUnit tu,
+    MStringView projectRootNorm,
+    b8 skipGeneratedHeaders,
+    MVector<MString>& outAllFiles,
+    MVector<MString>* outProjectFiles
+);
+
+template<typename DeclT>
+[[nodiscard]] inline DeclT* FindExistingDeclForMerge(
+    const MStringMap<DeclT*>& byExportName,
+    const MStringMap<DeclT*>& byName,
+    const MStringView adhdName,
+    const MStringView cppExportName
+)noexcept{
+    if(!cppExportName.empty()){
+        if(const auto it = byExportName.find(cppExportName); it != byExportName.end())
+            return it->second;
+    }
+    if(!adhdName.empty()){
+        if(const auto it = byName.find(adhdName); it != byName.end())
+            return it->second;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] b8 MethodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept;
+
+struct CppRecordSpecialMemberTraits{
+    b8 isAbstract = false;
+    b8 isPolymorphicBase = false;
+    b8 isFinal = false;
+    b8 hasVirtualMethod = false;
+    b8 isCopyConstructible = true;
+    b8 isMoveConstructible = true;
+    b8 isCopyAssignable = true;
+    b8 isMoveAssignable = true;
+    b8 hasUserDeclaredCopyCtor = false;
+    b8 hasUserDeclaredMoveCtor = false;
+    b8 hasUserDeclaredCopyAssign = false;
+    b8 hasUserDeclaredMoveAssign = false;
+    b8 hasAnyUserCtor = false;
+    b8 hasAccessibleZeroArgCtor = false;
+    b8 zeroArgCtorNothrow = false;
+    b8 hasNonStaticField = false;
+};
+
+[[nodiscard]] b8 ApplyFallbackBaseCopyMoveTraits(MStringView baseName, CppRecordSpecialMemberTraits& traits)noexcept;
+void FinalizeRecordSpecialMemberTraits(CppRecordSpecialMemberTraits& traits)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -333,16 +403,8 @@ private:
         b8 valid = false;
     };
 
-    struct ClassTraits{
-        b8 isCopyConstructible = true;
-        b8 isMoveConstructible = true;
-        b8 isCopyAssignable = true;
-        b8 isMoveAssignable = true;
+    struct ClassTraits : CppRecordSpecialMemberTraits{
         b8 hasExplicitDestructor = false;
-        b8 hasUserDeclaredCopyCtor = false;
-        b8 hasUserDeclaredCopyAssign = false;
-        b8 hasUserDeclaredMoveCtor = false;
-        b8 hasUserDeclaredMoveAssign = false;
         MVector<CXCursor> publicBaseRecords;
 
         explicit ClassTraits(MetaArena& arena)noexcept : publicBaseRecords(arena){}
@@ -375,14 +437,11 @@ private:
 private:
     [[nodiscard]] b8 formatDeclName(CXCursor declCursor, MStringView& outName, MStringView& outNamespace, MStringView& outCppExportName, b8& outIsDirectEnum, b8& outIsFlag);
     [[nodiscard]] MStringView resolveRequiredHeader(CXCursor cursor);
-    [[nodiscard]] MStringView mapOperatorToken(MStringView spelling)noexcept;
-    [[nodiscard]] b8 hasDefaultInitializerToken(CXCursor parmCursor)const;
     [[nodiscard]] TypeRef* mapGenericContainerType(CXType type, CXType canonical, MStringView rawSpelling, MStringView sugaredLeaf, ParamPassingMode::Enum refMode, u32 depth, b8& outWasGenericContainer);
     [[nodiscard]] TypeRef* mapTypeUncached(CXType type, b8 isParamContext, u32 depth);
     [[nodiscard]] TypeRef* mapType(CXType type, b8 isParamContext, u32 depth = 0u);
     [[nodiscard]] b8 evaluateIntegralConstant(CXCursor cursor, MStringView& outText);
     [[nodiscard]] MethodDecl* buildMethodDecl(CXCursor cursor, MStringView ownerClassName, b8 isTemplate, const ClassDecl* ownerClass = nullptr);
-    void visitChildrenList(CXCursor parent, MVector<CXCursor>& outChildren)const;
     void inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTraits& traits, HashSet<CursorKey, MetaArena, CursorKeyHash>& visitedTraitBases, b8 isBasePass);
     void importClassMethodsFromCursor(CXCursor classCursor, ClassDecl& targetClass, b8 isBasePass, ClassImportDedupe& dedupe);
     void extractEnum(CXCursor enumCursor);
@@ -392,24 +451,6 @@ private:
     void extractFreeFunction(CXCursor fnCursor, b8 isTemplate);
     void visitScopeCursor(CXCursor parentCursor);
 
-    template<typename DeclT>
-    [[nodiscard]] static DeclT* FindExistingDeclForMerge(
-        const MStringMap<DeclT*>& byExportName,
-        const MStringMap<DeclT*>& byName,
-        const MStringView adhdName,
-        const MStringView cppExportName
-    )noexcept{
-        if(!cppExportName.empty()){
-            if(const auto it = byExportName.find(cppExportName); it != byExportName.end())
-                return it->second;
-        }
-        if(!adhdName.empty()){
-            if(const auto it = byName.find(adhdName); it != byName.end())
-                return it->second;
-        }
-        return nullptr;
-    }
-    [[nodiscard]] static b8 MethodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept;
     void tryAddClassField(ClassDecl& targetClass, CXCursor child, CXType recordType, b8 isStatic, ClassImportDedupe& dedupe);
     void addUniqueMethod(ClassDecl& target, MethodDecl* method, ClassImportDedupe& dedupe);
 

@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache::Candidate"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache::Candidate")]
 extern class GpuPersistentStateCandidate{
     b8 valid()const;
     b8 empty()const;
     Optional<in CommandListResourceStateHandoff> borrowSource()const;
 };
 
-[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/persistent_state.h>"), cpp_name("::NWB::Core::GpuPersistentResourceStateCache")]
 extern class GpuPersistentResourceStateCache{
     b8 buildMergedBufferSubset(in CommandListResourceStateHandoff source, in Span<BufferHandle> buffers, mut GpuPersistentStateCandidate candidate)const;
     b8 buildFilteredResourceSubset(in CommandListResourceStateHandoff source, in Span<TextureHandle> textures, in Span<BufferHandle> buffers, mut GpuPersistentStateCandidate candidate)const;

@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/preprocessor_includes.h>"), cpp_name("::NWB::Core::Metascript::IIncludeResolver"), cpp_flags(no_copy, no_assign, polymorphic_base, abstract)]
+[cpp_header("<core/metascript/preprocessor_includes.h>"), cpp_name("::NWB::Core::Metascript::IIncludeResolver")]
 extern class MetascriptIIncludeResolver{
-    [cpp_flags(unwind)] b8 resolveInclude(in StringView path, in b8 system, mut GlobalAllocator storage, mut GlobalString key, mut GlobalString source);
+    b8 resolveInclude(in StringView path, in b8 system, mut GlobalAllocator storage, mut GlobalString key, mut GlobalString source);
     StringView resolveIncludeNamespace(in StringView key)const;
     void popIncludeScope();
 };
 
-[cpp_header("<core/metascript/preprocessor_includes.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorIncludes"), cpp_flags(no_assign)]
+[cpp_header("<core/metascript/preprocessor_includes.h>"), cpp_name("::NWB::Core::Metascript::PreprocessorIncludes")]
 extern class MetascriptPreprocessorIncludes{
     void clearRanges(...);
     b8 containsOffset(...)const;

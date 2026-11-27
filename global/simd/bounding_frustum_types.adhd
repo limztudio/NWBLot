@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::BoundingDoubleFrustum"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::BoundingDoubleFrustum"), cpp_flags(binary_serializable, brace_init)]
 extern class BoundingDoubleFrustum{
     f64 bottomSlope;
     f64 farPlane;
@@ -19,7 +19,7 @@ extern class BoundingDoubleFrustum{
     void transform(...)const;
 };
 
-[cpp_name("::BoundingFrustum"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::BoundingFrustum"), cpp_flags(binary_serializable, brace_init)]
 extern class BoundingFrustum{
     f32 bottomSlope;
     f32 farPlane;

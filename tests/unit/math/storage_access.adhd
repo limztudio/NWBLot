@@ -35,7 +35,7 @@ extern class StorageSnapshot<T>{
     u8 operator[](in usize index)const;
 };
 
-[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::RawEqualityStorage"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/math/storage_access.h>"), cpp_name("::NWB::Tests::MathCases::RawEqualityStorage"), cpp_flags(brace_init)]
 extern class RawEqualityStorage<T, const usize Count>{
     Array<T, Count> raw;
 };

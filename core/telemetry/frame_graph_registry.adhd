@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_registry.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphRegistry"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_registry.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphRegistry")]
 extern class FrameGraphRegistry{
     void clear(...);
     b8 record(...);

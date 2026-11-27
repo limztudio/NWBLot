@@ -9,38 +9,38 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("void*"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("void*"), cpp_flags(binary_serializable)]
 extern class WinAddress;
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::EXCEPTION_RECORD"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::EXCEPTION_RECORD"), cpp_flags(binary_serializable)]
 extern class WinRecord{
     WinAddress ExceptionAddress;
     WinAddress ExceptionRecord;
 };
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::EXCEPTION_POINTERS"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::EXCEPTION_POINTERS"), cpp_flags(binary_serializable)]
 extern class WinPointers{
     WinAddress ContextRecord;
     WinAddress ExceptionRecord;
 };
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::DumpStream"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::DumpStream"), cpp_flags(binary_serializable)]
 extern class WinDumpStream{
     b8 found;
     usize address;
     u32 size;
 };
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::ThreadHandle"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::ThreadHandle"), cpp_flags(binary_serializable)]
 extern class WinThread;
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::SuspendedThread"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::SuspendedThread")]
 extern class SuspendedThread{
     u32 previousSuspendCount()const;
     u32 resume();
 };
 
-[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::FileHandle"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/crash/windows/windows_sdk.h>"), cpp_name("::NWB::Tests::WindowsCrashSdk::FileHandle")]
 extern class WinFile{
     b8 valid()const;
     b8 close();

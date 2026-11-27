@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_metric_sample.h>"), cpp_name("::NWB::Core::GpuTimingSinkSample"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_metric_sample.h>"), cpp_name("::NWB::Core::GpuTimingSinkSample"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTimingSinkSample{
     TimingScopeId scope;
     f64 durationSeconds;

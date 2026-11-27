@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/atomic.h>"), cpp_name("::Atomic"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<global/atomic.h>"), cpp_name("::Atomic")]
 extern class TestAtomic<T>{
     T load(in MemoryOrder order)const;
     void store(in T value, in MemoryOrder order);

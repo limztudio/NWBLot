@@ -82,7 +82,7 @@ extern enum TextureSubresourceMipResolve : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class BufferDesc{
     Name debugName;
     u64 byteSize;
@@ -123,7 +123,7 @@ extern class BufferDesc{
     BufferDesc setStructStride(...);
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class BufferHandle{
     usize identity()const;
     b8 valid(...)const;
@@ -131,7 +131,7 @@ extern class BufferHandle{
     mut Buffer deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferRange"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::BufferRange"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch, map_key)]
 extern class BufferRange{
     u64 byteOffset;
     u64 byteSize;
@@ -145,34 +145,34 @@ extern class BufferRange{
     BufferRange setByteSize(...);
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class HeapDesc{
     u64 capacity;
     Name debugName;
     HeapType type;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::HeapHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class HeapHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut Heap deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::InputLayoutHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::InputLayoutHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class InputLayoutHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut InputLayout deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::MemoryRequirements"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::MemoryRequirements"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class MemoryRequirements{
     u64 size;
     u64 alignment;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueAdmissionSnapshot"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::ResourceQueueAdmissionSnapshot"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class ResourceQueueAdmissionSnapshot{
     u32 queueFamilyIndexCount;
     ResourceQueueSharing admittedQueueClasses;
@@ -180,20 +180,20 @@ extern class ResourceQueueAdmissionSnapshot{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class StagingTextureHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut StagingTexture deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureMapping"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::StagingTextureMapping"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class StagingTextureMapping{
     usize rowPitch;
     Span<u8> readBytes()const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class TextureDesc{
     Name name;
     Color clearValue;
@@ -232,7 +232,7 @@ extern class TextureDesc{
     TextureDesc setWidth(...);
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class TextureHandle{
     usize identity()const;
     b8 valid(...)const;
@@ -240,7 +240,7 @@ extern class TextureHandle{
     mut RhiTexture deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSlice"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSlice"), cpp_flags(binary_serializable, brace_init)]
 extern class TextureSlice{
     u32 x;
     u32 y;
@@ -260,7 +260,7 @@ extern class TextureSlice{
     TextureSlice setWidth(...);
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::TextureSubresourceSet"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch, map_key)]
 extern class TextureSubresourceSet{
     u32 baseMipLevel;
     u32 numMipLevels;
@@ -276,7 +276,7 @@ extern class TextureSubresourceSet{
     TextureSubresourceSet setMipLevels(...);
 };
 
-[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::VertexAttributeDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource.h>"), cpp_name("::NWB::Core::VertexAttributeDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class VertexAttributeDesc{
     Name name;
     u32 arraySize;

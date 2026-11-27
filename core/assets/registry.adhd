@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/registry.h>"), cpp_name("::NWB::Core::Assets::AssetRegistry"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/assets/registry.h>"), cpp_name("::NWB::Core::Assets::AssetRegistry")]
 extern class AssetRegistry{
     b8 registerCodec(...);
     b8 unregisterCodec(in Name type);

@@ -13,7 +13,7 @@ extern enum GpuCrashDumpKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashMarkerTracker"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashMarkerTracker")]
 extern class GpuCrashMarkerTracker{
     void popEvent();
     usize pushEvent(in StringView name);
@@ -33,7 +33,7 @@ extern class ResolvedMarker{
     StringView second()const;
 };
 
-[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashTracker"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/rhi/gpu_crash_diagnostics.h>"), cpp_name("::NWB::Core::GpuCrashTracker")]
 extern class GpuCrashTracker{
     ResolvedMarker resolveMarker(in usize hash);
 };

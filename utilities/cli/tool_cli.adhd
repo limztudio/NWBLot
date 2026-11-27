@@ -34,7 +34,7 @@ extern class ToolCliParseResult{
     i32 exitLogged()const;
 };
 
-[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ToolCli"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<utilities/cli/tool_cli.h>"), cpp_name("::NWB::Utilities::ToolCli")]
 extern class ToolCli{
     void setHelpFlag(in StringView names, in StringView description);
     ToolCliOption addText(in StringView names, mut String value, in StringView description);

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<pipeline/dependency_computer/dependency_workspace.h>"), cpp_name("::NWB::Pipeline::CookDependencyAccess"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/dependency_computer/dependency_workspace.h>"), cpp_name("::NWB::Pipeline::CookDependencyAccess")]
 extern class CookDependencyAccess{
     CookDependencyRegistry registry;
     b8 registerTypes();

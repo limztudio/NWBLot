@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/scheduler_callback_bindings.h>"), cpp_name("::NWB::Core::GpuTaskSubmissionDetail::TaskCallbackBindings"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/scheduler_callback_bindings.h>"), cpp_name("::NWB::Core::GpuTaskSubmissionDetail::TaskCallbackBindings")]
 extern class GpuTaskCallbackBindings<T>{
     b8 resolve(in GpuTaskGraphDeclarationReadView declarations, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketRange range, in auto callbacks, in usize declaredCount);
     Optional<in T> findCallback(in GpuTaskId task)const;

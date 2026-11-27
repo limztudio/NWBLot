@@ -18,20 +18,20 @@ extern enum ArenaMemorySource : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::ArenaMemoryOwnerIdentity"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::ArenaMemoryOwnerIdentity"), cpp_flags(binary_serializable, brace_init)]
 extern class ArenaMemoryOwnerIdentity{
     Name ownerName;
     ArenaMemorySource source;
 };
 
-[cpp_name("::ArenaMemoryOwnerSnapshot"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::ArenaMemoryOwnerSnapshot"), cpp_flags(binary_serializable, brace_init)]
 extern class ArenaMemoryOwnerSnapshot{
     Name ownerName;
     ArenaMemorySource source;
     ArenaMemoryStats stats;
 };
 
-[cpp_name("::ArenaMemoryStats"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::ArenaMemoryStats"), cpp_flags(binary_serializable, brace_init)]
 extern class ArenaMemoryStats{
     u64 allocationCount;
     u64 deallocationCount;
@@ -41,7 +41,7 @@ extern class ArenaMemoryStats{
     u64 usedBytes;
 };
 
-[cpp_name("::ArenaMemoryTracker"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_name("::ArenaMemoryTracker"), cpp_flags(brace_init)]
 extern class ArenaMemoryTracker{
     void addReservedBytes(...);
     Name ownerName(...)const;
@@ -74,7 +74,7 @@ extern void RecordHeapMemoryReallocation(in isize a0, in isize a1);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/arena_memory.h>"), cpp_name("::ArenaMemoryOwnerCursor"), cpp_flags(self_defaulted)]
+[cpp_header("<global/arena_memory.h>"), cpp_name("::ArenaMemoryOwnerCursor")]
 extern class ArenaMemoryOwnerCursor{
     b8 next(mut ArenaMemoryOwnerSnapshot snapshot);
 };

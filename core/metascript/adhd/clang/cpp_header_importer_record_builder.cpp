@@ -185,7 +185,7 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     b8 isOperator = false;
     MStringView methodName = InternArenaString(m_arena, spellingView);
     if(!isCtor && spellingView.starts_with(KeywordSemantics::s_Operator)){
-        methodName = mapOperatorToken(spellingView);
+        methodName = MapCppOperatorSpelling(spellingView);
         if(methodName.empty() || ownerClassName.empty())
             return nullptr;
         isOperator = true;
@@ -209,12 +209,7 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     decl->isImported = true;
     decl->isExtern = true;
     decl->requiredHeader = resolveRequiredHeader(cursor);
-    const int excSpec = ::clang_getCursorExceptionSpecificationType(cursor);
-    const b8 isNothrow = (excSpec == CXCursor_ExceptionSpecificationKind_BasicNoexcept)
-        || (excSpec == CXCursor_ExceptionSpecificationKind_DynamicNone)
-        || (excSpec == CXCursor_ExceptionSpecificationKind_NoThrow);
-    decl->isNothrowExtern = isNothrow;
-    decl->allowsCppUnwind = !isNothrow;
+    decl->allowsCppUnwind = !IsClangCursorNothrow(cursor);
 
     if(!isCtor){
         const CXType resultType = ::clang_getCursorResultType(cursor);
@@ -228,7 +223,7 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
     MVector<Pair<MStringView, MStringView>> tparamRenames(m_arena);
     if(isTemplate){
         MVector<CXCursor> children(m_arena);
-        visitChildrenList(cursor, children);
+        VisitDirectChildren(cursor, children);
         for(const CXCursor child : children){
             const CXCursorKind ck = ::clang_getCursorKind(child);
             if(ck == CXCursor_TemplateTypeParameter || ck == CXCursor_NonTypeTemplateParameter){
@@ -249,20 +244,7 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
         }
     }
     else{
-        const int numArgs = ::clang_Cursor_getNumArguments(cursor);
-        if(numArgs >= 0){
-            paramCursors.reserve(static_cast<usize>(numArgs));
-            for(int i = 0; i < numArgs; ++i)
-                paramCursors.push_back(::clang_Cursor_getArgument(cursor, static_cast<unsigned>(i)));
-        }
-        else{
-            MVector<CXCursor> children(m_arena);
-            visitChildrenList(cursor, children);
-            for(const CXCursor child : children){
-                if(::clang_getCursorKind(child) == CXCursor_ParmDecl)
-                    paramCursors.push_back(child);
-            }
-        }
+        CollectCallableParamCursors(m_arena, cursor, false, paramCursors);
     }
 
     if(isOperator){
@@ -292,7 +274,7 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
                 return nullptr;
         }
 
-        const b8 hasDefault = hasDefaultInitializerToken(parm);
+        const b8 hasDefault = HasDefaultInitializerExpr(parm);
         TypeRef* mappedParamType = mapType(parmType, true);
         if(!mappedParamType){
             if(hasDefault)
@@ -313,6 +295,8 @@ MethodDecl* ImporterContext::buildMethodDecl(CXCursor cursor, const MStringView 
             : InternArenaString(m_arena, pNameStr);
         param.type = mappedParamType;
         param.mode = mappedParamType->refMode;
+        if(param.mode == ParamPassingMode::In)
+            param.cppConstReference = IsClangTypeConstLValueRef(parmType);
         decl->params.push_back(param);
     }
 
@@ -340,11 +324,22 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
     }
 
     MVector<CXCursor> children(m_arena);
-    visitChildrenList(classCursor, children);
+    VisitDirectChildren(classCursor, children);
 
     for(const CXCursor child : children){
         const CXCursorKind ck = ::clang_getCursorKind(child);
         const CX_CXXAccessSpecifier acc = ::clang_getCXXAccessSpecifier(child);
+
+        if(ck == CXCursor_CXXFinalAttr){
+            if(!isBasePass)
+                traits.isFinal = true;
+            continue;
+        }
+
+        if(ck == CXCursor_FieldDecl){
+            traits.hasNonStaticField = true;
+            continue;
+        }
 
         if(ck == CXCursor_CXXBaseSpecifier){
             const CXType baseType = ::clang_getCursorType(child);
@@ -352,21 +347,8 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
             const MString baseNameStr = ConsumeClangString(m_arena, ::clang_getCursorSpelling(baseDecl));
             const MStringView baseName(baseNameStr.data(), baseNameStr.size());
 
-            if(baseName == CppImporterSemantics::s_NoCopyBaseClass){
-                traits.isCopyConstructible = false;
-                traits.isCopyAssignable = false;
+            if(ApplyFallbackBaseCopyMoveTraits(baseName, traits))
                 continue;
-            }
-            if(baseName == CppImporterSemantics::s_NoMoveBaseClass){
-                traits.isMoveConstructible = false;
-                traits.isMoveAssignable = false;
-                continue;
-            }
-            if(baseName == CppImporterSemantics::s_MoveOnlyBaseClass){
-                traits.isCopyConstructible = false;
-                traits.isCopyAssignable = false;
-                continue;
-            }
 
             if(acc == CX_CXXPublic && !::clang_Cursor_isNull(baseDecl) && ::clang_getCursorKind(baseDecl) != CXCursor_NoDeclFound){
                 inspectBaseAndSpecialMembers(baseDecl, traits, visitedTraitBases, true);
@@ -376,21 +358,37 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
         }
 
         if(ck == CXCursor_Constructor){
+            if(!isBasePass)
+                traits.hasAnyUserCtor = true;
             const b8 accessible = (acc == CX_CXXPublic) && (::clang_CXXMethod_isDeleted(child) == 0u);
             if(::clang_CXXConstructor_isCopyConstructor(child)){
                 traits.hasUserDeclaredCopyCtor = true;
                 if(!accessible)
                     traits.isCopyConstructible = false;
+                continue;
             }
             if(::clang_CXXConstructor_isMoveConstructor(child)){
                 traits.hasUserDeclaredMoveCtor = true;
                 if(!accessible)
                     traits.isMoveConstructible = false;
+                continue;
+            }
+            if(!isBasePass && accessible){
+                const int numArgs = ::clang_Cursor_getNumArguments(child);
+                b8 acceptsZero = (numArgs == 0);
+                if(numArgs > 0)
+                    acceptsZero = HasDefaultInitializerExpr(::clang_Cursor_getArgument(child, 0u));
+                if(acceptsZero){
+                    traits.hasAccessibleZeroArgCtor = true;
+                    traits.zeroArgCtorNothrow = IsClangCursorNothrow(child);
+                }
             }
             continue;
         }
 
         if(ck == CXCursor_CXXMethod){
+            if(::clang_CXXMethod_isVirtual(child))
+                traits.hasVirtualMethod = true;
             const b8 accessible = (acc == CX_CXXPublic) && (::clang_CXXMethod_isDeleted(child) == 0u);
             if(::clang_CXXMethod_isCopyAssignmentOperator(child)){
                 traits.hasUserDeclaredCopyAssign = true;
@@ -406,39 +404,14 @@ void ImporterContext::inspectBaseAndSpecialMembers(CXCursor classCursor, ClassTr
         }
 
         if(ck == CXCursor_Destructor){
+            if(::clang_CXXMethod_isVirtual(child))
+                traits.hasVirtualMethod = true;
             if(::clang_CXXMethod_isDeleted(child) == 0u)
                 traits.hasExplicitDestructor = true;
         }
     }
 
-    if(traits.hasUserDeclaredMoveCtor || traits.hasUserDeclaredMoveAssign){
-        if(!traits.hasUserDeclaredCopyCtor)
-            traits.isCopyConstructible = false;
-        if(!traits.hasUserDeclaredCopyAssign)
-            traits.isCopyAssignable = false;
-    }
-    if(traits.hasUserDeclaredCopyCtor || traits.hasUserDeclaredCopyAssign){
-        if(!traits.hasUserDeclaredMoveCtor)
-            traits.isMoveConstructible = traits.isCopyConstructible;
-        if(!traits.hasUserDeclaredMoveAssign)
-            traits.isMoveAssignable = traits.isCopyAssignable;
-    }
-}
-
-b8 ImporterContext::MethodSignaturesEqual(const MethodDecl& a, const MethodDecl& b)noexcept{
-    if(a.isConstructor != b.isConstructor || a.isOperator != b.isOperator || a.isConst != b.isConst || a.isStatic != b.isStatic)
-        return false;
-    if(a.name != b.name || a.params.size() != b.params.size() || a.templateParams.size() != b.templateParams.size())
-        return false;
-    for(usize i = 0u; i < a.params.size(); ++i){
-        const TypeRef* ta = a.params[i].type;
-        const TypeRef* tb = b.params[i].type;
-        if((ta == nullptr) != (tb == nullptr))
-            return false;
-        if(ta && (ta->name != tb->name || a.params[i].mode != b.params[i].mode))
-            return false;
-    }
-    return true;
+    FinalizeRecordSpecialMemberTraits(traits);
 }
 
 void ImporterContext::addUniqueMethod(ClassDecl& target, MethodDecl* method, ClassImportDedupe& dedupe){
@@ -497,7 +470,7 @@ void ImporterContext::importClassMethodsFromCursor(CXCursor classCursor, ClassDe
     }
 
     MVector<CXCursor> children(m_arena);
-    visitChildrenList(classCursor, children);
+    VisitDirectChildren(classCursor, children);
 
     const CXType recordType = ::clang_getCursorType(classCursor);
 
@@ -597,11 +570,15 @@ void ImporterContext::extractClass(CXCursor classCursor){
     ClassTraits traits(m_arena);
     HashSet<CursorKey, MetaArena, CursorKeyHash> visitedTraitBases(m_arena);
     inspectBaseAndSpecialMembers(classCursor, traits, visitedTraitBases, false);
-    cls->isCopyConstructible = traits.isCopyConstructible;
-    cls->isMoveConstructible = traits.isMoveConstructible;
-    cls->isCopyAssignable = traits.isCopyAssignable;
-    cls->isMoveAssignable = traits.isMoveAssignable;
+    cls->isPolymorphicBase = traits.hasVirtualMethod && !traits.isFinal;
+    cls->isEmptyBase = !cls->isAbstract && !cls->isPolymorphicBase && !traits.isFinal && !traits.hasNonStaticField;
+    cls->isCopyConstructible = !cls->isAbstract && traits.isCopyConstructible;
+    cls->isMoveConstructible = !cls->isAbstract && traits.isMoveConstructible;
+    cls->isCopyAssignable = !cls->isAbstract && traits.isCopyAssignable;
+    cls->isMoveAssignable = !cls->isAbstract && traits.isMoveAssignable;
     cls->hasExplicitDestructor = traits.hasExplicitDestructor;
+    cls->isSelfDefaulted = !cls->isAbstract && (traits.hasAccessibleZeroArgCtor || !traits.hasAnyUserCtor);
+    cls->isNothrowDefaultConstructible = !cls->isAbstract && (traits.hasAccessibleZeroArgCtor ? traits.zeroArgCtorNothrow : !traits.hasAnyUserCtor);
 
     if(isNew){
         m_unit.classes.push_back(cls);

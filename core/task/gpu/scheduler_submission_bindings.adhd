@@ -2,19 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/scheduler_submission_bindings.h>"), cpp_name("::NWB::Core::GpuTaskSubmissionDetail::TaskSubmissionBindings"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/scheduler_submission_bindings.h>"), cpp_name("::NWB::Core::GpuTaskSubmissionDetail::TaskSubmissionBindings")]
 extern class GpuSubmissionBindings{
     b8 resolve(in GpuTaskGraphDeclarationReadView declarations, in GpuCompiledGraphReadView plan, in GpuSubmissionPacketRange range, in Span<GpuTaskGraphTaskTimingTicket> tickets, in Span<GpuTaskGraphTaskSubmissionHook> hooks);
     b8 validateTicket(in GpuSubmissionPacketId packet, in Optional<mut GpuTimingSubmissionTicket> ticket)const;
     GpuResolvedTimingTickets timingTickets;
 };
 
-[cpp_header("<core/task/gpu/scheduler_submission_bindings.h>"), cpp_name("::Vector<::NWB::Core::GpuTaskSubmissionDetail::ResolvedTimingTicket, ::NWB::Core::Alloc::ScratchArena>"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/scheduler_submission_bindings.h>"), cpp_name("::Vector<::NWB::Core::GpuTaskSubmissionDetail::ResolvedTimingTicket, ::NWB::Core::Alloc::ScratchArena>")]
 extern class GpuResolvedTimingTickets{
     usize size()const;
 };
 
-[cpp_header("<core/task/gpu/scheduler_submission_bindings.h>"), cpp_name("::Vector<::NotNull<::NWB::Core::GpuTimingSubmissionTicket*>, ::NWB::Core::Alloc::ScratchArena>"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/scheduler_submission_bindings.h>"), cpp_name("::Vector<::NotNull<::NWB::Core::GpuTimingSubmissionTicket*>, ::NWB::Core::Alloc::ScratchArena>")]
 extern class GpuSubmissionPacketTickets{
     void reserve(in usize count);
     usize size()const;

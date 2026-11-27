@@ -8,35 +8,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::IClipboardService>"), cpp_flags(no_copy)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::IClipboardService>")]
 extern class OsClipboardServiceOwner{
     b8 valid()const;
     mut IClipboardService deref()const;
     void reset();
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::ITextInputService>"), cpp_flags(no_copy)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::ITextInputService>")]
 extern class OsTextServiceOwner{
     b8 valid()const;
     mut ITextInputService deref()const;
     void reset();
 };
 
-[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::ICursorService>"), cpp_flags(no_copy)]
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::ICursorService>")]
 extern class OsCursorServiceOwner{
     b8 valid()const;
     mut ICursorService deref()const;
     void reset();
 };
 
-[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::IAccessibilityService>"), cpp_flags(no_copy)]
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::GlobalUniquePtr<::NWB::Core::IAccessibilityService>")]
 extern class OsAccessibilityServiceOwner{
     b8 valid()const;
     mut IAccessibilityService deref()const;
     void reset();
 };
 
-[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::WindowHandle"), cpp_flags(small_value, self_defaulted)]
+[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::WindowHandle"), cpp_flags(small_value)]
 extern class OsWindowHandle;
 [cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_NullWindow")]
 extern const OsWindowHandle s_OsNullWindow;
@@ -53,7 +53,7 @@ extern Expected<OsCursorServiceOwner> OpenOsCursorService(mut HeapStorage storag
 extern Expected<OsAccessibilityServiceOwner> OpenOsAccessibilityService(mut HeapStorage storage, in OsWindowHandle window);
 
 
-[cpp_header("<core/os/text_input_text.h>"), cpp_name("::Array<char, ::s_Utf8MaxSequenceBytes>"), cpp_flags(self_defaulted)]
+[cpp_header("<core/os/text_input_text.h>"), cpp_name("::Array<char, ::s_Utf8MaxSequenceBytes>")]
 extern class EncodedOsCodePoint;
 [cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::EncodedBytesView")]
 extern StringView EncodedBytesView(in EncodedOsCodePoint bytes, in usize length);

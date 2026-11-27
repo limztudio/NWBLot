@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/runtime/runtime.h>"), cpp_name("::NWB::Core::GraphicsRuntime"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/runtime/runtime.h>"), cpp_name("::NWB::Core::GraphicsRuntime")]
 extern class GraphicsRuntime{
     AcquiredPresentationFrame acquiredPresentationFrame(...)const;
     mut GraphicsAllocator allocator()const;
@@ -44,10 +44,10 @@ extern class GraphicsRuntime{
     void requestDeviceRecreation(...)const;
     b8 runFrame(...);
     b8 setAsyncComputeLaneEnabled(...);
-    [cpp_flags(nothrow)] b8 setBindlessHeapAbi(...);
+    b8 setBindlessHeapAbi(...);
     b8 setDebugRuntimeEnabled(...);
     void setFrameSubmissionSuspended(...);
-    [cpp_flags(nothrow)] b8 setHDR10OutputEnabled(...);
+    b8 setHDR10OutputEnabled(...);
     b8 setHardwareRayTracingPolicy(...);
     b8 setSwapChainReadbackEnabled(...);
     b8 shouldRenderUnfocused(...)const;

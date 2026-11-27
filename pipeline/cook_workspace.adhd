@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::AssetCookWorkspace"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::AssetCookWorkspace")]
 extern class AssetCookWorkspace;
 
 
@@ -34,7 +34,7 @@ extern class CookInputSelectionError{
 [cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::ResolveCookRootEntries"), cpp_flags(scratch_arena)]
 extern Expected<Vector<T>> ResolveCookRootEntries<T>(in Path repo, in Vector<String> inputs, in b8 infer, in AssetRootDuplicatePolicy policy, in Func<64u, void(in StringView, in b8)> onError);
 
-[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::CookFileCatalog"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::CookFileCatalog")]
 extern class CookFileCatalog{
     CookResolvedPaths paths;
     Vector<DiscoveredNwbFile> files;

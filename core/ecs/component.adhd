@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/ecs/component.h>"), cpp_name("::NWB::Core::ECS::IComponentPool"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/ecs/component.h>"), cpp_name("::NWB::Core::ECS::IComponentPool")]
 extern class IComponentPool{
     void clear(...);
     b8 has(...)const;

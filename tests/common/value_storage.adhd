@@ -2,15 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestProcessValue"), cpp_flags(nothrow)]
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestProcessValue")]
 extern mut T TestProcessValue<T>();
 
-[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestObserved"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestObserved"), cpp_flags(arena_first_ctor)]
 extern class TestObserved<T>{
     mut T value()const;
 };
 
-[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestValueSlot"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestValueSlot")]
 extern class TestValueSlot<T>{
     mut T value();
     in T value()const;

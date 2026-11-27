@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/presentation_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphPresentationContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/task/gpu/presentation_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphPresentationContributor")]
 extern class IGpuTaskGraphPresentationContributor{
     Expected<GpuTaskId> declareTaskGraphPresentation(...);
     b8 hasTaskGraphPresentationWork(...)const;

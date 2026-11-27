@@ -789,6 +789,8 @@ NWB_ADHD_EXPORT_MEMBER_METHOD("test",                    false, false, false, fa
 NWB_ADHD_EXPORT_MEMBER_METHOD("testAndSet",              true,  false, false, false, false, FixedType,              "b8")
 NWB_ADHD_EXPORT_MEMBER_METHOD("wait",                    false, false, false, false, false, FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("notifyAll",               true,  false, false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("notify_one",              true,  false, false, false, false, FixedType,              "void")
+NWB_ADHD_EXPORT_MEMBER_METHOD("notify_all",              true,  false, false, false, false, FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("breaksBefore",            false, false, false, false, false, FixedType,              "b8")
 NWB_ADHD_EXPORT_MEMBER_METHOD("advance",                 true,  false, false, false, false, FixedType,              "void")
 NWB_ADHD_EXPORT_MEMBER_METHOD("path",                    false, false, false, false, true,  FixedType,              "Path")

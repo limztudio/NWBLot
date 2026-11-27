@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_frame_transaction.h>"), cpp_name("::NWB::Core::GpuTimingFrameTransaction"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_timing_frame_transaction.h>"), cpp_name("::NWB::Core::GpuTimingFrameTransaction")]
 extern class GpuTimingFrameTransaction{
     b8 confirmBeginSubmission(...);
     b8 confirmEndSubmission(...);

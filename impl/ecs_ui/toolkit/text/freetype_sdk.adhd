@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::FT_BBox"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::FT_BBox")]
 extern class FreeTypeOutlineBox{
     i64 xMin;
     i64 yMin;
@@ -20,7 +20,7 @@ extern class FreeTypeOutlineBox{
 extern const i32 s_FreeTypeLoadNoAutohint;
 
 
-[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiFreeTypeFace"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiFreeTypeFace"), cpp_flags(arena_first_ctor)]
 extern class UiFreeTypeFace{
     i32 createLibrary();
     void addDefaultModules();

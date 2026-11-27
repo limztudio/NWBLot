@@ -17,6 +17,14 @@ NWB_ADHD_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ArenaCtorMode{
+    enum Enum : u8{
+        Default = 0u,
+        First = 1u,
+        Omit = 2u,
+    };
+};
+
 struct EnumEntry{
     MStringView name;
     Expr* valueExpr = nullptr;
@@ -131,7 +139,6 @@ struct MethodDecl{
     b8 declaredBodylessInImport = false;
     b8 forceNothrowContract = false;
     b8 isOpenVirtualContract = false;
-    b8 isNothrowExtern = false;
     b8 exportsExplicitBool = false;
     b8 exportsTakingAssignment = false;
     b8 exportsRvalueOverload = false;
@@ -242,8 +249,9 @@ struct ClassDecl{
     b8 isMoveAssignable = true;
     b8 hasExplicitDestructor = false;
     b8 hasExplicitLayout = false;
-    u8 arenaCtorMode = 0u;
+    u8 arenaCtorMode = ArenaCtorMode::Default;
     b8 isSelfDefaulted = false;
+    b8 isNothrowDefaultConstructible = false;
     b8 isSmallValue = false;
     b8 isBorrowView = false;
     b8 isBinarySerializable = false;
@@ -252,6 +260,7 @@ struct ClassDecl{
     b8 isNonThreadSafeContainer = false;
     b8 isNwbMapKey = false;
     b8 isPolymorphicBase = false;
+    b8 isEmptyBase = false;
 
 
 public:
@@ -274,6 +283,10 @@ public:
 
     [[nodiscard]] constexpr b8 canBorrowMotherArena()const noexcept{
         return !isSerialize && !usesStaticClassArena() && subsystemTypeName.empty();
+    }
+
+    [[nodiscard]] constexpr b8 usesArenaCtor()const noexcept{
+        return (isArenaOwner && arenaCtorMode != ArenaCtorMode::Omit) || arenaCtorMode == ArenaCtorMode::First;
     }
 };
 

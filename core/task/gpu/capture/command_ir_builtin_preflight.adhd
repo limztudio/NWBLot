@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/capture/command_ir_builtin_preflight.h>"), cpp_name("::NWB::Core::GpuCommandIrBuiltinPreflight"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/capture/command_ir_builtin_preflight.h>"), cpp_name("::NWB::Core::GpuCommandIrBuiltinPreflight"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class GpuCommandIrBuiltinPreflight;
 
 

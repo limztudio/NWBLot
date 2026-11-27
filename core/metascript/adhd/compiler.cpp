@@ -4,6 +4,8 @@
 
 #include "compiler.h"
 
+#include "cache_utils.h"
+#include "clang/cpp_extern_trait_resolver.h"
 #include "clang/cpp_header_importer.h"
 #include "codegen/header_emitter.h"
 #include "parser/decl_parser.h"
@@ -68,6 +70,41 @@ b8 Compiler::Compile(const CompileOptions& options, MetaArena& arena, CompileRes
 
     if(!declParser.parseTranslationUnit(outResult.unit))
         return false;
+
+    {
+        MVector<MString> traitDefines(arena);
+        MStringMap<u8> seenTraitDefines(arena);
+        const auto addDefine = [&](const MString& def){
+            if(!def.empty())
+                CacheDetail::AddExistingUnique(traitDefines, seenTraitDefines, def);
+        };
+        for(const MString& def : options.cppDefines)
+            addDefine(def);
+        for(const MString& def : options.macroDefinitions)
+            addDefine(def);
+
+        MVector<MString> resolvedCppHeaders(arena);
+        CppExternTraitResolveOptions traitOpts;
+        traitOpts.includeDirectories = options.cppIncludeDirectories;
+        traitOpts.defines = Span<const MString>(traitDefines.data(), traitDefines.size());
+        traitOpts.compilerArgs = options.cppCompilerArgs;
+        traitOpts.enableAutoProjectIncludes = options.enableAutoProjectCppIncludes;
+        traitOpts.useDiskCache = true;
+        traitOpts.outProjectIncludedFiles = &resolvedCppHeaders;
+        CppExternTraitResolver::ResolveTranslationUnitTraits(traitOpts, arena, outResult.unit);
+
+        if(!resolvedCppHeaders.empty()){
+            MStringMap<u8> seenResolvedFiles(arena);
+            for(const MString& existing : outResult.unit.resolvedIncludedFiles)
+                seenResolvedFiles.emplace(existing, 1u);
+            for(const MString& cppHdr : resolvedCppHeaders){
+                const MStringView hdrView(cppHdr.data(), cppHdr.size());
+                if(hdrView.empty() || hdrView.ends_with(ContractSemantics::s_GeneratedHeaderSuffix))
+                    continue;
+                CacheDetail::AddExistingUnique(outResult.unit.resolvedIncludedFiles, seenResolvedFiles, cppHdr);
+            }
+        }
+    }
 
     for(const MString& extraHdr : options.extraPreambleHeaders){
         if(!extraHdr.empty())

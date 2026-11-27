@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::Document"), cpp_flags(no_assign)]
+[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::Document")]
 extern class MetascriptDocument{
     Span<MetascriptParseError> errors(...)const;
     Optional<StringView> declarationType(in StringView name)const;
@@ -17,14 +17,14 @@ extern class MetascriptDocument{
     b8 visitVariable(in StringView a0, in Func<b8(mut MetascriptValue)> a1)const;
 };
 
-[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::ParseError"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::ParseError"), cpp_flags(brace_init)]
 extern class MetascriptParseError{
     u32 line;
     u32 column;
     String message;
 };
 
-[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::DocumentWorkspace"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::DocumentWorkspace")]
 extern class MetascriptDocumentWorkspace{
     MetascriptDocument document;
 };

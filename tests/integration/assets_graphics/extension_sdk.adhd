@@ -11,11 +11,11 @@
 
 [cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::Alignment128")]
 extern class Alignment128;
-[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::ParsedMetadataExtension"), cpp_flags(no_copy)]
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::ParsedMetadataExtension")]
 extern class ErasedExtension{
     void reset();
 };
-[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::ParsedMetadataExtensionMap"), cpp_flags(no_copy)]
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Core::Assets::ParsedMetadataExtensionMap")]
 extern class PlainExtensionMap{
     mut ErasedExtension at(in Name key);
     usize size()const;
@@ -23,7 +23,7 @@ extern class PlainExtensionMap{
     usize erase(in Name name);
     void clear();
 };
-[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::PolicyMap"), cpp_flags(no_copy)]
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::PolicyMap")]
 extern class PolicyExtensionMap<Policy>{
     void reserve(in usize count);
     b8 empty()const;
@@ -48,7 +48,7 @@ extern mut T StoredExtension<T>(mut ErasedExtension value);
 extern b8 InsertExtension(mut auto map, in Name name, mut ErasedExtension owner);
 [cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::MakePolicyMap")]
 extern PolicyExtensionMap<Policy> NewPolicyExtensionMap<Policy>(mut HeapStorage storage, mut Policy policy);
-[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::SavedNameCallbacks"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::SavedNameCallbacks")]
 extern class SavedNameCallbacks;
 [cpp_header("<tests/integration/assets_graphics/extension_sdk.h>"), cpp_name("::NWB::Tests::GraphicsExtensionSdk::s_DebugNames")]
 extern const b8 s_DebugNameBinding;

@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("char"), cpp_flags(self_defaulted, small_value)]
+[cpp_name("char"), cpp_flags(small_value)]
 extern class CrashChar;
 
 [cpp_header("<core/crash/protocol.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::s_MaxMetadata")]
@@ -127,7 +127,7 @@ extern b8 IsCurrentCrashRequest(in CrashRequest request);
 extern b8 CrashAckMatchesRequest(in CrashAck ack, in CrashRequest request);
 
 
-[cpp_header("<core/crash/internal.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::ManualDumpContextStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/crash/internal.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::ManualDumpContextStorage")]
 extern class ManualContext;
 
 [cpp_header("<core/crash/internal.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::CaptureManualDumpContext")]
@@ -149,7 +149,7 @@ extern const i32 s_TestSegvSignal;
 extern i32 RaiseTestSignal(in i32 value);
 
 
-[cpp_header("<tests/integration/crash/protocol_sdk.h>"), cpp_name("::NWB::Tests::CrashProtocolSdk::DiagnosticSubscription"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/crash/protocol_sdk.h>"), cpp_name("::NWB::Tests::CrashProtocolSdk::DiagnosticSubscription")]
 extern class CrashDiagnosticSubscription<Observer>;
 
 [cpp_header("<tests/integration/crash/protocol_sdk.h>"), cpp_name("::NWB::Tests::CrashProtocolSdk::ErrorCategory")]

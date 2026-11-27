@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineVertex"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineVertex"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuDebugLineVertex{
     f32x4 positionPad;
     f32x4 color;
 };
 
-[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineCollector"), cpp_flags(self_defaulted, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineCollector")]
 extern class GpuDebugLineCollector{
     void clear();
     void reserve(in usize depthTestedVertexCapacity, in usize overlayVertexCapacity);
@@ -19,10 +19,9 @@ extern class GpuDebugLineCollector{
     b8 empty()const;
 };
 
-[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::IDebugLineProvider"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::IDebugLineProvider")]
 extern class IDebugLineProvider{
     b8 hasDebugLines()const;
-    [cpp_flags(unwind)]
     void collectDebugLines(mut GpuDebugLineCollector collector);
 };
 

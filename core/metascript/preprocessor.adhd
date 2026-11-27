@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor"), cpp_flags(no_assign)]
+[cpp_header("<core/metascript/preprocessor.h>"), cpp_name("::NWB::Core::Metascript::Preprocessor")]
 extern class MetascriptPreprocessor{
     void defineObjectMacro(...);
     Span<String> includedFiles(...)const;

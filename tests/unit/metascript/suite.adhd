@@ -350,9 +350,11 @@ void VerifyAdhdCompiler_SystemUpdateUnwindRespectsSdkContract(){
     {
         const ScopedTestTrace trace("clamped_prepare_sys");
         CompileResult clampedRes = CompileResult(arena.arena);
-        ASSERT_TRUE(Compile("[cpp_header(\"<opaque/probe.h>\"), cpp_name(\"::OpaqueProbe\")] extern void OpaqueProbe(); [system(\"clamped_sys\")] class ClampedSystem { public void prepare(mut World world)override{ OpaqueProbe(); } }", "impl/ecs_sample/clamped_system.adhd", arena.arena, clampedRes));
+        ASSERT_TRUE(Compile("[cpp_header(\"<opaque/probe.h>\"), cpp_name(\"::OpaqueProbe\")] extern void OpaqueProbe(); [system(\"clamped_sys\")] class ClampedSystem { public void prepare(mut World world)override{ OpaqueProbe(); } public CpuTaskOptions taskOptions()const override{ OpaqueProbe(); return CpuTaskOptions(); } }", "impl/ecs_sample/clamped_system.adhd", arena.arena, clampedRes));
         const StringView clampedHeader = GeneratedHeaderView(clampedRes);
-        EXPECT_NE(clampedHeader.find("prepare(::NWB::Core::ECS::World& world)noexcept override"), usize.max);
+        EXPECT_NE(clampedHeader.find("prepare(::NWB::Core::ECS::World& world) override"), usize.max);
+        EXPECT_EQ(clampedHeader.find("prepare(::NWB::Core::ECS::World& world)noexcept override"), usize.max);
+        EXPECT_NE(clampedHeader.find("taskOptions()const noexcept override"), usize.max);
     }
     {
         const ScopedTestTrace trace("bad_param_sys");
@@ -398,21 +400,21 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     ExpectCompileFailsWithMessage(arena, "[extensible] class Parent{ private u32 hidden = 1u; } class Child : Parent{ public u32 read()const{ return this.hidden; } }", "impl/private_inherited_field.adhd", "cannot access an inherited private member");
     ExpectCompileFailsWithMessage(arena, "[extensible] class Parent{ private u32 read()const{ return 1u; } } class Child : Parent{ public u32 other()const{ return this.read(); } }", "impl/private_inherited_method.adhd", "cannot access an inherited private member");
     ExpectCompileFailsWithMessage(arena, "[extensible] class Parent{ public Parent(in u32 value){} } class Child : Parent{}", "impl/missing_base_constructor.adhd", "a derived class requires an accessible default constructor on its concrete base");
-    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] extern void Foreign();", "impl/bad_unwind_extern.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] extern void Foreign();", "impl/bad_unwind_extern.adhd", "unsupported attribute on callable");
     ExpectCompileFailsWithMessage(arena, "class Item{ [cpp_base(IRenderPass, value)] public Item(mut u32 value){} }", "impl/bad_cpp_base_target.adhd", "'[cpp_base]' must name a direct external polymorphic base");
     ExpectCompileFailsWithMessage(arena, "class Pass : IRenderPass{ [cpp_base(IRenderPass, value)] public Pass(in u32 value){} }", "impl/bad_cpp_base_input.adhd", "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
     ExpectCompileFailsWithMessage(arena, "class Pass : IRenderPass{ [cpp_base(IRenderPass, first, second)] public Pass(mut u32 first, in u32 second){} }", "impl/bad_cpp_base_second_input.adhd", "'[cpp_base]' must forward a 'mut' or 'in borrow' constructor parameter");
-    ExpectCompileFailsWithMessage(arena, "class Owner{ [cpp_unwind] public ~Owner(){} }", "impl/bad_unwind_dtor.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
-    ExpectCompileFailsWithMessage(arena, "[component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "class Owner{ [cpp_unwind] public ~Owner(){} }", "impl/bad_unwind_dtor.adhd", "unsupported attribute on callable");
+    ExpectCompileFailsWithMessage(arena, "[component(\"part\")] class Part{ [cpp_unwind] public Part(){} }", "impl/bad_unwind_component_ctor.adhd", "unsupported attribute on callable");
     ExpectCompileFailsWithMessage(arena, "[friend(Writer)] class Vault{ private u32 key = 1u; } class Reader{ public u32 read(in Vault vault)const{ return vault.key; } }", "impl/bad_friend_access.adhd", "cannot access 'private' or 'protected' field outside of its declaring class");
     ExpectCompileFailsWithMessage(arena, "[friend(Box)] class Vault{} class Box<T>{}", "impl/bad_friend_template.adhd", "a friend must name a non-template peer class");
     ExpectCompileFailsWithMessage(arena, "class Secret : MoveOnly{} class A{ public Secret v; } class B{ public A a; } class C{ public B b; } class D{ public C c; } class E{ public D d; } void Bad(in E source){ E copy = source; }", "impl/bad_deep_move_only_copy.adhd", "cannot copy a non-copyable type");
     ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{ public u32 index = 0u; } u32 Bad(in Payload value){ Payload copy = value; return copy.index; }", "impl/bad_move_only_copy.adhd", "cannot copy a non-copyable type");
     ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue, mut u32 count){ MoveInto<Payload>(outValue, count); }", "impl/bad_move_source_type.adhd", "argument type does not match the explicit type parameter");
     ExpectCompileFailsWithMessage(arena, "class Payload : MoveOnly{} void Bad(mut Payload outValue){ MoveInto<Payload>(outValue, Payload()); }", "impl/bad_move_source_temporary.adhd", "a mutable type parameter requires a mutable lvalue");
-    ExpectCompileFailsWithMessage(arena, "class Task{ [cpp_unwind] public void record()const{} }", "impl/bad_unwind_method.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
-    ExpectCompileFailsWithMessage(arena, "interface Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_interface.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
-    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] void Call(){}", "impl/bad_unwind_free.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "class Task{ [cpp_unwind] public void record()const{} }", "impl/bad_unwind_method.adhd", "unsupported attribute on callable");
+    ExpectCompileFailsWithMessage(arena, "interface Base{ [cpp_unwind] void record(); }", "impl/bad_unwind_interface.adhd", "unsupported attribute on callable");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] void Call(){}", "impl/bad_unwind_free.adhd", "unsupported attribute on callable");
     ExpectCompileFails(arena, "[noinline]\r\nvoid BadNoInlineAttr() {}\r\n", "impl/bad_noinline_attr.adhd");
     ExpectCompileFails(arena, "inline void BadInlineKeyword() {}\r\n", "impl/bad_inline_kw.adhd");
     ExpectCompileFails(arena, "noinline void BadNoInlineKeyword() {}\r\n", "impl/bad_noinline_kw.adhd");
@@ -465,7 +467,7 @@ void VerifyAdhdCompiler_RejectsFlagBitWidthOverflowInvalidSwitchCtorAndAttribute
     EXPECT_NE(cookUnwindHdr.find("Expected<UnwindBlob> BuildUnwindBlob("), usize.max);
     EXPECT_EQ(cookUnwindHdr.find("BuildUnwindBlob(const UnwindEntry& entry)noexcept"), usize.max);
     EXPECT_NE(cookUnwindHdr.find("NWB_DEFINE_ASSET_CODEC(UnwindBlobAssetCodec, UnwindBlob);"), usize.max);
-    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] void BadUnwindSetup() {}\r\n", "impl/assets_unwind/bad_setup.adhd", "'cpp_unwind' attribute is prohibited in adhd; exception specifications are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[cpp_unwind] void BadUnwindSetup() {}\r\n", "impl/assets_unwind/bad_setup.adhd", "unsupported attribute on callable");
     ExpectCompileFailsWithMessage(arena, "[cook_setup] void BadCookSetup() {}\r\n", "impl/assets_unwind/bad_cook_setup.adhd", "unsupported attribute on callable");
 
     CompileResult systemRes = CompileResult(arena.arena);
@@ -1214,7 +1216,7 @@ void VerifyAdhdCompiler_CompilesExternHeaderAndDeclEdgeCases(){
 
 void VerifyAdhdCompiler_CompilesModularClassEdgeCases(){
     AdhdTestArena arena = AdhdTestArena();
-    ExpectCompileFailsWithMessage(arena, "[modular]\r\nclass BadModular {\r\n    public void step();\r\n}\r\n", "impl/bad_modular.adhd", "'modular' attribute is prohibited in adhd; out-of-line class methods are decided automatically by the adhd compiler");
+    ExpectCompileFailsWithMessage(arena, "[modular]\r\nclass BadModular {\r\n    public void step();\r\n}\r\n", "impl/bad_modular.adhd", "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
     ExpectCompileFails(arena, "class BadTmpl<T> {\r\n    public T item;\r\n    public void act(in T val);\r\n}\r\n", "impl/bad_tmpl_bodyless.adhd");
     ExpectCompileFails(arena, "[subsystem(\"bad\")]\r\nclass BadSub {\r\n}\r\n", "impl/bad_sub.adhd");
     ExpectCompileFails(arena, "class BadMethodTmpl {\r\n    public void act<T>(in T val);\r\n}\r\n", "impl/bad_method_tmpl.adhd");
@@ -1499,7 +1501,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_FALSE(ImportCompilerHeaders(badOpts, arena.arena, badUnit, badErrors));
     EXPECT_FALSE(badErrors.empty());
 
-    const StringView kLayoutFlagsAndPreludeSource = "\n[cpp_name(\"::MyExt::Contract\"), cpp_header(\"<my_ext/types.h>\"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]\nextern class ExtContract{\n    b8 probe(...)const;\n};\n\n[cpp_name(\"::MyExt::VariadicSink\"), cpp_header(\"<my_ext/types.h>\"), cpp_flags(self_defaulted, small_value, binary_serializable)]\nextern class VariadicSink{\n    u32 count;\n    b8 pushAny(...);\n};\n\nclass ImplContract : ExtContract{\n    public b8 validate(in ExtContract contract, mut VariadicSink sink)const{\n        const Path spoolDir = DefaultCrashSpoolDirectory();\n        const CrashDumpResult dump = CaptureCrashDump();\n        const usize compId = ComponentType<ImplContract>();\n        const BlendFactor bf = BlendFactor::SrcAlpha;\n        const ColorMask mask = ColorMask::Red | ColorMask::Green;\n        const Viewport vp = Viewport();\n        const b8 okSink = sink.pushAny(1u, \"ok\", vp.minX, s_BackBufferWidth, spoolDir, dump.packageWritten());\n        const b8 okValid = contract.probe() && contract.probe(bf, mask, compId);\n        return okSink && okValid;\n    }\n}\n";
+    const StringView kLayoutFlagsAndPreludeSource = "\n[cpp_name(\"::MyExt::Contract\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")]\nextern class ExtContract{\n    b8 probe(...)const;\n};\n\n[cpp_name(\"::MyExt::VariadicSink\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(small_value, binary_serializable)]\nextern class VariadicSink{\n    u32 count;\n    b8 pushAny(...);\n};\n\nclass ImplContract : ExtContract{\n    public b8 validate(in ExtContract contract, mut VariadicSink sink)const{\n        const Path spoolDir = DefaultCrashSpoolDirectory();\n        const CrashDumpResult dump = CaptureCrashDump();\n        const usize compId = ComponentType<ImplContract>();\n        const BlendFactor bf = BlendFactor::SrcAlpha;\n        const ColorMask mask = ColorMask::Red | ColorMask::Green;\n        const Viewport vp = Viewport();\n        const b8 okSink = sink.pushAny(1u, \"ok\", vp.minX, s_BackBufferWidth, spoolDir, dump.packageWritten());\n        const b8 okValid = contract.probe() && contract.probe(bf, mask, compId);\n        return okSink && okValid;\n    }\n}\n";
 
     CompileResult extPreludeRes(arena.arena);
     const b8 extPreludeOk = Compile(
@@ -1512,7 +1514,7 @@ void RunCoreCppHeaderImportVerification(){
     if(extPreludeOk){
         const StringView hdr = GeneratedHeaderView(extPreludeRes);
         const StringView cpp = GeneratedSourceView(extPreludeRes);
-        EXPECT_NE(hdr.find("#include <my_ext/types.h>"), usize.max);
+        EXPECT_NE(hdr.find("#include <tests/unit/metascript/extern_trait_fixtures.h>"), usize.max);
         EXPECT_NE(hdr.find("#include <core/crash/module.h>"), usize.max);
         EXPECT_NE(hdr.find("#include <core/ecs/type_id.h>"), usize.max);
         EXPECT_NE(hdr.find("#include <core/graphics/rhi/pipeline_state.h>"), usize.max);
@@ -1540,9 +1542,17 @@ void RunCoreCppHeaderImportVerification(){
         "impl/edge_cases/bad_non_extern_variadic.adhd"
     );
     expectExtFails(
-        "[cpp_name(\"::MyExt::Abs\"), cpp_header(\"<my_ext/abs.h>\"), cpp_flags(abstract)]\nextern class AbsType;\nvoid F(){ const AbsType a; }\n",
+        "[cpp_name(\"::MyExt::Abs\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")]\nextern class AbsType;\nvoid F(){ const AbsType a; }\n",
         "impl/edge_cases/bad_abstract_value.adhd"
     );
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(nothrow)] extern void BadFlag();", "impl/edge_cases/bad_flag_nothrow.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(unwind)] extern void BadFlag();", "impl/edge_cases/bad_flag_unwind.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(no_copy)] extern class BadCls;", "impl/edge_cases/bad_flag_no_copy.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(no_assign)] extern class BadCls;", "impl/edge_cases/bad_flag_no_assign.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(abstract)] extern class BadCls;", "impl/edge_cases/bad_flag_abstract.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(polymorphic_base)] extern class BadCls;", "impl/edge_cases/bad_flag_poly.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(self_defaulted)] extern class BadCls;", "impl/edge_cases/bad_flag_defaulted.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    expectExtFails("[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")] extern void BadRef(in cpp_ref u32 v);", "impl/edge_cases/bad_cpp_ref.adhd");
 }
 
 void VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder(){
@@ -1587,13 +1597,13 @@ void VerifyAdhdCompiler_ProhibitsOrderedAttributeAndAutoPreservesDependentFieldO
         arena,
         "[ordered]\r\nclass BadOrdered {\r\n    public u32 x = 0u;\r\n}\r\n",
         "impl/test_bad_ordered.adhd",
-        "'ordered' attribute is prohibited in adhd; member reordering is decided automatically by the adhd compiler"
+        "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'"
     );
     ExpectCompileFailsWithMessage(
         arena,
         "[layout(8)]\r\nclass BadLayout {\r\n    public u32 x = 0u;\r\n}\r\n",
         "impl/test_bad_layout.adhd",
-        "'layout' attribute is prohibited in adhd; use '[align(alignment)]' instead"
+        "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'"
     );
 
     const StringView alignedRecordSource = "[align(16)]\r\nclass AlignedRecord {\r\n    public u8 tag = 0u;\r\n    public u32 value = 0u;\r\n}\r\n";
@@ -1672,7 +1682,7 @@ void VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass()
         arena,
         "[move_only]\r\nclass BadAttr : MoveOnly {\r\n    public u32 x = 0u;\r\n}\r\n",
         "impl/test_bad_move_only_attr.adhd",
-        "'move_only' attribute is prohibited in adhd; inherit from 'MoveOnly' instead"
+        "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'"
     );
     ExpectCompileFailsWithMessage(
         arena,
@@ -1739,7 +1749,7 @@ void VerifyAdhdCompiler_ProhibitsMoveOnlyAttributeAndSupportsMoveOnlyBaseClass()
 void VerifyAdhdCompiler_InfersExceptionSpecificationsAutomatically(){
     AdhdTestArena arena = AdhdTestArena();
 
-    const StringView infSource = "[cpp_header(\"<ext/ops.h>\"), cpp_name(\"::ExtOpaque\")]\r\nextern void ExtOpaque();\r\n[cpp_header(\"<ext/ops.h>\"), cpp_name(\"::ExtNothrow\"), cpp_flags(nothrow)]\r\nextern void ExtNothrow();\r\n[cpp_header(\"<ext/ops.h>\"), cpp_name(\"::ExtObj\")]\r\nextern class ExtObj{\r\n    void opaqueMethod();\r\n    [cpp_flags(nothrow)]\r\n    void safeMethod()const;\r\n};\r\nu32 PureFn(in u32 x){ return x + 1u; }\r\nu32 CallNothrowExt(in ExtObj obj){ ExtNothrow(); obj.safeMethod(); return 1u; }\r\nvoid CallOpaqueExt(){ ExtOpaque(); }\r\nvoid CallOpaqueMethod(mut ExtObj obj){ obj.opaqueMethod(); }\r\nvoid AllocVec(){ Vector<u32> v; v.push_back(1u); }\r\nString AllocStr(){ String s = \"hello\"; return s; }\r\nvoid TransitiveCaller(){ CallOpaqueExt(); }\r\nu32 InvokeCallback(mut Func<u32()> cb){ return cb(); }\r\nclass Box{\r\n    private u32 value = 0u;\r\n    public Box(){}\r\n    public ~Box(){}\r\n    public u32 get()const{ return this.value; }\r\n    public void oolUnwind();\r\n}\r\nvoid Box::oolUnwind(){ ExtOpaque(); }\r\nclass UnwindGuard : NoCopy{\r\n    public UnwindGuard(){ ExtOpaque(); }\r\n    public ~UnwindGuard(){ ExtOpaque(); }\r\n}\r\ninterface IOpen{\r\n    u32 run();\r\n}\r\n[extensible]\r\nclass OpenBase : IOpen{\r\n    public u32 run()override{ return 1u; }\r\n}\r\nclass ClampedDtor : IOpen{\r\n    public u32 run()override{ return 2u; }\r\n    public ~ClampedDtor(){ ExtOpaque(); }\r\n}\r\nu32 CreateUnwindingLambdaOnly(){\r\n    auto fn = lambda[]() -> void{ ExtOpaque(); };\r\n    return 42u;\r\n}\r\nvoid InvokeUnwindingLambda(){\r\n    auto fn = lambda[]() -> void{ ExtOpaque(); };\r\n    fn();\r\n}\r\nvoid InvokePureLambda(){\r\n    auto fn = lambda[](in u32 x) -> u32{ return x + 1u; };\r\n    fn(1u);\r\n}\r\n";
+    const StringView infSource = "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_name(\"::ExtOpaque\")]\r\nextern void ExtOpaque();\r\n[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_name(\"::ExtNothrow\")]\r\nextern void ExtNothrow();\r\n[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_name(\"::ExtObj\")]\r\nextern class ExtObj{\r\n    void opaqueMethod();\r\n    void safeMethod()const;\r\n};\r\nu32 PureFn(in u32 x){ return x + 1u; }\r\nu32 CallNothrowExt(in ExtObj obj){ ExtNothrow(); obj.safeMethod(); return 1u; }\r\nvoid CallOpaqueExt(){ ExtOpaque(); }\r\nvoid CallOpaqueMethod(mut ExtObj obj){ obj.opaqueMethod(); }\r\nvoid AllocVec(){ Vector<u32> v; v.push_back(1u); }\r\nString AllocStr(){ String s = \"hello\"; return s; }\r\nvoid TransitiveCaller(){ CallOpaqueExt(); }\r\nu32 InvokeCallback(mut Func<u32()> cb){ return cb(); }\r\nclass Box{\r\n    private u32 value = 0u;\r\n    public Box(){}\r\n    public ~Box(){}\r\n    public u32 get()const{ return this.value; }\r\n    public void oolUnwind();\r\n}\r\nvoid Box::oolUnwind(){ ExtOpaque(); }\r\nclass UnwindGuard : NoCopy{\r\n    public UnwindGuard(){ ExtOpaque(); }\r\n    public ~UnwindGuard(){ ExtOpaque(); }\r\n}\r\ninterface IOpen{\r\n    u32 run();\r\n}\r\n[extensible]\r\nclass OpenBase : IOpen{\r\n    public u32 run()override{ return 1u; }\r\n}\r\nclass ClampedDtor : IOpen{\r\n    public u32 run()override{ return 2u; }\r\n    public ~ClampedDtor(){ ExtOpaque(); }\r\n}\r\nu32 CreateUnwindingLambdaOnly(){\r\n    auto fn = lambda[]() -> void{ ExtOpaque(); };\r\n    return 42u;\r\n}\r\nvoid InvokeUnwindingLambda(){\r\n    auto fn = lambda[]() -> void{ ExtOpaque(); };\r\n    fn();\r\n}\r\nvoid InvokePureLambda(){\r\n    auto fn = lambda[](in u32 x) -> u32{ return x + 1u; };\r\n    fn(1u);\r\n}\r\n";
 
     CompileResult infRes = CompileResult(arena.arena);
     ASSERT_TRUE(Compile(infSource, "impl/edge_cases/infer_exception_specs.adhd", arena.arena, infRes));

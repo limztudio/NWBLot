@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/logger_server/loopback_http.h>"), cpp_name("::NWB::Tests::LoopbackHttp::Request"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<tests/integration/logger_server/loopback_http.h>"), cpp_name("::NWB::Tests::LoopbackHttp::Request")]
 extern class TestHttpRequest{
     StringView method()const;
     StringView path()const;
@@ -12,7 +12,7 @@ extern class TestHttpRequest{
     b8 respond(in u32 status);
 };
 
-[cpp_header("<tests/integration/logger_server/loopback_http.h>"), cpp_name("::NWB::Tests::LoopbackHttp::Server"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/loopback_http.h>"), cpp_name("::NWB::Tests::LoopbackHttp::Server")]
 extern class TestHttpServer{
     b8 start(in Func<64u, b8(mut TestHttpRequest)> handler, mut u16 port);
     void stop();

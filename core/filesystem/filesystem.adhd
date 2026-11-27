@@ -13,13 +13,13 @@ extern enum FileSeekOrigin : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileCursor"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileCursor"), cpp_flags(binary_serializable, brace_init)]
 extern class FileCursor{
     Name virtualPath;
     u64 offset;
 };
 
-[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::IFilesystem"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::IFilesystem")]
 extern class IFilesystem{
     void closeFile(...)const;
     u64 fileCount(...)const;
@@ -38,7 +38,7 @@ extern class IFilesystem{
     b8 writable(...)const;
 };
 
-[cpp_header("<core/filesystem/factory.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemFactory"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<core/filesystem/factory.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemFactory"), cpp_flags(brace_init)]
 extern class FilesystemFactory;
 
 [cpp_header("<core/filesystem/factory.h>"), cpp_name("::NWB::Core::Filesystem::CreateFilesystem")]

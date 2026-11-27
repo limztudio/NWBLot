@@ -2,12 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Core::Alloc::ScratchArena"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Core::Alloc::ScratchArena")]
 extern class TestScratchAllocator{
     ArenaMemoryStats memoryStats()const;
 };
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::RawAllocation"), cpp_flags(self_defaulted, brace_init, small_value)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::RawAllocation"), cpp_flags(brace_init, small_value)]
 extern class RawAllocation{
     usize address()const;
     mut u8 operator[](in usize index)const;
@@ -27,7 +27,7 @@ extern RawAllocation ResizeBytes(mut auto storage, in RawAllocation block, in us
 [cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::BackendSize")]
 extern usize BackendSize(in RawAllocation block);
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::HeapStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::HeapStorage")]
 extern class HeapStorageHandle{
     GlobalAllocator arena;
     T makeValue<T>(...);
@@ -39,7 +39,7 @@ extern class HeapStorageHandle{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ScratchStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ScratchStorage")]
 extern class ScratchStorage{
     TestScratchAllocator arena;
     T makeValue<T>(...);
@@ -51,7 +51,7 @@ extern class ScratchStorage{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::PersistentStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::PersistentStorage")]
 extern class PersistentStorage{
     ArenaMemoryStats memoryStats()const;
     AllocationIdentity identity()const;
@@ -84,7 +84,7 @@ extern class HeapStorageVector<T>{
 };
 
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ScratchStorageVector"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::ScratchStorageVector")]
 extern class ScratchStorageVector<T>{
     void clear();
     mut T front();
@@ -104,7 +104,7 @@ extern class ScratchStorageVector<T>{
 type HeapStorage = HeapStorageHandle;
 
 
-[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::TestArrayData"), cpp_flags(self_defaulted, small_value)]
+[cpp_header("<tests/common/memory_sdk.h>"), cpp_name("::NWB::Tests::TestArrayData"), cpp_flags(small_value)]
 extern class TestArrayData<T>{
     Span<T> declaredSpan(in usize count)const;
 };

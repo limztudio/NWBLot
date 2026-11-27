@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/compiler_frontier_validator.h>"), cpp_name("::NWB::Core::GpuTaskGraphFrontierValidator"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler_frontier_validator.h>"), cpp_name("::NWB::Core::GpuTaskGraphFrontierValidator"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class GpuTaskGraphFrontierValidator;
 
 

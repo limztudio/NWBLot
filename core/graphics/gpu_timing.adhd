@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing.h>"), cpp_name("::NWB::Core::GpuTimingMeasure"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_timing.h>"), cpp_name("::NWB::Core::GpuTimingMeasure")]
 extern class GpuTimingMeasure{
     void abandonMarker(...);
     void abandonTimingWithoutCallbacks(...);
@@ -12,7 +12,7 @@ extern class GpuTimingMeasure{
     void finishTiming(...);
 };
 
-[cpp_header("<core/graphics/gpu_timing.h>"), cpp_name("::NWB::Core::GpuTimingRecorder"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_timing.h>"), cpp_name("::NWB::Core::GpuTimingRecorder")]
 extern class GpuTimingRecorder{
     Expected<GpuTimingSampleAttribution> allocateSampleAttribution(...);
     void beginFrame(...);

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryParseContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryParseContext")]
 extern class CookEntryParseContext{
     CpuTaskScheduler cpuScheduler;
     CookEntryPathHashSet seenVirtualPathHashes;
@@ -10,42 +10,42 @@ extern class CookEntryParseContext{
     u32 nwbSubIndex;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryPathHashSet"), cpp_flags(self_defaulted, brace_init, non_thread_safe)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryPathHashSet"), cpp_flags(brace_init, non_thread_safe)]
 extern class CookEntryPathHashSet{
     b8 empty()const;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryRegistry"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryRegistry")]
 extern class CookEntryRegistry{
-    [cpp_flags(nothrow)] b8 has(...)const;
-    [cpp_flags(unwind)] b8 parseDocument(...);
-    [cpp_flags(unwind)] b8 parseValue(...);
-    [cpp_flags(nothrow)] usize bucketCount(...)const;
+    b8 has(...)const;
+    b8 parseDocument(...);
+    b8 parseValue(...);
+    usize bucketCount(...)const;
     b8 writeBucket(...);
-    [cpp_flags(nothrow)] u64 entryCount(...)const;
+    u64 entryCount(...)const;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntrySourceLocation"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntrySourceLocation"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class CookEntrySourceLocation{
     usize nwbFileIndex;
     u32 nwbSubIndex;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryWriteContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryWriteContext")]
 extern class CookEntryWriteContext{
     ICookedAssetWriter writer;
     CookEntryPathHashSet seenVirtualPathHashes;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookEntryBucket"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookEntryBucket")]
 extern class ICookEntryBucket{
     usize size()const;
-    [cpp_flags(unwind)] b8 parseDocument(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut CookEntryParseContext context);
-    [cpp_flags(unwind)] b8 parseValue(in Name path, in GlobalPath file, in MetascriptValue value, mut CookEntryParseContext context);
-    [cpp_flags(unwind)] b8 writeCookedAssets(mut CookEntryWriteContext context);
+    b8 parseDocument(in GlobalPath root, in StringView virtualRoot, in GlobalPath path, in MetascriptDocument document, mut CookEntryParseContext context);
+    b8 parseValue(in Name path, in GlobalPath file, in MetascriptValue value, mut CookEntryParseContext context);
+    b8 writeCookedAssets(mut CookEntryWriteContext context);
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookedAssetWriter"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::ICookedAssetWriter")]
 extern class ICookedAssetWriter{
     b8 writeCookedAsset(...);
 };

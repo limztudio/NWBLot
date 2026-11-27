@@ -2,28 +2,28 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::JoiningThread"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_name("::JoiningThread"), cpp_flags(brace_init)]
 extern class JoiningThread{
     void join();
     b8 request_stop();
 };
 
-[cpp_name("::Latch"), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_name("::Latch"), cpp_flags(binary_serializable)]
 extern class Latch{
     void count_down();
     void wait()const;
     void arrive_and_wait();
 };
 
-[cpp_name("::StopToken"), cpp_flags(self_defaulted, brace_init, equality_switch)]
+[cpp_name("::StopToken"), cpp_flags(brace_init, equality_switch)]
 extern class StopToken{
     b8 stop_requested()const;
 };
 
-[cpp_name("::Thread"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_name("::Thread"), cpp_flags(brace_init)]
 extern class Thread;
 
-[cpp_name("::ThreadId"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_name("::ThreadId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch, map_key)]
 extern class ThreadId;
 
 

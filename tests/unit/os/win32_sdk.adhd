@@ -9,11 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::Window"), cpp_flags(self_defaulted, small_value)]
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::Window"), cpp_flags(small_value)]
 extern class Win32Window;
-[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::ImeContext"), cpp_flags(self_defaulted, small_value)]
+[cpp_header("<tests/unit/os/win32_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::ImeContext"), cpp_flags(small_value)]
 extern class Win32ImeContext;
-[cpp_header("<core/os/win32/text_input_context.h>"), cpp_name("::NWB::Core::Win32TextInputContextGuard"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/os/win32/text_input_context.h>"), cpp_name("::NWB::Core::Win32TextInputContextGuard")]
 extern class Win32ImeGuard{
     Expected<void> release();
 };

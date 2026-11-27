@@ -19,7 +19,7 @@ extern enum AssetMetadataParseResult : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetBunchExpandContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetBunchExpandContext")]
 extern class AssetBunchExpandContext{
     Path assetRoot;
     StringView virtualRoot;
@@ -27,7 +27,7 @@ extern class AssetBunchExpandContext{
     MetascriptDocument doc;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetDocumentMetadataParseContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetDocumentMetadataParseContext")]
 extern class AssetDocumentMetadataParseContext{
     DiscoveredNwbFile discoveredNwbFile;
     Name assetType;
@@ -35,12 +35,12 @@ extern class AssetDocumentMetadataParseContext{
     ParsedAssetMetadata parsedMetadata;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetPairedSidecarRule"), cpp_flags(self_defaulted, small_value, borrow_view, brace_init)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetPairedSidecarRule"), cpp_flags(small_value, borrow_view, brace_init)]
 extern class AssetPairedSidecarRule{
     StringView sidecarExtension;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetValueMetadataParseContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::AssetValueMetadataParseContext")]
 extern class AssetValueMetadataParseContext{
     DiscoveredNwbFile discoveredNwbFile;
     Name assetType;
@@ -49,7 +49,7 @@ extern class AssetValueMetadataParseContext{
     ParsedAssetMetadata parsedMetadata;
 };
 
-[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParsedAssetMetadata"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/cook_metadata.h>"), cpp_name("::NWB::Core::Assets::ParsedAssetMetadata")]
 extern class ParsedAssetMetadata{
     CookEntryRegistry entryRegistry;
 };

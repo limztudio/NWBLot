@@ -48,7 +48,7 @@ extern flag ShaderTypeMask : u16{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class ShaderDesc{
     Name debugName;
     StringView entryName;
@@ -58,21 +58,21 @@ extern class ShaderDesc{
     ShaderDesc setShaderType(...);
 };
 
-[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class ShaderHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut Shader deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderLibraryHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderLibraryHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class ShaderLibraryHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut ShaderLibrary deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderSpecialization"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/shader.h>"), cpp_name("::NWB::Core::ShaderSpecialization"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class ShaderSpecialization{
     u32 constantID;
 };

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/task_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraph"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/task_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraph")]
 extern class GpuTaskGraph{
     Expected<GpuTaskId> addClearBufferTask(...);
     Expected<GpuTaskId> addClearTextureRectUIntTask(...);

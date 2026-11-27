@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/inferred_dependency_collector.h>"), cpp_name("::NWB::Core::GpuInferredDependencyCollector"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/inferred_dependency_collector.h>"), cpp_name("::NWB::Core::GpuInferredDependencyCollector")]
 extern class GpuInferredDependencyCollector{
     void appendInferred(...);
     void appendRaw(...);

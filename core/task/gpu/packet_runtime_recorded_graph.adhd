@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedGraph"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedGraph")]
 extern class GpuRecordedGraph{
     Optional<GpuRecordedPacket> packetSnapshot(...)const;
     u64 recordingAttemptGeneration(...)const;
@@ -11,7 +11,7 @@ extern class GpuRecordedGraph{
     b8 tryReset(...);
 };
 
-[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedPacket"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuRecordedPacket"), cpp_flags(brace_init)]
 extern class GpuRecordedPacket{
     GpuSubmissionPacketId packet;
     u32 taskCount;
@@ -27,7 +27,7 @@ extern class GpuRecordedPacket{
     u8 commandListCount;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueRecordingStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueRecordingStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 graphGeneration;
     u64 planGeneration;
@@ -48,7 +48,7 @@ extern class GpuTaskGraphPhysicalQueueRecordingStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphRecordingStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime_recorded_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphRecordingStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphRecordingStatistics{
     u64 graphGeneration;
     u64 planGeneration;

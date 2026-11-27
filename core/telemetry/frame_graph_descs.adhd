@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDesc"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDesc"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class FrameGraphEdgeDesc{
     u32 fromNodeIndex;
     u32 toNodeIndex;
@@ -10,7 +10,7 @@ extern class FrameGraphEdgeDesc{
     u8 flags;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgePayload"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgePayload"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class FrameGraphEdgePayload{
     u32 fromNodeIndex;
     u32 toNodeIndex;
@@ -18,7 +18,7 @@ extern class FrameGraphEdgePayload{
     u8 flags;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class FrameGraphNodeDesc{
     Name name;
     StringView label;
@@ -29,7 +29,7 @@ extern class FrameGraphNodeDesc{
     FrameGraphRuntimeStatistics runtimeStatistics;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodePayload"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodePayload"), cpp_flags(binary_serializable, brace_init)]
 extern class FrameGraphNodePayload{
     Name name;
     StringView label;
@@ -97,7 +97,7 @@ extern b8 IsValidFrameGraphTaskPacketizationDecision(in auto a0);
 extern b8 RecordFrameGraph(mut auto a0, mut auto a1, in isize a2, in auto a3, in auto a4, in auto a5 = {}, in auto a6 = {}, in auto a7 = {});
 
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDescs"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDescs")]
 extern class FrameGraphNodeDescs{
     usize size()const;
     b8 empty()const;
@@ -109,7 +109,7 @@ extern class FrameGraphNodeDescs{
     in FrameGraphNodeDesc operator[](in usize index)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDescs"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDescs")]
 extern class FrameGraphEdgeDescs{
     usize size()const;
     b8 empty()const;
@@ -121,7 +121,7 @@ extern class FrameGraphEdgeDescs{
     in FrameGraphEdgeDesc operator[](in usize index)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords")]
 extern class FrameGraphPhysicalQueueRuntimeStatisticsRecords{
     usize size()const;
     b8 empty()const;
@@ -133,7 +133,7 @@ extern class FrameGraphPhysicalQueueRuntimeStatisticsRecords{
     in FrameGraphPhysicalQueueRuntimeStatisticsRecord operator[](in usize index)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords")]
 extern class FrameGraphPacketSubmissionStatisticsRecords{
     usize size()const;
     b8 empty()const;

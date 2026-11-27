@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/filesystem/volume_file_system.h>"), cpp_name("::NWB::Core::Filesystem::VolumeFileSystem"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/filesystem/volume_file_system.h>"), cpp_name("::NWB::Core::Filesystem::VolumeFileSystem")]
 extern class VolumeFileSystem{
     b8 compact(...);
     u64 fileCount(...)const;

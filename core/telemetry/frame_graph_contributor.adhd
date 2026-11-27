@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphBuilder"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphBuilder")]
 extern class FrameGraphBuilder{
     void addEdge(...);
     FrameGraphNodeHandle addExternal(...);
@@ -14,20 +14,20 @@ extern class FrameGraphBuilder{
     u64 frameIndex(...)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeHandle"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeHandle"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class FrameGraphNodeHandle{
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPassMetadata"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPassMetadata"), cpp_flags(binary_serializable, brace_init)]
 extern class FrameGraphPassMetadata{
     FrameGraphQueueAssignment queueAssignment;
     FrameGraphCompiledTask compiledTask;
     FrameGraphRuntimeStatistics runtimeStatistics;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdge"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdge"), cpp_flags(binary_serializable, brace_init)]
 extern class FrameGraphPendingNameEdge{
     Name toName;
     u32 fromNodeIndex;
@@ -35,9 +35,9 @@ extern class FrameGraphPendingNameEdge{
     u8 flags;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::IFrameGraphContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::IFrameGraphContributor")]
 extern class IFrameGraphContributor{
-    [cpp_flags(unwind)] b8 appendFrameGraph(mut FrameGraphBuilder builder);
+    b8 appendFrameGraph(mut FrameGraphBuilder builder);
 };
 
 
@@ -48,7 +48,7 @@ extern class IFrameGraphContributor{
 extern const u32 s_InvalidFrameGraphNodeIndex;
 
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdges"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdges")]
 extern class FrameGraphPendingNameEdges;
 
 

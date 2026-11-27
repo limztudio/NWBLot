@@ -61,6 +61,7 @@ class TestStorage{
 public:
     TestStorage() : arena(Name("tests/common/test_arena")){}
     template<typename... Args>
+        requires (sizeof...(Args) > 0u && !(sizeof...(Args) == 1u && (IsSame_V<RemoveCVRef_T<Args>, TestStorage> || ...)) && IsConstructible_V<Allocator, Args&&...>)
     explicit TestStorage(Args&&... args) : arena(Forward<Args>(args)...){}
     template<typename T, typename... Args>
     [[nodiscard]] T makeValue(Args&&... args){ return T(arena, Forward<Args>(args)...); }

@@ -5,7 +5,7 @@
 [cpp_header("<global/assert.h>"), cpp_name("FOUNDATION_ASSERT_CHECK")]
 extern b8 AssertionCheck(in b8 condition);
 
-[cpp_name("::DiagnosticEventRecord"), cpp_flags(self_defaulted, brace_init)]
+[cpp_name("::DiagnosticEventRecord"), cpp_flags(brace_init)]
 extern class DiagnosticEventRecord{
     StringView category;
     StringView event;
@@ -17,7 +17,7 @@ extern class DiagnosticEventRecord{
     b8 terminatesProcess;
 };
 
-[cpp_name("::DiagnosticEventText"), cpp_flags(self_defaulted, brace_init)]
+[cpp_name("::DiagnosticEventText"), cpp_flags(brace_init)]
 extern class DiagnosticEventText{
     StringView nullTerminatedText(...)const;
     StringView view(...)const;
@@ -27,28 +27,28 @@ extern class DiagnosticEventText{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/diagnostics.h>"), cpp_name("::SetDiagnosticEventCallback"), cpp_flags(nothrow)]
+[cpp_header("<global/diagnostics.h>"), cpp_name("::SetDiagnosticEventCallback")]
 extern void SetDiagnosticEventCallback(in auto callback);
 
-[cpp_header("<global/diagnostics.h>"), cpp_name("::ClearDiagnosticEventCallback"), cpp_flags(nothrow)]
+[cpp_header("<global/diagnostics.h>"), cpp_name("::ClearDiagnosticEventCallback")]
 extern void ClearDiagnosticEventCallback(in auto callback);
 
-[cpp_name("::CaptureDiagnosticEvent"), cpp_flags(nothrow)]
+[cpp_name("::CaptureDiagnosticEvent")]
 extern void CaptureDiagnosticEvent(in DiagnosticEventRecord a0);
 
 [cpp_header("<global/diagnostics.h>"), cpp_name("::MakeDiagnosticEventText")]
 extern DiagnosticEventText MakeDiagnosticEventText(in StringView format, in auto value);
 
-[cpp_header("<global/diagnostics.h>"), cpp_name("::CaptureDiagnosticEventAtCallSite"), cpp_flags(nothrow)]
+[cpp_header("<global/diagnostics.h>"), cpp_name("::CaptureDiagnosticEventAtCallSite")]
 extern void CaptureDiagnosticEventAtCallSite(in DiagnosticEventRecord record);
 
-[cpp_name("::CaptureDiagnosticEvent"), cpp_flags(nothrow)]
+[cpp_name("::CaptureDiagnosticEvent")]
 extern void CaptureDiagnosticMessage(in StringView category, in StringView message, in StringView file = {}, in u32 line = {});
 
-[cpp_name("::DiagnosticEventNameFromCategory"), cpp_flags(nothrow)]
+[cpp_name("::DiagnosticEventNameFromCategory")]
 extern StringView DiagnosticEventNameFromCategory(in StringView a0);
 
-[cpp_name("::DiagnosticEventNameFromRecord"), cpp_flags(nothrow)]
+[cpp_name("::DiagnosticEventNameFromRecord")]
 extern StringView DiagnosticEventNameFromRecord(in DiagnosticEventRecord a0);
 
 

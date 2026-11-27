@@ -2,16 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/resource_state_handoff_key.h>"), cpp_name("::NWB::Core::TextureSubresourceStateKey"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource_state_handoff_key.h>"), cpp_name("::NWB::Core::TextureSubresourceStateKey"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class TextureSubresourceStateKey{
     u32 mipLevel;
     u32 arraySlice;
 };
 
-[cpp_header("<core/graphics/rhi/resource_state_handoff_key.h>"), cpp_name("::NWB::Core::TextureSubresourceStateKeyEqualTo"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource_state_handoff_key.h>"), cpp_name("::NWB::Core::TextureSubresourceStateKeyEqualTo"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class TextureSubresourceStateKeyEqualTo;
 
-[cpp_header("<core/graphics/rhi/resource_state_handoff_key.h>"), cpp_name("::NWB::Core::TextureSubresourceStateKeyHasher"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/resource_state_handoff_key.h>"), cpp_name("::NWB::Core::TextureSubresourceStateKeyHasher"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class TextureSubresourceStateKeyHasher;
 
 

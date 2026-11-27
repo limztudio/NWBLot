@@ -179,7 +179,7 @@ extern class FormatInfo{
     StringView getName(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/format.h>"), cpp_name("::NWB::Core::TextureUploadAspectLayout"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/format.h>"), cpp_name("::NWB::Core::TextureUploadAspectLayout"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class TextureUploadAspectLayout{
     u32 blockWidth;
     u32 blockHeight;

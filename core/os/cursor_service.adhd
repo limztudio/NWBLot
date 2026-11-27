@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/cursor_service.h>"), cpp_name("::NWB::Core::TrackedCursorService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/os/cursor_service.h>"), cpp_name("::NWB::Core::TrackedCursorService")]
 extern class TrackedCursorService : ICursorService{
     CursorCapabilities capabilities()const;
     b8 isOwnerThread()const;

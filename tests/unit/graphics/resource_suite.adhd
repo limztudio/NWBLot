@@ -19,12 +19,12 @@ extern usize WorkspaceAddress(in StandaloneGraphWorkspaceLease lease);
 [cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::BytePrefixText")]
 extern StringView BytePrefixText(in Span<u8> bytes, in usize count);
 
-[cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool")]
 extern class StandaloneGraphWorkspacePool{
     b8 releaseCommandListCaches();
 };
 
-[cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/runtime/runtime_standalone_graph.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::StandaloneGraphWorkspacePool::Lease")]
 extern class StandaloneGraphWorkspaceLease;
 
 [cpp_header("<global/exception.h>"), cpp_name("::RuntimeException")]

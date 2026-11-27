@@ -18,18 +18,18 @@ extern usize FindAssetTypeIndex<T>(in auto descriptors);
 extern usize RequireAssetTypeIndex<T>(in auto descriptors);
 
 
-[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::IAsset"), cpp_flags(polymorphic_base)]
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::IAsset")]
 extern class IAsset{
     Name assetType(...)const;
     b8 checkVirtualPath(...)const;
     Name virtualPath(...)const;
 };
 
-[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::IAssetCodec"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::IAssetCodec")]
 extern class IAssetCodec{
     Name assetType()const;
-    [cpp_flags(unwind)] Expected<UniquePtr<IAsset>> deserialize(in cpp_ref Name path, in Span<u8> bytes, mut GlobalAllocator arena)const;
-    [cpp_flags(unwind)] b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const;
+    Expected<UniquePtr<IAsset>> deserialize(in Name path, in Span<u8> bytes, mut GlobalAllocator arena)const;
+    b8 serialize(in IAsset asset, mut AssetByteBuffer bytes)const;
 };
 
 [cpp_header("<core/assets/module.h>"), cpp_name("::NWB::Core::Assets::DeclaredAssetCodec")]

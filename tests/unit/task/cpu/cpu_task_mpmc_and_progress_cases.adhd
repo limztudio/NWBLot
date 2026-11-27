@@ -21,16 +21,9 @@ void VerifyCpuTaskMpmcTests_OwnerExternalAndWorkerProducersShareQueuesWithoutLos
     ProducerState state = ProducerState();
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
+    ScopeExit drainScheduler(lambda[mut scheduler]() -> void{ scheduler.drain(); });
     Array<JoiningThread, 4> producers = Array<JoiningThread, 4>();
-    ScopeExit stopProducers(lambda[mut state, mut producers, mut scheduler]() -> void{
-        state.start.store(true, MemoryOrder::release);
-        for(usize index = 0u; index < producers.size(); ++index){
-            if(producers[index].joinable()){
-                producers[index].join();
-            }
-        }
-        scheduler.drain();
-    });
+    ScopeExit releaseStart(lambda[mut state]() -> void{ state.start.store(true, MemoryOrder::release); });
 
     CpuTaskOptions anyCostOptions = CpuTaskOptions();
     anyCostOptions.cost = CpuTaskCost::Any;
@@ -63,7 +56,8 @@ void VerifyCpuTaskMpmcTests_OwnerExternalAndWorkerProducersShareQueuesWithoutLos
     }
     scope.wait();
     scheduler.wait();
-    stopProducers.release();
+    releaseStart.release();
+    drainScheduler.release();
 
     EXPECT_TRUE(readyReached);
     EXPECT_EQ(observedWorkerMask, expectedWorkerMask);
@@ -101,14 +95,9 @@ void VerifyCpuTaskMpmcTests_ExternalProducersCanWaitForMainThreadTasksWhileTheOw
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
     Array<JoiningThread, 4> producers = Array<JoiningThread, 4>();
-    ScopeExit stopProducers(lambda[mut start, mut scheduler, mut producers]() -> void{
+    ScopeExit stopProducers(lambda[mut start, mut scheduler]() -> void{
         start.store(true, MemoryOrder::release);
         scheduler.drain();
-        for(usize index = 0u; index < producers.size(); ++index){
-            if(producers[index].joinable()){
-                producers[index].join();
-            }
-        }
     });
 
     for(u32 producer = 0u; producer < externalProducerCount; ++producer){
@@ -236,15 +225,10 @@ void VerifyCpuTaskMpmcTests_CanceledCompletionCannotLoseConcurrentHandleScopeOrS
         Atomic<u32> entered(0u);
         Atomic<u32> finished(0u);
         Array<JoiningThread, 3> waiters = Array<JoiningThread, 3>();
-        ScopeExit finishWaiters(lambda[mut start, mut scope, mut scheduler, mut waiters]() -> void{
+        ScopeExit finishWaiters(lambda[mut start, mut scope, mut scheduler]() -> void{
             start.store(true, MemoryOrder::release);
             scope.cancel();
-            scheduler.pumpMainThread();
-            for(usize index = 0u; index < waiters.size(); ++index){
-                if(waiters[index].joinable()){
-                    waiters[index].join();
-                }
-            }
+            scheduler.drain();
         });
         for(u32 kind = 0u; kind < joinKinds; ++kind){
             waiters[kind] = JoiningThread(lambda[mut start, mut expired, mut entered, mut finished, mut scheduler, mut scope, in handle, in kind]() -> void{
@@ -304,15 +288,12 @@ void VerifyCpuTaskProgressTests_ScopeJoinWakesForANewlyReadyUnscopedMainThreadPr
         u32 callbacks = 0u;
         CpuTaskScope scope(scheduler);
         JoiningThread releaser = JoiningThread();
-        ScopeExit finish(lambda[mut joining, mut release, mut scheduler, mut releaser]() -> void{
+        ScopeExit finish(lambda[mut joining, mut release, mut scheduler]() -> void{
             joining.store(true, MemoryOrder::release);
             joining.notify_all();
             release.store(true, MemoryOrder::release);
             release.notify_all();
             scheduler.drain();
-            if(releaser.joinable()){
-                releaser.join();
-            }
         });
         const auto cpuTaskAdmission = scheduler.submit(lambda[mut workerEntered, mut release]() -> void{
             workerEntered.store(true, MemoryOrder::release);

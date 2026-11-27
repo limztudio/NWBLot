@@ -25,7 +25,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/physics/asset_manager_test_fixture.h>"), cpp_name("::NWB::Tests::PhysicsCases::InMemoryAssetManagerFixture"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/unit/physics/asset_manager_test_fixture.h>"), cpp_name("::NWB::Tests::PhysicsCases::InMemoryAssetManagerFixture")]
 extern class InMemoryAssetManagerFixture{
     void setBinary(in Name path, in Span<u8> bytes);
     mut AssetManager manager();

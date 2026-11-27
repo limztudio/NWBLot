@@ -8,7 +8,7 @@ extern class ExitedWithCode;
 [cpp_header("<gtest/gtest.h>"), cpp_name("::testing::Test::HasFatalFailure")]
 extern b8 HasFatalTestFailure();
 
-[cpp_header("<tests/common/gtest_sdk.h>"), cpp_name("::NWB::Tests::ScopedTestTrace"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/common/gtest_sdk.h>"), cpp_name("::NWB::Tests::ScopedTestTrace")]
 extern class ScopedTestTrace;
 
 

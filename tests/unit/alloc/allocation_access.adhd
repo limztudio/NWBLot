@@ -30,7 +30,7 @@ extern const b8 s_DebugAllocator;
 extern const usize s_MaxAlignment;
 
 
-[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::PersistentTestArray"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::PersistentTestArray")]
 extern class PersistentTestArray<T>;
 
 [cpp_header("<tests/unit/alloc/allocation_access.h>"), cpp_name("::NWB::Tests::AllocCases::MakePersistentTestArray")]

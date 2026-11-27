@@ -356,14 +356,7 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto,
                 }
                 param.copiesArgument = true;
             }
-            if(m_cursor.matchIdentifier(KeywordSemantics::s_CppRefParam)){
-                if(!isExtern || param.mode != ParamPassingMode::In){
-                    m_cursor.error("'cpp_ref' requires an 'in' parameter on an extern declaration");
-                    return false;
-                }
-                param.cppConstReference = true;
-            }
-            else if(m_cursor.matchIdentifier(KeywordSemantics::s_Borrow)){
+            if(m_cursor.matchIdentifier(KeywordSemantics::s_Borrow)){
                 if(param.mode != ParamPassingMode::In || (allowAuto && !isExtern)){
                     m_cursor.error("'borrow' requires an 'in' parameter on a callable declaration");
                     return false;

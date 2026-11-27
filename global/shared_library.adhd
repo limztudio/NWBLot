@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/shared_library.h>"), cpp_name("::SharedLibrary"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_header("<global/shared_library.h>"), cpp_name("::SharedLibrary"), cpp_flags(brace_init)]
 extern class SharedLibrary{
     void close(...);
     b8 isOpen(...)const;
 };
 
-[cpp_header("<global/shared_library.h>"), cpp_name("::SharedLibraryFailure"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<global/shared_library.h>"), cpp_name("::SharedLibraryFailure"), cpp_flags(binary_serializable, brace_init)]
 extern class SharedLibraryFailure{
     ErrorCode code;
     DiagnosticEventText detail;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/binary.h>"), cpp_name("::BinaryByteView"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<global/binary.h>"), cpp_name("::BinaryByteView"), cpp_flags(brace_init)]
 extern class BinaryByteView{
     usize byteCount;
     u8 operator[](in usize index)const;

@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::MatrixDecomposition"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::MatrixDecomposition"), cpp_flags(binary_serializable, brace_init)]
 extern class MatrixDecomposition{
     VectorSingle rotation;
     VectorSingle scale;
     VectorSingle translation;
 };
 
-[cpp_name("::MatrixDoubleDecomposition"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_name("::MatrixDoubleDecomposition"), cpp_flags(binary_serializable, brace_init)]
 extern class MatrixDoubleDecomposition{
     VectorDouble rotation;
     VectorDouble scale;

@@ -9,7 +9,7 @@ extern class ExpandedAssetMetadata{
     MetascriptValue value;
 };
 
-[cpp_header("<core/assets/expanded_metadata.h>"), cpp_name("::NWB::Core::Assets::ExpandedAssetMetadataVector"), cpp_flags(self_defaulted, brace_init, non_thread_safe)]
+[cpp_header("<core/assets/expanded_metadata.h>"), cpp_name("::NWB::Core::Assets::ExpandedAssetMetadataVector"), cpp_flags(brace_init, non_thread_safe)]
 extern class ExpandedAssetMetadataVector{
     usize size(...)const;
     b8 empty(...)const;

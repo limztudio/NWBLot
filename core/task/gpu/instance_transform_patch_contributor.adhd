@@ -9,7 +9,7 @@ extern enum GpuTaskGraphInstanceTransformPatchLayout : u32{
     Affine3x4WorldToObject
 };
 
-[cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphInstanceTransformPatchRequest"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphInstanceTransformPatchRequest"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphInstanceTransformPatchRequest{
     GpuGraphResourceId instanceBufferResource;
     u32 instanceBufferUavSlot;
@@ -22,11 +22,9 @@ extern class GpuTaskGraphInstanceTransformPatchRequest{
     b8 allowMergeAcrossConsumerFrontier;
 };
 
-[cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphInstanceTransformPatchContributor"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/task/gpu/instance_transform_patch_contributor.h>"), cpp_name("::NWB::Core::IGpuTaskGraphInstanceTransformPatchContributor")]
 extern class IGpuTaskGraphInstanceTransformPatchContributor{
-    [cpp_flags(unwind)]
     b8 prepareInstanceTransformPatches();
-    [cpp_flags(unwind)]
     Expected<GpuTaskId> declareInstanceTransformPatch(in GpuTaskGraphInstanceTransformPatchRequest request, in Span<u32> instanceEntityIds, mut GpuTaskGraph graph);
 };
 

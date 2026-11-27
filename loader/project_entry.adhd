@@ -8,14 +8,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::ProjectStartupContext"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::ProjectStartupContext")]
 extern class ProjectStartupContext{
     GraphicsRuntime graphics;
     GlobalAllocator objectArena;
     FilesystemFactory filesystemFactory;
 };
 
-[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::ProjectRuntimeContext"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::ProjectRuntimeContext")]
 extern class ProjectRuntimeContext{
     GraphicsRuntime graphics;
     InputDispatcher input;
@@ -39,11 +39,11 @@ extern class ProjectRuntimeContext{
     TimingView gpuTimingView()const;
 };
 
-[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign, polymorphic_base)]
+[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(brace_init)]
 extern class IProjectEntryCallbacks{
-    [cpp_flags(unwind)] b8 onStartup();
-    [cpp_flags(unwind)] void onShutdown();
-    [cpp_flags(unwind)] b8 onUpdate(in f32 delta);
+    b8 onStartup();
+    void onShutdown();
+    b8 onUpdate(in f32 delta);
 };
 
 

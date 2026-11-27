@@ -25,7 +25,7 @@ extern class Base64Text;
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::Base64View")]
 extern StringView Base64View(in Base64Text text);
 
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::NullableU32"), cpp_flags(self_defaulted, small_value, brace_init, equality_switch)]
+[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::NullableU32"), cpp_flags(small_value, brace_init, equality_switch)]
 extern class NullableU32;
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::NullableU32View")]
@@ -48,13 +48,11 @@ extern const NullableFormat s_NullFormat;
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::CapturedField")]
 extern class CapturedField{
-    [cpp_flags(nothrow)]
     void assign(in StringView text);
-    [cpp_flags(nothrow)]
     StringView view()const;
 };
 
-[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::HasTextAddress"), cpp_flags(nothrow)]
+[cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::HasTextAddress")]
 extern b8 HasTextAddress(in StringView text);
 
 [cpp_header("<tests/unit/global/global_algorithm_access.h>"), cpp_name("::NWB::Tests::GlobalCases::ThrowingAssignment")]

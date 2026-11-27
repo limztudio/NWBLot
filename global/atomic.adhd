@@ -16,7 +16,7 @@ extern enum MemoryOrder : u32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::AtomicFlag"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_name("::AtomicFlag"), cpp_flags(brace_init)]
 extern class AtomicFlag;
 
 

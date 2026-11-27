@@ -34,14 +34,14 @@ extern enum CursorBackend : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorCapabilities"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorCapabilities"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class CursorCapabilities{
     b8 setShape;
     b8 hide;
     CursorBackend backend;
 };
 
-[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::ICursorService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::ICursorService")]
 extern class ICursorService{
     CursorCapabilities capabilities()const;
     b8 isOwnerThread()const;

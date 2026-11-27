@@ -70,7 +70,7 @@ extern class CompilerTranslationUnit{
     HeapStorageVector<GlobalString> resolvedIncludedFiles;
 };
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeArg"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeArg"), cpp_flags(brace_init)]
 extern class CompilerTypeArg{
     StringView constantText;
 };
@@ -84,20 +84,20 @@ extern class CompilerTypeRef{
 [cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SymbolTable")]
 extern class CompilerSymbolTable;
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SourceSpan"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SourceSpan"), cpp_flags(brace_init)]
 extern class CompilerSourceSpan{
     u32 line;
     u32 column;
 };
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ImportedCppHeader"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ImportedCppHeader"), cpp_flags(brace_init)]
 extern class CompilerImportedCppHeader{
     StringView headerPath;
     b8 isSystemHeader;
     CompilerSourceSpan span;
 };
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImportOptions"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImportOptions"), cpp_flags(brace_init)]
 extern class CompilerCppHeaderImportOptions{
     Span<CompilerImportedCppHeader> headers;
 };
@@ -134,7 +134,7 @@ extern class AstPointerList<T>{
 [cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::BorrowAstNode")]
 extern Optional<in T> BorrowAstNode<T>(in AstPointerList<T> list, in usize index);
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CompileResult"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CompileResult")]
 extern class CompileResult{
     CompilerTranslationUnit unit;
     CompilerSymbolTable symbols;
@@ -177,7 +177,7 @@ extern void SetConstantType(mut CompilerTemplateParam param, mut CompilerTypeRef
 [cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::BorrowSubstitutedType")]
 extern Optional<in CompilerTypeRef> BorrowSubstitutedType(in CompilerSymbolTable symbols, in CompilerTypeRef original, in CompilerTemplateParam param, in CompilerTypeArg argument);
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::MacroMap"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Tests::Metascript::MacroMap")]
 extern class CompilerMacroMap{
     void store(mut GlobalString key, mut MetascriptPreprocessorMacro macro);
     Optional<mut MetascriptPreprocessorMacro> borrow(in StringView name);

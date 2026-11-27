@@ -105,15 +105,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
             matchedAttr = true;
         }
         if(!matchedAttr){
-            MStringView prohibitedErr;
-#define NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE(attrName, errorMessage) \
-            if(attr.name == attrName) prohibitedErr = errorMessage;
-#include "../export_keywords.h"
-#undef NWB_ADHD_EXPORT_PROHIBITED_CLASS_ATTRIBUTE
-            if(!prohibitedErr.empty())
-                m_cursor.error(attr.line, attr.column, prohibitedErr);
-            else
-                m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
+            m_cursor.error(attr.line, attr.column, "unsupported attribute on class; expected 'align(alignment)', 'friend(...)', 'serialize', 'reflect', 'arena', 'extensible', 'asset(\"...\")', 'system(\"...\")', 'subsystem(\"...\")', or 'component(\"...\")'");
             return nullptr;
         }
     }
@@ -183,7 +175,6 @@ b8 DeclParser::tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDe
                 return false;
             }
             switch(flagKind){
-            case ExternTypeFlagKind::SelfDefaulted:      outClass.isSelfDefaulted = true; break;
             case ExternTypeFlagKind::SmallValue:         outClass.isSmallValue = true; break;
             case ExternTypeFlagKind::BorrowView:         outClass.isBorrowView = true; break;
             case ExternTypeFlagKind::BinarySerializable: outClass.isBinarySerializable = true; break;
@@ -191,18 +182,8 @@ b8 DeclParser::tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDe
             case ExternTypeFlagKind::EqualitySwitch:     outClass.isEqualitySwitch = true; break;
             case ExternTypeFlagKind::NonThreadSafe:      outClass.isNonThreadSafeContainer = true; break;
             case ExternTypeFlagKind::MapKey:             outClass.isNwbMapKey = true; break;
-            case ExternTypeFlagKind::ArenaFirstCtor:     outClass.arenaCtorMode = 1u; break;
-            case ExternTypeFlagKind::ArenaOmitCtor:      outClass.arenaCtorMode = 2u; break;
-            case ExternTypeFlagKind::NoCopy:
-                outClass.isCopyConstructible = false;
-                outClass.isMoveConstructible = false;
-                break;
-            case ExternTypeFlagKind::NoAssign:
-                outClass.isCopyAssignable = false;
-                outClass.isMoveAssignable = false;
-                break;
-            case ExternTypeFlagKind::Abstract:           outClass.isAbstract = true; break;
-            case ExternTypeFlagKind::PolymorphicBase:    outClass.isPolymorphicBase = true; break;
+            case ExternTypeFlagKind::ArenaFirstCtor:     outClass.arenaCtorMode = ArenaCtorMode::First; break;
+            case ExternTypeFlagKind::ArenaOmitCtor:      outClass.arenaCtorMode = ArenaCtorMode::Omit; break;
             default: break;
             }
         }
@@ -294,6 +275,7 @@ b8 DeclParser::parseClassMethodOrOperatorTail(
     method->isStatic = isStatic;
     method->isImported = classDecl.isImported || isExtern;
     method->isExtern = isExtern;
+    method->allowsCppUnwind = isExtern;
     method->requiredHeader = classDecl.requiredHeader;
     method->span = span;
 
@@ -385,6 +367,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         dtor->access = access;
         dtor->isImported = classDecl.isImported || isMemberExtern;
         dtor->isExtern = isMemberExtern;
+        dtor->allowsCppUnwind = isMemberExtern;
         dtor->requiredHeader = classDecl.requiredHeader;
         dtor->span = span;
 
@@ -407,6 +390,7 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
             ctor->access = access;
             ctor->isImported = classDecl.isImported || isMemberExtern;
             ctor->isExtern = isMemberExtern;
+            ctor->allowsCppUnwind = isMemberExtern;
             ctor->requiredHeader = classDecl.requiredHeader;
             ctor->span = span;
 

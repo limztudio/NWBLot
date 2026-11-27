@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/operation_validator.h>"), cpp_name("::NWB::Core::Metascript::OperationValidator"), cpp_flags(small_value, binary_serializable, no_assign)]
+[cpp_header("<core/metascript/operation_validator.h>"), cpp_name("::NWB::Core::Metascript::OperationValidator"), cpp_flags(small_value, binary_serializable)]
 extern class MetascriptOperationValidator{
     b8 validateAssignment(...);
     b8 validateBinaryOperation(...);

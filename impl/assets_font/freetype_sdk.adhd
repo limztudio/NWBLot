@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeBitmapView"), cpp_flags(self_defaulted, borrow_view)]
+[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeBitmapView"), cpp_flags(borrow_view)]
 extern class FreeTypeBitmapView{
     Span<u8> pixels;
     u32 width;
@@ -14,7 +14,7 @@ extern class FreeTypeBitmapView{
     b8 colorBgra;
 };
 
-[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeFaceVisitResult"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeFaceVisitResult")]
 extern class FreeTypeFaceVisitResult{
     i32 openError;
     i32 closeError;
@@ -36,7 +36,7 @@ extern const i32 s_FreeTypeLoadColor;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeFaceView"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeFaceView")]
 extern class FreeTypeFaceView{
     i64 faceCount()const;
     i64 glyphCount()const;
@@ -56,7 +56,7 @@ extern class FreeTypeFaceView{
     FreeTypeBitmapView bitmap()const;
 };
 
-[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeLibrary"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeLibrary"), cpp_flags(arena_first_ctor)]
 extern class FreeTypeLibrary{
     i32 createLibrary();
     void addDefaultModules();

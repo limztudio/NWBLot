@@ -77,7 +77,7 @@ extern enum FrameGraphTaskPacketizationDecision : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphCompiledTask"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphCompiledTask"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class FrameGraphCompiledTask{
     u64 planGeneration;
     u32 packetIndex;
@@ -85,14 +85,14 @@ extern class FrameGraphCompiledTask{
     b8 present;
 };
 
-[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueId"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class FrameGraphPhysicalQueueId{
     u16 index;
     u16 deviceGeneration;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphQueueAssignment"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphQueueAssignment"), cpp_flags(binary_serializable, brace_init)]
 extern class FrameGraphQueueAssignment{
     FrameGraphPhysicalQueueId initialQueue;
     FrameGraphPhysicalQueueId plannedQueue;
@@ -107,7 +107,7 @@ extern class FrameGraphQueueAssignment{
     b8 present;
 };
 
-[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphQueueAssignmentScore"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_kinds.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphQueueAssignmentScore"), cpp_flags(binary_serializable, brace_init)]
 extern class FrameGraphQueueAssignmentScore{
     i32 overlap;
     i32 queueLoad;

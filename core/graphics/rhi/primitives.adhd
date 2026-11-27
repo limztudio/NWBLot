@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Box"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Box"), cpp_flags(binary_serializable, brace_init, equality_switch)]
 extern class Box{
     i32 minX;
     i32 maxX;
@@ -15,7 +15,7 @@ extern class Box{
     i32 width(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Color"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Color"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class Color{
     f32 r;
     f32 g;
@@ -23,7 +23,7 @@ extern class Color{
     f32 a;
 };
 
-[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::IntColor"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::IntColor"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class IntColor{
     i32 r;
     i32 g;
@@ -31,7 +31,7 @@ extern class IntColor{
     i32 a;
 };
 
-[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Rect"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Rect"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class Rect{
     i32 minX;
     i32 maxX;
@@ -42,7 +42,7 @@ extern class Rect{
     i32 width(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::UIntColor"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::UIntColor"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class UIntColor{
     u32 r;
     u32 g;
@@ -50,7 +50,7 @@ extern class UIntColor{
     u32 a;
 };
 
-[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Viewport"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/primitives.h>"), cpp_name("::NWB::Core::Viewport"), cpp_flags(binary_serializable, brace_init, equality_switch)]
 extern class Viewport{
     f32 minX;
     f32 maxX;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::GraphicsResource"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::GraphicsResource")]
 extern class GraphicsResource{
     u32 addReference(...);
     Object getNativeHandle(...);

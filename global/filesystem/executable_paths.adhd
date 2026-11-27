@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_name("::ExecutablePaths"), cpp_flags(self_defaulted, arena_first_ctor, no_assign)]
+[arena, cpp_name("::ExecutablePaths"), cpp_flags(arena_first_ctor)]
 extern class ExecutablePaths{
     Path defaultStorageDirectory(...)const;
     Expected<Path, ErrorCode> directory(...)const;

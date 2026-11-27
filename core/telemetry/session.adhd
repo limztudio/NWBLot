@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/session.h>"), cpp_name("::NWB::Core::Telemetry::CaptureSession"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/session.h>"), cpp_name("::NWB::Core::Telemetry::CaptureSession")]
 extern class CaptureSession{
     void clear(...);
     b8 enabled(...)const;
@@ -18,7 +18,7 @@ extern class CaptureSession{
     EventView view(...)const;
 };
 
-[cpp_header("<core/telemetry/session.h>"), cpp_name("::NWB::Core::Telemetry::CaptureSessionCaptureScope"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/session.h>"), cpp_name("::NWB::Core::Telemetry::CaptureSessionCaptureScope")]
 extern class CaptureSessionCaptureScope;
 
 

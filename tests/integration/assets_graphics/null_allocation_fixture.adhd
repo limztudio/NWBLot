@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::NullAllocation"), cpp_flags(polymorphic_base)]
+[cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::NullAllocation")]
 extern class NullAllocation;
 [cpp_header("<tests/integration/assets_graphics/cook_tool_sdk.h>"), cpp_name("::NWB::Tests::GraphicsCookToolSdk::RegisterBucket")]
 extern b8 RegisterTestCookBucket<Bucket>(mut CookEntryRegistry registry, in Name type);

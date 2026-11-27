@@ -38,7 +38,7 @@ extern enum RenderPassStoreAction : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandListResourceStateHandoff"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandListResourceStateHandoff")]
 extern class CommandListResourceStateHandoff{
     b8 buildResourceSubset(...);
     b8 coversBufferWithOwnership(mut Buffer buffer, in GpuPhysicalQueueId owner, in GpuPhysicalQueueId release)const;
@@ -52,7 +52,7 @@ extern class CommandListResourceStateHandoff{
     b8 validForDeviceGeneration(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandMarkerRecordingToken"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::CommandMarkerRecordingToken"), cpp_flags(binary_serializable, brace_init)]
 extern class CommandMarkerRecordingToken{
     u64 recordingLeaseSerial;
     u64 nativeRecordingID;
@@ -60,20 +60,20 @@ extern class CommandMarkerRecordingToken{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::ComputeState"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::ComputeState"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class ComputeState{
     ComputeState setPipeline(...);
     ComputeState setIndirectParams(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DispatchIndirectArguments"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DispatchIndirectArguments"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class DispatchIndirectArguments{
     u32 groupsX;
     u32 groupsY;
     u32 groupsZ;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawArguments"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawArguments"), cpp_flags(binary_serializable, brace_init)]
 extern class DrawArguments{
     u32 vertexCount;
     u32 instanceCount;
@@ -87,7 +87,7 @@ extern class DrawArguments{
     DrawArguments setVertexCount(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawIndexedIndirectArguments"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawIndexedIndirectArguments"), cpp_flags(binary_serializable, brace_init)]
 extern class DrawIndexedIndirectArguments{
     u32 indexCount;
     u32 instanceCount;
@@ -100,7 +100,7 @@ extern class DrawIndexedIndirectArguments{
     DrawIndexedIndirectArguments setStartInstanceLocation(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawIndirectArguments"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::DrawIndirectArguments"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class DrawIndirectArguments{
     u32 vertexCount;
     u32 instanceCount;
@@ -112,14 +112,14 @@ extern class DrawIndirectArguments{
     DrawIndirectArguments setVertexCount(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::EventQueryHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::EventQueryHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class EventQueryHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut EventQuery deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuCommandArenaStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuCommandArenaStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuCommandArenaStatistics{
     u64 workerArenaCount;
     u64 commandPoolEpochCount;
@@ -136,7 +136,7 @@ extern class GpuCommandArenaStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuCommandArenaWorkerStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuCommandArenaWorkerStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuCommandArenaWorkerStatistics{
     u64 recordingWorkerDomain;
     u64 commandPoolEpochCount;
@@ -154,14 +154,14 @@ extern class GpuCommandArenaWorkerStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueId"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class GpuPhysicalQueueId{
     u16 index;
     u16 deviceGeneration;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueInfo"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueInfo"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuPhysicalQueueInfo{
     u32 familyIndex;
     u32 queueIndex;
@@ -172,14 +172,14 @@ extern class GpuPhysicalQueueInfo{
     b8 dedicated;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueTopology"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuPhysicalQueueTopology"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class GpuPhysicalQueueTopology{
     void setQueues(in Span<GpuPhysicalQueueInfo> values);
     usize queueCount;
     Span<GpuPhysicalQueueInfo> queueSpan(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuQueueTimelineSnapshot"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GpuQueueTimelineSnapshot"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuQueueTimelineSnapshot{
     GpuPhysicalQueueId queue;
     u64 submittedValue;
@@ -188,7 +188,7 @@ extern class GpuQueueTimelineSnapshot{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GraphicsState"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::GraphicsState"), cpp_flags(binary_serializable, brace_init)]
 extern class GraphicsState{
     ViewportState viewport;
     VariableRateShadingState shadingRateState;
@@ -206,7 +206,7 @@ extern class GraphicsState{
     GraphicsState setIndirectParams(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::IndexBufferBinding"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::IndexBufferBinding"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class IndexBufferBinding{
     u32 offset;
     Format format;
@@ -215,7 +215,7 @@ extern class IndexBufferBinding{
     IndexBufferBinding setBuffer(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::MeshletState"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::MeshletState"), cpp_flags(binary_serializable, brace_init)]
 extern class MeshletState{
     ViewportState viewport;
     Color blendConstantColor;
@@ -228,7 +228,7 @@ extern class MeshletState{
     MeshletState setIndirectParams(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::QueueSubmissionToken"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::QueueSubmissionToken"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
 extern class QueueSubmissionToken{
     u64 value;
     u16 physicalQueueIndex;
@@ -239,7 +239,7 @@ extern class QueueSubmissionToken{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingDispatchRaysArguments"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingDispatchRaysArguments"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class RayTracingDispatchRaysArguments{
     u32 width;
     u32 height;
@@ -250,25 +250,25 @@ extern class RayTracingDispatchRaysArguments{
     RayTracingDispatchRaysArguments setWidth(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingShaderTableHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingShaderTableHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class RayTracingShaderTableHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut RayTracingShaderTable deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingState"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RayTracingState"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class RayTracingState{
     RayTracingState setShaderTable(...);
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassAttachmentActions"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassAttachmentActions"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class RenderPassAttachmentActions{
     RenderPassLoadAction loadAction;
     RenderPassStoreAction storeAction;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassParameters"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::RenderPassParameters"), cpp_flags(binary_serializable, brace_init)]
 extern class RenderPassParameters{
     RenderPassAttachmentActions depthAttachmentActions;
     RenderPassAttachmentActions stencilAttachmentActions;
@@ -278,20 +278,20 @@ extern class RenderPassParameters{
     Array<RenderPassAttachmentActions, 8> colorAttachmentActions;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryHandle"), cpp_flags(self_defaulted, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryHandle"), cpp_flags(brace_init, equality_switch, map_key)]
 extern class TimerQueryHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut TimerQuery deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryRecordingEndpoints"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryRecordingEndpoints"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class TimerQueryRecordingEndpoints{
     b8 recordsBegin;
     b8 recordsEnd;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryRecordingToken"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryRecordingToken"), cpp_flags(binary_serializable, brace_init)]
 extern class TimerQueryRecordingToken{
     u64 queryIncarnation;
     u64 generation;
@@ -300,7 +300,7 @@ extern class TimerQueryRecordingToken{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryResult"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::TimerQueryResult"), cpp_flags(binary_serializable, brace_init)]
 extern class TimerQueryResult{
     u64 beginTicks;
     u64 endTicks;
@@ -316,7 +316,7 @@ extern class TimerQueryResult{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::VertexBufferBinding"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/command.h>"), cpp_name("::NWB::Core::VertexBufferBinding"), cpp_flags(binary_serializable, brace_init, equality_switch)]
 extern class VertexBufferBinding{
     u64 offset;
     u32 slot;

@@ -106,6 +106,7 @@ public:
     [[nodiscard]] b8 isInterfaceOrAbstractType(MStringView name)const noexcept;
     [[nodiscard]] b8 isAbstractBuiltinType(MStringView name)const noexcept;
     [[nodiscard]] b8 isPolymorphicBaseBuiltinType(MStringView name)const noexcept;
+    [[nodiscard]] const ClassDecl* findPolymorphicSdkInterface(MStringView baseName)const noexcept;
     [[nodiscard]] b8 hasPolymorphicInterface(const ClassDecl& classDecl)const noexcept;
     [[nodiscard]] b8 hasPolymorphicBase(const ClassDecl& classDecl)const noexcept;
     [[nodiscard]] const BuiltinReceiverMethodInfo* findInheritedBuiltinReceiverMethod(const ClassDecl* cls, const InterfaceDecl* iface, MStringView methodName)const noexcept;

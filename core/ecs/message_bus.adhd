@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/ecs/message_bus.h>"), cpp_name("::NWB::Core::ECS::MessageBus"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/ecs/message_bus.h>"), cpp_name("::NWB::Core::ECS::MessageBus")]
 extern class MessageBus{
     void clear(...);
     void swapBuffers(...);

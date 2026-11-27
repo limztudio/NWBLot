@@ -2,17 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionTransaction::PayloadLifetimeScope")]
 extern class GpuGraphPayloadLifetimeScope;
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionAcceptanceSnapshot"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionAcceptanceSnapshot"), cpp_flags(brace_init)]
 extern class GpuGraphSubmissionAcceptanceSnapshot{
     Vector<QueueSubmissionToken> packetTokens;
     u64 recordingAttemptGeneration;
     u64 acceptanceRevision;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionTransaction"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuGraphSubmissionTransaction")]
 extern class GpuGraphSubmissionTransaction{
     b8 discardUnaccepted(...);
     b8 hasAcceptedPackets(...)const;
@@ -24,7 +24,7 @@ extern class GpuGraphSubmissionTransaction{
     b8 tryReset(...);
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphNormalExecutionDesc"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphNormalExecutionDesc"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphNormalExecutionDesc{
     GpuTaskId terminalTask;
     usize taskRecordedCallbackCount;
@@ -38,7 +38,7 @@ extern class GpuTaskGraphNormalExecutionDesc{
     void setTimingTickets(in Span<GpuTaskGraphTaskTimingTicket> values);
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphPacketSubmissionStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphPacketSubmissionStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphPacketSubmissionStatistics{
     u64 graphGeneration;
     u64 planGeneration;
@@ -60,7 +60,7 @@ extern class GpuTaskGraphPacketSubmissionStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueSubmissionStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueSubmissionStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 graphGeneration;
     u64 planGeneration;
@@ -86,7 +86,7 @@ extern class GpuTaskGraphPhysicalQueueSubmissionStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphRuntimeStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphRuntimeStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphRuntimeStatistics{
     GpuTaskGraphCompileStatistics compile;
     GpuTaskGraphRecordingStatistics recording;
@@ -94,7 +94,7 @@ extern class GpuTaskGraphRuntimeStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphSubmissionStatistics"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphSubmissionStatistics"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphSubmissionStatistics{
     u64 graphGeneration;
     u64 planGeneration;
@@ -118,13 +118,13 @@ extern class GpuTaskGraphSubmissionStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskAcceptedCallback"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskAcceptedCallback"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
     b8 notify(in QueueSubmissionToken token)const;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskRecordedCallback"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskRecordedCallback"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskRecordedCallback{
     GpuTaskId task;
     b8 notify(in Optional<in CommandListResourceStateHandoff> finalState)const;
@@ -136,20 +136,20 @@ extern GpuTaskGraphTaskRecordedCallback MakeGpuTaskRecordedCallback(in GpuTaskId
 [cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::MakeGpuTaskAcceptedCallback")]
 extern GpuTaskGraphTaskAcceptedCallback MakeGpuTaskAcceptedCallback(in GpuTaskId task, mut auto observer);
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskSubmissionHook"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskSubmissionHook"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskSubmissionHook{
     GpuTaskId task;
     QueueSubmissionPreSubmitHook hook;
 };
 
-[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskTimingTicket"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/packet_runtime.h>"), cpp_name("::NWB::Core::GpuTaskGraphTaskTimingTicket"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     void bind(in GpuTaskId id, mut GpuTimingSubmissionTicket ticket);
 };
 
 
-[cpp_header("<core/task/gpu/packet_runtime_internal.h>"), cpp_name("::NWB::Core::GpuPacketRuntimeDetail::PacketWaitStatistics"), cpp_flags(self_defaulted)]
+[cpp_header("<core/task/gpu/packet_runtime_internal.h>"), cpp_name("::NWB::Core::GpuPacketRuntimeDetail::PacketWaitStatistics")]
 extern class PacketWaitStatistics{
     usize plannedWaitTokenCount;
     usize sameQueueWaitElisionCount;

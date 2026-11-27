@@ -6,7 +6,7 @@
 extern usize PersistentArenaStructureAlignedSize(in isize bytes, in auto alignment = {});
 
 
-[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::Alloc::GlobalArena"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::Alloc::GlobalArena")]
 extern class GlobalAllocator{
     ArenaMemoryStats memoryStats()const;
 };
@@ -72,7 +72,7 @@ extern class ArenaObjectSlot<T>{
 };
 
 
-[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::GlobalUniquePtr"), cpp_flags(no_copy)]
+[cpp_header("<core/alloc/general.h>"), cpp_name("::NWB::Core::GlobalUniquePtr")]
 extern class GlobalUniquePtr<T>{
     b8 valid()const;
     mut T deref()const;

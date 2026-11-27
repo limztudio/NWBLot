@@ -8,15 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::Display"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::Display")]
 extern class X11Display;
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::XEvent"), cpp_flags(self_defaulted)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::XEvent")]
 extern class OsXEvent{
     i32 type;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::DisplayConnection"), cpp_flags(self_defaulted, no_copy, no_assign)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::DisplayConnection")]
 extern class DisplayConnection{
     b8 open();
     i32 close();
@@ -34,7 +34,7 @@ extern class DisplayConnection{
     u64 owner(in u64 atom)const;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11Property"), cpp_flags(no_copy)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11Property")]
 extern class OsX11Property{
     u64 type;
     usize count;
@@ -45,7 +45,7 @@ extern class OsX11PropertyFailure{
     u8 errorCode;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11CheckedOperation"), cpp_flags(no_copy)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::X11CheckedOperation")]
 extern class X11CheckedOperation{
     b8 succeeded();
 };
@@ -62,21 +62,21 @@ extern class ClipboardPipeReadFailure{
     b8 endOfStream;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipeWriter"), cpp_flags(no_copy)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Core::ClipboardPipeWriter")]
 extern class ClipboardPipeWriter{
     b8 begin(in i32 fd, in StringView text);
     ClipboardStatus advance();
     b8 finished()const;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::pollfd"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::pollfd"), cpp_flags(brace_init)]
 extern class OsPollFd{
     i32 fd;
     i16 events;
     i16 revents;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::sigset_t"), cpp_flags(self_defaulted)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::sigset_t")]
 extern class OsSignalMask;
 
 [cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::SelectionClearAtom")]

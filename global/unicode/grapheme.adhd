@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/unicode/grapheme.h>"), cpp_name("::GraphemeBoundaryState"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<global/unicode/grapheme.h>"), cpp_name("::GraphemeBoundaryState"), cpp_flags(small_value, brace_init)]
 extern class GraphemeBoundaryState{
     b8 first;
     b8 indicConsonantRun;

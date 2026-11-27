@@ -94,9 +94,11 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         ("class Item{ [cpp_take_assignment] public void take(in u32 input){} }", "one mutable value"),
         ("class Item{ [cpp_take_assignment] public void take(mut Item item){} }", "another type"),
         ("class Item{ [cpp_explicit_bool] public b8 ready()const{ return true; } [cpp_explicit_bool] public b8 valid()const{ return true; } }", "already exports"),
-        ("[cpp_unwind] void BadUnwind(){}", "prohibited"),
-        ("class X : IGpuTaskGraphOutputLayerContributor{ public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{} } [cpp_unwind] void Y(){}", "prohibited"),
-        ("void Read(in cpp_ref u32 value){}", "requires an 'in' parameter on an extern"),
+        ("[cpp_unwind] void BadUnwind(){}", "unsupported attribute on callable"),
+        ("class X : IGpuTaskGraphOutputLayerContributor{ public void acceptTaskGraphOutputLayer(in u64 generation, in QueueSubmissionToken token)override{} } [cpp_unwind] void Y(){}", "unsupported attribute on callable"),
+        ("void Read(in cpp_ref u32 value){}", "expected"),
+        ("[cpp_flags(nothrow)] extern void BadNothrow();", "valid extern flag"),
+        ("[cpp_flags(no_copy)] extern class BadNoCopy;", "valid extern flag"),
         ("class Item{ [cpp_rvalue_overload] public b8 read(in u32 value){ return true; } }", "one mutable value"),
         ("[cpp_type_alias(Item, u32)] class Item{}", "distinct member name"),
         ("[cpp_type_alias(Value, u32)] class Item{ public u32 Value; }", "distinct member name"),
@@ -104,10 +106,10 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
          "void Bad(in A a){ Retains dangling(a); }", "a retained reference cannot bind to a temporary created by an implicit class conversion"),
         ("[align(3)] class Item{}", "power-of-two"),
         ("[align(0)] class Item{}", "power-of-two"),
-        ("[layout(8)] class Item{}", "prohibited"),
-        ("[ordered] class Item{}", "prohibited"),
-        ("[move_only] class Item{}", "prohibited"),
-        ("[modular] class Item{}", "prohibited"),
+        ("[layout(8)] class Item{}", "unsupported attribute on class"),
+        ("[ordered] class Item{}", "unsupported attribute on class"),
+        ("[move_only] class Item{}", "unsupported attribute on class"),
+        ("[modular] class Item{}", "unsupported attribute on class"),
         ('[arena, asset("a")] class Item{}', "prohibited"),
         ("[reflect] enum<u8> E{ A = 0 }", "prohibited"),
         ("[reflect] interface I{ void f(); }", "prohibited"),
@@ -370,7 +372,7 @@ def check_conditional_exception_spec(compiler: pathlib.Path, root: pathlib.Path)
     )
     platform_text = 'const PlatformStringView s_Reason = PlatformTextLiteral("invalid");'
     cases += (
-        (platform_text, True, '::TStringView(FOUNDATION_TEXT("invalid"))'),
+        (platform_text, True, '::PlatformTextLiteral(FOUNDATION_TEXT("invalid"))'),
         ("PlatformStringView Convert(in StringView input){ return PlatformTextLiteral(input); }", False, "platform text requires a string literal"),
     )
     for text, success, expected in cases:

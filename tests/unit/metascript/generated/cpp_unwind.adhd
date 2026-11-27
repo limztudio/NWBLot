@@ -2,10 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelUnwindTracker"), cpp_flags(self_defaulted, no_copy, no_assign)]
+[cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelUnwindTracker")]
 extern class ParallelUnwindTracker{
     void completeWork(in u32 seed)const;
-    [cpp_flags(unwind)]
     void invokeAfterWorkerStarts(mut Func<void()> callback)const;
     u32 runs()const;
     u32 valueSum()const;
@@ -16,7 +15,7 @@ extern class ParallelUnwindTracker{
     u32 preOrder()const;
 };
 
-[cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelLifetimeProbe"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/unit/metascript/parallel_unwind_probe.h>"), cpp_name("::NWB::Tests::Metascript::ParallelLifetimeProbe")]
 extern class ParallelLifetimeProbe;
 
 

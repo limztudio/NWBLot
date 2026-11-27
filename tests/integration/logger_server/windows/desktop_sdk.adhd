@@ -9,40 +9,40 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HDC"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HDC"), cpp_flags(small_value, brace_init)]
 extern class WinDcHandle;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HWND"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HWND"), cpp_flags(small_value, brace_init)]
 extern class WinWindowHandle;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HGLOBAL"), cpp_flags(self_defaulted, small_value, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HGLOBAL"), cpp_flags(small_value, brace_init)]
 extern class WinGlobalHandle;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DeviceContext"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DeviceContext")]
 extern class WinDeviceContext{
     b8 valid()const;
     WinDcHandle native()const;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DibSection"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DibSection")]
 extern class WinDibSection{
     b8 valid()const;
     b8 hasPixels()const;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::SelectedBitmap"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::SelectedBitmap")]
 extern class WinSelectedBitmap{
     b8 valid()const;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::StaticWindow"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::StaticWindow")]
 extern class WinStaticWindow{
     b8 valid()const;
     WinWindowHandle native()const;
     void useDefaultGuiFont()const;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::GlobalTextLock"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::GlobalTextLock")]
 extern class WinGlobalTextLock{
     b8 valid()const;
     PlatformStringView view(in usize count)const;
@@ -50,10 +50,10 @@ extern class WinGlobalTextLock{
     b8 unlock();
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::OwnedGlobalMemory"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::OwnedGlobalMemory")]
 extern class WinOwnedGlobalMemory;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFOHEADER"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFOHEADER"), cpp_flags(brace_init)]
 extern class WinBitmapHeader{
     u32 biSize;
     i32 biWidth;
@@ -63,12 +63,12 @@ extern class WinBitmapHeader{
     u32 biCompression;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFO"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFO"), cpp_flags(brace_init)]
 extern class WinBitmapInfo{
     WinBitmapHeader bmiHeader;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::RECT"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::RECT"), cpp_flags(brace_init)]
 extern class WinRect{
     i32 left;
     i32 top;
@@ -76,14 +76,14 @@ extern class WinRect{
     i32 bottom;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::DRAWITEMSTRUCT"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::DRAWITEMSTRUCT"), cpp_flags(brace_init)]
 extern class WinDrawItem{
     WinDcHandle hDC;
     WinRect rcItem;
     u32 itemID;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::MEASUREITEMSTRUCT"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::MEASUREITEMSTRUCT"), cpp_flags(brace_init)]
 extern class WinMeasureItem{
     u32 itemHeight;
 };
@@ -125,27 +125,27 @@ extern usize WinGlobalSize(in WinGlobalHandle handle);
 [cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::GlobalFlags")]
 extern u32 WinGlobalFlags(in WinGlobalHandle handle);
 
-[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::LogString"), cpp_flags(no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::LogString")]
 extern class WinLogString;
 
 [cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::NativeText")]
 extern WinLogString NativeLogText(mut HeapStorage storage, in PlatformStringView text);
 
-[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::MessageItem"), cpp_flags(no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::MessageItem")]
 extern class WinLogRow;
 
-[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::MessageDeque"), cpp_flags(no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::MessageDeque")]
 extern class WinMessageDeque{
     void emplace_back(in WinLogString text, in LogType kind);
 };
 
-[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardText"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardText")]
 extern class WinClipboardText{
     WinGlobalHandle native()const;
     void release();
 };
 
-[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardTextFailure"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardTextFailure")]
 extern class WinClipboardFailure;
 
 [cpp_header("<logger/server/clipboard_text.h>"), cpp_name("::NWB::Log::FrameDetail::ClipboardByteCount")]

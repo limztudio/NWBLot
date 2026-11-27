@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::FileRemovalFailure"), cpp_flags(self_defaulted, brace_init)]
+[cpp_name("::FileRemovalFailure"), cpp_flags(brace_init)]
 extern class FileRemovalFailure{
     ErrorCode code;
     u64 removedCount;

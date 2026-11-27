@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_glyph_info_t"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_glyph_info_t")]
 extern class HarfBuzzGlyphInfo{
     u32 codepoint;
     u32 cluster;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_glyph_position_t"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_glyph_position_t")]
 extern class HarfBuzzGlyphPosition{
     i32 x_advance;
     i32 y_advance;
@@ -16,14 +16,14 @@ extern class HarfBuzzGlyphPosition{
     i32 y_offset;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_font_extents_t"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_font_extents_t")]
 extern class HarfBuzzFontExtents{
     i32 ascender;
     i32 descender;
     i32 line_gap;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_glyph_extents_t"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_glyph_extents_t")]
 extern class HarfBuzzGlyphExtents{
     i32 x_bearing;
     i32 y_bearing;
@@ -64,7 +64,7 @@ extern HarfBuzzScript HarfBuzzScriptFromTag(in u32 tag);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::HarfBuzzFont"), cpp_flags(self_defaulted, no_copy, no_assign)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::HarfBuzzFont")]
 extern class HarfBuzzFont{
     b8 open(in Span<u8> bytes, in u32 faceIndex);
     b8 valid()const;
@@ -80,7 +80,7 @@ extern class HarfBuzzFont{
     b8 hasVariationGlyph(in u32 codepoint, in u32 variationSelector)const;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiOpenTypeFeature"), cpp_flags(self_defaulted)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiOpenTypeFeature")]
 extern class HarfBuzzOpenTypeFeature{
     u32 tag;
     u32 value;
@@ -88,7 +88,7 @@ extern class HarfBuzzOpenTypeFeature{
     u32 end;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::HarfBuzzBuffer"), cpp_flags(self_defaulted, no_copy, no_assign)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::NWB::UiFontSdk::HarfBuzzBuffer")]
 extern class HarfBuzzBuffer{
     b8 valid()const;
     void clear();

@@ -60,7 +60,7 @@ extern CookDependencyRegistry MoveGraphicsRegistry(mut CookDependencyRegistry so
 
 [cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::std::pair<::NWB::Core::Assets::CookMetadataDetail::DiscoveredPathSet::iterator, bool>")]
 extern class InsertedPath{ b8 second; };
-[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::DiscoveredPathSet"), cpp_flags(no_copy)]
+[cpp_header("<core/assets/cook_metadata_internal.h>"), cpp_name("::NWB::Core::Assets::CookMetadataDetail::DiscoveredPathSet")]
 extern class DiscoveredPathSet{
     void reserve(in usize count);
     InsertedPath insert(in PathScratchString path);
@@ -92,7 +92,7 @@ extern class NwbFileAssetCacheRecord{
     b8 loadedFromCache;
     b8 canWriteCache;
 };
-[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetFileHeader"), cpp_flags(self_defaulted, binary_serializable)]
+[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetFileHeader"), cpp_flags(binary_serializable)]
 extern class BuiltAssetFileHeader{
     u32 magic;
     u16 version;

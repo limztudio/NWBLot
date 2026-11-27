@@ -2,19 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricQueueOutput"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricQueueOutput"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuPacketEnvelopeMetricQueueOutput{
     GpuPhysicalQueueId physicalQueue;
     Name internalIdleScopeName;
 };
 
-[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricScope"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricScope"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuPacketEnvelopeMetricScope{
     Name scopeName;
     GpuPhysicalQueueId physicalQueue;
 };
 
-[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuTimingMetricCorrelator"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuTimingMetricCorrelator")]
 extern class GpuTimingMetricCorrelator{
     void discardPendingRanges(...);
     void recordTimestampRange(in Name scope, in u64 frameIndex, in GpuComparableTimestampRange range, mut auto scratch, mut auto samples);

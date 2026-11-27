@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/linux/x11/text_input_dispatch.h>"), cpp_name("::NWB::Core::X11TextInputDispatchFence"), cpp_flags(self_defaulted)]
+[cpp_header("<core/os/linux/x11/text_input_dispatch.h>"), cpp_name("::NWB::Core::X11TextInputDispatchFence")]
 extern class X11TextInputDispatchFence{
     void enter();
     b8 leave();
@@ -19,7 +19,7 @@ extern class X11TextInputDispatchFence{
     void released();
 };
 
-[cpp_header("<core/os/linux/x11/text_input_key_history.h>"), cpp_name("::NWB::Core::X11FilteredKeyHistory"), cpp_flags(self_defaulted)]
+[cpp_header("<core/os/linux/x11/text_input_key_history.h>"), cpp_name("::NWB::Core::X11FilteredKeyHistory")]
 extern class X11FilteredKeyHistory{
     void synchronizeSession(in TextInputSessionToken token);
     void recordFiltered(in u32 keycode, in b8 released, in u32 timestamp, in u32 serial, in u64 receivedAt);
@@ -28,7 +28,7 @@ extern class X11FilteredKeyHistory{
     void reset();
 };
 
-[cpp_header("<core/os/linux/x11/text_input_preedit.h>"), cpp_name("::NWB::Core::X11PreeditBuffer"), cpp_flags(no_copy)]
+[cpp_header("<core/os/linux/x11/text_input_preedit.h>"), cpp_name("::NWB::Core::X11PreeditBuffer")]
 extern class X11PreeditBuffer{
     StringView text()const;
     usize caretByte()const;
@@ -41,7 +41,7 @@ extern class X11PreeditBuffer{
     usize moveCaretToEnd();
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurrounding"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurrounding"), cpp_flags(brace_init)]
 extern class WaylandTextInputSurrounding{
     StringView text;
     usize offsetByte;
@@ -50,21 +50,21 @@ extern class WaylandTextInputSurrounding{
     b8 available;
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputProvenance"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputProvenance"), cpp_flags(brace_init)]
 extern class WaylandTextInputProvenance{
     TextInputSessionToken token;
     u64 revision;
     b8 revisionKnown;
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurroundingState"), cpp_flags(self_defaulted)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurroundingState")]
 extern class WaylandTextInputSurroundingState{
     void reset();
     u64 revision()const;
     WaylandTextInputSurrounding update(in StringView text, in usize anchor, in usize caret, in u64 revision);
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputDeferredState"), cpp_flags(self_defaulted)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputDeferredState")]
 extern class WaylandTextInputDeferredState{
     void clear();
     void caretChanged();
@@ -73,7 +73,7 @@ extern class WaylandTextInputDeferredState{
     TextInputChangeCause cause()const;
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSerialTracker"), cpp_flags(self_defaulted)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSerialTracker")]
 extern class WaylandTextInputSerialTracker{
     void reset();
     void record(in u32 serial, in TextInputSessionToken token, in u64 revision);

@@ -167,7 +167,7 @@ void VerifyAdhdCompiler_ExpandsVariadicMacrosLiftsCtorsAndRejectsDuplicateSignat
     const StringView extIfaceSrcView = GeneratedSourceView(extIfaceRes);
     EXPECT_NE(extIfaceHdrView.find("class CallbackRunner final : public IExternalCallback{"), usize.max);
     EXPECT_NE(extIfaceHdrView.find("virtual ~CallbackRunner()noexcept override"), usize.max);
-    EXPECT_NE(extIfaceHdrView.find("virtual b8 onTick(const f32 dt)noexcept override"), usize.max);
+    EXPECT_NE(extIfaceHdrView.find("virtual b8 onTick(const f32 dt) override"), usize.max);
     EXPECT_NE(extIfaceSrcView.find("RegisterSelf((*this));"), usize.max);
     EXPECT_NE(extIfaceSrcView.find("ExternalEnum::Active"), usize.max);
 

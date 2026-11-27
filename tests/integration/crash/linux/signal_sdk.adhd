@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::AlternateSignalStackStorage"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::AlternateSignalStackStorage")]
 extern class AlternateSignalStackStorage;
 
 [cpp_header("<tests/integration/crash/linux/signal_sdk.h>"), cpp_name("::NWB::Tests::PosixSignals::AlternateStack")]

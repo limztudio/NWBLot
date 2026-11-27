@@ -180,15 +180,6 @@ void RewriteTemplateTypeRefNameInPlace(TypeRef* const ref, const MStringView old
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MString NormalizeSlashes(MetaArena& arena, const MStringView raw){
-    MString out(raw.data(), raw.size(), arena);
-    for(MChar& ch : out){
-        if(ch == '\\')
-            ch = '/';
-    }
-    return out;
-}
-
 b8 StartsWithCaseInsensitivePrefix(const MStringView fullPath, const MStringView prefix)noexcept{
     if(fullPath.size() < prefix.size())
         return false;
@@ -305,33 +296,6 @@ MStringView MapRawBuiltinScalarKind(const CXTypeKind kind)noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-MStringView ImporterContext::mapOperatorToken(MStringView spelling)noexcept{
-    if(!spelling.starts_with(KeywordSemantics::s_Operator))
-        return {};
-    spelling.remove_prefix(KeywordSemantics::s_Operator.size());
-    while(!spelling.empty() && spelling.front() == ' ')
-        spelling.remove_prefix(1u);
-
-    if(CppImporterSemantics::IsDisallowedOperatorSymbol(spelling))
-        return {};
-
-    return OperatorSemantics::InternOverloadableOperatorSymbol(spelling);
-}
-
-b8 ImporterContext::hasDefaultInitializerToken(CXCursor parmCursor)const{
-    b8 found = false;
-    ::clang_visitChildren(parmCursor, [](CXCursor child, CXCursor, CXClientData clientData) -> CXChildVisitResult{
-        auto* outFound = static_cast<b8*>(clientData);
-        const CXCursorKind k = ::clang_getCursorKind(child);
-        if(k >= CXCursor_FirstExpr && k <= CXCursor_LastExpr){
-            *outFound = true;
-            return CXChildVisit_Break;
-        }
-        return CXChildVisit_Continue;
-    }, &found);
-    return found;
-}
 
 TypeRef* ImporterContext::mapGenericContainerType(
     CXType type,

@@ -11,14 +11,14 @@ extern class AssetByteBuffer{
     mut u8 operator[](in usize index);
 };
 
-[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::AssetManager"), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::AssetManager"), cpp_flags(binary_serializable)]
 extern class AssetManager{
     Expected<UniquePtr<IAsset>> loadSync(...)const;
 };
 
-[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::IAssetBinarySource"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::IAssetBinarySource")]
 extern class IAssetBinarySource{
-    b8 readAssetBinary(in cpp_ref Name path, mut AssetByteBuffer bytes)const;
+    b8 readAssetBinary(in Name path, mut AssetByteBuffer bytes)const;
 };
 
 

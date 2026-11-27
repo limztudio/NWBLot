@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::AlignedProbeBytes"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/performance/simd_optimization/memory_probe_access.h>"), cpp_name("::SimdOptimizationBenchmark::MemoryProbe::AlignedProbeBytes")]
 extern class AlignedProbeBytes{
     AlignedProbeBytes(in usize size);
     ByteAddress data()const;

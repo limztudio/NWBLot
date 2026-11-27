@@ -17,8 +17,8 @@ extern b8 DeserializeReflected<T>(mut T value, in MetascriptValue input);
 [cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::VisitReflectedDependencies")]
 extern b8 VisitReflectedDependencies<T>(in MetascriptValue input, in Func<void(in Name)> visitor);
 
-[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::ReaderWithSpan"), cpp_flags(no_copy, no_assign, polymorphic_base, abstract)]
-extern class ReaderWithSpan{ [cpp_flags(unwind)] Expected<usize> readBytes(mut Span<u8> buffer); };
+[cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::ReaderWithSpan")]
+extern class ReaderWithSpan{  Expected<usize> readBytes(mut Span<u8> buffer); };
 
 [cpp_header("<tests/unit/metascript/runtime_access.h>"), cpp_name("::NWB::Tests::Metascript::LerpMoveOnlyOperand")]
 extern class LerpMoveOnlyOperand{ i32 value; };

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext")]
 extern class CookVolumePrepareContext{
     CookResolvedPaths resolvedPaths;
     String configurationSafeName;
@@ -10,7 +10,7 @@ extern class CookVolumePrepareContext{
     u64 plannedFileCount;
 };
 
-[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::CookVolumeWriteContext"), cpp_flags(no_assign)]
+[cpp_header("<core/assets/volume/volume_prepare_registry.h>"), cpp_name("::NWB::Core::Assets::AssetsVolumeCookDetail::CookVolumeWriteContext")]
 extern class CookVolumeWriteContext{
     CookVolumePrepareContext preparation;
     b8 claim(in Name path);

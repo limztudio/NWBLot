@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/text_input_service.h>"), cpp_name("::NWB::Core::QueuedTextInputService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/os/text_input_service.h>"), cpp_name("::NWB::Core::QueuedTextInputService")]
 extern class QueuedTextInputService : ITextInputService{
     TextInputSessionToken activeSession(...)const;
     Expected<TextInputSessionToken, TextInputAdmission> begin(...);

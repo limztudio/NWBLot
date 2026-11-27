@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::WaitResult"), cpp_flags(self_defaulted)]
+[cpp_header("<tests/common/posix_child.h>"), cpp_name("::NWB::Tests::PosixChild::WaitResult")]
 extern class ChildWaitResult{
     b8 collected;
     b8 signaled;

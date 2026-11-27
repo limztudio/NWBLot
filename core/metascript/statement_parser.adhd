@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/statement_parser.h>"), cpp_name("::NWB::Core::Metascript::StatementParser"), cpp_flags(binary_serializable, no_assign)]
+[cpp_header("<core/metascript/statement_parser.h>"), cpp_name("::NWB::Core::Metascript::StatementParser"), cpp_flags(binary_serializable)]
 extern class MetascriptStatementParser{
     b8 parseInto(...);
 };

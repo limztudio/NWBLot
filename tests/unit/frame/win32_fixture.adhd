@@ -2,19 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HINSTANCE"), cpp_flags(small_value, no_assign)]
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HINSTANCE"), cpp_flags(small_value)]
 extern class WinInstance;
 
-[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HWND"), cpp_flags(small_value, no_assign)]
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HWND"), cpp_flags(small_value)]
 extern class WinWindow;
 
-[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::WindowClassResult"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::WindowClassResult"), cpp_flags(brace_init)]
 extern class WindowClassResult{
     b8 registered;
     u32 error;
 };
 
-[cpp_header("<core/graphics/runtime/render_pass_collection.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::RenderPassCollection"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/runtime/render_pass_collection.h>"), cpp_name("::NWB::Core::GraphicsModuleDetail::RenderPassCollection")]
 extern class RenderPassCollection{
     void addToBack(mut IRenderPass pass, in u32 width, in u32 height, in u32 samples);
     b8 validateResources(in u32 width, in u32 height, in u32 samples);

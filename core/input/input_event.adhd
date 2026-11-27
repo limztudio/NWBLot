@@ -191,22 +191,22 @@ extern enum GamepadAxis : u32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_flags(self_defaulted, brace_init, polymorphic_base)]
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::IInputEventHandler"), cpp_flags(brace_init)]
 extern class IInputEventHandler{
-    [cpp_flags(unwind)] void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected);
-    [cpp_flags(unwind)] b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action);
-    [cpp_flags(unwind)] b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value);
-    [cpp_flags(unwind)] b8 keyboardCharInput(in u32 code, in i32 modifiers);
-    [cpp_flags(unwind)] KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers);
-    [cpp_flags(unwind)] b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 modifiers);
-    [cpp_flags(unwind)] b8 mousePosUpdate(in f64 x, in f64 y);
-    [cpp_flags(unwind)] b8 mouseScrollUpdate(in f64 x, in f64 y);
-    [cpp_flags(unwind)] void pointerCaptureLost();
-    [cpp_flags(unwind)] void pointerLeave();
-    [cpp_flags(unwind)] void windowFocusUpdate(in b8 focused);
+    void gamepadConnectionUpdate(in u32 gamepadIndex, in b8 connected);
+    b8 gamepadButtonUpdate(in u32 gamepadIndex, in i32 button, in i32 action);
+    b8 gamepadAxisUpdate(in u32 gamepadIndex, in i32 axis, in f32 value);
+    b8 keyboardCharInput(in u32 code, in i32 modifiers);
+    KeyboardInputResult keyboardUpdate(in i32 key, in i32 scancode, in i32 action, in i32 modifiers);
+    b8 mouseButtonUpdate(in i32 button, in i32 action, in i32 modifiers);
+    b8 mousePosUpdate(in f64 x, in f64 y);
+    b8 mouseScrollUpdate(in f64 x, in f64 y);
+    void pointerCaptureLost();
+    void pointerLeave();
+    void windowFocusUpdate(in b8 focused);
 };
 
-[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::KeyboardInputResult"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/input/input_event.h>"), cpp_name("::NWB::Core::KeyboardInputResult"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class KeyboardInputResult{
     b8 consumed;
     b8 blocksText;

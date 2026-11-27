@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/filesystem/crlf_output_stream.h>"), cpp_name("::CrlfOutputFileStream"), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<global/filesystem/crlf_output_stream.h>"), cpp_name("::CrlfOutputFileStream"), cpp_flags(binary_serializable)]
 extern class CrlfOutputFileStream;
 
 

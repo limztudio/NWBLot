@@ -12,13 +12,13 @@ extern enum AccessMode : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::ComponentAccess"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::ComponentAccess"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class ComponentAccess{
     usize typeId;
     AccessMode mode;
 };
 
-[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::ISystem"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::ISystem")]
 extern class ISystem{
     Span<ComponentAccess> accesses(...)const;
     void prepare(...);
@@ -26,12 +26,11 @@ extern class ISystem{
     void registerAccess(...);
     Name systemType(...)const;
     CpuTaskOptions taskOptions(...)const;
-    [cpp_flags(unwind)]
     Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta);
     void writeAccess(...);
 };
 
-[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::SystemScheduler"), cpp_flags(no_assign)]
+[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::SystemScheduler")]
 extern class SystemScheduler{
     void addSystem(...);
     void clear(...);

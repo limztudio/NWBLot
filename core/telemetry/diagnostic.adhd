@@ -12,7 +12,7 @@ extern enum DiagnosticPayloadFlag : u16{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::DiagnosticCaptureGuard"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::DiagnosticCaptureGuard")]
 extern class DiagnosticCaptureGuard{
     void capture(...);
     u64 frameIndex(...)const;
@@ -22,7 +22,7 @@ extern class DiagnosticCaptureGuard{
     u32 streamId(...)const;
 };
 
-[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::DiagnosticPayload"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::DiagnosticPayload"), cpp_flags(binary_serializable, brace_init)]
 extern class DiagnosticPayload{
     StringView event;
     StringView category;
@@ -34,7 +34,7 @@ extern class DiagnosticPayload{
     b8 terminatesProcess;
 };
 
-[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::EncodedDiagnosticPayloadHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/diagnostic.h>"), cpp_name("::NWB::Core::Telemetry::EncodedDiagnosticPayloadHeader"), cpp_flags(binary_serializable, brace_init)]
 extern class EncodedDiagnosticPayloadHeader{
     u32 magic;
     u16 version;

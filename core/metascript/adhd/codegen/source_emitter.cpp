@@ -130,6 +130,17 @@ template<typename IsReadyField>
     return false;
 }
 
+void CollectThisMembersInExpr(const Expr* const expr, HashSet<MStringView, MetaArena, MStringViewHash>& outMembers){
+    if(!expr || expr->kind == ExprKind::Lambda)
+        return;
+    if(expr->kind == ExprKind::ThisMember && !expr->text.empty())
+        outMembers.insert(expr->text);
+    CollectThisMembersInExpr(expr->lhs, outMembers);
+    CollectThisMembersInExpr(expr->rhs, outMembers);
+    for(const Expr* arg : expr->arguments)
+        CollectThisMembersInExpr(arg, outMembers);
+}
+
 struct CtorFieldAssignInfo{
     const Expr* firstFound = nullptr;
     usize totalMatches = 0u;
@@ -726,8 +737,14 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
         out.append("))");
     }
     HashMap<MStringView, __hidden_adhd_source_emitter::CtorFieldAssignInfo, MetaArena, MStringViewHash> ctorAssignMap(m_arena);
-    if(!orderedFields.empty())
+    HashSet<MStringView, MetaArena, MStringViewHash> referencedByLeadingAssign(m_arena);
+    if(!orderedFields.empty()){
         __hidden_adhd_source_emitter::CollectCtorFieldAssignments(ctor.body, ctorAssignMap);
+        for(const auto& entry : ctorAssignMap){
+            if(entry.second.firstFound && entry.second.firstIsTopLevel && entry.second.totalMatches == 1u && entry.second.firstInLeadingPrefix && entry.second.firstFound->rhs)
+                __hidden_adhd_source_emitter::CollectThisMembersInExpr(entry.second.firstFound->rhs, referencedByLeadingAssign);
+        }
+    }
 
     MVector<MStringView> readyFields(m_arena);
     const auto isReadyField = [&](const MStringView name)noexcept{
@@ -782,7 +799,12 @@ void SourceEmitter::emitConstructorNotNullInitializers(MString& out, const Span<
             const b8 constructsAsset = isDirectCtorCall && fieldClass && !fieldClass->assetTypeName.empty();
             if(field->usesClassArena && !requiresMemberInit && !constructsAsset && (!isDirectCtorCall || layoutAnalyzer.isTypeAssignable(*field->type, false)))
                 continue;
-            if(!isDirectCtorCall && !requiresMemberInit)
+            const b8 neededByLaterMemberInit = referencedByLeadingAssign.find(field->name) != referencedByLeadingAssign.end()
+                && !uniqueAssign->isNotNullRebind
+                && !uniqueAssign->useAdhdWrappedClassAssign
+                && !uniqueAssign->useAdhdWrappedScratchAssign
+                && !uniqueAssign->useAdhdAssign;
+            if(!isDirectCtorCall && !requiresMemberInit && !neededByLaterMemberInit)
                 continue;
             skipped->push_back(uniqueAssign);
             out.append(firstInit ? " : " : ", ");

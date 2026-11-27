@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<logger/client/module.h>"), cpp_name("::NWB::Log::Client"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/client/module.h>"), cpp_name("::NWB::Log::Client")]
 extern class ProtocolClient{
     b8 init(in StringView url);
     usize rejectedPayloadCount()const;
@@ -20,7 +20,7 @@ extern void EnqueueLogMessage(mut ProtocolClient client, in LogType kind, in Str
 [cpp_header("<global/filesystem/exclusive_publication.h>"), cpp_name("::PublishNewFileDurable")]
 extern FilePublicationResult PublishBytesView(in auto destination, in BinaryByteView bytes);
 
-[cpp_header("<logger/processed_message_file.h>"), cpp_name("::NWB::Log::ProcessedMessageFile"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/processed_message_file.h>"), cpp_name("::NWB::Log::ProcessedMessageFile")]
 extern class ProcessedMessageFile{
     b8 open(in PlatformStringView name);
     b8 writeLine(in PlatformStringView line);
@@ -47,7 +47,7 @@ extern enum MessagePayloadError : u8{
     SizeOverflow
 };
 
-[cpp_header("<logger/common.h>"), cpp_name("::NWB::Log::MessageType"), cpp_flags(no_assign)]
+[cpp_header("<logger/common.h>"), cpp_name("::NWB::Log::MessageType")]
 extern class ProtocolMessage;
 
 [cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Literal"), cpp_flags(platform_literal_arg0)]

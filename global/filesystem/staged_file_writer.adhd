@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_name("::StagedFileWriter"), cpp_flags(borrow_view, non_thread_safe, arena_omit_ctor, no_assign)]
+[arena, cpp_name("::StagedFileWriter"), cpp_flags(borrow_view, non_thread_safe, arena_omit_ctor)]
 extern class StagedFileWriter{
     b8 writeBinaryAtomic(...)const;
     b8 writeTextAtomic(...)const;

@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::BindingLayout"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::BindingLayout")]
 extern class BindingLayout{
     b8 isDescriptorBufferCompatible(...)const;
     u32 getDescriptorBufferSetSizeBytes(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Buffer"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Buffer")]
 extern class Buffer{
     mut BufferDesc getDescription(...)const;
     mut BufferDesc getCreationDescription(...)const;
@@ -19,7 +19,7 @@ extern class Buffer{
     ResourceStates resolveTaskGraphImportInitialState(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::CommandList"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::CommandList")]
 extern class CommandList{
     void open(...);
     void close(...);
@@ -105,13 +105,13 @@ extern class CommandList{
     CommandListParameters getResolvedDescription(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::ComputePipeline"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::ComputePipeline")]
 extern class ComputePipeline{
     mut ComputePipelineDesc getDescription(...)const;
     u16 getDeviceGeneration(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Device"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Device")]
 extern class Device{
     Expected<HeapHandle> createHeap(...);
     Expected<TextureHandle> createTexture(...);
@@ -190,16 +190,16 @@ extern class Device{
     mut GpuDescriptorHeap getDescriptorHeap(...);
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::EventQuery"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::EventQuery")]
 extern class EventQuery;
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Framebuffer"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Framebuffer")]
 extern class Framebuffer{
     mut FramebufferDesc getDescription(...)const;
     mut FramebufferInfoEx getFramebufferInfo(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorHeap"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorHeap")]
 extern class GpuDescriptorHeap{
     PendingRecordingLease acquirePendingRecordingLease(...);
     b8 initialize(...);
@@ -220,42 +220,42 @@ extern class GpuDescriptorHeap{
     u32 getRegisterSlot(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorHeap::PendingRecordingLease"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorHeap::PendingRecordingLease")]
 extern class PendingRecordingLease{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorRetirementGuard<::NWB::Core::GpuDescriptorHeap>"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GpuDescriptorRetirementGuard<::NWB::Core::GpuDescriptorHeap>")]
 extern class GpuDescriptorRetirementGuard{
     void release(...);
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GraphicsPipeline"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::GraphicsPipeline")]
 extern class GraphicsPipeline{
     mut GraphicsPipelineDesc getDescription(...)const;
     u16 getDeviceGeneration(...)const;
     mut FramebufferInfo getFramebufferInfo(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Heap"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Heap")]
 extern class Heap{
     mut HeapDesc getDescription(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::InputLayout"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::InputLayout")]
 extern class InputLayout{
     u32 getNumAttributes(...)const;
     u32 getNumBindings(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::MeshletPipeline"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::MeshletPipeline")]
 extern class MeshletPipeline{
     mut MeshletPipelineDesc getDescription(...)const;
     u16 getDeviceGeneration(...)const;
     mut FramebufferInfo getFramebufferInfo(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingAccelStruct"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingAccelStruct")]
 extern class RayTracingAccelStruct{
     mut RayTracingAccelStructDesc getDescription(...)const;
     ResourceQueueSharing getCreationQueueSharing(...)const;
@@ -265,7 +265,7 @@ extern class RayTracingAccelStruct{
     mut BufferHandle getBackingBufferHandle(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromap"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingOpacityMicromap")]
 extern class RayTracingOpacityMicromap{
     mut RayTracingOpacityMicromapDesc getDescription(...)const;
     u64 getDeviceAddress(...)const;
@@ -273,7 +273,7 @@ extern class RayTracingOpacityMicromap{
     u32 getMaxOpacity4StateSubdivisionLevel(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingPipeline"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingPipeline")]
 extern class RayTracingPipeline{
     mut RayTracingPipelineDesc getDescription(...)const;
     u16 getDeviceGeneration(...)const;
@@ -281,7 +281,7 @@ extern class RayTracingPipeline{
     Expected<RayTracingShaderTableHandle> createShaderTable(...);
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingShaderTable"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::RayTracingShaderTable")]
 extern class RayTracingShaderTable{
     b8 setRayGenerationShader(...);
     Expected<u32> addMissShader(...);
@@ -293,27 +293,27 @@ extern class RayTracingShaderTable{
     mut RayTracingPipeline getPipeline(...);
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Sampler"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Sampler")]
 extern class RhiSampler{
     mut SamplerDesc getDescription(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Shader"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Shader")]
 extern class Shader{
     mut ShaderDesc getDescription(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::ShaderLibrary"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::ShaderLibrary")]
 extern class ShaderLibrary{
     Expected<ShaderHandle> getShader(...);
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::StagingTexture"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::StagingTexture")]
 extern class StagingTexture{
     mut TextureDesc getDescription(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Texture"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::Texture")]
 extern class RhiTexture{
     mut TextureDesc getDescription(...)const;
     mut TextureDesc getCreationDescription(...)const;
@@ -323,7 +323,7 @@ extern class RhiTexture{
     ResourceStates resolveTaskGraphImportInitialState(...)const;
 };
 
-[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::TimerQuery"), cpp_flags(no_copy, no_assign, abstract)]
+[cpp_header("<core/graphics/backend_selection/backend.h>"), cpp_name("::NWB::Core::TimerQuery")]
 extern class TimerQuery{
     b8 discardUnacceptedRecording(...);
     b8 releaseUnacceptedEndForRecovery(...);

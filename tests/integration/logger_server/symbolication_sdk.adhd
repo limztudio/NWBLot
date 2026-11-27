@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashSymbolicationConfig"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashSymbolicationConfig")]
 extern class DumpSymbolicationConfig;
 
 [cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashScratchPath")]

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/binary_update.h>"), cpp_name("::NWB::Core::BinaryUpdateContext"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/common/binary_update.h>"), cpp_name("::NWB::Core::BinaryUpdateContext")]
 extern class BinaryUpdateContext{
     BinaryByteView current()const;
 };

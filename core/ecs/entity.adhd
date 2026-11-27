@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/ecs/entity.h>"), cpp_name("::NWB::Core::ECS::Entity"), cpp_flags(small_value, binary_serializable, no_assign)]
+[cpp_header("<core/ecs/entity.h>"), cpp_name("::NWB::Core::ECS::Entity"), cpp_flags(small_value, binary_serializable)]
 extern class Entity{
     T addComponent<T>(...);
     b8 alive(...)const;

@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/assets_font/freetype_probe.h>"), cpp_name("::NWB::Tests::FontCases::FreeTypeProbe"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<tests/integration/assets_font/freetype_probe.h>"), cpp_name("::NWB::Tests::FontCases::FreeTypeProbe")]
 extern class FreeTypeProbe{
     i32 initialize();
     i32 open(in Span<u8> bytes);

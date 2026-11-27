@@ -31,12 +31,6 @@ namespace __hidden_adhd_type_checker_decl{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const ClassDecl* FindPolymorphicSdkInterface(const SymbolTable& symbols, const MStringView baseName)noexcept{
-    if(const ClassDecl* sdk = symbols.findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase)
-        return sdk;
-    return FindBuiltinPolymorphicInterfaceDecl(baseName);
-}
-
 void MatchPolymorphicSdkOverride(
     const ClassDecl& sdk,
     MethodDecl& method,
@@ -619,7 +613,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         const MStringView ifaceName = m_symbols.resolveBaseTypeName(ifaceType->name);
         if(const ClassDecl* baseCls = m_symbols.findClass(ifaceName)){
-            if(!classDecl.isExtern && !baseCls->isExtensible && !(baseCls->isExtern && baseCls->isPolymorphicBase)){
+            if(!classDecl.isExtern && !baseCls->isExtensible && !(baseCls->isExtern && (baseCls->isPolymorphicBase || baseCls->isEmptyBase))){
                 reportError(errors, classDecl.span, "concrete class inheritance is prohibited in adhd; classes are implicitly final and may only implement interfaces");
                 ok = false;
             }
@@ -628,13 +622,13 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
         }
         if(!m_symbols.findInterface(ifaceName)){
             const BuiltinObjectTypeInfo* builtinObj = FindBuiltinObjectType(ifaceName);
-            const b8 isBuiltinInterface = IsNonCopyableBaseInterfaceName(ifaceName) || (builtinObj && builtinObj->isPolymorphicBase);
+            const b8 isBuiltinInterface = IsNonCopyableBaseInterfaceName(ifaceName) || (builtinObj && (builtinObj->isPolymorphicBase || builtinObj->isEmptyBase));
             if(
                 (!classDecl.isExtern && !isBuiltinInterface)
                 || m_symbols.findEnum(ifaceName)
                 || FindBuiltinEnum(ifaceName)
                 || BuiltinTypeSemantics::IsScalarType(ifaceName)
-                || (builtinObj && !builtinObj->isPolymorphicBase)
+                || (builtinObj && !builtinObj->isPolymorphicBase && !builtinObj->isEmptyBase)
                 || FindBuiltinGenericType(ifaceName)
                 || SymbolTable::IsSimdType(ifaceName)
                 || SymbolTable::IsUnalignedVectorType(ifaceName)
@@ -747,7 +741,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
                 if(!baseType)
                     continue;
                 const MStringView baseName = m_symbols.resolveBaseTypeName(baseType->name);
-                if(const ClassDecl* sdk = __hidden_adhd_type_checker_decl::FindPolymorphicSdkInterface(m_symbols, baseName)){
+                if(const ClassDecl* sdk = m_symbols.findPolymorphicSdkInterface(baseName)){
                     __hidden_adhd_type_checker_decl::MatchPolymorphicSdkOverride(*sdk, *m, m_symbols, matchesInterface);
                     continue;
                 }
@@ -760,7 +754,7 @@ b8 TypeChecker::checkClassDecl(ClassDecl& classDecl, MVector<ParseError>& errors
             if(!matchesInterface && !classDecl.systemTypeName.empty()){
                 const ClassRoleContractInfo* sysContract = ContractSemantics::FindClassRoleContract(ClassRoleKind::System);
                 if(sysContract){
-                    if(const ClassDecl* sdk = __hidden_adhd_type_checker_decl::FindPolymorphicSdkInterface(m_symbols, sysContract->implicitInterfaceAdhdName)){
+                    if(const ClassDecl* sdk = m_symbols.findPolymorphicSdkInterface(sysContract->implicitInterfaceAdhdName)){
                         __hidden_adhd_type_checker_decl::MatchPolymorphicSdkOverride(*sdk, *m, m_symbols, matchesInterface);
                     }
                     else if(FindBuiltinReceiverMethod(sysContract->implicitInterfaceAdhdName, m->name)){

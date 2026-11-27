@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::TelemetryBytes"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::TelemetryBytes")]
 extern class TelemetryBytes{
     usize size()const;
     usize capacity()const;
@@ -25,14 +25,14 @@ extern class EventRecord{
     Vector<u8> payload;
 };
 
-[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::EventView"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::EventView"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class EventView{
     Optional<in EventRecord> borrowEventAt(in usize index)const;
     usize eventCount(...)const;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::Recorder"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/telemetry/recorder.h>"), cpp_name("::NWB::Core::Telemetry::Recorder")]
 extern class Recorder{
     TelemetryBytes createByteBuffer();
     TelemetryCaptureOptions captureOptions()const;

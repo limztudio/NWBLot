@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::DiagnosticEventTextFormatter"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_name("::DiagnosticEventTextFormatter"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class DiagnosticEventTextFormatter;
 
 

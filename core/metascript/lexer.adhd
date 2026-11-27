@@ -69,7 +69,7 @@ extern class MetascriptLexer{
     MetascriptToken next(...);
 };
 
-[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token"), cpp_flags(binary_serializable, brace_init)]
 extern class MetascriptToken{
     StringView text;
     MetascriptTokenType type;

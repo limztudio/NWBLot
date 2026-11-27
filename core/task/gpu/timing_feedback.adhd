@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuQueueAssignmentScore"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuQueueAssignmentScore"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuQueueAssignmentScore{
     i32 overlap;
     i32 queueLoad;
@@ -12,7 +12,7 @@ extern class GpuQueueAssignmentScore{
     i32 total(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingAssignmentKey"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingAssignmentKey"), cpp_flags(binary_serializable, brace_init, equality_switch)]
 extern class GpuTaskTimingAssignmentKey{
     Name task;
     u32 variant;
@@ -20,7 +20,7 @@ extern class GpuTaskTimingAssignmentKey{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingAssignmentState"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingAssignmentState"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskTimingAssignmentState{
     GpuTaskTimingAssignmentKey key;
     u64 lastAcceptedFrameIndex;
@@ -30,7 +30,7 @@ extern class GpuTaskTimingAssignmentState{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingFeedbackPolicy"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingFeedbackPolicy"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskTimingFeedbackPolicy{
     f64 minimumAbsoluteBenefitSeconds;
     f64 minimumRelativeBenefit;
@@ -41,7 +41,7 @@ extern class GpuTaskTimingFeedbackPolicy{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistory"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistory"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskTimingHistory{
     f64 averageSeconds;
     f64 minimumSeconds;
@@ -50,7 +50,7 @@ extern class GpuTaskTimingHistory{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistoryEntry"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistoryEntry"), cpp_flags(binary_serializable, brace_init)]
 extern class GpuTaskTimingHistoryEntry{
     GpuTaskTimingKey key;
     GpuTaskTimingHistory history;
@@ -58,13 +58,13 @@ extern class GpuTaskTimingHistoryEntry{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistorySnapshot"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistorySnapshot"), cpp_flags(arena_first_ctor)]
 extern class GpuTaskTimingHistorySnapshot{
     u16 deviceGeneration(...)const;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistoryStore"), cpp_flags(arena_first_ctor, no_copy, no_assign)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingHistoryStore"), cpp_flags(arena_first_ctor)]
 extern class GpuTaskTimingHistoryStore{
     u16 deviceGeneration(...)const;
     usize historyCount(...)const;
@@ -76,7 +76,7 @@ extern class GpuTaskTimingHistoryStore{
     void snapshot(...)const;
 };
 
-[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingKey"), cpp_flags(self_defaulted, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/timing_feedback.h>"), cpp_name("::NWB::Core::GpuTaskTimingKey"), cpp_flags(binary_serializable, brace_init, equality_switch)]
 extern class GpuTaskTimingKey{
     Name task;
     u32 variant;

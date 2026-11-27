@@ -19,7 +19,7 @@ extern enum PerfTimingSource : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::EncodedPerfMemoryPayloadHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::EncodedPerfMemoryPayloadHeader"), cpp_flags(binary_serializable, brace_init)]
 extern class EncodedPerfMemoryPayloadHeader{
     u32 magic;
     u16 version;
@@ -43,7 +43,7 @@ extern class EncodedPerfMemoryPayloadHeader{
     u32 source;
 };
 
-[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::EncodedPerfTimingPayloadHeader"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::EncodedPerfTimingPayloadHeader"), cpp_flags(binary_serializable, brace_init)]
 extern class EncodedPerfTimingPayloadHeader{
     u32 magic;
     u16 version;
@@ -61,7 +61,7 @@ extern class EncodedPerfTimingPayloadHeader{
     u32 scopeNameBytes;
 };
 
-[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfMemoryPayload"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfMemoryPayload"), cpp_flags(binary_serializable, brace_init)]
 extern class PerfMemoryPayload{
     Name scopeName;
     StringView scopeText;
@@ -69,7 +69,7 @@ extern class PerfMemoryPayload{
     MemoryDelta delta;
 };
 
-[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfSessionRecordResult"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfSessionRecordResult"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class PerfSessionRecordResult{
     u32 cpuTimingEvents;
     u32 gpuTimingEvents;
@@ -79,7 +79,7 @@ extern class PerfSessionRecordResult{
     b8 ok(...)const;
 };
 
-[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfTimingPayload"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/perf.h>"), cpp_name("::NWB::Core::Telemetry::PerfTimingPayload"), cpp_flags(binary_serializable, brace_init)]
 extern class PerfTimingPayload{
     Name scopeName;
     StringView scopeText;

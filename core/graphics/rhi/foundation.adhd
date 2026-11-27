@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::GraphicsAllocator"), cpp_flags(binary_serializable, no_copy, no_assign)]
+[cpp_header("<core/graphics/rhi/foundation.h>"), cpp_name("::NWB::Core::GraphicsAllocator"), cpp_flags(binary_serializable)]
 extern class GraphicsAllocator;
 
 

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashPackageSummary"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<logger/server/crash_symbolicate.h>"), cpp_name("::NWB::Log::CrashPackageSummary")]
 extern class CrashPackageSummary{
     String crashId;
     String platform;

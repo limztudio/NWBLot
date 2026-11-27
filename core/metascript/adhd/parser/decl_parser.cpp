@@ -649,6 +649,7 @@ InterfaceDecl* DeclParser::parseInterfaceDecl(const SourceSpan span, const Span<
         method->span = methodSpan;
         method->isImported = isExtern;
         method->isExtern = isExtern;
+        method->allowsCppUnwind = isExtern;
         method->requiredHeader = decl->requiredHeader;
         if(!applyCallableAttributes(methodAttrs, *method))
             return nullptr;

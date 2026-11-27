@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/counting_output.h>"), cpp_name("::CountingByteOutput"), cpp_flags(self_defaulted, small_value, binary_serializable, brace_init)]
+[cpp_header("<global/counting_output.h>"), cpp_name("::CountingByteOutput"), cpp_flags(small_value, binary_serializable, brace_init)]
 extern class CountingByteOutput{
     usize byteCount;
 };

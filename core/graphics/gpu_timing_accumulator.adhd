@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_accumulator.h>"), cpp_name("::NWB::Core::GpuTimingAccumulator"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/graphics/gpu_timing_accumulator.h>"), cpp_name("::NWB::Core::GpuTimingAccumulator")]
 extern class GpuTimingAccumulator{
     b8 abandonQuery(...);
     void confirmFrameReset(...);

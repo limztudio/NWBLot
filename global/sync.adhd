@@ -2,37 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::AtomicBackOff"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_name("::AtomicBackOff"), cpp_flags(binary_serializable, brace_init)]
 extern class AtomicBackOff{
     b8 boundedPause(...);
     void pause(...);
     void reset(...);
 };
 
-[cpp_name("::ConditionVariableAny"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_name("::ConditionVariableAny"), cpp_flags(brace_init)]
 extern class ConditionVariableAny;
 
-[cpp_name("::Futex"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_name("::Futex"), cpp_flags(binary_serializable, brace_init)]
 extern class Futex{
     void lock(...);
     b8 try_lock(...);
     void unlock(...);
 };
 
-[cpp_header("<global/sync.h>"), cpp_name("::FutexGuard"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<global/sync.h>"), cpp_name("::FutexGuard")]
 extern class FutexGuard;
 
 [cpp_header("<global/sync.h>"), cpp_name("::AcquireFutex")]
 extern FutexGuard AcquireFutex(in Futex mutex);
 
-[cpp_name("::MallocMutex"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_name("::MallocMutex"), cpp_flags(binary_serializable, brace_init)]
 extern class MallocMutex{
     void lock(...);
     b8 try_lock(...);
     void unlock(...);
 };
 
-[cpp_name("::RecursiveMutex"), cpp_flags(self_defaulted, binary_serializable, brace_init, no_copy, no_assign)]
+[cpp_name("::RecursiveMutex"), cpp_flags(binary_serializable, brace_init)]
 extern class RecursiveMutex;
 
 

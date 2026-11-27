@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisFloatImage"), cpp_flags(self_defaulted)]
+[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisFloatImage")]
 extern class BasisFloatImage{
     u32 width()const;
     u32 height()const;
@@ -17,7 +17,7 @@ extern class BasisFloatImage{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisSliceDescription"), cpp_flags(self_defaulted, brace_init)]
+[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisSliceDescription"), cpp_flags(brace_init)]
 extern class BasisSliceDescription{
     u32 sourceIndex;
     u32 mipIndex;
@@ -31,7 +31,7 @@ extern class BasisSliceDescription{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisMipEncoder"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisMipEncoder")]
 extern class BasisMipEncoder{
     void addPlane(in u32 width, in u32 height);
     void setHdrPixel(in u32 plane, in u32 x, in u32 y, in VectorSingle color);

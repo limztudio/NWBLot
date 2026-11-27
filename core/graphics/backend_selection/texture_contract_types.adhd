@@ -21,13 +21,13 @@ extern enum TextureClearValueKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureClearContract"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureClearContract"), cpp_flags(binary_serializable, brace_init)]
 extern class TextureClearContract{
     TextureSubresourceSet subresources;
     TextureQueueRequirement queueRequirement;
 };
 
-[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureCopyContract"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/backend_selection/texture_contract_types.h>"), cpp_name("::NWB::Core::GraphicsBackend::TextureCopyContract"), cpp_flags(binary_serializable, brace_init)]
 extern class TextureCopyContract{
     TextureSlice sourceSlice;
     TextureSlice destinationSlice;

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::Initializer"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::Initializer")]
 extern class Initializer{
     b8 acquire(...);
     void enqueue(...);
@@ -11,15 +11,15 @@ extern class Initializer{
     void release(...);
 };
 
-[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::InitializerGuard"), cpp_flags(self_defaulted, brace_init, no_copy, no_assign)]
+[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::InitializerGuard"), cpp_flags(brace_init)]
 extern class InitializerGuard{
     void finalize(...);
     b8 initialize(...);
 };
 
-[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::Initializerable"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::Initializerable")]
 extern class Initializerable{
-    [cpp_flags(unwind)] b8 initialize();
+    b8 initialize();
     void finalize();
 };
 

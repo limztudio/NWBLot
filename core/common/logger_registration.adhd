@@ -24,10 +24,10 @@ extern enum LoggerBreakPolicy : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::ILogger"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::ILogger")]
 extern class ILogger;
 
-[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::LoggerRegistrationGuard"), cpp_flags(no_copy, no_assign)]
+[cpp_header("<core/common/logger_registration.h>"), cpp_name("::NWB::Core::Common::LoggerRegistrationGuard")]
 extern class LoggerRegistrationGuard;
 
 

@@ -514,6 +514,11 @@ struct formatter<ConvertStringArg<In>, CharT>{
 };
 
 
+template<usize N>
+[[nodiscard]] inline constexpr TStringView PlatformTextLiteral(const tchar (&text)[N])noexcept{
+    return TStringView(text, N > 0u ? (N - 1u) : 0u);
+}
+
 template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AppendPlatformText(ArenaT& arena, const TStringView prefix, const AStringView suffix){
     const auto converted = ConvertString(arena, suffix);

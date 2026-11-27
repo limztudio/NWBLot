@@ -628,6 +628,12 @@ b8 SymbolTable::isPolymorphicBaseBuiltinType(const MStringView name)const noexce
     return objInfo && objInfo->isPolymorphicBase;
 }
 
+const ClassDecl* SymbolTable::findPolymorphicSdkInterface(const MStringView baseName)const noexcept{
+    if(const ClassDecl* sdk = findClass(baseName); sdk && sdk->isExtern && sdk->isPolymorphicBase)
+        return sdk;
+    return FindBuiltinPolymorphicInterfaceDecl(baseName);
+}
+
 b8 SymbolTable::hasPolymorphicInterface(const ClassDecl& classDecl)const noexcept{
     for(const TypeRef* ifaceRef : classDecl.implementedInterfaces){
         if(!ifaceRef)

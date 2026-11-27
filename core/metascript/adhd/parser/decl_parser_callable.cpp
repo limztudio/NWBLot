@@ -56,6 +56,7 @@ MethodDecl* DeclParser::parseFreeOrOutOfLineCallable(const SourceSpan span, cons
     decl->span = span;
     decl->isImported = isImported || isExtern;
     decl->isExtern = isExtern;
+    decl->allowsCppUnwind = isExtern;
 
     if(!applyCallableAttributes(attributes, *decl))
         return nullptr;
@@ -233,8 +234,6 @@ b8 DeclParser::tryParseExternCallableAttribute(const ParsedAttribute& attr, Meth
             return false;
         }
         switch(flagKind){
-        case ExternCallableFlagKind::Unwind:       outMethod.allowsCppUnwind = true; break;
-        case ExternCallableFlagKind::Nothrow:      outMethod.isNothrowExtern = true; break;
         case ExternCallableFlagKind::ScratchArena: outMethod.injectsCallerArena = true; break;
         case ExternCallableFlagKind::BorrowView:   outMethod.returnsBorrowedView = true; break;
         case ExternCallableFlagKind::PlatformLiteralArg0:

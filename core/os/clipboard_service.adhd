@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/clipboard_service.h>"), cpp_name("::NWB::Core::QueuedClipboardService"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+[cpp_header("<core/os/clipboard_service.h>"), cpp_name("::NWB::Core::QueuedClipboardService")]
 extern class QueuedClipboardService : IClipboardService{
     b8 cancel(...);
     b8 isOwnerThread(...)const;

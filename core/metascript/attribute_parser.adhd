@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::AttributeParser"), cpp_flags(small_value, binary_serializable, no_assign)]
+[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::AttributeParser"), cpp_flags(small_value, binary_serializable)]
 extern class MetascriptAttributeParser;
 
 [cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::ParsedAttribute")]
@@ -12,7 +12,7 @@ extern class MetascriptParsedAttribute{
     u32 column;
 };
 
-[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::ParsedAttributeArg"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+[cpp_header("<core/metascript/attribute_parser.h>"), cpp_name("::NWB::Core::Metascript::ParsedAttributeArg"), cpp_flags(binary_serializable, brace_init)]
 extern class MetascriptParsedAttributeArg{
     StringView text;
     MetascriptTokenType kind;

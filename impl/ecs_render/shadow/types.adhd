@@ -208,6 +208,7 @@ class ShadowPrepareUploadTasks{
     public ShadowGpuTaskId shadowMaterialTyped = ShadowGpuTaskId();
     public ShadowGpuTaskId sceneBvhNodes = ShadowGpuTaskId();
     public ShadowGpuTaskId sceneBvhInstances = ShadowGpuTaskId();
+    public ShadowGpuTaskId tlasInstances = ShadowGpuTaskId();
 }
 
 class ShadowPrepareUploadChain{
@@ -221,6 +222,7 @@ class ShadowPrepareUploadChain{
     public ShadowGpuGraphResourceId shadowMaterialTyped = ShadowGpuGraphResourceId();
     public ShadowGpuGraphResourceId sceneBvhNodes = ShadowGpuGraphResourceId();
     public ShadowGpuGraphResourceId sceneBvhInstances = ShadowGpuGraphResourceId();
+    public ShadowGpuGraphResourceId tlasInstanceBuffer = ShadowGpuGraphResourceId();
     public Vector<GpuExternalCompletionId> pendingContextReadCompletions = Vector<GpuExternalCompletionId>();
     public u64 rayTraceMaterialContextSlotsWord0 = 0u;
     public u64 rayTraceMaterialContextSlotsWord1 = 0u;

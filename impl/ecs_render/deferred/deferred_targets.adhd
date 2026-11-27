@@ -77,6 +77,7 @@ Expected<TextureHandle> CreateDeferredTargetTexture(
     in u32 height,
     in Format format,
     in b8 isUav,
+    in b8 isRenderTarget,
     in b8 useClearValue,
     in Color clearValue,
     in Name textureName,
@@ -98,9 +99,8 @@ Expected<TextureHandle> CreateDeferredTargetTexture(
             .setKeepInitialState(true)
         ;
     }
-    else{
+    if(isRenderTarget)
         desc.setIsRenderTarget(true);
-    }
     if(useClearValue)
         desc.setClearValue(clearValue);
     const Expected<TextureHandle> result = graphics.createTexture(desc);
@@ -148,6 +148,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(mut DeferredFrameTargets 
     this.resetLaggedLightingHistoryResources(targets);
     this.resetDeferredBindlessFrameResources(targets);
     targets.framebuffer.reset();
+    targets.compositeDebugFramebuffer.reset();
 
     targets.albedo.reset();
     targets.normal.reset();
@@ -187,6 +188,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     const Format normalFormat = SelectGBufferAlbedoFormat(device);
     const Format worldPositionFormat = SelectGBufferAlbedoFormat(device);
     const Format opaqueColorFormat = SelectDeferredOpaqueColorFormat(device);
+    const Format compositeColorFormat = SelectDeferredCompositeColorFormat(device);
     const Format depthFormat = SelectGBufferDepthFormat(device);
     const Format csgCapNormalFormat = SelectCsgFormat(s_CsgCapNormalCoreFormat, s_CsgPeelFormatSupport, device);
     const Format csgIntervalDepthFormat = SelectCsgFormat(s_CsgIntervalDepthCoreFormat, s_CsgPeelFormatSupport, device);
@@ -204,6 +206,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         && normalFormat != Format::UNKNOWN
         && worldPositionFormat != Format::UNKNOWN
         && opaqueColorFormat != Format::UNKNOWN
+        && compositeColorFormat != Format::UNKNOWN
         && depthFormat != Format::UNKNOWN
     ;
     const b8 csgPeelFormatsKnown =
@@ -232,6 +235,8 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
 
     this.m_deferredState.m_lightingPipeline.reset();
     this.m_deferredState.m_compositeComputePipeline.reset();
+    this.m_deferredState.m_debugLineDepthPipeline.reset();
+    this.m_deferredState.m_debugLineOverlayPipeline.reset();
     this.m_deferredState.m_presentPipeline.reset();
 
     DeferredFrameTargets createdTargets;
@@ -242,7 +247,7 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     createdTargets.worldPositionFormat = worldPositionFormat;
     createdTargets.specularRoughnessFormat = worldPositionFormat;
     createdTargets.opaqueColorFormat = opaqueColorFormat;
-    createdTargets.compositeColorFormat = opaqueColorFormat;
+    createdTargets.compositeColorFormat = compositeColorFormat;
     createdTargets.depthFormat = depthFormat;
     createdTargets.csgCapNormalFormat = csgCapNormalFormat;
     createdTargets.csgIntervalDepthFormat = csgIntervalDepthFormat;
@@ -260,31 +265,31 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
     createdTargets.csgReceiverSpanLayerCount = s_CsgReceiverSpanLayerCount;
     createdTargets.csgRemovedIntervalLayerCount = s_CsgRemovedIntervalLayerCount;
 
-    const Expected<TextureHandle> albedo = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.albedoFormat, false, true, s_ClearColor, s_DeferredAlbedoTargetName, "RendererSystem: failed to create deferred albedo target", this.m_graphics);
+    const Expected<TextureHandle> albedo = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.albedoFormat, false, true, true, s_ClearColor, s_DeferredAlbedoTargetName, "RendererSystem: failed to create deferred albedo target", this.m_graphics);
     if(!albedo.has_value())
         return MakeUnexpected(Failure());
     createdTargets.albedo = albedo.value();
-    const Expected<TextureHandle> normal = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.normalFormat, false, true, s_GBufferNormalClearColor, s_DeferredNormalTargetName, "RendererSystem: failed to create deferred normal target", this.m_graphics);
+    const Expected<TextureHandle> normal = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.normalFormat, false, true, true, s_GBufferNormalClearColor, s_DeferredNormalTargetName, "RendererSystem: failed to create deferred normal target", this.m_graphics);
     if(!normal.has_value())
         return MakeUnexpected(Failure());
     createdTargets.normal = normal.value();
-    const Expected<TextureHandle> worldPosition = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.worldPositionFormat, false, true, s_GBufferWorldPositionClearColor, s_DeferredWorldPositionTargetName, "RendererSystem: failed to create deferred world-position target", this.m_graphics);
+    const Expected<TextureHandle> worldPosition = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.worldPositionFormat, false, true, true, s_GBufferWorldPositionClearColor, s_DeferredWorldPositionTargetName, "RendererSystem: failed to create deferred world-position target", this.m_graphics);
     if(!worldPosition.has_value())
         return MakeUnexpected(Failure());
     createdTargets.worldPosition = worldPosition.value();
-    const Expected<TextureHandle> specularRoughness = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.specularRoughnessFormat, false, true, s_GBufferSpecularRoughnessClearColor, s_DeferredSpecularRoughnessTargetName, "RendererSystem: failed to create deferred specular/roughness target", this.m_graphics);
+    const Expected<TextureHandle> specularRoughness = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.specularRoughnessFormat, false, true, true, s_GBufferSpecularRoughnessClearColor, s_DeferredSpecularRoughnessTargetName, "RendererSystem: failed to create deferred specular/roughness target", this.m_graphics);
     if(!specularRoughness.has_value())
         return MakeUnexpected(Failure());
     createdTargets.specularRoughness = specularRoughness.value();
-    const Expected<TextureHandle> opaqueColor = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.opaqueColorFormat, true, true, s_ClearColor, s_DeferredOpaqueColorTargetName, "RendererSystem: failed to create deferred opaque color target", this.m_graphics);
+    const Expected<TextureHandle> opaqueColor = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.opaqueColorFormat, true, false, true, s_ClearColor, s_DeferredOpaqueColorTargetName, "RendererSystem: failed to create deferred opaque color target", this.m_graphics);
     if(!opaqueColor.has_value())
         return MakeUnexpected(Failure());
     createdTargets.opaqueColor = opaqueColor.value();
-    const Expected<TextureHandle> compositeColor = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.compositeColorFormat, true, true, s_ClearColor, s_DeferredCompositeColorTargetName, "RendererSystem: failed to create deferred composite color target", this.m_graphics);
+    const Expected<TextureHandle> compositeColor = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.compositeColorFormat, true, true, true, s_ClearColor, s_DeferredCompositeColorTargetName, "RendererSystem: failed to create deferred composite color target", this.m_graphics);
     if(!compositeColor.has_value())
         return MakeUnexpected(Failure());
     createdTargets.compositeColor = compositeColor.value();
-    const Expected<TextureHandle> depth = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.depthFormat, false, false, s_ClearColor, s_DeferredDepthTargetName, "RendererSystem: failed to create deferred depth target", this.m_graphics);
+    const Expected<TextureHandle> depth = CreateDeferredTargetTexture(createdTargets.width, createdTargets.height, createdTargets.depthFormat, false, true, false, s_ClearColor, s_DeferredDepthTargetName, "RendererSystem: failed to create deferred depth target", this.m_graphics);
     if(!depth.has_value())
         return MakeUnexpected(Failure());
     createdTargets.depth = depth.value();
@@ -305,6 +310,21 @@ Expected<DeferredFrameTargets> RendererDeferredSystem::createDeferredFrameTarget
         return MakeUnexpected(Failure());
     }
     createdTargets.framebuffer = framebufferResult.value();
+
+    FramebufferAttachment compositeDebugColorAttachment;
+    compositeDebugColorAttachment.setTexture(createdTargets.compositeColor.deref()).setSubresources(s_FramebufferSubresources);
+    FramebufferAttachment compositeDebugDepthAttachment;
+    compositeDebugDepthAttachment.setTexture(createdTargets.depth.deref()).setSubresources(s_FramebufferSubresources).setIsReadOnly(true);
+    FramebufferDesc compositeDebugFramebufferDesc;
+    compositeDebugFramebufferDesc.addColorAttachment(compositeDebugColorAttachment);
+    compositeDebugFramebufferDesc.setDepthAttachment(compositeDebugDepthAttachment);
+    const Expected<FramebufferHandle> compositeDebugFramebufferResult = device.createFramebuffer(compositeDebugFramebufferDesc);
+    if(!compositeDebugFramebufferResult.has_value()){
+        createdTargets.compositeDebugFramebuffer.reset();
+        error("RendererSystem: failed to create deferred composite debug framebuffer");
+        return MakeUnexpected(Failure());
+    }
+    createdTargets.compositeDebugFramebuffer = compositeDebugFramebufferResult.value();
 
     return createdTargets;
 }
@@ -332,7 +352,7 @@ static_assert(s_MeshGbufferTargetCount == s_ShaderMeshGbufferTargetCount);
 
 b8 DeferredFrameTargets::valid()const{
     if(!s_RuntimeAssertionsEnabled)
-        return this.framebuffer.valid();
+        return this.framebuffer.valid() && this.compositeDebugFramebuffer.valid();
     return
         ValidDeferredTargetExtent(this.width, this.height)
         && this.albedoFormat != Format::UNKNOWN
@@ -351,6 +371,7 @@ b8 DeferredFrameTargets::valid()const{
         && this.compositeColor.valid()
         && this.depth.valid()
         && this.framebuffer.valid()
+        && this.compositeDebugFramebuffer.valid()
         && this.bindless.valid()
         && this.avboit.valid()
     ;

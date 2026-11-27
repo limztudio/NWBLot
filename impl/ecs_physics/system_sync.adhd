@@ -464,11 +464,16 @@ class EcsPhysicsSyncScratch{
     public Vector<EcsFluidSplashEvent> frameFluidSplashEvents;
     public Vector<EcsSoftBodyConstraintTearEvent> frameSoftBodyConstraintTearEvents;
     public Vector<EcsSoftBodyImpactEvent> frameSoftBodyImpactEvents;
+    public Vector<EcsFractureEvent> frameFractureEvents;
+    public Vector<FractureSplitEvent> fractureSplitScratch;
     public HashMap<EntityID, EcsCsgColliderState> csgColliderStates;
     public Vector<Transform3D> ragdollWorldTargetPoseScratch;
     public Vector<VehicleWheelDef> scaledVehicleWheelsScratch;
     public Vector<RagdollBoneDef> ragdollWorldBonesScratch;
     public Vector<ArticulationLinkDef> articulationWorldLinksScratch;
+    public Vector<EntityID> activeArticulationEntitiesScratch;
+    public Vector<EntityID> activeCharacterEntitiesScratch;
+    public Vector<EntityID> activeSoftBodyEntitiesScratch;
     public Vector<EntityID> restoreRemoveRecsScratch;
     public Vector<ShapeId> restoreValidExtrasScratch;
     public Vector<EntityID> restoreRemoveJointsScratch;
@@ -3136,10 +3141,10 @@ b8 AttachEcsColliderEntryMulti(
             cd.shapeDef = sd;
             cd.radius = Max(entry.chainRadius * maxS, 0.0f);
             cd.isLoop = entry.chainClosed;
-            const Expected<Vector<ShapeId>> res = physicsWorld.createChainShapes(bodyId, cd);
-            if(!res.has_value() || res.value().empty())
+            const Expected<ShapeId> res = physicsWorld.createChainShape(bodyId, cd);
+            if(!res.has_value())
                 return false;
-            outCreatedShapes = res.value();
+            outCreatedShapes.push_back(res.value());
             return true;
         }
         const Expected<SegmentShape> segRes = BuildEcsSegmentShape(entry, signedScale);

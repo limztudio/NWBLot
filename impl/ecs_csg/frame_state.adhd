@@ -53,6 +53,7 @@ class CsgPrecomputedCutter{
     public b8 hasShaderModule = false;
     public b8 boundsResolved = false;
     public b8 finiteBounds = false;
+    public b8 syncFromTransform = false;
     public b8 valid = false;
 }
 
@@ -323,6 +324,7 @@ CsgPrecomputedCutter BuildPrecomputedCsgCutter(in World world, in EntityID entit
     out.shapeName = shapeType.desc.name;
     out.shaderModule = shapeType.desc.shaderModule;
     out.parameterByteSize = shapeType.desc.parameterByteSize;
+    out.syncFromTransform = cutter.syncFromTransform;
     for(usize byteIndex = 0u; byteIndex < resolved.size(); ++byteIndex)
         out.parameterBytes.push_back(resolved[byteIndex]);
     out.worldToShape = f32x3x4(worldToShape);

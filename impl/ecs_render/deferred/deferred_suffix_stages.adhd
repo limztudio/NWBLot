@@ -144,6 +144,25 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     }
     result.compositeTask = compositeTaskResult.value();
 
+    GpuTaskId prePresentCompositeTask = result.compositeTask;
+    if(this.m_debugLineProvider.has_value() && this.m_debugLineProvider.value().hasDebugLines()){
+        const auto debugLinesTaskResult = this.m_deferredSystem.declareDeferredDebugLinesTasks(
+            this.m_graph,
+            inputs.targets,
+            compositeColor,
+            inputs.depth,
+            result.compositeTask,
+            MatrixSingle(inputs.viewProj),
+            this.m_debugLineProvider.value()
+        );
+        if(!debugLinesTaskResult.has_value()){
+            warning("RendererSystem: could not declare deferred debug-lines graph tasks");
+            return MakeUnexpected(Failure());
+        }
+        if(debugLinesTaskResult.value().has_value())
+            prePresentCompositeTask = debugLinesTaskResult.value().value();
+    }
+
     in AcquiredPresentationFrame presentationFrame = inputs.presentationFrame;
     in FramebufferDesc presentationFramebufferDesc = inputs.presentationFramebufferDesc;
     GpuExternalCompletionDesc availability;
@@ -184,7 +203,7 @@ Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     presentScheduling.forceSubmissionBoundary = true;
     presentScheduling.allowPacketMerge = false;
     FixedVector<GpuTaskId, s_PresentMaxDependencyCount> presentDependencies;
-    presentDependencies.push_back(result.compositeTask);
+    presentDependencies.push_back(prePresentCompositeTask);
     if(inputs.useLaggedLightingHistory){
         presentDependencies.push_back(inputs.surfelGiTask);
         if(inputs.hardwareCausticsTask.valid())

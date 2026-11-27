@@ -140,6 +140,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     mut MaterialTypedConstantRangeMap shadowConstantTypedRanges = this.m_sceneGatherScratch.shadowConstantTypedRanges;
     mut MaterialTypedByteContentRangeMap shadowMutableTypedRanges = this.m_sceneGatherScratch.shadowMutableTypedRanges;
     mut Vector<RayTracingInstanceWorldBounds> instanceWorldBounds = this.m_sceneGatherScratch.tlasInstanceWorldBounds;
+    mut Vector<u32> tlasEntityIds = this.m_sceneGatherScratch.tlasEntityIds;
     mut MeshBufferSlotLookup meshSlotLookup = this.m_sceneGatherScratch.meshSlotLookup;
     mut Vector<TextureHandle> pendingSampledTextures = this.m_sceneGatherScratch.pendingSampledTextures;
     instances.clear();
@@ -150,6 +151,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     shadowConstantTypedRanges.clear();
     shadowMutableTypedRanges.clear();
     instanceWorldBounds.clear();
+    tlasEntityIds.clear();
     meshSlotLookup.clear();
     pendingSampledTextures.clear();
     instances.reserve(candidateCount);
@@ -157,6 +159,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
     instanceWorldBounds.reserve(candidateCount);
+    tlasEntityIds.reserve(candidateCount);
     shadowConstantTypedRanges.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
     meshSlotLookup.reserve(candidateCount);
@@ -326,6 +329,7 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
         instanceWorldBounds.push_back(worldBounds);
+        tlasEntityIds.push_back(entity.id);
     }
 
     if(!lightSpaceGather.finishHardware(instances, instanceMaterials, contentComplete, this.m_rayTracingState.sceneBvh.m_sceneHasTransparentOccluder)){
@@ -356,7 +360,8 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
     u64 tlasStaticSceneHash = 0u;
     if(staticScene)
         tlasStaticSceneHash = ComputeTlasStaticSceneIdentity(Span<RayTracingInstanceDesc>(instances));
-    const b8 canReuseTlas = CanReuseStaticSceneTlas(
+    const b8 useTlasInstanceBuffer = this.m_instanceTransformPatchContributor.has_value();
+    const b8 canReuseTlas = !useTlasInstanceBuffer && CanReuseStaticSceneTlas(
         staticScene, this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHashValid, this.m_rayTracingState.sceneBvh.m_tlasStaticSceneHash, tlasStaticSceneHash,
         this.m_rayTracingState.sceneBvh.m_tlas.valid(), this.m_rayTracingState.sceneBvh.m_tlasMaxInstances, instances.size(),
         IsDescriptorClass(this.m_rayTracingState.sceneBvh.m_tlasHeapHandle, GpuDescriptorClass::AccelStruct)
@@ -397,6 +402,41 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         this.m_rayTracingState.sceneBvh.m_tlasHeapHandle = descriptor.value();
     }
 
+    if(useTlasInstanceBuffer && !instances.empty()){
+        if(!this.m_rayTracingState.sceneBvh.m_tlasInstanceBuffer.valid() || this.m_rayTracingState.sceneBvh.m_tlasInstanceCapacity < instances.size()){
+            const usize instanceCapacity = NextGrowingCapacity(this.m_rayTracingState.sceneBvh.m_tlasInstanceCapacity, instances.size(), s_TlasInitialInstanceCapacity);
+            BufferDesc instanceBufferDesc;
+            instanceBufferDesc
+                .setByteSize(cast<u64>(instanceCapacity * size_of<TlasInstanceGpuData>()))
+                .setStructStride(size_of<TlasInstanceGpuData>())
+                .setCanHaveUAVs(true)
+                .setIsAccelStructBuildInput(true)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+                .setDebugName(Name("render/raytrace/tlas_instances"))
+                .enableAutomaticStateTracking(ResourceStates::Common)
+            ;
+            const auto instanceBufferResult = this.m_graphics.createBuffer(instanceBufferDesc);
+            if(!instanceBufferResult.has_value()){
+                this.m_sceneGatherScratch.clearHandles();
+                error("RendererSystem: failed to create scene TLAS instance buffer (capacity {})", cast<u64>(instanceCapacity));
+                return false;
+            }
+            BufferHandle instanceBuffer = instanceBufferResult.value();
+            if(!ReplaceHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, instanceBuffer.deref(), this.m_rayTracingState.sceneBvh.m_tlasInstanceUavHeapHandle)){
+                this.m_sceneGatherScratch.clearHandles();
+                error("RendererSystem: failed to register scene TLAS instance UAV descriptor");
+                return false;
+            }
+            this.m_rayTracingState.sceneBvh.m_tlasInstanceBuffer = instanceBuffer;
+            this.m_rayTracingState.sceneBvh.m_tlasInstanceCapacity = instanceCapacity;
+        }
+        if(!EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, true, heap, this.m_rayTracingState.sceneBvh.m_tlasInstanceBuffer.deref(), this.m_rayTracingState.sceneBvh.m_tlasInstanceUavHeapHandle)){
+            this.m_sceneGatherScratch.clearHandles();
+            error("RendererSystem: failed to ensure scene TLAS instance UAV descriptor");
+            return false;
+        }
+    }
+
     ShadowMaterialContextPreparer materialContextPreparer(this);
     u64 materialTypedHash = 0u;
     const auto materialContextHash = materialContextPreparer.prepareWithTypedHash(PreparedShadowMaterialContextRoute::Hardware, staticScene, instances.size(), Span<NwbRtInstanceMaterialGpu>(instanceMaterials),
@@ -405,10 +445,19 @@ b8 RendererRayTracingSystem::prepareSceneTlasResources(){
         this.m_sceneGatherScratch.clearHandles();
         return false;
     }
+    this.m_preparedShadowInstanceEntityIds.clear();
+    this.m_preparedShadowInstanceEntityIds.reserve(shadowInstanceData.size());
+    for(usize index = 0u; index < shadowInstanceData.size(); ++index)
+        this.m_preparedShadowInstanceEntityIds.push_back(shadowInstanceData[index].scale.w);
     const u64 hwMaterialContextHash = materialContextHash.value();
 
     if(!canReuseTlas){
-        if(!this.m_preparedSceneTlas.capture(this.m_rayTracingState, staticScene, tlasStaticSceneHash, Span<RayTracingInstanceDesc>(instances), Span<RayTracingAccelStructHandle>(instanceBlases))){
+        b8 tlasCaptured = false;
+        if(useTlasInstanceBuffer)
+            tlasCaptured = this.m_preparedSceneTlas.captureFromInstanceBuffer(this.m_rayTracingState, staticScene, tlasStaticSceneHash, Span<RayTracingInstanceDesc>(instances), Span<RayTracingAccelStructHandle>(instanceBlases), Span<u32>(tlasEntityIds));
+        else
+            tlasCaptured = this.m_preparedSceneTlas.capture(this.m_rayTracingState, staticScene, tlasStaticSceneHash, Span<RayTracingInstanceDesc>(instances), Span<RayTracingAccelStructHandle>(instanceBlases));
+        if(!tlasCaptured){
             this.m_sceneGatherScratch.clearHandles();
             error("RendererSystem: could not freeze scene TLAS build after preflight");
             return false;
@@ -454,6 +503,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     mut MaterialTypedByteContentRangeMap shadowMutableTypedRanges = this.m_sceneGatherScratch.shadowMutableTypedRanges;
     mut MeshBufferSlotLookup meshSlotLookup = this.m_sceneGatherScratch.meshSlotLookup;
     mut Vector<TextureHandle> pendingSampledTextures = this.m_sceneGatherScratch.pendingSampledTextures;
+    mut Vector<u32> swEntityIds = this.m_sceneGatherScratch.tlasEntityIds;
     instances.clear();
     sceneRefitInputs.clear();
     sceneRefitRoots.clear();
@@ -466,8 +516,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
     shadowMutableTypedRanges.clear();
     meshSlotLookup.clear();
     pendingSampledTextures.clear();
+    swEntityIds.clear();
     instances.reserve(candidateCount);
     sceneRefitInputs.reserve(candidateCount);
+    swEntityIds.reserve(candidateCount);
     lightSpaceGather.reserveSoftwareCasters(candidateCount);
     instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
@@ -670,6 +722,7 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
+        swEntityIds.push_back(entity.id);
     }
 
     RayTracingDiagnostics().shadowMeshHeapHighWater(false, this.m_rayTracingState.shadow.m_swShadowMeshCount, this.m_rayTracingState.shadow.m_swShadowMeshHeapHighWater);
@@ -727,9 +780,13 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
             return false;
         }
     }
+    this.m_preparedSceneBvhInstanceEntityIds.clear();
+    this.m_preparedSceneBvhInstanceEntityIds.reserve(swEntityIds.size());
+    for(usize index = 0u; index < swEntityIds.size(); ++index)
+        this.m_preparedSceneBvhInstanceEntityIds.push_back(swEntityIds[index]);
 
-    if(!staticScene){
-        auto preparedRefit = this.m_sceneSwBvhRefit.prepare(Span<SoftwareSceneRefitInstanceGpu>(sceneRefitInputs), Span<BufferHandle>(sceneRefitRoots), this.m_preparedSceneBvh.nodeBuffer(),
+    if(!staticScene || this.m_instanceTransformPatchContributor.has_value()){
+        auto preparedRefit = this.m_sceneSwBvhRefit.prepare(Span<SoftwareSceneRefitInstanceGpu>(sceneRefitInputs), Span<BufferHandle>(sceneRefitRoots), Span<u32>(this.m_preparedSceneBvhInstanceEntityIds), this.m_preparedSceneBvh.nodeBuffer(),
             this.m_preparedSceneBvh.nodeHeapHandle(), cast<u32>(requiredNodeCount), this.m_shaderSystem);
         if(!preparedRefit.has_value()){
             this.m_preparedSceneSwBvhRefit.reset();
@@ -747,6 +804,10 @@ b8 RendererRayTracingSystem::prepareSceneSwBvhResources(){
         this.m_sceneGatherScratch.clearHandles();
         return false;
     }
+    this.m_preparedShadowInstanceEntityIds.clear();
+    this.m_preparedShadowInstanceEntityIds.reserve(shadowInstanceData.size());
+    for(usize index = 0u; index < shadowInstanceData.size(); ++index)
+        this.m_preparedShadowInstanceEntityIds.push_back(shadowInstanceData[index].scale.w);
     const u64 swMaterialContextHash = materialContextHash.value();
 
     this.m_rayTracingState.sceneBvh.m_sceneBvhInstanceCount = instanceCount;

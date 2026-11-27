@@ -3,6 +3,7 @@
 
 
 #include <impl/physics/snapshot.adhd>
+#include <impl/ecs_physics/debug_draw_types.adhd>
 #include <impl/ecs_physics/subsystem_bridges.adhd>
 
 
@@ -19,6 +20,7 @@ type EcsJointBreakCallback = Func<64u, void(in EcsJointBreakEvent)>;
 type EcsCharacterEventCallback = Func<64u, void(in EcsCharacterControllerEvent)>;
 type EcsVehicleEventCallback = Func<64u, void(in EcsVehicleTelemetryEvent)>;
 type EcsFluidSplashCallback = Func<64u, void(in EcsFluidSplashEvent)>;
+type EcsFractureEventCallback = Func<64u, void(in EcsFractureEvent)>;
 
 
 Transform3D InterpolatePhysicsTransform(in Transform3D prevXf, in Transform3D currXf, in f32 alpha){
@@ -75,7 +77,7 @@ void CollectSortedEntities<T>(mut World world, mut Vector<EntityID> outEntities)
 }
 
 [system("physics")]
-class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
+class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLineProvider{
     private mut World m_world;
     private PhysicsWorld m_physicsWorld;
     private PhysicsGpuDispatcher m_gpuDispatcher;
@@ -83,6 +85,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     private HashMap<EntityID, EcsEntityPhysicsRecord> m_entityRecords;
     private HashMap<EntityID, EcsJointSyncRecord> m_entityJoints;
     private HashMap<EntityID, EcsTrackedRagdoll> m_activeRagdolls;
+    private HashMap<EntityID, EcsTrackedFracture> m_activeFractures;
     private PhysicsEnvironment m_environmentScratch;
     private CollisionLayerMatrix m_collisionLayerMatrix;
     private CsgShapeRegistry m_csgShapeRegistry;
@@ -96,6 +99,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     private Optional<EcsCharacterEventCallback> m_onCharacterEvent;
     private Optional<EcsVehicleEventCallback> m_onVehicleEvent;
     private Optional<EcsFluidSplashCallback> m_onFluidSplash;
+    private Optional<EcsFractureEventCallback> m_onFractureEvent;
     private Vector<EcsBodyTransformSnapshot> m_bodyTransformSnapshots;
     private Vector<u32> m_bodyTransformSnapshotMeta;
     private Vector<EcsSlotOwner> m_bodyIndexToEntity;
@@ -127,6 +131,12 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     private Vector<EcsSensorStayEvent> m_ecsSensorStayEvents;
     private Vector<EcsBodyWakeEvent> m_ecsBodyWakeEvents;
     private Vector<EcsJointBreakEvent> m_ecsJointBreakEvents;
+    private Vector<GpuPhysicsEvent> m_gpuResidentEventsScratch;
+    private HashMap<u64, u64> m_prevGpuResidentContactPairs;
+    private HashMap<u64, u64> m_currGpuResidentContactPairs;
+    private HashMap<u64, u64> m_prevGpuResidentSensorPairs;
+    private HashMap<u64, u64> m_currGpuResidentSensorPairs;
+    private Vector<u32> m_pendingCpuWakeBodiesScratch;
     private f32 m_accumulator = 0.0f;
     private f32 m_interpolationAlpha = 1.0f;
     private WorldStepStats m_lastStepStats;
@@ -140,6 +150,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     private b8 m_publishContinuousEventsToMessageBus = false;
     private b8 m_cfgPublishEventsToMessageBus = false;
     private b8 m_cfgPublishContinuousEventsToMessageBus = false;
+    private b8 m_debugDrawEnabled = false;
+    private PhysicsDebugDrawOptions m_debugDrawOptions;
+    private PhysicsDebugDrawStats m_debugDrawStats;
+    private PhysicsDebugDrawScratch m_debugDrawScratch;
 
     public PhysicsSystem(mut World world){
         this.m_world = world;
@@ -179,6 +193,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         this.writeAccess<ForceFieldComponent>();
         this.writeAccess<ArticulationComponent>();
         this.writeAccess<SoftBodyComponent>();
+        this.writeAccess<FractureComponent>();
         this.writeAccess<GpuRenderTransformExportComponent>();
         this.writeAccess<SkeletonPoseComponent>();
         this.writeAccess<SkeletonJointPaletteComponent>();
@@ -221,6 +236,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         this.m_syncScratch.frameFluidSplashEvents.clear();
         this.m_syncScratch.frameSoftBodyConstraintTearEvents.clear();
         this.m_syncScratch.frameSoftBodyImpactEvents.clear();
+        this.m_syncScratch.frameFractureEvents.clear();
     }
 
     private void recordBrokenJointOwnersFromWorld(){
@@ -512,6 +528,8 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             world.postMessage(this.m_syncScratch.frameSoftBodyConstraintTearEvents[i]);
         for(usize i = 0u; i < this.m_syncScratch.frameSoftBodyImpactEvents.size(); ++i)
             world.postMessage(this.m_syncScratch.frameSoftBodyImpactEvents[i]);
+        for(usize i = 0u; i < this.m_syncScratch.frameFractureEvents.size(); ++i)
+            world.postMessage(this.m_syncScratch.frameFractureEvents[i]);
         if(this.publishContinuousEventsToMessageBus()){
             for(usize i = 0u; i < this.m_ecsBodyMoveEvents.size(); ++i)
                 world.postMessage(this.m_ecsBodyMoveEvents[i]);
@@ -568,6 +586,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             for(usize i = 0u; i < this.m_syncScratch.frameFluidSplashEvents.size(); ++i)
                 this.m_onFluidSplash.value()(this.m_syncScratch.frameFluidSplashEvents[i]);
         }
+        if(this.m_onFractureEvent.has_value()){
+            for(usize i = 0u; i < this.m_syncScratch.frameFractureEvents.size(); ++i)
+                this.m_onFractureEvent.value()(this.m_syncScratch.frameFractureEvents[i]);
+        }
     }
 
     public void setPublishEventsToMessageBus(in b8 enabled){ this.m_publishEventsToMessageBus = enabled; }
@@ -577,6 +599,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
 
     public mut PhysicsWorld physicsWorld(){ return this.m_physicsWorld; }
     public in PhysicsWorld physicsWorld()const{ return this.m_physicsWorld; }
+    public void setDebugDrawEnabled(in b8 enabled){ this.m_debugDrawEnabled = enabled; }
+    public b8 debugDrawEnabled()const{ return this.m_debugDrawEnabled; }
+    public void setDebugDrawOptions(in PhysicsDebugDrawOptions options){ this.m_debugDrawOptions = options; }
+    public in PhysicsDebugDrawOptions debugDrawOptions()const{ return this.m_debugDrawOptions; }
+    public in PhysicsDebugDrawStats lastDebugDrawStats()const{ return this.m_debugDrawStats; }
+    public b8 hasDebugLines()const override{ return this.m_debugDrawEnabled; }
+    [cpp_unwind]
+    public void collectDebugLines(mut GpuDebugLineCollector collector)override;
     public mut CsgShapeRegistry csgShapeRegistry(){ return this.m_csgShapeRegistry; }
     public in CsgShapeRegistry csgShapeRegistry()const{ return this.m_csgShapeRegistry; }
 
@@ -687,6 +717,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     public Span<EcsFluidSplashEvent> ecsFluidSplashEvents()const{ return this.m_syncScratch.frameFluidSplashEvents; }
     public Span<EcsSoftBodyConstraintTearEvent> ecsSoftBodyConstraintTearEvents()const{ return this.m_syncScratch.frameSoftBodyConstraintTearEvents; }
     public Span<EcsSoftBodyImpactEvent> ecsSoftBodyImpactEvents()const{ return this.m_syncScratch.frameSoftBodyImpactEvents; }
+    public Span<EcsFractureEvent> ecsFractureEvents()const{ return this.m_syncScratch.frameFractureEvents; }
 
     public void setAssetManager(mut AssetManager assetManager){
         this.m_assetManager = Optional<mut AssetManager>(assetManager);
@@ -748,6 +779,8 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
     public void clearOnVehicleEventCallback(){ this.m_onVehicleEvent.reset(); }
     public void setOnFluidSplashCallback(in EcsFluidSplashCallback cb){ this.m_onFluidSplash = cb; }
     public void clearOnFluidSplashCallback(){ this.m_onFluidSplash.reset(); }
+    public void setOnFractureEventCallback(in EcsFractureEventCallback cb){ this.m_onFractureEvent = cb; }
+    public void clearOnFractureEventCallback(){ this.m_onFractureEvent.reset(); }
 
     public void clearEventCallbacks(){
         this.m_onContactBegin.reset();
@@ -759,6 +792,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         this.m_onCharacterEvent.reset();
         this.m_onVehicleEvent.reset();
         this.m_onFluidSplash.reset();
+        this.m_onFractureEvent.reset();
     }
 
     public EntityID entityForBody(in BodyId bodyId)const{
@@ -2009,6 +2043,90 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         this.m_pendingSingleStep = true;
     }
 
+    public void shiftOrigin(mut World world, in VectorDouble delta){
+        if(!IsFinite(delta))
+            return;
+        if(delta.x == 0.0 && delta.y == 0.0 && delta.z == 0.0)
+            return;
+
+        this.m_physicsWorld.shiftOrigin(delta);
+        const VectorSingle negDelta(cast<f32>(-delta.x), cast<f32>(-delta.y), cast<f32>(-delta.z), 0.0f);
+        this.m_environmentScratch.shiftOrigin(negDelta);
+
+        world.view<TransformComponent>().each(
+            lambda[in negDelta, mut world](in EntityID entity, mut TransformComponent xf) -> void{
+                xf.position = f32x4(VectorSingle(xf.position) + negDelta, 0.0f);
+                if(EntityUsesLocalHierarchyTransform(world, entity)){
+                    const Optional<mut LocalTransformComponent> localOpt = world.borrowComponent<LocalTransformComponent>(entity);
+                    if(localOpt.has_value()){
+                        EntityID parent = s_InvalidEntityId;
+                        b8 inheritScale = true;
+                        if(!TryGetPhysicsOrSceneParent(world, entity, parent, inheritScale) || !parent.valid() || parent == entity || !world.alive(parent) || !world.hasComponent<TransformComponent>(parent))
+                            localOpt.value().position = f32x4(VectorSingle(localOpt.value().position) + negDelta, 0.0f);
+                    }
+                }
+            }
+        );
+
+        world.view<CharacterControllerComponent>().each(
+            lambda[in negDelta](in EntityID entity, mut CharacterControllerComponent cc) -> void{
+                cc.controller.shiftOrigin(negDelta);
+            }
+        );
+        world.view<VehicleComponent>().each(
+            lambda[in negDelta](in EntityID entity, mut VehicleComponent vc) -> void{
+                vc.controller.shiftOrigin(negDelta);
+            }
+        );
+        world.view<RagdollComponent>().each(
+            lambda[in negDelta](in EntityID entity, mut RagdollComponent rc) -> void{
+                rc.instance.shiftOrigin(negDelta);
+            }
+        );
+        world.view<ArticulationComponent>().each(
+            lambda[in negDelta](in EntityID entity, mut ArticulationComponent ac) -> void{
+                ac.articulation.shiftOrigin(negDelta);
+            }
+        );
+        world.view<SoftBodyComponent>().each(
+            lambda[in negDelta](in EntityID entity, mut SoftBodyComponent sb) -> void{
+                sb.softBody.shiftOrigin(negDelta);
+            }
+        );
+        world.view<FractureComponent>().each(
+            lambda[in negDelta](in EntityID entity, mut FractureComponent fc) -> void{
+                fc.cluster.shiftOrigin(negDelta);
+            }
+        );
+
+        for(usize i = 0u; i < this.m_bodyTransformSnapshots.size(); ++i){
+            mut EcsBodyTransformSnapshot snap = this.m_bodyTransformSnapshots[i];
+            snap.prevTransform.position = f32x4(VectorSingle(snap.prevTransform.position) + negDelta, 0.0f);
+            snap.currTransform.position = f32x4(VectorSingle(snap.currTransform.position) + negDelta, 0.0f);
+        }
+        for(in auto kv : this.m_syncScratch.characterSyncStates){
+            mut EcsCharacterControllerSyncState cs = this.m_syncScratch.characterSyncStates.at(kv.first);
+            cs.prevPosition = f32x4(VectorSingle(cs.prevPosition) + negDelta, 0.0f);
+            cs.currPosition = f32x4(VectorSingle(cs.currPosition) + negDelta, 0.0f);
+        }
+        for(in auto kv : this.m_syncScratch.articulationLiveStates){
+            mut EcsArticulationLiveState ls = this.m_syncScratch.articulationLiveStates.at(kv.first);
+            ls.prevBaseTransform.position = f32x4(VectorSingle(ls.prevBaseTransform.position) + negDelta, 0.0f);
+            ls.currBaseTransform.position = f32x4(VectorSingle(ls.currBaseTransform.position) + negDelta, 0.0f);
+            for(usize li = 0u; li < ls.prevLinkWorldTransforms.size(); ++li)
+                ls.prevLinkWorldTransforms[li].position = f32x4(VectorSingle(ls.prevLinkWorldTransforms[li].position) + negDelta, 0.0f);
+            for(usize li = 0u; li < ls.currLinkWorldTransforms.size(); ++li)
+                ls.currLinkWorldTransforms[li].position = f32x4(VectorSingle(ls.currLinkWorldTransforms[li].position) + negDelta, 0.0f);
+        }
+        for(usize i = 0u; i < this.m_syncScratch.ecsFluidImmersionState.size(); ++i)
+            this.m_syncScratch.ecsFluidImmersionState[i].lastPoint = f32x4(VectorSingle(this.m_syncScratch.ecsFluidImmersionState[i].lastPoint) + negDelta, 0.0f);
+        this.m_syncScratch.writeBackPoseCache.clear();
+    }
+
+    public void shiftOrigin(in VectorDouble delta){
+        this.shiftOrigin(this.m_world, delta);
+    }
+
     public b8 captureWorldSnapshot(mut Vector<u8> outBytes){
         this.syncGpuResidentToWorld();
         PhysicsSubsystemsBundle bundle;
@@ -2053,6 +2171,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             const Optional<mut ArticulationComponent> acOpt = this.m_world.borrowComponent<ArticulationComponent>(sortedIds[i]);
             if(acOpt.has_value())
                 bundle.articulations.push_back(acOpt.value().articulation);
+        }
+
+        CollectSortedEntities<FractureComponent>(this.m_world, sortedIds);
+        bundle.fractureClusters.reserve(sortedIds.size());
+        for(usize i = 0u; i < sortedIds.size(); ++i){
+            const Optional<mut FractureComponent> fcOpt = this.m_world.borrowComponent<FractureComponent>(sortedIds[i]);
+            if(fcOpt.has_value())
+                bundle.fractureClusters.push_back(fcOpt.value().cluster);
         }
 
         return SerializeFullPhysicsSnapshot(this.m_physicsWorld, bundle, outBytes);
@@ -2321,6 +2447,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         Vector<EntityID> sortedIds;
 
         this.m_activeRagdolls.clear();
+        this.m_activeFractures.clear();
         CollectSortedEntities<RagdollComponent>(this.m_world, sortedIds);
         for(usize ri = 0u; ri < sortedIds.size(); ++ri){
             const EntityID entity = sortedIds[ri];
@@ -2456,6 +2583,49 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                 EcsSoftBodySyncState sbSync;
                 sbSync.transformApplied = !sb.softBody.particles.empty();
                 this.m_syncScratch.softBodySyncStates.insert_or_assign(entity, sbSync);
+            }
+        }
+
+        CollectSortedEntities<FractureComponent>(this.m_world, sortedIds);
+        for(usize fi = 0u; fi < sortedIds.size(); ++fi){
+            const EntityID entity = sortedIds[fi];
+            const Optional<mut FractureComponent> fcOpt = this.m_world.borrowComponent<FractureComponent>(entity);
+            if(!fcOpt.has_value())
+                continue;
+            mut FractureComponent fc = fcOpt.value();
+            b8 fractureValid = (fi < bundle.fractureClusters.size()) && !bundle.fractureClusters[fi].chunks.empty();
+            if(fractureValid){
+                in FractureClusterBody cand = bundle.fractureClusters[fi];
+                b8 anyLiveBody = cand.rootBodyId.valid() && this.m_physicsWorld.isValidBody(cand.rootBodyId);
+                if(!anyLiveBody){
+                    for(usize di = 0u; di < cand.detachedBodies.size(); ++di){
+                        if(cand.detachedBodies[di].valid() && this.m_physicsWorld.isValidBody(cand.detachedBodies[di])){
+                            anyLiveBody = true;
+                            break;
+                        }
+                    }
+                }
+                fractureValid = anyLiveBody;
+            }
+            if(fractureValid){
+                fc.cluster = bundle.fractureClusters[fi];
+                fc.initialized = true;
+                fc.dirty = false;
+                EcsTrackedFracture tracked;
+                RegisterTrackedFractureSlots(
+                    entity,
+                    fc.cluster,
+                    this.m_physicsWorld,
+                    this.m_bodyIndexToEntity,
+                    this.m_shapeIndexToEntity,
+                    tracked
+                );
+                this.m_activeFractures.insert_or_assign(entity, tracked);
+            }
+            else{
+                fc.cluster.clear();
+                fc.initialized = false;
+                fc.dirty = true;
             }
         }
 
@@ -2609,6 +2779,36 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         return this.m_gpuDispatcher.dispatchBatchSpatialQueries(this.m_physicsWorld, queries, outResults);
     }
 
+    public b8 castShapeBatchGpu(
+        in Span<ShapeProxy> queryProxies,
+        in Span<ShapeCastInput> inputs,
+        mut Vector<GpuPhysicsSpatialQueryResult> outResults
+    ){
+        return this.m_gpuDispatcher.castShapeBatchGpu(this.m_physicsWorld, queryProxies, inputs, outResults);
+    }
+
+    public b8 overlapShapeBatchGpu(
+        in Span<ShapeProxy> queryProxies,
+        in Span<Transform3D> queryTransforms,
+        in Filter filter,
+        in b8 hitSensors,
+        mut Vector<GpuPhysicsSpatialQueryResult> outResults,
+        mut Vector<GpuPhysicsSpatialQueryResult> outMultiHits,
+        in u32 maxHitsPerQuery
+    ){
+        return this.m_gpuDispatcher.overlapShapeBatchGpu(this.m_physicsWorld, queryProxies, queryTransforms, filter, hitSensors, outResults, outMultiHits, maxHitsPerQuery);
+    }
+
+    public b8 overlapShapeBatchGpu(
+        in Span<ShapeProxy> queryProxies,
+        in Span<Transform3D> queryTransforms,
+        in Filter filter,
+        in b8 hitSensors,
+        mut Vector<GpuPhysicsSpatialQueryResult> outResults
+    ){
+        return this.m_gpuDispatcher.overlapShapeBatchGpu(this.m_physicsWorld, queryProxies, queryTransforms, filter, hitSensors, outResults);
+    }
+
     public b8 stepGpuResidentBodies(in f32 dt, in u32 subStepCount, in b8 readbackToWorld){
         const b8 ok = this.m_gpuDispatcher.stepGpuResidentBodies(this.m_physicsWorld, dt, subStepCount, readbackToWorld);
         if(ok){
@@ -2627,6 +2827,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         this.m_entityRecords.clear();
         this.m_entityJoints.clear();
         this.m_activeRagdolls.clear();
+        this.m_activeFractures.clear();
         this.m_environmentScratch = PhysicsEnvironment();
         this.m_bodyTransformSnapshots.clear();
         this.m_bodyTransformSnapshotMeta.clear();
@@ -2639,6 +2840,12 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         this.m_syncScratch = EcsPhysicsSyncScratch();
         ReleaseEcsPhysicsAssetCache(this.m_assetCache, this.m_physicsWorld, false);
         this.m_exportBindingsScratch.clear();
+        this.m_gpuResidentEventsScratch.clear();
+        this.m_prevGpuResidentContactPairs.clear();
+        this.m_currGpuResidentContactPairs.clear();
+        this.m_prevGpuResidentSensorPairs.clear();
+        this.m_currGpuResidentSensorPairs.clear();
+        this.m_pendingCpuWakeBodiesScratch.clear();
         this.clearFrameEvents();
         this.m_publishEventsToMessageBus = false;
         this.m_publishContinuousEventsToMessageBus = false;
@@ -2737,8 +2944,8 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         const u32 bodyCount = this.m_physicsWorld.activeBodyCount();
         const u32 exportCount = cast<u32>(this.m_world.view<GpuRenderTransformExportComponent>().candidateCount());
         const u32 recordCount = cast<u32>(this.m_entityRecords.size());
-        const u32 maxBindings = Max(Max(bodyCount, exportCount), recordCount);
-        return this.m_gpuDispatcher.prepareRenderExportCapacity(maxBindings);
+        const u32 estimatedBindings = Max(Max(bodyCount, exportCount), recordCount);
+        return this.m_gpuDispatcher.beginRenderExportFrame(estimatedBindings * 12u, estimatedBindings * 6u);
     }
 
     [cpp_unwind]
@@ -2747,6 +2954,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         in Span<u32> instanceEntityIds,
         mut GpuTaskGraph graph
     )override{
+        u32 exportMode = s_GpuExportModePatchInstanceBuffer;
+        if(request.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld)
+            exportMode = s_GpuExportModePatchAffine3x4ObjToWorld;
+        else if(request.layout == GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject)
+            exportMode = s_GpuExportModePatchAffine3x4WorldToObj;
+        else if(request.layout != GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs)
+            return MakeUnexpected(Failure());
+
         const b8 hasAnyPhysicsParents = AnyPhysicsHierarchyActive(this.m_world);
         if(hasAnyPhysicsParents)
             this.m_syncScratch.writeBackPoseCache.clear();
@@ -2774,8 +2989,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             request.instanceBufferResource,
             request.instanceBufferUavSlot,
             request.instanceStrideFloat4,
+            exportMode,
+            request.baseFloat4Offset,
             request.passIdentityPrefix,
             request.mergeWithPrevious,
+            request.allowMergeAcrossConsumerFrontier,
             request.dependency,
             outTaskId
         ))
@@ -2789,8 +3007,11 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         in GpuGraphResourceId targetResource,
         in u32 targetUavSlot,
         in u32 instanceStrideFloat4,
+        in u32 exportMode,
+        in u32 baseFloat4Offset,
         in Name passIdentityPrefix,
         in b8 mergeWithPrevious,
+        in b8 allowMergeAcrossConsumerFrontier,
         in GpuTaskId dependency,
         mut GpuTaskId outTaskId
     ){
@@ -2802,11 +3023,216 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             targetResource,
             targetUavSlot,
             instanceStrideFloat4,
+            exportMode,
+            baseFloat4Offset,
             passIdentityPrefix,
             mergeWithPrevious,
+            allowMergeAcrossConsumerFrontier,
             dependency,
             outTaskId
         );
+    }
+
+    private void processGpuResidentStepEvents(mut World world){
+        this.m_physicsWorld.m_inStep = true;
+        this.m_physicsWorld.m_bodyMoveEvents.clear();
+        this.m_physicsWorld.m_contactBeginEvents.clear();
+        this.m_physicsWorld.m_contactEndEvents.clear();
+        this.m_physicsWorld.m_contactPersistEvents.clear();
+        this.m_physicsWorld.m_contactHitEvents.clear();
+        this.m_physicsWorld.m_sensorBeginEvents.clear();
+        this.m_physicsWorld.m_sensorEndEvents.clear();
+        this.m_physicsWorld.m_sensorStayEvents.clear();
+        this.m_physicsWorld.m_bodyWakeEvents.clear();
+        this.m_physicsWorld.consumePendingEndEvents(this.m_physicsWorld.m_contactEndEvents, this.m_physicsWorld.m_sensorEndEvents);
+        this.m_physicsWorld.consumePendingWakeEvents(this.m_physicsWorld.m_bodyWakeEvents);
+        this.m_physicsWorld.m_jointBreakEvents.clear();
+
+        this.m_currGpuResidentContactPairs.clear();
+        this.m_currGpuResidentSensorPairs.clear();
+        this.m_pendingCpuWakeBodiesScratch.clear();
+
+        b8 needsCpuFallbackSync = false;
+        for(usize ei = 0u; ei < this.m_gpuResidentEventsScratch.size(); ++ei){
+            in GpuPhysicsEvent ev = this.m_gpuResidentEventsScratch[ei];
+            const u32 evType = ev.header.x;
+            if(evType == s_GpuEventContactActive){
+                const u32 sA = ev.header.y;
+                const u32 sB = ev.header.z;
+                u32 loS = sA;
+                u32 hiS = sB;
+                if(sB < sA){
+                    loS = sB;
+                    hiS = sA;
+                }
+                const u64 pairKey = (cast<u64>(loS) << 32u) | cast<u64>(hiS);
+                const u64 bodiesVal = (cast<u64>(ev.bodyIds.x) << 32u) | cast<u64>(ev.bodyIds.y);
+                this.m_currGpuResidentContactPairs.insert_or_assign(pairKey, bodiesVal);
+            }
+            else if(evType == s_GpuEventSensorOverlap){
+                const u32 sA = ev.header.y;
+                const u32 sB = ev.header.z;
+                u32 sensorId = sA;
+                u32 visitorId = sB;
+                const b8 aIsSensor = (sensorId < this.m_physicsWorld.m_shapes.size() && this.m_physicsWorld.m_shapes[sensorId].isSensor());
+                const b8 bIsSensor = (visitorId < this.m_physicsWorld.m_shapes.size() && this.m_physicsWorld.m_shapes[visitorId].isSensor());
+                if(!aIsSensor && bIsSensor){
+                    sensorId = sB;
+                    visitorId = sA;
+                }
+                else if(aIsSensor && bIsSensor && sB < sA){
+                    sensorId = sB;
+                    visitorId = sA;
+                }
+                const u64 pairKey = (cast<u64>(sensorId) << 32u) | cast<u64>(visitorId);
+                const u64 bodiesVal = (cast<u64>(ev.bodyIds.x) << 32u) | cast<u64>(ev.bodyIds.y);
+                this.m_currGpuResidentSensorPairs.insert_or_assign(pairKey, bodiesVal);
+            }
+            else if(evType == s_GpuEventContactHit){
+                ContactHitEvent hitEv;
+                hitEv.shapeIdA = this.m_physicsWorld.makeShapeId(ev.header.y);
+                hitEv.shapeIdB = this.m_physicsWorld.makeShapeId(ev.header.z);
+                hitEv.point = ev.pointImpulse;
+                hitEv.normalApproachSpeed = ev.normalApproach;
+                this.m_physicsWorld.m_contactHitEvents.push_back(hitEv);
+            }
+            else if(evType == s_GpuEventJointBreak){
+                const u32 jIdx = ev.header.y;
+                if(jIdx < this.m_physicsWorld.m_joints.size() && this.m_physicsWorld.m_joints[jIdx].alive()){
+                    in Joint jRef = this.m_physicsWorld.m_joints[jIdx];
+                    JointBreakEvent jbEv;
+                    jbEv.jointId = this.m_physicsWorld.makeJointId(jIdx);
+                    jbEv.bodyIdA = this.m_physicsWorld.makeBodyId(jRef.edges[0u].bodyId);
+                    jbEv.bodyIdB = this.m_physicsWorld.makeBodyId(jRef.edges[1u].bodyId);
+                    jbEv.userData = jRef.userData;
+                    jbEv.peakForce = ev.pointImpulse.w;
+                    jbEv.peakTorque = ev.normalApproach.w;
+                    this.m_physicsWorld.m_jointBreakEvents.push_back(jbEv);
+                    this.m_physicsWorld.destroyJointInternal(jIdx);
+                }
+            }
+            else if(evType == s_GpuEventBodySleep){
+                const u32 bodyId = this.m_gpuDispatcher.residentBodyIdAtSlot(ev.header.y);
+                if(bodyId < this.m_physicsWorld.m_bodies.size() && this.m_physicsWorld.m_bodies[bodyId].alive){
+                    BodyWakeEvent sleepEv;
+                    sleepEv.bodyId = this.m_physicsWorld.makeBodyId(bodyId);
+                    sleepEv.userData = this.m_physicsWorld.m_bodies[bodyId].userData;
+                    sleepEv.awake = false;
+                    this.m_physicsWorld.m_bodyWakeEvents.push_back(sleepEv);
+                }
+            }
+            else if(evType == s_GpuEventBodyWake){
+                if((ev.header.w & s_GpuEventFlagCpuSleepWake) != 0u){
+                    this.m_pendingCpuWakeBodiesScratch.push_back(ev.header.y);
+                }
+                else{
+                    const u32 bodyId = this.m_gpuDispatcher.residentBodyIdAtSlot(ev.header.y);
+                    if(bodyId < this.m_physicsWorld.m_bodies.size() && this.m_physicsWorld.m_bodies[bodyId].alive){
+                        BodyWakeEvent wakeEv;
+                        wakeEv.bodyId = this.m_physicsWorld.makeBodyId(bodyId);
+                        wakeEv.userData = this.m_physicsWorld.m_bodies[bodyId].userData;
+                        wakeEv.awake = true;
+                        this.m_physicsWorld.m_bodyWakeEvents.push_back(wakeEv);
+                    }
+                }
+            }
+            else if(evType == s_GpuEventFluidSplash){
+                FluidSplashEvent fsEv;
+                fsEv.type = cast<FluidSplashEventType>(ev.header.w & 3u);
+                const u32 bodyId = this.m_gpuDispatcher.residentBodyIdAtSlot(ev.header.y);
+                if(bodyId < this.m_physicsWorld.m_bodies.size())
+                    fsEv.bodyId = this.m_physicsWorld.makeBodyId(bodyId);
+                fsEv.fluidIndex = ev.header.z;
+                fsEv.submergedFraction = ev.pointImpulse.w;
+                fsEv.impactSpeed = ev.normalApproach.w;
+                fsEv.point = f32x4(ev.pointImpulse.x, ev.pointImpulse.y, ev.pointImpulse.z, 0.0f);
+                fsEv.normal = f32x4(ev.normalApproach.x, ev.normalApproach.y, ev.normalApproach.z, 0.0f);
+                EcsFluidSplashEvent ecsSplash;
+                ecsSplash.bodyEntity = this.resolveEcsEventBodyEntity(fsEv.bodyId, true);
+                if(cast<usize>(fsEv.fluidIndex) < this.m_syncScratch.envFluidEntitiesScratch.size())
+                    ecsSplash.fluidEntity = this.m_syncScratch.envFluidEntitiesScratch[cast<usize>(fsEv.fluidIndex)];
+                ecsSplash.event = fsEv;
+                this.m_syncScratch.frameFluidSplashEvents.push_back(ecsSplash);
+            }
+            else if(evType == s_GpuEventCpuFallback){
+                needsCpuFallbackSync = true;
+            }
+        }
+
+        for(in auto kv : this.m_currGpuResidentContactPairs){
+            const u64 k = kv.first;
+            const u32 loS = cast<u32>((k >> 32u) & 0xffffffffu);
+            const u32 hiS = cast<u32>(k & 0xffffffffu);
+            if(this.m_prevGpuResidentContactPairs.find(k) == this.m_prevGpuResidentContactPairs.end()){
+                ContactBeginTouchEvent ev;
+                ev.shapeIdA = this.m_physicsWorld.makeShapeId(loS);
+                ev.shapeIdB = this.m_physicsWorld.makeShapeId(hiS);
+                this.m_physicsWorld.m_contactBeginEvents.push_back(ev);
+            }
+            else{
+                ContactPersistEvent ev;
+                ev.shapeIdA = this.m_physicsWorld.makeShapeId(loS);
+                ev.shapeIdB = this.m_physicsWorld.makeShapeId(hiS);
+                this.m_physicsWorld.m_contactPersistEvents.push_back(ev);
+            }
+        }
+        for(in auto kv : this.m_prevGpuResidentContactPairs){
+            const u64 k = kv.first;
+            if(this.m_currGpuResidentContactPairs.find(k) == this.m_currGpuResidentContactPairs.end()){
+                const u32 loS = cast<u32>((k >> 32u) & 0xffffffffu);
+                const u32 hiS = cast<u32>(k & 0xffffffffu);
+                ContactEndTouchEvent ev;
+                ev.shapeIdA = this.m_physicsWorld.makeShapeId(loS);
+                ev.shapeIdB = this.m_physicsWorld.makeShapeId(hiS);
+                this.m_physicsWorld.m_contactEndEvents.push_back(ev);
+            }
+        }
+        this.m_prevGpuResidentContactPairs.clear();
+        for(in auto kv : this.m_currGpuResidentContactPairs)
+            this.m_prevGpuResidentContactPairs.insert_or_assign(kv.first, kv.second);
+
+        for(in auto kv : this.m_currGpuResidentSensorPairs){
+            const u64 k = kv.first;
+            const u32 sId = cast<u32>((k >> 32u) & 0xffffffffu);
+            const u32 vId = cast<u32>(k & 0xffffffffu);
+            if(this.m_prevGpuResidentSensorPairs.find(k) == this.m_prevGpuResidentSensorPairs.end()){
+                SensorBeginTouchEvent ev;
+                ev.sensorShapeId = this.m_physicsWorld.makeShapeId(sId);
+                ev.visitorShapeId = this.m_physicsWorld.makeShapeId(vId);
+                this.m_physicsWorld.m_sensorBeginEvents.push_back(ev);
+            }
+            else{
+                SensorStayEvent ev;
+                ev.sensorShapeId = this.m_physicsWorld.makeShapeId(sId);
+                ev.visitorShapeId = this.m_physicsWorld.makeShapeId(vId);
+                this.m_physicsWorld.m_sensorStayEvents.push_back(ev);
+            }
+        }
+        for(in auto kv : this.m_prevGpuResidentSensorPairs){
+            const u64 k = kv.first;
+            if(this.m_currGpuResidentSensorPairs.find(k) == this.m_currGpuResidentSensorPairs.end()){
+                const u32 sId = cast<u32>((k >> 32u) & 0xffffffffu);
+                const u32 vId = cast<u32>(k & 0xffffffffu);
+                SensorEndTouchEvent ev;
+                ev.sensorShapeId = this.m_physicsWorld.makeShapeId(sId);
+                ev.visitorShapeId = this.m_physicsWorld.makeShapeId(vId);
+                this.m_physicsWorld.m_sensorEndEvents.push_back(ev);
+            }
+        }
+        this.m_prevGpuResidentSensorPairs.clear();
+        for(in auto kv : this.m_currGpuResidentSensorPairs)
+            this.m_prevGpuResidentSensorPairs.insert_or_assign(kv.first, kv.second);
+
+        this.m_physicsWorld.m_inStep = false;
+        if(!this.m_pendingCpuWakeBodiesScratch.empty() || needsCpuFallbackSync){
+            this.syncGpuResidentToWorld();
+            for(usize wi = 0u; wi < this.m_pendingCpuWakeBodiesScratch.size(); ++wi){
+                const u32 wakeBodyId = this.m_pendingCpuWakeBodiesScratch[wi];
+                if(wakeBodyId < this.m_physicsWorld.m_bodies.size() && this.m_physicsWorld.m_bodies[wakeBodyId].alive)
+                    this.m_physicsWorld.wakeBody(this.m_physicsWorld.makeBodyId(wakeBodyId));
+            }
+            this.m_physicsWorld.m_pendingBodyWakeEvents.clear();
+        }
     }
 
     public b8 readbackGpuResidentEvents(mut Vector<GpuPhysicsEvent> outEvents){
@@ -2821,9 +3247,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         mut SoftBody softBody,
         in Optional<in PhysicsEnvironment> env,
         in f32 dt,
-        in b8 readbackToSoftBody
+        in b8 readbackToSoftBody,
+        in Optional<in SoftBodyGpuDeformTarget> deformTarget
     ){
-        return this.m_gpuDispatcher.stepSoftBodyGpu(softBody, this.m_physicsWorld, env, dt, readbackToSoftBody);
+        return this.m_gpuDispatcher.stepSoftBodyGpu(softBody, this.m_physicsWorld, env, dt, readbackToSoftBody, deformTarget);
     }
 
     public b8 applyEnvironmentGpu(in PhysicsEnvironment env, in f32 dt){
@@ -2836,9 +3263,32 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         in f32 impulse,
         in f32 upwardBias,
         in f32 falloffPower,
-        in b8 readbackToWorld
+        in b8 readbackToWorld,
+        in Filter filter
     ){
-        return this.m_gpuDispatcher.applyExplosionGpu(this.m_physicsWorld, origin, radius, impulse, upwardBias, falloffPower, readbackToWorld);
+        return this.m_gpuDispatcher.applyExplosionGpu(this.m_physicsWorld, origin, radius, impulse, upwardBias, falloffPower, readbackToWorld, filter);
+    }
+
+    public b8 applyExplosion(in ExplosionDef def){
+        if(def.radius <= 0.0f)
+            return true;
+        const b8 canUseGpu =
+            (this.m_gpuDispatcher.isGpuResidentDirtyCpu()
+                || (this.m_physicsWorld.m_def.gpuResidentMode && this.m_physicsWorld.m_backendMode != PhysicsBackendMode::CpuOnly))
+            && !def.checkOcclusion
+            && this.m_gpuDispatcher.isReady()
+        ;
+        if(canUseGpu){
+            Filter f;
+            if(def.useCustomFilter)
+                f = def.filter;
+            if(this.m_gpuDispatcher.applyExplosionGpu(this.m_physicsWorld, VectorSingle(def.position), def.radius, def.impulsePerLength, 0.0f, def.falloff, false, f))
+                return true;
+        }
+        if(this.m_gpuDispatcher.isGpuResidentDirtyCpu())
+            this.syncGpuResidentToWorld();
+        this.m_physicsWorld.explode(def);
+        return true;
     }
 
     public void setActiveSceneSubsystems(in ActiveSceneSubsystemsRef subsystems){
@@ -2928,6 +3378,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             this.m_jointIndexToEntity,
             this.m_syncScratch.deadRagdolls
         );
+        PruneRemovedEcsFractures(
+            world,
+            this.m_physicsWorld,
+            this.m_activeFractures,
+            this.m_bodyIndexToEntity,
+            this.m_shapeIndexToEntity,
+            this.m_syncScratch.deadRagdolls
+        );
 
         const b8 runSingleStep = this.m_pendingSingleStep;
         this.m_pendingSingleStep = false;
@@ -2977,16 +3435,23 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
         }
 
         const b8 useCollectedEnv = plannedSteps > 1u;
-        if(useCollectedEnv){
-            if(hasDrivenKinematic)
-                SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_syncScratch.kinematicTargets);
-            CollectEcsPhysicsEnvironment(hasAnyPhysicsParents, this.m_collisionLayerMatrix, world, this.m_syncScratch.writeBackPoseCache, this.m_environmentScratch, this.m_syncScratch.envFluidEntitiesScratch);
+        const auto fluidCheckView = world.view<FluidVolumeComponent>();
+        const auto fieldCheckView = world.view<ForceFieldComponent>();
+        const b8 hasAnyEnvEntities = fluidCheckView.candidateCount() > 0u || fieldCheckView.candidateCount() > 0u;
+        b8 allFluidsGpuSupported = true;
+        if(fluidCheckView.candidateCount() > 0u){
+            fluidCheckView.each(
+                lambda[mut allFluidsGpuSupported](in EntityID ent, in FluidVolumeComponent fvc) -> void{
+                    if(fvc.enabled && fvc.volume.enabled && !IsGpuSupportedFluidVolume(fvc.volume))
+                        allFluidsGpuSupported = false;
+                }
+            );
         }
 
         const b8 gpuResidentEligible =
             this.m_physicsWorld.m_def.gpuResidentMode
             && this.m_physicsWorld.m_backendMode != PhysicsBackendMode::CpuOnly
-            && this.m_physicsWorld.activeJointCount() == 0u
+            && allFluidsGpuSupported
             && !hasDrivenKinematic
             && !hasAnyPhysicsParents
             && !interpolateTransforms
@@ -2995,11 +3460,21 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
             && world.view<ArticulationComponent>().candidateCount() == 0u
             && world.view<RagdollComponent>().candidateCount() == 0u
             && world.view<SoftBodyComponent>().candidateCount() == 0u
-            && world.view<FluidVolumeComponent>().candidateCount() == 0u
-            && world.view<ForceFieldComponent>().candidateCount() == 0u
+            && world.view<FractureComponent>().candidateCount() == 0u
         ;
-        if(!gpuResidentEligible && this.m_gpuDispatcher.isGpuResidentDirtyCpu())
-            this.syncGpuResidentToWorld();
+        if(useCollectedEnv || (gpuResidentEligible && hasAnyEnvEntities)){
+            if(useCollectedEnv && hasDrivenKinematic)
+                SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_syncScratch.kinematicTargets);
+            CollectEcsPhysicsEnvironment(hasAnyPhysicsParents, this.m_collisionLayerMatrix, world, this.m_syncScratch.writeBackPoseCache, this.m_environmentScratch, this.m_syncScratch.envFluidEntitiesScratch);
+        }
+        const b8 gpuResidentActive = gpuResidentEligible && this.m_gpuDispatcher.isReady();
+        const Optional<mut SoftBodyMeshSystem> softBodyMeshSystem = world.borrowSystem<SoftBodyMeshSystem>();
+        if(!gpuResidentEligible){
+            this.m_prevGpuResidentContactPairs.clear();
+            this.m_prevGpuResidentSensorPairs.clear();
+            if(this.m_gpuDispatcher.isGpuResidentDirtyCpu())
+                this.syncGpuResidentToWorld();
+        }
 
         mut CpuTaskScheduler scheduler = world.taskScheduler();
         b8 usedGpuResidentNoReadback = false;
@@ -3035,26 +3510,53 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                 this.m_jointIndexToEntity,
                 fixedDt,
                 useCollectedEnv,
+                gpuResidentActive,
                 writeBackCharacters,
                 hasAnyPhysicsParents,
                 isFinalStep,
                 this.m_environmentScratch,
                 this.m_activeRagdolls,
+                this.m_activeFractures,
                 this.m_syncScratch,
-                scheduler
+                scheduler,
+                this.m_gpuDispatcher,
+                softBodyMeshSystem
             );
 
             const Timer stepStart = TimerNow();
-            if(gpuResidentEligible && this.m_gpuDispatcher.stepGpuResidentBodies(this.m_physicsWorld, fixedDt, subStepCount, false)){
+            b8 gpuEnvOk = true;
+            if(gpuResidentActive && (!this.m_environmentScratch.fluids.empty() || !this.m_environmentScratch.forceFields.empty())){
+                gpuEnvOk = this.m_gpuDispatcher.applyEnvironmentGpu(this.m_physicsWorld, this.m_environmentScratch, fixedDt);
+                if(gpuEnvOk)
+                    this.m_environmentScratch.elapsedTimeSec += fixedDt;
+            }
+            if(gpuResidentActive && gpuEnvOk && this.m_gpuDispatcher.stepGpuResidentBodies(this.m_physicsWorld, fixedDt, subStepCount, false)){
                 usedGpuResidentNoReadback = true;
+                this.m_gpuDispatcher.stepGpuBulletToiResident(this.m_physicsWorld, fixedDt);
+                if(this.m_gpuDispatcher.readbackGpuResidentEvents(this.m_physicsWorld, this.m_gpuResidentEventsScratch))
+                    this.processGpuResidentStepEvents(world);
             }
             else{
                 usedGpuResidentNoReadback = false;
                 if(this.m_gpuDispatcher.isGpuResidentDirtyCpu())
                     this.m_gpuDispatcher.syncGpuResidentToWorld(this.m_physicsWorld);
+                if(gpuResidentActive && !gpuEnvOk){
+                    this.m_environmentScratch.elapsedTimeSec += fixedDt;
+                    for(usize fi = 0u; fi < this.m_environmentScratch.forceFields.size(); ++fi)
+                        ApplyForceFieldWithScheduler(this.m_physicsWorld, this.m_environmentScratch.forceFields[fi], this.m_environmentScratch.elapsedTimeSec, fixedDt, scheduler);
+                }
                 StepWorldWithGpu(this.m_physicsWorld, this.m_gpuDispatcher, fixedDt, subStepCount, scheduler);
             }
             this.m_lastStepMs = DurationInMS<f64>(TimerNow(), stepStart);
+
+            ProcessEcsFracturePostStepHits(
+                world,
+                this.m_physicsWorld,
+                this.m_bodyIndexToEntity,
+                this.m_shapeIndexToEntity,
+                this.m_activeFractures,
+                this.m_syncScratch
+            );
 
             this.recordBrokenJointOwnersFromWorld();
             if(plannedSteps == 1u)
@@ -3138,6 +3640,16 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor{
                     interpolateTransforms,
                     this.m_interpolationAlpha,
                     true,
+                    hasAnyPhysicsParents,
+                    world,
+                    this.m_syncScratch
+                );
+                WriteBackEcsFracturePoses(
+                    this.m_physicsWorld,
+                    this.m_bodyTransformSnapshots,
+                    this.m_bodyTransformSnapshotMeta,
+                    interpolateTransforms,
+                    this.m_interpolationAlpha,
                     hasAnyPhysicsParents,
                     world,
                     this.m_syncScratch

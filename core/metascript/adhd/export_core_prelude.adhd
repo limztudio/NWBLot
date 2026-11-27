@@ -164,6 +164,7 @@
 #include <core/task/gpu/compiler_frontier_validator.adhd>
 #include <core/task/gpu/compiler_internal.adhd>
 #include <core/task/gpu/compiler_ownership_validator.adhd>
+#include <core/task/gpu/debug_line_contributor.adhd>
 #include <core/task/gpu/dependency_pair_hash.adhd>
 #include <core/task/gpu/frame_timing_begin_task.adhd>
 #include <core/task/gpu/inferred_dependency_collector.adhd>

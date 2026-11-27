@@ -392,7 +392,7 @@ b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceM
         const usize capacity = NextGrowingCapacity(this.m_state.m_sceneInstanceCapacity, instanceCount, s_SceneBvhInitialInstanceCapacity);
 
         BufferDesc instanceBufferDesc;
-        instanceBufferDesc.setByteSize(cast<u64>(size_of<SceneSwBvhInstanceGpu>() * capacity)).setStructStride(size_of<SceneSwBvhInstanceGpu>())
+        instanceBufferDesc.setByteSize(cast<u64>(size_of<SceneSwBvhInstanceGpu>() * capacity)).setStructStride(size_of<SceneSwBvhInstanceGpu>()).setCanHaveUAVs(true)
             .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(Name(s_RenderNameSceneBvhInstances)).enableAutomaticStateTracking(ResourceStates::Common);
         auto instanceBufferResult = this.m_graphics.createBuffer(instanceBufferDesc);
         if(!instanceBufferResult.has_value()){
@@ -400,14 +400,18 @@ b8 SoftwareBvhBuilder::ensureSceneBvhBuffers(in u32 instanceCount, mut RayTraceM
             return false;
         }
         BufferHandle instanceBuffer = instanceBufferResult.value();
-        if(!materials.replaceRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_state.m_sceneInstanceHeapHandle))
+        if(
+            !materials.replaceRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_state.m_sceneInstanceHeapHandle)
+            || !materials.replaceWritableRayTraceMaterialContextHeapHandle(instanceBuffer.deref(), this.m_state.m_sceneInstanceUavHeapHandle)
+        )
             return false;
         this.m_state.m_sceneInstanceBuffer = instanceBuffer;
         this.m_state.m_sceneInstanceCapacity = capacity;
         info("RendererSystem: created software scene BVH buffers (capacity {} instances)", cast<u64>(capacity));
     }
     return materials.ensureRayTraceMaterialContextHeapHandle(this.m_state.m_sceneBvhNodeBuffer.deref(), this.m_state.m_sceneBvhNodeHeapHandle)
-        && materials.ensureRayTraceMaterialContextHeapHandle(this.m_state.m_sceneInstanceBuffer.deref(), this.m_state.m_sceneInstanceHeapHandle);
+        && materials.ensureRayTraceMaterialContextHeapHandle(this.m_state.m_sceneInstanceBuffer.deref(), this.m_state.m_sceneInstanceHeapHandle)
+        && materials.ensureWritableRayTraceMaterialContextHeapHandle(this.m_state.m_sceneInstanceBuffer.deref(), this.m_state.m_sceneInstanceUavHeapHandle);
 }
 
 [cpp_unwind]

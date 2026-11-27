@@ -39,6 +39,7 @@ class ContactConstraint{
     public SymMat3 invIB;
     public Softness softness;
     public u32 contactId = s_NullIndex;
+    public u32 extraManifoldIndex = s_NullIndex;
     public u32 pointCount = 0u;
     public u32 indexA = s_NullIndex;
     public u32 indexB = s_NullIndex;
@@ -1014,6 +1015,288 @@ void ResolveKinematicSubstepDelta(
     outDeltaRot = VectorSingle(ks.deltaRotation);
 }
 
+b8 SolveLinearSystemNxN(
+    in u32 n,
+    mut Array<f32, 16u> mat,
+    mut Array<f32, 4u> rhs,
+    mut Array<f32, 4u> outX
+){
+    Array<f32, 16u> a = mat;
+    Array<f32, 4u> b = rhs;
+    for(u32 col = 0u; col < n; ++col){
+        u32 pivRow = col;
+        f32 maxAbs = Abs(VectorSingle(a[col * 4u + col])).x;
+        for(u32 r = col + 1u; r < n; ++r){
+            const f32 v = Abs(VectorSingle(a[r * 4u + col])).x;
+            if(v > maxAbs){
+                maxAbs = v;
+                pivRow = r;
+            }
+        }
+        if(maxAbs <= 1.0e-7f)
+            return false;
+        if(pivRow != col){
+            for(u32 c = col; c < n; ++c){
+                const f32 tmp = a[col * 4u + c];
+                a[col * 4u + c] = a[pivRow * 4u + c];
+                a[pivRow * 4u + c] = tmp;
+            }
+            const f32 tmpB = b[col];
+            b[col] = b[pivRow];
+            b[pivRow] = tmpB;
+        }
+        const f32 invPiv = 1.0f / a[col * 4u + col];
+        for(u32 c = col; c < n; ++c)
+            a[col * 4u + c] *= invPiv;
+        b[col] *= invPiv;
+        for(u32 r = 0u; r < n; ++r){
+            if(r == col)
+                continue;
+            const f32 factor = a[r * 4u + col];
+            if(factor == 0.0f)
+                continue;
+            for(u32 c = col; c < n; ++c)
+                a[r * 4u + c] -= factor * a[col * 4u + c];
+            b[r] -= factor * b[col];
+        }
+    }
+    for(u32 i = 0u; i < n; ++i)
+        outX[i] = b[i];
+    return true;
+}
+
+b8 SolveContactNormalBlock(
+    in b8 dynA,
+    in b8 dynB,
+    in f32 stepInvMassSum,
+    in VectorSingle n,
+    in f32 vnLin,
+    in VectorSingle wA,
+    in VectorSingle wB,
+    in b8 hasA,
+    in b8 hasB,
+    in b8 useBias,
+    in f32 invH,
+    in ContactConstraintStepCache cache,
+    mut ContactConstraint c,
+    in Array<f32, 4u> pointSeps,
+    mut VectorSingle vA,
+    mut VectorSingle ioWA,
+    mut VectorSingle vB,
+    mut VectorSingle ioWB,
+    mut f32 outTotalNormalImpulse,
+    mut b8 outAnyApplied
+){
+    const u32 pc = c.pointCount;
+    if(pc < 2u || pc > 4u)
+        return false;
+
+    Array<b8, 4u> eligible;
+    Array<f32, 4u> biasArr;
+    Array<f32, 4u> softRatioArr;
+    Array<f32, 4u> oldImpArr;
+    Array<f32, 4u> vnArr;
+    u32 eligibleCount = 0u;
+
+    for(u32 i = 0u; i < pc; ++i){
+        in ManifoldConstraintPoint pt = c.points[i];
+        const f32 sep = pointSeps[i];
+        oldImpArr[i] = pt.normalImpulse;
+        if(sep > 0.0f && !useBias && pt.normalImpulse <= 0.0f){
+            eligible[i] = false;
+            biasArr[i] = 0.0f;
+            softRatioArr[i] = 0.0f;
+            vnArr[i] = 0.0f;
+            continue;
+        }
+        eligible[i] = true;
+        ++eligibleCount;
+        f32 bias = 0.0f;
+        f32 massScale = 1.0f;
+        f32 impulseScale = 0.0f;
+        if(sep > 0.0f){
+            bias = sep * invH;
+        }
+        else if(useBias){
+            bias = Max(c.softness.biasRate * sep, -s_MaxContactBiasSpeed);
+            massScale = Max(c.softness.massScale, 1.0e-5f);
+            impulseScale = c.softness.impulseScale;
+        }
+        biasArr[i] = bias;
+        softRatioArr[i] = impulseScale / massScale;
+        f32 angRel = 0.0f;
+        if(hasB)
+            angRel += Vector3Dot(wB, VectorSingle(cache.points[i].rnB)).x;
+        if(hasA)
+            angRel -= Vector3Dot(wA, VectorSingle(cache.points[i].rnACachedSep, 0.0f)).x;
+        vnArr[i] = vnLin + angRel;
+    }
+
+    if(eligibleCount < 2u)
+        return false;
+
+    Array<f32, 16u> kMat;
+    Array<f32, 16u> mMat;
+    Array<f32, 4u> rhsAll;
+    for(u32 i = 0u; i < 16u; ++i){
+        kMat[i] = 0.0f;
+        mMat[i] = 0.0f;
+    }
+
+    for(u32 i = 0u; i < pc; ++i){
+        if(!eligible[i])
+            continue;
+        const VectorSingle rnAi(cache.points[i].rnACachedSep, 0.0f);
+        const VectorSingle rnBi(cache.points[i].rnB);
+        for(u32 j = i; j < pc; ++j){
+            if(!eligible[j])
+                continue;
+            f32 kij = stepInvMassSum;
+            if(dynA)
+                kij += Vector3Dot(rnAi, VectorSingle(cache.points[j].invIA_rnA)).x;
+            if(dynB)
+                kij += Vector3Dot(rnBi, VectorSingle(cache.points[j].invIB_rnB)).x;
+            kMat[i * 4u + j] = kij;
+            kMat[j * 4u + i] = kij;
+            mMat[i * 4u + j] = kij;
+            mMat[j * 4u + i] = kij;
+        }
+        mMat[i * 4u + i] = kMat[i * 4u + i] * (1.0f + softRatioArr[i]);
+    }
+
+    for(u32 i = 0u; i < pc; ++i){
+        if(!eligible[i]){
+            rhsAll[i] = 0.0f;
+            continue;
+        }
+        f32 kxOld = 0.0f;
+        for(u32 j = 0u; j < pc; ++j){
+            if(eligible[j])
+                kxOld += kMat[i * 4u + j] * oldImpArr[j];
+        }
+        rhsAll[i] = kxOld - (vnArr[i] + biasArr[i]);
+    }
+
+    Array<b8, 4u> active;
+    Array<f32, 4u> xSol;
+    for(u32 i = 0u; i < 4u; ++i){
+        active[i] = eligible[i];
+        xSol[i] = 0.0f;
+    }
+
+    b8 solved = false;
+    for(u32 asIter = 0u; asIter < 8u; ++asIter){
+        Array<u32, 4u> activeIndices;
+        u32 nActive = 0u;
+        for(u32 i = 0u; i < pc; ++i){
+            xSol[i] = 0.0f;
+            if(active[i]){
+                activeIndices[nActive] = i;
+                ++nActive;
+            }
+        }
+        if(nActive > 0u){
+            Array<f32, 16u> subA;
+            Array<f32, 4u> subRhs;
+            Array<f32, 4u> subX;
+            for(u32 i = 0u; i < 16u; ++i)
+                subA[i] = 0.0f;
+            for(u32 r = 0u; r < nActive; ++r){
+                const u32 ri = activeIndices[r];
+                subRhs[r] = rhsAll[ri];
+                subX[r] = 0.0f;
+                for(u32 col = 0u; col < nActive; ++col){
+                    const u32 cj = activeIndices[col];
+                    subA[r * 4u + col] = mMat[ri * 4u + cj];
+                }
+            }
+            if(!SolveLinearSystemNxN(nActive, subA, subRhs, subX))
+                return false;
+            for(u32 r = 0u; r < nActive; ++r)
+                xSol[activeIndices[r]] = subX[r];
+        }
+
+        b8 anyNeg = false;
+        u32 worstNegIdx = 0u;
+        f32 worstNegVal = -1.0e-5f;
+        for(u32 i = 0u; i < pc; ++i){
+            if(!active[i])
+                continue;
+            if(!IsFinite(VectorSingle(xSol[i])))
+                return false;
+            if(xSol[i] > c.maxNormalImpulse + 1.0e-5f)
+                return false;
+            if(xSol[i] < worstNegVal){
+                anyNeg = true;
+                worstNegVal = xSol[i];
+                worstNegIdx = i;
+            }
+        }
+        if(anyNeg){
+            active[worstNegIdx] = false;
+            continue;
+        }
+
+        b8 anyDualViolation = false;
+        u32 worstDualIdx = 0u;
+        f32 worstDualVal = -1.0e-3f;
+        for(u32 i = 0u; i < pc; ++i){
+            if(!eligible[i] || active[i])
+                continue;
+            f32 mx = 0.0f;
+            for(u32 j = 0u; j < pc; ++j){
+                if(eligible[j])
+                    mx += mMat[i * 4u + j] * xSol[j];
+            }
+            const f32 res = mx - rhsAll[i];
+            if(res < worstDualVal){
+                anyDualViolation = true;
+                worstDualVal = res;
+                worstDualIdx = i;
+            }
+        }
+        if(anyDualViolation){
+            active[worstDualIdx] = true;
+            continue;
+        }
+        solved = true;
+        break;
+    }
+
+    if(!solved)
+        return false;
+
+    f32 totalImp = 0.0f;
+    for(u32 i = 0u; i < pc; ++i){
+        mut ManifoldConstraintPoint pt = c.points[i];
+        if(!eligible[i]){
+            totalImp += pt.normalImpulse;
+            continue;
+        }
+        const f32 newImp = Clamp(xSol[i], 0.0f, c.maxNormalImpulse);
+        const f32 delta = newImp - pt.normalImpulse;
+        pt.normalImpulse = newImp;
+        if(useBias)
+            pt.totalNormalImpulse += newImp;
+        totalImp += newImp;
+        c.points[i] = pt;
+        if(delta != 0.0f){
+            outAnyApplied = true;
+            const VectorSingle p = n * delta;
+            if(dynA){
+                vA = vA - p * c.invMassA;
+                ioWA = ioWA - VectorSingle(cache.points[i].invIA_rnA) * delta;
+            }
+            if(dynB){
+                vB = vB + p * c.invMassB;
+                ioWB = ioWB + VectorSingle(cache.points[i].invIB_rnB) * delta;
+            }
+        }
+    }
+    outTotalNormalImpulse = totalImp;
+    return true;
+}
+
 void SolveContactConstraintCachedWithKinematics(
     mut Vector<BodyState> states,
     mut ContactConstraint c,
@@ -1021,6 +1304,7 @@ void SolveContactConstraintCachedWithKinematics(
     in f32 invH,
     in b8 useBias,
     in b8 reuseCachedSep,
+    in b8 enableBlockSolver,
     in Span<u32> movingKinSlots,
     in Span<BodyState> movingKinStates,
     in u32 kinStride,
@@ -1103,8 +1387,11 @@ void SolveContactConstraintCachedWithKinematics(
     f32 totalNormalImpulse = 0.0f;
     f32 vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
 
+    Array<f32, 4u> pointSeps;
+    for(u32 i = 0u; i < 4u; ++i)
+        pointSeps[i] = 0.0f;
     for(u32 i = 0u; i < c.pointCount; ++i){
-        mut ManifoldConstraintPoint pt = c.points[i];
+        in ManifoldConstraintPoint pt = c.points[i];
         mut ContactPointStepCache ptCache = cache.points[i];
         f32 currentSep = 0.0f;
         if(reuseCachedSep){
@@ -1118,62 +1405,77 @@ void SolveContactConstraintCachedWithKinematics(
                 currentSep += Vector3Dot(rB, rotDeltaNB).x - Vector3Dot(rA, rotDeltaNA).x;
             }
             ptCache.rnACachedSep.w = currentSep;
+            cache.points[i] = ptCache;
         }
+        pointSeps[i] = currentSep;
+    }
 
-        f32 bias = 0.0f;
-        f32 massScale = 1.0f;
-        f32 impulseScale = 0.0f;
-        if(currentSep > 0.0f){
-            if(!useBias && pt.normalImpulse <= 0.0f)
-                continue;
-            bias = currentSep * invH;
-        }
-        else if(useBias){
-            bias = Max(c.softness.biasRate * currentSep, -s_MaxContactBiasSpeed);
-            massScale = c.softness.massScale;
-            impulseScale = c.softness.impulseScale;
-        }
+    b8 blockSolved = false;
+    if(enableBlockSolver && c.pointCount >= 2u && !linLocked && !angLockedA && !angLockedB)
+        blockSolved = SolveContactNormalBlock(dynA, dynB, stepInvMassSum, n, vnLin, wA, wB, hasA, hasB, useBias, invH, cache, c, pointSeps, vA, wA, vB, wB, totalNormalImpulse, anyApplied);
 
-        const VectorSingle rnA = VectorSingle(ptCache.rnACachedSep, 0.0f);
-        const VectorSingle rnB = VectorSingle(ptCache.rnB);
-        f32 angRel = 0.0f;
-        if(hasB)
-            angRel += Vector3Dot(wB, rnB).x;
-        if(hasA)
-            angRel -= Vector3Dot(wA, rnA).x;
-        const f32 vn = vnLin + angRel;
-        const f32 oldImpulse = pt.normalImpulse;
-        const f32 impulse = -pt.normalMass * massScale * (vn + bias) - impulseScale * oldImpulse;
-        const f32 newImpulse = Clamp(oldImpulse + impulse, 0.0f, c.maxNormalImpulse);
-        const f32 delta = newImpulse - oldImpulse;
-        pt.normalImpulse = newImpulse;
-        if(useBias)
-            pt.totalNormalImpulse += newImpulse;
-        totalNormalImpulse += newImpulse;
+    if(!blockSolved){
+        for(u32 i = 0u; i < c.pointCount; ++i){
+            mut ManifoldConstraintPoint pt = c.points[i];
+            in ContactPointStepCache ptCache = cache.points[i];
+            const f32 currentSep = pointSeps[i];
 
-        if(delta != 0.0f){
-            anyApplied = true;
-            const VectorSingle p = n * delta;
-            if(dynA){
-                vA = vA - p * c.invMassA;
-                wA = wA - VectorSingle(ptCache.invIA_rnA) * delta;
-                if(lockedA){
-                    vA = ApplyLinearLocks(vA, flagsA);
-                    wA = ApplyAngularLocks(wA, flagsA);
-                }
+            f32 bias = 0.0f;
+            f32 massScale = 1.0f;
+            f32 impulseScale = 0.0f;
+            if(currentSep > 0.0f){
+                if(!useBias && pt.normalImpulse <= 0.0f)
+                    continue;
+                bias = currentSep * invH;
             }
-            if(dynB){
-                vB = vB + p * c.invMassB;
-                wB = wB + VectorSingle(ptCache.invIB_rnB) * delta;
-                if(lockedB){
-                    vB = ApplyLinearLocks(vB, flagsB);
-                    wB = ApplyAngularLocks(wB, flagsB);
-                }
+            else if(useBias){
+                bias = Max(c.softness.biasRate * currentSep, -s_MaxContactBiasSpeed);
+                massScale = c.softness.massScale;
+                impulseScale = c.softness.impulseScale;
             }
-            if(!linLocked)
-                vnLin += delta * stepInvMassSum;
-            else
-                vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
+
+            const VectorSingle rnA = VectorSingle(ptCache.rnACachedSep, 0.0f);
+            const VectorSingle rnB = VectorSingle(ptCache.rnB);
+            f32 angRel = 0.0f;
+            if(hasB)
+                angRel += Vector3Dot(wB, rnB).x;
+            if(hasA)
+                angRel -= Vector3Dot(wA, rnA).x;
+            const f32 vn = vnLin + angRel;
+            const f32 oldImpulse = pt.normalImpulse;
+            const f32 impulse = -pt.normalMass * massScale * (vn + bias) - impulseScale * oldImpulse;
+            const f32 newImpulse = Clamp(oldImpulse + impulse, 0.0f, c.maxNormalImpulse);
+            const f32 delta = newImpulse - oldImpulse;
+            pt.normalImpulse = newImpulse;
+            if(useBias)
+                pt.totalNormalImpulse += newImpulse;
+            totalNormalImpulse += newImpulse;
+
+            if(delta != 0.0f){
+                anyApplied = true;
+                const VectorSingle p = n * delta;
+                if(dynA){
+                    vA = vA - p * c.invMassA;
+                    wA = wA - VectorSingle(ptCache.invIA_rnA) * delta;
+                    if(lockedA){
+                        vA = ApplyLinearLocks(vA, flagsA);
+                        wA = ApplyAngularLocks(wA, flagsA);
+                    }
+                }
+                if(dynB){
+                    vB = vB + p * c.invMassB;
+                    wB = wB + VectorSingle(ptCache.invIB_rnB) * delta;
+                    if(lockedB){
+                        vB = ApplyLinearLocks(vB, flagsB);
+                        wB = ApplyAngularLocks(wB, flagsB);
+                    }
+                }
+                if(!linLocked)
+                    vnLin += delta * stepInvMassSum;
+                else
+                    vnLin = Vector3Dot(VectorSingle(vB - vA, 0.0f), n).x;
+            }
+            c.points[i] = pt;
         }
     }
 
@@ -1290,10 +1592,12 @@ void SolveContactConstraintCachedWithKinematics(
     }
 
     if((c.rollingResistance > 0.0f && totalNormalImpulse > 0.0f) || c.rollingImpulse.x != 0.0f || c.rollingImpulse.y != 0.0f || c.rollingImpulse.z != 0.0f){
-        const VectorSingle dw = VectorSingle(wB - wA, 0.0f);
+        const VectorSingle dwRaw = VectorSingle(wB - wA, 0.0f);
+        const VectorSingle dw = VectorSingle(dwRaw - n * Vector3Dot(dwRaw, n).x, 0.0f);
         const VectorSingle deltaR = -SymMat3MulVec(cache.rollingMass, dw);
         const VectorSingle oldR(c.rollingImpulse.x, c.rollingImpulse.y, c.rollingImpulse.z, 0.0f);
         VectorSingle newR = oldR + deltaR;
+        newR = VectorSingle(newR - n * Vector3Dot(newR, n).x, 0.0f);
         const f32 maxR = c.rollingResistance * totalNormalImpulse;
         if(maxR <= 0.0f){
             newR = VectorSingle(0.0f);
@@ -1333,8 +1637,8 @@ void SolveContactConstraintCachedWithKinematics(
     }
 }
 
-void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConstraint c, mut ContactConstraintStepCache cache, in f32 invH, in b8 useBias, in b8 reuseCachedSep){
-    SolveContactConstraintCachedWithKinematics(states, c, cache, invH, useBias, reuseCachedSep, Span<u32>(), Span<BodyState>(), 0u, 0u);
+void SolveContactConstraintCached(mut Vector<BodyState> states, mut ContactConstraint c, mut ContactConstraintStepCache cache, in f32 invH, in b8 useBias, in b8 reuseCachedSep, in b8 enableBlockSolver){
+    SolveContactConstraintCachedWithKinematics(states, c, cache, invH, useBias, reuseCachedSep, enableBlockSolver, Span<u32>(), Span<BodyState>(), 0u, 0u);
 }
 
 void ApplyRestitutionContactConstraintCached(

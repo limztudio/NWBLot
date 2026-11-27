@@ -26,6 +26,10 @@ enum<u8> ShapeType{
     Heightfield = 7u,
     Plane = 8u,
     Segment = 9u,
+    Compound = 10u,
+    Scaled = 11u,
+    Chain = 12u,
+    Sdf = 13u,
     kCount
 }
 
@@ -197,6 +201,62 @@ class HeightfieldGeometryId{
     }
 }
 
+class CompoundGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in CompoundGeometryId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class ScaledGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in ScaledGeometryId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class ChainGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in ChainGeometryId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
+class SdfGeometryId{
+    public u32 index = s_NullIndex;
+    public u16 generation = 0u;
+    public u16 worldIndex = 0u;
+
+    public b8 valid()const{
+        return this.index != s_NullIndex && this.generation != 0u && this.worldIndex != 0u;
+    }
+
+    public b8 operator==(in SdfGeometryId rhs)const{
+        return this.index == rhs.index && this.generation == rhs.generation && this.worldIndex == rhs.worldIndex;
+    }
+}
+
 class Transform3D{
     public f32x4 position;
     public f32x4 rotation;
@@ -208,6 +268,21 @@ class Transform3D{
 
     public Transform3D(in VectorSingle pos, in VectorSingle rot){
         this.position = f32x4(pos, 0.0f);
+        this.rotation = f32x4(rot);
+    }
+}
+
+class Transform3DDouble{
+    public f64x4 position;
+    public f32x4 rotation;
+
+    public Transform3DDouble(){
+        this.position = f64x4(0.0, 0.0, 0.0, 0.0);
+        this.rotation = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    public Transform3DDouble(in VectorDouble pos, in VectorSingle rot){
+        this.position = f64x4(pos.x, pos.y, pos.z, 0.0);
         this.rotation = f32x4(rot);
     }
 }
@@ -361,6 +436,8 @@ class WorldDef{
     public b8 forceGpuCollision = false;
     public b8 gpuResidentMode = false;
     public b8 useGpuLbvhBroadphase = false;
+    public b8 enableBlockSolver = false;
+    public b8 enableShockPropagation = false;
 }
 
 class BodyDef{
@@ -394,6 +471,7 @@ class ShapeDef{
     public b8 enableHitEvents = false;
     public b8 enableSensorEvents = false;
     public b8 enablePreSolveEvents = false;
+    public b8 enablePostSolveEvents = false;
     public b8 invokeContactCreation = false;
     public b8 updateBodyMass = true;
     public u64 userData = 0u;
@@ -560,8 +638,27 @@ class PreSolveContext{
     }
 }
 
+class PostSolveContext{
+    public ShapeId shapeIdA;
+    public ShapeId shapeIdB;
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public Array<f32x4, s_MaxManifoldPoints> points;
+    public Array<f32, s_MaxManifoldPoints> normalImpulses;
+    public Array<f32, s_MaxManifoldPoints> tangentImpulses;
+    public u32 pointCount = 0u;
+
+    public PostSolveContext(){
+        for(usize i = 0u; i < s_MaxManifoldPoints; ++i){
+            this.normalImpulses[i] = 0.0f;
+            this.tangentImpulses[i] = 0.0f;
+        }
+    }
+}
+
 type CustomFilterCallback = Func<64u, b8(in ShapeId, in ShapeId)>;
 type PreSolveCallback = Func<64u, b8(mut PreSolveContext)>;
+type PostSolveCallback = Func<64u, void(in PostSolveContext)>;
+type TriangleFilterCallback = Func<64u, b8(in ShapeId, in u32)>;
 type MaterialCombineCallback = Func<64u, b8(in ShapeId, in ShapeId, in SurfaceMaterial, in SurfaceMaterial, mut MaterialCombineResult)>;
 type ShapeQueryFilterCallback = Func<64u, b8(in ShapeId)>;
 type RayCastCollectorCallback = Func<64u, f32(in RayCastHit)>;
@@ -576,6 +673,7 @@ class ExplosionDef{
     public Filter filter;
     public b8 checkOcclusion = false;
     public Filter occlusionFilter;
+    public b8 useCustomFilter = true;
 }
 
 class RayCastInput{
@@ -603,6 +701,27 @@ class RayCastHit{
     }
 }
 
+class RayCastDoubleInput{
+    public f64x4 origin = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
+    public Filter filter;
+    public BodyId ignoreBodyId;
+    public ShapeId ignoreShapeId;
+    public b8 hitSensors = false;
+    public b8 cullBackFaces = false;
+    public b8 useCustomFilter = true;
+}
+
+class RayCastDoubleHit{
+    public ShapeId shapeId;
+    public f64x4 point = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x2u barycentrics = f32x2u(0.0f, 0.0f);
+    public f32 fraction = 1.0f;
+    public u32 triangleIndex = s_NullIndex;
+    public b8 hit = false;
+}
+
 class ShapeCastInput{
     public Transform3D originTransform;
     public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
@@ -628,6 +747,29 @@ class ShapeCastHit{
     public ShapeCastHit(){
         this.barycentrics = f32x2u(0.0f, 0.0f);
     }
+}
+
+class ShapeCastDoubleInput{
+    public Transform3DDouble originTransform;
+    public f32x4 translation(0.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 endRotation(0.0f, 0.0f, 0.0f, 1.0f);
+    public f32 radius = 0.0f;
+    public Filter filter;
+    public BodyId ignoreBodyId;
+    public ShapeId ignoreShapeId;
+    public b8 hitSensors = false;
+    public b8 hasRotation = false;
+    public b8 useCustomFilter = true;
+}
+
+class ShapeCastDoubleHit{
+    public ShapeId shapeId;
+    public f64x4 point = f64x4(0.0, 0.0, 0.0, 0.0);
+    public f32x4 normal(0.0f, 1.0f, 0.0f, 0.0f);
+    public f32x2u barycentrics = f32x2u(0.0f, 0.0f);
+    public f32 fraction = 1.0f;
+    public u32 triangleIndex = s_NullIndex;
+    public b8 hit = false;
 }
 
 class ShapeOverlapHit{

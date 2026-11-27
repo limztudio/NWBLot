@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/kernel/task_graph_barrier_task.adhd>
+#include <impl/ecs_render/kernel/instance_transform_patch.adhd>
 #include <impl/ecs_render/shadow/rt_shadow_internal_types.adhd>
 
 
@@ -248,8 +249,8 @@ b8 CanDeclareShadowPrepareSceneSwBvhRefit(in b8 buildPlanFrozen, in usize prepar
     return buildPlanFrozen && (preparedMeshSwBvhBuildCount == 0u || pureSoftwareMeshSwBvhBuildsGraphOwned);
 }
 
-b8 ShouldMergeShadowPrepareAcrossConsumerFrontier(in b8 pureSoftwareMeshSwBvhBuildsGraphOwned, in b8 hasSceneRefitTask){
-    return pureSoftwareMeshSwBvhBuildsGraphOwned || hasSceneRefitTask;
+b8 ShouldMergeShadowPrepareAcrossConsumerFrontier(in b8 pureSoftwareMeshSwBvhBuildsGraphOwned, in b8 hasSceneRefitTask, in b8 hasTransformPatchTask){
+    return pureSoftwareMeshSwBvhBuildsGraphOwned || hasSceneRefitTask || hasTransformPatchTask;
 }
 
 b8 HasAccelStructBuildStatesGraphOwned(in b8 sceneTlasBuildGraphOwned, in b8 meshBlasBuildsGraphOwned){
@@ -310,6 +311,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
         ShadowPrepareUploadInputs(
             deferredTargets,
             rayTracingResources,
+            rayTracingShadowResources,
             currentBindlessSlots,
             materialContextSlots
         ),
@@ -327,6 +329,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     this.m_shadowMaterialTypedUploadTask = uploads.tasks.shadowMaterialTyped;
     this.m_sceneBvhNodesUploadTask = uploads.tasks.sceneBvhNodes;
     this.m_sceneBvhInstancesUploadTask = uploads.tasks.sceneBvhInstances;
+    this.m_tlasInstancesUploadTask = uploads.tasks.tlasInstances;
     GpuTaskId shadowPrepareDependency = uploads.completionTask;
 
     const b8 sceneTlasBuildGraphOwned = context.rayTracing.preparedSceneTlasBuildReady();
@@ -372,10 +375,95 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
             return false;
     }
 
+    b8 hasTransformPatchTask = false;
+    {
+        const GpuTaskId patchStartDep = shadowPrepareDependency;
+        if(context.rayTracing.preparedSceneTlasUsesInstanceBuffer()){
+            if(!AppendTypedInstanceTransformPatch(
+                context.instanceTransformPatchContributor,
+                context.rayTracing.preparedSceneTlasInstanceEntityIds(),
+                uploads.tlasInstanceBuffer,
+                context.rayTracing.preparedSceneTlasInstanceUavHeapHandle(),
+                4u,
+                GpuTaskGraphInstanceTransformPatchLayout::Affine3x4ObjectToWorld,
+                0u,
+                Name("shadow.prepare.tlas.physics_patch"),
+                true,
+                true,
+                context.graph,
+                shadowPrepareDependency
+            ))
+                return false;
+        }
+        if(!AppendTypedInstanceTransformPatch(
+            context.instanceTransformPatchContributor,
+            context.rayTracing.preparedShadowInstanceEntityIds(),
+            uploads.shadowInstances,
+            context.rayTracing.shadowInstanceUavHeapHandle(),
+            cast<u32>(size_of<InstanceGpuData>() / size_of<f32x4>()),
+            GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs,
+            0u,
+            Name("shadow.prepare.shadow_instances.physics_patch"),
+            true,
+            true,
+            context.graph,
+            shadowPrepareDependency
+        ))
+            return false;
+        if(!AppendTypedInstanceTransformPatch(
+            context.instanceTransformPatchContributor,
+            context.rayTracing.preparedSceneBvhInstanceEntityIds(),
+            uploads.sceneBvhInstances,
+            context.rayTracing.sceneInstanceUavHeapHandle(),
+            4u,
+            GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
+            0u,
+            Name("shadow.prepare.scene_bvh_instances.physics_patch"),
+            true,
+            true,
+            context.graph,
+            shadowPrepareDependency
+        ))
+            return false;
+        if(uploads.csgTraceContext.valid()){
+            if(!AppendTypedInstanceTransformPatch(
+                context.instanceTransformPatchContributor,
+                context.rayTracing.preparedCsgCutterEntityIds(),
+                uploads.csgTraceContext,
+                context.rayTracing.csgTraceContextUavHeapHandle(),
+                6u,
+                GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
+                context.rayTracing.preparedCsgCutterByteOffset() / 16u + 1u,
+                Name("shadow.prepare.csg_cutters.physics_patch"),
+                true,
+                true,
+                context.graph,
+                shadowPrepareDependency
+            ))
+                return false;
+            if(!AppendTypedInstanceTransformPatch(
+                context.instanceTransformPatchContributor,
+                context.rayTracing.preparedCsgInstanceEntityIds(),
+                uploads.csgTraceContext,
+                context.rayTracing.csgTraceContextUavHeapHandle(),
+                6u,
+                GpuTaskGraphInstanceTransformPatchLayout::Affine3x4WorldToObject,
+                context.rayTracing.preparedCsgInstanceByteOffset() / 16u,
+                Name("shadow.prepare.csg_instances.physics_patch"),
+                true,
+                true,
+                context.graph,
+                shadowPrepareDependency
+            ))
+                return false;
+        }
+        hasTransformPatchTask = shadowPrepareDependency.valid() && shadowPrepareDependency != patchStartDep;
+    }
+
     if(context.rayTracing.preparedSceneSwBvhRefit().valid()){
         if(!CanDeclareShadowPrepareSceneSwBvhRefit(context.rayTracing.preparedMeshSwBvhBuildPlanFrozen(), preparedMeshSwBvhBuilds.size(), pureSoftwareMeshSwBvhBuildsGraphOwned))
             return false;
-        const auto refitTasks = DeclareSoftwareSceneRefit(context.rayTracing.preparedSceneSwBvhRefit(), uploads.sceneBvhNodes, shadowPrepareDependency, context.graph);
+        const auto refitTasks = DeclareSoftwareSceneRefit(context.rayTracing.preparedSceneSwBvhRefit(), uploads.sceneBvhNodes, context.instanceTransformPatchContributor, shadowPrepareDependency, context.graph);
         if(!refitTasks.has_value()){
             this.m_deferredShadowPrepareSceneRefitTask = GpuTaskId();
             this.m_sceneBvhRefitInputsUploadTask = GpuTaskId();
@@ -393,7 +481,7 @@ b8 ShadowPrepareGraphCoordinator::declareDeferredShadowPrepareTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = shadowPrepareDependency.valid();
-    scheduling.allowMergeAcrossConsumerFrontier = ShouldMergeShadowPrepareAcrossConsumerFrontier(pureSoftwareMeshSwBvhBuildsGraphOwned, this.m_deferredShadowPrepareSceneRefitTask.valid());
+    scheduling.allowMergeAcrossConsumerFrontier = ShouldMergeShadowPrepareAcrossConsumerFrontier(pureSoftwareMeshSwBvhBuildsGraphOwned, this.m_deferredShadowPrepareSceneRefitTask.valid(), hasTransformPatchTask);
     GpuTaskExternalStateSource shadowPrepareStateSource;
     const auto persistent = context.persistentState.borrowSource();
     if(persistent.has_value())
@@ -468,6 +556,7 @@ void ShadowPrepareGraphCoordinator::resetShadowPrepareUploadTaskState(){
     this.m_shadowMaterialTypedUploadTask = GpuTaskId();
     this.m_sceneBvhNodesUploadTask = GpuTaskId();
     this.m_sceneBvhInstancesUploadTask = GpuTaskId();
+    this.m_tlasInstancesUploadTask = GpuTaskId();
 }
 
 void ShadowPrepareGraphCoordinator::resetShadowPrepareTaskState(){
@@ -555,7 +644,8 @@ void ShadowPreparePacketValidator::validate(in GpuCompiledGraphReadView compiled
     outResult.causticEmissionTargetsUploadMerged = !pipeline.m_shadowPrepareGraph.m_causticEmissionTargetsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_causticEmissionTargetsUploadTask);
     outResult.surfelFrameConstantsUploadMerged = !pipeline.m_shadowPrepareGraph.m_surfelFrameConstantsUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_surfelFrameConstantsUploadTask);
     outResult.shadowMaterialContextUploadsMerged =
-        (!pipeline.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask))
+        (!pipeline.m_shadowPrepareGraph.m_tlasInstancesUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_tlasInstancesUploadTask))
+        && (!pipeline.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowInstanceMaterialUploadTask))
         && (!pipeline.m_shadowPrepareGraph.m_shadowInstanceUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowInstanceUploadTask))
         && (!pipeline.m_shadowPrepareGraph.m_shadowMaterialTypedUploadTask.valid() || compiledPlan.tasksSharePacket(pipeline.m_shadowPrepareGraph.m_deferredShadowPrepareTask, pipeline.m_shadowPrepareGraph.m_shadowMaterialTypedUploadTask))
     ;

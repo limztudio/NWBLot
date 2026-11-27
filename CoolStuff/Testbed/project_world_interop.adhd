@@ -214,193 +214,6 @@ void ClearTestbedPhysicsPreStepCallback(mut NotNullUniquePtr<World> worldHandle)
         physicsSystem.value().clearPreStepCallback();
 }
 
-class TestbedProjectedDebugLineSink : IPhysicsDebugLineSink{
-    private in PhysicsDebugScreenProjector m_projector;
-    private mut Vector<PaintLineSegment> m_outLines;
-    private mut Vector<f32x4> m_viewPts;
-    private u32 m_maxLines;
-
-    public TestbedProjectedDebugLineSink(
-        in borrow PhysicsDebugScreenProjector projector,
-        in u32 maxLines,
-        mut Vector<PaintLineSegment> outLines,
-        mut Vector<f32x4> viewPts
-    ){
-        this.m_projector = projector;
-        this.m_maxLines = maxLines;
-        this.m_outLines = outLines;
-        this.m_viewPts = viewPts;
-    }
-
-    public void clear()override{
-        this.m_outLines.clear();
-    }
-
-    public void reserve(in usize capacity)override{
-        const usize capped = Min(cast<usize>(this.m_maxLines), capacity);
-        if(capped > this.m_outLines.capacity())
-            this.m_outLines.reserve(Min(cast<usize>(this.m_maxLines), Max(capped, this.m_outLines.capacity() * 2u)));
-    }
-
-    public b8 full()const override{
-        return this.m_outLines.size() >= cast<usize>(this.m_maxLines);
-    }
-
-    public b8 emit(in VectorSingle p0, in VectorSingle p1, in VectorSingle color)override{
-        if(this.m_outLines.size() >= cast<usize>(this.m_maxLines))
-            return false;
-        VectorSingle seg(0.0f);
-        if(this.m_projector.projectSegment(p0, p1, seg)){
-            PaintLineSegment batchLine;
-            batchLine.start = Point(seg.x, seg.y);
-            batchLine.end = Point(seg.z, seg.w);
-            batchLine.color = Color(color.x, color.y, color.z, color.w);
-            this.m_outLines.push_back(batchLine);
-            return true;
-        }
-        return false;
-    }
-
-    private b8 emitViewSegment(in VectorSingle v0, in VectorSingle v1, in Color lineColor, mut PhysicsDebugPhaseBudget budget){
-        if(budget.limitReached() || this.m_outLines.size() >= cast<usize>(this.m_maxLines)){
-            budget.noteOverflow();
-            return false;
-        }
-        VectorSingle seg(0.0f);
-        if(this.m_projector.projectViewSpaceSegment(v0, v1, seg)){
-            PaintLineSegment batchLine;
-            batchLine.start = Point(seg.x, seg.y);
-            batchLine.end = Point(seg.z, seg.w);
-            batchLine.color = lineColor;
-            this.m_outLines.push_back(batchLine);
-            budget.recordEmitted();
-        }
-        return true;
-    }
-
-    public void emitOrientedBox(in VectorSingle center, in VectorSingle ex, in VectorSingle ey, in VectorSingle ez, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
-        const Color lineColor(color.x, color.y, color.z, color.w);
-        const VectorSingle vc = this.m_projector.projectPointToView(center);
-        const VectorSingle vx = this.m_projector.projectDirToView(ex);
-        const VectorSingle vy = this.m_projector.projectDirToView(ey);
-        const VectorSingle vz = this.m_projector.projectDirToView(ez);
-        const VectorSingle c0 = vc - vx - vy - vz;
-        const VectorSingle c1 = vc + vx - vy - vz;
-        const VectorSingle c2 = vc - vx + vy - vz;
-        const VectorSingle c3 = vc + vx + vy - vz;
-        const VectorSingle c4 = vc - vx - vy + vz;
-        const VectorSingle c5 = vc + vx - vy + vz;
-        const VectorSingle c6 = vc - vx + vy + vz;
-        const VectorSingle c7 = vc + vx + vy + vz;
-        if(!this.emitViewSegment(c0, c1, lineColor, budget)) return;
-        if(!this.emitViewSegment(c2, c3, lineColor, budget)) return;
-        if(!this.emitViewSegment(c4, c5, lineColor, budget)) return;
-        if(!this.emitViewSegment(c6, c7, lineColor, budget)) return;
-        if(!this.emitViewSegment(c0, c2, lineColor, budget)) return;
-        if(!this.emitViewSegment(c1, c3, lineColor, budget)) return;
-        if(!this.emitViewSegment(c4, c6, lineColor, budget)) return;
-        if(!this.emitViewSegment(c5, c7, lineColor, budget)) return;
-        if(!this.emitViewSegment(c0, c4, lineColor, budget)) return;
-        if(!this.emitViewSegment(c1, c5, lineColor, budget)) return;
-        if(!this.emitViewSegment(c2, c6, lineColor, budget)) return;
-        this.emitViewSegment(c3, c7, lineColor, budget);
-    }
-
-    public void emitCircleAxes(in VectorSingle center, in VectorSingle uR, in VectorSingle vR, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
-        const Color lineColor(color.x, color.y, color.z, color.w);
-        const VectorSingle vc = this.m_projector.projectPointToView(center);
-        const VectorSingle vu = this.m_projector.projectDirToView(uR);
-        const VectorSingle vv = this.m_projector.projectDirToView(vR);
-        const f32 c30 = 0.86602540378f;
-        const f32 s30 = 0.5f;
-        const VectorSingle uC = vu * c30;
-        const VectorSingle uS = vu * s30;
-        const VectorSingle vS = vv * s30;
-        const VectorSingle vC = vv * c30;
-        const VectorSingle d1 = uC + vS;
-        const VectorSingle d2 = uS + vC;
-        const VectorSingle d4 = vC - uS;
-        const VectorSingle d5 = vS - uC;
-
-        const VectorSingle p0 = vc + vu;
-        const VectorSingle p1 = vc + d1;
-        const VectorSingle p2 = vc + d2;
-        const VectorSingle p3 = vc + vv;
-        const VectorSingle p4 = vc + d4;
-        const VectorSingle p5 = vc + d5;
-        const VectorSingle p6 = vc - vu;
-        const VectorSingle p7 = vc - d1;
-        const VectorSingle p8 = vc - d2;
-        const VectorSingle p9 = vc - vv;
-        const VectorSingle p10 = vc - d4;
-        const VectorSingle p11 = vc - d5;
-        if(!this.emitViewSegment(p0, p1, lineColor, budget)) return;
-        if(!this.emitViewSegment(p1, p2, lineColor, budget)) return;
-        if(!this.emitViewSegment(p2, p3, lineColor, budget)) return;
-        if(!this.emitViewSegment(p3, p4, lineColor, budget)) return;
-        if(!this.emitViewSegment(p4, p5, lineColor, budget)) return;
-        if(!this.emitViewSegment(p5, p6, lineColor, budget)) return;
-        if(!this.emitViewSegment(p6, p7, lineColor, budget)) return;
-        if(!this.emitViewSegment(p7, p8, lineColor, budget)) return;
-        if(!this.emitViewSegment(p8, p9, lineColor, budget)) return;
-        if(!this.emitViewSegment(p9, p10, lineColor, budget)) return;
-        if(!this.emitViewSegment(p10, p11, lineColor, budget)) return;
-        this.emitViewSegment(p11, p0, lineColor, budget);
-    }
-
-    public void emitLoop(in Span<f32x4> points, in b8 closed, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
-        if(points.size() < 2u)
-            return;
-        const Color lineColor(color.x, color.y, color.z, color.w);
-        VectorSingle prevV = this.m_projector.projectPointToView(VectorSingle(points[0u]));
-        const VectorSingle firstV = prevV;
-        for(usize i = 1u; i < points.size(); ++i){
-            const VectorSingle currV = this.m_projector.projectPointToView(VectorSingle(points[i]));
-            if(!this.emitViewSegment(prevV, currV, lineColor, budget))
-                return;
-            prevV = currV;
-        }
-        if(closed)
-            this.emitViewSegment(prevV, firstV, lineColor, budget);
-    }
-
-    public void emitIndexedEdges(in Span<f32x4> points, in Span<u32> edgePairs, in VectorSingle color, mut PhysicsDebugPhaseBudget budget)override{
-        if(points.empty() || edgePairs.size() < 2u)
-            return;
-        const Color lineColor(color.x, color.y, color.z, color.w);
-        if(points.size() <= 256u){
-            FixedVector<f32x4, 256u> viewPts;
-            for(usize pi = 0u; pi < points.size(); ++pi)
-                viewPts.push_back(f32x4(this.m_projector.projectPointToView(VectorSingle(points[pi])), 0.0f));
-            for(usize ei = 0u; ei + 1u < edgePairs.size(); ei += 2u){
-                const u32 i0 = edgePairs[ei];
-                const u32 i1 = edgePairs[ei + 1u];
-                if(cast<usize>(i0) >= points.size() || cast<usize>(i1) >= points.size())
-                    continue;
-                if(!this.emitViewSegment(VectorSingle(viewPts[i0]), VectorSingle(viewPts[i1]), lineColor, budget))
-                    return;
-            }
-            return;
-        }
-        this.m_viewPts.clear();
-        this.m_viewPts.reserve(points.size());
-        for(usize pi = 0u; pi < points.size(); ++pi)
-            this.m_viewPts.push_back(f32x4(this.m_projector.projectPointToView(VectorSingle(points[pi])), 0.0f));
-        for(usize ei = 0u; ei + 1u < edgePairs.size(); ei += 2u){
-            const u32 i0 = edgePairs[ei];
-            const u32 i1 = edgePairs[ei + 1u];
-            if(cast<usize>(i0) >= points.size() || cast<usize>(i1) >= points.size())
-                continue;
-            if(!this.emitViewSegment(VectorSingle(this.m_viewPts[i0]), VectorSingle(this.m_viewPts[i1]), lineColor, budget))
-                return;
-        }
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class UiFilteredListSourceView : IListDataSource, NoCopy{
     private in IUiFilteredListState m_state;
 
@@ -494,6 +307,7 @@ Expected<NotNullUniquePtr<World>> CreateInitialProjectWorld(mut ProjectRuntimeCo
     );
 
     rendererSystem.setInstanceTransformPatchContributor(Optional<mut IGpuTaskGraphInstanceTransformPatchContributor>(physicsSystem));
+    rendererSystem.setDebugLineProvider(Optional<mut IDebugLineProvider>(physicsSystem));
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(softBodyMeshSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
@@ -513,6 +327,7 @@ void DestroyInitialProjectWorld(mut ProjectRuntimeContext context, mut NotNullUn
     const Optional<mut RendererSystem> rendererSystem = world.borrowSystem<RendererSystem>();
     if(rendererSystem.has_value()){
         rendererSystem.value().setInstanceTransformPatchContributor(Optional<mut IGpuTaskGraphInstanceTransformPatchContributor>());
+        rendererSystem.value().setDebugLineProvider(Optional<mut IDebugLineProvider>());
         mut FrameGraphRegistry registry = context.frameGraphRegistry;
         registry.unregisterContributor(rendererSystem.value());
         context.graphics.removeRenderPass(rendererSystem.value());
@@ -3379,14 +3194,10 @@ PhysicsDebugDrawStats PaintPhysicsDebugOverlay(
         return PhysicsDebugDrawStats();
 
     PhysicsDebugDrawStats stats;
+    if(drawPhysicsWorldDebug)
+        stats = physicsSystem.value().lastDebugDrawStats();
     const f32 lineThickness = ResolvePhysicsDebugLineThickness(options);
-    if(drawPhysicsWorldDebug){
-        TestbedProjectedDebugLineSink sink(projector, options.maxLines, screenLines, debugScratch.indexedEdgeViewPts);
-        stats = BuildEcsPhysicsDebugLinesToSink<TestbedProjectedDebugLineSink>(world, physicsSystem.value(), options, projector, sink, debugScratch);
-    }
-    else{
-        screenLines.clear();
-    }
+    screenLines.clear();
     if(grabState.active && grabState.targetKind != TestbedGrabTargetKind::GizmoAxis){
         VectorSingle grabSeg(0.0f);
         if(projector.projectSegment(VectorSingle(grabState.grabWorldPoint), VectorSingle(grabState.targetWorldPoint), grabSeg)){

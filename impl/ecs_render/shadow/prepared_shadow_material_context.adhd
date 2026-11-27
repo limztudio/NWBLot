@@ -182,6 +182,7 @@ b8 IsPreparedShadowMaterialStorageReady(
         && state.shadow.m_shadowMaterialTypedCapacity >= materialTypedByteCount
         && IsDescriptorClass(state.shadow.m_shadowInstanceMaterialHeapHandle, GpuDescriptorClass::StorageBuffer)
         && IsDescriptorClass(state.shadow.m_shadowInstanceHeapHandle, GpuDescriptorClass::StorageBuffer)
+        && IsDescriptorClass(state.shadow.m_shadowInstanceUavHeapHandle, GpuDescriptorClass::StorageBuffer)
         && IsDescriptorClass(state.shadow.m_shadowMaterialTypedHeapHandle, GpuDescriptorClass::StorageBuffer)
     ;
 }

@@ -7,9 +7,13 @@
 #include <impl/ecs_render/shared/renderer_scene_private.adhd>
 #include <impl/assets_shader/asset.adhd>
 #include <impl/ecs_render/deferred/deferred_system.adhd>
+#include <impl/ecs_render/deferred/import_types.adhd>
 #include <impl/ecs_render/deferred/scene_shading_upload_tracker.adhd>
 #include <impl/ecs_render/kernel/compute_pipeline_utils.adhd>
+#include <impl/ecs_render/kernel/descriptor_register_utils.adhd>
 #include <impl/ecs_render/kernel/renderer_constants_private.adhd>
+#include <impl/ecs_render/kernel/task_graph_resource_descs.adhd>
+#include <impl/ecs_render/kernel/task_graph_scheduling.adhd>
 #include <impl/ecs_render/kernel/timing_names.adhd>
 #include <impl/ecs_render/material/renderer_render_state_private.adhd>
 
@@ -28,6 +32,10 @@ const u32 s_DeferredCompositeGroupSize = 8u;
 const Name s_DeferredLightingShaderDebugName = "ECSRender_DeferredLightingCS";
 const Name s_DeferredCompositeShaderDebugName = "ECSRender_DeferredCompositeCS";
 const Name s_DeferredPresentShaderDebugName = "ECSRender_DeferredPresentPS";
+const Name s_DeferredDebugLineVertexShaderDebugName = "ECSRender_DeferredDebugLineVS";
+const Name s_DeferredDebugLinePixelShaderDebugName = "ECSRender_DeferredDebugLinePS";
+const Name s_DeferredDebugLineVertexBufferName = "render.deferred_debug_lines.vertex_buffer";
+const usize s_DeferredDebugLineInitialVertexCapacity = 4096u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,6 +79,59 @@ class DeferredCompositeGraphTask{
         GpuTimingTicketRecordingScope recording(this.m_timingTicket);
         return this.m_system.renderDeferredComposite(commands, this.m_targets, this.m_reflectionInputs);
     }
+}
+
+class DeferredDebugLinesGraphTask{
+    private mut RendererDeferredSystem m_system;
+    private mut DeferredFrameTargets m_targets;
+    private f32x4x4 m_viewProj;
+    private u32 m_depthVertexCount;
+    private u32 m_overlayVertexCount;
+
+    public DeferredDebugLinesGraphTask(
+        mut RendererDeferredSystem system,
+        mut DeferredFrameTargets targets,
+        in MatrixSingle viewProj,
+        in u32 depthVertexCount,
+        in u32 overlayVertexCount
+    ){
+        this.m_system = system;
+        this.m_targets = targets;
+        this.m_viewProj = f32x4x4(viewProj);
+        this.m_depthVertexCount = depthVertexCount;
+        this.m_overlayVertexCount = overlayVertexCount;
+    }
+
+    public GpuTaskCommandRequirements commandRequirements()const{
+        GpuTaskCommandRequirements requirements;
+        requirements.requiredCapabilities = GpuQueueCapability::Graphics;
+        return requirements;
+    }
+
+    [cpp_unwind]
+    public b8 record(mut CommandList commands, in GpuTaskRecordContext context)const{
+        return this.m_system.renderDeferredDebugLines(commands, this.m_targets, MatrixSingle(this.m_viewProj), this.m_depthVertexCount, this.m_overlayVertexCount);
+    }
+}
+
+RenderState BuildDeferredDebugLineRenderState(in b8 depthTest){
+    RenderState renderState;
+    renderState.rasterState.enableDepthClip().setCullNone();
+    if(depthTest)
+        renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(ComparisonFunc::LessOrEqual);
+    else
+        renderState.depthStencilState.enableDepthTest().disableDepthWrite().setDepthFunc(ComparisonFunc::Always);
+    renderState.blendState.targets[0u]
+        .enableBlend()
+        .setSrcBlend(BlendFactor::SrcAlpha)
+        .setDestBlend(BlendFactor::InvSrcAlpha)
+        .setBlendOp(BlendOp::Add)
+        .setSrcBlendAlpha(BlendFactor::One)
+        .setDestBlendAlpha(BlendFactor::InvSrcAlpha)
+        .setBlendOpAlpha(BlendOp::Add)
+        .setColorWriteMask(ColorMask::All)
+    ;
+    return renderState;
 }
 
 static_assert(s_DeferredSceneMaxLights == s_ShaderMaxSceneLights);
@@ -245,6 +306,11 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
+    if(!EnsurePushConstantBindingLayout(device, sizeof(DeferredDebugLinePushConstants), ShaderTypeMask::Vertex, this.m_deferredState.m_debugLineBindingLayout)){
+        error("RendererSystem: failed to create deferred debug-line binding layout");
+        return false;
+    }
+
     if(!CreateClampSampler(false, device, this.m_deferredState.m_sampler)){
         error("RendererSystem: failed to create deferred composite sampler");
         return false;
@@ -259,7 +325,22 @@ b8 RendererDeferredSystem::createDeferredCompositeResources(){
     if(!this.m_shaderSystem.loadShader<PixelShader, DeferredSubsystem>(lambda[](in DeferredSubsystem s) -> AssetRef<PixelShader>{ return s.compositePs; }, s_ShaderArchiveDefaultVariant, s_DeferredPresentShaderDebugName, this.m_deferredState.m_presentPixelShader))
         return false;
 
+    if(!this.m_shaderSystem.loadShader<VertexShader, DeferredSubsystem>(lambda[](in DeferredSubsystem s) -> AssetRef<VertexShader>{ return s.debugLineVs; }, s_ShaderArchiveDefaultVariant, s_DeferredDebugLineVertexShaderDebugName, this.m_deferredState.m_debugLineVertexShader))
+        return false;
+
+    if(!this.m_shaderSystem.loadShader<PixelShader, DeferredSubsystem>(lambda[](in DeferredSubsystem s) -> AssetRef<PixelShader>{ return s.debugLinePs; }, s_ShaderArchiveDefaultVariant, s_DeferredDebugLinePixelShaderDebugName, this.m_deferredState.m_debugLinePixelShader))
+        return false;
+
     return true;
+}
+
+void RendererDeferredSystem::invalidateResources(){
+    if(this.m_deferredState.m_debugLineVertexHeapHandle.valid()){
+        mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+        if(heap.isInitialized())
+            RetireDescriptor(heap, this.m_deferredState.m_debugLineVertexHeapHandle);
+    }
+    this.m_deferredState.invalidateResources();
 }
 
 b8 RendererDeferredSystem::createDeferredCompositePipeline(){
@@ -308,6 +389,115 @@ b8 RendererDeferredSystem::createDeferredPresentPipeline(mut Framebuffer present
     }
     this.m_deferredState.m_presentPipeline = presentPipelineResult.value();
 
+    return true;
+}
+
+b8 RendererDeferredSystem::createDeferredDebugLinePipelines(mut Framebuffer debugFramebuffer){
+    if(!this.createDeferredCompositeResources())
+        return false;
+
+    const FramebufferInfo framebufferInfo = FramebufferInfo(debugFramebuffer.getFramebufferInfo());
+    if(
+        this.m_deferredState.m_debugLineDepthPipeline.valid()
+        && this.m_deferredState.m_debugLineOverlayPipeline.valid()
+        && this.m_deferredState.m_debugLineDepthPipeline.deref().getFramebufferInfo() == framebufferInfo
+        && this.m_deferredState.m_debugLineOverlayPipeline.deref().getFramebufferInfo() == framebufferInfo
+    )
+        return true;
+
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+
+    GraphicsPipelineDesc depthDesc;
+    depthDesc.primType = PrimitiveType::LineList;
+    depthDesc
+        .setVertexShader(this.m_deferredState.m_debugLineVertexShader)
+        .setPixelShader(this.m_deferredState.m_debugLinePixelShader)
+        .setRenderState(BuildDeferredDebugLineRenderState(true))
+        .addBindingLayout(this.m_deferredState.m_debugLineBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    const Expected<GraphicsPipelineHandle> depthPipelineResult = device.createGraphicsPipeline(depthDesc, framebufferInfo);
+    if(!depthPipelineResult.has_value()){
+        this.m_deferredState.m_debugLineDepthPipeline.reset();
+        this.m_deferredState.m_debugLineOverlayPipeline.reset();
+        error("RendererSystem: failed to create deferred depth-tested debug-line pipeline");
+        return false;
+    }
+
+    GraphicsPipelineDesc overlayDesc;
+    overlayDesc.primType = PrimitiveType::LineList;
+    overlayDesc
+        .setVertexShader(this.m_deferredState.m_debugLineVertexShader)
+        .setPixelShader(this.m_deferredState.m_debugLinePixelShader)
+        .setRenderState(BuildDeferredDebugLineRenderState(false))
+        .addBindingLayout(this.m_deferredState.m_debugLineBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    const Expected<GraphicsPipelineHandle> overlayPipelineResult = device.createGraphicsPipeline(overlayDesc, framebufferInfo);
+    if(!overlayPipelineResult.has_value()){
+        this.m_deferredState.m_debugLineDepthPipeline.reset();
+        this.m_deferredState.m_debugLineOverlayPipeline.reset();
+        error("RendererSystem: failed to create deferred overlay debug-line pipeline");
+        return false;
+    }
+
+    this.m_deferredState.m_debugLineDepthPipeline = depthPipelineResult.value();
+    this.m_deferredState.m_debugLineOverlayPipeline = overlayPipelineResult.value();
+    return true;
+}
+
+b8 RendererDeferredSystem::ensureDeferredDebugLineVertexBuffer(in usize requiredVertices){
+    if(requiredVertices == 0u)
+        return true;
+    if(requiredVertices > usize.max / size_of<GpuDebugLineVertex>())
+        return false;
+    if(this.m_deferredState.m_debugLineVertexBuffer.valid() && requiredVertices <= this.m_deferredState.m_debugLineVertexCapacity && this.m_deferredState.m_debugLineVertexHeapHandle.valid())
+        return true;
+
+    mut Device device = this.m_graphics.getDevice();
+    mut GpuDescriptorHeap heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    usize nextCapacity = s_DeferredDebugLineInitialVertexCapacity;
+    if(this.m_deferredState.m_debugLineVertexCapacity > 0u){
+        nextCapacity = this.m_deferredState.m_debugLineVertexCapacity;
+        while(nextCapacity < requiredVertices){
+            if(nextCapacity > usize.max / 2u){
+                nextCapacity = requiredVertices;
+                break;
+            }
+            nextCapacity *= 2u;
+        }
+    }
+    if(nextCapacity < requiredVertices)
+        nextCapacity = requiredVertices;
+    if(nextCapacity > usize.max / size_of<GpuDebugLineVertex>())
+        return false;
+
+    BufferDesc vbDesc;
+    vbDesc
+        .setByteSize(nextCapacity * size_of<GpuDebugLineVertex>())
+        .setCanHaveRawViews(true)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setDebugName(s_DeferredDebugLineVertexBufferName)
+        .enableAutomaticStateTracking(ResourceStates::Common)
+    ;
+    const Expected<BufferHandle> vbResult = device.createBuffer(vbDesc);
+    if(!vbResult.has_value()){
+        error("RendererSystem: failed to create deferred debug-line vertex buffer");
+        return false;
+    }
+    BufferHandle newVb = vbResult.value();
+    if(!ReplaceDescriptor(heap, GpuDescriptorClass::StorageBuffer, DescriptorWriteItemRawBufferSrv(0u, newVb.deref()), this.m_deferredState.m_debugLineVertexHeapHandle)){
+        error("RendererSystem: failed to register deferred debug-line vertex buffer descriptor");
+        return false;
+    }
+    this.m_deferredState.m_debugLineVertexBuffer = newVb;
+    this.m_deferredState.m_debugLineVertexCapacity = nextCapacity;
     return true;
 }
 
@@ -375,6 +565,69 @@ b8 RendererDeferredSystem::renderDeferredPresent(mut CommandList commandList, mu
     return !commandList.isRenderPassActive();
 }
 
+b8 RendererDeferredSystem::renderDeferredDebugLines(
+    mut CommandList commandList,
+    mut DeferredFrameTargets targets,
+    in MatrixSingle viewProj,
+    in u32 depthVertexCount,
+    in u32 overlayVertexCount
+){
+    if(depthVertexCount == 0u && overlayVertexCount == 0u)
+        return true;
+    assert(targets.compositeDebugFramebuffer.valid());
+    assert(this.m_deferredState.m_debugLineDepthPipeline.valid());
+    assert(this.m_deferredState.m_debugLineOverlayPipeline.valid());
+    assert(this.m_deferredState.m_debugLineVertexHeapHandle.valid());
+
+    mut Framebuffer debugFramebuffer = targets.compositeDebugFramebuffer.deref();
+    RenderPassParameters renderPassParameters;
+    renderPassParameters.colorAttachmentActions[0u].loadAction = RenderPassLoadAction::Load;
+    renderPassParameters.colorAttachmentActions[0u].storeAction = RenderPassStoreAction::Store;
+    renderPassParameters.depthAttachmentActions.loadAction = RenderPassLoadAction::Load;
+    renderPassParameters.depthAttachmentActions.storeAction = RenderPassStoreAction::Store;
+    commandList.beginRenderPass(debugFramebuffer, renderPassParameters);
+    if(!commandList.isRenderPassActive())
+        return false;
+
+    ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(debugFramebuffer.getFramebufferInfo().getViewport());
+
+    DeferredDebugLinePushConstants pushConstants;
+    pushConstants.viewProj = f32x4x4(viewProj);
+    pushConstants.vertexBufferSlot = this.m_deferredState.m_debugLineVertexHeapHandle.slot();
+
+    mut GpuDescriptorHeap heap = this.m_graphics.getDevice().getDescriptorHeap();
+    if(depthVertexCount > 0u){
+        GraphicsState graphicsState;
+        graphicsState.setPipeline(this.m_deferredState.m_debugLineDepthPipeline.deref());
+        graphicsState.setFramebuffer(debugFramebuffer);
+        graphicsState.setViewport(viewportState);
+        commandList.setGraphicsState(graphicsState);
+        heap.bindGraphics(commandList, this.m_deferredState.m_debugLineDepthPipeline.deref());
+        commandList.setPushConstants(pushConstants);
+
+        DrawArguments drawArgs;
+        drawArgs.setVertexCount(depthVertexCount).setStartVertexLocation(0u);
+        commandList.draw(drawArgs);
+    }
+    if(overlayVertexCount > 0u){
+        GraphicsState graphicsState;
+        graphicsState.setPipeline(this.m_deferredState.m_debugLineOverlayPipeline.deref());
+        graphicsState.setFramebuffer(debugFramebuffer);
+        graphicsState.setViewport(viewportState);
+        commandList.setGraphicsState(graphicsState);
+        heap.bindGraphics(commandList, this.m_deferredState.m_debugLineOverlayPipeline.deref());
+        commandList.setPushConstants(pushConstants);
+
+        DrawArguments drawArgs;
+        drawArgs.setVertexCount(overlayVertexCount).setStartVertexLocation(depthVertexCount);
+        commandList.draw(drawArgs);
+    }
+
+    commandList.endRenderPass();
+    return !commandList.isRenderPassActive();
+}
+
 RayTracingLightingClassification ClassifyDeferredSceneLights(in Span<f32> importance, in u32 refractiveInstanceCount, mut Span<SceneLightGpuData> lights, in u32 lightCount){
     auto activeLights = lights.subspan(0u, lightCount);
     RayTracingLightingClassification classification;
@@ -426,6 +679,106 @@ Expected<GpuTaskId> RendererDeferredSystem::declareDeferredCompositeTask(
     mut GpuTimingSubmissionTicket timingTicket
 ){
     return graph.addPayloadTask(desc, DeferredCompositeGraphTask(this, targets, timingTicket, reflectionInputs));
+}
+
+[cpp_unwind]
+Expected<Optional<GpuTaskId>> RendererDeferredSystem::declareDeferredDebugLinesTasks(
+    mut GpuTaskGraph graph,
+    mut DeferredFrameTargets targets,
+    in GpuGraphResourceId compositeColor,
+    in GpuGraphResourceId depth,
+    in GpuTaskId compositeTask,
+    in MatrixSingle viewProj,
+    mut IDebugLineProvider provider
+){
+    this.m_deferredState.m_debugLineCollector.clear();
+    provider.collectDebugLines(this.m_deferredState.m_debugLineCollector);
+    if(this.m_deferredState.m_debugLineCollector.empty())
+        return Optional<GpuTaskId>();
+
+    if(!targets.compositeDebugFramebuffer.valid() || !compositeColor.valid() || !depth.valid() || !compositeTask.valid())
+        return MakeUnexpected(Failure());
+
+    if(!this.createDeferredDebugLinePipelines(targets.compositeDebugFramebuffer.deref()))
+        return MakeUnexpected(Failure());
+
+    const Span<GpuDebugLineVertex> depthVerts = this.m_deferredState.m_debugLineCollector.depthTestedVertices();
+    const Span<GpuDebugLineVertex> overlayVerts = this.m_deferredState.m_debugLineCollector.overlayVertices();
+    const usize totalVertices = depthVerts.size() + overlayVerts.size();
+    if(totalVertices == 0u || depthVerts.size() > cast<usize>(u32.max) || overlayVerts.size() > cast<usize>(u32.max) || totalVertices > cast<usize>(u32.max))
+        return MakeUnexpected(Failure());
+
+    if(!this.ensureDeferredDebugLineVertexBuffer(totalVertices))
+        return MakeUnexpected(Failure());
+
+    this.m_deferredState.m_debugLineCombinedScratch.clear();
+    this.m_deferredState.m_debugLineCombinedScratch.reserve(totalVertices);
+    for(usize i = 0u; i < depthVerts.size(); ++i)
+        this.m_deferredState.m_debugLineCombinedScratch.push_back(depthVerts[i]);
+    for(usize i = 0u; i < overlayVerts.size(); ++i)
+        this.m_deferredState.m_debugLineCombinedScratch.push_back(overlayVerts[i]);
+
+    const auto vertsBlobResult = graph.copyUploadElements<GpuDebugLineVertex>(Span<GpuDebugLineVertex>(this.m_deferredState.m_debugLineCombinedScratch.data(), totalVertices));
+    if(!vertsBlobResult.has_value())
+        return MakeUnexpected(Failure());
+
+    const auto debugVertsResourceResult = ImportExternalBuffer(
+        graph,
+        this.m_deferredState.m_debugLineVertexBuffer,
+        Name(s_RenderNameRenderDeferredDebugLinesVerts),
+        "Deferred Debug Line Vertices",
+        ResourceStates::Common,
+        ResourceStates::Common
+    );
+    if(!debugVertsResourceResult.has_value())
+        return MakeUnexpected(Failure());
+    const GpuGraphResourceId debugVertsResource = debugVertsResourceResult.value();
+
+    GpuTaskSchedulingHint uploadScheduling;
+    uploadScheduling.cost = GpuTaskCostHint::Tiny;
+    uploadScheduling.forceSubmissionBoundary = false;
+    uploadScheduling.allowPacketMerge = true;
+    uploadScheduling.mergeWithPrevious = false;
+    GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name(s_RenderNameRenderDeferredDebugLinesVertsUpload))
+        .setMarkerLabel("Deferred Debug Line Vertices Upload")
+        .setScheduling(uploadScheduling)
+    ;
+    GpuUploadBufferTaskDesc uploadTaskDesc;
+    uploadTaskDesc.source = vertsBlobResult.value();
+    uploadTaskDesc.destination = debugVertsResource;
+    uploadTaskDesc.finalState = ResourceStates::ShaderResource;
+    const auto uploadTaskResult = graph.addUploadBufferTask(uploadDesc, uploadTaskDesc);
+    if(!uploadTaskResult.has_value())
+        return MakeUnexpected(Failure());
+
+    const Array<GpuTaskResourceUse, 3u> drawUses(
+        ReadUse(debugVertsResource, ResourceStates::ShaderResource),
+        ReadWriteUse(compositeColor, ResourceStates::RenderTarget),
+        ReadUse(depth, ResourceStates::DepthRead)
+    );
+    const Array<GpuTaskId, 2u> drawDependencies(compositeTask, uploadTaskResult.value());
+    GpuTaskSchedulingHint drawScheduling;
+    drawScheduling.cost = GpuTaskCostHint::Small;
+    drawScheduling.forceSubmissionBoundary = false;
+    drawScheduling.allowPacketMerge = true;
+    drawScheduling.mergeWithPrevious = false;
+    GpuTaskDesc drawDesc;
+    drawDesc
+        .setIdentity(Name(s_RenderNameRenderDeferredDebugLines))
+        .setMarkerLabel("Deferred Debug Lines")
+        .setScheduling(drawScheduling)
+        .setDependencies(drawDependencies)
+        .setResourceUses(drawUses)
+    ;
+    const auto drawTaskResult = graph.addPayloadTask(
+        drawDesc,
+        DeferredDebugLinesGraphTask(this, targets, viewProj, cast<u32>(depthVerts.size()), cast<u32>(overlayVerts.size()))
+    );
+    if(!drawTaskResult.has_value())
+        return MakeUnexpected(Failure());
+    return Optional<GpuTaskId>(drawTaskResult.value());
 }
 
 

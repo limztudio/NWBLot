@@ -11,6 +11,8 @@
 
 #include "constants.h"
 #include "bindless/bindless_heap.slangi"
+#include "mesh/meshlet_payload.slangi"
+#include "mesh/runtime_bounds_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -123,6 +125,7 @@ struct NwbPhysicsGpuSpatialQueryResult{
     float4 hitPointFraction;
     float4 hitNormalDist;
     uint4 hitIds;
+    float4 hitTriBary;
 };
 
 struct NwbPhysicsGpuRenderTransformBinding{
@@ -178,6 +181,9 @@ struct NwbPhysicsGpuJointConstraint{
 struct NwbPhysicsGpuShapeMaterial{
     float4 fricRestStatRoll;
     float4 tanFlagsThreshSlot;
+    float4 surfVelBodyId;
+    float4 fricDirAniso0;
+    float4 aniso1RestPad;
 };
 
 struct NwbPhysicsGpuWarmCacheEntry{
@@ -191,6 +197,7 @@ struct NwbPhysicsGpuEvent{
     uint4 header;
     float4 pointImpulse;
     float4 normalApproach;
+    uint4 bodyIds;
 };
 
 struct NwbPhysicsGpuSoftParticle{
@@ -215,13 +222,22 @@ struct NwbPhysicsGpuSoftBackstop{
     float4 normalRadiusIdx;
 };
 
+struct NwbPhysicsGpuSoftBendConstraint{
+    uint4 indices;
+    float4 restAngleCompLambdaPad;
+};
+
 struct NwbPhysicsGpuForceField{
     float4 originOrDirStrength;
     float4 axisRadius;
     float4 minDistFalloffTurb;
-    float4 boundsMinType;
-    float4 boundsMaxFilter;
+    float4 boundsMinMeta;
+    float4 boundsMaxSuction;
+    float4 shapeCenterOrCapA;
+    float4 shapeRotOrCapB;
+    float4 shapeHalfExtentsExtra;
     float4 extraParams;
+    uint4 filterData;
 };
 
 struct NwbPhysicsGpuFluidVolume{
@@ -230,7 +246,11 @@ struct NwbPhysicsGpuFluidVolume{
     float4 boundsMaxDensity;
     float4 flowVelLinDrag;
     float4 dragLiftWaveAmpFreq;
-    float4 waveSpeedTimeFilter;
+    float4 waveSpeedAngAddedFlags;
+    float4 obbCenterSplash;
+    float4 obbRotation;
+    float4 obbHalfExtentsGerstner;
+    uint4 filterData;
 };
 
 
@@ -270,6 +290,9 @@ struct NwbPhysicsGpuFluidVolume{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftBackstop, Std430DataLayout> g_NwbPhysicsSoftBackstopBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuForceField, Std430DataLayout> g_NwbPhysicsForceFieldBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuFluidVolume, Std430DataLayout> g_NwbPhysicsFluidVolumeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbPhysicsGpuSoftBendConstraint, Std430DataLayout> g_NwbPhysicsSoftBendConstraintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbPhysicsMeshPosBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbPhysicsMeshHalf4Buffers[];
 #pragma warning(pop)
 
 

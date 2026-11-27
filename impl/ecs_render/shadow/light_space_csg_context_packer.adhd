@@ -31,8 +31,12 @@ class LightSpaceCsgContextPacker{
         in Span<CsgCutterGpuData> cutters,
         in Span<LightSpaceCsgInstanceGpu> instances,
         in Span<Span<u32>> solidTriangleMasks,
-        mut Vector<u8> outBytes
+        mut Vector<u8> outBytes,
+        mut u32 outCutterByteOffset,
+        mut u32 outInstanceByteOffset
     )const{
+        outCutterByteOffset = 0u;
+        outInstanceByteOffset = 0u;
         if(receiverRanges.size() != instances.size() || solidTriangleMasks.size() != instances.size())
             return false;
 
@@ -73,6 +77,8 @@ class LightSpaceCsgContextPacker{
             activeReceiverOffset,
             activeReceiverCount
         );
+        outCutterByteOffset = header.cutterByteOffset;
+        outInstanceByteOffset = header.instanceByteOffset;
         AppendPOD(outBytes, header);
 
         usize maskOffset = membershipOffset;

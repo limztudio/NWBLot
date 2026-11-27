@@ -1,0 +1,31 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineVertex"), cpp_flags(self_defaulted, binary_serializable, brace_init)]
+extern class GpuDebugLineVertex{
+    f32x4 positionPad;
+    f32x4 color;
+};
+
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineCollector"), cpp_flags(self_defaulted, no_copy, no_assign)]
+extern class GpuDebugLineCollector{
+    void clear();
+    void reserve(in usize depthTestedVertexCapacity, in usize overlayVertexCapacity);
+    void pushDepthTestedLine(in f32x4 start, in f32x4 end, in f32x4 color);
+    void pushOverlayLine(in f32x4 start, in f32x4 end, in f32x4 color);
+    Span<GpuDebugLineVertex> depthTestedVertices()const;
+    Span<GpuDebugLineVertex> overlayVertices()const;
+    b8 empty()const;
+};
+
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::IDebugLineProvider"), cpp_flags(no_copy, no_assign, abstract, polymorphic_base)]
+extern class IDebugLineProvider{
+    b8 hasDebugLines()const;
+    [cpp_flags(unwind)]
+    void collectDebugLines(mut GpuDebugLineCollector collector);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

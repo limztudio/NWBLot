@@ -598,11 +598,17 @@ void TestHeightfieldCellRay(
     in VectorSingle localOrigin,
     in VectorSingle localDir,
     in b8 cullBackFaces,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut f32 curMax,
     mut LocalRayHit outBest,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics
 ){
+    const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+    if(triFilter.has_value() && !triFilter.value()(hfShapeId, cellIdx))
+        return;
+
     VectorSingle v00(0.0f);
     VectorSingle v10(0.0f);
     VectorSingle v01(0.0f);
@@ -610,7 +616,6 @@ void TestHeightfieldCellRay(
     if(!LoadHeightfieldCellVertices(hf, cx, cz, v00, v10, v01, v11))
         return;
 
-    const u32 cellIdx = cz * (hf.cols - 1u) + cx;
     const b8 flipDiag = hf.flipDiagonal;
     for(usize ti = 0u; ti < 2u; ++ti){
         VectorSingle tv0(0.0f);
@@ -694,6 +699,8 @@ void RayCastHeightfieldHierarchy(
     in VectorSingle invDir,
     in u32 parallelMask,
     in b8 cullBackFaces,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut f32 curMax,
     mut LocalRayHit best,
     mut u32 outCellIndex,
@@ -754,7 +761,7 @@ void RayCastHeightfieldHierarchy(
                     u32 cx = c0 + dx;
                     if(revX)
                         cx = c1 - dx;
-                    TestHeightfieldCellRay(hf, cx, cz, localOrigin, localDir, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
+                    TestHeightfieldCellRay(hf, cx, cz, localOrigin, localDir, cullBackFaces, hfShapeId, triFilter, curMax, best, outCellIndex, outBarycentrics);
                 }
             }
             continue;
@@ -798,6 +805,8 @@ LocalRayHit RayCastHeightfieldDetailed(
     in VectorSingle translation,
     in f32 maxFraction,
     in b8 cullBackFaces,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics
 ){
@@ -823,7 +832,7 @@ LocalRayHit RayCastHeightfieldDetailed(
     const u32 cellRows = hf.rows - 1u;
     f32 curMax = maxFraction;
     if(!hf.hierarchy.empty() && cellCols * cellRows > 64u){
-        RayCastHeightfieldHierarchy(hf, localOrigin, localDir, invDir, parallelMask, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
+        RayCastHeightfieldHierarchy(hf, localOrigin, localDir, invDir, parallelMask, cullBackFaces, hfShapeId, triFilter, curMax, best, outCellIndex, outBarycentrics);
         if(best.hit()){
             const VectorSingle worldN = SafeNormalizeVec3(Vector3Rotate(best.normal(), xfRot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             best.pointFraction = f32x4(TransformPointValues(xfPos, xfRot, best.point()), best.fraction());
@@ -881,7 +890,7 @@ LocalRayHit RayCastHeightfieldDetailed(
         if(cx < 0 || cz < 0 || cx >= cast<isize>(cellCols) || cz >= cast<isize>(cellRows))
             break;
 
-        TestHeightfieldCellRay(hf, cast<u32>(cx), cast<u32>(cz), localOrigin, localDir, cullBackFaces, curMax, best, outCellIndex, outBarycentrics);
+        TestHeightfieldCellRay(hf, cast<u32>(cx), cast<u32>(cz), localOrigin, localDir, cullBackFaces, hfShapeId, triFilter, curMax, best, outCellIndex, outBarycentrics);
         const f32 tCellExit = Min(tMaxX, tMaxZ);
         if(best.hit() && best.fraction() <= tCellExit + 1.0e-5f)
             break;
@@ -914,11 +923,17 @@ void EvalClosestHeightfieldCell(
     in u32 cz,
     in u32 cellCols,
     in VectorSingle localPoint,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut f32 bestDistSq,
     mut VectorSingle bestCp,
     mut VectorSingle bestN,
     mut u32 bestCell
 ){
+    const u32 cellIdx = cz * cellCols + cx;
+    if(triFilter.has_value() && !triFilter.value()(hfShapeId, cellIdx))
+        return;
+
     VectorSingle v00(0.0f);
     VectorSingle v10(0.0f);
     VectorSingle v01(0.0f);
@@ -938,7 +953,7 @@ void EvalClosestHeightfieldCell(
         if(dSq < bestDistSq){
             bestDistSq = dSq;
             bestCp = cp;
-            bestCell = cz * cellCols + cx;
+            bestCell = cellIdx;
             const VectorSingle triN = SafeNormalizeVec3(Cross(VectorSingle(v1 - v0, 0.0f), VectorSingle(v2 - v0, 0.0f)), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             bestN = SafeNormalizeVec3(diff, triN);
         }
@@ -948,6 +963,8 @@ void EvalClosestHeightfieldCell(
 b8 ClosestPointOnHeightfield(
     in HeightfieldShape hf,
     in VectorSingle localPoint,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut VectorSingle outClosest,
     mut VectorSingle outNormal,
     mut u32 outCellIndex
@@ -983,7 +1000,7 @@ b8 ClosestPointOnHeightfield(
                 break;
         }
         if(ring == 0){
-            EvalClosestHeightfieldCell(hf, cast<u32>(centerCx), cast<u32>(centerCz), cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+            EvalClosestHeightfieldCell(hf, cast<u32>(centerCx), cast<u32>(centerCz), cellCols, localPoint, hfShapeId, triFilter, bestDistSq, bestCp, bestN, bestCell);
             continue;
         }
         const isize xStart = Max(cast<isize>(0), centerCx - ring);
@@ -994,22 +1011,22 @@ b8 ClosestPointOnHeightfield(
         if(centerCz - ring >= 0){
             const u32 cz = cast<u32>(centerCz - ring);
             for(isize cx = xStart; cx <= xEnd; ++cx)
-                EvalClosestHeightfieldCell(hf, cast<u32>(cx), cz, cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+                EvalClosestHeightfieldCell(hf, cast<u32>(cx), cz, cellCols, localPoint, hfShapeId, triFilter, bestDistSq, bestCp, bestN, bestCell);
         }
         if(centerCz + ring < cast<isize>(cellRows)){
             const u32 cz = cast<u32>(centerCz + ring);
             for(isize cx = xStart; cx <= xEnd; ++cx)
-                EvalClosestHeightfieldCell(hf, cast<u32>(cx), cz, cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+                EvalClosestHeightfieldCell(hf, cast<u32>(cx), cz, cellCols, localPoint, hfShapeId, triFilter, bestDistSq, bestCp, bestN, bestCell);
         }
         if(centerCx - ring >= 0){
             const u32 cx = cast<u32>(centerCx - ring);
             for(isize cz = zInnerStart; cz <= zInnerEnd; ++cz)
-                EvalClosestHeightfieldCell(hf, cx, cast<u32>(cz), cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+                EvalClosestHeightfieldCell(hf, cx, cast<u32>(cz), cellCols, localPoint, hfShapeId, triFilter, bestDistSq, bestCp, bestN, bestCell);
         }
         if(centerCx + ring < cast<isize>(cellCols)){
             const u32 cx = cast<u32>(centerCx + ring);
             for(isize cz = zInnerStart; cz <= zInnerEnd; ++cz)
-                EvalClosestHeightfieldCell(hf, cx, cast<u32>(cz), cellCols, localPoint, bestDistSq, bestCp, bestN, bestCell);
+                EvalClosestHeightfieldCell(hf, cx, cast<u32>(cz), cellCols, localPoint, hfShapeId, triFilter, bestDistSq, bestCp, bestN, bestCell);
         }
     }
 
@@ -1157,12 +1174,17 @@ void EvalHeightfieldShapeCastCell(
     in VectorSingle translation,
     in VectorSingle posHf,
     in VectorSingle rotHf,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut f32 curMax,
     mut LocalRayHit best,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics,
     mut u32 bestKey
 ){
+    const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+    if(triFilter.has_value() && !triFilter.value()(hfShapeId, cellIdx))
+        return;
     if(hf.isCellHoleBitSet(cx, cz))
         return;
     if(!IsHeightfieldBlockOverlappingY(hf, 0u, cx >> 1u, cz >> 1u, minY, maxY))
@@ -1199,7 +1221,6 @@ void EvalHeightfieldShapeCastCell(
     const VectorSingle v10(x1, h10, z0, 0.0f);
     const VectorSingle v01(x0, h01, z1, 0.0f);
     const VectorSingle v11(x1, h11, z1, 0.0f);
-    const u32 cellIdx = cz * (hf.cols - 1u) + cx;
     const b8 flipDiag = hf.flipDiagonal;
     for(usize ti = 0u; ti < 2u; ++ti){
         VectorSingle tv0(0.0f);
@@ -1236,6 +1257,8 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
     in VectorSingle posHf,
     in VectorSingle rotHf,
     in f32 maxFraction,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics
 ){
@@ -1285,7 +1308,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
         const f32 boxHiY = sweepBox.upperBound.y;
         for(u32 cz = minCz; cz <= maxCz; ++cz){
             for(u32 cx = minCx; cx <= maxCx; ++cx)
-                EvalHeightfieldShapeCastCell(hf, cx, cz, boxLoY, boxHiY, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+                EvalHeightfieldShapeCastCell(hf, cx, cz, boxLoY, boxHiY, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, hfShapeId, triFilter, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
         return best;
     }
@@ -1332,7 +1355,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
             const f32 yLo = cLo.y;
             const f32 yHi = cHi.y;
             for(u32 cz = colCz0; cz <= colCz1; ++cz)
-                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, hfShapeId, triFilter, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
     }
     else{
@@ -1375,7 +1398,7 @@ LocalRayHit ShapeCastHeightfieldViewDetailed(
             const f32 yLo = cLo.y;
             const f32 yHi = cHi.y;
             for(u32 cx = rowCx0; cx <= rowCx1; ++cx)
-                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, curMax, best, outCellIndex, outBarycentrics, bestKey);
+                EvalHeightfieldShapeCastCell(hf, cx, cz, yLo, yHi, queryProxy, posQuery, rotQuery, translation, posHf, rotHf, hfShapeId, triFilter, curMax, best, outCellIndex, outBarycentrics, bestKey);
         }
     }
     return best;
@@ -1496,13 +1519,13 @@ TimeOfImpactOutput ComputeHeightfieldTimeOfImpactViewsPrecomputed(
     f32 curMax = tMax;
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
             VectorSingle v00(0.0f);
             VectorSingle v10(0.0f);
             VectorSingle v01(0.0f);
             VectorSingle v11(0.0f);
             if(!LoadHeightfieldCellVerticesInYRange(hfB, cx, cz, qLoY, qHiY, v00, v10, v01, v11))
                 continue;
-            const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
             const b8 flipDiag = hfB.flipDiagonal;
             for(usize ti = 0u; ti < 2u; ++ti){
                 VectorSingle tv0(0.0f);
@@ -1581,6 +1604,8 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
     in VectorSingle posHf,
     in VectorSingle rotHf,
     in f32 maxFraction,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut u32 outCellIndex,
     mut f32x2u outBarycentrics
 ){
@@ -1649,11 +1674,15 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
     const f32 toiTargetPadding = 0.25f * s_LinearSlop;
     const f32 toiTol = 0.5f * s_LinearSlop;
 
+    const b8 hasTriFilter = triFilter.has_value();
     f32 curMax = maxFraction;
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         const f32 z0 = oz + cast<f32>(cz) * sz;
         const f32 z1 = z0 + sz;
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            const u32 cellIdx = cz * (hf.cols - 1u) + cx;
+            if(hasTriFilter && !triFilter.value()(hfShapeId, cellIdx))
+                continue;
             if(hf.isCellHoleBitSet(cx, cz))
                 continue;
             if(!IsHeightfieldBlockOverlappingY(hf, 0u, cx >> 1u, cz >> 1u, qLoY, qHiY))
@@ -1684,7 +1713,6 @@ LocalRayHit ShapeCastHeightfieldViewRotatedDetailed(
             const VectorSingle v10(x1, h10, z0, 0.0f);
             const VectorSingle v01(x0, h01, z1, 0.0f);
             const VectorSingle v11(x1, h11, z1, 0.0f);
-            const u32 cellIdx = cz * (hf.cols - 1u) + cx;
             const b8 flipDiag = hf.flipDiagonal;
             for(usize ti = 0u; ti < 2u; ++ti){
                 VectorSingle tv0(0.0f);
@@ -2006,13 +2034,17 @@ void CollideConvexProxyAndHeightfieldWithRelativeMulti(
     in VectorSingle localRotA,
     in VectorSingle worldUp,
     in f32 maxDistance,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Manifold outSecondaryManifold
+    mut Vector<Manifold> outExtraManifolds
 ){
     outManifold = Manifold();
-    outSecondaryManifold = Manifold();
+    outExtraManifolds.clear();
     if(!hfB.isValid() || IsProxyViewEmpty(proxyA))
         return;
+
+    const b8 hasTriFilter = triFilter.has_value();
 
     VectorSingle lMin(0.0f);
     VectorSingle lMax(0.0f);
@@ -2032,8 +2064,8 @@ void CollideConvexProxyAndHeightfieldWithRelativeMulti(
     if(!anyOverlap)
         return;
 
-    const b8 isSphereA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u);
-    const b8 isCapsuleA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 2u);
+    const b8 isSphereA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u && proxyA.scaleMinMargin.w < 0.0f);
+    const b8 isCapsuleA = (proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 2u && proxyA.scaleMinMargin.w < 0.0f);
     VectorSingle sphereCenterB(0.0f);
     Array<f32x3u, 2u> capPtsInB;
     if(isSphereA){
@@ -2059,13 +2091,15 @@ void CollideConvexProxyAndHeightfieldWithRelativeMulti(
 
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
+            if(hasTriFilter && !triFilter.value()(hfShapeId, cellIdx))
+                continue;
             VectorSingle v00(0.0f);
             VectorSingle v10(0.0f);
             VectorSingle v01(0.0f);
             VectorSingle v11(0.0f);
             if(!LoadHeightfieldCellVerticesInYRange(hfB, cx, cz, qLoY, qHiY, v00, v10, v01, v11))
                 continue;
-            const u32 cellIdx = cz * (hfB.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
                 VectorSingle tv0(0.0f);
                 VectorSingle tv1(0.0f);
@@ -2212,7 +2246,7 @@ void CollideConvexProxyAndHeightfieldWithRelativeMulti(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesMultiPlane(chosenNormal, candidates, maxDistance, outManifold, outSecondaryManifold);
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
 Manifold CollideConvexProxyAndHeightfieldWithRelative(
@@ -2228,8 +2262,9 @@ Manifold CollideConvexProxyAndHeightfieldWithRelative(
     in f32 maxDistance
 ){
     Manifold primary;
-    Manifold secondary;
-    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, primary, secondary);
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
     return primary;
 }
 
@@ -2241,11 +2276,13 @@ void CollideConvexProxyAndHeightfieldMulti(
     in VectorSingle posB,
     in VectorSingle rotB,
     in f32 maxDistance,
+    in ShapeId hfShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Manifold outSecondaryManifold
+    mut Vector<Manifold> outExtraManifolds
 ){
     outManifold = Manifold();
-    outSecondaryManifold = Manifold();
+    outExtraManifolds.clear();
     if(!hfB.isValid() || IsProxyViewEmpty(proxyA))
         return;
 
@@ -2253,7 +2290,7 @@ void CollideConvexProxyAndHeightfieldMulti(
     VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
     RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
     const VectorSingle worldUp = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, outManifold, outSecondaryManifold);
+    CollideConvexProxyAndHeightfieldWithRelativeMulti(proxyA, posA, rotA, hfB, posB, rotB, localPosA, localRotA, worldUp, maxDistance, hfShapeId, triFilter, outManifold, outExtraManifolds);
 }
 
 Manifold CollideConvexProxyAndHeightfield(
@@ -2266,8 +2303,9 @@ Manifold CollideConvexProxyAndHeightfield(
     in f32 maxDistance
 ){
     Manifold primary;
-    Manifold secondary;
-    CollideConvexProxyAndHeightfieldMulti(proxyA, posA, rotA, hfB, posB, rotB, maxDistance, primary, secondary);
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideConvexProxyAndHeightfieldMulti(proxyA, posA, rotA, hfB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
     return primary;
 }
 
@@ -2327,7 +2365,7 @@ void PushHeightfieldASmoothedPoint(
     PushMeshCandidateWithTris(candPt, candAncA, candAncB, candN, sep, featureId, cellIdxA, triIdxB, candidates);
 }
 
-Manifold CollideHeightfieldAgainstTarget<TriColliderFn>(
+void CollideHeightfieldAgainstTarget<TriColliderFn>(
     in HeightfieldShape hfA,
     in VectorSingle posA,
     in VectorSingle rotA,
@@ -2336,9 +2374,15 @@ Manifold CollideHeightfieldAgainstTarget<TriColliderFn>(
     in VectorSingle posB,
     in VectorSingle rotB,
     in f32 maxDistance,
-    in TriColliderFn collideTri
+    in ShapeId hfShapeIdA,
+    in Optional<TriangleFilterCallback> triFilter,
+    in TriColliderFn collideTri,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
 ){
-    Manifold m;
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    const b8 hasTriFilter = triFilter.has_value();
     VectorSingle relPos(0.0f);
     VectorSingle relRot(0.0f, 0.0f, 0.0f, 1.0f);
     RelativeTransformValues(posA, rotA, posB, rotB, relPos, relRot);
@@ -2351,7 +2395,7 @@ Manifold CollideHeightfieldAgainstTarget<TriColliderFn>(
     b8 anyOverlap = false;
     ComputeHeightfieldOverlappedCells(hfA, queryBox, minCx, maxCx, minCz, maxCz, anyOverlap);
     if(!anyOverlap)
-        return m;
+        return;
 
     const VectorSingle worldUpA = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
@@ -2361,6 +2405,9 @@ Manifold CollideHeightfieldAgainstTarget<TriColliderFn>(
 
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         for(u32 cx = minCx; cx <= maxCx; ++cx){
+            const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
+            if(hasTriFilter && !triFilter.value()(hfShapeIdA, cellIdx))
+                continue;
             if(!IsHeightfieldBlockOverlappingY(hfA, 0u, cx >> 1u, cz >> 1u, qMin.y, qMax.y))
                 continue;
             VectorSingle v00(0.0f); VectorSingle v10(0.0f); VectorSingle v01(0.0f); VectorSingle v11(0.0f);
@@ -2374,7 +2421,6 @@ Manifold CollideHeightfieldAgainstTarget<TriColliderFn>(
             const f32 cellHiY = Max(hPairMax.x, hPairMax.y) + hfA.thickness;
             if(cellHiY < qMin.y || cellLoY > qMax.y)
                 continue;
-            const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
             for(usize ti = 0u; ti < 2u; ++ti){
                 VectorSingle tv0(0.0f);
                 VectorSingle tv1(0.0f);
@@ -2424,8 +2470,47 @@ Manifold CollideHeightfieldAgainstTarget<TriColliderFn>(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesAndWriteManifold(chosenNormal, candidates, m);
-    return m;
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
+}
+
+void CollideHeightfieldAndMeshMulti(
+    in HeightfieldShape hfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in ShapeId hfShapeIdA,
+    in ShapeId meshShapeIdB,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(!hfA.isValid() || meshB.nodes.empty() || meshB.triangles.empty())
+        return;
+    CollideHeightfieldAgainstTarget(
+        hfA,
+        posA,
+        rotA,
+        meshB.localAabb(),
+        meshB.radius(),
+        posB,
+        rotB,
+        maxDistance,
+        hfShapeIdA,
+        triFilter,
+        lambda[in posA, in rotA, in meshB, in posB, in rotB, in maxDistance, in meshShapeIdB, in triFilter](in ShapeProxyView triView) -> Manifold{
+            Manifold triPrimary;
+            Vector<Manifold> triExtras;
+            CollideConvexProxyAndMeshMulti(triView, posA, rotA, meshB, posB, rotB, maxDistance, meshShapeIdB, triFilter, triPrimary, triExtras);
+            return triPrimary;
+        },
+        outManifold,
+        outExtraManifolds
+    );
 }
 
 Manifold CollideHeightfieldAndMesh(
@@ -2437,20 +2522,54 @@ Manifold CollideHeightfieldAndMesh(
     in VectorSingle rotB,
     in f32 maxDistance
 ){
-    if(!hfA.isValid() || meshB.nodes.empty() || meshB.triangles.empty())
-        return Manifold();
-    return CollideHeightfieldAgainstTarget(
+    Manifold primary;
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideHeightfieldAndMeshMulti(hfA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
+    return primary;
+}
+
+void CollideHeightfieldsMulti(
+    in HeightfieldShape hfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in HeightfieldShape hfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in ShapeId hfShapeIdA,
+    in ShapeId hfShapeIdB,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(!hfA.isValid() || !hfB.isValid())
+        return;
+    VectorSingle localPosAInB(0.0f);
+    VectorSingle localRotAInB(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosAInB, localRotAInB);
+    const VectorSingle worldUpB = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    CollideHeightfieldAgainstTarget(
         hfA,
         posA,
         rotA,
-        meshB.localAabb(),
-        meshB.radius(),
+        hfB.computeLocalAabb(),
+        hfB.thickness,
         posB,
         rotB,
         maxDistance,
-        lambda[in posA, in rotA, in meshB, in posB, in rotB, in maxDistance](in ShapeProxyView triView) -> Manifold{
-            return CollideConvexProxyAndMesh(triView, posA, rotA, meshB, posB, rotB, maxDistance);
-        }
+        hfShapeIdA,
+        triFilter,
+        lambda[in posA, in rotA, in hfB, in posB, in rotB, in localPosAInB, in localRotAInB, in worldUpB, in maxDistance, in hfShapeIdB, in triFilter](in ShapeProxyView triView) -> Manifold{
+            Manifold triPrimary;
+            Vector<Manifold> triExtras;
+            CollideConvexProxyAndHeightfieldWithRelativeMulti(triView, posA, rotA, hfB, posB, rotB, localPosAInB, localRotAInB, worldUpB, maxDistance, hfShapeIdB, triFilter, triPrimary, triExtras);
+            return triPrimary;
+        },
+        outManifold,
+        outExtraManifolds
     );
 }
 
@@ -2463,25 +2582,11 @@ Manifold CollideHeightfields(
     in VectorSingle rotB,
     in f32 maxDistance
 ){
-    if(!hfA.isValid() || !hfB.isValid())
-        return Manifold();
-    VectorSingle localPosAInB(0.0f);
-    VectorSingle localRotAInB(0.0f, 0.0f, 0.0f, 1.0f);
-    RelativeTransformValues(posB, rotB, posA, rotA, localPosAInB, localRotAInB);
-    const VectorSingle worldUpB = SafeNormalizeVec3(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    return CollideHeightfieldAgainstTarget(
-        hfA,
-        posA,
-        rotA,
-        hfB.computeLocalAabb(),
-        hfB.thickness,
-        posB,
-        rotB,
-        maxDistance,
-        lambda[in posA, in rotA, in hfB, in posB, in rotB, in localPosAInB, in localRotAInB, in worldUpB, in maxDistance](in ShapeProxyView triView) -> Manifold{
-            return CollideConvexProxyAndHeightfieldWithRelative(triView, posA, rotA, hfB, posB, rotB, localPosAInB, localRotAInB, worldUpB, maxDistance);
-        }
-    );
+    Manifold primary;
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideHeightfieldsMulti(hfA, posA, rotA, hfB, posB, rotB, maxDistance, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);
+    return primary;
 }
 
 

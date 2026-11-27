@@ -238,6 +238,68 @@ void nwbPhysicsStoreBodyVelocity(const uint bodyStateSlot, const uint bodyIdx, c
 #endif
 }
 
+void nwbPhysicsInvertSymmetric3(
+    const float4 a0,
+    const float2 a1,
+    out float4 inv0,
+    out float2 inv1
+){
+    const float c11 = a0.w * a1.y - a1.x * a1.x;
+    const float c12 = a0.z * a1.x - a0.y * a1.y;
+    const float c13 = a0.y * a1.x - a0.z * a0.w;
+    const float c22 = a0.x * a1.y - a0.z * a0.z;
+    const float c23 = a0.y * a0.z - a0.x * a1.x;
+    const float c33 = a0.x * a0.w - a0.y * a0.y;
+    const float det = a0.x * c11 + a0.y * c12 + a0.z * c13;
+    const float tr = a0.x + a0.w + a1.y;
+    const float s2 = c11 + c22 + c33;
+    const float detTol = max(1.0e-30f, 1.0e-6f * abs(tr * s2) + 1.0e-12f * abs(tr * tr * tr));
+
+    if(abs(det) > detTol){
+        const float invDet = 1.0f / det;
+        inv0 = float4(c11, c12, c13, c22) * invDet;
+        inv1 = float2(c23, c33) * invDet;
+        return;
+    }
+
+    if(s2 > 1.0e-6f * tr * tr && s2 > 1.0e-30f){
+        float3 nCol = float3(c11, c12, c13);
+        float bestDiag = abs(c11);
+        if(abs(c22) > bestDiag){
+            bestDiag = abs(c22);
+            nCol = float3(c12, c22, c23);
+        }
+        if(abs(c33) > bestDiag)
+            nCol = float3(c13, c23, c33);
+        const float nLenSq = dot(nCol, nCol);
+        if(nLenSq > 1.0e-30f){
+            const float3 n = nCol * rsqrt(nLenSq);
+            const float invS2 = 1.0f / s2;
+            inv0 = float4(
+                tr * (1.0f - n.x * n.x) - a0.x,
+                tr * (-n.x * n.y) - a0.y,
+                tr * (-n.x * n.z) - a0.z,
+                tr * (1.0f - n.y * n.y) - a0.w
+            ) * invS2;
+            inv1 = float2(
+                tr * (-n.y * n.z) - a1.x,
+                tr * (1.0f - n.z * n.z) - a1.y
+            ) * invS2;
+            return;
+        }
+    }
+
+    if(tr > 1.0e-15f){
+        const float invTrSq = 1.0f / (tr * tr);
+        inv0 = a0 * invTrSq;
+        inv1 = a1 * invTrSq;
+        return;
+    }
+
+    inv0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    inv1 = float2(0.0f, 0.0f);
+}
+
 void nwbPhysicsApplyGyroscopicStep(
     const float4 q,
     const float4 invInertiaLocal0,

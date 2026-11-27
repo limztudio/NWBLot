@@ -6,6 +6,7 @@
 #include <impl/ecs_mesh/runtime/buffer_upload.adhd>
 #include <impl/ecs_mesh/soft_body/cpu_mesh.adhd>
 #include <impl/ecs_physics/subsystem_components.adhd>
+#include <impl/physics/gpu/gpu_dispatcher.adhd>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,6 +38,13 @@ class SoftBodyRuntimeMeshGpuBuffers{
     public BufferHandle attributeBuffer;
     public BufferHandle meshletLocalBoundsBuffer;
     public BufferHandle localBoundsBuffer;
+    public GpuDescriptorHandle positionUav;
+    public GpuDescriptorHandle normalUav;
+    public GpuDescriptorHandle tangentUav;
+    public GpuDescriptorHandle attributeUav;
+    public GpuDescriptorHandle meshletBoundsUav;
+    public GpuDescriptorHandle meshletLocalBoundsUav;
+    public GpuDescriptorHandle localBoundsUav;
 
     public void reset(){
         this.meshKey = s_NameNone;
@@ -56,6 +64,50 @@ class SoftBodyRuntimeMeshGpuBuffers{
         this.attributeBuffer.reset();
         this.meshletLocalBoundsBuffer.reset();
         this.localBoundsBuffer.reset();
+        this.positionUav = GpuDescriptorHandleInvalid();
+        this.normalUav = GpuDescriptorHandleInvalid();
+        this.tangentUav = GpuDescriptorHandleInvalid();
+        this.attributeUav = GpuDescriptorHandleInvalid();
+        this.meshletBoundsUav = GpuDescriptorHandleInvalid();
+        this.meshletLocalBoundsUav = GpuDescriptorHandleInvalid();
+        this.localBoundsUav = GpuDescriptorHandleInvalid();
+    }
+
+    public b8 hasValidUavs()const{
+        return this.positionUav.valid()
+            && this.normalUav.valid()
+            && this.tangentUav.valid()
+            && this.attributeUav.valid()
+            && this.meshletBoundsUav.valid()
+            && this.meshletLocalBoundsUav.valid()
+            && this.localBoundsUav.valid();
+    }
+
+    public void releaseUavs(mut GraphicsRuntime graphics){
+        mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+        if(heap.isInitialized()){
+            if(this.positionUav.valid())
+                heap.free(this.positionUav);
+            if(this.normalUav.valid())
+                heap.free(this.normalUav);
+            if(this.tangentUav.valid())
+                heap.free(this.tangentUav);
+            if(this.attributeUav.valid())
+                heap.free(this.attributeUav);
+            if(this.meshletBoundsUav.valid())
+                heap.free(this.meshletBoundsUav);
+            if(this.meshletLocalBoundsUav.valid())
+                heap.free(this.meshletLocalBoundsUav);
+            if(this.localBoundsUav.valid())
+                heap.free(this.localBoundsUav);
+        }
+        this.positionUav = GpuDescriptorHandleInvalid();
+        this.normalUav = GpuDescriptorHandleInvalid();
+        this.tangentUav = GpuDescriptorHandleInvalid();
+        this.attributeUav = GpuDescriptorHandleInvalid();
+        this.meshletBoundsUav = GpuDescriptorHandleInvalid();
+        this.meshletLocalBoundsUav = GpuDescriptorHandleInvalid();
+        this.localBoundsUav = GpuDescriptorHandleInvalid();
     }
 
     public b8 valid()const{
@@ -76,6 +128,19 @@ class SoftBodyRuntimeMeshGpuBuffers{
             && this.meshletLocalBoundsBuffer.valid()
             && this.localBoundsBuffer.valid();
     }
+}
+
+class SoftBodyGpuDeformOverride{
+    public BufferHandle positionBuffer;
+    public BufferHandle normalBuffer;
+    public BufferHandle tangentBuffer;
+    public BufferHandle meshletBoundsBuffer;
+    public BufferHandle meshletLocalBoundsBuffer;
+    public BufferHandle localBoundsBuffer;
+    public BufferHandle attributeBuffer;
+    public RuntimeMeshLocalBounds localBounds;
+    public u64 contentRevision = 0u;
+    public b8 active = false;
 }
 
 class SoftBodyRuntimeMeshEntry{
@@ -99,17 +164,89 @@ u64 ComputeSoftBodyDeformSignature(in SoftBody sb, in TransformComponent xf){
     if(sb.isWorldSpaceBaked())
         bakedFlag = 1u;
     h = HashCombineValue(h, bakedFlag);
-    h = HashCombineValue(h, BitCast<u32>(xf.position.x));
-    h = HashCombineValue(h, BitCast<u32>(xf.position.y));
-    h = HashCombineValue(h, BitCast<u32>(xf.position.z));
-    h = HashCombineValue(h, BitCast<u32>(xf.rotation.x));
-    h = HashCombineValue(h, BitCast<u32>(xf.rotation.y));
-    h = HashCombineValue(h, BitCast<u32>(xf.rotation.z));
-    h = HashCombineValue(h, BitCast<u32>(xf.rotation.w));
-    h = HashCombineValue(h, BitCast<u32>(xf.scale.x));
-    h = HashCombineValue(h, BitCast<u32>(xf.scale.y));
-    h = HashCombineValue(h, BitCast<u32>(xf.scale.z));
+    if(sb.isWorldSpaceBaked()){
+        h = HashCombineValue(h, BitCast<u32>(xf.position.x));
+        h = HashCombineValue(h, BitCast<u32>(xf.position.y));
+        h = HashCombineValue(h, BitCast<u32>(xf.position.z));
+        h = HashCombineValue(h, BitCast<u32>(xf.rotation.x));
+        h = HashCombineValue(h, BitCast<u32>(xf.rotation.y));
+        h = HashCombineValue(h, BitCast<u32>(xf.rotation.z));
+        h = HashCombineValue(h, BitCast<u32>(xf.rotation.w));
+        h = HashCombineValue(h, BitCast<u32>(xf.scale.x));
+        h = HashCombineValue(h, BitCast<u32>(xf.scale.y));
+        h = HashCombineValue(h, BitCast<u32>(xf.scale.z));
+    }
     return cast<u64>(h);
+}
+
+TransformComponent ResolveSoftBodyEntityWorldTransform(
+    in World world,
+    in EntityID entity,
+    mut Vector<TransformComponent> localChainScratch,
+    mut Vector<u8> inheritScaleScratch
+){
+    TransformComponent outXf;
+    localChainScratch.clear();
+    inheritScaleScratch.clear();
+
+    if(!entity.valid() || !world.alive(entity))
+        return outXf;
+
+    EntityID cur = entity;
+    b8 hasHierarchy = false;
+    TransformComponent rootXf;
+    for(u32 depth = 0u; depth < 32u; ++depth){
+        if(!world.hasComponent<SceneParentComponent>(cur) || !world.hasComponent<LocalTransformComponent>(cur)){
+            if(world.hasComponent<TransformComponent>(cur))
+                rootXf = world.getComponent<TransformComponent>(cur);
+            break;
+        }
+        in SceneParentComponent sp = world.getComponent<SceneParentComponent>(cur);
+        if(!sp.parent.valid() || sp.parent == cur || !world.alive(sp.parent)){
+            if(world.hasComponent<TransformComponent>(cur))
+                rootXf = world.getComponent<TransformComponent>(cur);
+            break;
+        }
+        in LocalTransformComponent lxf = world.getComponent<LocalTransformComponent>(cur);
+        TransformComponent stepXf;
+        stepXf.position = lxf.position;
+        stepXf.rotation = lxf.rotation;
+        stepXf.scale = lxf.scale;
+        localChainScratch.push_back(stepXf);
+        u8 inh = 0u;
+        if(sp.inheritScale)
+            inh = 1u;
+        inheritScaleScratch.push_back(inh);
+        hasHierarchy = true;
+        cur = sp.parent;
+    }
+
+    if(!hasHierarchy){
+        if(world.hasComponent<TransformComponent>(entity))
+            return world.getComponent<TransformComponent>(entity);
+        return outXf;
+    }
+
+    VectorSingle accPos(rootXf.position.x, rootXf.position.y, rootXf.position.z, 0.0f);
+    VectorSingle accRot = SafeNormalizeQuat(VectorSingle(rootXf.rotation));
+    VectorSingle accScale(rootXf.scale.x, rootXf.scale.y, rootXf.scale.z, 0.0f);
+    for(usize idx = localChainScratch.size(); idx > 0u; --idx){
+        in TransformComponent loc = localChainScratch[idx - 1u];
+        const b8 inh = (inheritScaleScratch[idx - 1u] != 0u);
+        const VectorSingle locPos(loc.position.x, loc.position.y, loc.position.z, 0.0f);
+        const VectorSingle locRot = SafeNormalizeQuat(VectorSingle(loc.rotation));
+        const VectorSingle locScale(loc.scale.x, loc.scale.y, loc.scale.z, 0.0f);
+        accPos = TransformPointValues(accPos, accRot, locPos * accScale);
+        accRot = SafeNormalizeQuat(QuaternionMultiply(accRot, locRot));
+        if(inh)
+            accScale = accScale * locScale;
+        else
+            accScale = locScale;
+    }
+    outXf.position = f32x4(accPos, 0.0f);
+    outXf.rotation = f32x4(accRot);
+    outXf.scale = f32x4(accScale, 0.0f);
+    return outXf;
 }
 
 Expected<BufferHandle, BufferSetupFailure> CreateSoftBodyRuntimeBuffer(
@@ -132,6 +269,22 @@ Expected<BufferHandle, BufferSetupFailure> CreateSoftBodyRuntimeBuffer(
         structStride,
         BufferFlags(canHaveUavs, canHaveRawViews, accelStructBuildInput, ResourceQueueSharing::GraphicsAndAsyncCompute, isIndexBuffer)
     );
+}
+
+b8 AllocateSoftBodyStorageUav(
+    mut GpuDescriptorHeap heap,
+    in DescriptorWriteItem item,
+    mut GpuDescriptorHandle outHandle
+){
+    const Expected<GpuDescriptorHandle> handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    if(!handle.has_value())
+        return false;
+    GpuDescriptorRetirementGuard retireHandle(heap, handle.value());
+    if(!heap.write(handle.value(), item))
+        return false;
+    retireHandle.release();
+    outHandle = handle.value();
+    return true;
 }
 
 [cpp_unwind]
@@ -211,6 +364,25 @@ b8 CreateSoftBodyEntryGpuBuffers(
     outGpu.meshletPrimitiveIndexBuffer = primRes.value();
     outGpu.triangleIndexBuffer = triIdxRes.value();
     outGpu.attributeBuffer = triAttrRes.value();
+
+    mut GpuDescriptorHeap heap = graphics.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized()){
+        outGpu.reset();
+        return false;
+    }
+    const b8 uavOk =
+        AllocateSoftBodyStorageUav(heap, DescriptorWriteItemStructuredBufferUav(0u, outGpu.positionBuffer.deref()), outGpu.positionUav)
+        && AllocateSoftBodyStorageUav(heap, DescriptorWriteItemStructuredBufferUav(0u, outGpu.normalBuffer.deref()), outGpu.normalUav)
+        && AllocateSoftBodyStorageUav(heap, DescriptorWriteItemStructuredBufferUav(0u, outGpu.tangentBuffer.deref()), outGpu.tangentUav)
+        && AllocateSoftBodyStorageUav(heap, DescriptorWriteItemRawBufferUav(0u, outGpu.attributeBuffer.deref()), outGpu.attributeUav)
+        && AllocateSoftBodyStorageUav(heap, DescriptorWriteItemRawBufferUav(0u, outGpu.meshletBoundsBuffer.deref()), outGpu.meshletBoundsUav)
+        && AllocateSoftBodyStorageUav(heap, DescriptorWriteItemRawBufferUav(0u, outGpu.meshletLocalBoundsBuffer.deref()), outGpu.meshletLocalBoundsUav)
+        && AllocateSoftBodyStorageUav(heap, DescriptorWriteItemRawBufferUav(0u, outGpu.localBoundsBuffer.deref()), outGpu.localBoundsUav);
+    if(!uavOk){
+        outGpu.releaseUavs(graphics);
+        outGpu.reset();
+        return false;
+    }
     return true;
 }
 
@@ -248,7 +420,11 @@ b8 DeclareSoftBodyTopologyUploads(
     return ok;
 }
 
-RuntimeMeshDesc BuildSoftBodyRuntimeMeshDesc(in SoftBodyRuntimeMeshEntry entry){
+RuntimeMeshDesc BuildSoftBodyRuntimeMeshDesc(
+    in SoftBodyRuntimeMeshEntry entry,
+    in b8 hasGpuOverride,
+    in SoftBodyGpuDeformOverride gpuOverride
+){
     RuntimeMeshDesc desc;
     desc.meshKey = entry.gpu.meshKey;
     desc.version = entry.cpu.editRevision;
@@ -275,6 +451,28 @@ RuntimeMeshDesc BuildSoftBodyRuntimeMeshDesc(in SoftBodyRuntimeMeshEntry entry){
     desc.meshletPrimitiveIndexCount = cast<u32>(entry.cpu.meshletPrimitiveIndices.size());
     desc.dynamicMeshletBoundsFresh = true;
     desc.dynamicMeshletConesFresh = true;
+
+    if(hasGpuOverride && gpuOverride.active){
+        if(gpuOverride.positionBuffer.valid())
+            desc.buffers.positionBuffer = gpuOverride.positionBuffer;
+        if(gpuOverride.normalBuffer.valid())
+            desc.buffers.normalBuffer = gpuOverride.normalBuffer;
+        if(gpuOverride.tangentBuffer.valid())
+            desc.buffers.tangentBuffer = gpuOverride.tangentBuffer;
+        if(gpuOverride.meshletBoundsBuffer.valid())
+            desc.buffers.meshletBoundsBuffer = gpuOverride.meshletBoundsBuffer;
+        if(gpuOverride.meshletLocalBoundsBuffer.valid())
+            desc.meshletLocalBoundsBuffer = gpuOverride.meshletLocalBoundsBuffer;
+        if(gpuOverride.localBoundsBuffer.valid())
+            desc.localBoundsBuffer = gpuOverride.localBoundsBuffer;
+        if(gpuOverride.attributeBuffer.valid())
+            desc.attributeBuffer = gpuOverride.attributeBuffer;
+        if(gpuOverride.localBounds.valid())
+            desc.localBounds = gpuOverride.localBounds;
+        if(gpuOverride.contentRevision > desc.geometryContentRevision)
+            desc.geometryContentRevision = gpuOverride.contentRevision;
+    }
+
     return desc;
 }
 
@@ -289,6 +487,13 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     private mut AssetManager m_assetManager;
     private mut IRuntimeMeshRegistry m_runtimeMeshRegistry;
     private HashMap<EntityID, SoftBodyRuntimeMeshEntry> m_entries;
+    private HashMap<EntityID, SoftBodyGpuDeformOverride> m_gpuOverrides;
+    private HashMap<Name, SoftBodyCachedSourceMesh> m_sourceMeshCache;
+    private Array<Vector<SoftBodyRuntimeMeshGpuBuffers>, 3u> m_retiredGpuBuffers;
+    private u32 m_retiredRingSlot = 0u;
+    private b8 m_syncedInUpdate = false;
+    private Vector<TransformComponent> m_localChainScratch;
+    private Vector<u8> m_inheritScaleScratch;
     private Vector<EntityID> m_staleEntities;
     private u64 m_uploadBatchSequence = 0u;
 
@@ -305,6 +510,8 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         this.readAccess<SoftBodyComponent>();
         this.readAccess<MeshComponent>();
         this.readAccess<TransformComponent>();
+        this.readAccess<LocalTransformComponent>();
+        this.readAccess<SceneParentComponent>();
         this.readAccess<SceneEntityNameComponent>();
         runtimeMeshRegistry.registerRuntimeMeshProvider(this);
     }
@@ -314,12 +521,137 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         this.m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(this);
     }
 
+    public void setGpuDeformOverride(in EntityID entity, in SoftBodyGpuDeformOverride overrideData){
+        if(!entity.valid())
+            return;
+        this.m_gpuOverrides.insert_or_assign(entity, overrideData);
+    }
+
+    public void clearGpuDeformOverride(in EntityID entity){
+        if(!entity.valid())
+            return;
+        this.m_gpuOverrides.erase(entity);
+    }
+
+    public b8 tryBuildGpuDeformTarget(
+        in EntityID entity,
+        in TransformComponent worldTransform,
+        in b8 worldSpaceBaked,
+        mut SoftBodyGpuDeformTarget outTarget
+    ){
+        if(!entity.valid())
+            return false;
+        const auto found = this.m_entries.find(entity);
+        if(found == this.m_entries.end())
+            return false;
+        mut SoftBodyRuntimeMeshEntry entry = found.value();
+        if(!entry.cpu.topologyValid || entry.cpu.emptySurfaceSentinel || entry.pendingTopologyUpload || !entry.gpu.valid() || !entry.gpu.hasValidUavs())
+            return false;
+
+        outTarget = SoftBodyGpuDeformTarget();
+        outTarget.topologyKey = entry.cpu.gpuTopologyKey;
+        outTarget.renderVertexCount = cast<u32>(entry.cpu.positions.size());
+        outTarget.cornerCount = cast<u32>(entry.cpu.triangleIndices.size());
+        outTarget.meshletCount = cast<u32>(entry.cpu.meshlets.size());
+        outTarget.useCage = entry.cpu.gpuUseCage;
+        outTarget.hasUv0 = (entry.cpu.gpuUv0Padded.size() == entry.cpu.positions.size());
+        f32 bakedFlag = 0.0f;
+        if(worldSpaceBaked)
+            bakedFlag = 1.0f;
+        outTarget.worldPosFlag = f32x4(worldTransform.position.x, worldTransform.position.y, worldTransform.position.z, bakedFlag);
+        outTarget.worldRot = f32x4(SafeNormalizeQuat(VectorSingle(worldTransform.rotation)));
+        outTarget.invScale = f32x4(ComputeSoftBodyInverseScale(worldTransform), 0.0f);
+        outTarget.vertToParticle = Span<u32>(entry.cpu.gpuVertToParticle);
+        outTarget.cageParticleIndices = Span<u32x4>(entry.cpu.gpuCageParticleIndices);
+        outTarget.cageBaryWeights = Span<f32x4>(entry.cpu.gpuCageBaryWeights);
+        outTarget.renderTriIndices = Span<u32>(entry.cpu.triangleIndices);
+        outTarget.vertTriRange = Span<u32>(entry.cpu.gpuVertTriRange);
+        outTarget.vertTriList = Span<u32>(entry.cpu.gpuVertTriList);
+        outTarget.uv0Padded = Span<f32x4>(entry.cpu.gpuUv0Padded);
+        outTarget.meshletMeta = Span<u32x4>(entry.cpu.gpuMeshletMeta);
+        outTarget.meshletVertList = Span<u32>(entry.cpu.gpuMeshletVertList);
+        outTarget.meshletTriList = Span<u32>(entry.cpu.gpuMeshletTriList);
+        outTarget.positionBuffer = entry.gpu.positionBuffer;
+        outTarget.normalBuffer = entry.gpu.normalBuffer;
+        outTarget.tangentBuffer = entry.gpu.tangentBuffer;
+        outTarget.attributeBuffer = entry.gpu.attributeBuffer;
+        outTarget.meshletBoundsBuffer = entry.gpu.meshletBoundsBuffer;
+        outTarget.meshletLocalBoundsBuffer = entry.gpu.meshletLocalBoundsBuffer;
+        outTarget.localBoundsBuffer = entry.gpu.localBoundsBuffer;
+        outTarget.positionUavSlot = entry.gpu.positionUav.slot();
+        outTarget.normalUavSlot = entry.gpu.normalUav.slot();
+        outTarget.tangentUavSlot = entry.gpu.tangentUav.slot();
+        outTarget.attributeUavSlot = entry.gpu.attributeUav.slot();
+        outTarget.meshletBoundsUavSlot = entry.gpu.meshletBoundsUav.slot();
+        outTarget.meshletLocalBoundsUavSlot = entry.gpu.meshletLocalBoundsUav.slot();
+        outTarget.localBoundsUavSlot = entry.gpu.localBoundsUav.slot();
+        return true;
+    }
+
+    public void markGpuDeformed(
+        in EntityID entity,
+        in SoftBody sb,
+        in TransformComponent worldTransform,
+        in RuntimeMeshLocalBounds localBounds
+    ){
+        if(!entity.valid())
+            return;
+        const auto found = this.m_entries.find(entity);
+        if(found == this.m_entries.end())
+            return;
+        mut SoftBodyRuntimeMeshEntry entry = found.value();
+        if(!entry.gpu.valid())
+            return;
+
+        u64 nextRev = 1u;
+        const auto prevIt = this.m_gpuOverrides.find(entity);
+        if(prevIt != this.m_gpuOverrides.end()){
+            nextRev = prevIt.value().contentRevision + 1u;
+            if(nextRev == 0u)
+                nextRev = 1u;
+        }
+        SoftBodyGpuDeformOverride ov;
+        ov.positionBuffer = entry.gpu.positionBuffer;
+        ov.normalBuffer = entry.gpu.normalBuffer;
+        ov.tangentBuffer = entry.gpu.tangentBuffer;
+        ov.meshletBoundsBuffer = entry.gpu.meshletBoundsBuffer;
+        ov.meshletLocalBoundsBuffer = entry.gpu.meshletLocalBoundsBuffer;
+        ov.localBoundsBuffer = entry.gpu.localBoundsBuffer;
+        ov.attributeBuffer = entry.gpu.attributeBuffer;
+        ov.localBounds = localBounds;
+        ov.contentRevision = nextRev;
+        ov.active = true;
+        this.m_gpuOverrides.insert_or_assign(entity, ov);
+        entry.cpu.localBounds = localBounds;
+        entry.lastDeformSignature = ComputeSoftBodyDeformSignature(sb, worldTransform);
+        entry.pendingDeformUpload = false;
+    }
+
+    private void retireGpuBuffers(mut SoftBodyRuntimeMeshGpuBuffers gpu){
+        if(gpu.meshKey != s_NameNone){
+            this.m_retiredGpuBuffers[this.m_retiredRingSlot].push_back(gpu);
+            gpu.reset();
+        }
+        else{
+            gpu.releaseUavs(this.m_graphics);
+        }
+    }
+
     public Expected<void, CpuTaskAdmissionError> update(mut World world, in f32 delta)override{
+        this.syncEntities();
+        this.m_syncedInUpdate = true;
         return Expected<void, CpuTaskAdmissionError>();
     }
 
     public b8 prepareResources(in FramebufferPtr framebuffer)override{
-        this.syncEntities();
+        this.m_retiredRingSlot = (this.m_retiredRingSlot + 1u) % 3u;
+        mut Vector<SoftBodyRuntimeMeshGpuBuffers> retiredSlot = this.m_retiredGpuBuffers[this.m_retiredRingSlot];
+        for(usize ri = 0u; ri < retiredSlot.size(); ++ri)
+            retiredSlot[ri].releaseUavs(this.m_graphics);
+        retiredSlot.clear();
+        if(!this.m_syncedInUpdate)
+            this.syncEntities();
+        this.m_syncedInUpdate = false;
         return this.uploadPendingBatches(true, true);
     }
 
@@ -329,7 +661,18 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     }
 
     public void invalidateResources()override{
+        for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it)
+            it.value().gpu.releaseUavs(this.m_graphics);
         this.m_entries.clear();
+        this.m_gpuOverrides.clear();
+        this.m_sourceMeshCache.clear();
+        for(usize s = 0u; s < 3u; ++s){
+            for(usize ri = 0u; ri < this.m_retiredGpuBuffers[s].size(); ++ri)
+                this.m_retiredGpuBuffers[s][ri].releaseUavs(this.m_graphics);
+            this.m_retiredGpuBuffers[s].clear();
+        }
+        this.m_retiredRingSlot = 0u;
+        this.m_syncedInUpdate = false;
         this.m_staleEntities.clear();
     }
 
@@ -341,7 +684,14 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         if(!found.value().cpu.topologyValid || !found.value().gpu.valid())
             return MakeUnexpected(Failure());
 
-        const RuntimeMeshDesc desc = BuildSoftBodyRuntimeMeshDesc(found.value());
+        b8 hasOverride = false;
+        SoftBodyGpuDeformOverride overrideData;
+        const auto ovIt = this.m_gpuOverrides.find(entity);
+        if(ovIt != this.m_gpuOverrides.end()){
+            hasOverride = true;
+            overrideData = ovIt.value();
+        }
+        const RuntimeMeshDesc desc = BuildSoftBodyRuntimeMeshDesc(found.value(), hasOverride, overrideData);
         if(!desc.valid())
             return MakeUnexpected(Failure());
         return desc;
@@ -382,8 +732,14 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             if(!this.hasRuntimeMeshBinding(entity))
                 this.m_staleEntities.push_back(entity);
         }
-        for(usize i = 0u; i < this.m_staleEntities.size(); ++i)
-            this.m_entries.erase(this.m_staleEntities[i]);
+        for(usize i = 0u; i < this.m_staleEntities.size(); ++i){
+            const EntityID staleEnt = this.m_staleEntities[i];
+            const auto foundStale = this.m_entries.find(staleEnt);
+            if(foundStale != this.m_entries.end())
+                this.retireGpuBuffers(foundStale.value().gpu);
+            this.m_entries.erase(staleEnt);
+            this.m_gpuOverrides.erase(staleEnt);
+        }
         this.m_staleEntities.clear();
 
         for(in auto row : this.m_world.view<SoftBodyComponent>()){
@@ -392,9 +748,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             if(!sbComp.enabled || sbComp.softBody.particles.empty())
                 continue;
 
-            TransformComponent xf;
-            if(this.m_world.hasComponent<TransformComponent>(entity))
-                xf = this.m_world.getComponent<TransformComponent>(entity);
+            const TransformComponent xf = ResolveSoftBodyEntityWorldTransform(this.m_world, entity, this.m_localChainScratch, this.m_inheritScaleScratch);
 
             Name sourceMeshName = s_NameNone;
             if(this.m_world.hasComponent<MeshComponent>(entity)){
@@ -407,20 +761,37 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             entry.entity = entity;
 
             const u64 deformSignature = ComputeSoftBodyDeformSignature(sbComp.softBody, xf);
-            if(entry.cpu.needsTopologyRebuild(sbComp.softBody, sourceMeshName)){
+            if(entry.cpu.needsTopologyRebuild(sbComp.softBody, xf, sourceMeshName)){
                 b8 rebuilt = false;
                 if(sourceMeshName != s_NameNone){
-                    auto loadedAsset = LoadTypedAssetSync<Mesh>(this.m_assetManager, sourceMeshName, s_SoftBodyAssetOwnerName);
-                    if(loadedAsset.has_value())
-                        rebuilt = entry.cpu.rebuildTopologyFromMesh(sbComp.softBody, xf, loadedAsset.value().deref(), sourceMeshName);
-                    else
-                        rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
+                    const auto cacheIt = this.m_sourceMeshCache.find(sourceMeshName);
+                    if(cacheIt != this.m_sourceMeshCache.end()){
+                        rebuilt = entry.cpu.rebuildTopologyFromCachedSource(sbComp.softBody, xf, cacheIt.value(), sourceMeshName);
+                    }
+                    else{
+                        auto loadedAsset = LoadTypedAssetSync<Mesh>(this.m_assetManager, sourceMeshName, s_SoftBodyAssetOwnerName);
+                        if(loadedAsset.has_value()){
+                            SoftBodyCachedSourceMesh cachedSrc;
+                            ExtractSoftBodyCachedSourceMesh(loadedAsset.value().deref(), cachedSrc);
+                            if(!cachedSrc.positions.empty()){
+                                this.m_sourceMeshCache.insert_or_assign(sourceMeshName, cachedSrc);
+                                rebuilt = entry.cpu.rebuildTopologyFromCachedSource(sbComp.softBody, xf, cachedSrc, sourceMeshName);
+                            }
+                            else{
+                                rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
+                            }
+                        }
+                        else{
+                            rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, sourceMeshName);
+                        }
+                    }
                 }
                 else{
                     rebuilt = entry.cpu.rebuildTopology(sbComp.softBody, xf, s_NameNone);
                 }
 
                 if(!rebuilt){
+                    this.retireGpuBuffers(entry.gpu);
                     entry.cpu.reset();
                     entry.gpu.reset();
                     entry.pendingTopologyUpload = false;
@@ -428,6 +799,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                     continue;
                 }
 
+                this.retireGpuBuffers(entry.gpu);
                 const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
                 if(!CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
                     entry.gpu.reset();
@@ -442,10 +814,16 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                 continue;
             }
 
-            if(deformSignature != entry.lastDeformSignature || !entry.gpu.valid()){
+            b8 hasGpuPosOverride = false;
+            const auto ovCheck = this.m_gpuOverrides.find(entity);
+            if(ovCheck != this.m_gpuOverrides.end())
+                hasGpuPosOverride = ovCheck.value().active && ovCheck.value().positionBuffer.valid();
+
+            if(!hasGpuPosOverride && (deformSignature != entry.lastDeformSignature || !entry.gpu.valid())){
                 if(entry.cpu.updateDeformation(sbComp.softBody, xf)){
                     entry.lastDeformSignature = deformSignature;
                     if(!entry.gpu.valid() || entry.gpu.uploadedEditRevision != entry.cpu.editRevision){
+                        this.retireGpuBuffers(entry.gpu);
                         const Name baseName = this.resolveEntityBaseName(entity, sourceMeshName);
                         if(CreateSoftBodyEntryGpuBuffers(this.m_graphics, entity, baseName, entry.cpu, entry.gpu)){
                             entry.pendingTopologyUpload = true;

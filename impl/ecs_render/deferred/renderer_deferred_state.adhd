@@ -28,11 +28,23 @@ class RendererDeferredState : NoCopy{
     public SamplerHandle m_sampler = SamplerHandle();
     public ShaderHandle m_presentPixelShader = ShaderHandle();
     public GraphicsPipelineHandle m_presentPipeline = GraphicsPipelineHandle();
+    public BindingLayoutHandle m_debugLineBindingLayout = BindingLayoutHandle();
+    public ShaderHandle m_debugLineVertexShader = ShaderHandle();
+    public ShaderHandle m_debugLinePixelShader = ShaderHandle();
+    public GraphicsPipelineHandle m_debugLineDepthPipeline = GraphicsPipelineHandle();
+    public GraphicsPipelineHandle m_debugLineOverlayPipeline = GraphicsPipelineHandle();
+    public BufferHandle m_debugLineVertexBuffer = BufferHandle();
+    public GpuDescriptorHandle m_debugLineVertexHeapHandle = GpuDescriptorHandleInvalid();
+    public usize m_debugLineVertexCapacity = 0u;
+    public GpuDebugLineCollector m_debugLineCollector;
+    public Vector<GpuDebugLineVertex> m_debugLineCombinedScratch;
     public u32 m_lightGpuDataCount = 0u;
     public Array<u8, s_SceneShadingGpuDataBytes> m_sceneShadingGpuData;
     public b8 m_sceneShadingGpuDataValid = false;
     public Array<u8, s_DeferredLightGpuByteCount> m_lightGpuData;
     public b8 m_lightGpuDataValid = false;
+
+    public RendererDeferredState(){}
 
     public void invalidateResources(){
         this.m_lightingBindingLayout.reset();
@@ -47,6 +59,16 @@ class RendererDeferredState : NoCopy{
         this.m_sampler.reset();
         this.m_presentPixelShader.reset();
         this.m_presentPipeline.reset();
+        this.m_debugLineBindingLayout.reset();
+        this.m_debugLineVertexShader.reset();
+        this.m_debugLinePixelShader.reset();
+        this.m_debugLineDepthPipeline.reset();
+        this.m_debugLineOverlayPipeline.reset();
+        this.m_debugLineVertexBuffer.reset();
+        this.m_debugLineVertexHeapHandle = GpuDescriptorHandleInvalid();
+        this.m_debugLineVertexCapacity = 0u;
+        this.m_debugLineCollector.clear();
+        this.m_debugLineCombinedScratch.clear();
         this.m_sceneShadingGpuDataValid = false;
         this.m_lightGpuDataCount = 0u;
         this.m_lightGpuDataValid = false;

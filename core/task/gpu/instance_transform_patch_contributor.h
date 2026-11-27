@@ -21,13 +21,22 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraph;
 
+enum class GpuTaskGraphInstanceTransformPatchLayout : u32{
+    InstanceTrs = 0u,
+    Affine3x4ObjectToWorld = 1u,
+    Affine3x4WorldToObject = 2u
+};
+
 struct GpuTaskGraphInstanceTransformPatchRequest{
     GpuGraphResourceId instanceBufferResource;
     u32 instanceBufferUavSlot = Limit<u32>::s_Max;
     u32 instanceStrideFloat4 = 0u;
+    u32 baseFloat4Offset = 0u;
+    GpuTaskGraphInstanceTransformPatchLayout layout = GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs;
     Name passIdentityPrefix = s_NameNone;
     GpuTaskId dependency;
     b8 mergeWithPrevious = true;
+    b8 allowMergeAcrossConsumerFrontier = false;
 };
 
 
@@ -49,3 +58,4 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

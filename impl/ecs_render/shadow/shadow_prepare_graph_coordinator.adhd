@@ -17,19 +17,22 @@ class ShadowPrepareGraphContext{
     public mut RendererMeshSystem mesh;
     public mut RendererRayTracingSystem rayTracing;
     public mut GpuPersistentResourceStateCache persistentState;
+    public Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor;
 
     public ShadowPrepareGraphContext(
         mut GpuTaskGraph graph,
         mut GraphicsRuntime graphics,
         mut RendererMeshSystem mesh,
         mut RendererRayTracingSystem rayTracing,
-        mut GpuPersistentResourceStateCache persistentState
+        mut GpuPersistentResourceStateCache persistentState,
+        in Optional<mut IGpuTaskGraphInstanceTransformPatchContributor> instanceTransformPatchContributor
     ){
         this.graph = graph;
         this.graphics = graphics;
         this.mesh = mesh;
         this.rayTracing = rayTracing;
         this.persistentState = persistentState;
+        this.instanceTransformPatchContributor = instanceTransformPatchContributor;
     }
 }
 
@@ -45,6 +48,7 @@ class ShadowPrepareGraphCoordinator : NoCopy{
     private GpuTaskId m_shadowMaterialTypedUploadTask;
     private GpuTaskId m_sceneBvhNodesUploadTask;
     private GpuTaskId m_sceneBvhInstancesUploadTask;
+    private GpuTaskId m_tlasInstancesUploadTask;
     private GpuTaskId m_deferredShadowPrepareTask;
     private GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     private GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;

@@ -1322,19 +1322,22 @@ b8 SmoothMeshContactNormal(
     return true;
 }
 
-Manifold CollideSphereAndMesh(
+Manifold CollideSphereAndMeshFiltered(
     in SphereShape sphereA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in MeshShape meshB,
     in VectorSingle posB,
     in VectorSingle rotB,
-    in f32 maxDistance
+    in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter
 ){
     Manifold m;
     if(meshB.nodes.empty() || meshB.triangles.empty())
         return m;
 
+    const b8 hasTriFilter = triFilter.has_value();
     const f32 sphereR = sphereA.radius();
     const f32 meshR = meshB.radius();
     const VectorSingle wcA = TransformPointValues(posA, rotA, sphereA.center());
@@ -1368,6 +1371,8 @@ Manifold CollideSphereAndMesh(
             const u32 firstTri = node.leftOrFirst();
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
+                if(hasTriFilter && !triFilter.value()(meshShapeId, ti))
+                    continue;
                 in MeshTriangle tri = meshB.triangles[ti];
                 const VectorSingle tv0(tri.v0, 0.0f);
                 const VectorSingle tv1(tri.v1, 0.0f);
@@ -1439,11 +1444,11 @@ Manifold CollideSphereAndMesh(
     }
 
     const b8 needInteriorCheck = closedMesh && (!foundHit || (bestSep > -sphereR && minBackfaceDist <= bestSurfaceDist + 1.0e-4f));
-    if(needInteriorCheck && IsPointInsideClosedMesh(meshB, lcA)){
+    if(needInteriorCheck && IsPointInsideClosedMeshFiltered(meshB, lcA, meshShapeId, triFilter)){
         VectorSingle closePt(0.0f);
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = 0u;
-        if(FindClosestPointOnClosedMesh(meshB, lcA, closePt, closeN, closeTri)){
+        if(FindClosestPointOnClosedMeshFiltered(meshB, lcA, meshShapeId, triFilter, closePt, closeN, closeTri)){
             const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
             const VectorSingle worldN = -worldOut;
             const VectorSingle worldQ = TransformPointValues(posB, rotB, closePt);
@@ -1467,6 +1472,19 @@ Manifold CollideSphereAndMesh(
         SetManifoldPoint(m, 0u, (bestWorldA + bestWorldB) * 0.5f, bestWorldA - posA, bestWorldB - posB, bestSep, MakeFeatureId(2u, 0u, 3u, cast<u8>(bestTriIdx & 0xffu)));
     }
     return m;
+}
+
+Manifold CollideSphereAndMesh(
+    in SphereShape sphereA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Optional<TriangleFilterCallback> noFilter;
+    return CollideSphereAndMeshFiltered(sphereA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter);
 }
 
 b8 ClipSegmentAgainstTriangleEdgePlane(
@@ -1518,19 +1536,22 @@ void TryAppendCapsuleTriangleClipPoint(
     }
 }
 
-Manifold CollideCapsuleAndMesh(
+Manifold CollideCapsuleAndMeshFiltered(
     in CapsuleShape capA,
     in VectorSingle posA,
     in VectorSingle rotA,
     in MeshShape meshB,
     in VectorSingle posB,
     in VectorSingle rotB,
-    in f32 maxDistance
+    in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter
 ){
     Manifold m;
     if(meshB.nodes.empty() || meshB.triangles.empty())
         return m;
 
+    const b8 hasTriFilter = triFilter.has_value();
     const f32 capR = capA.radius();
     const f32 meshR = meshB.radius();
     VectorSingle localCapPos(0.0f);
@@ -1575,6 +1596,8 @@ Manifold CollideCapsuleAndMesh(
             const u32 firstTri = node.leftOrFirst();
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
+                if(hasTriFilter && !triFilter.value()(meshShapeId, ti))
+                    continue;
                 in MeshTriangle tri = meshB.triangles[ti];
                 const VectorSingle tv0(tri.v0, 0.0f);
                 const VectorSingle tv1(tri.v1, 0.0f);
@@ -1703,7 +1726,7 @@ Manifold CollideCapsuleAndMesh(
 
     const b8 needInteriorCheck = closedMesh && (!foundHit || (bestSep > -capR && minBackfaceDist <= bestSurfaceDist + 1.0e-4f));
     if(needInteriorCheck){
-        if(IsPointInsideClosedMesh(meshB, lMid) || IsPointInsideClosedMesh(meshB, l1) || IsPointInsideClosedMesh(meshB, l2)){
+        if(IsPointInsideClosedMeshFiltered(meshB, lMid, meshShapeId, triFilter) || IsPointInsideClosedMeshFiltered(meshB, l1, meshShapeId, triFilter) || IsPointInsideClosedMeshFiltered(meshB, l2, meshShapeId, triFilter)){
             Array<f32x4, 3u> probePts;
             probePts[0u] = f32x4(l1, 0.0f);
             probePts[1u] = f32x4(lMid, 0.0f);
@@ -1719,7 +1742,7 @@ Manifold CollideCapsuleAndMesh(
                 VectorSingle cp(0.0f);
                 VectorSingle cn(0.0f, 1.0f, 0.0f, 0.0f);
                 u32 cTri = 0u;
-                if(FindClosestPointOnClosedMesh(meshB, pLocal, cp, cn, cTri)){
+                if(FindClosestPointOnClosedMeshFiltered(meshB, pLocal, meshShapeId, triFilter, cp, cn, cTri)){
                     const f32 dSq = Vector3LengthSq(VectorSingle(cp - pLocal, 0.0f)).x;
                     if(!foundInt || dSq < bestIntDistSq){
                         foundInt = true;
@@ -1787,6 +1810,19 @@ Manifold CollideCapsuleAndMesh(
         }
     }
     return m;
+}
+
+Manifold CollideCapsuleAndMesh(
+    in CapsuleShape capA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance
+){
+    Optional<TriangleFilterCallback> noFilter;
+    return CollideCapsuleAndMeshFiltered(capA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter);
 }
 
 void MatchManifoldImpulses(in Manifold oldManifold, mut Manifold newManifold, in b8 enableWarmStarting){
@@ -2067,38 +2103,56 @@ void ReduceMeshCandidatesAndWriteManifold(
     ReduceSinglePlaneMeshCandidates(normal, candidates, false, outManifold);
 }
 
-void ReduceMeshCandidatesMultiPlane(
+void ReduceMeshCandidatesMultiManifold(
     in VectorSingle normal,
     in FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates,
     in f32 maxDistance,
     mut Manifold outManifold,
-    mut Manifold outSecondaryManifold
+    mut Vector<Manifold> outExtraManifolds
 ){
-    outSecondaryManifold = Manifold();
+    outManifold = Manifold();
+    outExtraManifolds.clear();
     if(candidates.empty())
         return;
 
     ReduceSinglePlaneMeshCandidates(normal, candidates, false, outManifold);
 
     const usize limit = Min(candidates.size(), cast<usize>(s_MaxClipPoints));
-    b8 foundSec = false;
-    usize bestSecIdx = 0u;
-    f32 bestSecSep = s_MaxF32;
-    for(usize i = 0u; i < limit; ++i){
-        const f32 sep = candidates[i].pointSep.w;
-        if(sep > maxDistance)
-            continue;
-        if(Vector3Dot(VectorSingle(candidates[i].normal, 0.0f), normal).x > 0.7f)
-            continue;
-        if(!foundSec || sep < bestSecSep){
-            foundSec = true;
-            bestSecSep = sep;
-            bestSecIdx = i;
+    FixedVector<f32x4, 8u> clusterNormals;
+    clusterNormals.push_back(f32x4(normal, 0.0f));
+    const usize maxClusters = 1u + cast<usize>(s_MaxExtraManifoldsPerContact);
+    while(clusterNormals.size() < maxClusters){
+        b8 foundNext = false;
+        usize bestIdx = 0u;
+        f32 bestSep = s_MaxF32;
+        for(usize i = 0u; i < limit; ++i){
+            const f32 sep = candidates[i].pointSep.w;
+            if(sep > maxDistance)
+                continue;
+            const VectorSingle candN(candidates[i].normal, 0.0f);
+            b8 matchesExisting = false;
+            for(usize ci = 0u; ci < clusterNormals.size(); ++ci){
+                if(Vector3Dot(candN, VectorSingle(clusterNormals[ci], 0.0f)).x > 0.7f){
+                    matchesExisting = true;
+                    break;
+                }
+            }
+            if(matchesExisting)
+                continue;
+            if(!foundNext || sep < bestSep){
+                foundNext = true;
+                bestSep = sep;
+                bestIdx = i;
+            }
         }
-    }
-    if(foundSec){
-        const VectorSingle secNormal = SafeNormalizeVec3(VectorSingle(candidates[bestSecIdx].normal, 0.0f), normal);
-        ReduceSinglePlaneMeshCandidates(secNormal, candidates, true, outSecondaryManifold);
+        if(!foundNext)
+            break;
+        const VectorSingle nextNormal = SafeNormalizeVec3(VectorSingle(candidates[bestIdx].normal, 0.0f), normal);
+        Manifold extraM;
+        ReduceSinglePlaneMeshCandidates(nextNormal, candidates, true, extraM);
+        if(extraM.pointCount() > 0u)
+            outExtraManifolds.push_back(extraM);
+        clusterNormals.push_back(f32x4(nextNormal, 0.0f));
     }
 }
 
@@ -2576,6 +2630,49 @@ Manifold CollideConvexProxyViews(
     return CollideConvexProxyViewsFromGjk(proxyA, posA, rotA, proxyB, posB, rotB, maxDistance, gjk, gjkSimplex);
 }
 
+Manifold CollideConvexProxyVsFinitePlaneSlab(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in PlaneShape planeB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in VectorSingle worldPlanePt,
+    in VectorSingle worldPlaneN,
+    in VectorSingle wt1,
+    in VectorSingle wt2,
+    in f32 maxDistance
+){
+    const VectorSingle proxyCenterW = TransformPointValues(posA, rotA, ComputeProxyViewCenter(proxyA));
+    const VectorSingle relC = VectorSingle(proxyCenterW - worldPlanePt, 0.0f);
+    const f32 cu = Vector3Dot(relC, wt1).x;
+    const f32 cv = Vector3Dot(relC, wt2).x;
+    const f32 reach = ComputeProxyViewBoundingRadius(proxyA, ComputeProxyViewCenter(proxyA)) + maxDistance + 0.1f;
+    const f32 hx = planeB.halfExtent.x;
+    const f32 hz = planeB.halfExtent.z;
+    const f32 u0 = Clamp(cu - reach, -hx, hx);
+    const f32 u1 = Clamp(cu + reach, -hx, hx);
+    const f32 v0 = Clamp(cv - reach, -hz, hz);
+    const f32 v1 = Clamp(cv + reach, -hz, hz);
+    const f32 effU0 = Min(u0, Clamp(hx - 0.01f, -hx, hx));
+    const f32 effU1 = Max(u1, effU0 + Min(2.0f * hx, 0.01f));
+    const f32 effV0 = Min(v0, Clamp(hz - 0.01f, -hz, hz));
+    const f32 effV1 = Max(v1, effV0 + Min(2.0f * hz, 0.01f));
+    Array<f32x3u, 8u> slabPts;
+    const VectorSingle localOrigin = worldPlanePt - posB;
+    const f32 botN = -s_FinitePlaneThickness;
+    slabPts[0u] = f32x3u(localOrigin + wt1 * effU0 + wt2 * effV0 + worldPlaneN * botN);
+    slabPts[1u] = f32x3u(localOrigin + wt1 * effU1 + wt2 * effV0 + worldPlaneN * botN);
+    slabPts[2u] = f32x3u(localOrigin + wt1 * effU1 + wt2 * effV0);
+    slabPts[3u] = f32x3u(localOrigin + wt1 * effU0 + wt2 * effV0);
+    slabPts[4u] = f32x3u(localOrigin + wt1 * effU0 + wt2 * effV1 + worldPlaneN * botN);
+    slabPts[5u] = f32x3u(localOrigin + wt1 * effU1 + wt2 * effV1 + worldPlaneN * botN);
+    slabPts[6u] = f32x3u(localOrigin + wt1 * effU1 + wt2 * effV1);
+    slabPts[7u] = f32x3u(localOrigin + wt1 * effU0 + wt2 * effV1);
+    const ShapeProxyView slabView = MakeSpanProxyView(Span<f32x3u>(slabPts), 0.0f);
+    return CollideConvexProxyViews(proxyA, posA, rotA, slabView, posB, QuaternionIdentity(), maxDistance);
+}
+
 Manifold CollideConvexProxyVsPlane(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
@@ -2590,7 +2687,6 @@ Manifold CollideConvexProxyVsPlane(
         return m;
 
     const VectorSingle worldPlaneN = SafeNormalizeVec3(Vector3Rotate(planeB.normal(), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-    const VectorSingle nAtoB = -worldPlaneN;
     const VectorSingle worldPlanePt = TransformPointValues(posB, rotB, planeB.normal() * planeB.offset());
     const b8 isFinitePlane = planeB.isFiniteExtent();
     VectorSingle wt1(0.0f);
@@ -2603,15 +2699,27 @@ Manifold CollideConvexProxyVsPlane(
         wt2 = Vector3Rotate(t2Local, rotB);
     }
 
+    VectorSingle effPlaneN = worldPlaneN;
+    VectorSingle effPlanePt = worldPlanePt;
+    if(isFinitePlane){
+        const VectorSingle proxyCenterW = TransformPointValues(posA, rotA, ComputeProxyViewCenter(proxyA));
+        const f32 centerSigned = Vector3Dot(VectorSingle(proxyCenterW - worldPlanePt, 0.0f), worldPlaneN).x;
+        if(centerSigned < -s_FinitePlaneHalfThickness){
+            effPlaneN = -worldPlaneN;
+            effPlanePt = worldPlanePt - worldPlaneN * s_FinitePlaneThickness;
+        }
+    }
+    const VectorSingle nAtoB = -effPlaneN;
+
     FixedVector<ClipVertex, s_MaxClipPoints> patchA;
     BuildProxyPlanarPatchWorld(proxyA, posA, rotA, nAtoB, patchA);
 
     if(isFinitePlane && patchA.size() >= 3u){
         Array<f32x4, 4u> clipPlanes;
-        clipPlanes[0u] = f32x4(-wt1, Vector3Dot(-wt1, worldPlanePt).x + planeB.halfExtent.x + s_LinearSlop);
-        clipPlanes[1u] = f32x4(wt1, Vector3Dot(wt1, worldPlanePt).x + planeB.halfExtent.x + s_LinearSlop);
-        clipPlanes[2u] = f32x4(-wt2, Vector3Dot(-wt2, worldPlanePt).x + planeB.halfExtent.z + s_LinearSlop);
-        clipPlanes[3u] = f32x4(wt2, Vector3Dot(wt2, worldPlanePt).x + planeB.halfExtent.z + s_LinearSlop);
+        clipPlanes[0u] = f32x4(-wt1, Vector3Dot(-wt1, effPlanePt).x + planeB.halfExtent.x + s_LinearSlop);
+        clipPlanes[1u] = f32x4(wt1, Vector3Dot(wt1, effPlanePt).x + planeB.halfExtent.x + s_LinearSlop);
+        clipPlanes[2u] = f32x4(-wt2, Vector3Dot(-wt2, effPlanePt).x + planeB.halfExtent.z + s_LinearSlop);
+        clipPlanes[3u] = f32x4(wt2, Vector3Dot(wt2, effPlanePt).x + planeB.halfExtent.z + s_LinearSlop);
         FixedVector<ClipVertex, s_MaxClipPoints> scratch;
         for(u32 pi = 0u; pi < 4u; ++pi){
             const VectorSingle pN(clipPlanes[pi], 0.0f);
@@ -2633,8 +2741,8 @@ Manifold CollideConvexProxyVsPlane(
     else if(isFinitePlane && patchA.size() == 2u){
         const VectorSingle p0(patchA[0u].position, 0.0f);
         const VectorSingle p1(patchA[1u].position, 0.0f);
-        const VectorSingle r0 = VectorSingle(p0 - worldPlanePt, 0.0f);
-        const VectorSingle r1 = VectorSingle(p1 - worldPlanePt, 0.0f);
+        const VectorSingle r0 = VectorSingle(p0 - effPlanePt, 0.0f);
+        const VectorSingle r1 = VectorSingle(p1 - effPlanePt, 0.0f);
         const f32 u0 = Vector3Dot(r0, wt1).x;
         const f32 u1 = Vector3Dot(r1, wt1).x;
         const f32 v0 = Vector3Dot(r0, wt2).x;
@@ -2695,32 +2803,29 @@ Manifold CollideConvexProxyVsPlane(
     }
 
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
-    if(isFinitePlane && proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u){
+    if(isFinitePlane && proxyA.kind == ProxyKind::PointCloud && proxyA.points.size() == 1u && proxyA.scaleMinMargin.w < 0.0f){
         const VectorSingle wCenter = TransformPointValues(posA, rotA, VectorSingle(proxyA.points[0u], 0.0f));
         const VectorSingle relC = VectorSingle(wCenter - worldPlanePt, 0.0f);
         const f32 cu = Vector3Dot(relC, wt1).x;
+        const f32 cn = Vector3Dot(relC, worldPlaneN).x;
         const f32 cv = Vector3Dot(relC, wt2).x;
         const VectorSingle absUV = Abs(VectorSingle(cu, cv, 0.0f, 0.0f));
         if(absUV.x > planeB.halfExtent.x || absUV.y > planeB.halfExtent.z){
-            const VectorSingle clampedUV = Clamp(
-                VectorSingle(cu, cv, 0.0f, 0.0f),
-                VectorSingle(-planeB.halfExtent.x, -planeB.halfExtent.z, 0.0f, 0.0f),
-                VectorSingle(planeB.halfExtent.x, planeB.halfExtent.z, 0.0f, 0.0f)
-            );
-            const f32 clU = clampedUV.x;
-            const f32 clV = clampedUV.y;
-            const VectorSingle closestOnRect = worldPlanePt + wt1 * clU + wt2 * clV;
-            const VectorSingle toCenter = VectorSingle(wCenter - closestOnRect, 0.0f);
+            const f32 clU = Clamp(cu, -planeB.halfExtent.x, planeB.halfExtent.x);
+            const f32 clN = Clamp(cn, -s_FinitePlaneThickness, 0.0f);
+            const f32 clV = Clamp(cv, -planeB.halfExtent.z, planeB.halfExtent.z);
+            const VectorSingle closestOnSlab = worldPlanePt + wt1 * clU + worldPlaneN * clN + wt2 * clV;
+            const VectorSingle toCenter = VectorSingle(wCenter - closestOnSlab, 0.0f);
             const f32 distSq = Vector3LengthSq(toCenter).x;
             const f32 maxR = proxyA.radius + maxDistance;
-            if(Vector3Dot(relC, worldPlaneN).x >= -proxyA.radius && distSq <= maxR * maxR){
+            if(distSq <= maxR * maxR){
                 const f32 dist = Sqrt(distSq);
-                const VectorSingle outN = SafeNormalizeVec3(toCenter, worldPlaneN);
+                const VectorSingle outN = SafeNormalizeVec3(toCenter, effPlaneN);
                 const VectorSingle edgeNAtoB = -outN;
                 const VectorSingle wA = wCenter - outN * proxyA.radius;
                 const f32 sep = dist - proxyA.radius;
                 if(sep <= maxDistance){
-                    PushMeshCandidate((wA + closestOnRect) * 0.5f, wA - posA, closestOnRect - posB, edgeNAtoB, sep, MakeFeatureId(5u, 0u, 6u, 0u), candidates);
+                    PushMeshCandidate((wA + closestOnSlab) * 0.5f, wA - posA, closestOnSlab - posB, edgeNAtoB, sep, MakeFeatureId(5u, 0u, 6u, 0u), candidates);
                     ReduceMeshCandidatesAndWriteManifold(edgeNAtoB, candidates, m);
                 }
             }
@@ -2730,21 +2835,26 @@ Manifold CollideConvexProxyVsPlane(
 
     for(usize i = 0u; i < patchA.size(); ++i){
         const VectorSingle wA(patchA[i].position, 0.0f);
-        const VectorSingle rel = VectorSingle(wA - worldPlanePt, 0.0f);
+        const VectorSingle rel = VectorSingle(wA - effPlanePt, 0.0f);
         if(isFinitePlane && patchA.size() == 1u){
             const VectorSingle absRel = Abs(VectorSingle(Vector3Dot(rel, wt1).x, Vector3Dot(rel, wt2).x, 0.0f, 0.0f));
             if(absRel.x > planeB.halfExtent.x + s_LinearSlop || absRel.y > planeB.halfExtent.z + s_LinearSlop)
                 continue;
         }
-        const f32 sep = Vector3Dot(rel, worldPlaneN).x;
+        const f32 sep = Vector3Dot(rel, effPlaneN).x;
         if(sep <= maxDistance){
-            const VectorSingle wB = wA - worldPlaneN * sep;
+            const VectorSingle wB = wA - effPlaneN * sep;
             PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, sep, MakeFeatureId(5u, patchA[i].id0, 6u, 0u), candidates);
         }
     }
 
-    if(!candidates.empty())
+    if(!candidates.empty()){
         ReduceMeshCandidatesAndWriteManifold(nAtoB, candidates, m);
+        return m;
+    }
+
+    if(isFinitePlane)
+        m = CollideConvexProxyVsFinitePlaneSlab(proxyA, posA, rotA, planeB, posB, rotB, worldPlanePt, worldPlaneN, wt1, wt2, maxDistance);
     return m;
 }
 
@@ -2756,13 +2866,17 @@ void CollideConvexProxyAndMeshMulti(
     in VectorSingle posB,
     in VectorSingle rotB,
     in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
     mut Manifold outManifold,
-    mut Manifold outSecondaryManifold
+    mut Vector<Manifold> outExtraManifolds
 ){
     outManifold = Manifold();
-    outSecondaryManifold = Manifold();
+    outExtraManifolds.clear();
     if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA))
         return;
+
+    const b8 hasTriFilter = triFilter.has_value();
 
     VectorSingle localPosA(0.0f);
     VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
@@ -2795,6 +2909,8 @@ void CollideConvexProxyAndMeshMulti(
             const u32 firstTri = node.leftOrFirst();
             const u32 endTri = firstTri + node.rightOrCount();
             for(u32 ti = firstTri; ti < endTri; ++ti){
+                if(hasTriFilter && !triFilter.value()(meshShapeId, ti))
+                    continue;
                 in MeshTriangle tri = meshB.triangles[ti];
                 const VectorSingle tv0(tri.v0, 0.0f);
                 const VectorSingle tv1(tri.v1, 0.0f);
@@ -2865,11 +2981,11 @@ void CollideConvexProxyAndMeshMulti(
         }
     }
 
-    if(candidates.empty() && meshB.isClosed() && IsPointInsideClosedMesh(meshB, shapeCenterB)){
+    if(candidates.empty() && meshB.isClosed() && IsPointInsideClosedMeshFiltered(meshB, shapeCenterB, meshShapeId, triFilter)){
         VectorSingle closePt(0.0f);
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = s_NullIndex;
-        if(FindClosestPointOnClosedMesh(meshB, shapeCenterB, closePt, closeN, closeTri)){
+        if(FindClosestPointOnClosedMeshFiltered(meshB, shapeCenterB, meshShapeId, triFilter, closePt, closeN, closeTri)){
             const VectorSingle worldCenter = TransformPointValues(posB, rotB, shapeCenterB);
             const VectorSingle worldSurf = TransformPointValues(posB, rotB, closePt);
             const VectorSingle worldOutN = SafeNormalizeVec3(Vector3Rotate(closeN, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -2894,7 +3010,7 @@ void CollideConvexProxyAndMeshMulti(
     }
 
     if(!candidates.empty())
-        ReduceMeshCandidatesMultiPlane(chosenNormal, candidates, maxDistance, outManifold, outSecondaryManifold);
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
 Manifold CollideConvexProxyAndMesh(
@@ -2907,9 +3023,445 @@ Manifold CollideConvexProxyAndMesh(
     in f32 maxDistance
 ){
     Manifold primary;
-    Manifold secondary;
-    CollideConvexProxyAndMeshMulti(proxyA, posA, rotA, meshB, posB, rotB, maxDistance, primary, secondary);
+    Vector<Manifold> unusedExtras;
+    Optional<TriangleFilterCallback> noFilter;
+    CollideConvexProxyAndMeshMulti(proxyA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
     return primary;
+}
+
+void CollideConvexProxyAndChainMulti(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in ChainShape chainB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(!chainB.isValid() || chainB.nodes.empty() || IsProxyViewEmpty(proxyA))
+        return;
+
+    VectorSingle localPosA(0.0f);
+    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
+    VectorSingle lMin(0.0f);
+    VectorSingle lMax(0.0f);
+    ComputeProxyViewLocalBounds(proxyA, lMin, lMax);
+    const f32 chainR = chainB.radius;
+    const f32 totalR = proxyA.radius + chainR;
+    VectorSingle queryMin(0.0f);
+    VectorSingle queryMax(0.0f);
+    TransformLocalAabbValuesToWorld(lMin, lMax, totalR + maxDistance, localPosA, localRotA, queryMin, queryMax);
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
+    f32 deepestSep = s_MaxF32;
+
+    BvhSpillStack<u32, 256u> stack;
+    stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
+        in MeshBvhNode node = chainB.nodes[nodeIdx];
+        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMin, queryMax))
+            continue;
+
+        if(node.isLeaf()){
+            const u32 firstOrder = node.leftOrFirst();
+            const u32 endOrder = firstOrder + node.rightOrCount();
+            for(u32 oi = firstOrder; oi < endOrder; ++oi){
+                const u32 segIdx = chainB.bvhSegmentOrder[oi];
+                VectorSingle vPrev(0.0f);
+                VectorSingle v1(0.0f);
+                VectorSingle v2(0.0f);
+                VectorSingle vNext(0.0f);
+                b8 hasPrev = false;
+                b8 hasNext = false;
+                ComputeChainSegmentGhostVertices(chainB, segIdx, vPrev, v1, v2, vNext, hasPrev, hasNext);
+                const VectorSingle edge = VectorSingle(v2 - v1, 0.0f);
+                const f32 segLenSq = Vector3LengthSq(edge).x;
+                if(segLenSq <= s_NormalizeEpsilonSq)
+                    continue;
+                const f32 segLen = Sqrt(VectorSingle(segLenSq)).x;
+                const VectorSingle tCurr = edge * (1.0f / segLen);
+                const VectorSingle tPrev = SafeNormalizeVec3(VectorSingle(v1 - vPrev, 0.0f), tCurr);
+                const VectorSingle tNext = SafeNormalizeVec3(VectorSingle(vNext - v2, 0.0f), tCurr);
+
+                Array<f32x3u, 2u> segPts;
+                segPts[0u] = f32x3u(v1.x, v1.y, v1.z);
+                segPts[1u] = f32x3u(v2.x, v2.y, v2.z);
+                const ShapeProxyView segView = MakeSpanProxyView(Span<f32x3u>(segPts), chainR);
+                const Manifold segM = CollideConvexProxyViews(proxyA, posA, rotA, segView, posB, rotB, maxDistance);
+                if(segM.pointCount() == 0u)
+                    continue;
+
+                const VectorSingle nAtoB = segM.normal();
+                for(u32 pi = 0u; pi < segM.pointCount(); ++pi){
+                    VectorSingle candN = nAtoB;
+                    VectorSingle candAncA = segM.points[pi].anchorA();
+                    VectorSingle candAncB = segM.points[pi].anchorB();
+                    VectorSingle candPt = segM.points[pi].point();
+                    f32 sep = segM.points[pi].separation();
+
+                    const VectorSingle worldPtA = posA + candAncA;
+                    const VectorSingle worldPtB = posB + candAncB;
+                    const VectorSingle localPtA = InverseTransformPointValues(posB, rotB, worldPtA);
+                    const VectorSingle localPtB = InverseTransformPointValues(posB, rotB, worldPtB);
+                    const VectorSingle localOut = SafeNormalizeVec3(Vector3InverseRotate(-nAtoB, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                    const VectorSingle coreOnSeg = localPtB - localOut * chainR;
+                    const f32 proj = Vector3Dot(VectorSingle(coreOnSeg - v1, 0.0f), tCurr).x;
+
+                    b8 clamped = false;
+                    VectorSingle smoothedOut = localOut;
+                    if(hasPrev && proj <= 1.0e-3f && Vector3Dot(localOut, tCurr).x < -1.0e-4f && Vector3Dot(localOut, tPrev).x < 0.0f){
+                        const VectorSingle perp = localOut - tCurr * Vector3Dot(localOut, tCurr).x;
+                        if(Vector3LengthSq(perp).x > s_NormalizeEpsilonSq){
+                            smoothedOut = SafeNormalizeVec3(perp, localOut);
+                            clamped = true;
+                        }
+                    }
+                    else if(hasNext && proj >= segLen - 1.0e-3f && Vector3Dot(localOut, tCurr).x > 1.0e-4f && Vector3Dot(localOut, tNext).x > 0.0f){
+                        const VectorSingle perp = localOut - tCurr * Vector3Dot(localOut, tCurr).x;
+                        if(Vector3LengthSq(perp).x > s_NormalizeEpsilonSq){
+                            smoothedOut = SafeNormalizeVec3(perp, localOut);
+                            clamped = true;
+                        }
+                    }
+
+                    if(clamped){
+                        const f32 adjSep = Vector3Dot(smoothedOut, VectorSingle(localPtA - v1, 0.0f)).x - chainR;
+                        if(adjSep > maxDistance)
+                            continue;
+                        sep = adjSep;
+                        candN = SafeNormalizeVec3(Vector3Rotate(-smoothedOut, rotB), nAtoB);
+                        candAncB = (worldPtA + candN * sep) - posB;
+                        candPt = (worldPtA + posB + candAncB) * 0.5f;
+                    }
+
+                    if(sep < deepestSep){
+                        deepestSep = sep;
+                        chosenNormal = candN;
+                    }
+                    PushMeshCandidateWithTris(
+                        candPt,
+                        candAncA,
+                        candAncB,
+                        candN,
+                        sep,
+                        MakeFeatureId(5u, cast<u8>(pi), 2u, cast<u8>(segIdx & 0xffu)),
+                        s_NullIndex,
+                        segIdx,
+                        candidates
+                    );
+                }
+            }
+        }
+        else{
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
+}
+
+void PushSdfSampleCandidate(
+    in VectorSingle sampleInSdf,
+    in VectorSingle posA,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 queryRadius,
+    in SdfShape sdfB,
+    in f32 maxDistance,
+    in u32 featId,
+    mut f32 deepestSep,
+    mut VectorSingle chosenNormal,
+    mut FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates
+){
+    const VectorSingle g = sdfB.sampleGradient(sampleInSdf);
+    const VectorSingle wAInSdf = sampleInSdf - g * queryRadius;
+    const f32 d = sdfB.sampleDistance(wAInSdf);
+    if(d > maxDistance)
+        return;
+    const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(g, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+    const VectorSingle nAtoB = -worldOut;
+    const VectorSingle worldPtA = TransformPointValues(posB, rotB, wAInSdf);
+    const VectorSingle worldPtB = TransformPointValues(posB, rotB, wAInSdf - g * d);
+    if(d < deepestSep){
+        deepestSep = d;
+        chosenNormal = nAtoB;
+    }
+    PushMeshCandidateWithTris(
+        (worldPtA + worldPtB) * 0.5f,
+        worldPtA - posA,
+        worldPtB - posB,
+        nAtoB,
+        d,
+        featId,
+        s_NullIndex,
+        s_NullIndex,
+        candidates
+    );
+}
+
+void CollideConvexProxyAndSdfMulti(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in SdfShape sdfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(!sdfB.isValid() || IsProxyViewEmpty(proxyA))
+        return;
+
+    VectorSingle localPosA(0.0f);
+    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
+    VectorSingle qMin(0.0f);
+    VectorSingle qMax(0.0f);
+    ComputeProxyViewLocalBounds(proxyA, qMin, qMax);
+    VectorSingle aabbMin(0.0f);
+    VectorSingle aabbMax(0.0f);
+    TransformLocalAabbValuesToWorld(qMin, qMax, proxyA.radius + maxDistance, localPosA, localRotA, aabbMin, aabbMax);
+    const VectorSingle sdfPad(sdfB.margin, sdfB.margin, sdfB.margin, 0.0f);
+    if(!AabbOverlapsValues(aabbMin, aabbMax, VectorSingle(sdfB.boundsMin, 0.0f) - sdfPad, VectorSingle(sdfB.boundsMax, 0.0f) + sdfPad))
+        return;
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
+    f32 deepestSep = s_MaxF32;
+
+    VectorSingle bestW(0.0f);
+    VectorSingle bestG(0.0f, 1.0f, 0.0f, 0.0f);
+    const f32 minSep = FindMinSdfConvexSeparation(proxyA, localPosA, localRotA, sdfB, bestW, bestG);
+    if(minSep <= maxDistance){
+        const VectorSingle worldOut = SafeNormalizeVec3(Vector3Rotate(bestG, rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle nAtoB = -worldOut;
+        const VectorSingle worldPtA = TransformPointValues(posB, rotB, bestW);
+        const VectorSingle surfLocal = bestW - bestG * sdfB.sampleDistance(bestW);
+        const VectorSingle worldPtB = TransformPointValues(posB, rotB, surfLocal);
+        deepestSep = minSep;
+        chosenNormal = nAtoB;
+        PushMeshCandidateWithTris(
+            (worldPtA + worldPtB) * 0.5f,
+            worldPtA - posA,
+            worldPtB - posB,
+            nAtoB,
+            minSep,
+            MakeFeatureId(5u, 0u, 7u, 0u),
+            s_NullIndex,
+            s_NullIndex,
+            candidates
+        );
+    }
+
+    if(proxyA.kind == ProxyKind::PointCloud && proxyA.scaleMinMargin.w < 0.0f){
+        const usize ptLim = Min(proxyA.points.size(), cast<usize>(24u));
+        for(usize pi = 0u; pi < ptLim; ++pi){
+            const f32x3u rawPt = proxyA.points[pi];
+            const VectorSingle ptInB = TransformPointValues(localPosA, localRotA, VectorSingle(rawPt.x, rawPt.y, rawPt.z, 0.0f));
+            PushSdfSampleCandidate(ptInB, posA, posB, rotB, proxyA.radius, sdfB, maxDistance, MakeFeatureId(5u, cast<u8>(pi + 1u), 7u, 1u), deepestSep, chosenNormal, candidates);
+        }
+    }
+    else{
+        Array<f32x4, 14u> dirs;
+        dirs[0u]  = f32x4( 1.0f,  0.0f,  0.0f, 0.0f);
+        dirs[1u]  = f32x4(-1.0f,  0.0f,  0.0f, 0.0f);
+        dirs[2u]  = f32x4( 0.0f,  1.0f,  0.0f, 0.0f);
+        dirs[3u]  = f32x4( 0.0f, -1.0f,  0.0f, 0.0f);
+        dirs[4u]  = f32x4( 0.0f,  0.0f,  1.0f, 0.0f);
+        dirs[5u]  = f32x4( 0.0f,  0.0f, -1.0f, 0.0f);
+        const f32 invS = 0.57735027f;
+        dirs[6u]  = f32x4( invS,  invS,  invS, 0.0f);
+        dirs[7u]  = f32x4(-invS,  invS,  invS, 0.0f);
+        dirs[8u]  = f32x4( invS, -invS,  invS, 0.0f);
+        dirs[9u]  = f32x4(-invS, -invS,  invS, 0.0f);
+        dirs[10u] = f32x4( invS,  invS, -invS, 0.0f);
+        dirs[11u] = f32x4(-invS,  invS, -invS, 0.0f);
+        dirs[12u] = f32x4( invS, -invS, -invS, 0.0f);
+        dirs[13u] = f32x4(-invS, -invS, -invS, 0.0f);
+        for(usize di = 0u; di < 14u; ++di){
+            u8 unusedIdx = 0xffu;
+            const VectorSingle dWorldB(dirs[di]);
+            const VectorSingle supLocal = ComputeProxyViewSupport(proxyA, Vector3InverseRotate(dWorldB, localRotA), unusedIdx);
+            const VectorSingle ptInB = TransformPointValues(localPosA, localRotA, supLocal);
+            PushSdfSampleCandidate(ptInB, posA, posB, rotB, proxyA.radius, sdfB, maxDistance, MakeFeatureId(5u, cast<u8>(di + 1u), 7u, 2u), deepestSep, chosenNormal, candidates);
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
+}
+
+void CollideSdfAndSdfMulti(
+    in SdfShape sdfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in SdfShape sdfB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(!sdfA.isValid() || !sdfB.isValid())
+        return;
+
+    VectorSingle relPosAtoB(0.0f);
+    VectorSingle relRotAtoB(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, relPosAtoB, relRotAtoB);
+
+    VectorSingle bAMin(0.0f);
+    VectorSingle bAMax(0.0f);
+    TransformLocalAabbValuesToWorld(VectorSingle(sdfA.boundsMin, 0.0f), VectorSingle(sdfA.boundsMax, 0.0f), sdfA.margin + maxDistance, relPosAtoB, relRotAtoB, bAMin, bAMax);
+    const VectorSingle padB(sdfB.margin, sdfB.margin, sdfB.margin, 0.0f);
+    if(!AabbOverlapsValues(bAMin, bAMax, VectorSingle(sdfB.boundsMin, 0.0f) - padB, VectorSingle(sdfB.boundsMax, 0.0f) + padB))
+        return;
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
+    f32 deepestSep = s_MaxF32;
+
+    const f32 surfBandA = Vector3Length(VectorSingle(sdfA.cellSize, 0.0f)).x;
+    const u32 strideX = Max(1u, sdfA.dimX / 12u);
+    const u32 strideY = Max(1u, sdfA.dimY / 12u);
+    const u32 strideZ = Max(1u, sdfA.dimZ / 12u);
+    for(u32 z = 0u; z < sdfA.dimZ; z += strideZ){
+        const f32 pz = sdfA.boundsMin.z + cast<f32>(z) * sdfA.cellSize.z;
+        for(u32 y = 0u; y < sdfA.dimY; y += strideY){
+            const f32 py = sdfA.boundsMin.y + cast<f32>(y) * sdfA.cellSize.y;
+            for(u32 x = 0u; x < sdfA.dimX; x += strideX){
+                const f32 dA = sdfA.atGrid(x, y, z) - sdfA.margin;
+                if(Abs(VectorSingle(dA)).x > surfBandA)
+                    continue;
+                const VectorSingle pA(sdfA.boundsMin.x + cast<f32>(x) * sdfA.cellSize.x, py, pz, 0.0f);
+                const VectorSingle gA = sdfA.sampleGradient(pA);
+                const VectorSingle surfA = pA - gA * dA;
+                const VectorSingle surfInB = TransformPointValues(relPosAtoB, relRotAtoB, surfA);
+                const f32 dB = sdfB.sampleDistance(surfInB);
+                if(dB > maxDistance)
+                    continue;
+                const VectorSingle gB = sdfB.sampleGradient(surfInB);
+                const VectorSingle nAtoB = SafeNormalizeVec3(-Vector3Rotate(gB, rotB), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+                const VectorSingle worldA = TransformPointValues(posA, rotA, surfA);
+                const VectorSingle worldB = TransformPointValues(posB, rotB, surfInB - gB * dB);
+                if(dB < deepestSep){
+                    deepestSep = dB;
+                    chosenNormal = nAtoB;
+                }
+                PushMeshCandidateWithTris((worldA + worldB) * 0.5f, worldA - posA, worldB - posB, nAtoB, dB, MakeFeatureId(7u, cast<u8>(x & 0xffu), 7u, cast<u8>(y & 0xffu)), s_NullIndex, s_NullIndex, candidates);
+            }
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
+}
+
+void CollideSdfAndMeshMulti(
+    in SdfShape sdfA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut Vector<Manifold> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(!sdfA.isValid() || meshB.nodes.empty() || meshB.triangles.empty())
+        return;
+
+    const b8 hasTriFilter = triFilter.has_value();
+    VectorSingle relPosAtoB(0.0f);
+    VectorSingle relRotAtoB(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, relPosAtoB, relRotAtoB);
+    VectorSingle relPosBtoA(0.0f);
+    VectorSingle relRotBtoA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPosBtoA, relRotBtoA);
+
+    const f32 meshR = meshB.radius();
+    VectorSingle queryMinB(0.0f);
+    VectorSingle queryMaxB(0.0f);
+    TransformLocalAabbValuesToWorld(VectorSingle(sdfA.boundsMin, 0.0f), VectorSingle(sdfA.boundsMax, 0.0f), sdfA.margin + meshR + maxDistance, relPosAtoB, relRotAtoB, queryMinB, queryMaxB);
+    const b8 cullBackFaces = (meshB.isClosed() || meshB.sidedness() == MeshSidedness::SingleSided);
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
+    f32 deepestSep = s_MaxF32;
+
+    BvhSpillStack<u32, 256u> stack;
+    stack.push(0u);
+    u32 nodeIdx = 0u;
+    while(stack.pop(nodeIdx)){
+        in MeshBvhNode node = meshB.nodes[nodeIdx];
+        if(!AabbOverlapsValues(VectorSingle(node.aabbMinLeft, 0.0f), VectorSingle(node.aabbMaxRight, 0.0f), queryMinB, queryMaxB))
+            continue;
+        if(node.isLeaf()){
+            const u32 firstTri = node.leftOrFirst();
+            const u32 endTri = firstTri + node.rightOrCount();
+            for(u32 ti = firstTri; ti < endTri; ++ti){
+                if(hasTriFilter && !triFilter.value()(meshShapeId, ti))
+                    continue;
+                in MeshTriangle tri = meshB.triangles[ti];
+                const VectorSingle tv0(tri.v0, 0.0f);
+                const VectorSingle tv1(tri.v1, 0.0f);
+                const VectorSingle tv2(tri.v2, 0.0f);
+                if(!AabbOverlapsValues(Min(tv0, Min(tv1, tv2)), Max(tv0, Max(tv1, tv2)), queryMinB, queryMaxB))
+                    continue;
+                const VectorSingle worldTriN = SafeNormalizeVec3(Vector3Rotate(VectorSingle(tri.normal, 0.0f), rotB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                Array<f32x4, 7u> samples;
+                samples[0u] = f32x4(tv0);
+                samples[1u] = f32x4(tv1);
+                samples[2u] = f32x4(tv2);
+                samples[3u] = f32x4((tv0 + tv1 + tv2) * (1.0f / 3.0f));
+                samples[4u] = f32x4((tv0 + tv1) * 0.5f);
+                samples[5u] = f32x4((tv1 + tv2) * 0.5f);
+                samples[6u] = f32x4((tv2 + tv0) * 0.5f);
+                for(usize si = 0u; si < 7u; ++si){
+                    const VectorSingle sLocal(samples[si], 0.0f);
+                    const VectorSingle ptInA = TransformPointValues(relPosBtoA, relRotBtoA, sLocal);
+                    const f32 sep = sdfA.sampleDistance(ptInA) - meshR;
+                    if(sep > maxDistance)
+                        continue;
+                    const VectorSingle gA = sdfA.sampleGradient(ptInA);
+                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(gA, rotA), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+                    if(cullBackFaces && Vector3Dot(nAtoB, worldTriN).x >= 0.0f)
+                        continue;
+                    const VectorSingle worldPtA = TransformPointValues(posA, rotA, ptInA - gA * (sep + meshR));
+                    const VectorSingle worldPtB = TransformPointValues(posB, rotB, sLocal) - nAtoB * meshR;
+                    if(sep < deepestSep){
+                        deepestSep = sep;
+                        chosenNormal = nAtoB;
+                    }
+                    PushMeshCandidateWithTris((worldPtA + worldPtB) * 0.5f, worldPtA - posA, worldPtB - posB, nAtoB, sep, MakeFeatureId(7u, cast<u8>(si), 3u, cast<u8>(ti & 0xffu)), s_NullIndex, ti, candidates);
+                }
+            }
+        }
+        else{
+            stack.push(node.leftOrFirst());
+            stack.push(node.rightOrCount());
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
 

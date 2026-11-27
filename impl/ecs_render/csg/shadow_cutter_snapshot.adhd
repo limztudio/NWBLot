@@ -49,6 +49,7 @@ static_assert(s_CsgRayShapeCapsule == s_ShaderCsgRayShapeCapsule);
 class CsgShadowSnapshot{
     public Vector<CsgShadowReceiverRangeGpu> receiverRanges;
     public Vector<CsgCutterGpuData> cutters;
+    public Vector<u32> cutterEntityIds;
     public u64 identity = 0u;
     public u64 contentIdentity = 0u;
     public b8 hasCsg = false;
@@ -93,6 +94,7 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
                 snapshot.contentIdentity,
                 snapshot.identity
             );
+            const usize prevCutterCount = snapshot.cutters.size();
             AppendShadowCutterRecord(
                 cutter.hasShaderModule,
                 cutter.shapeName,
@@ -102,8 +104,15 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
                 range,
                 snapshot.cutters
             );
+            if(snapshot.cutters.size() > prevCutterCount){
+                u32 cutterEntityId = u32.max;
+                if(cutter.syncFromTransform)
+                    cutterEntityId = cutter.entity.id;
+                snapshot.cutterEntityIds.push_back(cutterEntityId);
+            }
         }
         FinalizeShadowReceiverCuttersRange(range, snapshot.cutters);
+        snapshot.cutterEntityIds.resize(snapshot.cutters.size());
         return;
     }
     for(in auto record : receiverLookup.receiverCutters(drawState)){
@@ -137,6 +146,7 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
             snapshot.contentIdentity,
             snapshot.identity
         );
+        const usize prevCutterCount = snapshot.cutters.size();
         AppendShadowCutterRecord(
             shapeType.value().desc.shaderModule != s_NameNone,
             shapeType.value().desc.name,
@@ -146,13 +156,21 @@ void AppendReceiverCutters(in CsgShadowReceiverInput receiver, in CsgReceiverDra
             range,
             snapshot.cutters
         );
+        if(snapshot.cutters.size() > prevCutterCount){
+            u32 cutterEntityId = u32.max;
+            if(cutter.syncFromTransform)
+                cutterEntityId = record.value().entity.id;
+            snapshot.cutterEntityIds.push_back(cutterEntityId);
+        }
     }
     FinalizeShadowReceiverCuttersRange(range, snapshot.cutters);
+    snapshot.cutterEntityIds.resize(snapshot.cutters.size());
 }
 
 b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowReceiverInput> receivers, mut World world, mut CsgShadowSnapshot outSnapshot){
     outSnapshot.receiverRanges.clear();
     outSnapshot.cutters.clear();
+    outSnapshot.cutterEntityIds.clear();
     outSnapshot.identity = 0u;
     outSnapshot.contentIdentity = 0u;
     outSnapshot.hasCsg = false;
@@ -185,6 +203,7 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
 
     outSnapshot.receiverRanges.resize(receiverCount);
     outSnapshot.cutters.reserve(cutterCapacity);
+    outSnapshot.cutterEntityIds.reserve(cutterCapacity);
     CsgSnapshotIdentityBuilder().initializeShadowCutterSnapshotHashes(shapeRegistry.revision(), receiverCount, outSnapshot.contentIdentity, outSnapshot.identity);
     for(usize index = 0u; index < receiverCount; ++index){
         in CsgShadowReceiverInput receiver = receivers[index];
@@ -199,6 +218,8 @@ b8 BuildCsgShadowSnapshot(in CsgShapeRegistry shapeRegistry, in Span<CsgShadowRe
     }
     if(!outSnapshot.hasCsg){
         outSnapshot.receiverRanges.clear();
+        outSnapshot.cutters.clear();
+        outSnapshot.cutterEntityIds.clear();
         outSnapshot.identity = 0u;
         outSnapshot.contentIdentity = 0u;
     }

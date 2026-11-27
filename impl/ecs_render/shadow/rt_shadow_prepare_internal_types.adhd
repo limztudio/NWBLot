@@ -46,17 +46,20 @@ class ShadowPrepareGeometryInputs{
 class ShadowPrepareUploadInputs{
     public in DeferredFrameTargets targets;
     public in RayTracingDeferredGraphResourceSnapshot rayTracingResources;
+    public in RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources;
     public GpuGraphResourceId currentBindlessSlots;
     public GpuGraphResourceId materialContextSlots;
 
     public ShadowPrepareUploadInputs(
         in borrow DeferredFrameTargets targets,
         in borrow RayTracingDeferredGraphResourceSnapshot rayTracingResources,
+        in borrow RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources,
         in GpuGraphResourceId currentBindlessSlots,
         in GpuGraphResourceId materialContextSlots
     ){
         this.targets = targets;
         this.rayTracingResources = rayTracingResources;
+        this.rayTracingShadowResources = rayTracingShadowResources;
         this.currentBindlessSlots = currentBindlessSlots;
         this.materialContextSlots = materialContextSlots;
     }
@@ -126,6 +129,7 @@ class ShadowPrepareUploadChainBuilder : NoCopy{
             || !this.declareSurfelFrameConstantsUpload(inputs, chain)
             || !this.declareShadowMaterialContextUploads(inputs, chain)
             || !this.declareSceneBvhUploads(inputs, chain)
+            || !this.declareSceneTlasInstanceUpload(inputs, chain)
         ){
             chain = ShadowPrepareUploadChain();
             return false;
@@ -144,6 +148,9 @@ class ShadowPrepareUploadChainBuilder : NoCopy{
 
     [cpp_unwind]
     private b8 declareSceneBvhUploads(in ShadowPrepareUploadInputs inputs, mut ShadowPrepareUploadChain chain);
+
+    [cpp_unwind]
+    private b8 declareSceneTlasInstanceUpload(in ShadowPrepareUploadInputs inputs, mut ShadowPrepareUploadChain chain);
 }
 
 class ShadowPrepareResourcePlanner : NoCopy{
@@ -224,6 +231,7 @@ b8 ValidateAccelStructFinalizeResourceUses(
 
 usize ResolveShadowPrepareResourceUseReserveCount(
     in b8 hasCsgTraceContext,
+    in b8 hasTlasInstanceBuffer,
     in usize shadowTraceGeometryCount,
     in usize softwareBvhBuildStateCount,
     in usize liveMeshBlasGraphStateCount,
@@ -232,8 +240,12 @@ usize ResolveShadowPrepareResourceUseReserveCount(
     usize csgCount = 0u;
     if(hasCsgTraceContext)
         csgCount = 1u;
+    usize tlasInstanceCount = 0u;
+    if(hasTlasInstanceBuffer)
+        tlasInstanceCount = 1u;
     return s_ShadowPrepareResourceUseCapacity
         + csgCount
+        + tlasInstanceCount
         + shadowTraceGeometryCount
         + softwareBvhBuildStateCount
         + liveMeshBlasGraphStateCount

@@ -16,6 +16,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint flags = g_NwbPhysicsPushConstants.flags;
     const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
     const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
+    const uint metaSlot = g_NwbPhysicsPushConstants.slots0.w;
     const uint jointSlot = g_NwbPhysicsPushConstants.slots1.x;
     const uint outSlot = g_NwbPhysicsPushConstants.slots1.z;
     const float h = g_NwbPhysicsPushConstants.deltaTime;
@@ -28,8 +29,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint endIdx = isSerial ? itemCount : (dispatchThreadID.x + 1u);
     for(uint k = startIdx; k < endIdx; ++k){
         const uint idx = itemOffset + k;
-        if(mode == NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES)
+        if(mode == NWB_PHYSICS_SOLVER_MODE_REFRESH_RESIDENT){
+            nwbPhysicsRefreshResidentJoint(idx, bodySimSlot, bodyStateSlot, jointSlot, metaSlot);
+        }
+        else if(mode == NWB_PHYSICS_SOLVER_MODE_EXPORT_IMPULSES){
             nwbPhysicsExportJointImpulses(idx, jointSlot, outSlot);
+            if((flags & NWB_PHYSICS_SOLVER_FLAG_HAS_HIT_EVENTS) != 0u){
+                const uint eventRingSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.x);
+                const uint prepCountersSlot = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.y);
+                const uint maxEvents = asuint(g_NwbPhysicsPushConstants.gravitySpeculative.z);
+                nwbPhysicsCheckResidentJointBreak(idx, jointSlot, outSlot, metaSlot, prepCountersSlot, eventRingSlot, maxEvents, g_NwbPhysicsPushConstants.invDeltaTime);
+            }
+        }
         else if(mode == NWB_PHYSICS_SOLVER_MODE_WARM_START)
             nwbPhysicsWarmStartSingleJoint(idx, bodySimSlot, bodyStateSlot, jointSlot, flags);
         else if(mode == NWB_PHYSICS_SOLVER_MODE_PROJECT){

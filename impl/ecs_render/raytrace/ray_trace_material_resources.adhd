@@ -26,6 +26,10 @@ class RayTraceMaterialResources : NoCopy{
     public b8 ensureRayTraceMaterialContextSlotsHeapHandle();
     public b8 ensureRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle);
     public b8 replaceRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle);
+    public b8 ensureWritableRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle);
+    public b8 replaceWritableRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle);
+    private b8 ensureRayTraceStorageHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle, in b8 writable);
+    private b8 replaceRayTraceStorageHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle, in b8 writable);
     public b8 ensureShadowInstanceMaterialBuffer(in usize instanceCount);
     public b8 ensureShadowInstanceContextBuffer(in usize instanceCount);
     public b8 ensureShadowMaterialTypedBuffer(in usize byteCount);

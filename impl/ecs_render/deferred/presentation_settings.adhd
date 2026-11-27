@@ -30,6 +30,19 @@ const usize s_PresentMaxDependencyCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class DeferredDebugLinePushConstants{
+    public f32x4x4 viewProj(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f);
+    public u32 vertexBufferSlot = 0u;
+    public u32 pad0 = 0u;
+    public u32 pad1 = 0u;
+    public u32 pad2 = 0u;
+}
+static_assert(size_of<DeferredDebugLinePushConstants>() == 80u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 enum<u32> PresentationToneMap{
     LinearClamp = 0u,
     Reinhard = 1u

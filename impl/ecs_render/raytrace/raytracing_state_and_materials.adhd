@@ -236,22 +236,28 @@ void RayTraceMaterialResources::releaseRayTraceMaterialContextHeapHandles(){
     if(heap.isInitialized()){
         heap.free(this.m_scene.m_sceneBvhNodeHeapHandle);
         heap.free(this.m_scene.m_sceneInstanceHeapHandle);
+        heap.free(this.m_scene.m_sceneInstanceUavHeapHandle);
         heap.free(this.m_shadow.m_shadowInstanceMaterialHeapHandle);
         heap.free(this.m_shadow.m_shadowMaterialTypedHeapHandle);
         heap.free(this.m_shadow.m_shadowInstanceHeapHandle);
+        heap.free(this.m_shadow.m_shadowInstanceUavHeapHandle);
         heap.free(this.m_scene.m_rayTraceMaterialContextSlotsHeapHandle);
         RetireDescriptor(heap, this.m_scene.m_csgTraceContextHeapHandle);
+        RetireDescriptor(heap, this.m_scene.m_csgTraceContextUavHeapHandle);
         heap.free(this.m_shadow.m_swShadowEdgeCounterHeapHandle);
         heap.free(this.m_shadow.m_swShadowEdgeListHeapHandle);
         heap.free(this.m_shadow.m_swShadowIndirectArgsHeapHandle);
     }
     this.m_scene.m_sceneBvhNodeHeapHandle = GpuDescriptorHandleInvalid();
     this.m_scene.m_sceneInstanceHeapHandle = GpuDescriptorHandleInvalid();
+    this.m_scene.m_sceneInstanceUavHeapHandle = GpuDescriptorHandleInvalid();
     this.m_shadow.m_shadowInstanceMaterialHeapHandle = GpuDescriptorHandleInvalid();
     this.m_shadow.m_shadowMaterialTypedHeapHandle = GpuDescriptorHandleInvalid();
     this.m_shadow.m_shadowInstanceHeapHandle = GpuDescriptorHandleInvalid();
+    this.m_shadow.m_shadowInstanceUavHeapHandle = GpuDescriptorHandleInvalid();
     this.m_scene.m_rayTraceMaterialContextSlotsHeapHandle = GpuDescriptorHandleInvalid();
     this.m_scene.m_csgTraceContextHeapHandle = GpuDescriptorHandleInvalid();
+    this.m_scene.m_csgTraceContextUavHeapHandle = GpuDescriptorHandleInvalid();
     this.m_shadow.m_swShadowEdgeCounterHeapHandle = GpuDescriptorHandleInvalid();
     this.m_shadow.m_swShadowEdgeListHeapHandle = GpuDescriptorHandleInvalid();
     this.m_shadow.m_swShadowIndirectArgsHeapHandle = GpuDescriptorHandleInvalid();
@@ -293,7 +299,7 @@ b8 RayTraceMaterialResources::ensureRayTraceMaterialContextSlotsHeapHandle(){
     return true;
 }
 
-b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle){
+b8 RayTraceMaterialResources::ensureRayTraceStorageHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle, in b8 writable){
     if(handle.valid())
         return true;
 
@@ -304,14 +310,14 @@ b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(mut Buffer
         return false;
     }
 
-    if(!EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, false, heap, buffer, handle)){
+    if(!EnsureHeapBuffer(GpuDescriptorClass::StorageBuffer, writable, heap, buffer, handle)){
         error("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap");
         return false;
     }
     return true;
 }
 
-b8 RayTraceMaterialResources::replaceRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle){
+b8 RayTraceMaterialResources::replaceRayTraceStorageHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle, in b8 writable){
     mut Device device = this.m_graphics.getDevice();
     mut GpuDescriptorHeap heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -319,11 +325,27 @@ b8 RayTraceMaterialResources::replaceRayTraceMaterialContextHeapHandle(mut Buffe
         return false;
     }
 
-    if(!ReplaceHeapBuffer(GpuDescriptorClass::StorageBuffer, false, heap, buffer, handle)){
+    if(!ReplaceHeapBuffer(GpuDescriptorClass::StorageBuffer, writable, heap, buffer, handle)){
         error("RendererSystem: failed to replace ray-trace material-context heap descriptor");
         return false;
     }
     return true;
+}
+
+b8 RayTraceMaterialResources::ensureRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle){
+    return this.ensureRayTraceStorageHeapHandle(buffer, handle, false);
+}
+
+b8 RayTraceMaterialResources::replaceRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle){
+    return this.replaceRayTraceStorageHeapHandle(buffer, handle, false);
+}
+
+b8 RayTraceMaterialResources::ensureWritableRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle){
+    return this.ensureRayTraceStorageHeapHandle(buffer, handle, true);
+}
+
+b8 RayTraceMaterialResources::replaceWritableRayTraceMaterialContextHeapHandle(mut Buffer buffer, mut GpuDescriptorHandle handle){
+    return this.replaceRayTraceStorageHeapHandle(buffer, handle, true);
 }
 
 

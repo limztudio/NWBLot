@@ -18,7 +18,7 @@
 #endif
 
 #ifndef NWB_ADHD_EXPORT_FUNCTION_CALL
-#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
+#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule)
 #define NWB_ADHD_EXPORT_FUNCTION_CALL_AUTO_UNDEF
 #endif
 
@@ -72,11 +72,6 @@
 #define NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF
 #endif
 
-#ifndef NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE
-#define NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE(ruleName)
-#define NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE_AUTO_UNDEF
-#endif
-
 #ifndef NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT
 #define NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(ruleName, elementTypeName, templateArgCount, isExactElementCheck, checksContiguousSequence, countText)
 #define NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT_AUTO_UNDEF
@@ -126,11 +121,6 @@
 #ifdef NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT_AUTO_UNDEF
 #undef NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT
-#endif
-
-#ifdef NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE_AUTO_UNDEF
-#undef NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE
 #endif
 
 #ifdef NWB_ADHD_EXPORT_BUILTIN_FIELD_AUTO_UNDEF

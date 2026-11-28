@@ -13,7 +13,7 @@ extern class GpuResourcePointerKey;
 [cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::ResourcePointerKey::FromObject")]
 extern GpuResourcePointerKey GpuResourcePointerKeyFromObject(in borrow auto object, in GpuGraphResourceType type);
 
-[cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::ResourceImportMatch"), cpp_flags(small_value)]
+[cpp_header("<core/task/gpu/task_graph_nodes.h>"), cpp_name("::NWB::Core::GpuTaskGraphDetail::ResourceImportMatch")]
 extern class GpuResourceImportMatch{
     u32 index;
     b8 samePointer;

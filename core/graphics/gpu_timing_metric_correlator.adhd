@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricQueueOutput"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricQueueOutput")]
 extern class GpuPacketEnvelopeMetricQueueOutput{
     GpuPhysicalQueueId physicalQueue;
     Name internalIdleScopeName;
 };
 
-[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricScope"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/gpu_timing_metric_correlator.h>"), cpp_name("::NWB::Core::GpuPacketEnvelopeMetricScope")]
 extern class GpuPacketEnvelopeMetricScope{
     Name scopeName;
     GpuPhysicalQueueId physicalQueue;

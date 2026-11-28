@@ -302,14 +302,26 @@ b8 CallableArgumentChecker::check(
             && expectedParamTypeRef
             && m_checker.m_symbols.resolveRefMode(expectedParamTypeRef) != ParamPassingMode::None;
         arg->isMutArg = paramIsMut || IsBorrowViewType(expectedParamType);
-        if(i == 0u && ((builtinFnInfo && builtinFnInfo->callLowering == BuiltinCallLowering::PlatformLiteralArg0)
-            || (targetCallable && targetCallable->isExtern && targetCallable->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::PlatformLiteralArg0)))){
+        const b8 expectsPlatformLiteral = (i < 32u) && (
+            (builtinFnInfo && ((builtinFnInfo->platformLiteralArgMask & (1u << i)) != 0u))
+            || (targetCallable && targetCallable->isExtern && ((targetCallable->platformLiteralArgMask & (1u << i)) != 0u))
+        );
+        const b8 lowersByteView = (i < 32u) && (
+            (builtinFnInfo && ((builtinFnInfo->byteViewArgMask & (1u << i)) != 0u))
+            || (targetCallable && targetCallable->isExtern && ((targetCallable->byteViewArgMask & (1u << i)) != 0u))
+        );
+        if(expectsPlatformLiteral){
             if(arg->kind != ExprKind::StringLiteral){
                 m_checker.reportError(errors, arg->span, "platform text requires a string literal");
                 ok = false;
             }
             else
                 arg->adaptToTChar = true;
+        }
+        if(lowersByteView){
+            const MStringView actualByteType = m_checker.inferExprBaseType(ownerClass, &method, *arg, scope);
+            if(actualByteType != BuiltinTypeSemantics::BinaryByteViewTypeName() || m_checker.m_symbols.hasTypeSymbol(actualByteType))
+                arg->adaptToByteView = true;
         }
         if(RequiresTCharAdaptation(expectedParamType))
             m_checker.markStringToPathAdaptation(ownerClass, &method, scope, *arg);
@@ -347,8 +359,7 @@ b8 CallableArgumentChecker::check(
             }
             b8 typeMismatch = exactTypeMismatch
                 || (builtinArgRule->requiresStringLike && isKnownAdhdType && !(builtinArgRule->isMut ? IsOwningStringType(actualArgType) : IsStringLikeType(actualArgType)))
-                || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType))
-                || (IsNumericScalarArgRule(builtinArgRule->rule) && isKnownAdhdType && !BuiltinTypeSemantics::IsNumericScalarType(actualArgType));
+                || (builtinArgRule->requiresIntegerScalar && isKnownAdhdType && !BuiltinTypeSemantics::IsIntegerScalarType(actualArgType));
             if(const BuiltinContainerArgConstraintInfo* constraint = FindContainerArgConstraint(builtinArgRule->rule); !typeMismatch && constraint){
                 if(constraint->isExactElementCheck){
                     const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
@@ -359,9 +370,7 @@ b8 CallableArgumentChecker::check(
                     const b8 isContiguous = actualArgType == builtinArgRule->expectedParamType || DoesImplicitConversionPropagateFirstTypeArg(actualArgType, builtinArgRule->expectedParamType);
                     const TypeRef* containerType = actualRef ? m_checker.m_symbols.unwrapTypeAlias(actualRef) : nullptr;
                     const TypeRef* elementType = containerType && !containerType->templateArgs.empty() && containerType->templateArgs[0].type ? m_checker.m_symbols.unwrapTypeAlias(containerType->templateArgs[0].type) : nullptr;
-                    const b8 lowersByteView = builtinFnInfo && ((i == 0u && builtinFnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg0)
-                        || (i == 1u && builtinFnInfo->callLowering == BuiltinCallLowering::BinaryByteViewArg1));
-                    const b8 alreadyByteView = lowersByteView && actualArgType == "BinaryByteView" && !m_checker.m_symbols.hasTypeSymbol(actualArgType);
+                    const b8 alreadyByteView = lowersByteView && actualArgType == BuiltinTypeSemantics::BinaryByteViewTypeName() && !m_checker.m_symbols.hasTypeSymbol(actualArgType);
                     typeMismatch = !alreadyByteView && (!isContiguous || !elementType || m_checker.m_symbols.resolveBaseTypeName(elementType->name) != constraint->elementTypeName);
                 }
                 else if(isKnownAdhdType && !constraint->countText.empty()){

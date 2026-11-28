@@ -8,6 +8,7 @@
 #include "operations.h"
 #include "crlf_output_stream.h"
 #include "../atomic.h"
+#include "../binary.h"
 #include "../diagnostics.h"
 #include "../numeric_text.h"
 
@@ -303,6 +304,11 @@ template<typename ArenaT>
         offset += chunk;
     }
     return VerifyStreamAtEnd(stream);
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline b8 VerifyBinaryFileBytes(const Path<ArenaT>& path, const BinaryByteView expected){
+    return VerifyBinaryFileBytes(path, expected.data(), expected.size());
 }
 
 template<typename ArenaT, typename Container>

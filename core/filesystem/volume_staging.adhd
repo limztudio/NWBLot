@@ -7,7 +7,7 @@ extern class StagedDirectoryCleanupGuard{
     void dismiss(...);
 };
 
-[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::VolumePublicationObserver"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/volume_staging.h>"), cpp_name("::NWB::Core::Filesystem::VolumePublicationObserver")]
 extern class VolumePublicationObserver;
 
 

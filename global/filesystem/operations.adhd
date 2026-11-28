@@ -20,7 +20,7 @@ extern Expected<b8, ErrorCode> FileExists(in Path a0);
 [cpp_name("::FileExistsNoFollow")]
 extern Expected<b8, ErrorCode> FileExistsNoFollow(in Path a0);
 
-[cpp_name("::GetCurrentPath"), cpp_flags(scratch_arena)]
+[cpp_name("::GetCurrentPath")]
 extern Expected<Path, ErrorCode> GetCurrentPath();
 
 [cpp_name("::IsDirectory")]

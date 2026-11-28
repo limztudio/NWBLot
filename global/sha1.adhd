@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/sha1.h>"), cpp_name("::Sha1Digest"), cpp_flags(binary_serializable, brace_init, equality_switch)]
+[cpp_header("<global/sha1.h>"), cpp_name("::Sha1Digest")]
 extern class Sha1Digest{
     Array<u8, 20u> bytes;
 };
@@ -14,7 +14,7 @@ extern class Sha1Digest{
 [cpp_header("<global/sha1.h>"), cpp_name("::AppendSha1Hex")]
 extern void AppendSha1Hex(in Sha1Digest digest, mut auto output);
 
-[cpp_header("<global/sha1.h>"), cpp_name("::ComputeSha1"), cpp_flags(byte_view_arg0)]
+[cpp_header("<global/sha1.h>"), cpp_name("::ComputeSha1")]
 extern Sha1Digest ComputeSha1(in auto a0);
 
 [cpp_header("<global/sha1.h>"), cpp_name("::ComputeSha1Text")]

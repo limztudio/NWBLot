@@ -20,7 +20,7 @@ extern class FreeTypeOutlineBox{
 extern const i32 s_FreeTypeLoadNoAutohint;
 
 
-[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiFreeTypeFace"), cpp_flags(arena_first_ctor)]
+[cpp_header("<impl/ecs_ui/toolkit/text/freetype_sdk.h>"), cpp_name("::NWB::UiFontSdk::UiFreeTypeFace")]
 extern class UiFreeTypeFace{
     i32 createLibrary();
     void addDefaultModules();

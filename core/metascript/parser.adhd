@@ -17,7 +17,7 @@ extern class MetascriptDocument{
     b8 visitVariable(in StringView a0, in Func<b8(mut MetascriptValue)> a1)const;
 };
 
-[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::ParseError"), cpp_flags(brace_init)]
+[cpp_header("<core/metascript/parser.h>"), cpp_name("::NWB::Core::Metascript::ParseError")]
 extern class MetascriptParseError{
     u32 line;
     u32 column;

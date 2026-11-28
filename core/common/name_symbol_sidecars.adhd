@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars")]
 extern class NameSymbolSidecars;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars::DefaultPath"), cpp_flags(scratch_arena)]
+[cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars::DefaultPath")]
 extern Expected<Path> NameSymbolSidecarsDefaultPath();
 
 [cpp_header("<core/common/name_symbol_sidecars.h>"), cpp_name("::NWB::Core::Common::NameSymbolSidecars::LoadDefault")]

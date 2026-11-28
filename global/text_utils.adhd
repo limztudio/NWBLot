@@ -44,7 +44,7 @@ extern b8 EqualsAsciiIgnoreCase(in StringView a0, in StringView a1);
 [cpp_name("::ErrorCodeCategoryName")]
 extern StringView ErrorCodeCategoryName(in ErrorCode error);
 
-[cpp_name("::ErrorCodeMessage"), cpp_flags(scratch_arena)]
+[cpp_name("::ErrorCodeMessage")]
 extern String ErrorCodeMessage(in ErrorCode a0);
 
 [cpp_name("::ExtractLeadingIdentifier"), cpp_flags(borrow_view)]
@@ -107,7 +107,7 @@ extern b8 IsRelativeSlashPathWithoutDotSegments(in StringView a0);
 [cpp_name("::IsUnicodeWhitespace")]
 extern b8 IsUnicodeWhitespace(in isize a0);
 
-[cpp_name("::JoinWithSingleSlash"), cpp_flags(scratch_arena)]
+[cpp_name("::JoinWithSingleSlash")]
 extern String JoinWithSingleSlash(in StringView a0, in StringView a1);
 
 [cpp_name("::ReadCommaOrSpaceDelimitedToken")]

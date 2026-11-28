@@ -26,6 +26,7 @@ AdhdOutputTransaction::AdhdOutputTransaction(Core::Metascript::MetaArena& arena,
     , m_depfilePath(depfilePath)
     , m_emitCppExternsPath(emitCppExternsPath)
     , m_hadExisting(arena)
+    , m_unchanged(arena)
     , m_hasStaged(arena)
     , m_hasBackup(arena)
     , m_promoted(arena)
@@ -34,6 +35,7 @@ AdhdOutputTransaction::AdhdOutputTransaction(Core::Metascript::MetaArena& arena,
 {
     const usize totalOutputs = m_outputPaths.size();
     m_hadExisting.resize(totalOutputs, false);
+    m_unchanged.resize(totalOutputs, false);
     m_hasStaged.resize(totalOutputs, false);
     m_hasBackup.resize(totalOutputs, false);
     m_promoted.resize(totalOutputs, false);
@@ -65,10 +67,14 @@ b8 AdhdOutputTransaction::publish(){
                 return false;
             }
             m_hadExisting[k] = true;
+            if(!isDepfileOutput(k) && VerifyBinaryFileBytes(m_outputPaths[k], m_outputContents[k].data(), m_outputContents[k].size()))
+                m_unchanged[k] = true;
         }
     }
 
     for(usize k = 0u; k < totalOutputs; ++k){
+        if(m_unchanged[k])
+            continue;
         const auto staged = StagedFileWriter(m_outputPaths[k]).stageUnique(m_outputContents[k].data(), m_outputContents[k].size());
         if(!staged){
             logOutputWriteFailure(k);
@@ -80,7 +86,7 @@ b8 AdhdOutputTransaction::publish(){
     }
 
     for(usize k = 0u; k < totalOutputs; ++k){
-        if(!m_hadExisting[k])
+        if(!m_hadExisting[k] || m_unchanged[k])
             continue;
         const auto stillExists = FileExistsNoFollow(m_outputPaths[k]);
         if(!stillExists){
@@ -112,6 +118,8 @@ b8 AdhdOutputTransaction::publish(){
     }
 
     for(usize k = 0u; k < totalOutputs; ++k){
+        if(m_unchanged[k])
+            continue;
         const auto finalized = RenamePath(m_stagedPaths[k], m_outputPaths[k]);
         if(!finalized){
             logOutputWriteFailure(k);
@@ -133,8 +141,12 @@ b8 AdhdOutputTransaction::publish(){
 }
 
 
+b8 AdhdOutputTransaction::isDepfileOutput(const usize outputIndex)const noexcept{
+    return !m_depfilePath.empty() && outputIndex + 1u == m_outputPaths.size();
+}
+
 void AdhdOutputTransaction::logOutputWriteFailure(const usize outputIndex)const{
-    if(!m_depfilePath.empty() && outputIndex + 1u == m_outputPaths.size())
+    if(isDepfileOutput(outputIndex))
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write depfile '{}'"), ConvertString(m_depfilePath));
     else if(!m_emitCppExternsPath.empty() && outputIndex == m_inputs.size() * 2u)
         NWB_LOGGER_ERROR(FOUNDATION_TEXT("AdhdCompiler: failed to write emitted C++ externs '{}'"), ConvertString(m_emitCppExternsPath));

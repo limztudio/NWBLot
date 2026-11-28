@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDesc"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgeDesc")]
 extern class FrameGraphEdgeDesc{
     u32 fromNodeIndex;
     u32 toNodeIndex;
@@ -10,7 +10,7 @@ extern class FrameGraphEdgeDesc{
     u8 flags;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgePayload"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphEdgePayload")]
 extern class FrameGraphEdgePayload{
     u32 fromNodeIndex;
     u32 toNodeIndex;
@@ -18,7 +18,7 @@ extern class FrameGraphEdgePayload{
     u8 flags;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDesc"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeDesc")]
 extern class FrameGraphNodeDesc{
     Name name;
     StringView label;
@@ -29,7 +29,7 @@ extern class FrameGraphNodeDesc{
     FrameGraphRuntimeStatistics runtimeStatistics;
 };
 
-[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodePayload"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_descs.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodePayload")]
 extern class FrameGraphNodePayload{
     Name name;
     StringView label;

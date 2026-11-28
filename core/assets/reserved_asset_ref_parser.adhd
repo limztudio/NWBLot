@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/assets/reserved_asset_ref_parser.h>"), cpp_name("::NWB::Core::Assets::ReservedAssetRefParser"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/assets/reserved_asset_ref_parser.h>"), cpp_name("::NWB::Core::Assets::ReservedAssetRefParser")]
 extern class ReservedAssetRefParser;
 
 [cpp_header("<core/assets/reserved_asset_ref_parser.h>"), cpp_name("::NWB::Core::Assets::ReservedAssetRefParser::ParseText")]

@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/assets_graphics/path_sdk.h>"), cpp_name("::NWB::Tests::GraphicsPathSdk::NativeUnits"), cpp_flags(arena_first_ctor)]
+[cpp_header("<tests/integration/assets_graphics/path_sdk.h>"), cpp_name("::NWB::Tests::GraphicsPathSdk::NativeUnits")]
 extern class NativeUnits{
     PlatformStringView view()const;
 };

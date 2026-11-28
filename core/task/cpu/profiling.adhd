@@ -16,7 +16,7 @@ extern enum CpuTaskProfileKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/cpu/profiling.h>"), cpp_name("::NWB::Core::CpuTaskProfileEvent"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/cpu/profiling.h>"), cpp_name("::NWB::Core::CpuTaskProfileEvent")]
 extern class CpuTaskProfileEvent{
     CpuTaskHandle task;
     Name label;

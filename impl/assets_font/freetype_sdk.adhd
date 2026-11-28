@@ -56,7 +56,7 @@ extern class FreeTypeFaceView{
     FreeTypeBitmapView bitmap()const;
 };
 
-[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeLibrary"), cpp_flags(arena_first_ctor)]
+[cpp_header("<impl/assets_font/freetype_sdk.h>"), cpp_name("::NWB::FontSdk::FreeTypeLibrary")]
 extern class FreeTypeLibrary{
     i32 createLibrary();
     void addDefaultModules();

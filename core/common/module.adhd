@@ -11,7 +11,7 @@ extern class Initializer{
     void release(...);
 };
 
-[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::InitializerGuard"), cpp_flags(brace_init)]
+[cpp_header("<core/common/module.h>"), cpp_name("::NWB::Core::Common::InitializerGuard")]
 extern class InitializerGuard{
     void finalize(...);
     b8 initialize(...);

@@ -107,7 +107,7 @@ extern enum GpuTaskResourceVersionRole : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuCompiledBarrier"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuCompiledBarrier")]
 extern class GpuCompiledBarrier{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
@@ -121,66 +121,66 @@ extern class GpuCompiledBarrier{
     b8 forceMemoryDependency;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuExternalCompletionId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuExternalCompletionId")]
 extern class GpuExternalCompletionId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphPipelineId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphPipelineId")]
 extern class GpuGraphPipelineId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceId")]
 extern class GpuGraphResourceId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceIdHasher"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceIdHasher")]
 extern class GpuGraphResourceIdHasher;
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceSetId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceSetId")]
 extern class GpuGraphResourceSetId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceVersionId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuGraphResourceVersionId")]
 extern class GpuGraphResourceVersionId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuPacketStateSeed"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuPacketStateSeed")]
 extern class GpuPacketStateSeed{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
     GpuSubmissionPacketId sourcePacket;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuSubmissionPacketId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuSubmissionPacketId")]
 extern class GpuSubmissionPacketId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuSubmissionPacketRange"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuSubmissionPacketRange")]
 extern class GpuSubmissionPacketRange{
     GpuSubmissionPacketId first;
     usize packetCount;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskDependencyEdge"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskDependencyEdge")]
 extern class GpuTaskDependencyEdge{
     GpuTaskId producer;
     GpuTaskId consumer;
@@ -189,26 +189,26 @@ extern class GpuTaskDependencyEdge{
     GpuTaskHazardType hazard;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskExternalDependencyEdge"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskExternalDependencyEdge")]
 extern class GpuTaskExternalDependencyEdge{
     GpuExternalCompletionId completion;
     GpuTaskId consumer;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskId")]
 extern class GpuTaskId{
     u64 generation;
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceRange"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceRange")]
 extern class GpuTaskResourceRange{
     TextureSubresourceSet textureSubresources;
     BufferRange bufferRange;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceSetUse"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceSetUse")]
 extern class GpuTaskResourceSetUse{
     GpuGraphResourceSetId resourceSet;
     GpuTaskResourceRange range;
@@ -217,7 +217,7 @@ extern class GpuTaskResourceSetUse{
     b8 hasIndependentStateSource;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceUse"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceUse")]
 extern class GpuTaskResourceUse{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
@@ -226,13 +226,13 @@ extern class GpuTaskResourceUse{
     b8 hasIndependentStateSource;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceVersionUse"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuTaskResourceVersionUse")]
 extern class GpuTaskResourceVersionUse{
     GpuGraphResourceVersionId version;
     GpuTaskResourceVersionRole role;
 };
 
-[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuUploadBlobId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/task/gpu/types.h>"), cpp_name("::NWB::Core::GpuUploadBlobId")]
 extern class GpuUploadBlobId{
     u64 generation;
     u32 index;

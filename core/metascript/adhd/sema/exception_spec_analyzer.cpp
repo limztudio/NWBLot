@@ -36,7 +36,7 @@ namespace __hidden_adhd_exception_spec_analyzer{
 }
 
 [[nodiscard]] b8 ExternClassHasSafeTrivialDefault(const ClassDecl& cls)noexcept{
-    return !cls.isAbstract && (cls.isNothrowDefaultConstructible || cls.isSmallValue || cls.isBorrowView || cls.isBinarySerializable || cls.emitsBraceFieldInit);
+    return !cls.isAbstract && (cls.isNothrowDefaultConstructible || cls.isBorrowView);
 }
 
 [[nodiscard]] b8 IsProvenNothrowBuiltinConstructibleType(const MStringView baseType, const SymbolTable& symbols)noexcept{
@@ -45,7 +45,7 @@ namespace __hidden_adhd_exception_spec_analyzer{
     if(BuiltinTypeSemantics::IsScalarType(baseType) || SymbolTable::IsSimdType(baseType) || FindBuiltinEnum(baseType) != nullptr)
         return true;
     if(const BuiltinObjectTypeInfo* obj = FindBuiltinObjectType(baseType))
-        return !obj->isAbstract && (obj->isNothrowDefaultConstructible || obj->isSmallValue || obj->isBorrowView || obj->isBinarySerializable || obj->emitsBraceFieldInit);
+        return !obj->isAbstract && (obj->isNothrowDefaultConstructible || obj->isBorrowView);
     if(const BuiltinGenericTypeInfo* generic = FindBuiltinGenericType(baseType)){
         return generic->isCopyMoveConstructible
             || generic->isSmallValue

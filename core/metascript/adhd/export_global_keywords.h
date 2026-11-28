@@ -161,21 +161,10 @@ NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppName,   "cpp_name",   "duplicate '[cpp_name]
 NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppHeader, "cpp_header", "duplicate '[cpp_header]' attribute", "'[cpp_header(\"...\")]' requires a single non-empty string literal argument")
 NWB_ADHD_EXPORT_EXTERN_ATTRIBUTE(CppFlags,  "cpp_flags",  "duplicate '[cpp_flags]' attribute",  "'[cpp_flags(...)]' requires one or more valid extern flag identifiers")
 
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(SmallValue,         "small_value")
 NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(BorrowView,         "borrow_view")
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(BinarySerializable, "binary_serializable")
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(BraceInit,          "brace_init")
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(EqualitySwitch,     "equality_switch")
 NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(NonThreadSafe,      "non_thread_safe")
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(MapKey,             "map_key")
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(ArenaFirstCtor,     "arena_first_ctor")
-NWB_ADHD_EXPORT_EXTERN_TYPE_FLAG(ArenaOmitCtor,      "arena_omit_ctor")
 
-NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(ScratchArena,        "scratch_arena")
 NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(BorrowView,          "borrow_view")
-NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(PlatformLiteralArg0, "platform_literal_arg0")
-NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(ByteViewArg0,        "byte_view_arg0")
-NWB_ADHD_EXPORT_EXTERN_CALLABLE_FLAG(ByteViewArg1,        "byte_view_arg1")
 
 NWB_ADHD_EXPORT_PROHIBITED_POSTFIX_KEYWORD("as", "Rust-style 'as' cast is prohibited in adhd; use 'cast<T>(x)' or 'bit_cast<T>(x)'")
 

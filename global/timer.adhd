@@ -2,10 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::LocalTime"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::LocalTime")]
 extern class LocalTime;
 
-[cpp_name("::Timer"), cpp_flags(small_value, brace_init, equality_switch)]
+[cpp_name("::Timer")]
 extern class Timer;
 
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/presentation_endpoint_validator.h>"), cpp_name("::NWB::Core::GpuPresentationEndpointValidator"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/presentation_endpoint_validator.h>"), cpp_name("::NWB::Core::GpuPresentationEndpointValidator")]
 extern class GpuPresentationEndpointValidator;
 
 

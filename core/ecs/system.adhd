@@ -12,7 +12,7 @@ extern enum AccessMode : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::ComponentAccess"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/ecs/system.h>"), cpp_name("::NWB::Core::ECS::ComponentAccess")]
 extern class ComponentAccess{
     usize typeId;
     AccessMode mode;

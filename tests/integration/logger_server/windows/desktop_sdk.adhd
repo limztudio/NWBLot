@@ -9,13 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HDC"), cpp_flags(small_value, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HDC")]
 extern class WinDcHandle;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HWND"), cpp_flags(small_value, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HWND")]
 extern class WinWindowHandle;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HGLOBAL"), cpp_flags(small_value, brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::HGLOBAL")]
 extern class WinGlobalHandle;
 
 [cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::DeviceContext")]
@@ -53,7 +53,7 @@ extern class WinGlobalTextLock{
 [cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::NWB::Tests::WindowsDesktop::OwnedGlobalMemory")]
 extern class WinOwnedGlobalMemory;
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFOHEADER"), cpp_flags(brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFOHEADER")]
 extern class WinBitmapHeader{
     u32 biSize;
     i32 biWidth;
@@ -63,12 +63,12 @@ extern class WinBitmapHeader{
     u32 biCompression;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFO"), cpp_flags(brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::BITMAPINFO")]
 extern class WinBitmapInfo{
     WinBitmapHeader bmiHeader;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::RECT"), cpp_flags(brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::RECT")]
 extern class WinRect{
     i32 left;
     i32 top;
@@ -76,14 +76,14 @@ extern class WinRect{
     i32 bottom;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::DRAWITEMSTRUCT"), cpp_flags(brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::DRAWITEMSTRUCT")]
 extern class WinDrawItem{
     WinDcHandle hDC;
     WinRect rcItem;
     u32 itemID;
 };
 
-[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::MEASUREITEMSTRUCT"), cpp_flags(brace_init)]
+[cpp_header("<tests/integration/logger_server/windows/desktop_sdk.h>"), cpp_name("::MEASUREITEMSTRUCT")]
 extern class WinMeasureItem{
     u32 itemHeight;
 };

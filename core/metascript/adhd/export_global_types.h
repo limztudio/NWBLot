@@ -151,7 +151,8 @@ NWB_ADHD_EXPORT_SPECIAL_TYPE(Name,         "Name",         "::Name",            
 NWB_ADHD_EXPORT_SPECIAL_TYPE(Path,         "Path",         "::Path",             false)
 NWB_ADHD_EXPORT_SPECIAL_TYPE(VectorSingle, "VectorSingle", "::SIMDVectorSingle", false)
 NWB_ADHD_EXPORT_SPECIAL_TYPE(VectorDouble, "VectorDouble", "::SIMDVectorDouble", false)
-NWB_ADHD_EXPORT_SPECIAL_TYPE(ArenaBase,    "ArenaBase",    "::ArenaBase",        false)
+NWB_ADHD_EXPORT_SPECIAL_TYPE(ArenaBase,      "ArenaBase",      "::ArenaBase",        false)
+NWB_ADHD_EXPORT_SPECIAL_TYPE(BinaryByteView, "BinaryByteView", "::BinaryByteView",   false)
 
 NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("UniquePtr",        true, true)
 NWB_ADHD_EXPORT_POINTER_LIKE_GENERIC_TYPE("NotNullUniquePtr", true, true)

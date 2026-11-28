@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_LOCATION_DESCRIPTOR"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_LOCATION_DESCRIPTOR")]
 extern class WinDumpLocation{
     u32 DataSize;
     u32 Rva;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_HEADER"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_HEADER")]
 extern class WinDumpHeader{
     u32 Signature;
     u32 Version;
@@ -16,49 +16,49 @@ extern class WinDumpHeader{
     u32 StreamDirectoryRva;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_DIRECTORY"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_DIRECTORY")]
 extern class WinDumpDirectory{
     u32 StreamType;
     WinDumpLocation Location;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_EXCEPTION"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_EXCEPTION")]
 extern class WinDumpRecord{
     u32 ExceptionCode;
     u64 ExceptionAddress;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_EXCEPTION_STREAM"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_EXCEPTION_STREAM")]
 extern class WinDumpException{
     u32 ThreadId;
     WinDumpRecord ExceptionRecord;
     WinDumpLocation ThreadContext;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::CONTEXT"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::CONTEXT")]
 extern class WinContext{
     u32 ContextFlags;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MEMORY_DESCRIPTOR64"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MEMORY_DESCRIPTOR64")]
 extern class WinDumpMemoryRange{
     u64 StartOfMemoryRange;
     u64 DataSize;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MEMORY64_LIST"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MEMORY64_LIST")]
 extern class WinDumpMemoryList{
     u64 NumberOfMemoryRanges;
     u64 BaseRva;
     WinDumpMemoryRange MemoryRanges;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MODULE"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MODULE")]
 extern class WinDumpModule{
     u32 ModuleNameRva;
 };
 
-[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MODULE_LIST"), cpp_flags(binary_serializable)]
+[cpp_header("<tests/integration/windows/minidump_records.h>"), cpp_name("::MINIDUMP_MODULE_LIST")]
 extern class WinDumpModuleList{
     WinDumpModule Modules;
 };

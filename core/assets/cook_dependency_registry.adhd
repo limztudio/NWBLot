@@ -22,7 +22,7 @@ extern class CookDependencyRegistry{
     b8 extractDependencies(...)const;
 };
 
-[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::DefaultCookEntryAssetDescriptor"), cpp_flags(borrow_view, brace_init)]
+[cpp_header("<core/assets/cook_dependency_registry.h>"), cpp_name("::NWB::Core::Assets::DefaultCookEntryAssetDescriptor"), cpp_flags(borrow_view)]
 extern class DefaultCookEntryAssetDescriptor{
     Name virtualPath;
     Name assetType;

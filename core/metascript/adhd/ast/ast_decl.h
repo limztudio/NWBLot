@@ -163,7 +163,8 @@ struct MethodDecl{
     b8 isExtern = false;
     b8 isVariadic = false;
     b8 returnsBorrowedView = false;
-    u8 callLoweringKind = 0u;
+    u32 byteViewArgMask = 0u;
+    u32 platformLiteralArgMask = 0u;
 
 
 public:
@@ -258,7 +259,6 @@ struct ClassDecl{
     b8 emitsBraceFieldInit = false;
     b8 isEqualitySwitch = false;
     b8 isNonThreadSafeContainer = false;
-    b8 isNwbMapKey = false;
     b8 isPolymorphicBase = false;
     b8 isEmptyBase = false;
 

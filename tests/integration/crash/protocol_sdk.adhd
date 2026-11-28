@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("char"), cpp_flags(small_value)]
+[cpp_name("char")]
 extern class CrashChar;
 
 [cpp_header("<core/crash/protocol.h>"), cpp_name("::NWB::Core::Crash::CrashDetail::s_MaxMetadata")]

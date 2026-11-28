@@ -16,10 +16,10 @@ extern enum ProcessExecutionFailure : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/process_execution.h>"), cpp_name("::ExecutableAvailableInPath"), cpp_flags(scratch_arena)]
+[cpp_header("<global/process_execution.h>"), cpp_name("::ExecutableAvailableInPath")]
 extern Expected<b8, ErrorCode> ExecutableAvailableInPath(in StringView a0, in StringView a1);
 
-[cpp_header("<global/process_execution.h>"), cpp_name("::RunProcessRedirectedToFile"), cpp_flags(scratch_arena)]
+[cpp_header("<global/process_execution.h>"), cpp_name("::RunProcessRedirectedToFile")]
 extern Expected<i32, ProcessExecutionFailure> RunProcessRedirectedToFile(in auto a0, in StringView a1);
 
 

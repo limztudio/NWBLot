@@ -3,7 +3,6 @@
 
 
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(Any,        "",           false, "",      false, false, "")
-NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(StringView, "StringView", false, "",      false, false, "")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(TextView,   "StringView", false, "",      true,  false, "built-in function argument must be StringView, String, or CompactString")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutU64, "", true, "u64", false, false, "built-in function argument must be a mutable u64 variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutU32,     "",           true,  "u32",   false, false, "built-in function argument must be a mutable 'u32' variable")
@@ -18,11 +17,9 @@ NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(BoolScalar, "", false, "b8", false, false, "bu
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(U64Scalar, "", false, "u64", false, false, "built-in function argument must be u64")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(U32Scalar, "", false, "u32", false, false, "built-in function argument must be u32")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(F32Scalar, "", false, "f32", false, false, "built-in function argument must be f32")
-NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(NumericScalar, "", false, "", false, false, "built-in function argument must be a numeric scalar")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutF32Scalar, "", true, "f32", false, false, "built-in function argument must be a mutable f32 variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutF64Scalar, "", true, "f64", false, false, "built-in function argument must be a mutable f64 variable")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutByteFixedVector, "", true, "FixedVector", false, false, "built-in function argument must be a mutable FixedVector<u8, N>")
-NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ByteSpan,   "",           false, "Span",  false, false, "built-in function argument must be Span<u8>")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ReadableByteSequence, "Span", false, "", false, false, "built-in function argument must be a contiguous u8 sequence")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutableByteSequence, "Span", true, "", false, false, "built-in function argument must be a mutable contiguous u8 sequence")
 NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(MutableU32Sequence, "Span", true, "", false, false, "built-in function argument must be a mutable contiguous u32 sequence")
@@ -72,7 +69,7 @@ NWB_ADHD_EXPORT_FUNCTION("Log",                    "::Log",                    1
 NWB_ADHD_EXPORT_FUNCTION("Log2",                   "::Log2",                   1u, PromoteSimd,    "",           "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("Pow",                    "::Pow",                    2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
 
-NWB_ADHD_EXPORT_FUNCTION_CALL("IsFinite", "::IsFinite", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, None, false, false, true, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("IsFinite", "::IsFinite", 1u, 1u, FixedType, "b8", "", "", "", "", false, false, false, false, false, true, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 
 NWB_ADHD_EXPORT_FUNCTION("DivideUp",               "::DivideUp",               2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
 NWB_ADHD_EXPORT_FUNCTION("AlignUp",                "::AlignUp",                2u, PromoteSimd,    "",           "",    Any,        Any,     Any)
@@ -81,12 +78,6 @@ NWB_ADHD_EXPORT_FUNCTION("MakeUnexpected",         "::MakeUnexpected",         1
 NWB_ADHD_EXPORT_FUNCTION_EX("StringFormat",                  "::StringFormat",                              1u, 1u, FixedType,        "String",                    "",         "",          "",                      "",                                    true,  true,  true,  true,  TextView,              Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("StringAppendFormat",            "::StringAppendFormat",                        2u, 2u, FixedType,        "void",                      "",         "",          "",                      "",                                    false, true,  true,  true,  MutString,             TextView,  Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("MakeDiagnosticEventText",       "::MakeDiagnosticEventText",                   1u, 1u, FixedType,        "DiagnosticEventText",       "",         "",          "",                      "",                                    false, true,  true,  true,  TextView,              Any,       Any, Any, Any)
-
-NWB_ADHD_EXPORT_FUNCTION_CALL("WriteTextFileAtomic",         "::StagedFileWriter",                          2u, 2u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, StagedWriteTextAtomic, false, false, false, true, PathValue, TextView, Any, Any, Any, Any, Any, Any, Any)
-
-NWB_ADHD_EXPORT_FUNCTION_CALL("WriteBinaryFileAtomic",       "::StagedFileWriter",                          2u, 2u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, StagedWriteBinaryAtomic, false, false, false, true, PathValue, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("WriteAtomicChecked",          "::StagedFileWriter",                          2u, 2u, FixedType,        "Expected",                  "void",     "",          "ErrorCode",             "",                                    false, false, false, StagedWriteAtomicChecked, false, false, false, true, PathValue, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("VerifyBinaryFileBytes",       "::VerifyBinaryFileBytes",                     2u, 2u, FixedType,        "b8",                        "",         "",          "",                      "",                                    false, false, false, Arg0AndBytePtrSizeArg1, false, false, false, true, PathValue, Any, Any, Any, Any, Any, Any, Any, Any)
 
 NWB_ADHD_EXPORT_FUNCTION_EX("ToAsciiLower",                  "::ToAsciiLower",                              1u, 1u, PromoteSimd,      "",                          "",         "",          "",                      "",                                    false, false, false, false, Integer,               Any,       Any, Any, Any)
 NWB_ADHD_EXPORT_FUNCTION_EX("ToAsciiUpper",                  "::ToAsciiUpper",                              1u, 1u, PromoteSimd,      "",                          "",         "",          "",                      "",                                    false, false, false, false, Integer,               Any,       Any, Any, Any)
@@ -101,12 +92,12 @@ NWB_ADHD_EXPORT_FUNCTION_EX("LowestSetBit",                  "::LowestSetBit",  
 
 NWB_ADHD_EXPORT_FUNCTION_EX("SubtractSaturating",            "::SubtractSaturating",                        2u, 2u, PromoteSimd,      "",                          "",         "",          "",                      "",                                    false, false, false, false, Integer,               Integer,   Any, Any, Any)
 
-NWB_ADHD_EXPORT_FUNCTION_CALL("AddNoOverflow", "::AddNoOverflow", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, None, false, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("CommonAlignmentChecked", "::CommonAlignmentChecked", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, None, false, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("AlignUpPowerOfTwoChecked", "::AlignUpPowerOfTwoChecked", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, None, false, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("DivideUpChecked", "::DivideUpChecked", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, None, false, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("ModF", "::ModF", 2u, 2u, PromoteSimd, "", "", "", "", "", false, false, false, None, false, false, false, false, Any, MutAny, Any, Any, Any, Any, Any, Any, Any)
-NWB_ADHD_EXPORT_FUNCTION_CALL("MatrixIdentity", "::MatrixIdentity", 0u, 0u, CallTemplateArg0OrFixedType, "MatrixSingle", "", "", "", "", false, false, false, None, false, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("AddNoOverflow", "::AddNoOverflow", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, false, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("CommonAlignmentChecked", "::CommonAlignmentChecked", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, false, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("AlignUpPowerOfTwoChecked", "::AlignUpPowerOfTwoChecked", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, false, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("DivideUpChecked", "::DivideUpChecked", 2u, 2u, CallTemplateArg0, "Expected", "", "", "", "", false, false, false, false, false, false, false, Integer, Integer, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("ModF", "::ModF", 2u, 2u, PromoteSimd, "", "", "", "", "", false, false, false, false, false, false, false, Any, MutAny, Any, Any, Any, Any, Any, Any, Any)
+NWB_ADHD_EXPORT_FUNCTION_CALL("MatrixIdentity", "::MatrixIdentity", 0u, 0u, CallTemplateArg0OrFixedType, "MatrixSingle", "", "", "", "", false, false, false, false, false, false, false, Any, Any, Any, Any, Any, Any, Any, Any, Any)
 
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("EqualF32x4Bits")
 NWB_ADHD_EXPORT_SIMD_REGISTER_CALL("HashCombineF32x4")
@@ -830,10 +821,7 @@ NWB_ADHD_EXPORT_RECEIVER_METHOD("Path",                  "lexicallyRelative", "P
 NWB_ADHD_EXPORT_RECEIVER_METHOD("Path",                  "replaceExtension",  "Path",       true, true)
 NWB_ADHD_EXPORT_RECEIVER_METHOD("Path",                  "append",            "Path",       true, true)
 
-NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE(NumericScalar)
-
 NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(UsizeSpan,            "usize", 1u, true,  false, "")
-NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(ByteSpan,             "u8",    1u, true,  false, "")
 NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(MutByteFixedVector,   "u8",    2u, true,  false, "")
 NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(ReadableByteSequence, "u8",    1u, false, true,  "")
 NWB_ADHD_EXPORT_CONTAINER_ARG_CONSTRAINT(MutableByteSequence,  "u8",    1u, false, true,  "")

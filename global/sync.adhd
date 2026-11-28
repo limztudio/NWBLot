@@ -2,17 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::AtomicBackOff"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::AtomicBackOff")]
 extern class AtomicBackOff{
     b8 boundedPause(...);
     void pause(...);
     void reset(...);
 };
 
-[cpp_name("::ConditionVariableAny"), cpp_flags(brace_init)]
+[cpp_name("::ConditionVariableAny")]
 extern class ConditionVariableAny;
 
-[cpp_name("::Futex"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::Futex")]
 extern class Futex{
     void lock(...);
     b8 try_lock(...);
@@ -25,14 +25,14 @@ extern class FutexGuard;
 [cpp_header("<global/sync.h>"), cpp_name("::AcquireFutex")]
 extern FutexGuard AcquireFutex(in Futex mutex);
 
-[cpp_name("::MallocMutex"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::MallocMutex")]
 extern class MallocMutex{
     void lock(...);
     b8 try_lock(...);
     void unlock(...);
 };
 
-[cpp_name("::RecursiveMutex"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::RecursiveMutex")]
 extern class RecursiveMutex;
 
 

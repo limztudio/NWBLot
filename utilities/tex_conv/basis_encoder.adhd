@@ -17,7 +17,7 @@ extern class BasisFloatImage{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisSliceDescription"), cpp_flags(brace_init)]
+[cpp_header("<utilities/tex_conv/basis_encoder.h>"), cpp_name("::NWB::TexConv::BasisSliceDescription")]
 extern class BasisSliceDescription{
     u32 sourceIndex;
     u32 mipIndex;

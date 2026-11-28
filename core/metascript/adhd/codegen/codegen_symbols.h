@@ -38,8 +38,6 @@ public:
     inline static constexpr MStringView s_ForwardTemplate           = "::Forward";
     inline static constexpr MStringView s_MakeNotNullFunc           = "::MakeNotNull";
     inline static constexpr MStringView s_SqrtFunc                  = "::Sqrt(";
-    inline static constexpr MStringView s_BinaryByteViewType        = "::BinaryByteView";
-    inline static constexpr MStringView s_StagedFileWriterType      = "::StagedFileWriter";
     inline static constexpr MStringView s_StringViewCppType         = "::AStringView";
     inline static constexpr MStringView s_NameCppType               = "::Name";
     inline static constexpr MStringView s_ByteCppType               = "::u8";

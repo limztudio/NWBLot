@@ -99,6 +99,9 @@ def run_layout_cli_tests(compiler: pathlib.Path, root: pathlib.Path) -> None:
         ("void Read(in cpp_ref u32 value){}", "expected"),
         ("[cpp_flags(nothrow)] extern void BadNothrow();", "valid extern flag"),
         ("[cpp_flags(no_copy)] extern class BadNoCopy;", "valid extern flag"),
+        ("[cpp_flags(small_value)] extern class BadSmallValue;", "valid extern flag"),
+        ("[cpp_flags(scratch_arena)] extern void BadScratchArena();", "valid extern flag"),
+        ("[arena] extern class BadExternArena;", "unsupported attribute on class"),
         ("class Item{ [cpp_rvalue_overload] public b8 read(in u32 value){ return true; } }", "one mutable value"),
         ("[cpp_type_alias(Item, u32)] class Item{}", "distinct member name"),
         ("[cpp_type_alias(Value, u32)] class Item{ public u32 Value; }", "distinct member name"),
@@ -381,6 +384,40 @@ def check_conditional_exception_spec(compiler: pathlib.Path, root: pathlib.Path)
         actual = (output / "visitor.adhd.h").read_text(encoding="utf-8") if result.returncode == 0 else result.stdout + result.stderr
         if (result.returncode == 0) != success or expected not in actual:
             raise AssertionError(f"unexpected generic visitor result: {actual}")
+
+
+def check_unchanged_output_mtime_preserved(compiler: pathlib.Path, root: pathlib.Path) -> None:
+    stable_dir = root / "stable_mtime"
+    stable_dir.mkdir()
+    source = stable_dir / "stable.adhd"
+    output = stable_dir / "out"
+    command = [str(compiler), "--input", str(source), "--output", str(output)]
+
+    source.write_text("const u32 s_Stable = 1u;\n", encoding="utf-8")
+    first = subprocess.run(command, cwd=stable_dir, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+    if first.returncode != 0:
+        raise AssertionError(f"initial compile failed: {first.stdout}\n{first.stderr}")
+
+    header = output / "stable.adhd.h"
+    generated = output / "stable.adhd.cpp"
+    old_ns = header.stat().st_mtime_ns - 5_000_000_000
+    os.utime(header, ns=(old_ns, old_ns))
+    os.utime(generated, ns=(old_ns, old_ns))
+    recorded_hdr_mtime = header.stat().st_mtime_ns
+    recorded_cpp_mtime = generated.stat().st_mtime_ns
+
+    second = subprocess.run(command, cwd=stable_dir, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+    if second.returncode != 0:
+        raise AssertionError(f"unchanged recompile failed: {second.stdout}\n{second.stderr}")
+    if header.stat().st_mtime_ns != recorded_hdr_mtime or generated.stat().st_mtime_ns != recorded_cpp_mtime:
+        raise AssertionError("identical compiler output modified existing file mtime")
+
+    source.write_text("const u32 s_Stable = 2u;\n", encoding="utf-8")
+    third = subprocess.run(command, cwd=stable_dir, capture_output=True, text=True, errors="replace", timeout=30, check=False)
+    if third.returncode != 0:
+        raise AssertionError(f"changed recompile failed: {third.stdout}\n{third.stderr}")
+    if "2u" not in header.read_text(encoding="utf-8") or header.stat().st_mtime_ns <= recorded_hdr_mtime:
+        raise AssertionError("changed compiler output did not update file content and mtime")
 
 
 def check_asset_cook_roles(compiler: pathlib.Path, root: pathlib.Path) -> None:
@@ -702,6 +739,7 @@ def main() -> None:
         else:
             print("SKIP: Ninja depfile consumption check (Ninja not available)")
 
+        check_unchanged_output_mtime_preserved(compiler, root)
         check_asset_cook_roles(compiler, root)
         check_conditional_exception_spec(compiler, root)
         run_shared_specialization_cli_test(compiler, root)

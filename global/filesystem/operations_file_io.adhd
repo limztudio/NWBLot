@@ -16,7 +16,7 @@ extern class BinaryInputStream{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::SizedFileCreateFailure"), cpp_flags(brace_init)]
+[cpp_name("::SizedFileCreateFailure")]
 extern class SizedFileCreateFailure{
     ErrorCode code;
     b8 created;
@@ -41,20 +41,23 @@ extern Expected<void, ErrorCode> ReadTextFile(in Path a0, mut String a1);
 [cpp_name("::ResizeFile")]
 extern Expected<void, ErrorCode> ResizeFile(in Path a0, in isize a1);
 
-[cpp_name("::ResolveAbsolutePath"), cpp_flags(scratch_arena)]
+[cpp_name("::ResolveAbsolutePath")]
 extern Expected<Path, ErrorCode> ResolveAbsolutePath(in Path a0, in auto a1);
 
 [cpp_name("::WriteBinaryFile")]
 extern b8 WriteBinaryFile(in Path a0, in auto a1);
 
 [cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::FileWriteStatus")]
-extern enum<u8> FileWriteStatus{ Success, OpenFailed, WriteFailed };
+extern enum FileWriteStatus : u8{ Success, OpenFailed, WriteFailed };
 
 [cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::WritePlatformTextFile")]
 extern FileWriteStatus WritePlatformTextFile(in Path path, in StringView content, in b8 append);
 
 [cpp_name("::WriteTextFile")]
 extern b8 WriteTextFile(in Path a0, in StringView a1);
+
+[cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::VerifyBinaryFileBytes")]
+extern b8 VerifyBinaryFileBytes(in Path a0, in auto a1);
 
 
 [cpp_header("<global/filesystem/operations_file_io.h>"), cpp_name("::BinaryOutputStream")]

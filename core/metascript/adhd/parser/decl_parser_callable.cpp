@@ -234,13 +234,7 @@ b8 DeclParser::tryParseExternCallableAttribute(const ParsedAttribute& attr, Meth
             return false;
         }
         switch(flagKind){
-        case ExternCallableFlagKind::ScratchArena: outMethod.injectsCallerArena = true; break;
         case ExternCallableFlagKind::BorrowView:   outMethod.returnsBorrowedView = true; break;
-        case ExternCallableFlagKind::PlatformLiteralArg0:
-        case ExternCallableFlagKind::ByteViewArg0:
-        case ExternCallableFlagKind::ByteViewArg1:
-            outMethod.callLoweringKind = static_cast<u8>(flagKind);
-            break;
         default: break;
         }
     }

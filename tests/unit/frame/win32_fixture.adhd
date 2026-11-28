@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HINSTANCE"), cpp_flags(small_value)]
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HINSTANCE")]
 extern class WinInstance;
 
-[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HWND"), cpp_flags(small_value)]
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("HWND")]
 extern class WinWindow;
 
-[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::WindowClassResult"), cpp_flags(brace_init)]
+[cpp_header("<tests/unit/frame/win32_fixture.h>"), cpp_name("::NWB::Tests::FrameCases::WindowClassResult")]
 extern class WindowClassResult{
     b8 registered;
     u32 error;

@@ -50,7 +50,7 @@ extern enum MessagePayloadError : u8{
 [cpp_header("<logger/common.h>"), cpp_name("::NWB::Log::MessageType")]
 extern class ProtocolMessage;
 
-[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Literal"), cpp_flags(platform_literal_arg0)]
+[cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Literal")]
 extern PlatformStringView ProtocolText(in StringView text);
 [cpp_header("<tests/integration/logger_server/protocol_sdk.h>"), cpp_name("::NWB::Tests::LoggerProtocolSdk::Message")]
 extern ProtocolMessage MakeProtocolMessage(mut HeapStorage storage, in Timer time, in LogType logType, in PlatformStringView text);

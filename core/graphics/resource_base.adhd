@@ -9,7 +9,7 @@ extern class GraphicsResource{
     u32 release(...);
 };
 
-[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::Object"), cpp_flags(small_value, binary_serializable, equality_switch)]
+[cpp_header("<core/graphics/resource_base.h>"), cpp_name("::NWB::Core::Object")]
 extern class Object{
     u64 integer;
 };

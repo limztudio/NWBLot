@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/literal_decoder.h>"), cpp_name("::NWB::Core::Metascript::LiteralDecoder"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/metascript/literal_decoder.h>"), cpp_name("::NWB::Core::Metascript::LiteralDecoder")]
 extern class MetascriptLiteralDecoder;
 
 

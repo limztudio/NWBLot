@@ -64,12 +64,12 @@ extern enum MetascriptTokenType : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Lexer"), cpp_flags(binary_serializable)]
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Lexer")]
 extern class MetascriptLexer{
     MetascriptToken next(...);
 };
 
-[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/metascript/lexer.h>"), cpp_name("::NWB::Core::Metascript::Token")]
 extern class MetascriptToken{
     StringView text;
     MetascriptTokenType type;

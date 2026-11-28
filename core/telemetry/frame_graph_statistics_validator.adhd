@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsAccumulator"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsAccumulator")]
 extern class FrameGraphPacketSubmissionStatisticsAccumulator{
     u64 nativeSubmissionCount;
     u64 taskCount;
@@ -17,7 +17,7 @@ extern class FrameGraphPacketSubmissionStatisticsAccumulator{
     f64 submissionSeconds;
 };
 
-[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsAccumulator"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsAccumulator")]
 extern class FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
     FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
@@ -25,7 +25,7 @@ extern class FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     u64 barrierCount;
 };
 
-[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_statistics_validator.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphStatisticsValidator")]
 extern class FrameGraphStatisticsValidator;
 
 

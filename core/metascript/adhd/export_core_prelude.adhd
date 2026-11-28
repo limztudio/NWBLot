@@ -25,7 +25,6 @@
 #include <core/assets/metadata_fields.adhd>
 #include <core/assets/module.adhd>
 #include <core/assets/paths.adhd>
-#include <core/assets/polymorphic_asset_codec.adhd>
 #include <core/assets/registry.adhd>
 #include <core/assets/reserved_asset_ref_parser.adhd>
 #include <core/assets/volume/arena_names.adhd>

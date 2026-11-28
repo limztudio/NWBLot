@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::BuildCanonicalSafeCacheName<char>"), cpp_flags(scratch_arena)]
+[cpp_name("::BuildCanonicalSafeCacheName<char>")]
 extern String BuildCanonicalSafeCacheName(in StringView a0);
 
 [cpp_name("::IsPathPrefixText<char>")]
@@ -17,17 +17,17 @@ extern b8 PathHasListedExtension(in auto path, in auto extensions);
 [cpp_header("<global/filesystem/utility.h>"), cpp_name("::AppendOwnedPath")]
 extern void AppendOwnedPath(mut auto paths, in Path path);
 
-[cpp_header("<global/filesystem/utility.h>"), cpp_name("::NativePathComparisonKey"), cpp_flags(scratch_arena)]
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::NativePathComparisonKey")]
 extern String NativePathComparisonKey(in Path path);
 
-[cpp_name("::PathToGenericString<char>"), cpp_flags(scratch_arena)]
+[cpp_name("::PathToGenericString<char>")]
 extern String PathToGenericString(in auto a0);
 
-[cpp_name("::PathToString<char>"), cpp_flags(scratch_arena)]
+[cpp_name("::PathToString<char>")]
 extern String PathToString(in auto a0);
 
 
-[cpp_header("<global/filesystem/utility.h>"), cpp_name("::FirstPathComponent"), cpp_flags(scratch_arena)]
+[cpp_header("<global/filesystem/utility.h>"), cpp_name("::FirstPathComponent")]
 extern Path FirstPathComponent(in Path path);
 
 [cpp_header("<global/filesystem/utility.h>"), cpp_name("::NativePathSize")]

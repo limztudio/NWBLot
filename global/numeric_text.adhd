@@ -29,7 +29,7 @@ extern Expected<void, ErrorCode> FormatF64Into(in f64 value, mut CompactString o
 [cpp_name("::FormatI64Into"), cpp_header("<global/compact_string.h>")]
 extern Expected<void, ErrorCode> FormatI64Into(in i64 value, mut CompactString output);
 
-[cpp_name("::FormatHex64A"), cpp_flags(scratch_arena)]
+[cpp_name("::FormatHex64A")]
 extern String FormatHex64A(in isize a0);
 
 [cpp_name("::ParseDecimalPrefixU64<char>")]

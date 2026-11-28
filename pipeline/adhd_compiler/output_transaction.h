@@ -32,6 +32,7 @@ public:
 
 
 private:
+    [[nodiscard]] b8 isDepfileOutput(usize outputIndex)const noexcept;
     void logOutputWriteFailure(usize outputIndex)const;
     void rollbackOutputs()noexcept;
 
@@ -43,6 +44,7 @@ private:
     Core::Metascript::MStringView m_depfilePath;
     Core::Metascript::MStringView m_emitCppExternsPath;
     Core::Metascript::MVector<b8> m_hadExisting;
+    Core::Metascript::MVector<b8> m_unchanged;
     Core::Metascript::MVector<b8> m_hasStaged;
     Core::Metascript::MVector<b8> m_hasBackup;
     Core::Metascript::MVector<b8> m_promoted;

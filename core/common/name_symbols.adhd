@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::DefaultFileLoadFailure"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/common/name_symbols.h>"), cpp_name("::NWB::Core::Common::NameSymbols::DefaultFileLoadFailure")]
 extern class DefaultFileLoadFailure{
     ErrorCode code;
     b8 loadedAny;

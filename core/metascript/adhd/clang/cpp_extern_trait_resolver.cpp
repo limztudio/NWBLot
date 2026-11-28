@@ -32,7 +32,7 @@ using namespace CppHeaderImportDetail;
 
 
 inline constexpr u32 s_ExternTraitCacheMagic = 0x4E574254u;
-inline constexpr u32 s_ExternTraitCacheVersion = 3u;
+inline constexpr u32 s_ExternTraitCacheVersion = 9u;
 inline constexpr usize s_MaxMemoryCacheEntries = 256u;
 
 inline constexpr MStringView s_TraitProbeNamespace = "__nwb_adhd_trait_probe";
@@ -40,21 +40,38 @@ inline constexpr MStringView s_TraitProbeClassAliasPrefix = "__t_";
 inline constexpr MStringView s_TraitProbeIfaceAliasPrefix = "__it_";
 inline constexpr MStringView s_TraitProbeFlagVarPrefix = "__f_";
 
-inline constexpr u32 s_ProbeFlagAbstract           = 1u << 0u;
-inline constexpr u32 s_ProbeFlagPolymorphicBase    = 1u << 1u;
-inline constexpr u32 s_ProbeFlagCopyConstructible  = 1u << 2u;
-inline constexpr u32 s_ProbeFlagCopyAssignable     = 1u << 3u;
-inline constexpr u32 s_ProbeFlagSelfDefaulted      = 1u << 4u;
-inline constexpr u32 s_ProbeFlagNothrowDefault     = 1u << 5u;
-inline constexpr u32 s_ProbeFlagResolvedComplete   = 1u << 6u;
-inline constexpr u32 s_ProbeFlagResolvedIncomplete = 1u << 7u;
-inline constexpr u32 s_ProbeFlagMoveConstructible  = 1u << 8u;
-inline constexpr u32 s_ProbeFlagMoveAssignable     = 1u << 9u;
-inline constexpr u32 s_ProbeFlagEmptyBase          = 1u << 10u;
+inline constexpr u32 s_ProbeFlagAbstract            = 1u << 0u;
+inline constexpr u32 s_ProbeFlagPolymorphicBase     = 1u << 1u;
+inline constexpr u32 s_ProbeFlagEmptyBase           = 1u << 2u;
+inline constexpr u32 s_ProbeFlagCopyConstructible   = 1u << 3u;
+inline constexpr u32 s_ProbeFlagCopyAssignable      = 1u << 4u;
+inline constexpr u32 s_ProbeFlagMoveConstructible   = 1u << 5u;
+inline constexpr u32 s_ProbeFlagMoveAssignable      = 1u << 6u;
+inline constexpr u32 s_ProbeFlagZeroDefault         = 1u << 7u;
+inline constexpr u32 s_ProbeFlagNothrowZeroDefault  = 1u << 8u;
+inline constexpr u32 s_ProbeFlagArenaDefault        = 1u << 9u;
+inline constexpr u32 s_ProbeFlagNothrowArenaDefault = 1u << 10u;
+inline constexpr u32 s_ProbeFlagSmallValue          = 1u << 11u;
+inline constexpr u32 s_ProbeFlagBinarySerializable  = 1u << 12u;
+inline constexpr u32 s_ProbeFlagEqualitySwitch      = 1u << 13u;
+inline constexpr u32 s_ProbeFlagResolvedComplete    = 1u << 14u;
+inline constexpr u32 s_ProbeFlagResolvedIncomplete  = 1u << 15u;
+inline constexpr u32 s_ProbeFlagLeadingArenaTag     = 1u << 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct CppParamInfo{
+    b8 isConstRef = false;
+    b8 isExactArenaBaseRef = false;
+    b8 isDerivedArenaRef = false;
+    b8 isTemplateArenaRef = false;
+    b8 isTemplateParamUsedInReturn = false;
+    b8 isBinaryByteView = false;
+    b8 isPlatformTCharLiteralRef = false;
+    b8 isRecordType = false;
+};
 
 struct CppCallableCandidate{
     CXCursor cursor = {};
@@ -65,15 +82,17 @@ struct CppCallableCandidate{
     b8 isConstructor = false;
     b8 isOperator = false;
     b8 isNothrow = false;
-    MVector<b8> paramIsConstRef;
+    MVector<CppParamInfo> params;
 
     explicit CppCallableCandidate(MetaArena& arena)noexcept
-        : paramIsConstRef(arena)
+        : params(arena)
     {}
 };
 
 struct CachedMethodOutcome{
     b8 allowsCppUnwind = true;
+    u32 byteViewArgMask = 0u;
+    u32 platformLiteralArgMask = 0u;
     MVector<u8> paramIsConstRef;
 
     explicit CachedMethodOutcome(MetaArena& arena)noexcept
@@ -81,8 +100,17 @@ struct CachedMethodOutcome{
     {}
 };
 
+struct CachedFreeFunctionOutcome{
+    b8 allowsCppUnwind = true;
+    b8 injectsCallerArena = false;
+    u32 byteViewArgMask = 0u;
+    u32 platformLiteralArgMask = 0u;
+};
+
 struct CachedClassOutcome{
     b8 resolved = false;
+    b8 isArenaOwner = false;
+    u8 arenaCtorMode = ArenaCtorMode::Default;
     b8 isAbstract = false;
     b8 isPolymorphicBase = false;
     b8 isEmptyBase = false;
@@ -92,11 +120,32 @@ struct CachedClassOutcome{
     b8 isMoveAssignable = true;
     b8 isSelfDefaulted = false;
     b8 isNothrowDefaultConstructible = false;
+    b8 isSmallValue = false;
+    b8 isBinarySerializable = false;
+    b8 emitsBraceFieldInit = false;
+    b8 isEqualitySwitch = false;
     MVector<CachedMethodOutcome> methods;
 
     explicit CachedClassOutcome(MetaArena& arena)noexcept
         : methods(arena)
     {}
+
+    void resetIncomplete()noexcept{
+        resolved = true;
+        isAbstract = false;
+        isPolymorphicBase = false;
+        isEmptyBase = false;
+        isCopyConstructible = false;
+        isCopyAssignable = false;
+        isMoveConstructible = false;
+        isMoveAssignable = false;
+        isSelfDefaulted = false;
+        isNothrowDefaultConstructible = false;
+        isSmallValue = false;
+        isBinarySerializable = false;
+        emitsBraceFieldInit = false;
+        isEqualitySwitch = false;
+    }
 };
 
 struct CachedInterfaceOutcome{
@@ -114,7 +163,7 @@ struct CachedTraitResolution{
     MVector<MString> projectIncludedFiles;
     MVector<CachedClassOutcome> classOutcomes;
     MVector<CachedInterfaceOutcome> ifaceOutcomes;
-    MVector<b8> freeFnAllowsUnwind;
+    MVector<CachedFreeFunctionOutcome> freeFnOutcomes;
 
     CachedTraitResolution()noexcept
         : arena(MetascriptArenaScope::s_ParserScratch)
@@ -123,7 +172,7 @@ struct CachedTraitResolution{
         , projectIncludedFiles(arena)
         , classOutcomes(arena)
         , ifaceOutcomes(arena)
-        , freeFnAllowsUnwind(arena)
+        , freeFnOutcomes(arena)
     {}
 };
 
@@ -205,24 +254,209 @@ struct TraitResolutionMemoryCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] b8 IsIdentChar(const MChar ch)noexcept{
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
+}
+
+[[nodiscard]] b8 ContainsTemplateArgToken(const MStringView text, const MStringView token)noexcept{
+    if(token.empty() || text.size() < token.size() + 2u)
+        return false;
+    usize angleDepth = 0u;
+    for(usize i = 0u; i < text.size(); ++i){
+        const MChar ch = text[i];
+        if(ch == '<'){
+            ++angleDepth;
+            continue;
+        }
+        if(ch == '>'){
+            if(angleDepth > 0u)
+                --angleDepth;
+            continue;
+        }
+        if(angleDepth > 0u && i + token.size() <= text.size() && text.substr(i, token.size()) == token){
+            const b8 leftOk = (i == 0u) || !IsIdentChar(text[i - 1u]);
+            const usize endPos = i + token.size();
+            const b8 rightOk = (endPos >= text.size()) || !IsIdentChar(text[endPos]);
+            if(leftOk && rightOk)
+                return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] MChar AsciiLowerChar(const MChar ch)noexcept{
+    return (ch >= 'A' && ch <= 'Z') ? static_cast<MChar>(ch + ('a' - 'A')) : ch;
+}
+
+[[nodiscard]] b8 ContainsAsciiCaseInsensitive(const MStringView text, const MStringView lowerNeedle)noexcept{
+    if(lowerNeedle.empty() || text.size() < lowerNeedle.size())
+        return false;
+    for(usize i = 0u; i + lowerNeedle.size() <= text.size(); ++i){
+        b8 matched = true;
+        for(usize j = 0u; j < lowerNeedle.size(); ++j){
+            if(AsciiLowerChar(text[i + j]) != lowerNeedle[j]){
+                matched = false;
+                break;
+            }
+        }
+        if(matched)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] b8 UnqualifiedTypeSpellingEquals(MetaArena& arena, const CXType type, const MStringView targetName){
+    const MString spell = ConsumeClangString(arena, ::clang_getTypeSpelling(::clang_getUnqualifiedType(type)));
+    return MStringView(spell.data(), spell.size()) == targetName;
+}
+
+[[nodiscard]] CXCursor ResolveBaseSpecifierDecl(MetaArena& arena, CXCursor baseSpecCursor);
+
+[[nodiscard]] b8 IsClangGlobalRecordType(MetaArena& arena, const CXType type, const MStringView expectedName){
+    const CXType canon = ::clang_getCanonicalType(type);
+    const CXCursor rec = ::clang_getTypeDeclaration(canon);
+    if(::clang_Cursor_isNull(rec) || ::clang_getCursorKind(rec) == CXCursor_NoDeclFound)
+        return false;
+    const MString nameStr = ConsumeClangString(arena, ::clang_getCursorSpelling(rec));
+    if(nameStr != expectedName)
+        return false;
+    const CXCursor parent = ::clang_getCursorSemanticParent(rec);
+    const CXCursorKind pk = ::clang_getCursorKind(parent);
+    return pk == CXCursor_TranslationUnit || pk == CXCursor_LinkageSpec;
+}
+
+[[nodiscard]] b8 IsClangTypeExactArenaBase(MetaArena& arena, const CXType type){
+    return IsClangGlobalRecordType(arena, type, BuiltinTypeSemantics::ArenaBaseTypeName());
+}
+
+[[nodiscard]] b8 IsClangTypeDerivedFromArenaBase(MetaArena& arena, const CXType type, const u32 depth = 0u){
+    if(depth >= 8u)
+        return false;
+    const CXType canon = ::clang_getCanonicalType(type);
+    if(IsClangTypeExactArenaBase(arena, canon))
+        return true;
+    const CXCursor rec = ::clang_getTypeDeclaration(canon);
+    if(::clang_Cursor_isNull(rec) || ::clang_getCursorKind(rec) == CXCursor_NoDeclFound)
+        return false;
+    const CXCursor def = ::clang_getCursorDefinition(rec);
+    const CXCursor inspectCursor = ::clang_Cursor_isNull(def) ? rec : def;
+    MVector<CXCursor> children(arena);
+    VisitDirectChildren(inspectCursor, children);
+    for(const CXCursor ch : children){
+        if(::clang_getCursorKind(ch) != CXCursor_CXXBaseSpecifier)
+            continue;
+        if(IsClangTypeDerivedFromArenaBase(arena, ::clang_getCursorType(ch), depth + 1u))
+            return true;
+        const CXCursor baseDecl = ResolveBaseSpecifierDecl(arena, ch);
+        if(!::clang_Cursor_isNull(baseDecl) && IsClangTypeDerivedFromArenaBase(arena, ::clang_getCursorType(baseDecl), depth + 1u))
+            return true;
+    }
+    return false;
+}
+
+void CollectEnclosingTemplateTypeParams(MetaArena& arena, CXCursor cursor, MVector<MString>& outNames){
+    outNames.clear();
+    for(u32 depth = 0u; depth < 8u && !::clang_Cursor_isNull(cursor); ++depth){
+        const CXCursorKind ck = ::clang_getCursorKind(cursor);
+        if(ck == CXCursor_TranslationUnit || ck == CXCursor_Namespace)
+            break;
+        if(ck == CXCursor_FunctionTemplate || ck == CXCursor_ClassTemplate){
+            MVector<CXCursor> children(arena);
+            VisitDirectChildren(cursor, children);
+            for(const CXCursor ch : children){
+                if(::clang_getCursorKind(ch) != CXCursor_TemplateTypeParameter)
+                    continue;
+                MString nameStr = ConsumeClangString(arena, ::clang_getCursorSpelling(ch));
+                if(!nameStr.empty())
+                    outNames.push_back(Move(nameStr));
+            }
+        }
+        cursor = ::clang_getCursorSemanticParent(cursor);
+    }
+}
+
 void PopulateCallableParams(MetaArena& arena, const CXCursor cursor, const b8 isTemplate, CppCallableCandidate& outCand){
     MVector<CXCursor> paramCursors(arena);
     CollectCallableParamCursors(arena, cursor, isTemplate, paramCursors);
 
+    MVector<MString> tplTypeNames(arena);
+    CollectEnclosingTemplateTypeParams(arena, cursor, tplTypeNames);
+
+    MString resultSpelling(arena);
+    if(!tplTypeNames.empty()){
+        const CXType resType = ::clang_getCursorResultType(cursor);
+        resultSpelling = ConsumeClangString(arena, ::clang_getTypeSpelling(resType));
+    }
+    const MStringView resultSpellingView(resultSpelling.data(), resultSpelling.size());
+
     b8 isUnboundedVariadic = (::clang_Cursor_isVariadic(cursor) != 0u);
     usize minArgs = 0u;
     b8 seenDefault = false;
-    outCand.paramIsConstRef.reserve(paramCursors.size());
+    outCand.params.reserve(paramCursors.size());
 
     for(usize idx = 0u; idx < paramCursors.size(); ++idx){
         const CXCursor parm = paramCursors[idx];
-        const CXType parmType = ::clang_getCursorType(parm);
-        const MString spelling = ConsumeClangString(arena, ::clang_getTypeSpelling(parmType));
+        const CXType rawType = ::clang_getCursorType(parm);
+        const CXType canonType = ::clang_getCanonicalType(rawType);
+        const MString spelling = ConsumeClangString(arena, ::clang_getTypeSpelling(rawType));
         if(MStringView(spelling.data(), spelling.size()).find(CppImporterSemantics::s_VariadicPackToken) != MStringView::npos){
             isUnboundedVariadic = true;
             break;
         }
-        outCand.paramIsConstRef.push_back(IsClangTypeConstLValueRef(parmType));
+
+        CppParamInfo pinfo{};
+        pinfo.isConstRef = IsClangTypeConstLValueRef(rawType);
+
+        if(canonType.kind == CXType_LValueReference){
+            const CXType pointeeCanon = ::clang_getPointeeType(canonType);
+            const CXType rawPointee = (rawType.kind == CXType_LValueReference) ? ::clang_getPointeeType(rawType) : pointeeCanon;
+            if(::clang_isConstQualifiedType(pointeeCanon) != 0u
+                && (rawPointee.kind == CXType_ConstantArray || rawPointee.kind == CXType_DependentSizedArray
+                    || pointeeCanon.kind == CXType_ConstantArray || pointeeCanon.kind == CXType_DependentSizedArray)
+            ){
+                const CXType elemSource = (rawPointee.kind == CXType_ConstantArray || rawPointee.kind == CXType_DependentSizedArray) ? rawPointee : pointeeCanon;
+                const CXType elemType = ::clang_getArrayElementType(elemSource);
+                const CXCursor elemDecl = ::clang_getTypeDeclaration(elemType);
+                const MString elemName = !::clang_Cursor_isNull(elemDecl)
+                    ? ConsumeClangString(arena, ::clang_getCursorSpelling(elemDecl))
+                    : ConsumeClangString(arena, ::clang_getTypeSpelling(::clang_getUnqualifiedType(elemType)));
+                if(elemName == "tchar")
+                    pinfo.isPlatformTCharLiteralRef = true;
+            }
+            if(::clang_isConstQualifiedType(pointeeCanon) == 0u){
+                if(IsClangTypeExactArenaBase(arena, pointeeCanon)){
+                    pinfo.isExactArenaBaseRef = true;
+                }
+                else if(IsClangTypeDerivedFromArenaBase(arena, pointeeCanon)){
+                    pinfo.isDerivedArenaRef = true;
+                }
+                else if(!tplTypeNames.empty()){
+                    const MString rawPointeeSpell = ConsumeClangString(arena, ::clang_getTypeSpelling(::clang_getUnqualifiedType(rawPointee)));
+                    const MStringView basePointee(rawPointeeSpell.data(), rawPointeeSpell.size());
+                    for(const MString& tplName : tplTypeNames){
+                        const MStringView tplView(tplName.data(), tplName.size());
+                        if(basePointee == tplView){
+                            const b8 usedAsReturnTplArg = !resultSpellingView.empty() && ContainsTemplateArgToken(resultSpellingView, tplView);
+                            if(usedAsReturnTplArg)
+                                pinfo.isTemplateParamUsedInReturn = true;
+                            if(usedAsReturnTplArg || ContainsAsciiCaseInsensitive(tplView, "arena"))
+                                pinfo.isTemplateArenaRef = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        CXType valueCanon = canonType;
+        if(canonType.kind == CXType_LValueReference || canonType.kind == CXType_RValueReference)
+            valueCanon = ::clang_getCanonicalType(::clang_getPointeeType(canonType));
+        if(IsClangGlobalRecordType(arena, valueCanon, BuiltinTypeSemantics::BinaryByteViewTypeName()))
+            pinfo.isBinaryByteView = true;
+        else if(valueCanon.kind == CXType_Record)
+            pinfo.isRecordType = true;
+
+        outCand.params.push_back(pinfo);
 
         const b8 hasDefault = HasDefaultInitializerExpr(parm);
         if(!hasDefault && !seenDefault)
@@ -232,7 +466,7 @@ void PopulateCallableParams(MetaArena& arena, const CXCursor cursor, const b8 is
     }
 
     outCand.minArgs = minArgs;
-    outCand.maxArgs = isUnboundedVariadic ? Limit<usize>::s_Max : outCand.paramIsConstRef.size();
+    outCand.maxArgs = isUnboundedVariadic ? Limit<usize>::s_Max : outCand.params.size();
 }
 
 [[nodiscard]] CppCallableCandidate BuildCandidateFromCursor(MetaArena& arena, const CXCursor cursor, const MStringView forcedSpelling = {}){
@@ -370,7 +604,7 @@ void CollectRecordCallableHierarchy(
             CppCallableCandidate cand = BuildCandidateFromCursor(arena, child);
             if(cand.spelling.empty())
                 continue;
-            const MethodHideKey key{ cand.spelling, cand.isConst, cand.isOperator, cand.paramIsConstRef.size() };
+            const MethodHideKey key{ cand.spelling, cand.isConst, cand.isOperator, cand.params.size() };
             if(isBasePass && derivedMethods.find(key) != derivedMethods.end())
                 continue;
             currentLevelKeys.push_back(key);
@@ -385,23 +619,45 @@ void CollectRecordCallableHierarchy(
         CollectRecordCallableHierarchy(arena, baseCursor, true, visitedBases, derivedMethods, outMethods, outConstructors);
 }
 
+[[nodiscard]] b8 IsCandidateTypeCompatible(const CppCallableCandidate& cand, const MethodDecl& adhdMethod, const usize offset)noexcept{
+    for(usize pi = 0u; pi < adhdMethod.params.size() && (offset + pi) < cand.params.size(); ++pi){
+        const ParamDecl& ap = adhdMethod.params[pi];
+        const CppParamInfo& cp = cand.params[offset + pi];
+        const TypeRef* pt = ap.type;
+        if(cp.isExactArenaBaseRef || cp.isDerivedArenaRef || cp.isTemplateArenaRef){
+            if(ap.mode != ParamPassingMode::Mut)
+                return false;
+            if(pt && !pt->isAuto){
+                if(BuiltinTypeSemantics::IsScalarType(pt->name)
+                    || FindStaticBuiltinObjectType(pt->name) != nullptr
+                    || FindBuiltinGenericType(pt->name) != nullptr)
+                    return false;
+            }
+        }
+        if(!pt || pt->isAuto)
+            continue;
+        if(BuiltinTypeSemantics::IsScalarType(pt->name) && cp.isRecordType)
+            return false;
+    }
+    return true;
+}
+
 void SelectArityMatchedCandidates(
-    MetaArena& arena,
     const Span<const CppCallableCandidate* const> candidates,
     const MethodDecl& adhdMethod,
+    const usize offset,
     MVector<const CppCallableCandidate*>& outMatched
 ){
     outMatched.clear();
     if(!adhdMethod.isVariadic){
-        const usize expectedArgs = adhdMethod.params.size() + (adhdMethod.injectsCallerArena ? 1u : 0u);
+        const usize expectedArgs = adhdMethod.params.size() + offset;
         for(const CppCallableCandidate* cand : candidates){
-            if(expectedArgs >= cand->minArgs && expectedArgs <= cand->maxArgs)
+            if(expectedArgs >= cand->minArgs && expectedArgs <= cand->maxArgs && IsCandidateTypeCompatible(*cand, adhdMethod, offset))
                 outMatched.push_back(cand);
         }
     }
     if(outMatched.empty())
         outMatched.assign(candidates.begin(), candidates.end());
-    (void)arena;
 }
 
 [[nodiscard]] b8 AnyCandidateAllowsUnwind(const Span<const CppCallableCandidate* const> candidates)noexcept{
@@ -412,6 +668,40 @@ void SelectArityMatchedCandidates(
     return false;
 }
 
+void CollectCallableParamLoweringMasks(
+    const Span<const CppCallableCandidate* const> candidates,
+    const MethodDecl& adhdMethod,
+    const usize offset,
+    u32& outByteViewMask,
+    u32& outPlatformLiteralMask
+)noexcept{
+    outByteViewMask = 0u;
+    outPlatformLiteralMask = 0u;
+    if(adhdMethod.isVariadic)
+        return;
+    for(usize pi = 0u; pi < adhdMethod.params.size() && pi < 32u; ++pi){
+        const TypeRef* pt = adhdMethod.params[pi].type;
+        const b8 alreadyByteView = pt && !pt->isAuto && pt->name == BuiltinTypeSemantics::BinaryByteViewTypeName();
+        b8 hasParamCandidate = false;
+        b8 allByteView = !alreadyByteView;
+        b8 allPlatformLiteral = true;
+        for(const CppCallableCandidate* cand : candidates){
+            if(offset + pi >= cand->params.size())
+                continue;
+            hasParamCandidate = true;
+            const CppParamInfo& cp = cand->params[offset + pi];
+            if(!cp.isBinaryByteView)
+                allByteView = false;
+            if(!cp.isPlatformTCharLiteralRef)
+                allPlatformLiteral = false;
+        }
+        if(hasParamCandidate && allByteView)
+            outByteViewMask |= (1u << pi);
+        if(hasParamCandidate && allPlatformLiteral)
+            outPlatformLiteralMask |= (1u << pi);
+    }
+}
+
 void ApplyMethodTraitMatches(
     const MVector<CppCallableCandidate>& methods,
     const MVector<CppCallableCandidate>& constructors,
@@ -420,6 +710,8 @@ void ApplyMethodTraitMatches(
     MetaArena& scratchArena
 ){
     outOutcome.allowsCppUnwind = true;
+    outOutcome.byteViewArgMask = 0u;
+    outOutcome.platformLiteralArgMask = 0u;
     outOutcome.paramIsConstRef.assign(adhdMethod.params.size(), 0u);
 
     const MVector<CppCallableCandidate>& pool = adhdMethod.isConstructor ? constructors : methods;
@@ -451,17 +743,87 @@ void ApplyMethodTraitMatches(
         return;
 
     MVector<const CppCallableCandidate*> finalMatches(scratchArena);
-    SelectArityMatchedCandidates(scratchArena, Span<const CppCallableCandidate* const>(constMatches.data(), constMatches.size()), adhdMethod, finalMatches);
-    outOutcome.allowsCppUnwind = AnyCandidateAllowsUnwind(Span<const CppCallableCandidate* const>(finalMatches.data(), finalMatches.size()));
+    SelectArityMatchedCandidates(Span<const CppCallableCandidate* const>(constMatches.data(), constMatches.size()), adhdMethod, 0u, finalMatches);
+    const Span<const CppCallableCandidate* const> finalSpan(finalMatches.data(), finalMatches.size());
+    outOutcome.allowsCppUnwind = AnyCandidateAllowsUnwind(finalSpan);
+    CollectCallableParamLoweringMasks(finalSpan, adhdMethod, 0u, outOutcome.byteViewArgMask, outOutcome.platformLiteralArgMask);
 
     if(!adhdMethod.isVariadic){
         for(const CppCallableCandidate* cand : finalMatches){
-            for(usize pi = 0u; pi < adhdMethod.params.size() && pi < cand->paramIsConstRef.size(); ++pi){
-                if(adhdMethod.params[pi].mode == ParamPassingMode::In && cand->paramIsConstRef[pi])
+            for(usize pi = 0u; pi < adhdMethod.params.size() && pi < cand->params.size(); ++pi){
+                if(adhdMethod.params[pi].mode == ParamPassingMode::In && cand->params[pi].isConstRef)
                     outOutcome.paramIsConstRef[pi] = 1u;
             }
         }
     }
+}
+
+void CollectCandidatePointers(const Span<const CppCallableCandidate> candidates, MVector<const CppCallableCandidate*>& outPtrs){
+    outPtrs.clear();
+    outPtrs.reserve(candidates.size());
+    for(const CppCallableCandidate& c : candidates)
+        outPtrs.push_back(&c);
+}
+
+void ResolveFreeFunctionOutcome(
+    MetaArena& scratchArena,
+    const Span<const CppCallableCandidate> candidates,
+    const MethodDecl& fn,
+    CachedFreeFunctionOutcome& outOutcome
+){
+    outOutcome.allowsCppUnwind = true;
+    outOutcome.injectsCallerArena = false;
+    outOutcome.byteViewArgMask = 0u;
+    outOutcome.platformLiteralArgMask = 0u;
+
+    if(candidates.empty())
+        return;
+
+    if(fn.isVariadic){
+        MVector<const CppCallableCandidate*> allCands(scratchArena);
+        CollectCandidatePointers(candidates, allCands);
+        outOutcome.allowsCppUnwind = AnyCandidateAllowsUnwind(Span<const CppCallableCandidate* const>(allCands.data(), allCands.size()));
+        return;
+    }
+
+    MVector<const CppCallableCandidate*> directMatches(scratchArena);
+    MVector<const CppCallableCandidate*> arenaMatches(scratchArena);
+    const usize expectedDirect = fn.params.size();
+    const usize expectedArena = fn.params.size() + 1u;
+    b8 anyPreferredArenaMatch = false;
+
+    for(const CppCallableCandidate& cand : candidates){
+        if(expectedDirect >= cand.minArgs && expectedDirect <= cand.maxArgs && IsCandidateTypeCompatible(cand, fn, 0u))
+            directMatches.push_back(&cand);
+        if(!cand.params.empty()
+            && (cand.params[0].isExactArenaBaseRef || cand.params[0].isTemplateArenaRef)
+            && expectedArena >= cand.minArgs
+            && expectedArena <= cand.maxArgs
+            && IsCandidateTypeCompatible(cand, fn, 1u)
+        ){
+            arenaMatches.push_back(&cand);
+            if(cand.params[0].isExactArenaBaseRef || cand.params[0].isTemplateParamUsedInReturn)
+                anyPreferredArenaMatch = true;
+        }
+    }
+
+    usize offset = 0u;
+    MVector<const CppCallableCandidate*> chosen(scratchArena);
+    if(!arenaMatches.empty() && (directMatches.empty() || anyPreferredArenaMatch)){
+        outOutcome.injectsCallerArena = true;
+        offset = 1u;
+        chosen = Move(arenaMatches);
+    }
+    else if(!directMatches.empty()){
+        chosen = Move(directMatches);
+    }
+    else{
+        CollectCandidatePointers(candidates, chosen);
+    }
+
+    const Span<const CppCallableCandidate* const> chosenSpan(chosen.data(), chosen.size());
+    outOutcome.allowsCppUnwind = AnyCandidateAllowsUnwind(chosenSpan);
+    CollectCallableParamLoweringMasks(chosenSpan, fn, offset, outOutcome.byteViewArgMask, outOutcome.platformLiteralArgMask);
 }
 
 
@@ -625,7 +987,238 @@ struct TemplateClassTraits : CppRecordSpecialMemberTraits{
     b8 hasAccessibleArenaArgCtor = false;
     b8 arenaArgCtorNothrow = false;
     b8 hasReferenceOrNoDefaultField = false;
+    b8 isEqualitySwitch = false;
 };
+
+void CollectSubtreeTemplateAndParamRefs(
+    MetaArena& arena,
+    const CXCursor cursor,
+    const MStringView paramName,
+    b8& hasTemplateRef,
+    b8& hasParamTypeRef,
+    const u32 depth = 0u
+){
+    if(depth >= 6u || (hasTemplateRef && hasParamTypeRef))
+        return;
+    MVector<CXCursor> children(arena);
+    VisitDirectChildren(cursor, children);
+    for(const CXCursor ch : children){
+        const CXCursorKind ck = ::clang_getCursorKind(ch);
+        if(ck == CXCursor_TemplateRef)
+            hasTemplateRef = true;
+        else if(ck == CXCursor_TypeRef){
+            const MString refSpell = ConsumeClangString(arena, ::clang_getCursorSpelling(ch));
+            if(MStringView(refSpell.data(), refSpell.size()) == paramName)
+                hasParamTypeRef = true;
+        }
+        if(hasTemplateRef && hasParamTypeRef)
+            return;
+        CollectSubtreeTemplateAndParamRefs(arena, ch, paramName, hasTemplateRef, hasParamTypeRef, depth + 1u);
+    }
+}
+
+[[nodiscard]] b8 SubtreeHasTemplateInstantiationUsingParam(MetaArena& arena, const CXCursor cursor, const MStringView paramName){
+    const MString typeSpell = ConsumeClangString(arena, ::clang_getTypeSpelling(::clang_getCursorType(cursor)));
+    if(ContainsTemplateArgToken(MStringView(typeSpell.data(), typeSpell.size()), paramName))
+        return true;
+    b8 hasTemplateRef = false;
+    b8 hasParamTypeRef = false;
+    CollectSubtreeTemplateAndParamRefs(arena, cursor, paramName, hasTemplateRef, hasParamTypeRef);
+    return hasTemplateRef && hasParamTypeRef;
+}
+
+[[nodiscard]] b8 IsSingleRequiredArenaClassTemplate(MetaArena& arena, const CXCursor tplCursor){
+    MVector<CXCursor> children(arena);
+    VisitDirectChildren(tplCursor, children);
+    usize totalParams = 0u;
+    b8 firstIsTypeParam = false;
+    b8 hasUnusableParam = false;
+    MString param0Name(arena);
+
+    for(const CXCursor ch : children){
+        const CXCursorKind ck = ::clang_getCursorKind(ch);
+        if(ck != CXCursor_TemplateTypeParameter && ck != CXCursor_NonTypeTemplateParameter && ck != CXCursor_TemplateTemplateParameter)
+            continue;
+        if(totalParams == 0u){
+            if(ck == CXCursor_TemplateTypeParameter){
+                param0Name = ConsumeClangString(arena, ::clang_getCursorSpelling(ch));
+                firstIsTypeParam = !param0Name.empty();
+            }
+            if(!firstIsTypeParam)
+                hasUnusableParam = true;
+        }
+        else{
+            MVector<CXCursor> defaultChildren(arena);
+            VisitDirectChildren(ch, defaultChildren);
+            if(defaultChildren.empty())
+                hasUnusableParam = true;
+        }
+        ++totalParams;
+    }
+    if(totalParams == 0u || !firstIsTypeParam || hasUnusableParam)
+        return false;
+
+    const MStringView param0View(param0Name.data(), param0Name.size());
+    b8 usesParamAsArena = false;
+
+    for(const CXCursor ch : children){
+        const CXCursorKind ck = ::clang_getCursorKind(ch);
+        if(ck == CXCursor_FieldDecl){
+            const CXType ftype = ::clang_getCursorType(ch);
+            if(ftype.kind != CXType_LValueReference
+                && ftype.kind != CXType_RValueReference
+                && ftype.kind != CXType_Pointer
+                && UnqualifiedTypeSpellingEquals(arena, ftype, param0View)
+            ){
+                return false;
+            }
+            if(SubtreeHasTemplateInstantiationUsingParam(arena, ch, param0View))
+                usesParamAsArena = true;
+        }
+        else if(ck == CXCursor_CXXBaseSpecifier){
+            if(SubtreeHasTemplateInstantiationUsingParam(arena, ch, param0View))
+                usesParamAsArena = true;
+        }
+        else if(ck == CXCursor_TypeAliasDecl || ck == CXCursor_TypedefDecl){
+            const MString aliasName = ConsumeClangString(arena, ::clang_getCursorSpelling(ch));
+            if(aliasName == "uses_leading_arena_t" && UnqualifiedTypeSpellingEquals(arena, ::clang_getTypedefDeclUnderlyingType(ch), param0View))
+                usesParamAsArena = true;
+        }
+        else if((ck == CXCursor_Constructor || (ck == CXCursor_FunctionTemplate && ::clang_getTemplateCursorKind(ch) == CXCursor_Constructor))
+            && ::clang_getCXXAccessSpecifier(ch) == CX_CXXPublic
+            && ::clang_CXXMethod_isDeleted(ch) == 0u
+            && !::clang_CXXConstructor_isCopyConstructor(ch)
+            && !::clang_CXXConstructor_isMoveConstructor(ch)
+        ){
+            MVector<CXCursor> ctorChildren(arena);
+            VisitDirectChildren(ch, ctorChildren);
+            for(const CXCursor pch : ctorChildren){
+                if(::clang_getCursorKind(pch) != CXCursor_ParmDecl)
+                    continue;
+                const CXType ptype = ::clang_getCursorType(pch);
+                if(ptype.kind == CXType_LValueReference){
+                    const CXType pointee = ::clang_getPointeeType(ptype);
+                    if(::clang_isConstQualifiedType(pointee) == 0u && UnqualifiedTypeSpellingEquals(arena, pointee, param0View))
+                        usesParamAsArena = true;
+                }
+                if(SubtreeHasTemplateInstantiationUsingParam(arena, pch, param0View))
+                    usesParamAsArena = true;
+            }
+        }
+    }
+
+    return usesParamAsArena;
+}
+
+[[nodiscard]] b8 HasPointerOrReferenceFieldRecursive(MetaArena& arena, const CXCursor recCursor, HashSet<CursorKey, MetaArena, CursorKeyHash>& activeRecursion){
+    if(::clang_Cursor_isNull(recCursor))
+        return false;
+    const CXCursor def = ::clang_getCursorDefinition(recCursor);
+    const CXCursor inspectCursor = ::clang_Cursor_isNull(def) ? recCursor : def;
+    if(::clang_isCursorDefinition(inspectCursor) == 0u)
+        return true;
+
+    const CursorKey defKey = MakeCursorKey(inspectCursor);
+    if(!activeRecursion.insert(defKey).second)
+        return false;
+
+    MVector<CXCursor> children(arena);
+    VisitDirectChildren(inspectCursor, children);
+    b8 foundPtr = false;
+    for(const CXCursor ch : children){
+        const CXCursorKind ck = ::clang_getCursorKind(ch);
+        if(ck == CXCursor_CXXBaseSpecifier){
+            const CXCursor baseDecl = ResolveBaseSpecifierDecl(arena, ch);
+            if(!::clang_Cursor_isNull(baseDecl) && HasPointerOrReferenceFieldRecursive(arena, baseDecl, activeRecursion)){
+                foundPtr = true;
+                break;
+            }
+            continue;
+        }
+        if(ck == CXCursor_FieldDecl){
+            CXType ftype = ::clang_getCanonicalType(::clang_getCursorType(ch));
+            while(ftype.kind == CXType_ConstantArray || ftype.kind == CXType_IncompleteArray)
+                ftype = ::clang_getCanonicalType(::clang_getArrayElementType(ftype));
+            if(ftype.kind == CXType_Pointer
+                || ftype.kind == CXType_LValueReference
+                || ftype.kind == CXType_RValueReference
+                || ftype.kind == CXType_MemberPointer
+            ){
+                foundPtr = true;
+                break;
+            }
+            if(ftype.kind == CXType_Record){
+                const CXCursor fieldRec = ::clang_getTypeDeclaration(ftype);
+                if(HasPointerOrReferenceFieldRecursive(arena, fieldRec, activeRecursion)){
+                    foundPtr = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    activeRecursion.erase(defKey);
+    return foundPtr;
+}
+
+[[nodiscard]] u8 DeduceRecordArenaCtorMode(MetaArena& arena, const CXCursor recCursor, const b8 isArenaTemplated){
+    if(::clang_Cursor_isNull(recCursor))
+        return isArenaTemplated ? ArenaCtorMode::Omit : ArenaCtorMode::Default;
+
+    CXCursor inspectCursor = ::clang_getCursorDefinition(recCursor);
+    if(::clang_Cursor_isNull(inspectCursor))
+        inspectCursor = recCursor;
+
+    b8 hasArenaFirst = false;
+    b8 hasArenaLast = false;
+
+    const auto scanCursorCtorArena = [&](const CXCursor targetCursor) -> b8{
+        MVector<CXCursor> children(arena);
+        VisitDirectChildren(targetCursor, children);
+        for(const CXCursor ch : children){
+            const CXCursorKind ck = ::clang_getCursorKind(ch);
+            if(ck == CXCursor_TypeAliasDecl || ck == CXCursor_TypedefDecl){
+                const MString aliasName = ConsumeClangString(arena, ::clang_getCursorSpelling(ch));
+                if(aliasName == "uses_leading_arena_t"){
+                    if(isArenaTemplated || IsClangTypeExactArenaBase(arena, ::clang_getTypedefDeclUnderlyingType(ch)))
+                        return true;
+                }
+                continue;
+            }
+            const b8 isCtor = (ck == CXCursor_Constructor) || (ck == CXCursor_FunctionTemplate && ::clang_getTemplateCursorKind(ch) == CXCursor_Constructor);
+            if(!isCtor || ::clang_getCXXAccessSpecifier(ch) != CX_CXXPublic || ::clang_CXXMethod_isDeleted(ch) != 0u)
+                continue;
+            if(::clang_CXXConstructor_isCopyConstructor(ch) || ::clang_CXXConstructor_isMoveConstructor(ch))
+                continue;
+
+            const CppCallableCandidate ctorCand = BuildCandidateFromCursor(arena, ch);
+            if(ctorCand.params.empty())
+                continue;
+            const auto isArenaParam = [isArenaTemplated](const CppParamInfo& p)noexcept{
+                return p.isExactArenaBaseRef || (isArenaTemplated && p.isTemplateArenaRef);
+            };
+            if(isArenaParam(ctorCand.params.front()))
+                hasArenaFirst = true;
+            else if(isArenaParam(ctorCand.params.back()))
+                hasArenaLast = true;
+        }
+        return false;
+    };
+
+    if(scanCursorCtorArena(inspectCursor))
+        return ArenaCtorMode::First;
+    if(isArenaTemplated && !hasArenaFirst && !hasArenaLast){
+        const CXCursor specializedTpl = ::clang_getSpecializedCursorTemplate(inspectCursor);
+        if(!::clang_Cursor_isNull(specializedTpl) && scanCursorCtorArena(specializedTpl))
+            return ArenaCtorMode::First;
+    }
+
+    if(hasArenaFirst)
+        return ArenaCtorMode::First;
+    if(isArenaTemplated && !hasArenaLast)
+        return ArenaCtorMode::Omit;
+    return ArenaCtorMode::Default;
+}
 
 struct PureVirtualSlot{
     CursorKey canonicalKey;
@@ -874,7 +1467,11 @@ void InspectClassTemplateRecursive(
                     traits.hasAccessibleZeroArgCtor = true;
                     traits.zeroArgCtorNothrow = ctorCand.isNothrow;
                 }
-                if(ctorCand.minArgs <= 1u && 1u <= ctorCand.maxArgs){
+                if(ctorCand.minArgs <= 1u
+                    && 1u <= ctorCand.maxArgs
+                    && !ctorCand.params.empty()
+                    && (ctorCand.params[0].isExactArenaBaseRef || ctorCand.params[0].isTemplateArenaRef)
+                ){
                     traits.hasAccessibleArenaArgCtor = true;
                     traits.arenaArgCtorNothrow = ctorCand.isNothrow;
                 }
@@ -889,6 +1486,20 @@ void InspectClassTemplateRecursive(
                 if(ftype.kind == CXType_LValueReference || ftype.kind == CXType_RValueReference){
                     if(!HasDefaultInitializerExpr(child))
                         traits.hasReferenceOrNoDefaultField = true;
+                }
+            }
+            continue;
+        }
+
+        if(ck == CXCursor_FriendDecl){
+            MVector<CXCursor> friendChildren(arena);
+            VisitDirectChildren(child, friendChildren);
+            for(const CXCursor fc : friendChildren){
+                const CXCursorKind fck = ::clang_getCursorKind(fc);
+                if(fck == CXCursor_FunctionDecl || (fck == CXCursor_FunctionTemplate && ::clang_getTemplateCursorKind(fc) == CXCursor_FunctionDecl)){
+                    const MString fname = ConsumeClangString(arena, ::clang_getCursorSpelling(fc));
+                    if(fname == "operator==" && ::clang_CXXMethod_isDeleted(fc) == 0u)
+                        traits.isEqualitySwitch = true;
                 }
             }
             continue;
@@ -927,6 +1538,11 @@ void InspectClassTemplateRecursive(
 
             const b8 accessible = (isBasePass ? (acc != CX_CXXPrivate) : (acc == CX_CXXPublic))
                 && (::clang_CXXMethod_isDeleted(child) == 0u);
+            if(accessible){
+                const MString mname = ConsumeClangString(arena, ::clang_getCursorSpelling(child));
+                if(mname == "operator==")
+                    traits.isEqualitySwitch = true;
+            }
             if(::clang_CXXMethod_isCopyAssignmentOperator(child)){
                 if(!isBasePass)
                     traits.hasUserDeclaredCopyAssign = true;
@@ -963,7 +1579,7 @@ void InspectClassTemplateRecursive(
     activeRecursion.erase(defKey);
 }
 
-void DeduceClassTemplateTraits(MetaArena& arena, const CXCursor templateCursor, const b8 usesArenaCtor, CachedClassOutcome& outOutcome){
+void DeduceClassTemplateTraits(MetaArena& arena, const CXCursor templateCursor, CachedClassOutcome& outOutcome){
     TemplateClassTraits traits;
     HashSet<CursorKey, MetaArena, CursorKeyHash> activeRecursion(arena);
     MVector<PureVirtualSlot> remainingPureVirtuals(arena);
@@ -973,6 +1589,8 @@ void DeduceClassTemplateTraits(MetaArena& arena, const CXCursor templateCursor, 
     FinalizeRecordSpecialMemberTraits(traits);
 
     outOutcome.resolved = true;
+    outOutcome.arenaCtorMode = DeduceRecordArenaCtorMode(arena, templateCursor, false);
+    const b8 usesArenaCtor = (outOutcome.arenaCtorMode == ArenaCtorMode::First);
     outOutcome.isAbstract = traits.isAbstract;
     outOutcome.isPolymorphicBase = traits.hasVirtualMethod && !traits.isFinal;
     outOutcome.isEmptyBase = !traits.isAbstract && !outOutcome.isPolymorphicBase && !traits.isFinal && !traits.hasNonStaticField;
@@ -980,19 +1598,20 @@ void DeduceClassTemplateTraits(MetaArena& arena, const CXCursor templateCursor, 
     outOutcome.isCopyAssignable = !traits.isAbstract && traits.isCopyAssignable;
     outOutcome.isMoveConstructible = !traits.isAbstract && traits.isMoveConstructible;
     outOutcome.isMoveAssignable = !traits.isAbstract && traits.isMoveAssignable;
+    outOutcome.isEqualitySwitch = traits.isEqualitySwitch;
+
+    const b8 zeroDefault = !traits.isAbstract && (traits.hasAccessibleZeroArgCtor || (!traits.hasAnyUserCtor && !traits.hasReferenceOrNoDefaultField));
+    const b8 zeroDefaultNothrow = traits.hasAccessibleZeroArgCtor ? traits.zeroArgCtorNothrow : true;
+    outOutcome.emitsBraceFieldInit = zeroDefault && !usesArenaCtor;
 
     if(!traits.isAbstract){
         if(usesArenaCtor && traits.hasAccessibleArenaArgCtor){
             outOutcome.isSelfDefaulted = true;
             outOutcome.isNothrowDefaultConstructible = traits.arenaArgCtorNothrow;
         }
-        else if(traits.hasAccessibleZeroArgCtor){
+        else if(zeroDefault){
             outOutcome.isSelfDefaulted = true;
-            outOutcome.isNothrowDefaultConstructible = traits.zeroArgCtorNothrow;
-        }
-        else if(!traits.hasAnyUserCtor && !traits.hasReferenceOrNoDefaultField){
-            outOutcome.isSelfDefaulted = true;
-            outOutcome.isNothrowDefaultConstructible = true;
+            outOutcome.isNothrowDefaultConstructible = zeroDefaultNothrow;
         }
     }
 }
@@ -1034,11 +1653,16 @@ void AppendMethodQueryKey(MString& key, const MethodDecl& method){
     key.push_back(method.isConst ? '1' : '0');
     key.push_back(method.isStatic ? '1' : '0');
     key.push_back(method.isVariadic ? '1' : '0');
-    key.push_back(method.injectsCallerArena ? '1' : '0');
     AppendUnsignedDecimal(key, method.params.size());
     key.push_back('[');
-    for(const ParamDecl& p : method.params)
+    for(const ParamDecl& p : method.params){
         key.push_back(p.mode == ParamPassingMode::In ? 'I' : (p.mode == ParamPassingMode::Mut ? 'M' : 'N'));
+        key.push_back(':');
+        if(p.type)
+            AppendLengthPrefixed(key, p.type->isAuto ? MStringView("*") : p.type->name);
+        else
+            AppendLengthPrefixed(key, {});
+    }
     key.push_back(']');
 }
 
@@ -1062,8 +1686,6 @@ void AppendMethodQueryKey(MString& key, const MethodDecl& method){
     key.push_back('#');
     for(const ClassDecl* cls : classes){
         AppendLengthPrefixed(key, !cls->cppExportName.empty() ? cls->cppExportName : cls->name);
-        key.push_back(cls->isArenaOwner ? '1' : '0');
-        key.push_back(static_cast<MChar>('0' + cls->arenaCtorMode));
         AppendUnsignedDecimal(key, cls->templateParams.size());
         key.push_back(':');
         AppendUnsignedDecimal(key, cls->methods.size());
@@ -1155,7 +1777,12 @@ void AppendMethodQueryKey(MString& key, const MethodDecl& method){
         for(u32 mi = 0u; mi < count; ++mi){
             CachedMethodOutcome mo(outCached.arena);
             u32 paramCount = 0u;
-            if(!reader.readBool(mo.allowsCppUnwind) || !reader.readValue(paramCount) || paramCount > 1024u)
+            if(!reader.readBool(mo.allowsCppUnwind)
+                || !reader.readValue(mo.byteViewArgMask)
+                || !reader.readValue(mo.platformLiteralArgMask)
+                || !reader.readValue(paramCount)
+                || paramCount > 1024u
+            )
                 return false;
             mo.paramIsConstRef.reserve(paramCount);
             for(u32 pi = 0u; pi < paramCount; ++pi){
@@ -1177,6 +1804,8 @@ void AppendMethodQueryKey(MString& key, const MethodDecl& method){
         CachedClassOutcome co(outCached.arena);
         u32 methodCount = 0u;
         if(!reader.readBool(co.resolved)
+            || !reader.readBool(co.isArenaOwner)
+            || !reader.readValue(co.arenaCtorMode)
             || !reader.readBool(co.isAbstract)
             || !reader.readBool(co.isPolymorphicBase)
             || !reader.readBool(co.isEmptyBase)
@@ -1186,6 +1815,10 @@ void AppendMethodQueryKey(MString& key, const MethodDecl& method){
             || !reader.readBool(co.isMoveAssignable)
             || !reader.readBool(co.isSelfDefaulted)
             || !reader.readBool(co.isNothrowDefaultConstructible)
+            || !reader.readBool(co.isSmallValue)
+            || !reader.readBool(co.isBinarySerializable)
+            || !reader.readBool(co.emitsBraceFieldInit)
+            || !reader.readBool(co.isEqualitySwitch)
             || !reader.readValue(methodCount)
             || methodCount > 4096u
         )
@@ -1212,12 +1845,16 @@ void AppendMethodQueryKey(MString& key, const MethodDecl& method){
     u32 fnCount = 0u;
     if(!reader.readValue(fnCount) || fnCount != expectedFreeFnCount)
         return false;
-    outCached.freeFnAllowsUnwind.reserve(fnCount);
+    outCached.freeFnOutcomes.reserve(fnCount);
     for(u32 fi = 0u; fi < fnCount; ++fi){
-        b8 unwinds = true;
-        if(!reader.readBool(unwinds))
+        CachedFreeFunctionOutcome fo{};
+        if(!reader.readBool(fo.allowsCppUnwind)
+            || !reader.readBool(fo.injectsCallerArena)
+            || !reader.readValue(fo.byteViewArgMask)
+            || !reader.readValue(fo.platformLiteralArgMask)
+        )
             return false;
-        outCached.freeFnAllowsUnwind.push_back(unwinds);
+        outCached.freeFnOutcomes.push_back(fo);
     }
 
     return reader.atEnd();
@@ -1247,6 +1884,8 @@ void SaveDiskCache(const u64 keyHash, const CachedTraitResolution& cached, MetaA
         writer.writeValue(static_cast<u32>(list.size()));
         for(const CachedMethodOutcome& mo : list){
             writer.writeBool(mo.allowsCppUnwind);
+            writer.writeValue(mo.byteViewArgMask);
+            writer.writeValue(mo.platformLiteralArgMask);
             writer.writeValue(static_cast<u32>(mo.paramIsConstRef.size()));
             for(const u8 flag : mo.paramIsConstRef)
                 writer.writeValue(flag);
@@ -1256,6 +1895,8 @@ void SaveDiskCache(const u64 keyHash, const CachedTraitResolution& cached, MetaA
     writer.writeValue(static_cast<u32>(cached.classOutcomes.size()));
     for(const CachedClassOutcome& co : cached.classOutcomes){
         writer.writeBool(co.resolved);
+        writer.writeBool(co.isArenaOwner);
+        writer.writeValue(co.arenaCtorMode);
         writer.writeBool(co.isAbstract);
         writer.writeBool(co.isPolymorphicBase);
         writer.writeBool(co.isEmptyBase);
@@ -1265,6 +1906,10 @@ void SaveDiskCache(const u64 keyHash, const CachedTraitResolution& cached, MetaA
         writer.writeBool(co.isMoveAssignable);
         writer.writeBool(co.isSelfDefaulted);
         writer.writeBool(co.isNothrowDefaultConstructible);
+        writer.writeBool(co.isSmallValue);
+        writer.writeBool(co.isBinarySerializable);
+        writer.writeBool(co.emitsBraceFieldInit);
+        writer.writeBool(co.isEqualitySwitch);
         writeMethodList(Span<const CachedMethodOutcome>(co.methods.data(), co.methods.size()));
     }
 
@@ -1272,9 +1917,13 @@ void SaveDiskCache(const u64 keyHash, const CachedTraitResolution& cached, MetaA
     for(const CachedInterfaceOutcome& io : cached.ifaceOutcomes)
         writeMethodList(Span<const CachedMethodOutcome>(io.methods.data(), io.methods.size()));
 
-    writer.writeValue(static_cast<u32>(cached.freeFnAllowsUnwind.size()));
-    for(const b8 unwinds : cached.freeFnAllowsUnwind)
-        writer.writeBool(unwinds);
+    writer.writeValue(static_cast<u32>(cached.freeFnOutcomes.size()));
+    for(const CachedFreeFunctionOutcome& fo : cached.freeFnOutcomes){
+        writer.writeBool(fo.allowsCppUnwind);
+        writer.writeBool(fo.injectsCallerArena);
+        writer.writeValue(fo.byteViewArgMask);
+        writer.writeValue(fo.platformLiteralArgMask);
+    }
 
     const ::Path<MetaArena> cachePath = ResolveExternTraitCachePath(scratchArena, keyHash);
     CacheDetail::WriteBinaryFileAtomic(scratchArena, cachePath, writer.bytes());
@@ -1289,6 +1938,8 @@ void ApplyMethodOutcomes(const Span<MethodDecl* const> methods, const Span<const
             break;
         const CachedMethodOutcome& mo = outcomes[moIdx++];
         m->allowsCppUnwind = mo.allowsCppUnwind;
+        m->byteViewArgMask = mo.byteViewArgMask;
+        m->platformLiteralArgMask = mo.platformLiteralArgMask;
         for(usize pi = 0u; pi < m->params.size() && pi < mo.paramIsConstRef.size(); ++pi){
             if(mo.paramIsConstRef[pi] != 0u)
                 m->params[pi].cppConstReference = true;
@@ -1344,6 +1995,8 @@ void ApplyOutcomeToTranslationUnit(
         ClassDecl* cls = classes[ci];
         const CachedClassOutcome& co = outcome.classOutcomes[ci];
         if(co.resolved){
+            cls->isArenaOwner = co.isArenaOwner;
+            cls->arenaCtorMode = co.arenaCtorMode;
             cls->isAbstract = co.isAbstract;
             cls->isPolymorphicBase = co.isPolymorphicBase;
             cls->isEmptyBase = co.isEmptyBase;
@@ -1353,6 +2006,10 @@ void ApplyOutcomeToTranslationUnit(
             cls->isMoveAssignable = co.isMoveAssignable;
             cls->isSelfDefaulted = co.isSelfDefaulted;
             cls->isNothrowDefaultConstructible = co.isNothrowDefaultConstructible;
+            cls->isSmallValue = co.isSmallValue;
+            cls->isBinarySerializable = co.isBinarySerializable;
+            cls->emitsBraceFieldInit = co.emitsBraceFieldInit;
+            cls->isEqualitySwitch = co.isEqualitySwitch;
         }
         ApplyMethodOutcomes(
             Span<MethodDecl* const>(cls->methods.data(), cls->methods.size()),
@@ -1369,8 +2026,13 @@ void ApplyOutcomeToTranslationUnit(
         );
     }
 
-    for(usize fi = 0u; fi < freeFunctions.size() && fi < outcome.freeFnAllowsUnwind.size(); ++fi)
-        freeFunctions[fi]->allowsCppUnwind = outcome.freeFnAllowsUnwind[fi];
+    for(usize fi = 0u; fi < freeFunctions.size() && fi < outcome.freeFnOutcomes.size(); ++fi){
+        const CachedFreeFunctionOutcome& fo = outcome.freeFnOutcomes[fi];
+        freeFunctions[fi]->allowsCppUnwind = fo.allowsCppUnwind;
+        freeFunctions[fi]->injectsCallerArena = fo.injectsCallerArena;
+        freeFunctions[fi]->byteViewArgMask = fo.byteViewArgMask;
+        freeFunctions[fi]->platformLiteralArgMask = fo.platformLiteralArgMask;
+    }
 
     if(outProjectIncludedFiles){
         outProjectIncludedFiles->reserve(outProjectIncludedFiles->size() + outcome.projectIncludedFiles.size());
@@ -1389,45 +2051,51 @@ void RunClangTraitProbe(
 ){
     MetaArena& arena = outResult.arena;
 
-    MString syntheticSource(arena);
-    syntheticSource.reserve(4096u + uniqueHeaders.size() * 64u + (classes.size() + ifaces.size()) * 128u);
+    MString syntheticPreamble(arena);
+    syntheticPreamble.reserve(4096u + uniqueHeaders.size() * 64u);
 
     for(const MString& hdr : uniqueHeaders){
-        syntheticSource.append("#include <");
-        syntheticSource.append(hdr.data(), hdr.size());
-        syntheticSource.append(">\n");
+        syntheticPreamble.append("#include <");
+        syntheticPreamble.append(hdr.data(), hdr.size());
+        syntheticPreamble.append(">\n");
     }
 
-    syntheticSource.append("class ArenaBase;\nnamespace ");
-    syntheticSource.append(s_TraitProbeNamespace.data(), s_TraitProbeNamespace.size());
-    syntheticSource.append("{\n");
+    syntheticPreamble.append("class ArenaBase;\nnamespace ");
+    syntheticPreamble.append(s_TraitProbeNamespace.data(), s_TraitProbeNamespace.size());
+    syntheticPreamble.append("{\n");
 
     const auto appendProbeConst = [&](const MStringView name, const u32 value){
-        syntheticSource.append("inline constexpr unsigned ");
-        syntheticSource.append(name.data(), name.size());
-        syntheticSource.append(" = ");
-        AppendUnsignedDecimal(syntheticSource, value);
-        syntheticSource.append("u;\n");
+        syntheticPreamble.append("inline constexpr unsigned ");
+        syntheticPreamble.append(name.data(), name.size());
+        syntheticPreamble.append(" = ");
+        AppendUnsignedDecimal(syntheticPreamble, value);
+        syntheticPreamble.append("u;\n");
     };
-    appendProbeConst("k_flag_abstract",            s_ProbeFlagAbstract);
-    appendProbeConst("k_flag_polymorphic",         s_ProbeFlagPolymorphicBase);
-    appendProbeConst("k_flag_copy_constructible",  s_ProbeFlagCopyConstructible);
-    appendProbeConst("k_flag_copy_assignable",     s_ProbeFlagCopyAssignable);
-    appendProbeConst("k_flag_self_defaulted",      s_ProbeFlagSelfDefaulted);
-    appendProbeConst("k_flag_nothrow_default",     s_ProbeFlagNothrowDefault);
-    appendProbeConst("k_flag_resolved_complete",   s_ProbeFlagResolvedComplete);
-    appendProbeConst("k_flag_resolved_incomplete", s_ProbeFlagResolvedIncomplete);
-    appendProbeConst("k_flag_move_constructible",  s_ProbeFlagMoveConstructible);
-    appendProbeConst("k_flag_move_assignable",     s_ProbeFlagMoveAssignable);
-    appendProbeConst("k_flag_empty_base",          s_ProbeFlagEmptyBase);
+    appendProbeConst("k_flag_abstract",             s_ProbeFlagAbstract);
+    appendProbeConst("k_flag_polymorphic",          s_ProbeFlagPolymorphicBase);
+    appendProbeConst("k_flag_empty_base",           s_ProbeFlagEmptyBase);
+    appendProbeConst("k_flag_copy_constructible",   s_ProbeFlagCopyConstructible);
+    appendProbeConst("k_flag_copy_assignable",      s_ProbeFlagCopyAssignable);
+    appendProbeConst("k_flag_move_constructible",   s_ProbeFlagMoveConstructible);
+    appendProbeConst("k_flag_move_assignable",      s_ProbeFlagMoveAssignable);
+    appendProbeConst("k_flag_zero_default",         s_ProbeFlagZeroDefault);
+    appendProbeConst("k_flag_nothrow_zero_default", s_ProbeFlagNothrowZeroDefault);
+    appendProbeConst("k_flag_arena_default",        s_ProbeFlagArenaDefault);
+    appendProbeConst("k_flag_nothrow_arena_default", s_ProbeFlagNothrowArenaDefault);
+    appendProbeConst("k_flag_small_value",          s_ProbeFlagSmallValue);
+    appendProbeConst("k_flag_binary_serializable",  s_ProbeFlagBinarySerializable);
+    appendProbeConst("k_flag_equality_switch",      s_ProbeFlagEqualitySwitch);
+    appendProbeConst("k_flag_resolved_complete",    s_ProbeFlagResolvedComplete);
+    appendProbeConst("k_flag_resolved_incomplete",  s_ProbeFlagResolvedIncomplete);
+    appendProbeConst("k_flag_leading_arena_tag",    s_ProbeFlagLeadingArenaTag);
 
-    syntheticSource.append(
-        "template<typename T, bool UsesArenaCtor, bool Complete = requires { sizeof(T); }>\n"
+    syntheticPreamble.append(
+        "template<typename T, bool Complete = requires { sizeof(T); }>\n"
         "struct Probe{\n"
         "    static constexpr unsigned k_flags = k_flag_resolved_incomplete;\n"
         "};\n"
-        "template<typename T, bool UsesArenaCtor>\n"
-        "struct Probe<T, UsesArenaCtor, true>{\n"
+        "template<typename T>\n"
+        "struct Probe<T, true>{\n"
         "    static constexpr bool k_abstract = __is_abstract(T);\n"
         "    static constexpr bool k_polymorphic = __is_polymorphic(T) && !__is_final(T);\n"
         "    static constexpr bool k_empty_base = !k_abstract && !k_polymorphic && !__is_final(T) && __is_empty(T);\n"
@@ -1435,71 +2103,104 @@ void RunClangTraitProbe(
         "    static constexpr bool k_copy_assignable = !k_abstract && __is_assignable(T&, const T&);\n"
         "    static constexpr bool k_move_constructible = !k_abstract && __is_constructible(T, T&&);\n"
         "    static constexpr bool k_move_assignable = !k_abstract && __is_assignable(T&, T&&);\n"
-        "    static constexpr bool k_arena_default = UsesArenaCtor && __is_constructible(T, ::ArenaBase&);\n"
-        "    static constexpr bool k_zero_default = __is_constructible(T);\n"
-        "    static constexpr bool k_self_defaulted = !k_abstract && (k_arena_default || k_zero_default);\n"
-        "    static constexpr bool k_nothrow_default = !k_abstract && (k_arena_default\n"
-        "        ? __is_nothrow_constructible(T, ::ArenaBase&)\n"
-        "        : (k_zero_default && __is_nothrow_constructible(T)));\n"
+        "    static constexpr bool k_zero_default = !k_abstract && __is_constructible(T);\n"
+        "    static constexpr bool k_nothrow_zero_default = k_zero_default && __is_nothrow_constructible(T);\n"
+        "    static constexpr bool k_arena_default = !k_abstract && __is_constructible(T, ::ArenaBase&);\n"
+        "    static constexpr bool k_nothrow_arena_default = k_arena_default && __is_nothrow_constructible(T, ::ArenaBase&);\n"
+        "    static constexpr bool k_small_value = !k_abstract && !k_polymorphic && k_copy_constructible && sizeof(T) <= 16u && __is_trivially_copyable(T);\n"
+        "    static constexpr bool k_binary_serializable = !k_abstract && !k_polymorphic && __is_trivially_copyable(T) && __is_standard_layout(T);\n"
+        "    static constexpr bool k_equality_switch = requires(const T& a, const T& b){ static_cast<bool>(a == b); };\n"
+        "    static constexpr bool k_leading_arena_tag = requires{ typename T::uses_leading_arena_t; requires __is_same(typename T::uses_leading_arena_t, ::ArenaBase); };\n"
         "    static constexpr unsigned k_flags = k_flag_resolved_complete\n"
         "        | (k_abstract ? k_flag_abstract : 0u)\n"
         "        | (k_polymorphic ? k_flag_polymorphic : 0u)\n"
         "        | (k_empty_base ? k_flag_empty_base : 0u)\n"
         "        | (k_copy_constructible ? k_flag_copy_constructible : 0u)\n"
         "        | (k_copy_assignable ? k_flag_copy_assignable : 0u)\n"
-        "        | (k_self_defaulted ? k_flag_self_defaulted : 0u)\n"
-        "        | (k_nothrow_default ? k_flag_nothrow_default : 0u)\n"
         "        | (k_move_constructible ? k_flag_move_constructible : 0u)\n"
-        "        | (k_move_assignable ? k_flag_move_assignable : 0u);\n"
+        "        | (k_move_assignable ? k_flag_move_assignable : 0u)\n"
+        "        | (k_zero_default ? k_flag_zero_default : 0u)\n"
+        "        | (k_nothrow_zero_default ? k_flag_nothrow_zero_default : 0u)\n"
+        "        | (k_arena_default ? k_flag_arena_default : 0u)\n"
+        "        | (k_nothrow_arena_default ? k_flag_nothrow_arena_default : 0u)\n"
+        "        | (k_small_value ? k_flag_small_value : 0u)\n"
+        "        | (k_binary_serializable ? k_flag_binary_serializable : 0u)\n"
+        "        | (k_equality_switch ? k_flag_equality_switch : 0u)\n"
+        "        | (k_leading_arena_tag ? k_flag_leading_arena_tag : 0u);\n"
         "};\n"
     );
 
-    b8 needsTemplateWalk = !freeFunctions.empty();
-    for(usize ci = 0u; ci < classes.size(); ++ci){
-        const ClassDecl* cls = classes[ci];
-        if(!cls->templateParams.empty()){
-            needsTemplateWalk = true;
-            continue;
-        }
-        const MStringView rawCpp = !cls->cppExportName.empty() ? cls->cppExportName : cls->name;
-        if(rawCpp.empty() || HasDisallowedProbeSyntax(rawCpp))
-            continue;
-        const b8 usesArenaCtor = cls->usesArenaCtor();
+    const auto resolveProbeCppName = [](const MStringView cppExport, const MStringView name)noexcept -> MStringView{
+        return !cppExport.empty() ? cppExport : name;
+    };
+    const auto isUnparameterizedConcreteClass = [&](const ClassDecl& cls)noexcept -> MStringView{
+        if(!cls.templateParams.empty())
+            return {};
+        const MStringView rawCpp = resolveProbeCppName(cls.cppExportName, cls.name);
+        if(rawCpp.empty() || HasDisallowedProbeSyntax(rawCpp) || rawCpp.find('<') != MStringView::npos)
+            return {};
+        return rawCpp;
+    };
 
-        syntheticSource.append("using ");
-        syntheticSource.append(s_TraitProbeClassAliasPrefix.data(), s_TraitProbeClassAliasPrefix.size());
-        AppendUnsignedDecimal(syntheticSource, ci);
-        syntheticSource.append(" = ");
-        syntheticSource.append(rawCpp.data(), rawCpp.size());
-        if(cls->isArenaOwner && rawCpp.find('<') == MStringView::npos)
-            syntheticSource.append("<::ArenaBase>");
-        syntheticSource.append(";\ninline constexpr unsigned ");
-        syntheticSource.append(s_TraitProbeFlagVarPrefix.data(), s_TraitProbeFlagVarPrefix.size());
-        AppendUnsignedDecimal(syntheticSource, ci);
-        syntheticSource.append(" = Probe<");
-        syntheticSource.append(s_TraitProbeClassAliasPrefix.data(), s_TraitProbeClassAliasPrefix.size());
-        AppendUnsignedDecimal(syntheticSource, ci);
-        syntheticSource.append(", ");
-        syntheticSource.append(usesArenaCtor ? "true" : "false");
-        syntheticSource.append(">::k_flags;\n");
-    }
-    for(usize ii = 0u; ii < ifaces.size(); ++ii){
-        const InterfaceDecl* iface = ifaces[ii];
-        if(!iface->templateParams.empty()){
+    b8 needsTemplateWalk = !freeFunctions.empty();
+    b8 hasConcreteTemplateCandidateCheck = false;
+    for(const ClassDecl* cls : classes){
+        if(!cls->templateParams.empty())
             needsTemplateWalk = true;
-            continue;
-        }
-        const MStringView rawCpp = !iface->cppExportName.empty() ? iface->cppExportName : iface->name;
-        if(rawCpp.empty() || HasDisallowedProbeSyntax(rawCpp))
-            continue;
-        syntheticSource.append("using ");
-        syntheticSource.append(s_TraitProbeIfaceAliasPrefix.data(), s_TraitProbeIfaceAliasPrefix.size());
-        AppendUnsignedDecimal(syntheticSource, ii);
-        syntheticSource.append(" = ");
-        syntheticSource.append(rawCpp.data(), rawCpp.size());
-        syntheticSource.append(";\n");
+        else if(!isUnparameterizedConcreteClass(*cls).empty())
+            hasConcreteTemplateCandidateCheck = true;
     }
-    syntheticSource.append("}\n");
+    for(const InterfaceDecl* iface : ifaces){
+        if(!iface->templateParams.empty())
+            needsTemplateWalk = true;
+    }
+
+    const auto buildSyntheticSource = [&](const Span<const u8> arenaTemplatedClasses) -> MString{
+        MString src(syntheticPreamble.data(), syntheticPreamble.size(), arena);
+        src.reserve(syntheticPreamble.size() + (classes.size() + ifaces.size()) * 128u + 16u);
+        for(usize ci = 0u; ci < classes.size(); ++ci){
+            const ClassDecl* cls = classes[ci];
+            if(!cls->templateParams.empty())
+                continue;
+            const MStringView rawCpp = resolveProbeCppName(cls->cppExportName, cls->name);
+            if(rawCpp.empty() || HasDisallowedProbeSyntax(rawCpp))
+                continue;
+            src.append("using ");
+            src.append(s_TraitProbeClassAliasPrefix.data(), s_TraitProbeClassAliasPrefix.size());
+            AppendUnsignedDecimal(src, ci);
+            src.append(" = ");
+            src.append(rawCpp.data(), rawCpp.size());
+            if(arenaTemplatedClasses[ci] != 0u && rawCpp.find('<') == MStringView::npos)
+                src.append("<::ArenaBase>");
+            src.append(";\ninline constexpr unsigned ");
+            src.append(s_TraitProbeFlagVarPrefix.data(), s_TraitProbeFlagVarPrefix.size());
+            AppendUnsignedDecimal(src, ci);
+            src.append(" = Probe<");
+            src.append(s_TraitProbeClassAliasPrefix.data(), s_TraitProbeClassAliasPrefix.size());
+            AppendUnsignedDecimal(src, ci);
+            src.append(">::k_flags;\n");
+        }
+        for(usize ii = 0u; ii < ifaces.size(); ++ii){
+            const InterfaceDecl* iface = ifaces[ii];
+            if(!iface->templateParams.empty())
+                continue;
+            const MStringView rawCpp = resolveProbeCppName(iface->cppExportName, iface->name);
+            if(rawCpp.empty() || HasDisallowedProbeSyntax(rawCpp))
+                continue;
+            src.append("using ");
+            src.append(s_TraitProbeIfaceAliasPrefix.data(), s_TraitProbeIfaceAliasPrefix.size());
+            AppendUnsignedDecimal(src, ii);
+            src.append(" = ");
+            src.append(rawCpp.data(), rawCpp.size());
+            src.append(";\n");
+        }
+        src.append("}\n");
+        return src;
+    };
+
+    MVector<u8> arenaTemplatedClasses(arena);
+    arenaTemplatedClasses.assign(classes.size(), 0u);
+    MString syntheticSource = buildSyntheticSource(Span<const u8>(arenaTemplatedClasses.data(), arenaTemplatedClasses.size()));
 
     const MString virtualTuPath = BuildVirtualTuPath(arena);
 
@@ -1520,29 +2221,156 @@ void RunClangTraitProbe(
         InitMethodOutcomes(arena, Span<MethodDecl* const>(ifaces[ii]->methods.data(), ifaces[ii]->methods.size()), io.methods);
         outResult.ifaceOutcomes.push_back(Move(io));
     }
-    outResult.freeFnAllowsUnwind.assign(freeFunctions.size(), 1u);
+    outResult.freeFnOutcomes.resize(freeFunctions.size());
 
     const CXIndex index = ::clang_createIndex(0, 0);
     if(!index)
         return;
 
     CXTranslationUnit tu = nullptr;
-    const unsigned parseFlags = CXTranslationUnit_SkipFunctionBodies
+    const unsigned parseFlags = CXTranslationUnit_PrecompiledPreamble
+        | CXTranslationUnit_SkipFunctionBodies
         | CXTranslationUnit_IgnoreNonErrorsFromIncludedFiles
         | CXTranslationUnit_KeepGoing;
-    const CXErrorCode parseRes = ::clang_parseTranslationUnit2(
-        index,
-        virtualTuPath.c_str(),
-        argPtrs.data(),
-        static_cast<int>(argPtrs.size()),
-        &unsavedFile,
-        1u,
-        parseFlags,
-        &tu
-    );
-    if(parseRes != CXError_Success || !tu){
+    const auto parseVirtualTu = [&]() -> b8{
+        const CXErrorCode res = ::clang_parseTranslationUnit2(
+            index,
+            virtualTuPath.c_str(),
+            argPtrs.data(),
+            static_cast<int>(argPtrs.size()),
+            &unsavedFile,
+            1u,
+            parseFlags,
+            &tu
+        );
+        return res == CXError_Success && tu != nullptr;
+    };
+    if(!parseVirtualTu()){
         ::clang_disposeIndex(index);
         return;
+    }
+
+    const auto scanProbeNamespace = [&](
+        const CXCursor root,
+        MVector<CXCursor>& outClassRecords,
+        MVector<CXCursor>& outIfaceRecords,
+        MVector<u8>& outClassEvaluated,
+        MVector<u64>& outClassFlags
+    ){
+        outClassRecords.assign(classes.size(), CXCursor{});
+        outIfaceRecords.assign(ifaces.size(), CXCursor{});
+        outClassEvaluated.assign(classes.size(), 0u);
+        outClassFlags.assign(classes.size(), 0u);
+
+        const auto tryResolveProbeAliasTarget = [](const CXCursor aliasCursor, const MStringView name, const MStringView prefix, MVector<CXCursor>& outTargets) -> b8{
+            if(!name.starts_with(prefix))
+                return false;
+            u64 idx = 0u;
+            if(LiteralDecoder::TryParseUnsignedIntegerLiteral(name.substr(prefix.size()), idx) && idx < outTargets.size()){
+                const CXType canonical = ::clang_getCanonicalType(::clang_getTypedefDeclUnderlyingType(aliasCursor));
+                const CXCursor rec = ::clang_getTypeDeclaration(canonical);
+                const CXCursor def = ::clang_getCursorDefinition(rec);
+                outTargets[static_cast<usize>(idx)] = ::clang_Cursor_isNull(def) ? rec : def;
+            }
+            return true;
+        };
+
+        MVector<CXCursor> topLevel(arena);
+        VisitDirectChildren(root, topLevel);
+        for(const CXCursor c : topLevel){
+            if(::clang_getCursorKind(c) != CXCursor_Namespace)
+                continue;
+            const MString nsName = ConsumeClangString(arena, ::clang_getCursorSpelling(c));
+            if(nsName != s_TraitProbeNamespace)
+                continue;
+
+            MVector<CXCursor> probeDecls(arena);
+            VisitDirectChildren(c, probeDecls);
+            for(const CXCursor pd : probeDecls){
+                const CXCursorKind pk = ::clang_getCursorKind(pd);
+                const MString pdNameStr = ConsumeClangString(arena, ::clang_getCursorSpelling(pd));
+                const MStringView pdName(pdNameStr.data(), pdNameStr.size());
+
+                if(pk == CXCursor_TypeAliasDecl){
+                    if(tryResolveProbeAliasTarget(pd, pdName, s_TraitProbeClassAliasPrefix, outClassRecords))
+                        continue;
+                    if(tryResolveProbeAliasTarget(pd, pdName, s_TraitProbeIfaceAliasPrefix, outIfaceRecords))
+                        continue;
+                }
+                if(pk == CXCursor_VarDecl && pdName.starts_with(s_TraitProbeFlagVarPrefix)){
+                    u64 idx = 0u;
+                    if(!LiteralDecoder::TryParseUnsignedIntegerLiteral(pdName.substr(s_TraitProbeFlagVarPrefix.size()), idx) || idx >= classes.size())
+                        continue;
+                    CXEvalResult eval = ::clang_Cursor_Evaluate(pd);
+                    if(!eval)
+                        continue;
+                    if(::clang_EvalResult_getKind(eval) == CXEval_Int){
+                        outClassEvaluated[static_cast<usize>(idx)] = 1u;
+                        outClassFlags[static_cast<usize>(idx)] = static_cast<u64>(::clang_EvalResult_getAsUnsigned(eval));
+                    }
+                    ::clang_EvalResult_dispose(eval);
+                }
+            }
+            break;
+        }
+    };
+
+    CXCursor rootCursor = ::clang_getTranslationUnitCursor(tu);
+    MVector<CXCursor> concreteClassRecords(arena);
+    MVector<CXCursor> concreteIfaceRecords(arena);
+    MVector<u8> classEvaluated(arena);
+    MVector<u64> classFlags(arena);
+    scanProbeNamespace(rootCursor, concreteClassRecords, concreteIfaceRecords, classEvaluated, classFlags);
+
+    SymbolIndex symIndex(arena);
+    b8 symIndexPopulated = false;
+
+    if(hasConcreteTemplateCandidateCheck){
+        b8 anyUnresolvedConcrete = false;
+        for(usize ci = 0u; ci < classes.size(); ++ci){
+            if(classEvaluated[ci] == 0u && !isUnparameterizedConcreteClass(*classes[ci]).empty()){
+                anyUnresolvedConcrete = true;
+                break;
+            }
+        }
+        if(anyUnresolvedConcrete){
+            IndexScopeSymbols(arena, rootCursor, {}, false, symIndex);
+            symIndexPopulated = true;
+            b8 reparseNeeded = false;
+            for(usize ci = 0u; ci < classes.size(); ++ci){
+                if(classEvaluated[ci] != 0u)
+                    continue;
+                const MStringView rawCpp = isUnparameterizedConcreteClass(*classes[ci]);
+                if(rawCpp.empty())
+                    continue;
+                const MString normCpp = NormalizeCppQualifiedName(arena, rawCpp);
+                const auto tplIt = symIndex.classTemplates.find(MStringView(normCpp.data(), normCpp.size()));
+                if(tplIt != symIndex.classTemplates.end() && IsSingleRequiredArenaClassTemplate(arena, tplIt->second)){
+                    arenaTemplatedClasses[ci] = 1u;
+                    outResult.classOutcomes[ci].isArenaOwner = true;
+                    reparseNeeded = true;
+                }
+            }
+            if(reparseNeeded){
+                symIndex.classTemplates.clear();
+                symIndex.freeFunctions.clear();
+                symIndex.typeRecords.clear();
+                symIndexPopulated = false;
+                syntheticSource = buildSyntheticSource(Span<const u8>(arenaTemplatedClasses.data(), arenaTemplatedClasses.size()));
+                unsavedFile.Contents = syntheticSource.c_str();
+                unsavedFile.Length = static_cast<unsigned long>(syntheticSource.size());
+                if(::clang_reparseTranslationUnit(tu, 1u, &unsavedFile, ::clang_defaultReparseOptions(tu)) != 0){
+                    ::clang_disposeTranslationUnit(tu);
+                    tu = nullptr;
+                    if(!parseVirtualTu()){
+                        ::clang_disposeIndex(index);
+                        return;
+                    }
+                }
+                rootCursor = ::clang_getTranslationUnitCursor(tu);
+                scanProbeNamespace(rootCursor, concreteClassRecords, concreteIfaceRecords, classEvaluated, classFlags);
+            }
+        }
     }
 
     MString projectRootNorm(arena);
@@ -1561,93 +2389,10 @@ void RunClangTraitProbe(
             outResult.watchedStamps.push_back(Move(stamp));
     }
 
-    MVector<CXCursor> concreteClassRecords(arena);
-    concreteClassRecords.resize(classes.size());
-    MVector<CXCursor> concreteIfaceRecords(arena);
-    concreteIfaceRecords.resize(ifaces.size());
-
-    const auto tryResolveProbeAliasTarget = [](const CXCursor aliasCursor, const MStringView name, const MStringView prefix, MVector<CXCursor>& outTargets) -> b8{
-        if(!name.starts_with(prefix))
-            return false;
-        u64 idx = 0u;
-        if(LiteralDecoder::TryParseUnsignedIntegerLiteral(name.substr(prefix.size()), idx) && idx < outTargets.size()){
-            const CXType canonical = ::clang_getCanonicalType(::clang_getTypedefDeclUnderlyingType(aliasCursor));
-            const CXCursor rec = ::clang_getTypeDeclaration(canonical);
-            const CXCursor def = ::clang_getCursorDefinition(rec);
-            outTargets[static_cast<usize>(idx)] = ::clang_Cursor_isNull(def) ? rec : def;
-        }
-        return true;
-    };
-
-    const CXCursor rootCursor = ::clang_getTranslationUnitCursor(tu);
-    MVector<CXCursor> topLevel(arena);
-    VisitDirectChildren(rootCursor, topLevel);
-
-    for(const CXCursor c : topLevel){
-        if(::clang_getCursorKind(c) != CXCursor_Namespace)
-            continue;
-        const MString nsName = ConsumeClangString(arena, ::clang_getCursorSpelling(c));
-        if(nsName != s_TraitProbeNamespace)
-            continue;
-
-        MVector<CXCursor> probeDecls(arena);
-        VisitDirectChildren(c, probeDecls);
-        for(const CXCursor pd : probeDecls){
-            const CXCursorKind pk = ::clang_getCursorKind(pd);
-            const MString pdNameStr = ConsumeClangString(arena, ::clang_getCursorSpelling(pd));
-            const MStringView pdName(pdNameStr.data(), pdNameStr.size());
-
-            if(pk == CXCursor_TypeAliasDecl){
-                if(tryResolveProbeAliasTarget(pd, pdName, s_TraitProbeClassAliasPrefix, concreteClassRecords))
-                    continue;
-                if(tryResolveProbeAliasTarget(pd, pdName, s_TraitProbeIfaceAliasPrefix, concreteIfaceRecords))
-                    continue;
-            }
-            if(pk == CXCursor_VarDecl && pdName.starts_with(s_TraitProbeFlagVarPrefix)){
-                u64 idx = 0u;
-                if(!LiteralDecoder::TryParseUnsignedIntegerLiteral(pdName.substr(s_TraitProbeFlagVarPrefix.size()), idx) || idx >= classes.size())
-                    continue;
-                CXEvalResult eval = ::clang_Cursor_Evaluate(pd);
-                if(!eval)
-                    continue;
-                if(::clang_EvalResult_getKind(eval) == CXEval_Int){
-                    const u64 flags = static_cast<u64>(::clang_EvalResult_getAsUnsigned(eval));
-                    CachedClassOutcome& co = outResult.classOutcomes[static_cast<usize>(idx)];
-                    if((flags & s_ProbeFlagResolvedComplete) != 0u){
-                        co.resolved = true;
-                        co.isAbstract = (flags & s_ProbeFlagAbstract) != 0u;
-                        co.isPolymorphicBase = (flags & s_ProbeFlagPolymorphicBase) != 0u;
-                        co.isEmptyBase = (flags & s_ProbeFlagEmptyBase) != 0u;
-                        co.isCopyConstructible = (flags & s_ProbeFlagCopyConstructible) != 0u;
-                        co.isCopyAssignable = (flags & s_ProbeFlagCopyAssignable) != 0u;
-                        co.isSelfDefaulted = (flags & s_ProbeFlagSelfDefaulted) != 0u;
-                        co.isNothrowDefaultConstructible = (flags & s_ProbeFlagNothrowDefault) != 0u;
-                        co.isMoveConstructible = (flags & s_ProbeFlagMoveConstructible) != 0u;
-                        co.isMoveAssignable = (flags & s_ProbeFlagMoveAssignable) != 0u;
-                    }
-                    else if((flags & s_ProbeFlagResolvedIncomplete) != 0u){
-                        co.resolved = true;
-                        co.isAbstract = false;
-                        co.isPolymorphicBase = false;
-                        co.isEmptyBase = false;
-                        co.isCopyConstructible = false;
-                        co.isCopyAssignable = false;
-                        co.isMoveConstructible = false;
-                        co.isMoveAssignable = false;
-                        co.isSelfDefaulted = false;
-                        co.isNothrowDefaultConstructible = false;
-                    }
-                }
-                ::clang_EvalResult_dispose(eval);
-            }
-        }
-        break;
-    }
-
-    SymbolIndex symIndex(arena);
-    if(needsTemplateWalk)
+    if(needsTemplateWalk && !symIndexPopulated)
         IndexScopeSymbols(arena, rootCursor, {}, false, symIndex);
 
+    HashSet<CursorKey, MetaArena, CursorKeyHash> fieldVisited(arena);
     for(usize ci = 0u; ci < classes.size(); ++ci){
         const ClassDecl* cls = classes[ci];
         CachedClassOutcome& co = outResult.classOutcomes[ci];
@@ -1661,8 +2406,49 @@ void RunClangTraitProbe(
                 const CXCursor unwrapped = UnwrapToRecordOrClassTemplate(arena, tplIt->second);
                 if(!::clang_Cursor_isNull(unwrapped)){
                     recCursor = unwrapped;
-                    DeduceClassTemplateTraits(arena, unwrapped, cls->usesArenaCtor(), co);
+                    DeduceClassTemplateTraits(arena, unwrapped, co);
                 }
+            }
+        }
+        else if(classEvaluated[ci] != 0u){
+            const u64 flags = classFlags[ci];
+            if((flags & s_ProbeFlagResolvedComplete) != 0u){
+                co.resolved = true;
+                co.isAbstract = (flags & s_ProbeFlagAbstract) != 0u;
+                co.isPolymorphicBase = (flags & s_ProbeFlagPolymorphicBase) != 0u;
+                co.isEmptyBase = (flags & s_ProbeFlagEmptyBase) != 0u;
+                co.isCopyConstructible = (flags & s_ProbeFlagCopyConstructible) != 0u;
+                co.isCopyAssignable = (flags & s_ProbeFlagCopyAssignable) != 0u;
+                co.isMoveConstructible = (flags & s_ProbeFlagMoveConstructible) != 0u;
+                co.isMoveAssignable = (flags & s_ProbeFlagMoveAssignable) != 0u;
+                co.isSmallValue = (flags & s_ProbeFlagSmallValue) != 0u;
+                co.isEqualitySwitch = (flags & s_ProbeFlagEqualitySwitch) != 0u;
+
+                co.arenaCtorMode = ((flags & s_ProbeFlagLeadingArenaTag) != 0u)
+                    ? ArenaCtorMode::First
+                    : DeduceRecordArenaCtorMode(arena, recCursor, co.isArenaOwner);
+                const b8 usesArenaCtor = (co.isArenaOwner && co.arenaCtorMode != ArenaCtorMode::Omit) || co.arenaCtorMode == ArenaCtorMode::First;
+                const b8 hasZeroDefault = (flags & s_ProbeFlagZeroDefault) != 0u;
+                const b8 hasNothrowZeroDefault = (flags & s_ProbeFlagNothrowZeroDefault) != 0u;
+                const b8 hasArenaDefault = (flags & s_ProbeFlagArenaDefault) != 0u;
+                const b8 hasNothrowArenaDefault = (flags & s_ProbeFlagNothrowArenaDefault) != 0u;
+
+                co.isSelfDefaulted = !co.isAbstract && ((usesArenaCtor && hasArenaDefault) || hasZeroDefault);
+                co.isNothrowDefaultConstructible = !co.isAbstract && ((usesArenaCtor && hasArenaDefault)
+                    ? hasNothrowArenaDefault
+                    : (hasZeroDefault && hasNothrowZeroDefault));
+                co.emitsBraceFieldInit = !co.isAbstract && hasZeroDefault && !usesArenaCtor;
+
+                if((flags & s_ProbeFlagBinarySerializable) != 0u){
+                    fieldVisited.clear();
+                    co.isBinarySerializable = !HasPointerOrReferenceFieldRecursive(arena, recCursor, fieldVisited);
+                }
+                else{
+                    co.isBinarySerializable = false;
+                }
+            }
+            else if((flags & s_ProbeFlagResolvedIncomplete) != 0u){
+                co.resetIncomplete();
             }
         }
 
@@ -1716,18 +2502,11 @@ void RunClangTraitProbe(
         }
 
         if(!cands || cands->empty()){
-            outResult.freeFnAllowsUnwind[fi] = 1u;
+            outResult.freeFnOutcomes[fi] = CachedFreeFunctionOutcome{};
             continue;
         }
 
-        MVector<const CppCallableCandidate*> rawCands(arena);
-        rawCands.reserve(cands->size());
-        for(const CppCallableCandidate& cand : *cands)
-            rawCands.push_back(&cand);
-
-        MVector<const CppCallableCandidate*> matched(arena);
-        SelectArityMatchedCandidates(arena, Span<const CppCallableCandidate* const>(rawCands.data(), rawCands.size()), *fn, matched);
-        outResult.freeFnAllowsUnwind[fi] = AnyCandidateAllowsUnwind(Span<const CppCallableCandidate* const>(matched.data(), matched.size())) ? 1u : 0u;
+        ResolveFreeFunctionOutcome(arena, Span<const CppCallableCandidate>(cands->data(), cands->size()), *fn, outResult.freeFnOutcomes[fi]);
     }
 
     ::clang_disposeTranslationUnit(tu);
@@ -1819,6 +2598,10 @@ void StoreInMemoryCache(TraitResolutionMemoryCache& memCache, const MStringView 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+u32 CppExternTraitResolver::SchemaVersion()noexcept{
+    return __hidden_cpp_extern_trait_resolver::s_ExternTraitCacheVersion;
+}
 
 void CppExternTraitResolver::ResolveTranslationUnitTraits(
     const CppExternTraitResolveOptions& options,

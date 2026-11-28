@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferAttachment"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferAttachment")]
 extern class FramebufferAttachment{
     TextureSubresourceSet subresources;
     Format format;
@@ -17,7 +17,7 @@ extern class FramebufferAttachment{
     FramebufferAttachment setTexture(...);
 };
 
-[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferDesc"), cpp_flags(binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferDesc")]
 extern class FramebufferDesc{
     FramebufferAttachment depthAttachment;
     FramebufferAttachment shadingRateAttachment;
@@ -26,7 +26,7 @@ extern class FramebufferDesc{
     FramebufferDesc setDepthAttachment(...);
 };
 
-[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferHandle"), cpp_flags(brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferHandle")]
 extern class FramebufferHandle{
     FramebufferPtr get()const;
     b8 valid(...)const;
@@ -34,7 +34,7 @@ extern class FramebufferHandle{
     mut Framebuffer deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferInfo"), cpp_flags(binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferInfo")]
 extern class FramebufferInfo{
     u32 sampleCount;
     u32 sampleQuality;
@@ -44,7 +44,7 @@ extern class FramebufferInfo{
     FramebufferInfo setDepthFormat(...);
 };
 
-[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferInfoEx"), cpp_flags(binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/graphics/rhi/framebuffer.h>"), cpp_name("::NWB::Core::FramebufferInfoEx")]
 extern class FramebufferInfoEx{
     u32 width;
     u32 height;

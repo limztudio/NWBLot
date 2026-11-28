@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest"), cpp_flags(binary_serializable, brace_init, equality_switch)]
+[cpp_header("<global/sha256.h>"), cpp_name("::Sha256Digest")]
 extern class Sha256Digest{
     Array<u8, 32u> bytes;
 };
@@ -11,7 +11,7 @@ extern class Sha256Digest{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/sha256.h>"), cpp_name("::ComputeSha256"), cpp_flags(byte_view_arg0)]
+[cpp_header("<global/sha256.h>"), cpp_name("::ComputeSha256")]
 extern Sha256Digest ComputeSha256(in auto a0);
 
 [cpp_header("<global/sha256.h>"), cpp_name("::ParseSha256")]

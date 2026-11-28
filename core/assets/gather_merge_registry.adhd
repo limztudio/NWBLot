@@ -8,7 +8,7 @@ extern class BinaryUpdateContext{
 };
 
 
-[cpp_header("<core/assets/gather_merge_registry.h>"), cpp_name("::NWB::Core::Assets::AssetGatherMergeAutoRegistrar"), cpp_flags(small_value, binary_serializable)]
+[cpp_header("<core/assets/gather_merge_registry.h>"), cpp_name("::NWB::Core::Assets::AssetGatherMergeAutoRegistrar")]
 extern class AssetGatherMergeAutoRegistrar;
 
 

@@ -44,7 +44,7 @@ ClassDecl* DeclParser::parseClassDecl(const SourceSpan span, const Span<const Pa
         if(!matchedAttr && !tryParseExternClassAttribute(attr, *decl, isExtern, seenExternFlags, matchedAttr))
             return nullptr;
 #define NWB_ADHD_EXPORT_CLASS_FLAG_ATTRIBUTE(attrName, declField) \
-        if(!matchedAttr && attr.name == attrName && attr.arguments.empty()){ \
+        if(!matchedAttr && !isExtern && attr.name == attrName && attr.arguments.empty()){ \
             decl->declField = true; \
             if(attr.name == "arena"){ seenExplicitArena = true; explicitArenaSpan = { attr.line, attr.column }; } \
             if(attr.name == "reflect"){ seenExplicitReflect = true; explicitReflectSpan = { attr.line, attr.column }; } \
@@ -175,15 +175,8 @@ b8 DeclParser::tryParseExternClassAttribute(const ParsedAttribute& attr, ClassDe
                 return false;
             }
             switch(flagKind){
-            case ExternTypeFlagKind::SmallValue:         outClass.isSmallValue = true; break;
             case ExternTypeFlagKind::BorrowView:         outClass.isBorrowView = true; break;
-            case ExternTypeFlagKind::BinarySerializable: outClass.isBinarySerializable = true; break;
-            case ExternTypeFlagKind::BraceInit:          outClass.emitsBraceFieldInit = true; break;
-            case ExternTypeFlagKind::EqualitySwitch:     outClass.isEqualitySwitch = true; break;
             case ExternTypeFlagKind::NonThreadSafe:      outClass.isNonThreadSafeContainer = true; break;
-            case ExternTypeFlagKind::MapKey:             outClass.isNwbMapKey = true; break;
-            case ExternTypeFlagKind::ArenaFirstCtor:     outClass.arenaCtorMode = ArenaCtorMode::First; break;
-            case ExternTypeFlagKind::ArenaOmitCtor:      outClass.arenaCtorMode = ArenaCtorMode::Omit; break;
             default: break;
             }
         }
@@ -318,22 +311,11 @@ b8 DeclParser::parseClassMember(ClassDecl& classDecl){
         return false;
     }
 
-    b8 isMemberStatic = false;
-    b8 isMemberExtern = classDecl.isExtern;
-    if(classDecl.isExtern){
-        b8 seenExternKeyword = false;
-        for(;;){
-            if(!isMemberStatic && m_cursor.matchIdentifier(KeywordSemantics::s_Static)){
-                isMemberStatic = true;
-                continue;
-            }
-            if(!seenExternKeyword && m_cursor.matchIdentifier(KeywordSemantics::s_Extern)){
-                seenExternKeyword = true;
-                isMemberExtern = true;
-                continue;
-            }
-            break;
-        }
+    const b8 isMemberStatic = classDecl.isExtern && m_cursor.matchIdentifier(KeywordSemantics::s_Static);
+    const b8 isMemberExtern = classDecl.isExtern;
+    if(classDecl.isExtern && m_cursor.checkIdentifier(KeywordSemantics::s_Extern)){
+        m_cursor.error("redundant 'extern' keyword is prohibited on members inside an 'extern class'");
+        return false;
     }
 
     if(m_cursor.check(TokenType::Identifier)){

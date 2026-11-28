@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/text_log_payload_builder.h>"), cpp_name("::NWB::Core::Telemetry::TextLogPayloadBuilder"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/text_log_payload_builder.h>"), cpp_name("::NWB::Core::Telemetry::TextLogPayloadBuilder")]
 extern class TextLogPayloadBuilder;
 
 

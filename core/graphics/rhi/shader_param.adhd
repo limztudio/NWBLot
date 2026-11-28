@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/shader_param.h>"), cpp_name("::NWB::Core::IndirectArgs"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/shader_param.h>"), cpp_name("::NWB::Core::IndirectArgs")]
 extern class IndirectArgs{
     u32 clusterCount;
     u32 clusterReferencesStride;
     u64 clusterAddresses;
 };
 
-[cpp_header("<core/graphics/rhi/shader_param.h>"), cpp_name("::NWB::Core::IndirectInstanceDesc"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/shader_param.h>"), cpp_name("::NWB::Core::IndirectInstanceDesc")]
 extern class IndirectInstanceDesc{
     Array<f32x4, 3> transform;
     u32 instanceID;

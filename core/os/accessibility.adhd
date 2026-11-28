@@ -81,7 +81,7 @@ extern enum AccessibilityActionKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityCapabilities"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityCapabilities")]
 extern class AccessibilityCapabilities{
     b8 tree;
     b8 announcements;
@@ -89,7 +89,7 @@ extern class AccessibilityCapabilities{
     AccessibilityBackend backend;
 };
 
-[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityNodeData"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityNodeData")]
 extern class AccessibilityNodeData{
     u64 id;
     u64 parentId;
@@ -116,7 +116,7 @@ extern class AccessibilityNodeData{
     i32 level;
 };
 
-[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionEvent"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/accessibility.h>"), cpp_name("::NWB::Core::AccessibilityActionEvent")]
 extern class AccessibilityActionEvent{
     u64 targetId;
     AccessibilityActionKind kind;

@@ -70,7 +70,7 @@ extern class CompilerTranslationUnit{
     HeapStorageVector<GlobalString> resolvedIncludedFiles;
 };
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeArg"), cpp_flags(brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::TypeArg")]
 extern class CompilerTypeArg{
     StringView constantText;
 };
@@ -84,20 +84,20 @@ extern class CompilerTypeRef{
 [cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SymbolTable")]
 extern class CompilerSymbolTable;
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SourceSpan"), cpp_flags(brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::SourceSpan")]
 extern class CompilerSourceSpan{
     u32 line;
     u32 column;
 };
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ImportedCppHeader"), cpp_flags(brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::ImportedCppHeader")]
 extern class CompilerImportedCppHeader{
     StringView headerPath;
     b8 isSystemHeader;
     CompilerSourceSpan span;
 };
 
-[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImportOptions"), cpp_flags(brace_init)]
+[cpp_header("<tests/unit/metascript/compiler_access.h>"), cpp_name("::NWB::Core::Metascript::Adhd::CppHeaderImportOptions")]
 extern class CompilerCppHeaderImportOptions{
     Span<CompilerImportedCppHeader> headers;
 };

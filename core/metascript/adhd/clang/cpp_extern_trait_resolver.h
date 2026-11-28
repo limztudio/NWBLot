@@ -37,6 +37,8 @@ namespace CppExternTraitResolver{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] u32 SchemaVersion()noexcept;
+
 void ResolveTranslationUnitTraits(
     const CppExternTraitResolveOptions& options,
     MetaArena& arena,

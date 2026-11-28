@@ -14,20 +14,20 @@ extern class FrameGraphBuilder{
     u64 frameIndex(...)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeHandle"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphNodeHandle")]
 extern class FrameGraphNodeHandle{
     u32 index;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPassMetadata"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPassMetadata")]
 extern class FrameGraphPassMetadata{
     FrameGraphQueueAssignment queueAssignment;
     FrameGraphCompiledTask compiledTask;
     FrameGraphRuntimeStatistics runtimeStatistics;
 };
 
-[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdge"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/frame_graph_contributor.h>"), cpp_name("::NWB::Core::Telemetry::FrameGraphPendingNameEdge")]
 extern class FrameGraphPendingNameEdge{
     Name toName;
     u32 fromNodeIndex;

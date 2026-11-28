@@ -2,22 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::SIMDVectorConstF"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_name("::SIMDVectorConstF")]
 extern class SIMDVectorConstF{
     VectorSingle v;
 };
 
-[cpp_name("::SIMDVectorConstI"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_name("::SIMDVectorConstI")]
 extern class SIMDVectorConstI{
     VectorSingle v;
 };
 
-[cpp_name("::SIMDVectorDoubleConstF"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::SIMDVectorDoubleConstF")]
 extern class SIMDVectorDoubleConstF{
     VectorDouble v;
 };
 
-[cpp_name("::SIMDVectorDoubleConstI"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::SIMDVectorDoubleConstI")]
 extern class SIMDVectorDoubleConstI{
     VectorDouble v;
 };

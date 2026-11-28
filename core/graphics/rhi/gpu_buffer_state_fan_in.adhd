@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/gpu_buffer_state_fan_in.h>"), cpp_name("::NWB::Core::GpuBufferStateFanIn"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/gpu_buffer_state_fan_in.h>"), cpp_name("::NWB::Core::GpuBufferStateFanIn")]
 extern class GpuBufferStateFanIn;
 
 

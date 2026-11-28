@@ -11,7 +11,7 @@ extern class AssetByteBuffer{
     mut u8 operator[](in usize index);
 };
 
-[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::AssetManager"), cpp_flags(binary_serializable)]
+[cpp_header("<core/assets/manager.h>"), cpp_name("::NWB::Core::Assets::AssetManager")]
 extern class AssetManager{
     Expected<UniquePtr<IAsset>> loadSync(...)const;
 };

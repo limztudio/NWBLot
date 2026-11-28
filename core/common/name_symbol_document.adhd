@@ -2,16 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocument"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocument")]
 extern class NameSymbolDocument;
 
-[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocumentRecord"), cpp_flags(brace_init)]
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocumentRecord")]
 extern class NameSymbolDocumentRecord{
     NameHash hash;
     String text;
 };
 
-[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocumentView"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/common/name_symbol_document.h>"), cpp_name("::NWB::Core::Common::NameSymbolDocumentView")]
 extern class NameSymbolDocumentView{
     NameHash hash;
     StringView text;

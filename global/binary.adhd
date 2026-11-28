@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/binary.h>"), cpp_name("::BinaryByteView"), cpp_flags(brace_init)]
+[cpp_header("<global/binary.h>"), cpp_name("::BinaryByteView")]
 extern class BinaryByteView{
     usize byteCount;
     u8 operator[](in usize index)const;
@@ -94,10 +94,10 @@ extern b8 CanStoreValueCount(in auto a0, in isize a1);
 [cpp_name("::ComputeBinaryVectorPayloadBytes")]
 extern Expected<usize, BinaryVectorPayloadFailure> ComputeBinaryVectorPayloadBytes<T>(in isize a0);
 
-[cpp_name("::FindBinaryTextOffset"), cpp_flags(byte_view_arg0)]
+[cpp_name("::FindBinaryTextOffset")]
 extern Expected<usize> FindBinaryTextOffset(in Span<u8> a0, in StringView a1);
 
-[cpp_name("::ReadBinaryTextSlice"), cpp_flags(borrow_view, byte_view_arg0)]
+[cpp_name("::ReadBinaryTextSlice"), cpp_flags(borrow_view)]
 extern Expected<StringView> ReadBinaryTextSlice(in Span<u8> a0, in isize a1, in isize a2);
 
 [cpp_name("::ReadBinaryVectorPayload")]

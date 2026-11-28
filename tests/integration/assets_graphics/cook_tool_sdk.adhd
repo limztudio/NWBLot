@@ -92,7 +92,7 @@ extern class NwbFileAssetCacheRecord{
     b8 loadedFromCache;
     b8 canWriteCache;
 };
-[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetFileHeader"), cpp_flags(binary_serializable)]
+[cpp_header("<core/assets/built_asset_format.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetFileHeader")]
 extern class BuiltAssetFileHeader{
     u32 magic;
     u16 version;

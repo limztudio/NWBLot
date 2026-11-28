@@ -80,7 +80,7 @@ extern class ITextInputService{
     TextInputAdmission updateSurrounding(...);
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputCapabilities"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputCapabilities")]
 extern class TextInputCapabilities{
     b8 commit;
     b8 preedit;
@@ -98,14 +98,14 @@ extern enum TextInputPreeditClauseStyle : u8{
     kCount
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputPreeditClause"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputPreeditClause")]
 extern class TextInputPreeditClause{
     usize beginByte;
     usize endByte;
     TextInputPreeditClauseStyle style;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent"), cpp_flags(arena_first_ctor)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputEvent")]
 extern class TextInputEvent{
     String text;
     Vector<TextInputPreeditClause> preeditClauses;
@@ -122,7 +122,7 @@ extern class TextInputEvent{
     TextInputDeletionBasis deletionBasis;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputRect"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputRect")]
 extern class TextInputRect{
     i32 x;
     i32 y;
@@ -130,7 +130,7 @@ extern class TextInputRect{
     i32 height;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionDesc"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionDesc")]
 extern class TextInputSessionDesc{
     TextInputRect caret;
     StringView surrounding;
@@ -138,7 +138,7 @@ extern class TextInputSessionDesc{
     usize caretByte;
 };
 
-[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionToken"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/os/text_input.h>"), cpp_name("::NWB::Core::TextInputSessionToken")]
 extern class TextInputSessionToken{
     u64 service;
     u64 generation;

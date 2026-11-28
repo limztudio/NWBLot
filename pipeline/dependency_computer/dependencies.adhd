@@ -254,7 +254,7 @@ b8 WriteDependencyListOutput(in StringView outputPathText, in StringView encoded
         return false;
     if(!EnsureDirectories(output.value().parentPath()).has_value())
         return false;
-    return WriteTextFileAtomic(output.value(), encodedListText);
+    return StagedFileWriter(output.value()).writeTextAtomic(encodedListText);
 }
 
 void LogUnrepresentableDependencyList(){

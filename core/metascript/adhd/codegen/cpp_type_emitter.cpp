@@ -214,7 +214,8 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type, const b8 ign
     }
     if(m_symbols.hasTypeSymbol(name)){
         MStringView cppExport;
-        if(const ClassDecl* cls = m_symbols.findClass(name))
+        const ClassDecl* cls = m_symbols.findClass(name);
+        if(cls)
             cppExport = cls->cppExportName;
         else if(const TypeAliasDecl* aliasDecl = m_symbols.findTypeAlias(name))
             cppExport = aliasDecl->cppExportName;
@@ -224,6 +225,11 @@ void CppTypeEmitter::emitTypeCpp(MString& out, const TypeRef& type, const b8 ign
             out.append(cppExport.data(), cppExport.size());
         else
             appendQualifiedName(out, m_symbols.findTypeNamespace(name), name);
+        if(cls && cls->isExtern && cls->isArenaOwner && type.templateArgs.empty() && cls->templateParams.empty()){
+            out.push_back('<');
+            out.append(BuiltinTypeSemantics::ArenaBaseCppName().data(), BuiltinTypeSemantics::ArenaBaseCppName().size());
+            out.push_back('>');
+        }
         if(!type.templateArgs.empty())
             emitTypeArgListCpp(out, type.templateArgs);
         return;

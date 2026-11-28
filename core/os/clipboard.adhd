@@ -42,13 +42,13 @@ extern enum ClipboardStatus : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCapabilities"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCapabilities")]
 extern class ClipboardCapabilities{
     b8 readText;
     b8 writeText;
 };
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion"), cpp_flags(arena_first_ctor)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardCompletion")]
 extern class ClipboardCompletion{
     String text;
     ClipboardRequestToken token;
@@ -57,7 +57,7 @@ extern class ClipboardCompletion{
     ClipboardStatus status;
 };
 
-[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardRequestToken"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch)]
+[cpp_header("<core/os/clipboard.h>"), cpp_name("::NWB::Core::ClipboardRequestToken")]
 extern class ClipboardRequestToken{
     u64 service;
     u64 generation;

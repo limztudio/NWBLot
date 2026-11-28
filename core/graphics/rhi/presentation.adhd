@@ -28,7 +28,7 @@ extern enum SwapChainTransitionKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::AcquiredBackBuffer"), cpp_flags(brace_init)]
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::AcquiredBackBuffer")]
 extern class AcquiredBackBuffer{
     TextureHandle texture;
     QueueSubmissionToken availabilityCompletion;
@@ -37,14 +37,14 @@ extern class AcquiredBackBuffer{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::AcquiredPresentationFrame"), cpp_flags(brace_init)]
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::AcquiredPresentationFrame")]
 extern class AcquiredPresentationFrame{
     AcquiredBackBuffer backBuffer;
     FramebufferHandle framebuffer;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::BeginFrameResult"), cpp_flags(brace_init)]
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::BeginFrameResult")]
 extern class BeginFrameResult{
     AcquiredBackBuffer backBuffer;
     u32 suggestedWidth;
@@ -53,12 +53,12 @@ extern class BeginFrameResult{
     b8 acquired(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationFailure"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationFailure")]
 extern class PresentationFailure{
     b8 presentationAccepted;
 };
 
-[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationReceipt"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::PresentationReceipt")]
 extern class PresentationReceipt{
     QueueSubmissionToken availabilityCompletion;
     ResourceStates nativeInitialState;
@@ -70,7 +70,7 @@ extern class PresentationReceipt{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::SwapChainTransitionTicket"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/presentation.h>"), cpp_name("::NWB::Core::SwapChainTransitionTicket")]
 extern class SwapChainTransitionTicket{
     u64 epoch;
     SwapChainTransitionKind kind;

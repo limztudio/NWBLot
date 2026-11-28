@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/compiler_ownership_validator.h>"), cpp_name("::NWB::Core::GpuTaskGraphOwnershipValidator"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiler_ownership_validator.h>"), cpp_name("::NWB::Core::GpuTaskGraphOwnershipValidator")]
 extern class GpuTaskGraphOwnershipValidator;
 
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/perf/report.h>"), cpp_name("::NWB::Core::Perf::CaptureOptions"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/perf/report.h>"), cpp_name("::NWB::Core::Perf::CaptureOptions")]
 extern class PerfCaptureOptions{
     b8 enabled;
     b8 cpuTiming;
@@ -13,7 +13,7 @@ extern class PerfCaptureOptions{
     b8 memoryActive(...)const;
 };
 
-[cpp_header("<core/perf/report.h>"), cpp_name("::NWB::Core::Perf::SessionReport"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/perf/report.h>"), cpp_name("::NWB::Core::Perf::SessionReport")]
 extern class SessionReport{
     u64 frameIndex;
     TimingView cpuTiming;

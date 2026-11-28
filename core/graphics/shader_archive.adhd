@@ -34,7 +34,7 @@ extern b8 WriteShaderArchiveIndex(mut BinaryUpdateContext context, in Span<Recor
 [cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::SerializeIndex")]
 extern Expected<Vector<u8>> SerializeIndex(in auto a0, mut auto a1, mut auto a2);
 
-[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::DeserializeIndex"), cpp_flags(byte_view_arg1)]
+[cpp_header("<core/graphics/shader_archive.h>"), cpp_name("::NWB::Core::ShaderArchive::DeserializeIndex")]
 extern Expected<Vector<Record>> DeserializeIndex(mut auto a0, in auto a1);
 
 

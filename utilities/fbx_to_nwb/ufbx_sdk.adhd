@@ -2,20 +2,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_vec2"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_vec2")]
 extern class UfbxVec2{
     f64 x;
     f64 y;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_vec3"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_vec3")]
 extern class UfbxVec3{
     f64 x;
     f64 y;
     f64 z;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_vec4"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_vec4")]
 extern class UfbxVec4{
     f64 x;
     f64 y;
@@ -23,7 +23,7 @@ extern class UfbxVec4{
     f64 w;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_matrix"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_matrix")]
 extern class UfbxMatrix{
     f64 m00;
     f64 m01;
@@ -39,24 +39,24 @@ extern class UfbxMatrix{
     f64 m23;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_face"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_face")]
 extern class UfbxFace{
     u32 num_indices;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_skin_vertex"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_skin_vertex")]
 extern class UfbxSkinVertex{
     u32 weight_begin;
     u32 num_weights;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_skin_weight"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_skin_weight")]
 extern class UfbxSkinWeight{
     u32 cluster_index;
     f64 weight;
 };
 
-[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Node"), cpp_flags(small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Node")]
 extern class UfbxNode{
     b8 valid()const;
     usize identity()const;
@@ -66,14 +66,14 @@ extern class UfbxNode{
     in UfbxMatrix geometryToWorld()const;
 };
 
-[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Cluster"), cpp_flags(small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Cluster")]
 extern class UfbxCluster{
     b8 valid()const;
     UfbxNode bone()const;
     in UfbxMatrix geometryToBone()const;
 };
 
-[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Skin"), cpp_flags(small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Skin")]
 extern class UfbxSkin{
     b8 valid()const;
     usize clusterCount()const;
@@ -84,7 +84,7 @@ extern class UfbxSkin{
     UfbxSkinWeight weight(in usize index)const;
 };
 
-[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Mesh"), cpp_flags(small_value, brace_init)]
+[cpp_header("<utilities/fbx_to_nwb/ufbx_sdk.h>"), cpp_name("::NWB::FbxToNwb::Ufbx::Mesh")]
 extern class UfbxMesh{
     b8 valid()const;
     StringView name()const;
@@ -115,18 +115,18 @@ extern class UfbxMesh{
     UfbxVec4 color(in u32 corner)const;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_coordinate_axes"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_coordinate_axes")]
 extern class UfbxAxes{
     UfbxAxis right;
     UfbxAxis up;
     UfbxAxis front;
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_error"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_error")]
 extern class UfbxError{
 };
 
-[cpp_header("<ufbx.h>"), cpp_name("::ufbx_load_opts"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<ufbx.h>"), cpp_name("::ufbx_load_opts")]
 extern class UfbxLoadOptions{
     b8 load_external_files;
     b8 ignore_missing_external_files;

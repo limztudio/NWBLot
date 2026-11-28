@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScheduler"), cpp_flags(brace_init)]
+[cpp_header("<core/task/cpu/scheduler.h>"), cpp_name("::NWB::Core::CpuTaskScheduler")]
 extern class CpuTaskScheduler{
     CpuAffinity currentWorkerAffinity(...)const;
     usize currentWorkerIndex(...)const;

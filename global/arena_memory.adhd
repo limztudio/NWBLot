@@ -18,20 +18,20 @@ extern enum ArenaMemorySource : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::ArenaMemoryOwnerIdentity"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::ArenaMemoryOwnerIdentity")]
 extern class ArenaMemoryOwnerIdentity{
     Name ownerName;
     ArenaMemorySource source;
 };
 
-[cpp_name("::ArenaMemoryOwnerSnapshot"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::ArenaMemoryOwnerSnapshot")]
 extern class ArenaMemoryOwnerSnapshot{
     Name ownerName;
     ArenaMemorySource source;
     ArenaMemoryStats stats;
 };
 
-[cpp_name("::ArenaMemoryStats"), cpp_flags(binary_serializable, brace_init)]
+[cpp_name("::ArenaMemoryStats")]
 extern class ArenaMemoryStats{
     u64 allocationCount;
     u64 deallocationCount;
@@ -41,7 +41,7 @@ extern class ArenaMemoryStats{
     u64 usedBytes;
 };
 
-[cpp_name("::ArenaMemoryTracker"), cpp_flags(brace_init)]
+[cpp_name("::ArenaMemoryTracker")]
 extern class ArenaMemoryTracker{
     void addReservedBytes(...);
     Name ownerName(...)const;

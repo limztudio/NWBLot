@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/call_text.h>"), cpp_name("::CallTextParts"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<global/call_text.h>"), cpp_name("::CallTextParts")]
 extern class CallTextParts{
     StringView arguments;
     StringView name;

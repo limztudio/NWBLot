@@ -23,7 +23,7 @@ extern class CookDependencyAccess{
 extern Expected<b8, NameTextError> HasAssetBunchDeclaration(in MetascriptDocument document);
 [cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::HasCompositeAssetDeclarations")]
 extern Expected<b8, NameTextError> HasCompositeAssetDeclarations(in MetascriptDocument document);
-[cpp_header("<pipeline/dependency_computer/dependency_workspace.h>"), cpp_name("::NWB::Pipeline::EncodeCookInputPaths"), cpp_flags(scratch_arena)]
+[cpp_header("<pipeline/dependency_computer/dependency_workspace.h>"), cpp_name("::NWB::Pipeline::EncodeCookInputPaths")]
 extern Expected<String> EncodeCookInputPaths(in Vector<String> inputs);
 
 

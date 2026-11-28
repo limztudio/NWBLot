@@ -100,7 +100,7 @@ extern enum StencilOp : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendState"), cpp_flags(binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendState")]
 extern class BlendState{
     b8 alphaToCoverageEnable;
     Array<BlendStateRenderTarget, 8> targets;
@@ -108,7 +108,7 @@ extern class BlendState{
     b8 usesConstantColor(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendState::RenderTarget"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::BlendState::RenderTarget")]
 extern class BlendStateRenderTarget{
     BlendFactor srcBlend;
     BlendFactor destBlend;
@@ -129,7 +129,7 @@ extern class BlendStateRenderTarget{
     b8 usesConstantColor()const;
 };
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::DepthStencilState"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::DepthStencilState")]
 extern class DepthStencilState{
     b8 depthTestEnable;
     b8 depthWriteEnable;
@@ -148,7 +148,7 @@ extern class DepthStencilState{
     DepthStencilState setDepthWriteEnable(...);
 };
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::RasterState"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::RasterState")]
 extern class RasterState{
     RasterFillMode fillMode;
     RasterCullMode cullMode;
@@ -163,7 +163,7 @@ extern class RasterState{
     RasterState setCullNone(...);
 };
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerDesc"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerDesc")]
 extern class SamplerDesc{
     Color borderColor;
     f32 maxAnisotropy;
@@ -179,14 +179,14 @@ extern class SamplerDesc{
     SamplerDesc setAllFilters(...);
 };
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerHandle"), cpp_flags(brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::SamplerHandle")]
 extern class SamplerHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut RhiSampler deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ViewportState"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/pipeline_state.h>"), cpp_name("::NWB::Core::ViewportState")]
 extern class ViewportState{
     FixedVector<Viewport, 16> viewports;
     FixedVector<Rect, 16> scissorRects;

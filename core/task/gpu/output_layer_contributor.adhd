@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphOutputLayer"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/output_layer_contributor.h>"), cpp_name("::NWB::Core::GpuTaskGraphOutputLayer")]
 extern class GpuTaskGraphOutputLayer{
     GpuTaskId readyTask;
     GpuGraphResourceId color;

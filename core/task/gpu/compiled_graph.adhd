@@ -31,7 +31,7 @@ extern enum GpuTaskPacketizationDecision : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExport"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExport")]
 extern class GpuCompiledExternalResourceExport{
     GpuGraphResourceId resource;
     GpuTaskId producerTask;
@@ -42,14 +42,14 @@ extern class GpuCompiledExternalResourceExport{
     ResourceStates finalState;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportSource"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportSource")]
 extern class GpuCompiledExternalResourceExportSource{
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
     GpuTaskResourceRange range;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportView"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledExternalResourceExportView")]
 extern class GpuCompiledExternalResourceExportView{
     Optional<GpuCompiledExternalResourceExport> exportPlan()const;
     Span<GpuCompiledExternalResourceExportSource> sourcesSpan()const;
@@ -95,7 +95,7 @@ extern class GpuCompiledGraphReadView{
     b8 validPacketRange(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledOwnershipTransfer"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledOwnershipTransfer")]
 extern class GpuCompiledOwnershipTransfer{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
@@ -115,7 +115,7 @@ extern class GpuCompiledOwnershipTransfer{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPacketView"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPacketView")]
 extern class GpuCompiledPacketView{
     Span<GpuExternalCompletionId> externalDependenciesSpan()const;
     b8 hasExternalDependencies()const;
@@ -129,7 +129,7 @@ extern class GpuCompiledPacketView{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPresentEndpoint"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledPresentEndpoint")]
 extern class GpuCompiledPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -138,7 +138,7 @@ extern class GpuCompiledPresentEndpoint{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTask"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTask")]
 extern class GpuCompiledTask{
     GpuTaskId task;
     GpuSubmissionPacketId packet;
@@ -154,7 +154,7 @@ extern class GpuCompiledTask{
     b8 recordsNonCommittingTimingSample;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTaskView"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuCompiledTaskView")]
 extern class GpuCompiledTaskView{
     Optional<GpuCompiledTask> taskPlan()const;
     Span<GpuCompiledBarrier> epilogueBarriersSpan()const;
@@ -167,13 +167,13 @@ extern class GpuCompiledTaskView{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuPacketDependency"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuPacketDependency")]
 extern class GpuPacketDependency{
     GpuSubmissionPacketId producer;
     GpuSubmissionPacketId consumer;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuSubmissionPacket"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuSubmissionPacket")]
 extern class GpuSubmissionPacket{
     u32 taskOffset;
     u32 taskCount;
@@ -189,7 +189,7 @@ extern class GpuSubmissionPacket{
     b8 recordsTiming;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileStatistics"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphCompileStatistics")]
 extern class GpuTaskGraphCompileStatistics{
     u64 graphGeneration;
     u64 planGeneration;
@@ -250,7 +250,7 @@ extern class GpuTaskGraphCompileStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueCompileStatistics"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskGraphPhysicalQueueCompileStatistics")]
 extern class GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration;
     u64 planGeneration;
@@ -274,7 +274,7 @@ extern class GpuTaskGraphPhysicalQueueCompileStatistics{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskRecordContext"), cpp_flags(binary_serializable)]
+[cpp_header("<core/task/gpu/compiled_graph.h>"), cpp_name("::NWB::Core::GpuTaskRecordContext")]
 extern class GpuTaskRecordContext{
     b8 hasCommandIrCapture()const;
     GpuTaskGraphDeclarationReadView declarations;

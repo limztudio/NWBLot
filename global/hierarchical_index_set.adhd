@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_header("<global/hierarchical_index_set.h>"), cpp_name("::HierarchicalIndexSet"), cpp_flags(non_thread_safe, arena_first_ctor)]
+[cpp_header("<global/hierarchical_index_set.h>"), cpp_name("::HierarchicalIndexSet"), cpp_flags(non_thread_safe)]
 extern class HierarchicalIndexSet;
 
 

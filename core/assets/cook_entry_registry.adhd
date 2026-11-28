@@ -10,7 +10,7 @@ extern class CookEntryParseContext{
     u32 nwbSubIndex;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryPathHashSet"), cpp_flags(brace_init, non_thread_safe)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntryPathHashSet"), cpp_flags(non_thread_safe)]
 extern class CookEntryPathHashSet{
     b8 empty()const;
 };
@@ -25,7 +25,7 @@ extern class CookEntryRegistry{
     u64 entryCount(...)const;
 };
 
-[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntrySourceLocation"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/assets/cook_entry_registry.h>"), cpp_name("::NWB::Core::Assets::CookEntrySourceLocation")]
 extern class CookEntrySourceLocation{
     usize nwbFileIndex;
     u32 nwbSubIndex;

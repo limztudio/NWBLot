@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/accepted_queue_frontier_validator.h>"), cpp_name("::NWB::Core::GpuAcceptedQueueFrontierValidator"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/accepted_queue_frontier_validator.h>"), cpp_name("::NWB::Core::GpuAcceptedQueueFrontierValidator")]
 extern class GpuAcceptedQueueFrontierValidator;
 
 

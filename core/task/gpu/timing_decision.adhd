@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/timing_decision.h>"), cpp_name("::NWB::Core::GpuTaskTimingDecision")]
 extern class GpuTaskTimingDecision;
 
 

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineVertex"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/debug_line_contributor.h>"), cpp_name("::NWB::Core::GpuDebugLineVertex")]
 extern class GpuDebugLineVertex{
     f32x4 positionPad;
     f32x4 color;

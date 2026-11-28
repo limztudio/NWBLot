@@ -182,6 +182,7 @@ struct Expr{
     b8 isSwizzle = false;
     b8 moveAtLastUse = false;
     b8 adaptToTChar = false;
+    b8 adaptToByteView = false;
     b8 isPointerMemberAccess = false;
     b8 isNotNullRebind = false;
     b8 derefNotNull = false;

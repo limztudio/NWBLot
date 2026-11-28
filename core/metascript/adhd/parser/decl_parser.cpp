@@ -479,7 +479,30 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         return true;
     };
 
-    if(m_cursor.match(TokenType::Less)){
+    if(isExtern){
+        if(m_cursor.check(TokenType::Less)){
+            m_cursor.error(isFlag ? "'extern flag' must use 'extern flag Name : SizeType' syntax" : "'extern enum' must use 'extern enum Name : SizeType' syntax");
+            return nullptr;
+        }
+        if(!m_cursor.check(TokenType::Identifier)){
+            m_cursor.errorExpected(isFlag ? "expected flag name" : "expected enum name");
+            return nullptr;
+        }
+        enumName = m_cursor.current().text;
+        m_cursor.advance();
+
+        if(!m_cursor.expect(TokenType::Colon, "expected ':' and integer underlying type after extern enum/flag name"))
+            return nullptr;
+        if(!parseFixedWidthUnderlyingType("expected integer underlying type after ':'"))
+            return nullptr;
+    }
+    else{
+        if(!m_cursor.match(TokenType::Less)){
+            m_cursor.error(isFlag
+                ? "'flag' must explicitly specify an integer size type: 'flag<u8|u16|u32|u64|i8|i16|i32|i64> Name'"
+                : "'enum' must explicitly specify an integer size type: 'enum<u8|u16|u32|u64|i8|i16|i32|i64> Name'");
+            return nullptr;
+        }
         if(!parseFixedWidthUnderlyingType(isFlag ? "expected integer size type inside 'flag<...>'" : "expected integer size type inside 'enum<...>'"))
             return nullptr;
 
@@ -492,30 +515,6 @@ EnumDecl* DeclParser::parseEnumDecl(const SourceSpan span, const Span<const Pars
         }
         enumName = m_cursor.current().text;
         m_cursor.advance();
-    }
-    else if(isExtern){
-        if(!m_cursor.check(TokenType::Identifier)){
-            m_cursor.errorExpected(isFlag ? "expected flag name" : "expected enum name");
-            return nullptr;
-        }
-        enumName = m_cursor.current().text;
-        m_cursor.advance();
-
-        if(m_cursor.match(TokenType::Colon)){
-            if(!parseFixedWidthUnderlyingType("expected integer underlying type after ':'"))
-                return nullptr;
-        }
-        else{
-            sizeTypeName = BuiltinTypeSemantics::UInt32ScalarTypeName();
-            if(!BuiltinTypeSemantics::ResolveFixedWidthIntScalar(sizeTypeName, underlyingSize, underlyingAlign))
-                return nullptr;
-        }
-    }
-    else{
-        m_cursor.error(isFlag
-            ? "'flag' must explicitly specify an integer size type: 'flag<u8|u16|u32|u64|i8|i16|i32|i64> Name'"
-            : "'enum' must explicitly specify an integer size type: 'enum<u8|u16|u32|u64|i8|i16|i32|i64> Name'");
-        return nullptr;
     }
 
     EnumDecl* decl = AllocateAstNode<EnumDecl>(m_cursor.arena());

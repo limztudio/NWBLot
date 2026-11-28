@@ -1310,7 +1310,7 @@ void RunExternHeaderAndDeclEdgeCases(){
 
     EXPECT_FALSE(emittedExterns.empty());
     if(!emittedExterns.empty()){
-        const StringView kRoundTripConsumer = "\n[cpp_name(\"::MyNs::DirectMode\"), cpp_header(\"<my_ns/types.h>\")]\nextern enum DirectMode{\n    Fast = 0,\n    Accurate = 1\n};\n\n[cpp_name(\"::MyNs::AccessBits\"), cpp_header(\"<my_ns/types.h>\")]\nextern flag AccessBits{\n    None = 0,\n    Read = 1,\n    Write = 2\n};\n\n[cpp_name(\"::MyNs::Counter\"), cpp_header(\"<my_ns/types.h>\")]\nextern class Counter : NoCopy{\n    static u32 s_Count;\n    static u32 Next();\n    u32 addWithDefault(in u32 delta = {});\n};\n\n[cpp_name(\"::MyNs::ComputeScale\"), cpp_header(\"<my_ns/types.h>\")]\nextern f32 ComputeScale(in DirectMode mode = {});\n\n[cpp_name(\"::MyNs::kMaxItems\"), cpp_header(\"<my_ns/types.h>\")]\nextern const u32 kMaxItems;\n\nb8 ExerciseEmittedAndManualExterns(\n    in StringView src,\n    mut Document doc,\n    mut MetascriptDocument aliasDoc,\n    mut Counter counter\n){\n    const u32 invalidHandle = GpuDescriptorHandle::s_Invalid;\n    const u32 count = Counter::s_Count;\n    const u32 nextVal = Counter::Next();\n    const u32 updated = counter.addWithDefault();\n    const f32 scale = ComputeScale();\n    const DirectMode mode = DirectMode::Accurate;\n    const AccessBits bits = AccessBits::Read | AccessBits::Write;\n    return doc.parse(src)\n        && aliasDoc.parse(src)\n        && (invalidHandle != 0u)\n        && (count <= kMaxItems)\n        && (nextVal > 0u)\n        && (updated > 0u)\n        && (scale > 0.0f)\n        && (mode != DirectMode::Fast)\n        && (bits != AccessBits::None);\n}\n";
+        const StringView kRoundTripConsumer = "\n[cpp_name(\"::MyNs::DirectMode\"), cpp_header(\"<my_ns/types.h>\")]\nextern enum DirectMode : u32{\n    Fast = 0,\n    Accurate = 1\n};\n\n[cpp_name(\"::MyNs::AccessBits\"), cpp_header(\"<my_ns/types.h>\")]\nextern flag AccessBits : u32{\n    None = 0,\n    Read = 1,\n    Write = 2\n};\n\n[cpp_name(\"::MyNs::Counter\"), cpp_header(\"<my_ns/types.h>\")]\nextern class Counter : NoCopy{\n    static u32 s_Count;\n    static u32 Next();\n    u32 addWithDefault(in u32 delta = {});\n};\n\n[cpp_name(\"::MyNs::ComputeScale\"), cpp_header(\"<my_ns/types.h>\")]\nextern f32 ComputeScale(in DirectMode mode = {});\n\n[cpp_name(\"::MyNs::kMaxItems\"), cpp_header(\"<my_ns/types.h>\")]\nextern const u32 kMaxItems;\n\nb8 ExerciseEmittedAndManualExterns(\n    in StringView src,\n    mut Document doc,\n    mut MetascriptDocument aliasDoc,\n    mut Counter counter\n){\n    const u32 invalidHandle = GpuDescriptorHandle::s_Invalid;\n    const u32 count = Counter::s_Count;\n    const u32 nextVal = Counter::Next();\n    const u32 updated = counter.addWithDefault();\n    const f32 scale = ComputeScale();\n    const DirectMode mode = DirectMode::Accurate;\n    const AccessBits bits = AccessBits::Read | AccessBits::Write;\n    return doc.parse(src)\n        && aliasDoc.parse(src)\n        && (invalidHandle != 0u)\n        && (count <= kMaxItems)\n        && (nextVal > 0u)\n        && (updated > 0u)\n        && (scale > 0.0f)\n        && (mode != DirectMode::Fast)\n        && (bits != AccessBits::None);\n}\n";
         GlobalString roundTripSrc(arena.arena);
         roundTripSrc.append(emittedExterns);
         roundTripSrc.push_back(cast<u8>(10u));
@@ -1501,7 +1501,7 @@ void RunCoreCppHeaderImportVerification(){
     EXPECT_FALSE(ImportCompilerHeaders(badOpts, arena.arena, badUnit, badErrors));
     EXPECT_FALSE(badErrors.empty());
 
-    const StringView kLayoutFlagsAndPreludeSource = "\n[cpp_name(\"::MyExt::Contract\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")]\nextern class ExtContract{\n    b8 probe(...)const;\n};\n\n[cpp_name(\"::MyExt::VariadicSink\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(small_value, binary_serializable)]\nextern class VariadicSink{\n    u32 count;\n    b8 pushAny(...);\n};\n\nclass ImplContract : ExtContract{\n    public b8 validate(in ExtContract contract, mut VariadicSink sink)const{\n        const Path spoolDir = DefaultCrashSpoolDirectory();\n        const CrashDumpResult dump = CaptureCrashDump();\n        const usize compId = ComponentType<ImplContract>();\n        const BlendFactor bf = BlendFactor::SrcAlpha;\n        const ColorMask mask = ColorMask::Red | ColorMask::Green;\n        const Viewport vp = Viewport();\n        const b8 okSink = sink.pushAny(1u, \"ok\", vp.minX, s_BackBufferWidth, spoolDir, dump.packageWritten());\n        const b8 okValid = contract.probe() && contract.probe(bf, mask, compId);\n        return okSink && okValid;\n    }\n}\n";
+    const StringView kLayoutFlagsAndPreludeSource = "\n[cpp_name(\"::MyExt::Contract\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")]\nextern class ExtContract{\n    b8 probe(...)const;\n};\n\n[cpp_name(\"::MyExt::VariadicSink\"), cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")]\nextern class VariadicSink{\n    u32 count;\n    b8 pushAny(...);\n};\n\nclass ImplContract : ExtContract{\n    public b8 validate(in ExtContract contract, mut VariadicSink sink, in VariadicSink byValSink)const{\n        const Path spoolDir = DefaultCrashSpoolDirectory();\n        const CrashDumpResult dump = CaptureCrashDump();\n        const usize compId = ComponentType<ImplContract>();\n        const BlendFactor bf = BlendFactor::SrcAlpha;\n        const ColorMask mask = ColorMask::Red | ColorMask::Green;\n        const Viewport vp = Viewport();\n        const Sha256Digest hash = ComputeSha256(\"hello\");\n        const b8 okSink = sink.pushAny(1u, \"ok\", vp.minX, s_BackBufferWidth, spoolDir, dump.packageWritten(), byValSink.count, hash.bytes[0u]);\n        const b8 okValid = contract.probe() && contract.probe(bf, mask, compId);\n        return okSink && okValid;\n    }\n}\n";
 
     CompileResult extPreludeRes(arena.arena);
     const b8 extPreludeOk = Compile(
@@ -1518,11 +1518,13 @@ void RunCoreCppHeaderImportVerification(){
         EXPECT_NE(hdr.find("#include <core/crash/module.h>"), usize.max);
         EXPECT_NE(hdr.find("#include <core/ecs/type_id.h>"), usize.max);
         EXPECT_NE(hdr.find("#include <core/graphics/rhi/pipeline_state.h>"), usize.max);
+        EXPECT_NE(hdr.find("::MyExt::VariadicSink byValSink"), usize.max);
         EXPECT_NE(cpp.find("::NWB::Core::Crash::DefaultCrashSpoolDirectory(__adhd_scratch)"), usize.max);
         EXPECT_NE(cpp.find("::NWB::Core::ECS::ComponentType<ImplContract>()"), usize.max);
         EXPECT_NE(cpp.find("::NWB::Core::BlendFactor::SrcAlpha"), usize.max);
         EXPECT_NE(cpp.find("::NWB::Core::ColorMask::Red"), usize.max);
         EXPECT_NE(cpp.find("::NWB::Core::s_BackBufferWidth"), usize.max);
+        EXPECT_NE(cpp.find("::BinaryByteView"), usize.max);
     }
 
     auto expectExtFails = lambda[mut arena](in StringView src, in StringView path) -> void{
@@ -1534,7 +1536,7 @@ void RunCoreCppHeaderImportVerification(){
         "impl/edge_cases/bad_non_extern_name.adhd"
     );
     expectExtFails(
-        "[cpp_flags(small_value)]\nclass NonExternFlags{\n    public u32 x = 0u;\n}\n",
+        "[cpp_flags(borrow_view)]\nclass NonExternFlags{\n    public u32 x = 0u;\n}\n",
         "impl/edge_cases/bad_non_extern_flags.adhd"
     );
     expectExtFails(
@@ -1552,7 +1554,23 @@ void RunCoreCppHeaderImportVerification(){
     ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(abstract)] extern class BadCls;", "impl/edge_cases/bad_flag_abstract.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
     ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(polymorphic_base)] extern class BadCls;", "impl/edge_cases/bad_flag_poly.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
     ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(self_defaulted)] extern class BadCls;", "impl/edge_cases/bad_flag_defaulted.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(small_value)] extern class BadCls;", "impl/edge_cases/bad_flag_small_value.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(binary_serializable)] extern class BadCls;", "impl/edge_cases/bad_flag_binary_serializable.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(brace_init)] extern class BadCls;", "impl/edge_cases/bad_flag_brace_init.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(equality_switch)] extern class BadCls;", "impl/edge_cases/bad_flag_equality_switch.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(map_key)] extern class BadCls;", "impl/edge_cases/bad_flag_map_key.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(arena_first_ctor)] extern class BadCls;", "impl/edge_cases/bad_flag_arena_first_ctor.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(arena_omit_ctor)] extern class BadCls;", "impl/edge_cases/bad_flag_arena_omit_ctor.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(scratch_arena)] extern void BadFn();", "impl/edge_cases/bad_flag_scratch_arena.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(platform_literal_arg0)] extern void BadFn();", "impl/edge_cases/bad_flag_platform_literal.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(byte_view_arg0)] extern void BadFn();", "impl/edge_cases/bad_flag_byte_view_arg0.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    ExpectCompileFailsWithMessage(arena, "[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\"), cpp_flags(byte_view_arg1)] extern void BadFn();", "impl/edge_cases/bad_flag_byte_view_arg1.adhd", "'[cpp_flags(...)]' requires one or more valid extern flag identifiers");
+    expectExtFails("[arena, cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")] extern class BadArenaCls;", "impl/edge_cases/bad_extern_arena.adhd");
     expectExtFails("[cpp_header(\"<tests/unit/metascript/extern_trait_fixtures.h>\")] extern void BadRef(in cpp_ref u32 v);", "impl/edge_cases/bad_cpp_ref.adhd");
+    expectExtFails("extern enum<u8> BadAngleEnum{ A };", "impl/edge_cases/bad_angle_extern_enum.adhd");
+    expectExtFails("extern enum BadImplicitEnum{ A };", "impl/edge_cases/bad_implicit_extern_enum.adhd");
+    expectExtFails("extern void BadTwoDotVariadic(..);", "impl/edge_cases/bad_two_dot_variadic.adhd");
+    expectExtFails("extern class BadExternMember{ extern void ping(); };", "impl/edge_cases/bad_extern_member.adhd");
 }
 
 void VerifyAdhdCompiler_ParallelLoweringUsesCheckedAdmissionAndBlockLifetimeOrder(){
@@ -1757,7 +1775,7 @@ void VerifyAdhdCompiler_InfersExceptionSpecificationsAutomatically(){
     const StringView cpp = GeneratedSourceView(infRes);
 
     EXPECT_NE(hdr.find("u32 PureFn(const u32 x)noexcept"), usize.max);
-    EXPECT_NE(hdr.find("u32 CallNothrowExt(const ::ExtObj& obj)noexcept"), usize.max);
+    EXPECT_NE(hdr.find("u32 CallNothrowExt(const ::ExtObj obj)noexcept"), usize.max);
     EXPECT_NE(hdr.find("void CallOpaqueExt();"), usize.max);
     EXPECT_EQ(hdr.find("CallOpaqueExt()noexcept"), usize.max);
     EXPECT_EQ(hdr.find("CallOpaqueMethod(::ExtObj& obj)noexcept"), usize.max);

@@ -13,7 +13,7 @@ extern enum FileSeekOrigin : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileCursor"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/filesystem.h>"), cpp_name("::NWB::Core::Filesystem::FileCursor")]
 extern class FileCursor{
     Name virtualPath;
     u64 offset;
@@ -38,7 +38,7 @@ extern class IFilesystem{
     b8 writable(...)const;
 };
 
-[cpp_header("<core/filesystem/factory.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemFactory"), cpp_flags(brace_init)]
+[cpp_header("<core/filesystem/factory.h>"), cpp_name("::NWB::Core::Filesystem::FilesystemFactory")]
 extern class FilesystemFactory;
 
 [cpp_header("<core/filesystem/factory.h>"), cpp_name("::NWB::Core::Filesystem::CreateFilesystem")]

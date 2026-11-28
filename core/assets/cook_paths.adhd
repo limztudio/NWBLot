@@ -10,7 +10,7 @@ extern class CookResolvedPaths{
     Path cacheDirectory;
 };
 
-[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::ResolveCookVirtualAssetPath"), cpp_flags(scratch_arena)]
+[cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::ResolveCookVirtualAssetPath")]
 extern Expected<Path> ResolveCookVirtualAssetPath(in CookResolvedPaths paths, in StringView name);
 
 [cpp_header("<core/assets/cook_paths.h>"), cpp_name("::NWB::Core::Assets::PrepareGeneratedIncludeRoot")]

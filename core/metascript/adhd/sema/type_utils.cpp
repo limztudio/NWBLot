@@ -33,7 +33,7 @@ namespace __hidden_adhd_type_utils{
 
 inline constexpr BuiltinObjectTypeInfo s_BuiltinObjectTypes[] = {
 #define NWB_ADHD_EXPORT_OBJECT_TYPE(adhdName, cppExportName, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, arenaCtorMode, isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, formatArgWrapKind, requiredHeader) \
-    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, (!isAbstract && (isSelfDefaulted || isSmallValue || isBorrowView || isBinarySerializable || emitsBraceFieldInit)), isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, static_cast<u8>(arenaCtorMode), isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, false, formatArgWrapKind },
+    BuiltinObjectTypeInfo{ adhdName, cppExportName, requiredHeader, byteSize, byteAlign, isArenaBacked, isSelfDefaulted, (!isAbstract && (isSelfDefaulted || isBorrowView)), isSmallValue, isBorrowView, isBinarySerializable, isSingleValueCtor, emitsBraceFieldInit, isStringLike, isStringSwitch, isNonThreadSafeContainer, isNwbMapKey, requiresTCharAdaptation, static_cast<u8>(arenaCtorMode), isCopyMoveConstructible, isAssignable, isAbstract, isPolymorphicBase, false, formatArgWrapKind },
 #include "../export_types.h"
 #undef NWB_ADHD_EXPORT_OBJECT_TYPE
 };
@@ -184,21 +184,15 @@ static_assert(AreStaticArgRulesDense());
 
 inline constexpr BuiltinFunctionInfo s_BuiltinFunctions[] = {
 #define NWB_ADHD_EXPORT_FUNCTION(adhdName, cppExportName, arity, returnRule, returnTypeName, returnTypeArgName, arg0Rule, arg1Rule, arg2Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, false, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, "", "", "", arity, arity, BuiltinFunctionReturnRule::returnRule, false, false, false, false, false, false, false, false, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
 #define NWB_ADHD_EXPORT_FUNCTION_EX(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::None, prependsScratchArena, isVariadic, wrapsFormatArgs, (BuiltinFunctionReturnRule::returnRule == BuiltinFunctionReturnRule::CallTemplateArg0), false, false, false, allowsCppUnwind, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
-#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, callLowering, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
-    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, BuiltinCallLowering::callLowering, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, false, allowsCppUnwind, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule } },
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, prependsScratchArena, isVariadic, wrapsFormatArgs, (BuiltinFunctionReturnRule::returnRule == BuiltinFunctionReturnRule::CallTemplateArg0), false, false, false, allowsCppUnwind, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any, BuiltinFunctionArgRule::Any } },
+#define NWB_ADHD_EXPORT_FUNCTION_CALL(adhdName, cppExportName, minArity, arity, returnRule, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, allowsCppUnwind, arg0Rule, arg1Rule, arg2Rule, arg3Rule, arg4Rule, arg5Rule, arg6Rule, arg7Rule, arg8Rule) \
+    BuiltinFunctionInfo{ adhdName, cppExportName, returnTypeName, returnTypeArgName, returnNestedTypeArgName, returnErrorTypeName, requiredHeader, minArity, arity, BuiltinFunctionReturnRule::returnRule, prependsScratchArena, isVariadic, wrapsFormatArgs, requiresExplicitTypeArg, returnsBorrowedView, rejectsSimdStorage, false, allowsCppUnwind, { BuiltinFunctionArgRule::arg0Rule, BuiltinFunctionArgRule::arg1Rule, BuiltinFunctionArgRule::arg2Rule, BuiltinFunctionArgRule::arg3Rule, BuiltinFunctionArgRule::arg4Rule, BuiltinFunctionArgRule::arg5Rule, BuiltinFunctionArgRule::arg6Rule, BuiltinFunctionArgRule::arg7Rule, BuiltinFunctionArgRule::arg8Rule } },
 #include "../export_functions.h"
 #undef NWB_ADHD_EXPORT_FUNCTION_CALL
 #undef NWB_ADHD_EXPORT_FUNCTION_EX
 #undef NWB_ADHD_EXPORT_FUNCTION
-};
-
-inline constexpr BuiltinFunctionArgRule::Enum s_NumericScalarArgRules[] = {
-#define NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE(ruleName) BuiltinFunctionArgRule::ruleName,
-#include "../export_functions.h"
-#undef NWB_ADHD_EXPORT_NUMERIC_SCALAR_ARG_RULE
 };
 
 inline constexpr BuiltinContainerArgConstraintInfo s_ContainerArgConstraints[] = {
@@ -456,7 +450,7 @@ private:
     };
 
     static inline constexpr u32 s_BinaryCacheMagic = 0x4E574250u;
-    static inline constexpr u32 s_BinaryCacheVersion = 8u;
+    static inline constexpr u32 s_BinaryCacheVersion = 12u;
 
     [[nodiscard]] static u64 ComputeBinaryCacheSchemaSignature()noexcept{
         u64 sig = s_Fnv64OffsetBasis;
@@ -465,6 +459,7 @@ private:
         };
         mix(s_BinaryCacheMagic);
         mix(s_BinaryCacheVersion);
+        mix(CppExternTraitResolver::SchemaVersion());
         mix(sizeof(BuiltinObjectTypeInfo));
         mix(sizeof(BuiltinEnumInfo));
         mix(sizeof(BuiltinEnumEntryInfo));
@@ -1117,7 +1112,7 @@ private:
             obj.isStringLike = false;
             obj.isStringSwitch = cls->isEqualitySwitch;
             obj.isNonThreadSafeContainer = cls->isNonThreadSafeContainer;
-            obj.isNwbMapKey = cls->isNwbMapKey;
+            obj.isNwbMapKey = false;
             obj.requiresTCharAdaptation = false;
             obj.arenaCtorMode = cls->arenaCtorMode;
             obj.isCopyMoveConstructible = cls->isCopyConstructible;
@@ -1328,14 +1323,8 @@ private:
             unpackReturnType(fn->returnType, fnTplName, info.returnTypeName, info.returnTypeArgName, info.returnNestedTypeArgName, info.returnErrorTypeName, &info.returnRule);
             info.minArity = fn->minArgCount;
             info.arity = fn->params.size() <= info.argRules.size() ? fn->params.size() : info.argRules.size();
-            if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::PlatformLiteralArg0))
-                info.callLowering = BuiltinCallLowering::PlatformLiteralArg0;
-            else if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg0))
-                info.callLowering = BuiltinCallLowering::BinaryByteViewArg0;
-            else if(fn->callLoweringKind == static_cast<u8>(ExternCallableFlagKind::ByteViewArg1))
-                info.callLowering = BuiltinCallLowering::BinaryByteViewArg1;
-            else
-                info.callLowering = BuiltinCallLowering::None;
+            info.byteViewArgMask = fn->byteViewArgMask;
+            info.platformLiteralArgMask = fn->platformLiteralArgMask;
             info.prependsScratchArena = fn->injectsCallerArena;
             info.isVariadic = fn->isVariadic;
             info.wrapsFormatArgs = false;
@@ -1627,20 +1616,15 @@ private:
                 || !reader.readBool(obj.isSmallValue)
                 || !reader.readBool(obj.isBorrowView)
                 || !reader.readBool(obj.isBinarySerializable)
-                || !reader.readBool(obj.isSingleValueCtor)
                 || !reader.readBool(obj.emitsBraceFieldInit)
-                || !reader.readBool(obj.isStringLike)
                 || !reader.readBool(obj.isStringSwitch)
                 || !reader.readBool(obj.isNonThreadSafeContainer)
-                || !reader.readBool(obj.isNwbMapKey)
-                || !reader.readBool(obj.requiresTCharAdaptation)
                 || !reader.readValue(obj.arenaCtorMode)
                 || !reader.readBool(obj.isCopyMoveConstructible)
                 || !reader.readBool(obj.isAssignable)
                 || !reader.readBool(obj.isAbstract)
                 || !reader.readBool(obj.isPolymorphicBase)
                 || !reader.readBool(obj.isEmptyBase)
-                || !reader.readValue(obj.formatArgWrapKind)
                 || !reader.readValue(tplListIdx)
             ){
                 resetRegistryState();
@@ -1825,7 +1809,6 @@ private:
             u64 minArity = 0u;
             u64 arity = 0u;
             u8 retRuleByte = 0u;
-            u8 callLowerByte = 0u;
             if(!reader.readStringRef(m_sourceText, fn.adhdName)
                 || !reader.readStringRef(m_sourceText, fn.cppExportName)
                 || !reader.readStringRef(m_sourceText, fn.returnTypeName)
@@ -1836,13 +1819,10 @@ private:
                 || !reader.readValue(minArity)
                 || !reader.readValue(arity)
                 || !reader.readValue(retRuleByte)
-                || !reader.readValue(callLowerByte)
                 || !reader.readBool(fn.prependsScratchArena)
                 || !reader.readBool(fn.isVariadic)
-                || !reader.readBool(fn.wrapsFormatArgs)
                 || !reader.readBool(fn.requiresExplicitTypeArg)
                 || !reader.readBool(fn.returnsBorrowedView)
-                || !reader.readBool(fn.rejectsSimdStorage)
                 || !reader.readBool(fn.returnsReference)
                 || !reader.readBool(fn.allowsCppUnwind)
             ){
@@ -1852,7 +1832,6 @@ private:
             fn.minArity = static_cast<usize>(minArity);
             fn.arity = static_cast<usize>(arity);
             fn.returnRule = static_cast<BuiltinFunctionReturnRule::Enum>(retRuleByte);
-            fn.callLowering = static_cast<BuiltinCallLowering::Enum>(callLowerByte);
             for(BuiltinFunctionArgRule::Enum& r : fn.argRules){
                 u16 rv = 0u;
                 if(!reader.readValue(rv)){
@@ -1861,7 +1840,11 @@ private:
                 }
                 r = static_cast<BuiltinFunctionArgRule::Enum>(rv);
             }
-            if(!reader.readValue(fn.retainedArgMask) || !reader.readValue(fn.explicitTypeParamMask)){
+            if(!reader.readValue(fn.retainedArgMask)
+                || !reader.readValue(fn.explicitTypeParamMask)
+                || !reader.readValue(fn.byteViewArgMask)
+                || !reader.readValue(fn.platformLiteralArgMask)
+            ){
                 resetRegistryState();
                 return false;
             }
@@ -2065,20 +2048,15 @@ private:
             writer.writeBool(obj.isSmallValue);
             writer.writeBool(obj.isBorrowView);
             writer.writeBool(obj.isBinarySerializable);
-            writer.writeBool(obj.isSingleValueCtor);
             writer.writeBool(obj.emitsBraceFieldInit);
-            writer.writeBool(obj.isStringLike);
             writer.writeBool(obj.isStringSwitch);
             writer.writeBool(obj.isNonThreadSafeContainer);
-            writer.writeBool(obj.isNwbMapKey);
-            writer.writeBool(obj.requiresTCharAdaptation);
             writer.writeValue(obj.arenaCtorMode);
             writer.writeBool(obj.isCopyMoveConstructible);
             writer.writeBool(obj.isAssignable);
             writer.writeBool(obj.isAbstract);
             writer.writeBool(obj.isPolymorphicBase);
             writer.writeBool(obj.isEmptyBase);
-            writer.writeValue(obj.formatArgWrapKind);
             i32 tplListIdx = -1;
             if(!obj.templateParams.empty()){
                 const auto it = tplListByFirstPtr.find(obj.templateParams.data());
@@ -2172,19 +2150,18 @@ private:
             writer.writeValue(static_cast<u64>(fn.minArity));
             writer.writeValue(static_cast<u64>(fn.arity));
             writer.writeValue(static_cast<u8>(fn.returnRule));
-            writer.writeValue(static_cast<u8>(fn.callLowering));
             writer.writeBool(fn.prependsScratchArena);
             writer.writeBool(fn.isVariadic);
-            writer.writeBool(fn.wrapsFormatArgs);
             writer.writeBool(fn.requiresExplicitTypeArg);
             writer.writeBool(fn.returnsBorrowedView);
-            writer.writeBool(fn.rejectsSimdStorage);
             writer.writeBool(fn.returnsReference);
             writer.writeBool(fn.allowsCppUnwind);
             for(const BuiltinFunctionArgRule::Enum r : fn.argRules)
                 writer.writeValue(static_cast<u16>(r));
             writer.writeValue(fn.retainedArgMask);
             writer.writeValue(fn.explicitTypeParamMask);
+            writer.writeValue(fn.byteViewArgMask);
+            writer.writeValue(fn.platformLiteralArgMask);
         }
 
         writer.writeValue(static_cast<u32>(m_globalConstants.size()));
@@ -2336,13 +2313,9 @@ private:
                 }
             }
 
-            MVector<MString> preludeDefines(parseArena);
-            preludeDefines.emplace_back("NWB_COOK=1", parseArena);
-
             MVector<MString> includedCppHeaders(parseArena);
             CppExternTraitResolveOptions traitOpts;
             traitOpts.extraHeaders = Span<const MString>(extraHeaders.data(), extraHeaders.size());
-            traitOpts.defines = Span<const MString>(preludeDefines.data(), preludeDefines.size());
             traitOpts.enableAutoProjectIncludes = true;
             traitOpts.useDiskCache = false;
             traitOpts.outProjectIncludedFiles = &includedCppHeaders;
@@ -2452,8 +2425,12 @@ MStringView BuiltinPreludeLoadError()noexcept{
     return __hidden_adhd_type_utils::GetCoreExternRegistry().loadError();
 }
 
+const BuiltinObjectTypeInfo* FindStaticBuiltinObjectType(const MStringView name)noexcept{
+    return __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findObjectType(name);
+}
+
 const BuiltinObjectTypeInfo* FindBuiltinObjectType(const MStringView name)noexcept{
-    if(const BuiltinObjectTypeInfo* info = __hidden_adhd_type_utils::GetStaticBuiltinTableIndex().findObjectType(name))
+    if(const BuiltinObjectTypeInfo* info = FindStaticBuiltinObjectType(name))
         return info;
     return __hidden_adhd_type_utils::GetCoreExternRegistry().findObjectType(name);
 }
@@ -2932,14 +2909,6 @@ MStringView FindIntSimdStorageVectorTypeName(const b8 isDouble, const b8 isSigne
 
 const BuiltinContainerArgConstraintInfo* FindContainerArgConstraint(const BuiltinFunctionArgRule::Enum rule)noexcept{
     return __hidden_adhd_type_utils::FindBuiltinByRule(__hidden_adhd_type_utils::s_ContainerArgConstraints, rule);
-}
-
-b8 IsNumericScalarArgRule(const BuiltinFunctionArgRule::Enum rule)noexcept{
-    for(const BuiltinFunctionArgRule::Enum entry : __hidden_adhd_type_utils::s_NumericScalarArgRules){
-        if(entry == rule)
-            return true;
-    }
-    return false;
 }
 
 SpecialFunctionKind::Enum FindSpecialFunctionKind(const MStringView name)noexcept{

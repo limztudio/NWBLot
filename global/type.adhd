@@ -7,7 +7,7 @@ extern class WideStringView{
     WideStringView substr(in usize offset, in usize length)const;
 };
 
-[cpp_name("::ErrorCode"), cpp_flags(small_value, binary_serializable, equality_switch)]
+[cpp_name("::ErrorCode")]
 extern class ErrorCode{
     i32 value(...)const;
 };

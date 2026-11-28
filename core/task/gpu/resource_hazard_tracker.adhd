@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/resource_hazard_tracker.h>"), cpp_name("::NWB::Core::GpuResourceHazardTracker"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/resource_hazard_tracker.h>"), cpp_name("::NWB::Core::GpuResourceHazardTracker")]
 extern class GpuResourceHazardTracker;
 
 

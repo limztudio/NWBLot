@@ -36,7 +36,7 @@ extern class OsAccessibilityServiceOwner{
     void reset();
 };
 
-[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::WindowHandle"), cpp_flags(small_value)]
+[cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::WindowHandle")]
 extern class OsWindowHandle;
 [cpp_header("<tests/unit/os/service_sdk.h>"), cpp_name("::NWB::Tests::OsSdk::s_NullWindow")]
 extern const OsWindowHandle s_OsNullWindow;

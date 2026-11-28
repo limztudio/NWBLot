@@ -31,7 +31,7 @@ extern class CookInputSelectionError{
     CookInputSelectionFailure reason;
 };
 
-[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::ResolveCookRootEntries"), cpp_flags(scratch_arena)]
+[cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::ResolveCookRootEntries")]
 extern Expected<Vector<T>> ResolveCookRootEntries<T>(in Path repo, in Vector<String> inputs, in b8 infer, in AssetRootDuplicatePolicy policy, in Func<64u, void(in StringView, in b8)> onError);
 
 [cpp_header("<pipeline/cook_workspace.h>"), cpp_name("::NWB::Pipeline::CookFileCatalog")]

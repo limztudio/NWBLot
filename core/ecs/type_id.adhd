@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::ComponentTypeId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::ComponentTypeId")]
 extern class ComponentTypeId;
 
-[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::MessageTypeId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::MessageTypeId")]
 extern class MessageTypeId;
 
-[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::SystemTypeId"), cpp_flags(small_value, binary_serializable, brace_init, equality_switch, map_key)]
+[cpp_header("<core/ecs/type_id.h>"), cpp_name("::NWB::Core::ECS::SystemTypeId")]
 extern class SystemTypeId;
 
 

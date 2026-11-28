@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<pipeline/volume_workspace.h>"), cpp_name("::NWB::Pipeline::GatherMergeCallback"), cpp_flags(small_value)]
+[cpp_header("<pipeline/volume_workspace.h>"), cpp_name("::NWB::Pipeline::GatherMergeCallback")]
 extern class GatherMergeCallback{
     b8 apply(in Name path, in Span<u8> incoming, mut AssetCookWorkspace workspace, mut Vector<u8> existing)const;
 };
@@ -40,7 +40,7 @@ extern class CookPackManifest{
     u64 plannedFileCount;
 };
 
-[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::BuiltAssetPayload"), cpp_flags(small_value, brace_init)]
+[cpp_header("<core/assets/volume/built_asset.h>"), cpp_name("::NWB::Core::Assets::BuiltAssetDetail::BuiltAssetPayload")]
 extern class BuiltAssetPayload{
     Name virtualPath;
     usize payloadOffset;

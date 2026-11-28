@@ -34,7 +34,7 @@ extern enum CursorBackend : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorCapabilities"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/os/cursor.h>"), cpp_name("::NWB::Core::CursorCapabilities")]
 extern class CursorCapabilities{
     b8 setShape;
     b8 hide;

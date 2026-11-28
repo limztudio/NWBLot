@@ -2,25 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAbort"), cpp_flags(brace_init)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAbort")]
 extern class GpuPacketRecordingAbort{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAccess"), cpp_flags(binary_serializable)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingAccess")]
 extern class GpuPacketRecordingAccess;
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingLease"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketRecordingLease")]
 extern class GpuPacketRecordingLease{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketSubmissionLease"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuPacketSubmissionLease")]
 extern class GpuPacketSubmissionLease{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuRecordingAttemptScope"), cpp_flags(brace_init)]
+[cpp_header("<core/task/gpu/task_graph_packet_claims.h>"), cpp_name("::NWB::Core::GpuRecordingAttemptScope")]
 extern class GpuRecordingAttemptScope{
     void complete(...);
 };

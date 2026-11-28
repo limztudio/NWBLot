@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/name_hash.h>"), cpp_name("::NameText<char>"), cpp_flags(small_value)]
+[cpp_header("<global/name_hash.h>"), cpp_name("::NameText<char>")]
 extern class NameTextAscii;
 
 [cpp_name("::NameTextError::Enum")]
@@ -15,7 +15,7 @@ extern enum NameTextError : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::NameHash"), cpp_flags(binary_serializable, brace_init, equality_switch)]
+[cpp_name("::NameHash")]
 extern class NameHash{
     Array<u64, 8u> qwords;
 };

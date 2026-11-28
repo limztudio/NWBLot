@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<global/filesystem/retention.h>"), cpp_name("::ApplyDirectoryRetention"), cpp_flags(scratch_arena)]
+[cpp_header("<global/filesystem/retention.h>"), cpp_name("::ApplyDirectoryRetention")]
 extern Expected<void, ErrorCode> ApplyDirectoryRetention(in Path directory, in isize maxEntries, in auto shouldRetainPath = {});
 
 

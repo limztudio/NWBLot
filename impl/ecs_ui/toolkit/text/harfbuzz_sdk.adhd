@@ -31,15 +31,15 @@ extern class HarfBuzzGlyphExtents{
     i32 height;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_direction_t"), cpp_flags(small_value, equality_switch)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_direction_t")]
 extern class HarfBuzzDirection;
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_script_t"), cpp_flags(small_value, equality_switch)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_script_t")]
 extern class HarfBuzzScript{
     b8 operator==(in HarfBuzzScript rhs)const;
 };
 
-[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_buffer_cluster_level_t"), cpp_flags(small_value, equality_switch)]
+[cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::hb_buffer_cluster_level_t")]
 extern class HarfBuzzClusterLevel;
 
 [cpp_header("<impl/ecs_ui/toolkit/text/harfbuzz_sdk.h>"), cpp_name("::HB_DIRECTION_LTR")]

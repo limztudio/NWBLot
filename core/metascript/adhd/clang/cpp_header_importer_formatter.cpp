@@ -77,12 +77,10 @@ void AppendTypeRefExternText(MString& out, const TypeRef& type, const b8 include
     }
 }
 
-void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStringView indent, const b8 includeHeader){
-    AppendExternAttributes(out, includeHeader ? m.requiredHeader : MStringView(), m.cppExportName, indent);
+void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStringView indent, const b8 isFreeFunction){
+    AppendExternAttributes(out, isFreeFunction ? m.requiredHeader : MStringView(), m.cppExportName, indent);
     out.append(indent.data(), indent.size());
     if(m.isConstructor){
-        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
-        out.push_back(' ');
         out.append(m.name.data(), m.name.size());
     }
     else{
@@ -90,8 +88,10 @@ void AppendMethodExternSignature(MString& out, const MethodDecl& m, const MStrin
             out.append(KeywordSemantics::s_Static.data(), KeywordSemantics::s_Static.size());
             out.push_back(' ');
         }
-        out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
-        out.push_back(' ');
+        if(isFreeFunction){
+            out.append(KeywordSemantics::s_Extern.data(), KeywordSemantics::s_Extern.size());
+            out.push_back(' ');
+        }
         if(m.returnType)
             AppendTypeRefExternText(out, *m.returnType, true);
         else{

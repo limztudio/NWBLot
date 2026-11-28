@@ -2,13 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::EnvironmentVariableEquals"), cpp_flags(scratch_arena)]
+[cpp_name("::EnvironmentVariableEquals")]
 extern Expected<b8, ErrorCode> EnvironmentVariableEquals(in StringView a0, in StringView a1);
 
-[cpp_name("::HasEnvironmentValue"), cpp_flags(scratch_arena)]
+[cpp_name("::HasEnvironmentValue")]
 extern Expected<b8, ErrorCode> HasEnvironmentValue(in StringView a0);
 
-[cpp_name("::ReadEnvironmentVariable"), cpp_flags(scratch_arena)]
+[cpp_name("::ReadEnvironmentVariable")]
 extern Expected<Optional<String>, ErrorCode> ReadEnvironmentVariable(in StringView a0);
 
 

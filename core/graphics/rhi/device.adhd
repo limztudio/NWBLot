@@ -47,14 +47,14 @@ extern class AdapterInfo{
     b8 hasLUID;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::CommandListHandle"), cpp_flags(brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::CommandListHandle")]
 extern class CommandListHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut CommandList deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::CommandListParameters"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::CommandListParameters")]
 extern class CommandListParameters{
     CommandQueue queueType;
     GpuPhysicalQueueId physicalQueue;
@@ -94,14 +94,14 @@ extern class DeviceCreationParameters{
     Path pipelineCacheDirectory;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::DeviceHandle"), cpp_flags(brace_init, equality_switch, map_key)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::DeviceHandle")]
 extern class DeviceHandle{
     b8 valid(...)const;
     u32 reset(...);
     mut Device deref(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionDesc"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionDesc")]
 extern class QueueSubmissionDesc{
     usize waitTokenCount;
     QueueSubmissionPreSubmitHook preSubmitHook;
@@ -110,26 +110,26 @@ extern class QueueSubmissionDesc{
     QueueSubmissionDesc setWaitTokens(...);
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionNativeSignal"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionNativeSignal")]
 extern class QueueSubmissionNativeSignal{
     Object semaphore;
     u64 value;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionPreSubmitHook"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionPreSubmitHook")]
 extern class QueueSubmissionPreSubmitHook{
     u64 identity;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionReceipt"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::QueueSubmissionReceipt")]
 extern class QueueSubmissionReceipt{
     QueueSubmissionToken token;
     usize timelineWaitCount;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::SwapChainRuntimeState"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::SwapChainRuntimeState")]
 extern class SwapChainRuntimeState{
     u32 backBufferWidth;
     u32 backBufferHeight;
@@ -139,7 +139,7 @@ extern class SwapChainRuntimeState{
     b8 swapChainReadbackAvailable;
 };
 
-[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::WaveLaneCountRange"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/graphics/rhi/device.h>"), cpp_name("::NWB::Core::WaveLaneCountRange")]
 extern class WaveLaneCountRange{
     u32 maxWaveLaneCount;
 };

@@ -18,7 +18,7 @@ extern class StandaloneTextureUploadRegion{
     void setBytes(in Span<u8> bytes);
 };
 
-[cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService"), cpp_flags(binary_serializable)]
+[cpp_header("<core/graphics/runtime/standalone_service.h>"), cpp_name("::NWB::Core::GraphicsStandaloneService")]
 extern class GraphicsStandaloneService{
     Expected<QueueSubmissionToken> submitStandaloneTaskGraph(in auto declare, in GpuPhysicalQueueId queue)const;
     Expected<QueueSubmissionToken> submitStandaloneTaskGraphWithTiming(in auto declare, in GpuPhysicalQueueId queue, mut GpuTimingRecorder recorder, mut GpuTimingFrameTransaction timing)const;

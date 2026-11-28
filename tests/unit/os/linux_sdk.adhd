@@ -69,7 +69,7 @@ extern class ClipboardPipeWriter{
     b8 finished()const;
 };
 
-[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::pollfd"), cpp_flags(brace_init)]
+[cpp_header("<tests/unit/os/linux_sdk.h>"), cpp_name("::pollfd")]
 extern class OsPollFd{
     i32 fd;
     i16 events;

@@ -26,7 +26,7 @@ extern enum EventKind : u16{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::CaptureOptions")]
 extern class TelemetryCaptureOptions{
     TelemetryCaptureFlag flags;
     b8 diagnosticEnabled(...)const;
@@ -35,7 +35,7 @@ extern class TelemetryCaptureOptions{
     b8 perfEnabled(...)const;
 };
 
-[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::EventHeader"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/telemetry/event.h>"), cpp_name("::NWB::Core::Telemetry::EventHeader")]
 extern class EventHeader{
     u64 frameIndex;
     u64 timestampNanoseconds;

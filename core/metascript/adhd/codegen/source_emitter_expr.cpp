@@ -67,6 +67,7 @@ void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOu
     constexpr u8 s_SuppressNotNull = 1u << 2u;
     constexpr u8 s_SuppressFuncType = 1u << 3u;
     constexpr u8 s_SuppressAdaptToTChar = 1u << 4u;
+    constexpr u8 s_SuppressAdaptToByteView = 1u << 5u;
 
     const TokenType::Enum prevUnfusedLogicOp = m_unfusedLogicOp;
     if(expr.kind != ExprKind::Binary || expr.op != prevUnfusedLogicOp)
@@ -112,6 +113,27 @@ void SourceEmitter::emitExprImpl(MString& out, const Expr& expr, const b8 omitOu
         out.append("::ConvertString(");
         emitExprImpl(out, expr, false, suppressWrapMask | s_SuppressAdaptToTChar);
         out.push_back(')');
+        return;
+    }
+
+    if((suppressWrapMask & s_SuppressAdaptToByteView) == 0u && expr.adaptToByteView){
+        const MStringView excSpec = lambdaExceptionSpec();
+        const MStringView byteViewCpp = BuiltinTypeSemantics::BinaryByteViewCppName();
+        out.append("([](const auto& __adhd_bytes)");
+        out.append(excSpec.data(), excSpec.size());
+        out.append("{ if constexpr(requires{ __adhd_bytes.data(); __adhd_bytes.size(); }){ return ");
+        out.append(byteViewCpp.data(), byteViewCpp.size());
+        out.append("{ reinterpret_cast<const ");
+        out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
+        out.append("*>(__adhd_bytes.data()), __adhd_bytes.size() * sizeof(*__adhd_bytes.data()) }; }else{ const ");
+        out.append(CodegenSymbols::s_StringViewCppType.data(), CodegenSymbols::s_StringViewCppType.size());
+        out.append(" __adhd_sv(__adhd_bytes); return ");
+        out.append(byteViewCpp.data(), byteViewCpp.size());
+        out.append("{ reinterpret_cast<const ");
+        out.append(CodegenSymbols::s_ByteCppType.data(), CodegenSymbols::s_ByteCppType.size());
+        out.append("*>(__adhd_sv.data()), __adhd_sv.size() }; } }(");
+        emitExprImpl(out, expr, false, suppressWrapMask | s_SuppressAdaptToByteView);
+        out.append("))");
         return;
     }
 

@@ -76,19 +76,6 @@ namespace BuiltinFunctionReturnRule{
     };
 };
 
-namespace BuiltinCallLowering{
-    enum Enum : u8{
-        None = 0u,
-        PlatformLiteralArg0,
-        BinaryByteViewArg0,
-        BinaryByteViewArg1,
-        StagedWriteTextAtomic,
-        StagedWriteBinaryAtomic,
-        StagedWriteAtomicChecked,
-        Arg0AndBytePtrSizeArg1,
-    };
-};
-
 namespace BuiltinFunctionArgRule{
     enum Enum : u16{
 #define NWB_ADHD_EXPORT_FUNCTION_ARG_RULE(ruleName, expectedParamType, isMut, requiredExactType, requiresStringLike, requiresIntegerScalar, errorMessage) \
@@ -345,7 +332,6 @@ struct BuiltinFunctionInfo{
     usize minArity;
     usize arity;
     BuiltinFunctionReturnRule::Enum returnRule;
-    BuiltinCallLowering::Enum callLowering;
     b8 prependsScratchArena;
     b8 isVariadic;
     b8 wrapsFormatArgs;
@@ -357,6 +343,8 @@ struct BuiltinFunctionInfo{
     Array<BuiltinFunctionArgRule::Enum, 20> argRules;
     u32 retainedArgMask = 0u;
     u32 explicitTypeParamMask = 0u;
+    u32 byteViewArgMask = 0u;
+    u32 platformLiteralArgMask = 0u;
 };
 
 struct BuiltinGlobalConstantInfo{
@@ -414,6 +402,7 @@ struct BuiltinSpecialMethodInfo{
 }
 
 [[nodiscard]] MStringView BuiltinPreludeLoadError()noexcept;
+[[nodiscard]] const BuiltinObjectTypeInfo* FindStaticBuiltinObjectType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinObjectTypeInfo* FindBuiltinObjectType(MStringView name)noexcept;
 [[nodiscard]] const BuiltinEnumInfo* FindBuiltinEnum(MStringView name)noexcept;
 [[nodiscard]] b8 HasBuiltinEnumEntry(MStringView enumName, MStringView entryName)noexcept;
@@ -483,7 +472,6 @@ struct BuiltinSpecialMethodInfo{
 [[nodiscard]] MStringView FindFloatSimdRegisterTypeName(b8 isDouble)noexcept;
 [[nodiscard]] MStringView FindIntSimdStorageVectorTypeName(b8 isDouble, b8 isSigned)noexcept;
 [[nodiscard]] const BuiltinContainerArgConstraintInfo* FindContainerArgConstraint(BuiltinFunctionArgRule::Enum rule)noexcept;
-[[nodiscard]] b8 IsNumericScalarArgRule(BuiltinFunctionArgRule::Enum rule)noexcept;
 [[nodiscard]] SpecialFunctionKind::Enum FindSpecialFunctionKind(MStringView name)noexcept;
 [[nodiscard]] SimdLaneZeroRuleKind::Enum FindSimdLaneZeroRule(MStringView name)noexcept;
 [[nodiscard]] SpecialMethodKind::Enum FindSpecialMethodSemantics(MStringView methodName)noexcept;

@@ -13,7 +13,7 @@ extern enum VolumeUsage : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeBuildConfig"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/filesystem/volume_types.h>"), cpp_name("::NWB::Core::Filesystem::VolumeBuildConfig")]
 extern class VolumeBuildConfig{
     CompactString volumeName;
     u64 segmentSize;

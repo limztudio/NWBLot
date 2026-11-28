@@ -5,7 +5,7 @@
 [cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestProcessValue")]
 extern mut T TestProcessValue<T>();
 
-[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestObserved"), cpp_flags(arena_first_ctor)]
+[cpp_header("<tests/common/value_storage.h>"), cpp_name("::NWB::Tests::TestObserved")]
 extern class TestObserved<T>{
     mut T value()const;
 };

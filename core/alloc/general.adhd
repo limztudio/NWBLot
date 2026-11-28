@@ -63,7 +63,7 @@ extern b8 TryCopyVector<T>(mut Vector<T> destination, in Span<T> source);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/alloc/arena_object_slot.h>"), cpp_name("::NWB::Core::Alloc::ArenaObjectSlot"), cpp_flags(arena_first_ctor)]
+[cpp_header("<core/alloc/arena_object_slot.h>"), cpp_name("::NWB::Core::Alloc::ArenaObjectSlot")]
 extern class ArenaObjectSlot<T>{
     b8 tryEmplace(...);
     b8 valid()const;

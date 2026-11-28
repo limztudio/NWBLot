@@ -39,7 +39,7 @@ extern class ProjectRuntimeContext{
     TimingView gpuTimingView()const;
 };
 
-[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks"), cpp_flags(brace_init)]
+[cpp_header("<loader/project_entry.h>"), cpp_name("::NWB::IProjectEntryCallbacks")]
 extern class IProjectEntryCallbacks{
     b8 onStartup();
     void onShutdown();

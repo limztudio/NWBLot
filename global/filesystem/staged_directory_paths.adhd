@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[arena, cpp_name("::StagedDirectoryPaths"), cpp_flags(arena_first_ctor)]
+[cpp_name("::StagedDirectoryPaths")]
 extern class StagedDirectoryPaths{
     Path backupDirectory;
     Path stageDirectory;
@@ -12,7 +12,7 @@ extern class StagedDirectoryPaths{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_name("::StagedDirectoryPaths<::ArenaBase>::Create"), cpp_flags(scratch_arena)]
+[cpp_name("::StagedDirectoryPaths<::ArenaBase>::Create")]
 extern StagedDirectoryPaths CreateStagedDirectoryPaths(in Path a0, in StringView a1);
 
 

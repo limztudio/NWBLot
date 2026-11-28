@@ -38,7 +38,7 @@ extern enum CpuTaskTarget : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskHandle"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskHandle")]
 extern class CpuTaskHandle{
     u64 domainIdentity;
     u32 index;
@@ -46,7 +46,7 @@ extern class CpuTaskHandle{
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskOptions"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskOptions")]
 extern class CpuTaskOptions{
     CpuTaskProfileLabel profileLabel;
     CpuTaskCost cost;
@@ -54,13 +54,13 @@ extern class CpuTaskOptions{
     CpuTaskTarget target;
 };
 
-[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskProfileLabel"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskProfileLabel")]
 extern class CpuTaskProfileLabel{
     u64 value;
     b8 valid(...)const;
 };
 
-[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerConfig"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerConfig")]
 extern class CpuTaskSchedulerConfig{
     usize profileEventCapacity;
     u32 workerCount;
@@ -68,7 +68,7 @@ extern class CpuTaskSchedulerConfig{
     b8 heterogeneous;
 };
 
-[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerStatistics"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/task/cpu/types.h>"), cpp_name("::NWB::Core::CpuTaskSchedulerStatistics")]
 extern class CpuTaskSchedulerStatistics{
     u64 completedTasks;
     u64 canceledTasks;

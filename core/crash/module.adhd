@@ -30,7 +30,7 @@ extern enum CrashGpuCrashDumpKind : u8{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashCapturePolicy"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashCapturePolicy")]
 extern class CrashCapturePolicy{
     b8 captureAssertions;
     b8 captureFatalAssertions;
@@ -40,7 +40,7 @@ extern class CrashCapturePolicy{
     u32 maxDiagnosticDumpsPerSite;
 };
 
-[arena, cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashConfigT"), cpp_flags(non_thread_safe, arena_first_ctor)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashConfigT"), cpp_flags(non_thread_safe)]
 extern class CrashConfig{
     Path spoolDirectory;
     CrashSpoolRetentionConfig spoolRetention;
@@ -48,14 +48,14 @@ extern class CrashConfig{
     CrashDumpDetailMode dumpDetailMode;
 };
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashDumpResult"), cpp_flags(small_value, binary_serializable, brace_init)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashDumpResult")]
 extern class CrashDumpResult{
     CrashDumpStatus status;
     b8 packageWritten(...)const;
     b8 requestAccepted(...)const;
 };
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashSpoolRetentionConfig"), cpp_flags(binary_serializable, brace_init)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::CrashSpoolRetentionConfig")]
 extern class CrashSpoolRetentionConfig{
     usize maxPendingPackages;
     usize maxUploadedPackages;
@@ -67,10 +67,10 @@ extern class CrashSpoolRetentionConfig{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DefaultCrashSpoolDirectory"), cpp_flags(scratch_arena)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DefaultCrashSpoolDirectory")]
 extern Path DefaultCrashSpoolDirectory();
 
-[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DefaultCrashHandlerExecutablePath"), cpp_flags(scratch_arena)]
+[cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::DefaultCrashHandlerExecutablePath")]
 extern Path DefaultCrashHandlerExecutablePath();
 
 [cpp_header("<core/crash/module.h>"), cpp_name("::NWB::Core::Crash::InstallCrashHandler")]

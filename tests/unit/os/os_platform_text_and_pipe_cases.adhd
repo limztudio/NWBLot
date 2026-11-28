@@ -41,7 +41,7 @@ extern class X11PreeditBuffer{
     usize moveCaretToEnd();
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurrounding"), cpp_flags(brace_init)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputSurrounding")]
 extern class WaylandTextInputSurrounding{
     StringView text;
     usize offsetByte;
@@ -50,7 +50,7 @@ extern class WaylandTextInputSurrounding{
     b8 available;
 };
 
-[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputProvenance"), cpp_flags(brace_init)]
+[cpp_header("<core/os/linux/wayland/text_input_state.h>"), cpp_name("::NWB::Core::WaylandTextInputProvenance")]
 extern class WaylandTextInputProvenance{
     TextInputSessionToken token;
     u64 revision;

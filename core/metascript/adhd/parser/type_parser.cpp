@@ -318,8 +318,8 @@ b8 TypeParser::parseParamList(MVector<ParamDecl>& outParams, const b8 allowAuto,
                 usize dotCount = 0u;
                 while(m_cursor.match(TokenType::Dot))
                     ++dotCount;
-                if(dotCount != 2u && dotCount != 3u){
-                    m_cursor.error("expected '..' or '...' for variadic 'extern' parameter list");
+                if(dotCount != 3u){
+                    m_cursor.error("expected '...' for variadic 'extern' parameter list");
                     return false;
                 }
                 if(!m_cursor.check(TokenType::RightParen)){

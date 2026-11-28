@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[cpp_header("<core/alloc/shared.h>"), cpp_name("::NWB::Core::Alloc::SharedPool"), cpp_flags(arena_first_ctor)]
+[cpp_header("<core/alloc/shared.h>"), cpp_name("::NWB::Core::Alloc::SharedPool")]
 extern class SharedPool{
     ArenaMemoryStats memoryStats()const;
     Expected<Shared<T>> make<T>(...)const;

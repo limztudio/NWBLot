@@ -140,7 +140,12 @@ MeshletBounds BuildMeshletBoundsWithAabbCachedNormals(
     for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
         const f32x4 rawFaceN = cachedFaceNormals[cast<usize>(baseTri + primitiveIndex)];
         const VectorSingle faceNormal(rawFaceN.x, rawFaceN.y, rawFaceN.z, 0.0f);
-        if(IsValidMeshletDirection3(faceNormal)){
+        if(rawFaceN.w > 0.0f){
+            areaWeightedNormal = areaWeightedNormal + faceNormal;
+            unitNormals[cast<usize>(primitiveIndex)] = f32x4(faceNormal * rawFaceN.w);
+            ++validFaceNormalCount;
+        }
+        else if(IsValidMeshletDirection3(faceNormal)){
             areaWeightedNormal = areaWeightedNormal + faceNormal;
             unitNormals[cast<usize>(primitiveIndex)] = f32x4(NormalizeMeshletDirection3OrZero(faceNormal));
             ++validFaceNormalCount;

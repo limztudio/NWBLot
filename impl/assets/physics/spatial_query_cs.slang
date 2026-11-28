@@ -816,6 +816,7 @@ bool nwbPhysicsQueryMeshClosestOutwardNormal(
     return found;
 }
 
+[noinline]
 bool nwbPhysicsQueryRayMesh(
     const uint meshNodeSlot,
     const uint meshTriSlot,
@@ -956,6 +957,7 @@ bool nwbPhysicsQueryRayMesh(
     return true;
 }
 
+[noinline]
 bool nwbPhysicsQuerySphereCastMesh(
     const uint meshNodeSlot,
     const uint meshTriSlot,
@@ -1572,6 +1574,7 @@ bool nwbPhysicsHfStepDda(
     return true;
 }
 
+[noinline]
 bool nwbPhysicsQueryRayHeightfield(
     const uint hullVertexSlot,
     const NwbPhysicsGpuShapeProxy spProxy,
@@ -1781,6 +1784,7 @@ void nwbPhysicsQuerySphereCastHfCell(
     }
 }
 
+[noinline]
 bool nwbPhysicsQuerySphereCastHeightfield(
     const uint hullVertexSlot,
     const NwbPhysicsGpuShapeProxy spProxy,
@@ -2082,6 +2086,7 @@ float nwbPhysicsQueryPointHeightfieldDistSq(
     return effDist * effDist;
 }
 
+[noinline]
 float nwbPhysicsPrimitivePointDistSq(
     const float3 p,
     const NwbPhysicsGpuBodyPose pose,
@@ -2376,6 +2381,7 @@ float nwbPhysicsPrimitivePointDistSq(
     return 1.0e30f;
 }
 
+[noinline]
 bool nwbPhysicsQuerySphereMarchShape(
     const NwbPhysicsGpuShapeProxy spProxy,
     const NwbPhysicsGpuBodyPose pose,
@@ -3045,6 +3051,7 @@ bool nwbPhysicsQueryHeightfieldVsQueryShape(
 }
 #endif
 
+[noinline]
 void nwbPhysicsTestSpatialQueryShape(
     const uint queryIdx,
     const uint shapeSlot,
@@ -3755,10 +3762,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         while(((traverseLbvh && sp > 0u) || (!traverseLbvh && bruteIdx < shapeCount)) && !(queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_ANY && hasHit && !isMultiHit) && !needsCpuFallback){
             uint leafCount = 0u;
-            uint leafShapes[2] = { 0u, 0u };
-            float3 leafMin[2] = { float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f) };
-            float3 leafMax[2] = { float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f) };
-            float leafT[2] = { 0.0f, 0.0f };
+            uint leafShape0 = 0u;
+            uint leafShape1 = 0u;
+            float3 leafMin0 = float3(0.0f, 0.0f, 0.0f);
+            float3 leafMin1 = float3(0.0f, 0.0f, 0.0f);
+            float3 leafMax0 = float3(0.0f, 0.0f, 0.0f);
+            float3 leafMax1 = float3(0.0f, 0.0f, 0.0f);
+            float leafT0 = 0.0f;
+            float leafT1 = 0.0f;
             if(traverseLbvh){
                 --sp;
                 if(sortNodes && !isMultiHit && stackT[sp] > bestMetric)
@@ -3818,17 +3829,25 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     ++sp;
                 }
                 if(hitFirst && idxFirst >= leafStart){
-                    leafShapes[leafCount] = asuint(nodeFirst.minLeft.w);
-                    leafMin[leafCount] = nodeFirst.minLeft.xyz;
-                    leafMax[leafCount] = nodeFirst.maxRight.xyz;
-                    leafT[leafCount] = tFirst;
-                    ++leafCount;
+                    leafShape0 = asuint(nodeFirst.minLeft.w);
+                    leafMin0 = nodeFirst.minLeft.xyz;
+                    leafMax0 = nodeFirst.maxRight.xyz;
+                    leafT0 = tFirst;
+                    leafCount = 1u;
                 }
                 if(hitSecond && idxSecond >= leafStart){
-                    leafShapes[leafCount] = asuint(nodeSecond.minLeft.w);
-                    leafMin[leafCount] = nodeSecond.minLeft.xyz;
-                    leafMax[leafCount] = nodeSecond.maxRight.xyz;
-                    leafT[leafCount] = tSecond;
+                    if(leafCount == 0u){
+                        leafShape0 = asuint(nodeSecond.minLeft.w);
+                        leafMin0 = nodeSecond.minLeft.xyz;
+                        leafMax0 = nodeSecond.maxRight.xyz;
+                        leafT0 = tSecond;
+                    }
+                    else{
+                        leafShape1 = asuint(nodeSecond.minLeft.w);
+                        leafMin1 = nodeSecond.minLeft.xyz;
+                        leafMax1 = nodeSecond.maxRight.xyz;
+                        leafT1 = tSecond;
+                    }
                     ++leafCount;
                 }
             }
@@ -3853,18 +3872,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 else if(!nwbPhysicsAabbOverlaps(qBoxMin, qBoxMax, aMin, aMax)){
                     continue;
                 }
-                leafShapes[0] = shapeIdx;
-                leafMin[0] = aMin;
-                leafMax[0] = aMax;
-                leafT[0] = candAabbT;
+                leafShape0 = shapeIdx;
+                leafMin0 = aMin;
+                leafMax0 = aMax;
+                leafT0 = candAabbT;
                 leafCount = 1u;
             }
             [loop]
             for(uint li = 0u; li < leafCount; ++li){
                 if(needsCpuFallback || (queryType == NWB_PHYSICS_QUERY_TYPE_RAYCAST_ANY && hasHit && !isMultiHit))
                     break;
-                if(sortNodes && !isMultiHit && leafT[li] > bestMetric)
+                const float candLeafT = (li == 0u) ? leafT0 : leafT1;
+                if(sortNodes && !isMultiHit && candLeafT > bestMetric)
                     continue;
+                const uint candLeafShape = (li == 0u) ? leafShape0 : leafShape1;
+                const float3 candLeafMin = (li == 0u) ? leafMin0 : leafMin1;
+                const float3 candLeafMax = (li == 0u) ? leafMax0 : leafMax1;
                 nwbPhysicsTestSpatialQueryShape(
                     queryIdx,
                     shapeSlot,
@@ -3902,9 +3925,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     qRelMin,
                     qRelMax,
 #endif
-                    leafShapes[li],
-                    leafMin[li],
-                    leafMax[li],
+                    candLeafShape,
+                    candLeafMin,
+                    candLeafMax,
                     bestMetric,
                     bestPoint,
                     bestNormal,

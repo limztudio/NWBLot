@@ -35,6 +35,14 @@ extern class InMemoryAssetManagerFixture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuPhysicsShapeProxy PackTestGpuShapeProxy(in PhysicsWorld pw, in ShapeId shapeId, in BodyId bodyId){
+    in Shape shape = pw.m_shapes[shapeId.index];
+    VectorSingle localMin(0.0f);
+    VectorSingle localMax(0.0f);
+    ComputeShapeLocalAabbCachedValues(shape, pw.m_hullShapes, pw.m_hullLocalAabbs, pw.m_meshShapes, pw.m_heightfieldShapes, pw.m_compoundShapes, pw.m_scaledShapes, pw.m_chainShapes, pw.m_sdfShapes, localMin, localMax);
+    return PackGpuShapeProxyWithLocalBounds(shape, pw.m_bodies[bodyId.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, localMin, localMax, 0u, shapeId.index, 0.0f, 0u, 0u, 0u);
+}
+
 void AppendClosedCubeVerticesIndices(in f32 halfExtent, mut Vector<f32x4> outVerts, mut Vector<u32> outIndices){
     outVerts.push_back(f32x4(-halfExtent, -halfExtent, -halfExtent, 0.0f));
     outVerts.push_back(f32x4( halfExtent, -halfExtent, -halfExtent, 0.0f));
@@ -2874,18 +2882,7 @@ void VerifyPhysicsEdgeCases_GpuStructParityAndAssetParentCodec(){
     shiftedPts.push_back(f32x4(1.0f, 1.0f, 3.0f, 0.0f));
     const HullShape hull = BuildConvexHull(Span<f32x4>(shiftedPts.data(), shiftedPts.size()), 0.12f).value();
     const ShapeId hullShapeId = pw.createHullShape(bodyId, ShapeDef(), hull).value();
-    const GpuPhysicsShapeProxy hullProxy = PackGpuShapeProxy(
-        pw.m_shapes[hullShapeId.index],
-        pw.m_bodies[bodyId.index],
-        pw.m_hullShapes,
-        pw.m_meshShapes,
-        pw.m_heightfieldShapes,
-        0u,
-        hullShapeId.index,
-        0.0f,
-        0u,
-        0u
-    );
+    const GpuPhysicsShapeProxy hullProxy = PackTestGpuShapeProxy(pw, hullShapeId, bodyId);
     EXPECT_NEAR(hullProxy.localCenterRadius.x, hull.centroid().x, 1.0e-5f);
     EXPECT_NEAR(hullProxy.localCenterRadius.y, hull.centroid().y, 1.0e-5f);
     EXPECT_NEAR(hullProxy.localCenterRadius.w, hull.radius(), 1.0e-5f);
@@ -5861,7 +5858,7 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         ShapeDef plSd;
         plSd.localTransform = Transform3D(VectorSingle(1.0f, 2.0f, -1.0f, 0.0f), QuaternionRotationNormal(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), s_Pi * 0.5f));
         const ShapeId plShape = pw.createPlaneShape(stBody, plSd, MakePlaneShape(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.5f, VectorSingle(2.0f, 0.0f, 3.0f, 0.0f)).value()).value();
-        const GpuPhysicsShapeProxy plProxy = PackGpuShapeProxy(pw.m_shapes[plShape.index], pw.m_bodies[stBody.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, 0u, plShape.index, 0.0f, 0u, 0u);
+        const GpuPhysicsShapeProxy plProxy = PackTestGpuShapeProxy(pw, plShape, stBody);
         EXPECT_NEAR(plProxy.localCenterRadius.x, 0.5f, 1.0e-4f);
         EXPECT_NEAR(plProxy.localCenterRadius.y, 2.0f, 1.0e-4f);
         EXPECT_NEAR(plProxy.localCenterRadius.z, -1.0f, 1.0e-4f);
@@ -5873,7 +5870,7 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         ShapeDef tcSd;
         tcSd.localTransform = Transform3D(VectorSingle(2.0f, 0.0f, 0.0f, 0.0f), QuaternionIdentity());
         const ShapeId tcShape = pw.createTaperedCapsuleShape(stBody, tcSd, MakeTaperedCapsuleShape(VectorSingle(0.0f, -1.0f, 0.0f, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), 0.6f, 0.2f).value()).value();
-        const GpuPhysicsShapeProxy tcProxy = PackGpuShapeProxy(pw.m_shapes[tcShape.index], pw.m_bodies[stBody.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, 0u, tcShape.index, 0.0f, 0u, 0u);
+        const GpuPhysicsShapeProxy tcProxy = PackTestGpuShapeProxy(pw, tcShape, stBody);
         EXPECT_NEAR(tcProxy.localCenterRadius.x, 2.0f, 1.0e-5f);
         EXPECT_NEAR(tcProxy.localCenterRadius.w, 0.2f, 1.0e-5f);
         EXPECT_NEAR(tcProxy.localRotationOrMeta.x, 0.4f, 1.0e-5f);
@@ -5912,8 +5909,8 @@ void VerifyPhysicsEdgeCases_Phase2BGpuParityAndPacking(){
         Vector<GpuPhysicsBodyPose> qPoses;
         qPoses.push_back(GpuPhysicsBodyPose());
         Vector<GpuPhysicsShapeProxy> qShapes;
-        qShapes.push_back(PackGpuShapeProxy(pw.m_shapes[infPlShape.index], pw.m_bodies[stBody.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, 0u, infPlShape.index, 0.0f, 0u, 0u));
-        qShapes.push_back(PackGpuShapeProxy(pw.m_shapes[sphShape.index], pw.m_bodies[stBody.index], pw.m_hullShapes, pw.m_meshShapes, pw.m_heightfieldShapes, 0u, sphShape.index, 0.0f, 0u, 0u));
+        qShapes.push_back(PackTestGpuShapeProxy(pw, infPlShape, stBody));
+        qShapes.push_back(PackTestGpuShapeProxy(pw, sphShape, stBody));
         VectorSingle lbMin(0.0f);
         VectorSingle lbInvExt(0.0f);
         VectorSingle bMin(s_MaxF32);
@@ -7752,7 +7749,8 @@ void VerifyPhysicsEdgeCases_Phase2BGpuResidentSubsystemsAndColoring(){
 
         Vector<GpuPhysicsSoftDistConstraint> ordered;
         Vector<SoftBodyColorSlice> slices;
-        BuildSoftBodyDistanceConstraintColors(sb, ordered, slices);
+        SoftBodyColorScratch colorScratch;
+        BuildSoftBodyDistanceConstraintColors(sb, ordered, slices, colorScratch);
         EXPECT_EQ(ordered.size(), cast<usize>(71u));
         EXPECT_EQ(slices.size(), cast<usize>(71u));
 
@@ -7799,7 +7797,8 @@ void VerifyPhysicsEdgeCases_Phase2BGpuResidentSubsystemsAndColoring(){
 
         Vector<GpuPhysicsSoftVolConstraint> volOrdered;
         Vector<SoftBodyColorSlice> volSlices;
-        BuildSoftBodyVolumeConstraintColors(vsb, volOrdered, volSlices);
+        SoftBodyColorScratch volColorScratch;
+        BuildSoftBodyVolumeConstraintColors(vsb, volOrdered, volSlices, volColorScratch);
         EXPECT_EQ(volOrdered.size(), cast<usize>(4u));
         EXPECT_EQ(volSlices.size(), cast<usize>(4u));
 

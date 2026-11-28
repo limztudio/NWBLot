@@ -23,26 +23,31 @@ const StringView s_VehicleDiagnosticPrefix = "Vehicle meta";
 class FractureCookEntry{
     public Name virtualPath = s_NameNone;
     public FractureCollection collection;
+    public b8 validated = false;
 }
 
 class SoftBodyCookEntry{
     public Name virtualPath = s_NameNone;
     public SoftBody softBody;
+    public b8 validated = false;
 }
 
 class RagdollCookEntry{
     public Name virtualPath = s_NameNone;
     public RagdollAssetData ragdoll;
+    public b8 validated = false;
 }
 
 class ArticulationCookEntry{
     public Name virtualPath = s_NameNone;
     public ArticulationAssetData articulation;
+    public b8 validated = false;
 }
 
 class VehicleCookEntry{
     public Name virtualPath = s_NameNone;
     public VehicleAssetData vehicle;
+    public b8 validated = false;
 }
 
 class RigSkeletonLoadResult{
@@ -64,31 +69,31 @@ class SoftBodyTetBoundaryFace{
 
 
 b8 SerializeFractureAsset(in FractureAsset asset, mut Vector<u8> outBinary){
-    if(!asset.validatePayload())
+    if(!asset.payloadValidated() && !asset.validatePayload())
         return false;
     return PhysicsRigBinaryCodec().serializeFractureCollectionUnchecked(asset.fractureCollection(), outBinary);
 }
 
 b8 SerializeSoftBodyAsset(in SoftBodyAsset asset, mut Vector<u8> outBinary){
-    if(!asset.validatePayload())
+    if(!asset.payloadValidated() && !asset.validatePayload())
         return false;
     return PhysicsRigBinaryCodec().serializeSoftBodyUnchecked(asset.softBody(), outBinary);
 }
 
 b8 SerializeRagdollAsset(in RagdollAsset asset, mut Vector<u8> outBinary){
-    if(!asset.validatePayload())
+    if(!asset.payloadValidated() && !asset.validatePayload())
         return false;
     return PhysicsRigBinaryCodec().serializeRagdollUnchecked(asset.ragdollData(), outBinary);
 }
 
 b8 SerializeArticulationAsset(in ArticulationAsset asset, mut Vector<u8> outBinary){
-    if(!asset.validatePayload())
+    if(!asset.payloadValidated() && !asset.validatePayload())
         return false;
     return PhysicsRigBinaryCodec().serializeArticulationUnchecked(asset.articulationData(), outBinary);
 }
 
 b8 SerializeVehicleAsset(in VehicleAsset asset, mut Vector<u8> outBinary){
-    if(!asset.validatePayload())
+    if(!asset.payloadValidated() && !asset.validatePayload())
         return false;
     return PhysicsRigBinaryCodec().serializeVehicleUnchecked(asset.vehicleData(), outBinary);
 }
@@ -506,14 +511,20 @@ Expected<FractureCookEntry> ParseFractureCookMetadata(in Name virtualPath, in Pa
 
     if(entry.virtualPath == s_NameNone || !PhysicsRigBinaryCodec().validateFractureCollection(entry.collection, entry.virtualPath))
         return MakeUnexpected(Failure());
+    entry.validated = true;
     return entry;
 }
 
 Expected<FractureAsset> BuildFractureAsset(in FractureCookEntry entry){
     FractureAsset asset(entry.virtualPath);
     asset.setFractureCollection(entry.collection);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure());
+    if(entry.validated)
+        asset.markPayloadValidated();
+    else{
+        if(!asset.validatePayload())
+            return MakeUnexpected(Failure());
+        asset.markPayloadValidated();
+    }
     return asset;
 }
 
@@ -610,9 +621,12 @@ b8 BuildSoftBodyFromExternalTetMesh(
     HashMap<u64, u8> seenEdges;
     HashMap<u64, SoftBodyTetBoundaryFace> faceCounts;
     const usize tetCount = tetIndices.size() / 4u;
+    seenEdges.reserve(tetCount * 2u + pCount);
+    faceCounts.reserve(tetCount * 3u);
     outSb.volumeConstraints.clear();
     outSb.distanceConstraints.clear();
     outSb.volumeConstraints.reserve(tetCount);
+    outSb.distanceConstraints.reserve(tetCount * 2u + pCount);
 
     for(usize ti = 0u; ti < tetCount; ++ti){
         u32 p0 = tetIndices[ti * 4u + 0u];
@@ -1615,14 +1629,20 @@ Expected<SoftBodyCookEntry> ParseSoftBodyCookMetadata(in Name virtualPath, in Pa
 
     if(entry.virtualPath == s_NameNone || !PhysicsRigBinaryCodec().validateSoftBody(entry.softBody, entry.virtualPath))
         return MakeUnexpected(Failure());
+    entry.validated = true;
     return entry;
 }
 
 Expected<SoftBodyAsset> BuildSoftBodyAsset(in SoftBodyCookEntry entry){
     SoftBodyAsset asset(entry.virtualPath);
     asset.setSoftBody(entry.softBody);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure());
+    if(entry.validated)
+        asset.markPayloadValidated();
+    else{
+        if(!asset.validatePayload())
+            return MakeUnexpected(Failure());
+        asset.markPayloadValidated();
+    }
     return asset;
 }
 
@@ -2148,14 +2168,20 @@ Expected<RagdollCookEntry> ParseRagdollCookMetadata(in Name virtualPath, in Path
 
     if(entry.virtualPath == s_NameNone || !PhysicsRigBinaryCodec().validateRagdoll(entry.ragdoll, entry.virtualPath))
         return MakeUnexpected(Failure());
+    entry.validated = true;
     return entry;
 }
 
 Expected<RagdollAsset> BuildRagdollAsset(in RagdollCookEntry entry){
     RagdollAsset asset(entry.virtualPath);
     asset.setRagdoll(entry.ragdoll);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure());
+    if(entry.validated)
+        asset.markPayloadValidated();
+    else{
+        if(!asset.validatePayload())
+            return MakeUnexpected(Failure());
+        asset.markPayloadValidated();
+    }
     return asset;
 }
 
@@ -2837,14 +2863,20 @@ Expected<ArticulationCookEntry> ParseArticulationCookMetadata(in Name virtualPat
 
     if(entry.virtualPath == s_NameNone || !PhysicsRigBinaryCodec().validateArticulation(entry.articulation, entry.virtualPath))
         return MakeUnexpected(Failure());
+    entry.validated = true;
     return entry;
 }
 
 Expected<ArticulationAsset> BuildArticulationAsset(in ArticulationCookEntry entry){
     ArticulationAsset asset(entry.virtualPath);
     asset.setArticulation(entry.articulation);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure());
+    if(entry.validated)
+        asset.markPayloadValidated();
+    else{
+        if(!asset.validatePayload())
+            return MakeUnexpected(Failure());
+        asset.markPayloadValidated();
+    }
     return asset;
 }
 
@@ -3156,14 +3188,20 @@ Expected<VehicleCookEntry> ParseVehicleCookMetadata(in Name virtualPath, in Path
 
     if(entry.virtualPath == s_NameNone || !PhysicsRigBinaryCodec().validateVehicle(entry.vehicle, entry.virtualPath))
         return MakeUnexpected(Failure());
+    entry.validated = true;
     return entry;
 }
 
 Expected<VehicleAsset> BuildVehicleAsset(in VehicleCookEntry entry){
     VehicleAsset asset(entry.virtualPath);
     asset.setVehicle(entry.vehicle);
-    if(!asset.validatePayload())
-        return MakeUnexpected(Failure());
+    if(entry.validated)
+        asset.markPayloadValidated();
+    else{
+        if(!asset.validatePayload())
+            return MakeUnexpected(Failure());
+        asset.markPayloadValidated();
+    }
     return asset;
 }
 

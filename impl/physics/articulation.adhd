@@ -552,6 +552,11 @@ class ArticulationIkResult{
     public f32 maxRotationError = 0.0f;
 }
 
+class ArticulationEffMassNode{
+    public usize linkIdx = 0u;
+    public f32x4 uVal(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
 class ArticulationContactConstraint{
     public usize linkIdx = 0u;
     public BodyId hitBodyId;
@@ -592,6 +597,23 @@ class ArticulationContactConstraint{
     public f32 effInvN = 0.0f;
     public usize unitOffset = 0u;
     public b8 hasCachedUnit = false;
+    public f32x4 t1Dir(1.0f, 0.0f, 0.0f, 0.0f);
+    public f32x4 t2Dir(0.0f, 0.0f, 1.0f, 0.0f);
+    public f32 anisoScale1 = 1.0f;
+    public f32 anisoScale2 = 1.0f;
+    public f32 effInvT1 = 0.0f;
+    public f32 effInvT2 = 0.0f;
+    public usize unitOffsetT1 = 0u;
+    public usize unitOffsetT2 = 0u;
+    public b8 hasCachedUnitT1 = false;
+    public b8 hasCachedUnitT2 = false;
+    public b8 hasTangentCache = false;
+    public usize unitOffsetB = 0u;
+    public usize unitOffsetBT1 = 0u;
+    public usize unitOffsetBT2 = 0u;
+    public b8 hasCachedUnitB = false;
+    public b8 hasCachedUnitBT1 = false;
+    public b8 hasCachedUnitBT2 = false;
 }
 
 class ArticulationSkeletonJointInput{
@@ -741,6 +763,8 @@ class Articulation{
     private b8 m_linkShapeCacheValid = false;
     private Aabb3D m_aggregateAabb;
     private b8 m_aggregateAabbValid = false;
+    private Aabb3D m_aggregateEnvAabb;
+    private b8 m_aggregateEnvAabbValid = false;
     private Aabb3D m_sleepAggregateAabb;
     private b8 m_sleepAggregateAabbValid = false;
     private b8 m_recordReactionForcesThisSubstep = true;
@@ -795,12 +819,23 @@ class Articulation{
     private Vector<ArticulationLoopUnitMeta> m_loopUnitMetaScratch;
     private Vector<ArticulationLoopUnitMeta> m_rbConstraintUnitMetaScratch;
     private Vector<ArticulationContactConstraint> m_contactConstraintsScratch;
+    private Vector<ArticulationContactConstraint> m_pairContactsScratch;
     private HashMap<u64, f32> m_warmContactLambdaN;
     private HashMap<u64, f32x4> m_warmContactLambdaT;
     private Vector<f32> m_tendonLambdaScratch;
     private Vector<f32> m_spatialTendonLambdaScratch;
     private Vector<Transform3D> m_prevLinkTransformsScratch;
     private Vector<u8> m_linkDetachedMask;
+    private Vector<u8> m_envGravSubtractedScratch;
+    private Vector<f32> m_ikJacScratch;
+    private Vector<f32> m_ikJRowsScratch;
+    private Vector<f32> m_ikErrScratch;
+    private Vector<f32> m_ikNormalMatScratch;
+    private Vector<f32> m_ikDualSolScratch;
+    private Vector<f32> m_ikDqScratch;
+    private Vector<usize> m_ikChainScratch;
+    private Vector<f32x4> m_ikPtsScratch;
+    private Vector<f32> m_ikSegLensScratch;
     private Spatial6x6Factor m_rootFactor;
 
     public void shiftOrigin(in VectorSingle negDelta){
@@ -822,6 +857,10 @@ class Articulation{
         if(this.m_aggregateAabbValid){
             this.m_aggregateAabb.lowerBound = f32x4(VectorSingle(this.m_aggregateAabb.lowerBound) + d, 0.0f);
             this.m_aggregateAabb.upperBound = f32x4(VectorSingle(this.m_aggregateAabb.upperBound) + d, 0.0f);
+        }
+        if(this.m_aggregateEnvAabbValid){
+            this.m_aggregateEnvAabb.lowerBound = f32x4(VectorSingle(this.m_aggregateEnvAabb.lowerBound) + d, 0.0f);
+            this.m_aggregateEnvAabb.upperBound = f32x4(VectorSingle(this.m_aggregateEnvAabb.upperBound) + d, 0.0f);
         }
         if(this.m_sleepAggregateAabbValid){
             this.m_sleepAggregateAabb.lowerBound = f32x4(VectorSingle(this.m_sleepAggregateAabb.lowerBound) + d, 0.0f);
@@ -858,6 +897,8 @@ class Articulation{
         this.m_linkShapeCacheValid = false;
         this.m_aggregateAabb = Aabb3D();
         this.m_aggregateAabbValid = false;
+        this.m_aggregateEnvAabb = Aabb3D();
+        this.m_aggregateEnvAabbValid = false;
         this.m_sleepAggregateAabb = Aabb3D();
         this.m_sleepAggregateAabbValid = false;
         this.m_recordReactionForcesThisSubstep = true;
@@ -912,12 +953,23 @@ class Articulation{
         this.m_loopUnitMetaScratch.clear();
         this.m_rbConstraintUnitMetaScratch.clear();
         this.m_contactConstraintsScratch.clear();
+        this.m_pairContactsScratch.clear();
         this.m_warmContactLambdaN.clear();
         this.m_warmContactLambdaT.clear();
         this.m_tendonLambdaScratch.clear();
         this.m_spatialTendonLambdaScratch.clear();
         this.m_prevLinkTransformsScratch.clear();
         this.m_linkDetachedMask.clear();
+        this.m_envGravSubtractedScratch.clear();
+        this.m_ikJacScratch.clear();
+        this.m_ikJRowsScratch.clear();
+        this.m_ikErrScratch.clear();
+        this.m_ikNormalMatScratch.clear();
+        this.m_ikDualSolScratch.clear();
+        this.m_ikDqScratch.clear();
+        this.m_ikChainScratch.clear();
+        this.m_ikPtsScratch.clear();
+        this.m_ikSegLensScratch.clear();
         this.m_rootFactor = Spatial6x6Factor();
         this.isSleeping = false;
         this.sleepTimer = 0.0f;
@@ -934,8 +986,17 @@ class Articulation{
         this.m_fkDirty = true;
         this.m_linkShapeCacheValid = false;
         this.m_aggregateAabbValid = false;
+        this.m_aggregateEnvAabbValid = false;
         this.m_sleepAggregateAabbValid = false;
         this.m_cachedProxyBodies.clear();
+    }
+
+    public void markPoseDirty(){
+        this.m_fkDirty = true;
+        this.m_linkShapeCacheValid = false;
+        this.m_aggregateAabbValid = false;
+        this.m_aggregateEnvAabbValid = false;
+        this.m_sleepAggregateAabbValid = false;
     }
 
     public void snapshotCollectWarmContacts(
@@ -1549,11 +1610,14 @@ class Articulation{
         this.m_fkValid = false;
         this.m_linkShapeCacheValid = false;
         this.m_aggregateAabbValid = false;
+        this.m_aggregateEnvAabbValid = false;
         this.m_sleepAggregateAabbValid = false;
         this.m_recordReactionForcesThisSubstep = true;
         this.m_warmContactLambdaN.clear();
         this.m_warmContactLambdaT.clear();
         this.m_rbConstraintUnitMetaScratch.clear();
+        this.m_pairContactsScratch.clear();
+        this.m_envGravSubtractedScratch.clear();
         this.stepBreakEvents.clear();
         this.m_linkDetachedMask.assign(links.size(), 0u);
         this.baseTransform = rootTransform;
@@ -1650,6 +1714,7 @@ class Articulation{
         this.m_fkValid = true;
         this.m_linkShapeCacheValid = false;
         this.m_aggregateAabbValid = false;
+        this.m_aggregateEnvAabbValid = false;
     }
 
     private void ensureForwardKinematicsValid(){
@@ -1657,6 +1722,26 @@ class Articulation{
         if(this.m_fkValid && !this.m_fkDirty && this.m_relP2C.size() == n && this.linkStates.size() == n)
             return;
         this.computeForwardKinematics();
+    }
+
+    private void recomputeLinkFkTransform(in usize i){
+        const usize n = this.linkDefs.size();
+        if(i == 0u || i >= n || this.isLinkDetached(i))
+            return;
+        if(this.m_relP2C.size() < n)
+            this.m_relP2C.resize(n);
+        in ArticulationLinkDef d = this.linkDefs[i];
+        const Transform3D jRel = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
+        this.m_relP2C[i] = jRel;
+        this.linkStates[i].worldTransform = ComposeTransform(this.linkStates[d.parentIndex].worldTransform, jRel);
+        if(this.m_hasPoseDependentSubspace && i < this.m_linkSubspaces.size() && (d.jointType == ArticulationJointType::Universal || d.jointType == ArticulationJointType::Planar)){
+            this.m_linkSubspaces[i] = this.computeJointSubspaceFromBasis(
+                i,
+                VectorSingle(this.m_linkBasisAxis0[i]),
+                VectorSingle(this.m_linkBasisAxis1[i]),
+                VectorSingle(this.m_linkBasisAxis2[i])
+            );
+        }
     }
 
     private b8 isLimitEnabledOnDof(in ArticulationLinkDef d, in u32 dofIdx)const{
@@ -2585,8 +2670,7 @@ class Articulation{
         const VectorSingle fLocal = Vector3InverseRotate(dir, qLink);
         SpatialVec pAccum = SpatialVecMake(Cross(rLocal, fLocal), fLocal);
 
-        Vector<usize> chainNodes;
-        Vector<f32x4> chainU;
+        BvhSpillStack<ArticulationEffMassNode, 64u> chainStack;
         usize cur = linkIdx;
         while(cur > 0u){
             in ArticulationLinkDef d = this.linkDefs[cur];
@@ -2605,8 +2689,10 @@ class Articulation{
                     pMod = SpatialSub(pMod, SpatialScale(fac.uSub[a], est));
                 }
             }
-            chainNodes.push_back(cur);
-            chainU.push_back(f32x4(uArr[0u], uArr[1u], uArr[2u], 0.0f));
+            ArticulationEffMassNode cNode;
+            cNode.linkIdx = cur;
+            cNode.uVal = f32x4(uArr[0u], uArr[1u], uArr[2u], 0.0f);
+            chainStack.push(cNode);
             in Transform3D rp = this.m_relP2C[cur];
             pAccum = SpatialTransformForceC2P(VectorSingle(rp.position), VectorSingle(rp.rotation), pMod);
             cur = cast<usize>(d.parentIndex);
@@ -2620,16 +2706,16 @@ class Articulation{
                 dvCur = SolveSpatial6x6(this.m_iaList[0u], pAccum);
         }
 
-        for(usize rev = 0u; rev < chainNodes.size(); ++rev){
-            const usize slot = chainNodes.size() - 1u - rev;
-            const usize cIdx = chainNodes[slot];
+        ArticulationEffMassNode popNode;
+        while(chainStack.pop(popNode)){
+            const usize cIdx = popNode.linkIdx;
             in ArticulationSubspace sub = this.m_linkSubspaces[cIdx];
             in ArticulationAbcLinkData fac = this.m_abcData[cIdx];
             in Transform3D rp = this.m_relP2C[cIdx];
             const SpatialVec dvPrime = SpatialTransformMotionP2C(VectorSingle(rp.position), VectorSingle(rp.rotation), dvCur);
             if(sub.dofCount > 0u && fac.dValid){
                 Array<f32, 3u> uIn;
-                uIn[0u] = chainU[slot].x; uIn[1u] = chainU[slot].y; uIn[2u] = chainU[slot].z;
+                uIn[0u] = popNode.uVal.x; uIn[1u] = popNode.uVal.y; uIn[2u] = popNode.uVal.z;
                 Array<f32, 3u> rhs;
                 for(u32 a = 0u; a < sub.dofCount; ++a)
                     rhs[a] = uIn[a] - SpatialDot(fac.uSub[a], dvPrime);
@@ -2772,11 +2858,12 @@ class Articulation{
         this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, 1.0f);
     }
 
-    private void computeInverseDynamicsRneaImpl(
+    private void computeInverseDynamicsRneaCore(
         in VectorSingle gravityWorld,
         in SpatialVec rootAccel,
         in Span<f32> targetQddPacked,
         in b8 forceZeroQdd,
+        in Span<ArticulationSubspace> activeSubs,
         mut Vector<f32> outTorquesPacked,
         mut SpatialVec outRootWrench
     )const{
@@ -2794,12 +2881,9 @@ class Articulation{
             baseDofs = 0u;
 
         const b8 canUseInertiaCache = (!this.m_cachesDirty && this.m_linkSpatialInertia.size() == n);
-        const b8 canUseSubspaceCache = (!this.m_cachesDirty && this.m_linkSubspaces.size() == n);
 
         Vector<RneaLinkScratch> work;
         work.resize(n);
-        Vector<ArticulationSubspace> subs;
-        subs.resize(n);
 
         u32 curPackedOff = baseDofs;
         for(usize i = 0u; i < n; ++i){
@@ -2895,11 +2979,7 @@ class Articulation{
                 const Transform3D rp = ComposeTransform(d.parentToJoint, ComposeTransform(jXf, d.jointToChild));
                 work[i].relXf = rp;
                 work[i].worldRot = f32x4(SafeNormalizeQuat(QuaternionMultiply(VectorSingle(work[d.parentIndex].worldRot), VectorSingle(rp.rotation))));
-                if(canUseSubspaceCache && d.jointType != ArticulationJointType::Universal && d.jointType != ArticulationJointType::Planar)
-                    subs[i] = this.m_linkSubspaces[i];
-                else
-                    subs[i] = this.computeJointSubspace(i);
-                in ArticulationSubspace sub = subs[i];
+                in ArticulationSubspace sub = activeSubs[i];
                 const VectorSingle rpPos = VectorSingle(rp.position);
                 const VectorSingle rpRot = VectorSingle(rp.rotation);
 
@@ -2973,7 +3053,7 @@ class Articulation{
             if(i == 0u)
                 break;
             in ArticulationLinkDef d = this.linkDefs[i];
-            in ArticulationSubspace sub = subs[i];
+            in ArticulationSubspace sub = activeSubs[i];
             runningOutOff -= sub.dofCount;
             if(sub.dofCount > 0u){
                 for(u32 a = 0u; a < sub.dofCount; ++a){
@@ -2997,6 +3077,38 @@ class Articulation{
             outTorquesPacked[4u] = outRootWrench.lin.y;
             outTorquesPacked[5u] = outRootWrench.lin.z;
         }
+    }
+
+    private void computeInverseDynamicsRneaImpl(
+        in VectorSingle gravityWorld,
+        in SpatialVec rootAccel,
+        in Span<f32> targetQddPacked,
+        in b8 forceZeroQdd,
+        mut Vector<f32> outTorquesPacked,
+        mut SpatialVec outRootWrench
+    )const{
+        const usize n = this.linkDefs.size();
+        const u32 totalDofs = this.totalDofCount();
+        if(n == 0u){
+            outTorquesPacked.assign(cast<usize>(totalDofs), 0.0f);
+            outRootWrench = SpatialVec();
+            return;
+        }
+        const b8 canUseSubspaceCache = (!this.m_cachesDirty && this.m_linkSubspaces.size() == n);
+        if(canUseSubspaceCache && !this.m_hasPoseDependentSubspace){
+            this.computeInverseDynamicsRneaCore(gravityWorld, rootAccel, targetQddPacked, forceZeroQdd, Span<ArticulationSubspace>(this.m_linkSubspaces), outTorquesPacked, outRootWrench);
+            return;
+        }
+        Vector<ArticulationSubspace> localSubs;
+        localSubs.resize(n);
+        for(usize i = 1u; i < n; ++i){
+            in ArticulationLinkDef d = this.linkDefs[i];
+            if(canUseSubspaceCache && d.jointType != ArticulationJointType::Universal && d.jointType != ArticulationJointType::Planar)
+                localSubs[i] = this.m_linkSubspaces[i];
+            else
+                localSubs[i] = this.computeJointSubspace(i);
+        }
+        this.computeInverseDynamicsRneaCore(gravityWorld, rootAccel, targetQddPacked, forceZeroQdd, Span<ArticulationSubspace>(localSubs), outTorquesPacked, outRootWrench);
     }
 
     public void computeInverseDynamicsRNEA(
@@ -3051,53 +3163,15 @@ class Articulation{
         this.computeInverseDynamicsRneaImpl(gravityWorld, SpatialVec(), Span<f32>(), true, outBiasTorquesPacked, unusedRootWrench);
     }
 
-    public void computeMassMatrixCRBA(mut Vector<f32> outMassMatrix, mut u32 outDofCount)const{
-        const usize n = this.linkDefs.size();
-        outDofCount = this.totalDofCount();
-        const usize nd = cast<usize>(outDofCount);
-        outMassMatrix.assign(nd * nd, 0.0f);
-        if(n == 0u || nd == 0u)
-            return;
-
-        const b8 canUseInertiaCache = (!this.m_cachesDirty && this.m_linkSpatialInertia.size() == n);
-        const b8 canUseSubspaceCache = (!this.m_cachesDirty && this.m_linkSubspaces.size() == n);
-        const b8 canUseRelCache = (!this.m_cachesDirty && !this.m_fkDirty && this.m_fkValid && this.m_relP2C.size() == n);
-
-        Vector<SpatialMat6> icList;
-        icList.resize(n);
-        Vector<Transform3D> relP2C;
-        relP2C.resize(n);
-        Vector<ArticulationSubspace> subs;
-        subs.resize(n);
-        Vector<u32> offsets;
-        offsets.resize(n, 0u);
-
-        u32 runningOff = 6u;
-        if(this.fixedBase)
-            runningOff = 0u;
-        for(usize i = 0u; i < n; ++i){
-            in ArticulationLinkDef d = this.linkDefs[i];
-            if(canUseInertiaCache)
-                icList[i] = this.m_linkSpatialInertia[i];
-            else
-                icList[i] = SpatialInertiaMatrix(Max(1.0e-3f, d.mass), VectorSingle(d.comLocal), this.resolveLinkInertiaSym(d));
-            if(i == 0u){
-                offsets[0u] = 0u;
-            }
-            else{
-                offsets[i] = runningOff;
-                if(canUseRelCache)
-                    relP2C[i] = this.m_relP2C[i];
-                else
-                    relP2C[i] = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
-                if(canUseSubspaceCache && d.jointType != ArticulationJointType::Universal && d.jointType != ArticulationJointType::Planar)
-                    subs[i] = this.m_linkSubspaces[i];
-                else
-                    subs[i] = this.computeJointSubspace(i);
-                runningOff += subs[i].dofCount;
-            }
-        }
-
+    private void computeMassMatrixCrbaCore(
+        in usize n,
+        in usize nd,
+        in Span<Transform3D> relP2C,
+        in Span<ArticulationSubspace> subs,
+        in Span<u32> offsets,
+        mut Vector<SpatialMat6> icList,
+        mut Vector<f32> outMassMatrix
+    )const{
         for(usize rev = 0u; rev < n; ++rev){
             const usize i = n - 1u - rev;
             if(i == 0u)
@@ -3169,7 +3243,92 @@ class Articulation{
         }
     }
 
-    public void computeLinkJacobian(in usize linkIdx, in VectorSingle worldPoint, mut Vector<f32> outJacobian6xN, mut u32 outDofCount)const{
+    public void computeMassMatrixCRBA(mut Vector<f32> outMassMatrix, mut u32 outDofCount)const{
+        const usize n = this.linkDefs.size();
+        outDofCount = this.totalDofCount();
+        const usize nd = cast<usize>(outDofCount);
+        outMassMatrix.assign(nd * nd, 0.0f);
+        if(n == 0u || nd == 0u)
+            return;
+
+        const b8 canUseInertiaCache = (!this.m_cachesDirty && this.m_linkSpatialInertia.size() == n);
+        const b8 canUseSubspaceCache = (!this.m_cachesDirty && this.m_linkSubspaces.size() == n);
+        const b8 canUseRelCache = (!this.m_cachesDirty && !this.m_fkDirty && this.m_fkValid && this.m_relP2C.size() == n);
+        const b8 canUseDofOffCache = (!this.m_cachesDirty && this.m_cachedFixedBase == this.fixedBase && this.m_linkDofOffsets.size() == n);
+
+        Vector<SpatialMat6> icList;
+        if(canUseInertiaCache){
+            icList = this.m_linkSpatialInertia;
+        }
+        else{
+            icList.resize(n);
+            for(usize i = 0u; i < n; ++i){
+                in ArticulationLinkDef d = this.linkDefs[i];
+                icList[i] = SpatialInertiaMatrix(Max(1.0e-3f, d.mass), VectorSingle(d.comLocal), this.resolveLinkInertiaSym(d));
+            }
+        }
+
+        if(canUseRelCache && canUseSubspaceCache && !this.m_hasPoseDependentSubspace && canUseDofOffCache){
+            this.computeMassMatrixCrbaCore(
+                n,
+                nd,
+                Span<Transform3D>(this.m_relP2C),
+                Span<ArticulationSubspace>(this.m_linkSubspaces),
+                Span<u32>(this.m_linkDofOffsets),
+                icList,
+                outMassMatrix
+            );
+            return;
+        }
+
+        Vector<Transform3D> relP2C;
+        relP2C.resize(n);
+        Vector<ArticulationSubspace> subs;
+        subs.resize(n);
+        Vector<u32> offsets;
+        offsets.resize(n, 0u);
+
+        u32 runningOff = 6u;
+        if(this.fixedBase)
+            runningOff = 0u;
+        for(usize i = 0u; i < n; ++i){
+            in ArticulationLinkDef d = this.linkDefs[i];
+            if(i == 0u){
+                offsets[0u] = 0u;
+            }
+            else{
+                offsets[i] = runningOff;
+                if(canUseRelCache)
+                    relP2C[i] = this.m_relP2C[i];
+                else
+                    relP2C[i] = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
+                if(canUseSubspaceCache && d.jointType != ArticulationJointType::Universal && d.jointType != ArticulationJointType::Planar)
+                    subs[i] = this.m_linkSubspaces[i];
+                else
+                    subs[i] = this.computeJointSubspace(i);
+                runningOff += subs[i].dofCount;
+            }
+        }
+
+        this.computeMassMatrixCrbaCore(
+            n,
+            nd,
+            Span<Transform3D>(relP2C),
+            Span<ArticulationSubspace>(subs),
+            Span<u32>(offsets),
+            icList,
+            outMassMatrix
+        );
+    }
+
+    private void computeLinkJacobianWithXfs(
+        in usize linkIdx,
+        in VectorSingle worldPoint,
+        in b8 canUseLiveXfs,
+        in Span<Transform3D> fallbackXfs,
+        mut Vector<f32> outJacobian6xN,
+        mut u32 outDofCount
+    )const{
         const usize n = this.linkDefs.size();
         outDofCount = this.totalDofCount();
         const usize nd = cast<usize>(outDofCount);
@@ -3177,53 +3336,12 @@ class Articulation{
         if(linkIdx >= n || nd == 0u)
             return;
 
-        b8 canUseLiveXfs = (
-            !this.m_cachesDirty
-            && !this.m_fkDirty
-            && this.m_fkValid
-            && !this.baseTransformChangedSinceSync()
-            && this.linkStates.size() == n
-            && this.m_syncedQ.size() == n
-        );
-        if(canUseLiveXfs){
-            for(usize i = 0u; i < n; ++i){
-                in ArticulationLinkState s = this.linkStates[i];
-                if(
-                    s.q != this.m_syncedQ[i]
-                    || s.q3.x != this.m_syncedQ3[i].x
-                    || s.q3.y != this.m_syncedQ3[i].y
-                    || s.q3.z != this.m_syncedQ3[i].z
-                    || s.jointRotation.x != this.m_syncedJointRot[i].x
-                    || s.jointRotation.y != this.m_syncedJointRot[i].y
-                    || s.jointRotation.z != this.m_syncedJointRot[i].z
-                    || s.jointRotation.w != this.m_syncedJointRot[i].w
-                ){
-                    canUseLiveXfs = false;
-                    break;
-                }
-            }
-        }
-
-        Vector<Transform3D> linkWorldXfs;
-        if(!canUseLiveXfs){
-            linkWorldXfs.resize(n);
-            for(usize i = 0u; i < n; ++i){
-                if(i == 0u)
-                    linkWorldXfs[0u] = this.baseTransform;
-                else{
-                    in ArticulationLinkDef d = this.linkDefs[i];
-                    const Transform3D jRel = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
-                    linkWorldXfs[i] = ComposeTransform(linkWorldXfs[d.parentIndex], jRel);
-                }
-            }
-        }
-
         if(!this.fixedBase){
             Transform3D xf0;
             if(canUseLiveXfs)
                 xf0 = this.linkStates[0u].worldTransform;
             else
-                xf0 = linkWorldXfs[0u];
+                xf0 = fallbackXfs[0u];
             const VectorSingle q0 = SafeNormalizeQuat(VectorSingle(xf0.rotation));
             const VectorSingle r0W = worldPoint - VectorSingle(xf0.position);
             for(u32 a = 0u; a < 3u; ++a){
@@ -3254,7 +3372,7 @@ class Articulation{
             if(canUseLiveXfs)
                 xfK = this.linkStates[cur].worldTransform;
             else
-                xfK = linkWorldXfs[cur];
+                xfK = fallbackXfs[cur];
             const VectorSingle posK = VectorSingle(xfK.position);
             const VectorSingle qK = SafeNormalizeQuat(VectorSingle(xfK.rotation));
             const VectorSingle armW = worldPoint - posK;
@@ -3277,6 +3395,61 @@ class Articulation{
             }
             cur = cast<usize>(d.parentIndex);
         }
+    }
+
+    public void computeLinkJacobian(in usize linkIdx, in VectorSingle worldPoint, mut Vector<f32> outJacobian6xN, mut u32 outDofCount)const{
+        const usize n = this.linkDefs.size();
+        outDofCount = this.totalDofCount();
+        const usize nd = cast<usize>(outDofCount);
+        if(linkIdx >= n || nd == 0u){
+            outJacobian6xN.assign(6u * nd, 0.0f);
+            return;
+        }
+
+        b8 canUseLiveXfs = (
+            !this.m_cachesDirty
+            && !this.m_fkDirty
+            && this.m_fkValid
+            && !this.baseTransformChangedSinceSync()
+            && this.linkStates.size() == n
+            && this.m_syncedQ.size() == n
+        );
+        if(canUseLiveXfs){
+            for(usize i = 0u; i < n; ++i){
+                in ArticulationLinkState s = this.linkStates[i];
+                if(
+                    s.q != this.m_syncedQ[i]
+                    || s.q3.x != this.m_syncedQ3[i].x
+                    || s.q3.y != this.m_syncedQ3[i].y
+                    || s.q3.z != this.m_syncedQ3[i].z
+                    || s.jointRotation.x != this.m_syncedJointRot[i].x
+                    || s.jointRotation.y != this.m_syncedJointRot[i].y
+                    || s.jointRotation.z != this.m_syncedJointRot[i].z
+                    || s.jointRotation.w != this.m_syncedJointRot[i].w
+                ){
+                    canUseLiveXfs = false;
+                    break;
+                }
+            }
+        }
+
+        if(canUseLiveXfs){
+            this.computeLinkJacobianWithXfs(linkIdx, worldPoint, true, Span<Transform3D>(), outJacobian6xN, outDofCount);
+            return;
+        }
+
+        Vector<Transform3D> linkWorldXfs;
+        linkWorldXfs.resize(n);
+        for(usize i = 0u; i < n; ++i){
+            if(i == 0u)
+                linkWorldXfs[0u] = this.baseTransform;
+            else{
+                in ArticulationLinkDef d = this.linkDefs[i];
+                const Transform3D jRel = ComposeTransform(d.parentToJoint, ComposeTransform(this.computeJointTransform(i), d.jointToChild));
+                linkWorldXfs[i] = ComposeTransform(linkWorldXfs[d.parentIndex], jRel);
+            }
+        }
+        this.computeLinkJacobianWithXfs(linkIdx, worldPoint, false, Span<Transform3D>(linkWorldXfs), outJacobian6xN, outDofCount);
     }
 
     private VectorSingle linkPointWorldVelocity(in usize linkIdx, in VectorSingle worldPoint)const{
@@ -3376,6 +3549,9 @@ class Articulation{
         b8 aggAny = false;
         VectorSingle aggMin(0.0f);
         VectorSingle aggMax(0.0f);
+        b8 envAggAny = false;
+        VectorSingle envAggMin(0.0f);
+        VectorSingle envAggMax(0.0f);
 
         for(usize li = 0u; li < n; ++li){
             if(this.isLinkDetached(li))
@@ -3386,6 +3562,18 @@ class Articulation{
             const VectorSingle rotL = SafeNormalizeQuat(VectorSingle(linkXf.rotation));
             this.m_cachedLinkPosScratch[li] = f32x4(posL, 0.0f);
             this.m_cachedLinkRotScratch[li] = f32x4(rotL);
+            const VectorSingle comW = TransformPointValues(posL, rotL, VectorSingle(dL.comLocal));
+            const f32 approxVol = Max(1.0e-4f, dL.mass) * 0.001f;
+            const f32 approxRadius = Max(0.05f, Pow(VectorSingle(approxVol * (3.0f / (4.0f * s_Pi))), VectorSingle(1.0f / 3.0f)).x);
+            const VectorSingle envPad(approxRadius, approxRadius, approxRadius, 0.0f);
+            const VectorSingle linkEnvMin = comW - envPad;
+            const VectorSingle linkEnvMax = comW + envPad;
+            if(!envAggAny){
+                envAggMin = linkEnvMin; envAggMax = linkEnvMax; envAggAny = true;
+            }
+            else{
+                envAggMin = Min(envAggMin, linkEnvMin); envAggMax = Max(envAggMax, linkEnvMax);
+            }
 
             if(!dL.proxyBodyId.valid() || !world.isValidBody(dL.proxyBodyId))
                 continue;
@@ -3419,6 +3607,8 @@ class Articulation{
                 this.m_selfColShapeFilterOkScratch.push_back(filterBit);
                 ++shapeCount;
                 linkMask |= 1u;
+                envAggMin = Min(envAggMin, sMin);
+                envAggMax = Max(envAggMax, sMax);
                 if(!aggAny){
                     aggMin = sMin; aggMax = sMax; aggAny = true;
                 }
@@ -3451,6 +3641,14 @@ class Articulation{
         else{
             this.m_aggregateAabb = Aabb3D();
             this.m_aggregateAabbValid = false;
+        }
+        if(envAggAny){
+            this.m_aggregateEnvAabb = Aabb3D(envAggMin, envAggMax);
+            this.m_aggregateEnvAabbValid = true;
+        }
+        else{
+            this.m_aggregateEnvAabb = Aabb3D();
+            this.m_aggregateEnvAabbValid = false;
         }
         this.m_linkShapeCacheValid = true;
     }
@@ -3986,7 +4184,7 @@ class Articulation{
 
         usize maxUnitSlots = 0u;
         if(n > 0u)
-            maxUnitSlots = Max(cast<usize>(1u), cast<usize>(16384u) / n);
+            maxUnitSlots = Max(cast<usize>(1u), cast<usize>(32768u) / n);
         usize unitSlotsUsed = 0u;
 
         for(usize ci = 0u; ci < this.m_contactConstraintsScratch.size(); ++ci){
@@ -3994,6 +4192,13 @@ class Articulation{
             c.hasCachedUnit = false;
             c.effInvN = 0.0f;
             c.unitOffset = 0u;
+            c.effInvT1 = 0.0f;
+            c.effInvT2 = 0.0f;
+            c.unitOffsetT1 = 0u;
+            c.unitOffsetT2 = 0u;
+            c.hasCachedUnitT1 = false;
+            c.hasCachedUnitT2 = false;
+            c.hasTangentCache = false;
             const VectorSingle nOut(c.normalOut);
             const VectorSingle ptA(c.ptA);
             const VectorSingle ptB(c.ptB);
@@ -4022,28 +4227,69 @@ class Articulation{
                 const VectorSingle rawWarmT(c.lambdaT);
                 const VectorSingle warmT = rawWarmT - nOut * Vector3Dot(rawWarmT, nOut).x;
                 const f32 warmTLenSq = Vector3LengthSq(warmT).x;
-                if(warmTLenSq > 1.0e-12f){
-                    const f32 warmTLen = Sqrt(VectorSingle(warmTLenSq)).x;
-                    const VectorSingle tDir = warmT * (1.0f / warmTLen);
-                    const VectorSingle ftAL = Vector3InverseRotate(tDir, qA);
-                    const VectorSingle ftBL = Vector3InverseRotate(-tDir, qB);
-                    if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALoc, ftAL), ftAL), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLoc, ftBL), ftBL), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
-                        this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, warmTLen);
-                        this.accumulateReactionImpulseOnLink(c.linkIdx, ptA, tDir * warmTLen, invSubDt);
-                        this.accumulateReactionImpulseOnLink(c.linkIdxB, ptB, -tDir * warmTLen, invSubDt);
-                        c.lambdaT = f32x4(tDir * warmTLen, 0.0f);
+                if(c.friction > 0.0f || warmTLenSq > 1.0e-12f){
+                    VectorSingle t1(0.0f);
+                    VectorSingle t2(0.0f);
+                    ComputeTangentBasisFromUnitNormal(nOut, t1, t2);
+                    c.t1Dir = f32x4(t1, 0.0f);
+                    c.t2Dir = f32x4(t2, 0.0f);
+                    c.anisoScale1 = 1.0f;
+                    c.anisoScale2 = 1.0f;
+                    b8 okT1 = false;
+                    const VectorSingle ft1A = Vector3InverseRotate(t1, qA);
+                    const VectorSingle ft1B = Vector3InverseRotate(-t1, qB);
+                    if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALoc, ft1A), ft1A), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLoc, ft1B), ft1B), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
+                        const VectorSingle dvt1A = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALoc), qA);
+                        const VectorSingle dvt1B = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdxB].ang), rBLoc), qB);
+                        c.effInvT1 = Max(0.0f, Vector3Dot(t1, dvt1A - dvt1B).x);
+                        c.hasCachedUnitT1 = this.tryStorePgsUnitResponse(n, unitSlotsUsed, maxUnitSlots, c.unitOffsetT1);
+                        okT1 = true;
+                        if(warmTLenSq > 1.0e-12f){
+                            const f32 warm1 = Vector3Dot(warmT, t1).x;
+                            if(Abs(VectorSingle(warm1)).x > 1.0e-9f)
+                                this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, warm1);
+                        }
+                    }
+                    b8 okT2 = false;
+                    const VectorSingle ft2A = Vector3InverseRotate(t2, qA);
+                    const VectorSingle ft2B = Vector3InverseRotate(-t2, qB);
+                    if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALoc, ft2A), ft2A), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLoc, ft2B), ft2B), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
+                        const VectorSingle dvt2A = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALoc), qA);
+                        const VectorSingle dvt2B = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdxB].ang), rBLoc), qB);
+                        c.effInvT2 = Max(0.0f, Vector3Dot(t2, dvt2A - dvt2B).x);
+                        c.hasCachedUnitT2 = this.tryStorePgsUnitResponse(n, unitSlotsUsed, maxUnitSlots, c.unitOffsetT2);
+                        okT2 = true;
+                        if(warmTLenSq > 1.0e-12f){
+                            const f32 warm2 = Vector3Dot(warmT, t2).x;
+                            if(Abs(VectorSingle(warm2)).x > 1.0e-9f)
+                                this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, warm2);
+                        }
+                    }
+                    c.hasTangentCache = true;
+                    if(warmTLenSq > 1.0e-12f && (okT1 || okT2)){
+                        this.accumulateReactionImpulseOnLink(c.linkIdx, ptA, warmT, invSubDt);
+                        this.accumulateReactionImpulseOnLink(c.linkIdxB, ptB, -warmT, invSubDt);
+                        c.lambdaT = f32x4(warmT, 0.0f);
                     }
                     else{
                         c.lambdaT = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                     }
                 }
+                else{
+                    c.lambdaT = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                }
             }
             else{
-                f32 invArtN = 0.0f;
-                if(Max(c.invMassScaleA, c.invInertiaScaleA) > 0.0f && this.evaluateWorldImpulseSweepScaled(c.linkIdx, ptA, nOut, c.invMassScaleA, c.invInertiaScaleA, this.m_impU3, this.m_impDv)){
+                const b8 canActA = Max(c.invMassScaleA, c.invInertiaScaleA) > 0.0f;
+                VectorSingle qL(0.0f, 0.0f, 0.0f, 1.0f);
+                VectorSingle rLoc(0.0f);
+                if(canActA){
                     in Transform3D lXf = this.linkStates[c.linkIdx].worldTransform;
-                    const VectorSingle qL = SafeNormalizeQuat(VectorSingle(lXf.rotation));
-                    const VectorSingle rLoc = Vector3InverseRotate(ptA - VectorSingle(lXf.position), qL);
+                    qL = SafeNormalizeQuat(VectorSingle(lXf.rotation));
+                    rLoc = Vector3InverseRotate(ptA - VectorSingle(lXf.position), qL);
+                }
+                f32 invArtN = 0.0f;
+                if(canActA && this.evaluateWorldImpulseSweepScaled(c.linkIdx, ptA, nOut, c.invMassScaleA, c.invInertiaScaleA, this.m_impU3, this.m_impDv)){
                     const VectorSingle vPtLocal = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rLoc);
                     const VectorSingle vPtWorld = Vector3Rotate(vPtLocal, qL);
                     invArtN = Max(0.0f, Vector3Dot(nOut, vPtWorld).x);
@@ -4061,9 +4307,57 @@ class Articulation{
                     this.applyDynamicHitBodyImpulse(world, c.hitBodyId, nOut * c.lambdaN, rB, c.invMassScaleB, c.invInertiaScaleB);
                 const VectorSingle rawWarmT(c.lambdaT);
                 const VectorSingle warmT = rawWarmT - nOut * Vector3Dot(rawWarmT, nOut).x;
-                if(Vector3LengthSq(warmT).x > 1.0e-12f){
-                    c.lambdaT = f32x4(warmT, 0.0f);
-                    this.applyWorldContactTangentImpulse(world, c, warmT, ptA, rB, invSubDt);
+                const f32 warmTLenSq = Vector3LengthSq(warmT).x;
+                if(c.friction > 0.0f || c.staticFriction > 0.0f || warmTLenSq > 1.0e-12f){
+                    VectorSingle t1(0.0f);
+                    VectorSingle t2(0.0f);
+                    f32 scale1 = 1.0f;
+                    f32 scale2 = 1.0f;
+                    this.computeArticulationTangentBasisAndScales(c, nOut, t1, t2, scale1, scale2);
+                    c.t1Dir = f32x4(t1, 0.0f);
+                    c.t2Dir = f32x4(t2, 0.0f);
+                    c.anisoScale1 = scale1;
+                    c.anisoScale2 = scale2;
+                    f32 invArtT1 = 0.0f;
+                    if(canActA && this.evaluateWorldImpulseSweepScaled(c.linkIdx, ptA, t1, c.invMassScaleA, c.invInertiaScaleA, this.m_impU3, this.m_impDv)){
+                        const VectorSingle vPtLocalT1 = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rLoc);
+                        invArtT1 = Max(0.0f, Vector3Dot(t1, Vector3Rotate(vPtLocalT1, qL)).x);
+                        c.hasCachedUnitT1 = this.tryStorePgsUnitResponse(n, unitSlotsUsed, maxUnitSlots, c.unitOffsetT1);
+                        if(warmTLenSq > 1.0e-12f){
+                            const f32 warm1 = Vector3Dot(warmT, t1).x;
+                            if(Abs(VectorSingle(warm1)).x > 1.0e-9f)
+                                this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, warm1);
+                        }
+                    }
+                    const VectorSingle rxt1 = Cross(rB, t1);
+                    const f32 invHitT1 = (c.invHitMass * c.invMassScaleB) + (Vector3Dot(rxt1, Matrix3MulVec(Matrix3FromSymMat3(c.invHitInertiaWorld), rxt1)).x * c.invInertiaScaleB);
+                    c.effInvT1 = invArtT1 + invHitT1;
+
+                    f32 invArtT2 = 0.0f;
+                    if(canActA && this.evaluateWorldImpulseSweepScaled(c.linkIdx, ptA, t2, c.invMassScaleA, c.invInertiaScaleA, this.m_impU3, this.m_impDv)){
+                        const VectorSingle vPtLocalT2 = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rLoc);
+                        invArtT2 = Max(0.0f, Vector3Dot(t2, Vector3Rotate(vPtLocalT2, qL)).x);
+                        c.hasCachedUnitT2 = this.tryStorePgsUnitResponse(n, unitSlotsUsed, maxUnitSlots, c.unitOffsetT2);
+                        if(warmTLenSq > 1.0e-12f){
+                            const f32 warm2 = Vector3Dot(warmT, t2).x;
+                            if(Abs(VectorSingle(warm2)).x > 1.0e-9f)
+                                this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, warm2);
+                        }
+                    }
+                    const VectorSingle rxt2 = Cross(rB, t2);
+                    const f32 invHitT2 = (c.invHitMass * c.invMassScaleB) + (Vector3Dot(rxt2, Matrix3MulVec(Matrix3FromSymMat3(c.invHitInertiaWorld), rxt2)).x * c.invInertiaScaleB);
+                    c.effInvT2 = invArtT2 + invHitT2;
+                    c.hasTangentCache = true;
+                    if(warmTLenSq > 1.0e-12f){
+                        c.lambdaT = f32x4(warmT, 0.0f);
+                        if(canActA)
+                            this.accumulateReactionImpulseOnLink(c.linkIdx, ptA, warmT * Max(c.invMassScaleA, c.invInertiaScaleA), invSubDt);
+                        if(c.hitIsDynamic)
+                            this.applyDynamicHitBodyImpulse(world, c.hitBodyId, warmT, rB, c.invMassScaleB, c.invInertiaScaleB);
+                    }
+                    else{
+                        c.lambdaT = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                    }
                 }
                 else{
                     c.lambdaT = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -4479,31 +4773,38 @@ class Articulation{
                     if((c.lambdaN > 0.0f && c.friction > 0.0f) || Vector3LengthSq(oldLambdaT).x > 1.0e-12f){
                         VectorSingle t1(0.0f);
                         VectorSingle t2(0.0f);
-                        ComputeTangentBasisFromUnitNormal(nOut, t1, t2);
+                        f32 effInv1 = 0.0f;
+                        f32 effInv2 = 0.0f;
+                        if(c.hasTangentCache){
+                            t1 = VectorSingle(c.t1Dir);
+                            t2 = VectorSingle(c.t2Dir);
+                            effInv1 = c.effInvT1;
+                            effInv2 = c.effInvT2;
+                        }
+                        else{
+                            ComputeTangentBasisFromUnitNormal(nOut, t1, t2);
+                            const VectorSingle qAF = SafeNormalizeQuat(VectorSingle(this.linkStates[c.linkIdx].worldTransform.rotation));
+                            const VectorSingle qBF = SafeNormalizeQuat(VectorSingle(this.linkStates[c.linkIdxB].worldTransform.rotation));
+                            const VectorSingle rALocF = Vector3InverseRotate(ptA - VectorSingle(this.linkStates[c.linkIdx].worldTransform.position), qAF);
+                            const VectorSingle rBLocF = Vector3InverseRotate(ptB - VectorSingle(this.linkStates[c.linkIdxB].worldTransform.position), qBF);
+                            const VectorSingle ft1A = Vector3InverseRotate(t1, qAF);
+                            const VectorSingle ft1B = Vector3InverseRotate(-t1, qBF);
+                            if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALocF, ft1A), ft1A), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLocF, ft1B), ft1B), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
+                                const VectorSingle dvt1A = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALocF), qAF);
+                                const VectorSingle dvt1B = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdxB].ang), rBLocF), qBF);
+                                effInv1 = Vector3Dot(t1, dvt1A - dvt1B).x;
+                            }
+                            const VectorSingle ft2A = Vector3InverseRotate(t2, qAF);
+                            const VectorSingle ft2B = Vector3InverseRotate(-t2, qBF);
+                            if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALocF, ft2A), ft2A), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLocF, ft2B), ft2B), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
+                                const VectorSingle dvt2A = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALocF), qAF);
+                                const VectorSingle dvt2B = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdxB].ang), rBLocF), qBF);
+                                effInv2 = Vector3Dot(t2, dvt2A - dvt2B).x;
+                            }
+                        }
                         const f32 oldLam1 = Vector3Dot(oldLambdaT, t1).x;
                         const f32 oldLam2 = Vector3Dot(oldLambdaT, t2).x;
                         const VectorSingle vRelAfter = this.linkPointWorldVelocity(c.linkIdx, ptA) - this.linkPointWorldVelocity(c.linkIdxB, ptB);
-                        const VectorSingle qAF = SafeNormalizeQuat(VectorSingle(this.linkStates[c.linkIdx].worldTransform.rotation));
-                        const VectorSingle qBF = SafeNormalizeQuat(VectorSingle(this.linkStates[c.linkIdxB].worldTransform.rotation));
-                        const VectorSingle rALocF = Vector3InverseRotate(ptA - VectorSingle(this.linkStates[c.linkIdx].worldTransform.position), qAF);
-                        const VectorSingle rBLocF = Vector3InverseRotate(ptB - VectorSingle(this.linkStates[c.linkIdxB].worldTransform.position), qBF);
-
-                        f32 effInv1 = 0.0f;
-                        const VectorSingle ft1A = Vector3InverseRotate(t1, qAF);
-                        const VectorSingle ft1B = Vector3InverseRotate(-t1, qBF);
-                        if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALocF, ft1A), ft1A), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLocF, ft1B), ft1B), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
-                            const VectorSingle dvt1A = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALocF), qAF);
-                            const VectorSingle dvt1B = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdxB].ang), rBLocF), qBF);
-                            effInv1 = Vector3Dot(t1, dvt1A - dvt1B).x;
-                        }
-                        f32 effInv2 = 0.0f;
-                        const VectorSingle ft2A = Vector3InverseRotate(t2, qAF);
-                        const VectorSingle ft2B = Vector3InverseRotate(-t2, qBF);
-                        if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALocF, ft2A), ft2A), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLocF, ft2B), ft2B), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
-                            const VectorSingle dvt2A = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALocF), qAF);
-                            const VectorSingle dvt2B = Vector3Rotate(VectorSingle(this.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdxB].ang), rBLocF), qBF);
-                            effInv2 = Vector3Dot(t2, dvt2A - dvt2B).x;
-                        }
 
                         f32 cand1 = oldLam1;
                         if(effInv1 > 1.0e-8f)
@@ -4515,19 +4816,35 @@ class Articulation{
                         f32 final1 = 0.0f;
                         f32 final2 = 0.0f;
                         this.clampFrictionEllipse(cand1, cand2, limSelf, limSelf, final1, final2);
+                        const f32 dLam1 = final1 - oldLam1;
+                        const f32 dLam2 = final2 - oldLam2;
                         const VectorSingle newLambdaT = t1 * final1 + t2 * final2;
                         const VectorSingle dLambdaT = newLambdaT - oldLambdaT;
                         c.lambdaT = f32x4(newLambdaT, 0.0f);
                         const f32 dTSq = Vector3LengthSq(dLambdaT).x;
                         if(dTSq > 1.0e-12f){
-                            const f32 dTMag = Sqrt(VectorSingle(dTSq)).x;
-                            const VectorSingle dTDir = dLambdaT * (1.0f / dTMag);
-                            const VectorSingle fdtA = Vector3InverseRotate(dTDir, qAF);
-                            const VectorSingle fdtB = Vector3InverseRotate(-dTDir, qBF);
-                            if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALocF, fdtA), fdtA), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLocF, fdtB), fdtB), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
-                                this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, dTMag);
+                            if(c.hasCachedUnitT1 && c.hasCachedUnitT2){
+                                if(Abs(VectorSingle(dLam1)).x > 1.0e-9f)
+                                    this.applyCachedUnitImpulseDelta(c.unitOffsetT1, n, dLam1);
+                                if(Abs(VectorSingle(dLam2)).x > 1.0e-9f)
+                                    this.applyCachedUnitImpulseDelta(c.unitOffsetT2, n, dLam2);
                                 this.accumulateReactionImpulseOnLink(c.linkIdx, ptA, dLambdaT, invSubDt);
                                 this.accumulateReactionImpulseOnLink(c.linkIdxB, ptB, -dLambdaT, invSubDt);
+                            }
+                            else{
+                                const VectorSingle qAF = SafeNormalizeQuat(VectorSingle(this.linkStates[c.linkIdx].worldTransform.rotation));
+                                const VectorSingle qBF = SafeNormalizeQuat(VectorSingle(this.linkStates[c.linkIdxB].worldTransform.rotation));
+                                const VectorSingle rALocF = Vector3InverseRotate(ptA - VectorSingle(this.linkStates[c.linkIdx].worldTransform.position), qAF);
+                                const VectorSingle rBLocF = Vector3InverseRotate(ptB - VectorSingle(this.linkStates[c.linkIdxB].worldTransform.position), qBF);
+                                const f32 dTMag = Sqrt(VectorSingle(dTSq)).x;
+                                const VectorSingle dTDir = dLambdaT * (1.0f / dTMag);
+                                const VectorSingle fdtA = Vector3InverseRotate(dTDir, qAF);
+                                const VectorSingle fdtB = Vector3InverseRotate(-dTDir, qBF);
+                                if(this.evaluateSparseTwoLinkImpulseSweep(c.linkIdx, SpatialVecMake(Cross(rALocF, fdtA), fdtA), VectorSingle(0.0f), true, c.linkIdxB, SpatialVecMake(Cross(rBLocF, fdtB), fdtB), VectorSingle(0.0f), this.m_impU3, this.m_impDv)){
+                                    this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, dTMag);
+                                    this.accumulateReactionImpulseOnLink(c.linkIdx, ptA, dLambdaT, invSubDt);
+                                    this.accumulateReactionImpulseOnLink(c.linkIdxB, ptB, -dLambdaT, invSubDt);
+                                }
                             }
                         }
                     }
@@ -4597,11 +4914,23 @@ class Articulation{
                         VectorSingle t2(0.0f);
                         f32 scale1 = 1.0f;
                         f32 scale2 = 1.0f;
-                        this.computeArticulationTangentBasisAndScales(c, nOut, t1, t2, scale1, scale2);
+                        f32 effInv1 = 0.0f;
+                        f32 effInv2 = 0.0f;
+                        if(c.hasTangentCache){
+                            t1 = VectorSingle(c.t1Dir);
+                            t2 = VectorSingle(c.t2Dir);
+                            scale1 = c.anisoScale1;
+                            scale2 = c.anisoScale2;
+                            effInv1 = c.effInvT1;
+                            effInv2 = c.effInvT2;
+                        }
+                        else{
+                            this.computeArticulationTangentBasisAndScales(c, nOut, t1, t2, scale1, scale2);
+                            effInv1 = this.computeWorldContactTangentEffInv(c, t1, ptA, rB);
+                            effInv2 = this.computeWorldContactTangentEffInv(c, t2, ptA, rB);
+                        }
                         const f32 oldLam1 = Vector3Dot(oldLambdaT, t1).x;
                         const f32 oldLam2 = Vector3Dot(oldLambdaT, t2).x;
-                        const f32 effInv1 = this.computeWorldContactTangentEffInv(c, t1, ptA, rB);
-                        const f32 effInv2 = this.computeWorldContactTangentEffInv(c, t2, ptA, rB);
                         f32 ts1 = 0.0f;
                         f32 ts2 = 0.0f;
                         if(c.tangentSpeed != 0.0f && tanSpeed > 1.0e-5f){
@@ -4620,10 +4949,25 @@ class Articulation{
                         f32 final1 = 0.0f;
                         f32 final2 = 0.0f;
                         this.clampFrictionEllipse(cand1, cand2, lim1, lim2, final1, final2);
+                        const f32 dLam1 = final1 - oldLam1;
+                        const f32 dLam2 = final2 - oldLam2;
                         const VectorSingle newLambdaT = t1 * final1 + t2 * final2;
                         const VectorSingle dLambdaT = newLambdaT - oldLambdaT;
                         c.lambdaT = f32x4(newLambdaT, 0.0f);
-                        this.applyWorldContactTangentImpulse(world, c, dLambdaT, ptA, rB, invSubDt);
+                        if(Vector3LengthSq(dLambdaT).x > 1.0e-12f){
+                            if(Max(c.invMassScaleA, c.invInertiaScaleA) > 0.0f && c.hasCachedUnitT1 && c.hasCachedUnitT2){
+                                if(Abs(VectorSingle(dLam1)).x > 1.0e-9f)
+                                    this.applyCachedUnitImpulseDelta(c.unitOffsetT1, n, dLam1);
+                                if(Abs(VectorSingle(dLam2)).x > 1.0e-9f)
+                                    this.applyCachedUnitImpulseDelta(c.unitOffsetT2, n, dLam2);
+                                this.accumulateReactionImpulseOnLink(c.linkIdx, ptA, dLambdaT * Max(c.invMassScaleA, c.invInertiaScaleA), invSubDt);
+                                if(c.hitIsDynamic)
+                                    this.applyDynamicHitBodyImpulse(world, c.hitBodyId, dLambdaT, rB, c.invMassScaleB, c.invInertiaScaleB);
+                            }
+                            else{
+                                this.applyWorldContactTangentImpulse(world, c, dLambdaT, ptA, rB, invSubDt);
+                            }
+                        }
                     }
 
                     if(c.lambdaN > 0.0f && c.rollingResistance > 0.0f){
@@ -5461,11 +5805,21 @@ class Articulation{
         if(n != this.linkStates.size())
             return;
 
+        if(this.m_cachesDirty)
+            this.ensureLinkCaches();
+        this.ensureForwardKinematicsValid();
+        this.ensureLinkShapeCache(world);
+        const VectorSingle surfNorm = fluid.normalizedSurfaceNormal();
+        Aabb3D fluidBox;
+        if(this.m_aggregateEnvAabbValid && TryBuildFluidQueryAabb(fluid, surfNorm, fluidBox)){
+            if(!AabbOverlapsValues(VectorSingle(this.m_aggregateEnvAabb.lowerBound), VectorSingle(this.m_aggregateEnvAabb.upperBound), VectorSingle(fluidBox.lowerBound), VectorSingle(fluidBox.upperBound)))
+                return;
+        }
+
         if(this.m_cachesDirty || this.m_iaList.size() != n || this.m_abcData.size() != n || this.m_linkSubspaces.size() != n)
             this.computeForwardDynamicsABA(VectorSingle(0.0f));
 
         const VectorSingle grav = world.gravity();
-        const VectorSingle surfNorm = fluid.normalizedSurfaceNormal();
         const b8 wantNormal = (fluid.liftCoeff != 0.0f);
         const f32 fluidDens = fluid.density;
         const f32 linDrag = fluid.linearDrag;
@@ -5476,6 +5830,8 @@ class Articulation{
         VectorSingle waveT1(0.0f);
         VectorSingle waveT2(0.0f);
         fluid.computeSurfaceTangentBasis(surfNorm, waveT1, waveT2);
+        const b8 trustCache = fluid.isPreparedCacheValidForBatch(surfNorm);
+        BuoyancySubmersionScratch subScratch;
 
         this.m_sweepExtImpScratch.assign(n, SpatialVec());
         b8 anyWrench = false;
@@ -5495,23 +5851,20 @@ class Articulation{
             f32 subVol = 0.0f;
             VectorSingle weightedCob(0.0f);
             f32 areaEst = 0.0f;
-            if(d.proxyBodyId.valid() && world.isValidBody(d.proxyBodyId)){
-                world.bodyShapes(d.proxyBodyId, this.m_proxyShapesScratch);
-                for(usize si = 0u; si < this.m_proxyShapesScratch.size(); ++si){
-                    const ShapeId sId = this.m_proxyShapesScratch[si];
+            if((this.m_selfColLinkHasShapesScratch[i] & 1u) != 0u){
+                const usize sOff = cast<usize>(this.m_selfColShapeOffsetsScratch[i]);
+                const usize sCnt = cast<usize>(this.m_selfColShapeCountsScratch[i]);
+                for(usize si = 0u; si < sCnt; ++si){
+                    const usize slot = sOff + si;
+                    const ShapeId sId = this.m_selfColAllShapesScratch[slot];
                     if(!world.isValidShape(sId))
                         continue;
                     in Shape s = world.m_shapes[sId.index];
-                    if(s.isSensor())
-                        continue;
                     if(s.type == ShapeType::Plane && !s.planeShape().isFiniteExtent())
                         continue;
                     if(!ShouldCollideFilters(s.filter, fluid.filter))
                         continue;
-                    VectorSingle sMin(0.0f);
-                    VectorSingle sMax(0.0f);
-                    ComputeShapeWorldAabbValues(s, posL, rotL, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_chainShapes, world.m_sdfShapes, sMin, sMax);
-                    const Aabb3D sBox(sMin, sMax);
+                    in Aabb3D sBox = this.m_selfColShapeAabbsScratch[slot];
                     AccumulateShapeSubmersion(
                         world,
                         s,
@@ -5524,7 +5877,9 @@ class Articulation{
                         waveT1,
                         waveT2,
                         timeSec,
+                        trustCache,
                         0u,
+                        subScratch,
                         totalVol,
                         subVol,
                         weightedCob,
@@ -5545,16 +5900,10 @@ class Articulation{
                 subFrac = Clamp(subVol / totalVol, 0.0f, 1.0f);
                 cobW = weightedCob * (1.0f / subVol);
                 displacedMass = subVol * fluidDens;
-                if(wantNormal)
-                    fluid.evaluateSurfaceAt(cobW, surfNorm, timeSec, depth, surfVel, localNorm);
-                else
-                    fluid.evaluateSurfaceAtDepthAndFlow(cobW, surfNorm, timeSec, depth, surfVel);
+                fluid.evaluateSurfaceWithWaveBasisTrusted(cobW, surfNorm, waveT1, waveT2, timeSec, wantNormal, trustCache, depth, surfVel, localNorm);
             }
             else{
-                if(wantNormal)
-                    fluid.evaluateSurfaceAt(comW, surfNorm, timeSec, depth, surfVel, localNorm);
-                else
-                    fluid.evaluateSurfaceAtDepthAndFlow(comW, surfNorm, timeSec, depth, surfVel);
+                fluid.evaluateSurfaceWithWaveBasisTrusted(comW, surfNorm, waveT1, waveT2, timeSec, wantNormal, trustCache, depth, surfVel, localNorm);
                 const f32 approxVol = Max(1.0e-4f, d.mass) * 0.001f;
                 const f32 approxRadius = Max(0.05f, Pow(VectorSingle(approxVol * (3.0f / (4.0f * s_Pi))), VectorSingle(1.0f / 3.0f)).x);
                 subFrac = Clamp((depth + approxRadius) / (2.0f * approxRadius), 0.0f, 1.0f);
@@ -5618,6 +5967,16 @@ class Articulation{
         const usize n = this.linkDefs.size();
         if(n != this.linkStates.size())
             return;
+        if(this.m_cachesDirty)
+            this.ensureLinkCaches();
+        this.ensureForwardKinematicsValid();
+        this.ensureLinkShapeCache(world);
+        VectorSingle fFieldDir(0.0f);
+        Aabb3D fieldQueryBox;
+        if(this.m_aggregateEnvAabbValid && ResolveForceFieldDirectionAndQueryBox(field, fFieldDir, fieldQueryBox)){
+            if(!AabbOverlapsValues(VectorSingle(this.m_aggregateEnvAabb.lowerBound), VectorSingle(this.m_aggregateEnvAabb.upperBound), VectorSingle(fieldQueryBox.lowerBound), VectorSingle(fieldQueryBox.upperBound)))
+                return;
+        }
         if(this.m_cachesDirty || this.m_iaList.size() != n || this.m_abcData.size() != n || this.m_linkSubspaces.size() != n)
             this.computeForwardDynamicsABA(VectorSingle(0.0f));
 
@@ -5797,7 +6156,9 @@ class Articulation{
                     const f32 coupling = Max(0.0f, field.strength) * zoneFalloff;
                     if(coupling > 0.0f){
                         const f32 invDt = 1.0f / dt;
-                        const VectorSingle vFlow = field.sampleVectorFieldVelocity(comW);
+                        VectorSingle vFlow(0.0f);
+                        VectorSingle curl(0.0f);
+                        field.sampleVectorFieldVelocityAndCurl(comW, vFlow, curl);
                         const VectorSingle vL = this.linkPointWorldVelocity(i, comW);
                         const VectorSingle relFlow = vFlow - vL;
                         const f32 relFlowSq = Vector3LengthSq(relFlow).x;
@@ -5807,7 +6168,6 @@ class Articulation{
                             const f32 vecMag = Min(coupling * d.mass * relSp, d.mass * relSp * invDt * 0.9f);
                             fOut = relFlow * (vecMag * invRel);
                         }
-                        const VectorSingle curl = field.sampleVectorFieldCurl(comW);
                         const VectorSingle angW = Vector3Rotate(VectorSingle(this.linkStates[i].spatialVelocity.ang), rotL);
                         const VectorSingle relSpin = (curl * 0.5f) - angW;
                         const f32 spinSq = Vector3LengthSq(relSpin).x;
@@ -5848,9 +6208,11 @@ class Articulation{
     public void applyForceField(in PhysicsWorld world, in ForceField field, in f32 timeSec, in f32 dt){
         if(!field.enabled || dt <= 0.0f || this.linkDefs.empty())
             return;
-        Vector<u8> gravSubtracted;
-        gravSubtracted.assign(this.linkDefs.size(), 0u);
-        this.applyForceFieldInternal(world, field, timeSec, dt, true, gravSubtracted);
+        if(field.type == ForceFieldType::LocalGravityOverride)
+            this.m_envGravSubtractedScratch.assign(this.linkDefs.size(), 0u);
+        else if(!this.m_envGravSubtractedScratch.empty())
+            this.m_envGravSubtractedScratch.clear();
+        this.applyForceFieldInternal(world, field, timeSec, dt, true, this.m_envGravSubtractedScratch);
     }
 
     public void applyEnvironment(in PhysicsWorld world, in PhysicsEnvironment env, in f32 dt){
@@ -5858,10 +6220,20 @@ class Articulation{
             return;
         for(usize fi = 0u; fi < env.fluids.size(); ++fi)
             this.applyFluidVolume(world, env.fluids[fi], env.elapsedTimeSec, dt);
-        Vector<u8> gravSubtracted;
-        gravSubtracted.assign(this.linkDefs.size(), 0u);
+        b8 hasLocalGravOverride = false;
+        for(usize ffi = 0u; ffi < env.forceFields.size(); ++ffi){
+            in ForceField ff = env.forceFields[ffi];
+            if(ff.enabled && ff.type == ForceFieldType::LocalGravityOverride){
+                hasLocalGravOverride = true;
+                break;
+            }
+        }
+        if(hasLocalGravOverride)
+            this.m_envGravSubtractedScratch.assign(this.linkDefs.size(), 0u);
+        else if(!this.m_envGravSubtractedScratch.empty())
+            this.m_envGravSubtractedScratch.clear();
         for(usize ffi = 0u; ffi < env.forceFields.size(); ++ffi)
-            this.applyForceFieldInternal(world, env.forceFields[ffi], env.elapsedTimeSec, dt, true, gravSubtracted);
+            this.applyForceFieldInternal(world, env.forceFields[ffi], env.elapsedTimeSec, dt, true, this.m_envGravSubtractedScratch);
     }
 
     public void step(mut PhysicsWorld world, in f32 dt){
@@ -6449,13 +6821,6 @@ class Articulation{
             return res;
 
         if(params.method == ArticulationIkMethod::Dls){
-            Vector<f32> jac6xN;
-            Vector<f32> jRows;
-            Vector<f32> errVec;
-            Vector<f32> normalMat;
-            Vector<f32> dualSol;
-            Vector<f32> dq;
-
             for(u32 iter = 0u; iter < maxIters; ++iter){
                 f32 maxPosE = 0.0f;
                 f32 maxRotE = 0.0f;
@@ -6468,8 +6833,8 @@ class Articulation{
                     break;
                 }
 
-                jRows.clear();
-                errVec.clear();
+                this.m_ikJRowsScratch.clear();
+                this.m_ikErrScratch.clear();
                 usize mRows = 0u;
                 for(usize ti = 0u; ti < targets.size(); ++ti){
                     in ArticulationIkTarget t = targets[ti];
@@ -6481,22 +6846,22 @@ class Articulation{
                     const VectorSingle rotL = SafeNormalizeQuat(VectorSingle(lXf.rotation));
                     const VectorSingle pCur = TransformPointValues(posL, rotL, VectorSingle(t.localOffset));
                     u32 dofOut = 0u;
-                    this.computeLinkJacobian(lIdx, pCur, jac6xN, dofOut);
+                    this.computeLinkJacobianWithXfs(lIdx, pCur, true, Span<Transform3D>(), this.m_ikJacScratch, dofOut);
                     if(dofOut != totalDofs)
                         continue;
 
                     if(t.matchPosition && t.positionWeight > 0.0f){
                         const VectorSingle pe = (VectorSingle(t.targetPosition) - pCur) * t.positionWeight;
                         const usize rowBase = mRows * nd;
-                        jRows.resize((mRows + 3u) * nd, 0.0f);
+                        this.m_ikJRowsScratch.resize((mRows + 3u) * nd, 0.0f);
                         for(usize c = 0u; c < nd; ++c){
-                            jRows[rowBase + c] = jac6xN[3u * nd + c] * t.positionWeight;
-                            jRows[rowBase + nd + c] = jac6xN[4u * nd + c] * t.positionWeight;
-                            jRows[rowBase + 2u * nd + c] = jac6xN[5u * nd + c] * t.positionWeight;
+                            this.m_ikJRowsScratch[rowBase + c] = this.m_ikJacScratch[3u * nd + c] * t.positionWeight;
+                            this.m_ikJRowsScratch[rowBase + nd + c] = this.m_ikJacScratch[4u * nd + c] * t.positionWeight;
+                            this.m_ikJRowsScratch[rowBase + 2u * nd + c] = this.m_ikJacScratch[5u * nd + c] * t.positionWeight;
                         }
-                        errVec.push_back(pe.x);
-                        errVec.push_back(pe.y);
-                        errVec.push_back(pe.z);
+                        this.m_ikErrScratch.push_back(pe.x);
+                        this.m_ikErrScratch.push_back(pe.y);
+                        this.m_ikErrScratch.push_back(pe.z);
                         mRows += 3u;
                     }
                     if(t.matchRotation && t.rotationWeight > 0.0f){
@@ -6504,42 +6869,51 @@ class Articulation{
                         const VectorSingle qErr = SafeNormalizeQuat(QuaternionMultiply(qTgt, QuaternionConjugate(rotL)));
                         const VectorSingle re = ArticulationRotVecFromQuat(qErr) * t.rotationWeight;
                         const usize rowBase = mRows * nd;
-                        jRows.resize((mRows + 3u) * nd, 0.0f);
+                        this.m_ikJRowsScratch.resize((mRows + 3u) * nd, 0.0f);
                         for(usize c = 0u; c < nd; ++c){
-                            jRows[rowBase + c] = jac6xN[0u * nd + c] * t.rotationWeight;
-                            jRows[rowBase + nd + c] = jac6xN[1u * nd + c] * t.rotationWeight;
-                            jRows[rowBase + 2u * nd + c] = jac6xN[2u * nd + c] * t.rotationWeight;
+                            this.m_ikJRowsScratch[rowBase + c] = this.m_ikJacScratch[0u * nd + c] * t.rotationWeight;
+                            this.m_ikJRowsScratch[rowBase + nd + c] = this.m_ikJacScratch[1u * nd + c] * t.rotationWeight;
+                            this.m_ikJRowsScratch[rowBase + 2u * nd + c] = this.m_ikJacScratch[2u * nd + c] * t.rotationWeight;
                         }
-                        errVec.push_back(re.x);
-                        errVec.push_back(re.y);
-                        errVec.push_back(re.z);
+                        this.m_ikErrScratch.push_back(re.x);
+                        this.m_ikErrScratch.push_back(re.y);
+                        this.m_ikErrScratch.push_back(re.z);
                         mRows += 3u;
                     }
                 }
                 if(mRows == 0u)
                     break;
 
-                normalMat.assign(mRows * mRows, 0.0f);
+                const usize ndSimd = (nd / 4u) * 4u;
+                this.m_ikNormalMatScratch.assign(mRows * mRows, 0.0f);
                 for(usize r = 0u; r < mRows; ++r){
+                    const usize rOff = r * nd;
                     for(usize c = r; c < mRows; ++c){
-                        f32 acc = 0.0f;
-                        const usize rOff = r * nd;
                         const usize cOff = c * nd;
-                        for(usize k = 0u; k < nd; ++k)
-                            acc += jRows[rOff + k] * jRows[cOff + k];
+                        VectorSingle vAcc(0.0f);
+                        for(usize k = 0u; k < ndSimd; k += 4u){
+                            const VectorSingle vr(this.m_ikJRowsScratch[rOff + k], this.m_ikJRowsScratch[rOff + k + 1u], this.m_ikJRowsScratch[rOff + k + 2u], this.m_ikJRowsScratch[rOff + k + 3u]);
+                            const VectorSingle vc(this.m_ikJRowsScratch[cOff + k], this.m_ikJRowsScratch[cOff + k + 1u], this.m_ikJRowsScratch[cOff + k + 2u], this.m_ikJRowsScratch[cOff + k + 3u]);
+                            vAcc = vAcc + vr * vc;
+                        }
+                        f32 acc = vAcc.x + vAcc.y + vAcc.z + vAcc.w;
+                        for(usize k = ndSimd; k < nd; ++k)
+                            acc += this.m_ikJRowsScratch[rOff + k] * this.m_ikJRowsScratch[cOff + k];
                         if(r == c)
                             acc += dampingSq;
-                        normalMat[r * mRows + c] = acc;
-                        normalMat[c * mRows + r] = acc;
+                        this.m_ikNormalMatScratch[r * mRows + c] = acc;
+                        this.m_ikNormalMatScratch[c * mRows + r] = acc;
                     }
                 }
 
-                dualSol = errVec;
+                this.m_ikDualSolScratch.resize(mRows);
+                for(usize r = 0u; r < mRows; ++r)
+                    this.m_ikDualSolScratch[r] = this.m_ikErrScratch[r];
                 for(usize p = 0u; p < mRows; ++p){
                     usize bestRow = p;
-                    f32 bestVal = Abs(VectorSingle(normalMat[p * mRows + p])).x;
+                    f32 bestVal = Abs(VectorSingle(this.m_ikNormalMatScratch[p * mRows + p])).x;
                     for(usize r = p + 1u; r < mRows; ++r){
-                        const f32 v = Abs(VectorSingle(normalMat[r * mRows + p])).x;
+                        const f32 v = Abs(VectorSingle(this.m_ikNormalMatScratch[r * mRows + p])).x;
                         if(v > bestVal){
                             bestVal = v;
                             bestRow = r;
@@ -6549,52 +6923,62 @@ class Articulation{
                         continue;
                     if(bestRow != p){
                         for(usize c = p; c < mRows; ++c){
-                            const f32 tmp = normalMat[p * mRows + c];
-                            normalMat[p * mRows + c] = normalMat[bestRow * mRows + c];
-                            normalMat[bestRow * mRows + c] = tmp;
+                            const f32 tmp = this.m_ikNormalMatScratch[p * mRows + c];
+                            this.m_ikNormalMatScratch[p * mRows + c] = this.m_ikNormalMatScratch[bestRow * mRows + c];
+                            this.m_ikNormalMatScratch[bestRow * mRows + c] = tmp;
                         }
-                        const f32 rhsTmp = dualSol[p];
-                        dualSol[p] = dualSol[bestRow];
-                        dualSol[bestRow] = rhsTmp;
+                        const f32 rhsTmp = this.m_ikDualSolScratch[p];
+                        this.m_ikDualSolScratch[p] = this.m_ikDualSolScratch[bestRow];
+                        this.m_ikDualSolScratch[bestRow] = rhsTmp;
                     }
-                    const f32 invPiv = 1.0f / normalMat[p * mRows + p];
+                    const f32 invPiv = 1.0f / this.m_ikNormalMatScratch[p * mRows + p];
                     for(usize r = p + 1u; r < mRows; ++r){
-                        const f32 fac = normalMat[r * mRows + p] * invPiv;
+                        const f32 fac = this.m_ikNormalMatScratch[r * mRows + p] * invPiv;
                         if(Abs(VectorSingle(fac)).x <= 1.0e-12f)
                             continue;
                         for(usize c = p; c < mRows; ++c)
-                            normalMat[r * mRows + c] -= fac * normalMat[p * mRows + c];
-                        dualSol[r] -= fac * dualSol[p];
+                            this.m_ikNormalMatScratch[r * mRows + c] -= fac * this.m_ikNormalMatScratch[p * mRows + c];
+                        this.m_ikDualSolScratch[r] -= fac * this.m_ikDualSolScratch[p];
                     }
                 }
                 for(usize rev = 0u; rev < mRows; ++rev){
                     const usize p = mRows - 1u - rev;
-                    f32 rhs = dualSol[p];
+                    f32 rhs = this.m_ikDualSolScratch[p];
                     for(usize c = p + 1u; c < mRows; ++c)
-                        rhs -= normalMat[p * mRows + c] * dualSol[c];
-                    const f32 diag = normalMat[p * mRows + p];
+                        rhs -= this.m_ikNormalMatScratch[p * mRows + c] * this.m_ikDualSolScratch[c];
+                    const f32 diag = this.m_ikNormalMatScratch[p * mRows + p];
                     if(Abs(VectorSingle(diag)).x > 1.0e-12f)
-                        dualSol[p] = rhs / diag;
+                        this.m_ikDualSolScratch[p] = rhs / diag;
                     else
-                        dualSol[p] = 0.0f;
+                        this.m_ikDualSolScratch[p] = 0.0f;
                 }
 
-                dq.assign(nd, 0.0f);
-                f32 maxDq = 0.0f;
-                for(usize c = 0u; c < nd; ++c){
-                    f32 acc = 0.0f;
-                    for(usize r = 0u; r < mRows; ++r)
-                        acc += jRows[r * nd + c] * dualSol[r];
-                    const f32 val = acc * stepScale;
-                    dq[c] = val;
-                    maxDq = Max(maxDq, Abs(VectorSingle(val)).x);
+                this.m_ikDqScratch.assign(nd, 0.0f);
+                for(usize r = 0u; r < mRows; ++r){
+                    const f32 dVal = this.m_ikDualSolScratch[r] * stepScale;
+                    const VectorSingle dVec(dVal);
+                    const usize rOff = r * nd;
+                    for(usize c = 0u; c < ndSimd; c += 4u){
+                        const VectorSingle jv(this.m_ikJRowsScratch[rOff + c], this.m_ikJRowsScratch[rOff + c + 1u], this.m_ikJRowsScratch[rOff + c + 2u], this.m_ikJRowsScratch[rOff + c + 3u]);
+                        const VectorSingle curV(this.m_ikDqScratch[c], this.m_ikDqScratch[c + 1u], this.m_ikDqScratch[c + 2u], this.m_ikDqScratch[c + 3u]);
+                        const VectorSingle nextV = curV + jv * dVec;
+                        this.m_ikDqScratch[c] = nextV.x;
+                        this.m_ikDqScratch[c + 1u] = nextV.y;
+                        this.m_ikDqScratch[c + 2u] = nextV.z;
+                        this.m_ikDqScratch[c + 3u] = nextV.w;
+                    }
+                    for(usize c = ndSimd; c < nd; ++c)
+                        this.m_ikDqScratch[c] += this.m_ikJRowsScratch[rOff + c] * dVal;
                 }
+                f32 maxDq = 0.0f;
+                for(usize c = 0u; c < nd; ++c)
+                    maxDq = Max(maxDq, Abs(VectorSingle(this.m_ikDqScratch[c])).x);
                 if(maxDq > 0.5f){
                     const f32 clScale = 0.5f / maxDq;
                     for(usize c = 0u; c < nd; ++c)
-                        dq[c] *= clScale;
+                        this.m_ikDqScratch[c] *= clScale;
                 }
-                this.applyIkDeltaVector(Span<f32>(dq.data(), dq.size()), params.enforceLimits);
+                this.applyIkDeltaVector(Span<f32>(this.m_ikDqScratch.data(), this.m_ikDqScratch.size()), params.enforceLimits);
             }
         }
         else if(params.method == ArticulationIkMethod::Ccd){
@@ -6615,8 +6999,14 @@ class Articulation{
                     const usize tIdx = cast<usize>(t.linkIndex);
                     if(tIdx >= n || this.isLinkDetached(tIdx))
                         continue;
-                    usize cur = tIdx;
-                    while(cur > 0u && cur < n && !this.isLinkDetached(cur)){
+                    this.m_ikChainScratch.clear();
+                    usize walk = tIdx;
+                    while(walk > 0u && walk < n && !this.isLinkDetached(walk)){
+                        this.m_ikChainScratch.push_back(walk);
+                        walk = cast<usize>(this.linkDefs[walk].parentIndex);
+                    }
+                    for(usize ci = 0u; ci < this.m_ikChainScratch.size(); ++ci){
+                        const usize cur = this.m_ikChainScratch[ci];
                         in ArticulationLinkDef d = this.linkDefs[cur];
                         mut ArticulationLinkState s = this.linkStates[cur];
                         in Transform3D endXf = this.linkStates[tIdx].worldTransform;
@@ -6712,19 +7102,16 @@ class Articulation{
                                     this.clampLinkQ3ToLimits(cur);
                             }
                         }
-                        this.m_fkDirty = true;
-                        if(this.m_hasPoseDependentSubspace)
-                            this.refreshPoseDependentSubspaces();
-                        this.computeForwardKinematics();
-                        cur = cast<usize>(d.parentIndex);
+                        for(usize kRev = 0u; kRev <= ci; ++kRev)
+                            this.recomputeLinkFkTransform(this.m_ikChainScratch[ci - kRev]);
+                        this.markPoseDirty();
                     }
+                    if(targets.size() > 1u)
+                        this.computeForwardKinematics();
                 }
             }
         }
         else{
-            Vector<usize> chain;
-            Vector<f32x4> pts;
-            Vector<f32> segLens;
             for(u32 iter = 0u; iter < maxIters; ++iter){
                 f32 maxPosE = 0.0f;
                 f32 maxRotE = 0.0f;
@@ -6743,52 +7130,54 @@ class Articulation{
                     if(tIdx == 0u || tIdx >= n || this.isLinkDetached(tIdx) || !t.matchPosition)
                         continue;
 
-                    chain.clear();
+                    this.m_ikChainScratch.clear();
                     usize walk = tIdx;
                     while(walk > 0u && walk < n && !this.isLinkDetached(walk)){
-                        chain.push_back(walk);
+                        this.m_ikChainScratch.push_back(walk);
                         walk = cast<usize>(this.linkDefs[walk].parentIndex);
                     }
-                    if(chain.empty())
+                    if(this.m_ikChainScratch.empty())
                         continue;
-                    const usize cLen = chain.size();
+                    const usize cLen = this.m_ikChainScratch.size();
                     for(usize a = 0u; a < cLen / 2u; ++a){
-                        const usize tmp = chain[a];
-                        chain[a] = chain[cLen - 1u - a];
-                        chain[cLen - 1u - a] = tmp;
+                        const usize tmp = this.m_ikChainScratch[a];
+                        this.m_ikChainScratch[a] = this.m_ikChainScratch[cLen - 1u - a];
+                        this.m_ikChainScratch[cLen - 1u - a] = tmp;
                     }
 
-                    pts.resize(cLen + 1u);
+                    this.m_ikPtsScratch.resize(cLen + 1u);
                     for(usize k = 0u; k < cLen; ++k){
-                        in ArticulationLinkDef dK = this.linkDefs[chain[k]];
+                        in ArticulationLinkDef dK = this.linkDefs[this.m_ikChainScratch[k]];
                         in Transform3D pXf = this.linkStates[dK.parentIndex].worldTransform;
-                        pts[k] = f32x4(TransformPointValues(VectorSingle(pXf.position), SafeNormalizeQuat(VectorSingle(pXf.rotation)), VectorSingle(dK.parentToJoint.position)), 0.0f);
+                        this.m_ikPtsScratch[k] = f32x4(TransformPointValues(VectorSingle(pXf.position), SafeNormalizeQuat(VectorSingle(pXf.rotation)), VectorSingle(dK.parentToJoint.position)), 0.0f);
                     }
                     in Transform3D endXf = this.linkStates[tIdx].worldTransform;
-                    pts[cLen] = f32x4(TransformPointValues(VectorSingle(endXf.position), SafeNormalizeQuat(VectorSingle(endXf.rotation)), VectorSingle(t.localOffset)), 0.0f);
+                    this.m_ikPtsScratch[cLen] = f32x4(TransformPointValues(VectorSingle(endXf.position), SafeNormalizeQuat(VectorSingle(endXf.rotation)), VectorSingle(t.localOffset)), 0.0f);
 
-                    segLens.resize(cLen);
+                    this.m_ikSegLensScratch.resize(cLen);
                     for(usize k = 0u; k < cLen; ++k)
-                        segLens[k] = Max(1.0e-5f, Vector3Length(VectorSingle(pts[k + 1u]) - VectorSingle(pts[k])).x);
+                        this.m_ikSegLensScratch[k] = Max(1.0e-5f, Vector3Length(VectorSingle(this.m_ikPtsScratch[k + 1u]) - VectorSingle(this.m_ikPtsScratch[k])).x);
 
-                    const VectorSingle rootPin = VectorSingle(pts[0u]);
-                    const VectorSingle goalPt = Lerp(VectorSingle(pts[cLen]), VectorSingle(t.targetPosition), stepScale);
-                    pts[cLen] = f32x4(goalPt, 0.0f);
+                    const VectorSingle rootPin = VectorSingle(this.m_ikPtsScratch[0u]);
+                    const VectorSingle goalPt = Lerp(VectorSingle(this.m_ikPtsScratch[cLen]), VectorSingle(t.targetPosition), stepScale);
+                    this.m_ikPtsScratch[cLen] = f32x4(goalPt, 0.0f);
                     for(usize rev = 0u; rev < cLen; ++rev){
                         const usize k = cLen - 1u - rev;
-                        const VectorSingle pNext(pts[k + 1u]);
-                        const VectorSingle dir = SafeNormalizeVec3(VectorSingle(pts[k]) - pNext, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                        pts[k] = f32x4(pNext + dir * segLens[k], 0.0f);
+                        const VectorSingle pNext(this.m_ikPtsScratch[k + 1u]);
+                        const VectorSingle dir = SafeNormalizeVec3(VectorSingle(this.m_ikPtsScratch[k]) - pNext, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                        this.m_ikPtsScratch[k] = f32x4(pNext + dir * this.m_ikSegLensScratch[k], 0.0f);
                     }
-                    pts[0u] = f32x4(rootPin, 0.0f);
+                    this.m_ikPtsScratch[0u] = f32x4(rootPin, 0.0f);
                     for(usize k = 0u; k < cLen; ++k){
-                        const VectorSingle pCur(pts[k]);
-                        const VectorSingle dir = SafeNormalizeVec3(VectorSingle(pts[k + 1u]) - pCur, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                        pts[k + 1u] = f32x4(pCur + dir * segLens[k], 0.0f);
+                        const VectorSingle pCur(this.m_ikPtsScratch[k]);
+                        const VectorSingle dir = SafeNormalizeVec3(VectorSingle(this.m_ikPtsScratch[k + 1u]) - pCur, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+                        this.m_ikPtsScratch[k + 1u] = f32x4(pCur + dir * this.m_ikSegLensScratch[k], 0.0f);
                     }
 
                     for(usize k = 0u; k < cLen; ++k){
-                        const usize lIdx = chain[k];
+                        const usize lIdx = this.m_ikChainScratch[k];
+                        if(k > 0u)
+                            this.recomputeLinkFkTransform(lIdx);
                         in ArticulationLinkDef d = this.linkDefs[lIdx];
                         mut ArticulationLinkState s = this.linkStates[lIdx];
                         in Transform3D pXf = this.linkStates[d.parentIndex].worldTransform;
@@ -6798,7 +7187,7 @@ class Articulation{
 
                         VectorSingle curChildPt(0.0f);
                         if(k + 1u < cLen){
-                            in ArticulationLinkDef dNext = this.linkDefs[chain[k + 1u]];
+                            in ArticulationLinkDef dNext = this.linkDefs[this.m_ikChainScratch[k + 1u]];
                             in Transform3D cXf = this.linkStates[lIdx].worldTransform;
                             curChildPt = TransformPointValues(VectorSingle(cXf.position), SafeNormalizeQuat(VectorSingle(cXf.rotation)), VectorSingle(dNext.parentToJoint.position));
                         }
@@ -6806,7 +7195,7 @@ class Articulation{
                             in Transform3D cXf = this.linkStates[lIdx].worldTransform;
                             curChildPt = TransformPointValues(VectorSingle(cXf.position), SafeNormalizeQuat(VectorSingle(cXf.rotation)), VectorSingle(t.localOffset));
                         }
-                        const VectorSingle desDir = VectorSingle(pts[k + 1u]) - pJ;
+                        const VectorSingle desDir = VectorSingle(this.m_ikPtsScratch[k + 1u]) - pJ;
                         const VectorSingle curDir = curChildPt - pJ;
                         const f32 ld = Vector3Length(desDir).x;
                         const f32 lc = Vector3Length(curDir).x;
@@ -6856,16 +7245,18 @@ class Articulation{
                                         this.clampLinkQ3ToLimits(lIdx);
                                 }
                             }
-                            this.m_fkDirty = true;
-                            if(this.m_hasPoseDependentSubspace)
-                                this.refreshPoseDependentSubspaces();
-                            this.computeForwardKinematics();
+                            this.recomputeLinkFkTransform(lIdx);
+                            this.markPoseDirty();
                         }
                     }
+                    if(targets.size() > 1u)
+                        this.computeForwardKinematics();
                 }
             }
         }
 
+        if(this.m_fkDirty)
+            this.computeForwardKinematics();
         if(!res.converged){
             f32 finalPosE = 0.0f;
             f32 finalRotE = 0.0f;
@@ -6884,6 +7275,13 @@ class Articulation{
         this.computeLinkSpatialVelocitiesInternal();
         this.commitDofStateOutputs();
         this.syncProxyBodies(world, dt);
+    }
+
+    public b8 tryGetCachedAggregateAabb(mut Aabb3D outAabb)const{
+        if(!this.hasFreshAggregateAabb())
+            return false;
+        outAabb = this.m_aggregateAabb;
+        return true;
     }
 
     public void solvePairwiseContactsWith(mut Articulation other, mut PhysicsWorld world, in f32 subDt){
@@ -6911,7 +7309,11 @@ class Articulation{
         const f32 restCoeff = Max(Clamp(this.contactRestitution, 0.0f, 1.0f), Clamp(other.contactRestitution, 0.0f, 1.0f));
         const f32 baseFric = Sqrt(VectorSingle(Max(0.0f, this.contactFriction) * Max(0.0f, other.contactFriction))).x;
 
-        Vector<ArticulationContactConstraint> pairContacts;
+        const usize maxUnitSlotsA = Max(cast<usize>(1u), cast<usize>(32768u) / nA);
+        const usize maxUnitSlotsB = Max(cast<usize>(1u), cast<usize>(32768u) / nB);
+        usize unitSlotsUsedA = 0u;
+        usize unitSlotsUsedB = 0u;
+        this.m_pairContactsScratch.clear();
 
         for(usize ia = 0u; ia < nA; ++ia){
             if(this.isLinkDetached(ia) || (this.m_selfColLinkHasShapesScratch[ia] & 2u) == 0u)
@@ -7004,22 +7406,47 @@ class Articulation{
                             pc.friction = effMu;
                             pc.restitution = effRest;
                             pc.effInvN = effInvN;
-                            pairContacts.push_back(pc);
+                            pc.hasCachedUnit = this.tryStorePgsUnitResponse(nA, unitSlotsUsedA, maxUnitSlotsA, pc.unitOffset);
+                            pc.hasCachedUnitB = other.tryStorePgsUnitResponse(nB, unitSlotsUsedB, maxUnitSlotsB, pc.unitOffsetB);
+
+                            if(effMu > 0.0f){
+                                VectorSingle t1(0.0f);
+                                VectorSingle t2(0.0f);
+                                ComputeTangentBasisFromUnitNormal(nOut, t1, t2);
+                                pc.t1Dir = f32x4(t1, 0.0f);
+                                pc.t2Dir = f32x4(t2, 0.0f);
+                                if(this.evaluateWorldImpulseSweep(ia, ptW, t1, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(ib, ptW, -t1, other.m_impU3, other.m_impDv)){
+                                    const VectorSingle vt1A = VectorSingle(this.m_impDv[ia].lin) + Cross(VectorSingle(this.m_impDv[ia].ang), rALoc);
+                                    const VectorSingle vt1B = VectorSingle(other.m_impDv[ib].lin) + Cross(VectorSingle(other.m_impDv[ib].ang), rBLoc);
+                                    pc.effInvT1 = Max(0.0f, Vector3Dot(t1, Vector3Rotate(vt1A, rotA)).x) + Max(0.0f, Vector3Dot(-t1, Vector3Rotate(vt1B, rotB)).x);
+                                    pc.hasCachedUnitT1 = this.tryStorePgsUnitResponse(nA, unitSlotsUsedA, maxUnitSlotsA, pc.unitOffsetT1);
+                                    pc.hasCachedUnitBT1 = other.tryStorePgsUnitResponse(nB, unitSlotsUsedB, maxUnitSlotsB, pc.unitOffsetBT1);
+                                }
+                                if(this.evaluateWorldImpulseSweep(ia, ptW, t2, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(ib, ptW, -t2, other.m_impU3, other.m_impDv)){
+                                    const VectorSingle vt2A = VectorSingle(this.m_impDv[ia].lin) + Cross(VectorSingle(this.m_impDv[ia].ang), rALoc);
+                                    const VectorSingle vt2B = VectorSingle(other.m_impDv[ib].lin) + Cross(VectorSingle(other.m_impDv[ib].ang), rBLoc);
+                                    pc.effInvT2 = Max(0.0f, Vector3Dot(t2, Vector3Rotate(vt2A, rotA)).x) + Max(0.0f, Vector3Dot(-t2, Vector3Rotate(vt2B, rotB)).x);
+                                    pc.hasCachedUnitT2 = this.tryStorePgsUnitResponse(nA, unitSlotsUsedA, maxUnitSlotsA, pc.unitOffsetT2);
+                                    pc.hasCachedUnitBT2 = other.tryStorePgsUnitResponse(nB, unitSlotsUsedB, maxUnitSlotsB, pc.unitOffsetBT2);
+                                }
+                                pc.hasTangentCache = true;
+                            }
+                            this.m_pairContactsScratch.push_back(pc);
                         }
                     }
                 }
             }
         }
 
-        if(pairContacts.empty())
+        if(this.m_pairContactsScratch.empty())
             return;
 
         this.wake();
         other.wake();
         const u32 iters = Max(1u, Max(this.solverIterations, other.solverIterations));
         for(u32 iter = 0u; iter < iters; ++iter){
-            for(usize ci = 0u; ci < pairContacts.size(); ++ci){
-                mut ArticulationContactConstraint c = pairContacts[ci];
+            for(usize ci = 0u; ci < this.m_pairContactsScratch.size(); ++ci){
+                mut ArticulationContactConstraint c = this.m_pairContactsScratch[ci];
                 const VectorSingle ptW(c.ptA);
                 const VectorSingle nOut(c.normalOut);
                 const VectorSingle posA(this.m_cachedLinkPosScratch[c.linkIdx]);
@@ -7040,7 +7467,13 @@ class Articulation{
                 const f32 appliedN = newLambdaN - c.lambdaN;
                 c.lambdaN = newLambdaN;
                 if(Abs(VectorSingle(appliedN)).x > 0.0f){
-                    if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, nOut, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -nOut, other.m_impU3, other.m_impDv)){
+                    if(c.hasCachedUnit && c.hasCachedUnitB){
+                        this.applyCachedUnitImpulseDelta(c.unitOffset, nA, appliedN);
+                        this.accumulateReactionImpulseOnLink(c.linkIdx, ptW, nOut * appliedN, invSubDt);
+                        other.applyCachedUnitImpulseDelta(c.unitOffsetB, nB, appliedN);
+                        other.accumulateReactionImpulseOnLink(c.linkIdxB, ptW, -nOut * appliedN, invSubDt);
+                    }
+                    else if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, nOut, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -nOut, other.m_impU3, other.m_impDv)){
                         this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, appliedN);
                         this.accumulateReactionImpulseOnLink(c.linkIdx, ptW, nOut * appliedN, invSubDt);
                         other.applyImpulseSweepActiveDelta(other.m_impU3, other.m_impDv, appliedN);
@@ -7052,23 +7485,31 @@ class Articulation{
                 if((c.lambdaN > 0.0f && c.friction > 0.0f) || Vector3LengthSq(oldLambdaT).x > 1.0e-12f){
                     VectorSingle t1(0.0f);
                     VectorSingle t2(0.0f);
-                    ComputeTangentBasisFromUnitNormal(nOut, t1, t2);
+                    f32 effInv1 = 0.0f;
+                    f32 effInv2 = 0.0f;
+                    if(c.hasTangentCache){
+                        t1 = VectorSingle(c.t1Dir);
+                        t2 = VectorSingle(c.t2Dir);
+                        effInv1 = c.effInvT1;
+                        effInv2 = c.effInvT2;
+                    }
+                    else{
+                        ComputeTangentBasisFromUnitNormal(nOut, t1, t2);
+                        if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, t1, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -t1, other.m_impU3, other.m_impDv)){
+                            const VectorSingle vt1A = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALoc);
+                            const VectorSingle vt1B = VectorSingle(other.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(other.m_impDv[c.linkIdxB].ang), rBLoc);
+                            effInv1 = Max(0.0f, Vector3Dot(t1, Vector3Rotate(vt1A, rotA)).x) + Max(0.0f, Vector3Dot(-t1, Vector3Rotate(vt1B, rotB)).x);
+                        }
+                        if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, t2, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -t2, other.m_impU3, other.m_impDv)){
+                            const VectorSingle vt2A = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALoc);
+                            const VectorSingle vt2B = VectorSingle(other.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(other.m_impDv[c.linkIdxB].ang), rBLoc);
+                            effInv2 = Max(0.0f, Vector3Dot(t2, Vector3Rotate(vt2A, rotA)).x) + Max(0.0f, Vector3Dot(-t2, Vector3Rotate(vt2B, rotB)).x);
+                        }
+                    }
+
                     const f32 oldLam1 = Vector3Dot(oldLambdaT, t1).x;
                     const f32 oldLam2 = Vector3Dot(oldLambdaT, t2).x;
                     const VectorSingle vRelAfter = this.linkPointWorldVelocity(c.linkIdx, ptW) - other.linkPointWorldVelocity(c.linkIdxB, ptW);
-
-                    f32 effInv1 = 0.0f;
-                    if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, t1, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -t1, other.m_impU3, other.m_impDv)){
-                        const VectorSingle vt1A = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALoc);
-                        const VectorSingle vt1B = VectorSingle(other.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(other.m_impDv[c.linkIdxB].ang), rBLoc);
-                        effInv1 = Max(0.0f, Vector3Dot(t1, Vector3Rotate(vt1A, rotA)).x) + Max(0.0f, Vector3Dot(-t1, Vector3Rotate(vt1B, rotB)).x);
-                    }
-                    f32 effInv2 = 0.0f;
-                    if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, t2, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -t2, other.m_impU3, other.m_impDv)){
-                        const VectorSingle vt2A = VectorSingle(this.m_impDv[c.linkIdx].lin) + Cross(VectorSingle(this.m_impDv[c.linkIdx].ang), rALoc);
-                        const VectorSingle vt2B = VectorSingle(other.m_impDv[c.linkIdxB].lin) + Cross(VectorSingle(other.m_impDv[c.linkIdxB].ang), rBLoc);
-                        effInv2 = Max(0.0f, Vector3Dot(t2, Vector3Rotate(vt2A, rotA)).x) + Max(0.0f, Vector3Dot(-t2, Vector3Rotate(vt2B, rotB)).x);
-                    }
 
                     f32 cand1 = oldLam1;
                     if(effInv1 > 1.0e-8f)
@@ -7080,18 +7521,34 @@ class Articulation{
                     f32 final1 = 0.0f;
                     f32 final2 = 0.0f;
                     this.clampFrictionEllipse(cand1, cand2, limF, limF, final1, final2);
+                    const f32 dLam1 = final1 - oldLam1;
+                    const f32 dLam2 = final2 - oldLam2;
                     const VectorSingle newLambdaT = t1 * final1 + t2 * final2;
                     const VectorSingle dLambdaT = newLambdaT - oldLambdaT;
                     c.lambdaT = f32x4(newLambdaT, 0.0f);
                     const f32 dTSq = Vector3LengthSq(dLambdaT).x;
                     if(dTSq > 1.0e-12f){
-                        const f32 dTMag = Sqrt(VectorSingle(dTSq)).x;
-                        const VectorSingle dTDir = dLambdaT * (1.0f / dTMag);
-                        if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, dTDir, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -dTDir, other.m_impU3, other.m_impDv)){
-                            this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, dTMag);
+                        if(c.hasCachedUnitT1 && c.hasCachedUnitT2 && c.hasCachedUnitBT1 && c.hasCachedUnitBT2){
+                            if(Abs(VectorSingle(dLam1)).x > 1.0e-9f){
+                                this.applyCachedUnitImpulseDelta(c.unitOffsetT1, nA, dLam1);
+                                other.applyCachedUnitImpulseDelta(c.unitOffsetBT1, nB, dLam1);
+                            }
+                            if(Abs(VectorSingle(dLam2)).x > 1.0e-9f){
+                                this.applyCachedUnitImpulseDelta(c.unitOffsetT2, nA, dLam2);
+                                other.applyCachedUnitImpulseDelta(c.unitOffsetBT2, nB, dLam2);
+                            }
                             this.accumulateReactionImpulseOnLink(c.linkIdx, ptW, dLambdaT, invSubDt);
-                            other.applyImpulseSweepActiveDelta(other.m_impU3, other.m_impDv, dTMag);
                             other.accumulateReactionImpulseOnLink(c.linkIdxB, ptW, -dLambdaT, invSubDt);
+                        }
+                        else{
+                            const f32 dTMag = Sqrt(VectorSingle(dTSq)).x;
+                            const VectorSingle dTDir = dLambdaT * (1.0f / dTMag);
+                            if(this.evaluateWorldImpulseSweep(c.linkIdx, ptW, dTDir, this.m_impU3, this.m_impDv) && other.evaluateWorldImpulseSweep(c.linkIdxB, ptW, -dTDir, other.m_impU3, other.m_impDv)){
+                                this.applyImpulseSweepActiveDelta(this.m_impU3, this.m_impDv, dTMag);
+                                this.accumulateReactionImpulseOnLink(c.linkIdx, ptW, dLambdaT, invSubDt);
+                                other.applyImpulseSweepActiveDelta(other.m_impU3, other.m_impDv, dTMag);
+                                other.accumulateReactionImpulseOnLink(c.linkIdxB, ptW, -dLambdaT, invSubDt);
+                            }
                         }
                     }
                 }

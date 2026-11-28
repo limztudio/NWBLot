@@ -4218,13 +4218,20 @@ f32 FindMinSdfConvexSeparation(
 
             f32 bestStepF = fx;
             VectorSingle bestStepX = x;
+            VectorSingle bestStepG = gx;
+            b8 hasBestG = false;
             f32 alpha = 1.0f;
             for(u32 ls = 0u; ls < 4u; ++ls){
                 const VectorSingle candX = x + delta * alpha;
-                const f32 candF = sdf.sampleEffectiveDistance(candX) - queryProxy.radius;
+                f32 candRawD = 0.0f;
+                VectorSingle candG(0.0f, 1.0f, 0.0f, 0.0f);
+                sdf.sampleEffectiveDistanceAndGradient(candX, candRawD, candG);
+                const f32 candF = candRawD - queryProxy.radius;
                 if(candF < bestStepF){
                     bestStepF = candF;
                     bestStepX = candX;
+                    bestStepG = candG;
+                    hasBestG = true;
                     break;
                 }
                 alpha *= 0.5f;
@@ -4233,7 +4240,10 @@ f32 FindMinSdfConvexSeparation(
                 break;
             x = bestStepX;
             fx = bestStepF;
-            gx = sdf.sampleEffectiveGradient(x);
+            if(hasBestG)
+                gx = bestStepG;
+            else
+                gx = sdf.sampleEffectiveGradient(x);
         }
 
         if(fx < bestSep){
@@ -4353,8 +4363,9 @@ b8 ClosestPointOnSdfLocal(
     if(!sdf.isValid())
         return false;
 
-    const f32 d0 = sdf.sampleEffectiveDistance(localPoint);
-    const VectorSingle g0 = sdf.sampleEffectiveGradient(localPoint);
+    f32 d0 = 0.0f;
+    VectorSingle g0(0.0f, 1.0f, 0.0f, 0.0f);
+    sdf.sampleEffectiveDistanceAndGradient(localPoint, d0, g0);
     outNormal = g0;
     if(d0 <= 0.0f){
         outClosest = localPoint;
@@ -4362,15 +4373,23 @@ b8 ClosestPointOnSdfLocal(
     }
 
     VectorSingle p = localPoint - g0 * d0;
+    VectorSingle lastG = g0;
+    b8 gradFresh = false;
     for(u32 iter = 0u; iter < 5u; ++iter){
-        const f32 d = sdf.sampleEffectiveDistance(p);
+        f32 d = 0.0f;
+        VectorSingle g(0.0f, 1.0f, 0.0f, 0.0f);
+        sdf.sampleEffectiveDistanceAndGradient(p, d, g);
+        lastG = g;
+        gradFresh = true;
         if(Abs(VectorSingle(d)).x <= s_LinearSlop * 0.1f)
             break;
-        const VectorSingle g = sdf.sampleEffectiveGradient(p);
         p = p - g * d;
+        gradFresh = false;
     }
     outClosest = p;
-    outNormal = sdf.sampleEffectiveGradient(p);
+    if(!gradFresh)
+        lastG = sdf.sampleEffectiveGradient(p);
+    outNormal = lastG;
     return true;
 }
 

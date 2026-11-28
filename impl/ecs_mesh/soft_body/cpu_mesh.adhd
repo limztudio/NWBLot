@@ -316,6 +316,7 @@ class SoftBodyRuntimeMeshCpuState{
     private Vector<f32x4> m_accumTangents;
     private Vector<f32x4> m_accumBitangents;
     private Vector<f32x4> m_localParticlePositions;
+    private Vector<f32x4> m_localRenderPositions;
     private Vector<f32x4> m_cachedFaceNormals;
     private SolidTopologyCache m_solidTopologyCache;
     private SolidTopologyScratch m_solidTopologyScratch;
@@ -323,6 +324,7 @@ class SoftBodyRuntimeMeshCpuState{
     private Vector<u32> m_renderVertToSourcePos;
     private b8 m_useCageBinding = false;
     private b8 m_cachedMirroredWinding = false;
+    private b8 m_hasNonDegenerateUvs = false;
     private usize m_cachedCageBindingCount = 0u;
     public Vector<u32> gpuVertToParticle;
     public Vector<u32x4> gpuCageParticleIndices;
@@ -388,12 +390,14 @@ class SoftBodyRuntimeMeshCpuState{
         this.m_accumTangents.clear();
         this.m_accumBitangents.clear();
         this.m_localParticlePositions.clear();
+        this.m_localRenderPositions.clear();
         this.m_cachedFaceNormals.clear();
         this.m_solidTopologyCache.valid = false;
         this.m_renderVertToParticle.clear();
         this.m_renderVertToSourcePos.clear();
         this.m_useCageBinding = false;
         this.m_cachedMirroredWinding = false;
+        this.m_hasNonDegenerateUvs = false;
         this.m_cachedCageBindingCount = 0u;
         this.gpuVertToParticle.clear();
         this.gpuCageParticleIndices.clear();
@@ -549,29 +553,29 @@ class SoftBodyRuntimeMeshCpuState{
             Vector<f32x3u> particleLocalPos;
             WriteSoftBodyLocalPositions(sb, xf, particleLocalPos);
 
-            f32 minX = f32.max;
-            f32 maxX = -f32.max;
-            f32 minY = f32.max;
-            f32 maxY = -f32.max;
-            f32 minZ = f32.max;
-            f32 maxZ = -f32.max;
+            VectorSingle minP(f32.max, f32.max, f32.max, 0.0f);
+            VectorSingle maxP(-f32.max, -f32.max, -f32.max, 0.0f);
             const b8 useRest = (sb.restLocalPositions.size() == particleCount);
-            for(usize i = 0u; i < particleCount; ++i){
-                f32 px = particleLocalPos[i].x;
-                f32 py = particleLocalPos[i].y;
-                f32 pz = particleLocalPos[i].z;
-                if(useRest){
-                    px = sb.restLocalPositions[i].x;
-                    py = sb.restLocalPositions[i].y;
-                    pz = sb.restLocalPositions[i].z;
+            if(useRest){
+                for(usize i = 0u; i < particleCount; ++i){
+                    const VectorSingle p(sb.restLocalPositions[i]);
+                    minP = Min(minP, p);
+                    maxP = Max(maxP, p);
                 }
-                if(px < minX) minX = px;
-                if(px > maxX) maxX = px;
-                if(py < minY) minY = py;
-                if(py > maxY) maxY = py;
-                if(pz < minZ) minZ = pz;
-                if(pz > maxZ) maxZ = pz;
             }
+            else{
+                for(usize i = 0u; i < particleCount; ++i){
+                    const VectorSingle p(particleLocalPos[i]);
+                    minP = Min(minP, p);
+                    maxP = Max(maxP, p);
+                }
+            }
+            const f32 minX = minP.x;
+            const f32 maxX = maxP.x;
+            const f32 minY = minP.y;
+            const f32 maxY = maxP.y;
+            const f32 minZ = minP.z;
+            const f32 maxZ = maxP.z;
             f32 spanX = maxX - minX;
             f32 spanY = maxY - minY;
             f32 spanZ = maxZ - minZ;
@@ -987,28 +991,46 @@ class SoftBodyRuntimeMeshCpuState{
         ))
             return false;
 
-        const Expected<Vector<u32>> decodedIndices = BuildMeshletTriangleIndices(
-            Span<MeshletDesc>(this.meshlets),
-            Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
-            Span<u8>(this.meshletPositionRefDeltas),
-            Span<u8>(this.meshletPrimitiveIndices),
-            this.positions.size()
-        );
-        if(!decodedIndices.has_value())
-            return false;
-        this.triangleIndices = decodedIndices.value();
+        const usize cornerTotal = this.meshletPrimitiveIndices.size();
+        this.triangleIndices.resize(cornerTotal);
+        this.triangleAttributes.resize(cornerTotal);
+        for(usize meshletIndex = 0u; meshletIndex < this.meshlets.size(); ++meshletIndex){
+            in MeshletDesc meshlet = this.meshlets[meshletIndex];
+            const usize posRefBase = cast<usize>(this.meshletPositionRefElementOffsets[meshletIndex]);
+            const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+            for(u32 primitive = 0u; primitive < primitiveCount; ++primitive){
+                const usize base = cast<usize>(meshlet.primitiveOffset) + cast<usize>(primitive) * s_MeshletTriangleIndexCount;
+                for(u32 corner = 0u; corner < s_MeshletTriangleIndexCount; ++corner){
+                    const usize byteIndex = base + corner;
+                    if(byteIndex >= cornerTotal)
+                        return false;
+                    const usize refIndex = cast<usize>(meshlet.localVertexOffset) + cast<usize>(this.meshletPrimitiveIndices[byteIndex]);
+                    if(refIndex >= this.meshletLocalVertexRefs.size())
+                        return false;
+                    const usize posRefSlot = posRefBase + cast<usize>(this.meshletLocalVertexRefs[refIndex].localDeformedPosition);
+                    if(posRefSlot >= this.meshletPositionStreamRefs.size())
+                        return false;
+                    const u32 vIdx = this.meshletPositionStreamRefs[posRefSlot].position;
+                    if(cast<usize>(vIdx) >= renderVertCount)
+                        return false;
+                    this.triangleIndices[byteIndex] = vIdx;
+                    this.triangleAttributes[byteIndex].normal = this.normals[cast<usize>(vIdx)];
+                    this.triangleAttributes[byteIndex].uv0 = this.uv0[cast<usize>(vIdx)];
+                }
+            }
+        }
 
-        const Expected<Vector<AttribGpu>> builtAttributes = BuildMeshletTriangleAttributes(
-            Span<MeshletDesc>(this.meshlets),
-            Span<MeshletLocalVertexRef>(this.meshletLocalVertexRefs),
-            Span<u8>(this.meshletAttributeRefDeltas),
-            Span<u8>(this.meshletPrimitiveIndices),
-            Span<f16x4u>(this.normals),
-            Span<f32x2u>(this.uv0)
-        );
-        if(!builtAttributes.has_value() || builtAttributes.value().size() != this.triangleIndices.size())
-            return false;
-        this.triangleAttributes = builtAttributes.value();
+        this.m_hasNonDegenerateUvs = false;
+        if(renderVertCount > 1u){
+            const f32x2u refUv = this.uv0[0u];
+            for(usize vi = 1u; vi < renderVertCount; ++vi){
+                const f32x2u u = this.uv0[vi];
+                if(u.x != refUv.x || u.y != refUv.y){
+                    this.m_hasNonDegenerateUvs = true;
+                    break;
+                }
+            }
+        }
 
         this.cachedTopologyVersion = sb.topologyVersion;
         this.cachedParticleCount = particleCount;
@@ -1177,6 +1199,7 @@ class SoftBodyRuntimeMeshCpuState{
         const usize renderVertCount = this.positions.size();
         const usize particleCount = sb.particles.size();
         const b8 worldBaked = sb.isWorldSpaceBaked();
+        this.m_localRenderPositions.resize(renderVertCount);
 
         VectorSingle col0(1.0f, 0.0f, 0.0f, 0.0f);
         VectorSingle col1(0.0f, 1.0f, 0.0f, 0.0f);
@@ -1199,8 +1222,14 @@ class SoftBodyRuntimeMeshCpuState{
             }
             for(usize rv = 0u; rv < renderVertCount; ++rv){
                 const f32x4 bw = this.gpuCageBaryWeights[rv];
-                if(bw.x == 0.0f && bw.y == 0.0f && bw.z == 0.0f && bw.w == 0.0f)
+                if(bw.x == 0.0f && bw.y == 0.0f && bw.z == 0.0f && bw.w == 0.0f){
+                    VectorSingle lpKeep(this.positions[rv]);
+                    if(!IsFinite(lpKeep.xyz))
+                        lpKeep = VectorSingle(0.0f);
+                    this.m_localRenderPositions[rv] = f32x4(lpKeep, 0.0f);
+                    this.positions[rv] = f32x3u(lpKeep);
                     continue;
+                }
                 const u32x4 idx = this.gpuCageParticleIndices[rv];
                 const VectorSingle wv(bw);
                 VectorSingle p0(0.0f);
@@ -1219,7 +1248,7 @@ class SoftBodyRuntimeMeshCpuState{
                     p2 = VectorSingle(sb.particles[cast<usize>(idx.z)].position);
                     p3 = VectorSingle(sb.particles[cast<usize>(idx.w)].position);
                 }
-                const VectorSingle lp = VectorMultiplyAdd(
+                VectorSingle lp = VectorMultiplyAdd(
                     p0,
                     VectorSplatX(wv),
                     VectorMultiplyAdd(
@@ -1232,6 +1261,9 @@ class SoftBodyRuntimeMeshCpuState{
                         )
                     )
                 );
+                if(!IsFinite(lp.xyz))
+                    lp = VectorSingle(0.0f);
+                this.m_localRenderPositions[rv] = f32x4(lp, 0.0f);
                 this.positions[rv] = f32x3u(lp);
             }
         }
@@ -1240,27 +1272,36 @@ class SoftBodyRuntimeMeshCpuState{
                 this.m_localParticlePositions.resize(particleCount);
                 for(usize pi = 0u; pi < particleCount; ++pi){
                     const VectorSingle wp(sb.particles[pi].position);
-                    this.m_localParticlePositions[pi] = f32x4(TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3));
+                    VectorSingle lp = TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3);
+                    if(!IsFinite(lp.xyz))
+                        lp = VectorSingle(0.0f);
+                    this.m_localParticlePositions[pi] = f32x4(lp, 0.0f);
                 }
-                for(usize rv = 0u; rv < renderVertCount; ++rv)
-                    this.positions[rv] = f32x3u(VectorSingle(this.m_localParticlePositions[cast<usize>(this.m_renderVertToParticle[rv])]));
+                for(usize rv = 0u; rv < renderVertCount; ++rv){
+                    const f32x4 lp = this.m_localParticlePositions[cast<usize>(this.m_renderVertToParticle[rv])];
+                    this.m_localRenderPositions[rv] = lp;
+                    this.positions[rv] = f32x3u(VectorSingle(lp));
+                }
             }
             else{
                 for(usize rv = 0u; rv < renderVertCount; ++rv){
                     const VectorSingle wp(sb.particles[cast<usize>(this.m_renderVertToParticle[rv])].position);
-                    this.positions[rv] = f32x3u(TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3));
+                    VectorSingle lp = TransformSoftBodyPointWithColumns(wp, col0, col1, col2, col3);
+                    if(!IsFinite(lp.xyz))
+                        lp = VectorSingle(0.0f);
+                    this.m_localRenderPositions[rv] = f32x4(lp, 0.0f);
+                    this.positions[rv] = f32x3u(lp);
                 }
             }
         }
         else{
-            for(usize rv = 0u; rv < renderVertCount; ++rv)
-                this.positions[rv] = f32x3u(VectorSingle(sb.particles[cast<usize>(this.m_renderVertToParticle[rv])].position));
-        }
-
-        for(usize rv = 0u; rv < renderVertCount; ++rv){
-            const f32x3u rp = this.positions[rv];
-            if(!IsFinite(VectorSingle(rp.x, rp.y, rp.z, 0.0f).xyz))
-                this.positions[rv] = f32x3u(0.0f, 0.0f, 0.0f);
+            for(usize rv = 0u; rv < renderVertCount; ++rv){
+                VectorSingle lp(sb.particles[cast<usize>(this.m_renderVertToParticle[rv])].position);
+                if(!IsFinite(lp.xyz))
+                    lp = VectorSingle(0.0f);
+                this.m_localRenderPositions[rv] = f32x4(lp, 0.0f);
+                this.positions[rv] = f32x3u(lp);
+            }
         }
 
         const usize expectedSolidWords = ExpectedMeshletSolidTriangleWordCount(cast<u32>(this.meshletPrimitiveIndices.size()));
@@ -1277,9 +1318,12 @@ class SoftBodyRuntimeMeshCpuState{
                 return false;
         }
 
+        const b8 accumTangents = this.m_hasNonDegenerateUvs;
         this.m_accumNormals.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-        this.m_accumTangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-        this.m_accumBitangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        if(accumTangents){
+            this.m_accumTangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+            this.m_accumBitangents.assign(renderVertCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        }
 
         const usize renderTriCount = this.triangleIndices.size() / 3u;
         if(!this.emptySurfaceSentinel){
@@ -1294,39 +1338,46 @@ class SoftBodyRuntimeMeshCpuState{
                     continue;
                 }
 
-                const VectorSingle p0(this.positions[i0]);
-                const VectorSingle p1(this.positions[i1]);
-                const VectorSingle p2(this.positions[i2]);
+                const VectorSingle p0(this.m_localRenderPositions[i0]);
+                const VectorSingle p1(this.m_localRenderPositions[i1]);
+                const VectorSingle p2(this.m_localRenderPositions[i2]);
                 const VectorSingle e1 = p1 - p0;
                 const VectorSingle e2 = p2 - p0;
                 const VectorSingle faceN = Cross(e1.xyz, e2.xyz);
-                this.m_cachedFaceNormals[ti] = f32x4(faceN);
-                if(LengthSq(faceN.xyz) > 1.0e-16f){
+                const f32 faceLenSq = LengthSq(faceN.xyz);
+                if(faceLenSq > 1.0e-16f){
+                    const f32 invLen = 1.0f / Sqrt(VectorSingle(faceLenSq)).x;
+                    this.m_cachedFaceNormals[ti] = f32x4(faceN.x, faceN.y, faceN.z, invLen);
                     this.m_accumNormals[i0] = f32x4(VectorSingle(this.m_accumNormals[i0]) + faceN);
                     this.m_accumNormals[i1] = f32x4(VectorSingle(this.m_accumNormals[i1]) + faceN);
                     this.m_accumNormals[i2] = f32x4(VectorSingle(this.m_accumNormals[i2]) + faceN);
                 }
+                else{
+                    this.m_cachedFaceNormals[ti] = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                }
 
-                const f32x2u uv0v = this.uv0[i0];
-                const f32x2u uv1v = this.uv0[i1];
-                const f32x2u uv2v = this.uv0[i2];
-                const f32 du1 = uv1v.x - uv0v.x;
-                const f32 dv1 = uv1v.y - uv0v.y;
-                const f32 du2 = uv2v.x - uv0v.x;
-                const f32 dv2 = uv2v.y - uv0v.y;
-                const f32 det = du1 * dv2 - du2 * dv1;
-                f32 signDet = 1.0f;
-                if(det < 0.0f)
-                    signDet = -1.0f;
-                const VectorSingle tContrib = (e1 * dv2 - e2 * dv1) * signDet;
-                const VectorSingle bContrib = (e2 * du1 - e1 * du2) * signDet;
-                if(LengthSq(tContrib.xyz) > 1.0e-18f){
-                    this.m_accumTangents[i0] = f32x4(VectorSingle(this.m_accumTangents[i0]) + tContrib);
-                    this.m_accumTangents[i1] = f32x4(VectorSingle(this.m_accumTangents[i1]) + tContrib);
-                    this.m_accumTangents[i2] = f32x4(VectorSingle(this.m_accumTangents[i2]) + tContrib);
-                    this.m_accumBitangents[i0] = f32x4(VectorSingle(this.m_accumBitangents[i0]) + bContrib);
-                    this.m_accumBitangents[i1] = f32x4(VectorSingle(this.m_accumBitangents[i1]) + bContrib);
-                    this.m_accumBitangents[i2] = f32x4(VectorSingle(this.m_accumBitangents[i2]) + bContrib);
+                if(accumTangents){
+                    const f32x2u uv0v = this.uv0[i0];
+                    const f32x2u uv1v = this.uv0[i1];
+                    const f32x2u uv2v = this.uv0[i2];
+                    const f32 du1 = uv1v.x - uv0v.x;
+                    const f32 dv1 = uv1v.y - uv0v.y;
+                    const f32 du2 = uv2v.x - uv0v.x;
+                    const f32 dv2 = uv2v.y - uv0v.y;
+                    const f32 det = du1 * dv2 - du2 * dv1;
+                    f32 signDet = 1.0f;
+                    if(det < 0.0f)
+                        signDet = -1.0f;
+                    const VectorSingle tContrib = (e1 * dv2 - e2 * dv1) * signDet;
+                    const VectorSingle bContrib = (e2 * du1 - e1 * du2) * signDet;
+                    if(LengthSq(tContrib.xyz) > 1.0e-18f){
+                        this.m_accumTangents[i0] = f32x4(VectorSingle(this.m_accumTangents[i0]) + tContrib);
+                        this.m_accumTangents[i1] = f32x4(VectorSingle(this.m_accumTangents[i1]) + tContrib);
+                        this.m_accumTangents[i2] = f32x4(VectorSingle(this.m_accumTangents[i2]) + tContrib);
+                        this.m_accumBitangents[i0] = f32x4(VectorSingle(this.m_accumBitangents[i0]) + bContrib);
+                        this.m_accumBitangents[i1] = f32x4(VectorSingle(this.m_accumBitangents[i1]) + bContrib);
+                        this.m_accumBitangents[i2] = f32x4(VectorSingle(this.m_accumBitangents[i2]) + bContrib);
+                    }
                 }
             }
         }
@@ -1339,15 +1390,23 @@ class SoftBodyRuntimeMeshCpuState{
             const VectorSingle n = SafeNormalizeVec3(VectorSingle(this.m_accumNormals[i]), defaultN);
             this.normals[i] = MakeHalf4U(n.x, n.y, n.z, 0.0f);
 
-            const VectorSingle rawT(this.m_accumTangents[i]);
-            const VectorSingle rawB(this.m_accumBitangents[i]);
-            const VectorSingle projT = rawT - n * Vector3Dot(n, rawT).x;
             VectorSingle unitT(0.0f);
             f32 handedness = 1.0f;
-            if(LengthSq(projT.xyz) > 1.0e-12f){
-                unitT = VectorSingle(Normalize(projT.xyz), 0.0f);
-                if(Vector3Dot(VectorSingle(Cross(n.xyz, unitT.xyz), 0.0f), rawB).x < 0.0f)
-                    handedness = -1.0f;
+            if(accumTangents){
+                const VectorSingle rawT(this.m_accumTangents[i]);
+                const VectorSingle rawB(this.m_accumBitangents[i]);
+                const VectorSingle projT = rawT - n * Vector3Dot(n, rawT).x;
+                if(LengthSq(projT.xyz) > 1.0e-12f){
+                    unitT = VectorSingle(Normalize(projT.xyz), 0.0f);
+                    if(Vector3Dot(VectorSingle(Cross(n.xyz, unitT.xyz), 0.0f), rawB).x < 0.0f)
+                        handedness = -1.0f;
+                }
+                else{
+                    VectorSingle fallbackT(0.0f);
+                    VectorSingle fallbackB(0.0f);
+                    ComputeTangentBasisFromUnitNormal(n, fallbackT, fallbackB);
+                    unitT = fallbackT;
+                }
             }
             else{
                 VectorSingle fallbackT(0.0f);

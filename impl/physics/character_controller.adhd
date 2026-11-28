@@ -265,6 +265,7 @@ class CharacterController{
     private CharacterShapeType m_cachedCustomShapeType = CharacterShapeType::Capsule;
     private HullGeometryId m_cachedCustomHullId;
     private CompoundGeometryId m_cachedCustomCompId;
+    private u64 m_cachedCustomCompPoolVersion = 0u;
     private f32x4 m_cachedCustomScale(1.0f, 1.0f, 1.0f, 0.0f);
     private f32x4 m_groundShapeRot(0.0f, 0.0f, 0.0f, 1.0f);
     private Vector<ShapeOverlapHit> m_scratchHits;
@@ -273,6 +274,16 @@ class CharacterController{
     private Vector<CharacterContactInfo> m_scratchStepContacts;
     private Vector<ShapeProxy> m_scratchLeafProxies;
     private Vector<Transform3D> m_scratchLeafTransforms;
+    private Vector<ShapeProxy> m_cachedCompoundLeafProxies;
+    private Vector<Transform3D> m_cachedCompoundLeafTransforms;
+    private b8 m_hasCachedCompoundLeaves = false;
+    private CompoundGeometryId m_cachedLeavesCompId;
+    private f32x4 m_cachedLeavesScale(1.0f, 1.0f, 1.0f, 0.0f);
+    private u64 m_cachedLeavesPoolVersion = 0u;
+    private Vector<ShapeProxy> m_scratchLeafSkins;
+    private Vector<ShapeId> m_scratchOtherBodyShapes;
+    private Vector<ShapeProxy> m_scratchPairLeafProxies;
+    private Vector<Transform3D> m_scratchPairLeafTransforms;
     private FixedVector<f32x4, 8u> m_lastBlockingNormals;
     private Optional<CharacterContactValidateCallback> m_onContactValidateCallback;
     private Optional<CharacterContactAddedCallback> m_onContactAddedCallback;
@@ -333,6 +344,8 @@ class CharacterController{
         const VectorSingle upVec = SafeNormalizeVec3(VectorSingle(this.def.up), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
         this.def.up = f32x4(upVec, 0.0f);
         this.m_hasCustomLocalBounds = false;
+        this.m_cachedCustomCompPoolVersion = 0u;
+        this.m_hasCachedCompoundLeaves = false;
         this.m_cachedSlopeAngleRad = -1.0f;
         this.syncWalkableCos();
     }
@@ -359,6 +372,14 @@ class CharacterController{
         this.m_hasPrevProxyRotation = hasPrevProxyRot;
         this.m_activeGravityOverrideEpoch = 0u;
         this.m_hasCustomLocalBounds = false;
+        this.m_cachedCustomCompPoolVersion = 0u;
+        this.m_hasCachedCompoundLeaves = false;
+        this.m_cachedCompoundLeafProxies.clear();
+        this.m_cachedCompoundLeafTransforms.clear();
+        this.m_scratchLeafSkins.clear();
+        this.m_scratchOtherBodyShapes.clear();
+        this.m_scratchPairLeafProxies.clear();
+        this.m_scratchPairLeafTransforms.clear();
         this.m_groundShapeRot = f32x4(0.0f, 0.0f, 0.0f, 1.0f);
         this.m_cachedSlopeAngleRad = -1.0f;
         this.syncWalkableCos();
@@ -401,6 +422,14 @@ class CharacterController{
         this.m_hasPrevProxyRotation = true;
         this.m_activeGravityOverrideEpoch = 0u;
         this.m_hasCustomLocalBounds = false;
+        this.m_cachedCustomCompPoolVersion = 0u;
+        this.m_hasCachedCompoundLeaves = false;
+        this.m_cachedCompoundLeafProxies.clear();
+        this.m_cachedCompoundLeafTransforms.clear();
+        this.m_scratchLeafSkins.clear();
+        this.m_scratchOtherBodyShapes.clear();
+        this.m_scratchPairLeafProxies.clear();
+        this.m_scratchPairLeafTransforms.clear();
         this.prevGroundTransform = Transform3D();
         this.hasPrevGroundTransform = false;
         this.activeContacts.clear();
@@ -535,13 +564,83 @@ class CharacterController{
         return false;
     }
 
+    private b8 ensureCompoundLeavesCached(in PhysicsWorld world){
+        if(this.def.shapeType != CharacterShapeType::Compound || !world.isCompoundGeometryValid(this.def.customCompoundGeometryId)){
+            this.m_hasCachedCompoundLeaves = false;
+            this.m_cachedCompoundLeafProxies.clear();
+            this.m_cachedCompoundLeafTransforms.clear();
+            return false;
+        }
+        const VectorSingle scaleVec = ComputeValidCharacterScale(VectorSingle(this.def.customShapeScale));
+        if(
+            this.m_hasCachedCompoundLeaves
+            && this.m_cachedLeavesPoolVersion == world.m_compoundPoolVersion
+            && this.m_cachedLeavesCompId.index == this.def.customCompoundGeometryId.index
+            && this.m_cachedLeavesCompId.generation == this.def.customCompoundGeometryId.generation
+            && this.m_cachedLeavesCompId.worldIndex == this.def.customCompoundGeometryId.worldIndex
+            && this.m_cachedLeavesScale.x == scaleVec.x
+            && this.m_cachedLeavesScale.y == scaleVec.y
+            && this.m_cachedLeavesScale.z == scaleVec.z
+        )
+            return !this.m_cachedCompoundLeafProxies.empty();
+
+        this.m_cachedCompoundLeafProxies.clear();
+        this.m_cachedCompoundLeafTransforms.clear();
+        Shape cShape;
+        cShape.type = ShapeType::Compound;
+        cShape.geometryIndex = this.def.customCompoundGeometryId.index;
+        world.collectConvexQueryLeavesRecursive(cShape, Transform3D(), scaleVec, 0u, this.m_cachedCompoundLeafProxies, this.m_cachedCompoundLeafTransforms);
+        this.m_cachedLeavesCompId = this.def.customCompoundGeometryId;
+        this.m_cachedLeavesScale = f32x4(scaleVec, 0.0f);
+        this.m_cachedLeavesPoolVersion = world.m_compoundPoolVersion;
+        this.m_hasCachedCompoundLeaves = true;
+        return !this.m_cachedCompoundLeafProxies.empty();
+    }
+
+    private b8 resolveOwnShapeLeaves(
+        in PhysicsWorld world,
+        in f32 extraRadius,
+        mut Array<f32x3u, 8u> outInlinePts,
+        mut ShapeProxyView outSingleView,
+        mut Vector<ShapeProxy> outMultiProxies,
+        mut Vector<Transform3D> outMultiTransforms
+    ){
+        const f32 extra = Max(0.0f, extraRadius);
+        if(this.def.shapeType == CharacterShapeType::ConvexHull && world.isHullGeometryValid(this.def.customHullGeometryId)){
+            outMultiProxies.clear();
+            outMultiTransforms.clear();
+            const VectorSingle scaleVec = ComputeValidCharacterScale(VectorSingle(this.def.customShapeScale));
+            in HullShape hull = world.m_hullShapes[this.def.customHullGeometryId.index];
+            outSingleView = MakeHullProxyView(hull);
+            if(!CharacterScaleIsUnit(scaleVec))
+                outSingleView = MakeScaledProxyView(outSingleView, scaleVec);
+            outSingleView.radius += extra;
+            return false;
+        }
+        if(this.def.shapeType == CharacterShapeType::Compound && this.ensureCompoundLeavesCached(world)){
+            outMultiProxies = this.m_cachedCompoundLeafProxies;
+            outMultiTransforms = this.m_cachedCompoundLeafTransforms;
+            if(extra > 0.0f){
+                for(usize li = 0u; li < outMultiProxies.size(); ++li)
+                    outMultiProxies[li].radius += extra;
+            }
+            return true;
+        }
+        outMultiProxies.clear();
+        outMultiTransforms.clear();
+        outSingleView = this.makePrimitiveProxyViewForDef(this.def, extra, outInlinePts);
+        return false;
+    }
+
     private void ensureCustomLocalBounds(in PhysicsWorld world){
         if(this.def.shapeType != CharacterShapeType::ConvexHull && this.def.shapeType != CharacterShapeType::Compound){
             this.m_hasCustomLocalBounds = false;
             return;
         }
+        const b8 compPoolMatch = (this.def.shapeType != CharacterShapeType::Compound) || (this.m_cachedCustomCompPoolVersion == world.m_compoundPoolVersion);
         if(
             this.m_hasCustomLocalBounds
+            && compPoolMatch
             && this.m_cachedCustomShapeType == this.def.shapeType
             && this.m_cachedCustomHullId.index == this.def.customHullGeometryId.index
             && this.m_cachedCustomHullId.generation == this.def.customHullGeometryId.generation
@@ -557,7 +656,7 @@ class CharacterController{
 
         Array<f32x3u, 8u> inlinePts;
         ShapeProxyView singleView;
-        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, 0.0f, inlinePts, singleView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        const b8 useMulti = this.resolveOwnShapeLeaves(world, 0.0f, inlinePts, singleView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
         VectorSingle bMin(s_MaxF32);
         VectorSingle bMax(-s_MaxF32);
         if(useMulti){
@@ -580,6 +679,7 @@ class CharacterController{
             this.m_cachedCustomShapeType = this.def.shapeType;
             this.m_cachedCustomHullId = this.def.customHullGeometryId;
             this.m_cachedCustomCompId = this.def.customCompoundGeometryId;
+            this.m_cachedCustomCompPoolVersion = world.m_compoundPoolVersion;
             this.m_cachedCustomScale = this.def.customShapeScale;
         }
         else{
@@ -1042,7 +1142,7 @@ class CharacterController{
         this.ensureCustomLocalBounds(world);
         Array<f32x3u, 8u> ptsSkin;
         ShapeProxyView singleSkin;
-        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, this.def.skinWidth, ptsSkin, singleSkin, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        const b8 useMulti = this.resolveOwnShapeLeaves(world, this.def.skinWidth, ptsSkin, singleSkin, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
         const VectorSingle effRot = this.effectiveProxyRotation();
         const VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, singleSkin, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
         b8 cacheValid = false;
@@ -1572,12 +1672,11 @@ class CharacterController{
         Array<f32x3u, 8u> ptsSkin;
         ShapeProxyView baseView;
         ShapeProxyView skinView;
-        Vector<ShapeProxy> leafSkins;
-        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, 0.0f, ptsBase, baseView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        const b8 useMulti = this.resolveOwnShapeLeaves(world, 0.0f, ptsBase, baseView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
         if(useMulti){
-            leafSkins = this.m_scratchLeafProxies;
-            for(usize li = 0u; li < leafSkins.size(); ++li)
-                leafSkins[li].radius += this.def.skinWidth;
+            this.m_scratchLeafSkins = this.m_scratchLeafProxies;
+            for(usize li = 0u; li < this.m_scratchLeafSkins.size(); ++li)
+                this.m_scratchLeafSkins[li].radius += this.def.skinWidth;
         }
         else{
             skinView = this.makePrimitiveProxyViewForDef(this.def, this.def.skinWidth, ptsSkin);
@@ -1587,7 +1686,7 @@ class CharacterController{
             }
         }
 
-        VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
+        VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
         b8 cacheValid = false;
         VectorSingle candMin(0.0f);
         VectorSingle candMax(0.0f);
@@ -1608,7 +1707,7 @@ class CharacterController{
                 const f32 safeU = Max(0.0f, uRotHit.fraction - 0.002f);
                 effRot = this.quatSlerp(VectorSingle(this.m_prevProxyRotation), effRot, safeU);
                 this.rotation = f32x4(effRot);
-                halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
+                halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
             }
         }
 
@@ -1706,7 +1805,7 @@ class CharacterController{
                                 this.isCrushed = true;
                             }
                             else{
-                                this.gatherOverlapsWithCache(world, useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), activeCarryEffRot, halfExt, carriedEnd, cacheValid, candMin, candMax);
+                                this.gatherOverlapsWithCache(world, useMulti, skinView, Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), activeCarryEffRot, halfExt, carriedEnd, cacheValid, candMin, candMax);
                                 for(usize oi = 0u; oi < this.m_scratchHits.size(); ++oi){
                                     in ShapeOverlapHit ov = this.m_scratchHits[oi];
                                     if(ov.penetrationDepth > 1.0e-5f){
@@ -1731,13 +1830,13 @@ class CharacterController{
                 }
 
                 effRot = this.effectiveProxyRotation();
-                halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
+                halfExt = this.computeLocalHalfExtent(useMulti, skinView, Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot);
             }
         }
 
         b8 depMoved = false;
         b8 depClean = false;
-        this.depenetrateCached(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, dt, world, cacheValid, candMin, candMax, depMoved, depClean);
+        this.depenetrateCached(useMulti, skinView, Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, dt, world, cacheValid, candMin, candMax, depMoved, depClean);
 
         const VectorSingle vel = VectorSingle(this.linearVelocity);
         VectorSingle fullDelta = vel * dt;
@@ -1802,7 +1901,7 @@ class CharacterController{
 
         if(wasOnGround && hitSteep && Vector3LengthSq(VectorSingle(horizDelta, 0.0f)).x > 1.0e-8f){
             VectorSingle steppedPos(0.0f);
-            if(this.tryStepUp(curPos, horizDelta, dt, useMulti, baseView, skinView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, world, cacheValid, candMin, candMax, steppedPos)){
+            if(this.tryStepUp(curPos, horizDelta, dt, useMulti, baseView, skinView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, world, cacheValid, candMin, candMax, steppedPos)){
                 const VectorSingle dFlat = flatEndPos - curPos;
                 const VectorSingle hFlat = dFlat - up * Vector3Dot(dFlat, up).x;
                 const VectorSingle dStep = steppedPos - curPos;
@@ -1853,9 +1952,9 @@ class CharacterController{
             }
         }
 
-        this.depenetrateCached(useMulti, skinView, Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, dt, world, cacheValid, candMin, candMax, depMoved, depClean);
+        this.depenetrateCached(useMulti, skinView, Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, dt, world, cacheValid, candMin, candMax, depMoved, depClean);
         const b8 reuseStick = stickProbeHit && !depMoved;
-        this.updateGroundState(world, useMulti, baseView, skinView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<ShapeProxy>(leafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, reuseStick, floorProbe, depClean, cacheValid, candMin, candMax);
+        this.updateGroundState(world, useMulti, baseView, skinView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<ShapeProxy>(this.m_scratchLeafSkins), Span<Transform3D>(this.m_scratchLeafTransforms), effRot, halfExt, reuseStick, floorProbe, depClean, cacheValid, candMin, candMax);
         const b8 nowGroundedAny = (this.groundState == CharacterGroundState::OnGround || this.groundState == CharacterGroundState::OnSteepGround);
         if(!wasGroundedAny && nowGroundedAny){
             this.platformInheritedVelocity = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -2219,7 +2318,7 @@ class CharacterController{
         const VectorSingle effRot = this.effectiveProxyRotation();
         Array<f32x3u, 8u> ptsBase;
         ShapeProxyView baseView;
-        const b8 useMulti = this.buildShapeLeavesForDef(world, this.def, 0.0f, ptsBase, baseView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
+        const b8 useMulti = this.resolveOwnShapeLeaves(world, 0.0f, ptsBase, baseView, this.m_scratchLeafProxies, this.m_scratchLeafTransforms);
         const VectorSingle halfExt = this.computeLocalHalfExtent(useMulti, baseView, Span<ShapeProxy>(this.m_scratchLeafProxies), Span<Transform3D>(this.m_scratchLeafTransforms), effRot) + VectorSingle(this.def.skinWidth);
         const VectorSingle startPos = VectorSingle(this.position);
         const VectorSingle qMin = Min(startPos, startPos + wantDelta) - halfExt;
@@ -2230,19 +2329,18 @@ class CharacterController{
         if(otherIgnoreShape.valid() && world.isValidShape(otherIgnoreShape))
             excl.push_back(otherIgnoreShape.index);
         if(otherIgnoreBody.valid() && world.isValidBody(otherIgnoreBody)){
-            Vector<ShapeId> bShapes;
-            world.bodyShapes(otherIgnoreBody, bShapes);
-            for(usize bi = 0u; bi < bShapes.size(); ++bi){
-                if(bShapes[bi].valid() && excl.size() < 32u){
+            world.bodyShapes(otherIgnoreBody, this.m_scratchOtherBodyShapes);
+            for(usize bi = 0u; bi < this.m_scratchOtherBodyShapes.size(); ++bi){
+                if(this.m_scratchOtherBodyShapes[bi].valid() && excl.size() < 32u){
                     b8 dup = false;
                     for(usize ei = 0u; ei < excl.size(); ++ei){
-                        if(excl[ei] == bShapes[bi].index){
+                        if(excl[ei] == this.m_scratchOtherBodyShapes[bi].index){
                             dup = true;
                             break;
                         }
                     }
                     if(!dup)
-                        excl.push_back(bShapes[bi].index);
+                        excl.push_back(this.m_scratchOtherBodyShapes[bi].index);
                 }
             }
         }
@@ -2283,6 +2381,55 @@ class CharacterController{
         return moved;
     }
 
+    public Aabb3D computeWorldAabb(mut PhysicsWorld world){
+        const VectorSingle pos = VectorSingle(this.position);
+        const f32 pad = Max(0.0f, 0.5f * this.def.skinWidth) + 0.01f;
+        if(this.def.shapeType == CharacterShapeType::Sphere){
+            const VectorSingle he(Max(0.01f, this.def.radius) + pad);
+            return Aabb3D(pos - he, pos + he);
+        }
+
+        const VectorSingle effRot = this.effectiveProxyRotation();
+        if(this.def.shapeType == CharacterShapeType::ConvexHull || this.def.shapeType == CharacterShapeType::Compound){
+            this.ensureCustomLocalBounds(world);
+            if(this.m_hasCustomLocalBounds){
+                const VectorSingle lMin = VectorSingle(this.m_customLocalMin);
+                const VectorSingle lMax = VectorSingle(this.m_customLocalMax);
+                const VectorSingle lCenter = (lMin + lMax) * 0.5f;
+                const VectorSingle lHalf = (lMax - lMin) * 0.5f;
+                const VectorSingle wCenter = pos + Vector3Rotate(lCenter, effRot);
+                const VectorSingle ex = Abs(Vector3Rotate(VectorSingle(lHalf.x, 0.0f, 0.0f, 0.0f), effRot));
+                const VectorSingle ey = Abs(Vector3Rotate(VectorSingle(0.0f, lHalf.y, 0.0f, 0.0f), effRot));
+                const VectorSingle ez = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, lHalf.z, 0.0f), effRot));
+                const VectorSingle wHalf = ex + ey + ez + VectorSingle(pad);
+                return Aabb3D(wCenter - wHalf, wCenter + wHalf);
+            }
+        }
+        if(this.def.shapeType == CharacterShapeType::Box){
+            const VectorSingle lHalf = Max(VectorSingle(this.def.boxHalfExtents), VectorSingle(0.05f));
+            const VectorSingle ex = Abs(Vector3Rotate(VectorSingle(lHalf.x, 0.0f, 0.0f, 0.0f), effRot));
+            const VectorSingle ey = Abs(Vector3Rotate(VectorSingle(0.0f, lHalf.y, 0.0f, 0.0f), effRot));
+            const VectorSingle ez = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, lHalf.z, 0.0f), effRot));
+            const VectorSingle wHalf = ex + ey + ez + VectorSingle(pad);
+            return Aabb3D(pos - wHalf, pos + wHalf);
+        }
+        if(this.def.shapeType == CharacterShapeType::Cylinder){
+            const f32 rad = Max(0.01f, this.def.radius);
+            const f32 hh = Max(0.01f, this.def.halfHeight);
+            const VectorSingle ex = Abs(Vector3Rotate(VectorSingle(rad, 0.0f, 0.0f, 0.0f), effRot));
+            const VectorSingle ey = Abs(Vector3Rotate(VectorSingle(0.0f, hh, 0.0f, 0.0f), effRot));
+            const VectorSingle ez = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, rad, 0.0f), effRot));
+            const VectorSingle wHalf = ex + ey + ez + VectorSingle(pad);
+            return Aabb3D(pos - wHalf, pos + wHalf);
+        }
+
+        const f32 capHalfH = Max(0.0f, this.def.halfHeight);
+        const f32 capRad = Max(0.01f, this.def.radius);
+        const VectorSingle axis = Abs(Vector3Rotate(VectorSingle(0.0f, capHalfH, 0.0f, 0.0f), effRot));
+        const VectorSingle wHalf = axis + VectorSingle(capRad + pad);
+        return Aabb3D(pos - wHalf, pos + wHalf);
+    }
+
     public b8 resolveAgainstOtherCharacter(mut PhysicsWorld world, mut CharacterController other){
         if(!ShouldCollideFilters(this.def.filter, other.def.filter))
             return false;
@@ -2300,21 +2447,17 @@ class CharacterController{
         Array<f32x3u, 8u> ptsB;
         ShapeProxyView singleA;
         ShapeProxyView singleB;
-        Vector<ShapeProxy> multiA;
-        Vector<Transform3D> xfsA;
-        Vector<ShapeProxy> multiB;
-        Vector<Transform3D> xfsB;
         const f32 halfSkinA = 0.5f * this.def.skinWidth;
         const f32 halfSkinB = 0.5f * other.def.skinWidth;
-        const b8 isMultiA = this.buildShapeLeavesForDef(world, this.def, halfSkinA, ptsA, singleA, multiA, xfsA);
-        const b8 isMultiB = other.buildShapeLeavesForDef(world, other.def, halfSkinB, ptsB, singleB, multiB, xfsB);
+        const b8 isMultiA = this.resolveOwnShapeLeaves(world, halfSkinA, ptsA, singleA, this.m_scratchPairLeafProxies, this.m_scratchPairLeafTransforms);
+        const b8 isMultiB = other.resolveOwnShapeLeaves(world, halfSkinB, ptsB, singleB, other.m_scratchPairLeafProxies, other.m_scratchPairLeafTransforms);
 
         usize leafCountA = 1u;
         if(isMultiA)
-            leafCountA = multiA.size();
+            leafCountA = this.m_scratchPairLeafProxies.size();
         usize leafCountB = 1u;
         if(isMultiB)
-            leafCountB = multiB.size();
+            leafCountB = other.m_scratchPairLeafProxies.size();
         b8 hasOverlap = false;
         f32 deepestPen = 0.0f;
         VectorSingle sepDir(1.0f, 0.0f, 0.0f, 0.0f);
@@ -2325,16 +2468,16 @@ class CharacterController{
             VectorSingle posLeafA = pA;
             VectorSingle rotLeafA = rotA;
             if(isMultiA){
-                va = MakeShapeProxyView(multiA[ia]);
-                ComposeTransformValues(pA, rotA, VectorSingle(xfsA[ia].position), SafeNormalizeQuat(VectorSingle(xfsA[ia].rotation)), posLeafA, rotLeafA);
+                va = MakeShapeProxyView(this.m_scratchPairLeafProxies[ia]);
+                ComposeTransformValues(pA, rotA, VectorSingle(this.m_scratchPairLeafTransforms[ia].position), SafeNormalizeQuat(VectorSingle(this.m_scratchPairLeafTransforms[ia].rotation)), posLeafA, rotLeafA);
             }
             for(usize ib = 0u; ib < leafCountB; ++ib){
                 ShapeProxyView vb = singleB;
                 VectorSingle posLeafB = pB;
                 VectorSingle rotLeafB = rotB;
                 if(isMultiB){
-                    vb = MakeShapeProxyView(multiB[ib]);
-                    ComposeTransformValues(pB, rotB, VectorSingle(xfsB[ib].position), SafeNormalizeQuat(VectorSingle(xfsB[ib].rotation)), posLeafB, rotLeafB);
+                    vb = MakeShapeProxyView(other.m_scratchPairLeafProxies[ib]);
+                    ComposeTransformValues(pB, rotB, VectorSingle(other.m_scratchPairLeafTransforms[ib].position), SafeNormalizeQuat(VectorSingle(other.m_scratchPairLeafTransforms[ib].rotation)), posLeafB, rotLeafB);
                 }
                 const Manifold m = CollideConvexProxyViews(va, posLeafA, rotLeafA, vb, posLeafB, rotLeafB, 0.0f);
                 if(m.pointCount() == 0u)
@@ -2528,6 +2671,7 @@ class CharacterController{
         in VectorSingle waveT1,
         in VectorSingle waveT2,
         in f32 timeSec,
+        in b8 trustPreparedCache,
         mut f32 outTotalVol,
         mut f32 outSubVol,
         mut VectorSingle outCob,
@@ -2580,7 +2724,7 @@ class CharacterController{
             f32 d = 0.0f;
             VectorSingle fVel(0.0f);
             VectorSingle localN(0.0f);
-            fv.evaluateSurfaceWithWaveBasis(pos, surfNorm, waveT1, waveT2, timeSec, true, d, fVel, localN);
+            fv.evaluateSurfaceWithWaveBasisTrusted(pos, surfNorm, waveT1, waveT2, timeSec, true, trustPreparedCache, d, fVel, localN);
             if(d + r <= 0.0f)
                 return;
             const f32 h = Clamp(d + r, 0.0f, 2.0f * r);
@@ -2603,7 +2747,7 @@ class CharacterController{
             const VectorSingle p0 = pos - axis * hh;
             const VectorSingle p1 = pos + axis * hh;
             VectorSingle weightedCob(0.0f);
-            AccumulateAxisymmetricFrustumSlices(p0, p1, r, r, dome, dome, fv, surfNorm, waveT1, waveT2, timeSec, outTotalVol, outSubVol, weightedCob, outSubArea);
+            AccumulateAxisymmetricFrustumSlices(p0, p1, r, r, dome, dome, fv, surfNorm, waveT1, waveT2, timeSec, trustPreparedCache, outTotalVol, outSubVol, weightedCob, outSubArea);
             if(outSubVol > 1.0e-7f)
                 outCob = weightedCob / outSubVol;
             return;
@@ -2622,7 +2766,10 @@ class CharacterController{
             testShape.geometryIndex = this.def.customHullGeometryId.index;
             hasCustomWorldShape = true;
             in HullShape hull = world.m_hullShapes[this.def.customHullGeometryId.index];
-            outTotalVol = Max(1.0e-3f, ComputeHullBuoyancyVolume(hull) * scaleVol);
+            f32 rawHullVol = hull.cachedBuoyancyVolume;
+            if(rawHullVol < 0.0f)
+                rawHullVol = ComputeHullBuoyancyVolume(hull);
+            outTotalVol = Max(1.0e-3f, rawHullVol * scaleVol);
             if(this.m_hasCustomLocalBounds){
                 lMin = VectorSingle(this.m_customLocalMin);
                 lMax = VectorSingle(this.m_customLocalMax);
@@ -2633,7 +2780,10 @@ class CharacterController{
             testShape.geometryIndex = this.def.customCompoundGeometryId.index;
             hasCustomWorldShape = true;
             in CompoundShape comp = world.m_compoundShapes[this.def.customCompoundGeometryId.index];
-            outTotalVol = Max(1.0e-3f, ComputeCompoundGeometricVolume(comp, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_sdfShapes) * scaleVol);
+            f32 rawCompVol = comp.cachedBuoyancyVolume;
+            if(rawCompVol < 0.0f)
+                rawCompVol = ComputeCompoundGeometricVolume(comp, world.m_hullShapes, world.m_meshShapes, world.m_heightfieldShapes, world.m_compoundShapes, world.m_scaledShapes, world.m_sdfShapes);
+            outTotalVol = Max(1.0e-3f, rawCompVol * scaleVol);
             if(this.m_hasCustomLocalBounds){
                 lMin = VectorSingle(this.m_customLocalMin);
                 lMax = VectorSingle(this.m_customLocalMax);
@@ -2663,7 +2813,7 @@ class CharacterController{
                 for(u32 ix = 0u; ix < 3u; ++ix){
                     const VectorSingle localPt = localBase + VectorSingle(localStep.x * cast<f32>(ix), localStep.y * cast<f32>(iy), localStep.z * cast<f32>(iz), 0.0f);
                     const VectorSingle worldPt = TransformPointValues(pos, effRot, localPt);
-                    const b8 isSub = (fv.signedDepthWithWaveBasis(worldPt, surfNorm, waveT1, waveT2, timeSec) > 0.0f);
+                    const b8 isSub = (fv.signedDepthWithWaveBasisTrusted(worldPt, surfNorm, waveT1, waveT2, timeSec, trustPreparedCache) > 0.0f);
                     if(isSub){
                         ++rawSubCount;
                         rawSubSum = rawSubSum + worldPt;
@@ -2719,12 +2869,13 @@ class CharacterController{
             VectorSingle waveT1(0.0f);
             VectorSingle waveT2(0.0f);
             fv.computeSurfaceTangentBasis(n, waveT1, waveT2);
+            const b8 trustCache = fv.isPreparedCacheValidForBatch(n);
 
             f32 totalVol = 0.0f;
             f32 subVol = 0.0f;
             VectorSingle cob = pos;
             f32 subArea = 0.0f;
-            this.computeCharacterFluidSubmersion(world, fv, pos, effRot, n, waveT1, waveT2, env.elapsedTimeSec, totalVol, subVol, cob, subArea);
+            this.computeCharacterFluidSubmersion(world, fv, pos, effRot, n, waveT1, waveT2, env.elapsedTimeSec, trustCache, totalVol, subVol, cob, subArea);
             const f32 subFrac = Clamp(subVol / Max(1.0e-6f, totalVol), 0.0f, 1.0f);
             if(subFrac <= 1.0e-5f || subVol <= 1.0e-7f)
                 continue;
@@ -2734,7 +2885,7 @@ class CharacterController{
             VectorSingle localSurfNorm = n;
             const b8 analyticNorm = !fv.hasSurfaceCallback() && !fv.hasDynamicWaveGrid() && (fv.shape == FluidVolumeShape::Sphere || fv.shape == FluidVolumeShape::BoxAabb || fv.shape == FluidVolumeShape::Obb);
             const b8 needEvalNormal = (fv.liftCoeff != 0.0f) || !analyticNorm;
-            fv.evaluateSurfaceWithWaveBasis(cob, n, waveT1, waveT2, env.elapsedTimeSec, needEvalNormal, cobDepth, flowVel, localSurfNorm);
+            fv.evaluateSurfaceWithWaveBasisTrusted(cob, n, waveT1, waveT2, env.elapsedTimeSec, needEvalNormal, trustCache, cobDepth, flowVel, localSurfNorm);
 
             const f32 displacedMass = Max(0.0f, fv.density) * subVol;
             VectorSingle totalFluidAcc = -grav * (this.def.gravityScale * (displacedMass / bodyMass));
@@ -3003,7 +3154,9 @@ class CharacterController{
                 const f32 coupling = Max(0.0f, ff.strength) * zoneFalloff;
                 if(coupling <= 0.0f)
                     continue;
-                const VectorSingle vFlow = ff.sampleVectorFieldVelocity(pos);
+                VectorSingle vFlow(0.0f);
+                VectorSingle curl(0.0f);
+                ff.sampleVectorFieldVelocityAndCurl(pos, vFlow, curl);
                 const VectorSingle relFlow = vFlow - vel;
                 const f32 relFlowSq = Vector3LengthSq(relFlow).x;
                 if(relFlowSq > 1.0e-12f){
@@ -3012,7 +3165,6 @@ class CharacterController{
                     const f32 vecAcc = Min(coupling * relSp, relSp * invDt * 0.9f);
                     acc = relFlow * (vecAcc * invRel);
                 }
-                const VectorSingle curl = ff.sampleVectorFieldCurl(pos);
                 const VectorSingle relSpin = (curl * 0.5f) - angVel;
                 const f32 spinSq = Vector3LengthSq(relSpin).x;
                 if(spinSq > 1.0e-12f){

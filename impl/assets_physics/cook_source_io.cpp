@@ -749,6 +749,9 @@ void CompactReferencedVertices(
         }
     }
 
+    const usize estVerts = (static_cast<usize>(end - data) / 64u) + 16u;
+    outVerts.reserve(estVerts);
+    outIndices.reserve(estVerts);
     const char* cur = data;
     while(cur < end){
         AStringView kw;
@@ -971,12 +974,22 @@ enum class PlyScalarType : u8{
                 }
                 if(xIdx == Limit<usize>::s_Max || yIdx == Limit<usize>::s_Max || zIdx == Limit<usize>::s_Max)
                     return false;
+                if(elem.count > 0u){
+                    const usize maxAsciiVerts = static_cast<usize>(end - cur) / 5u + 1u;
+                    const usize safeCount = Min(elem.count, maxAsciiVerts);
+                    outVerts.reserve(outVerts.size() + safeCount);
+                }
             }
             else if(isFace){
                 for(usize pi = 0u; pi < elem.properties.size(); ++pi){
                     const AStringView pName(elem.properties[pi].name.data(), elem.properties[pi].name.size());
                     if(elem.properties[pi].isList && (pName == "vertex_indices" || pName == "vertex_index"))
                         faceListIdx = pi;
+                }
+                if(elem.count > 0u){
+                    const usize maxAsciiFaces = static_cast<usize>(end - cur) / 7u + 1u;
+                    const usize safeFaces = Min(elem.count, maxAsciiFaces);
+                    outIndices.reserve(outIndices.size() + safeFaces * 3u);
                 }
             }
 
@@ -1054,12 +1067,27 @@ enum class PlyScalarType : u8{
             }
             if(xIdx == Limit<usize>::s_Max || yIdx == Limit<usize>::s_Max || zIdx == Limit<usize>::s_Max)
                 return false;
+            if(elem.count > 0u){
+                usize minStride = 0u;
+                for(usize pi = 0u; pi < elem.properties.size(); ++pi){
+                    if(!elem.properties[pi].isList)
+                        minStride += elem.properties[pi].valueBytes;
+                }
+                if(minStride == 0u)
+                    minStride = 1u;
+                const usize safeCount = Min(elem.count, (bytes.size() - byteCursor) / minStride);
+                outVerts.reserve(outVerts.size() + safeCount);
+            }
         }
         else if(isFace){
             for(usize pi = 0u; pi < elem.properties.size(); ++pi){
                 const AStringView pName(elem.properties[pi].name.data(), elem.properties[pi].name.size());
                 if(elem.properties[pi].isList && (pName == "vertex_indices" || pName == "vertex_index"))
                     faceListIdx = pi;
+            }
+            if(elem.count > 0u){
+                const usize safeFaces = Min(elem.count, (bytes.size() - byteCursor) / 4u);
+                outIndices.reserve(outIndices.size() + safeFaces * 3u);
             }
         }
 
@@ -1262,6 +1290,66 @@ enum class PlyScalarType : u8{
     }
 
     outDoc = nlohmann::json::parse(jsonStart, jsonEnd, nullptr, false);
+    return !outDoc.is_discarded() && outDoc.is_object();
+}
+
+[[nodiscard]] b8 ReadGltfJsonOnly(
+    const AStringView filePathUtf8,
+    Core::Alloc::ScratchArena& scratch,
+    nlohmann::json& outDoc
+)noexcept{
+    const ::Path<Core::Alloc::ScratchArena> path(scratch, filePathUtf8);
+    BinaryInputStream stream(path);
+    if(!stream.isOpen())
+        return false;
+
+    const i64 fileSizeI = stream.seekEnd();
+    if(fileSizeI < 4 || !stream.seekBegin())
+        return false;
+
+    const u64 fileSize = static_cast<u64>(fileSizeI);
+    if(fileSize >= 12u){
+        u8 glbHdr[12] = {};
+        if(!stream.readBytes(Span<u8>(glbHdr, 12u)))
+            return false;
+        if(ReadLe32(glbHdr) == 0x46546C67u){
+            const u32 version = ReadLe32(glbHdr + 4u);
+            const u32 totalLength = ReadLe32(glbHdr + 8u);
+            if(version != 2u || totalLength < 20u || static_cast<u64>(totalLength) > fileSize)
+                return false;
+
+            u8 chunkHdr[8] = {};
+            if(!stream.readBytes(Span<u8>(chunkHdr, 8u)))
+                return false;
+            const u32 chunkLen = ReadLe32(chunkHdr);
+            const u32 chunkType = ReadLe32(chunkHdr + 4u);
+            if(chunkLen > totalLength - 20u)
+                return false;
+            if(chunkType == 0x4E4F534Au){
+                Vector<u8, Core::Alloc::ScratchArena> jsonBytes(scratch);
+                jsonBytes.resize(chunkLen);
+                if(chunkLen > 0u && !stream.readBytes(Span<u8>(jsonBytes.data(), jsonBytes.size())))
+                    return false;
+                outDoc = nlohmann::json::parse(jsonBytes.data(), jsonBytes.data() + jsonBytes.size(), nullptr, false);
+                return !outDoc.is_discarded() && outDoc.is_object();
+            }
+
+            Vector<u8, Core::Alloc::ScratchArena> fileBytes(scratch);
+            Span<const u8> unusedGlbBinSpan;
+            b8 unusedHasGlbBin = false;
+            return ReadGltfJsonDocument(filePathUtf8, scratch, fileBytes, unusedGlbBinSpan, unusedHasGlbBin, outDoc);
+        }
+        if(!stream.seekBegin())
+            return false;
+    }
+
+    if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
+        return false;
+    Vector<u8, Core::Alloc::ScratchArena> fileBytes(scratch);
+    fileBytes.resize(static_cast<usize>(fileSize));
+    if(!stream.readBytes(Span<u8>(fileBytes.data(), fileBytes.size())))
+        return false;
+    outDoc = nlohmann::json::parse(fileBytes.data(), fileBytes.data() + fileBytes.size(), nullptr, false);
     return !outDoc.is_discarded() && outDoc.is_object();
 }
 
@@ -2483,6 +2571,7 @@ template<typename RowFn>
     Vector<u32, Core::Alloc::ScratchArena>& outTets
 )noexcept{
     Vector<AStringView, Core::Alloc::ScratchArena> lines(scratch);
+    lines.reserve(static_cast<usize>(end - data) / 24u + 16u);
     const char* cur = data;
     while(cur < end){
         const char* lineEnd = cur;
@@ -2528,6 +2617,8 @@ template<typename RowFn>
                 ++li;
                 if(li + static_cast<usize>(numNodes) > lines.size())
                     return false;
+                nodeTags.reserve(nodeTags.size() + static_cast<usize>(numNodes));
+                outVerts.reserve(outVerts.size() + static_cast<usize>(numNodes));
                 for(u64 ni = 0u; ni < numNodes; ++ni, ++li){
                     const char* vp = lines[li].data();
                     const char* ve = vp + lines[li].size();
@@ -2551,6 +2642,9 @@ template<typename RowFn>
                 if(!ParseAsciiU64Token(hp, he, numBlocks) || !ParseAsciiU64Token(hp, he, numNodes))
                     return false;
                 ++li;
+                const usize safeNodeReserve = Min(static_cast<usize>(numNodes), (lines.size() - li) / 2u);
+                nodeTags.reserve(nodeTags.size() + safeNodeReserve);
+                outVerts.reserve(outVerts.size() + safeNodeReserve);
                 for(u64 bi = 0u; bi < numBlocks; ++bi){
                     if(li >= lines.size())
                         return false;
@@ -2617,6 +2711,7 @@ template<typename RowFn>
                 ++li;
                 if(li + static_cast<usize>(numElems) > lines.size())
                     return false;
+                outTets.reserve(outTets.size() + static_cast<usize>(numElems) * 4u);
                 for(u64 ei = 0u; ei < numElems; ++ei, ++li){
                     const char* lp = lines[li].data();
                     const char* le = lp + lines[li].size();
@@ -2668,6 +2763,8 @@ template<typename RowFn>
                     ++li;
                     if(li + static_cast<usize>(countInBlock) > lines.size())
                         return false;
+                    if(elemType == 4u && countInBlock > 0u)
+                        outTets.reserve(outTets.size() + static_cast<usize>(countInBlock) * 4u);
                     for(u64 k = 0u; k < countInBlock; ++k, ++li){
                         if(elemType != 4u)
                             continue;
@@ -2877,14 +2974,9 @@ b8 CollectGltfExternalBufferPathsRaw(
     if(extView != ".gltf" && extView != ".glb")
         return true;
 
-    Vector<u8, Core::Alloc::ScratchArena> fileBytes(scratch);
-    Span<const u8> glbBinSpan;
-    b8 hasGlbBin = false;
     nlohmann::json doc;
-    if(!__hidden_physics_cook_io::ReadGltfJsonDocument(filePathUtf8, scratch, fileBytes, glbBinSpan, hasGlbBin, doc))
+    if(!__hidden_physics_cook_io::ReadGltfJsonOnly(filePathUtf8, scratch, doc))
         return false;
-    (void)glbBinSpan;
-    (void)hasGlbBin;
 
     if(!doc.contains("buffers") || !doc["buffers"].is_array())
         return true;

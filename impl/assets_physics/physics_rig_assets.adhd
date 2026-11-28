@@ -83,80 +83,130 @@ class VehicleAssetData{
 [asset("physics_fracture")]
 class FractureAsset{
     private FractureCollection m_collection;
+    private b8 m_payloadValidated = false;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setFractureCollection(in FractureCollection inCollection){
         this.m_collection = inCollection;
+        this.m_payloadValidated = false;
     }
 
     public in FractureCollection fractureCollection()const{
         return this.m_collection;
+    }
+
+    public b8 payloadValidated()const{
+        return this.m_payloadValidated;
+    }
+
+    public void markPayloadValidated(){
+        this.m_payloadValidated = true;
     }
 }
 
 [asset("physics_soft_body")]
 class SoftBodyAsset{
     private SoftBody m_softBody;
+    private b8 m_payloadValidated = false;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setSoftBody(in SoftBody inSoftBody){
         this.m_softBody = inSoftBody;
+        this.m_payloadValidated = false;
     }
 
     public in SoftBody softBody()const{
         return this.m_softBody;
+    }
+
+    public b8 payloadValidated()const{
+        return this.m_payloadValidated;
+    }
+
+    public void markPayloadValidated(){
+        this.m_payloadValidated = true;
     }
 }
 
 [asset("physics_ragdoll")]
 class RagdollAsset{
     private RagdollAssetData m_ragdoll;
+    private b8 m_payloadValidated = false;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setRagdoll(in RagdollAssetData inRagdoll){
         this.m_ragdoll = inRagdoll;
+        this.m_payloadValidated = false;
     }
 
     public in RagdollAssetData ragdollData()const{
         return this.m_ragdoll;
+    }
+
+    public b8 payloadValidated()const{
+        return this.m_payloadValidated;
+    }
+
+    public void markPayloadValidated(){
+        this.m_payloadValidated = true;
     }
 }
 
 [asset("physics_articulation")]
 class ArticulationAsset{
     private ArticulationAssetData m_articulation;
+    private b8 m_payloadValidated = false;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setArticulation(in ArticulationAssetData inArticulation){
         this.m_articulation = inArticulation;
+        this.m_payloadValidated = false;
     }
 
     public in ArticulationAssetData articulationData()const{
         return this.m_articulation;
+    }
+
+    public b8 payloadValidated()const{
+        return this.m_payloadValidated;
+    }
+
+    public void markPayloadValidated(){
+        this.m_payloadValidated = true;
     }
 }
 
 [asset("physics_vehicle")]
 class VehicleAsset{
     private VehicleAssetData m_vehicle;
+    private b8 m_payloadValidated = false;
 
     public b8 loadBinary(in Span<u8> binary);
     public b8 validatePayload()const;
 
     public void setVehicle(in VehicleAssetData inVehicle){
         this.m_vehicle = inVehicle;
+        this.m_payloadValidated = false;
     }
 
     public in VehicleAssetData vehicleData()const{
         return this.m_vehicle;
+    }
+
+    public b8 payloadValidated()const{
+        return this.m_payloadValidated;
+    }
+
+    public void markPayloadValidated(){
+        this.m_payloadValidated = true;
     }
 }
 

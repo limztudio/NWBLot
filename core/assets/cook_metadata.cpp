@@ -13,8 +13,9 @@
 
 #include <core/common/log.h>
 
-#include <global/source_text.h>
 #include <global/filesystem/operations.h>
+#include <global/scope_exit.h>
+#include <global/source_text.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,12 +33,16 @@ namespace __hidden_cook_metadata{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void LogMetascriptParseErrors(const Path& nwbFilePath, const Core::Metascript::Document& doc){
+    for(const Core::Metascript::ParseError& err : doc.errors()){
+        NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message)));
+    }
+}
+
 [[nodiscard]] static Expected<Core::Metascript::Document> ParseMetascriptDocumentText(const Path& nwbFilePath, const AStringView metaText, CookArena& cookArena){
     Core::Metascript::Document doc(cookArena);
     if(!doc.parse(metaText)){
-        for(const Core::Metascript::ParseError& err : doc.errors()){
-            NWB_LOGGER_ERROR(FOUNDATION_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}"), PathToString<tchar>(nwbFilePath), err.line, err.column, ConvertString(AStringView(err.message)));
-        }
+        LogMetascriptParseErrors(nwbFilePath, doc);
         return MakeUnexpected(Failure{});
     }
     return doc;
@@ -50,6 +55,7 @@ namespace __hidden_cook_metadata{
     const Name assetType,
     const Name virtualPath,
     const Core::Metascript::Value& asset,
+    const CookMetadataDetail::CookMetadataRegistrySnapshot& registrySnapshot,
     CookArena& cookArena,
     Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena,
@@ -58,7 +64,7 @@ namespace __hidden_cook_metadata{
     b8& inOutStandalone
 ){
     AssetValueMetadataParseContext metadataParseContext{ cookArena, discoveredNwbFile, assetType, virtualPath, asset, outMetadata, scratchArena };
-    const AssetMetadataParseResult::Enum metadataParseResult = TryAutoCollectedValueMetadataParsers(metadataParseContext);
+    const AssetMetadataParseResult::Enum metadataParseResult = CookMetadataDetail::TryValueMetadataParsers(registrySnapshot, metadataParseContext);
     if(metadataParseResult == AssetMetadataParseResult::Parsed){
         inOutStandalone = false;
         return true;
@@ -66,7 +72,7 @@ namespace __hidden_cook_metadata{
     if(metadataParseResult == AssetMetadataParseResult::Error)
         return false;
 
-    if(IsNonStandaloneAssetType(assetType))
+    if(CookMetadataDetail::IsNonStandaloneAssetType(registrySnapshot, assetType))
         inOutStandalone = false;
 
     CookEntryParseContext parseContext{ cookArena, cpuScheduler, scratchArena, seenPropertyAssetPathHashes, nwbFileIndex, nwbSubIndex };
@@ -77,6 +83,7 @@ namespace __hidden_cook_metadata{
     const DiscoveredNwbFile& discoveredNwbFile,
     const usize nwbFileIndex,
     const Core::Metascript::Document& doc,
+    const CookMetadataDetail::CookMetadataRegistrySnapshot& registrySnapshot,
     CookArena& cookArena,
     Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena,
@@ -97,7 +104,7 @@ namespace __hidden_cook_metadata{
     }
     const Name assetType = *assetTypeResult ? **assetTypeResult : s_NameNone;
     AssetDocumentMetadataParseContext metadataParseContext{ cookArena, discoveredNwbFile, assetType, doc, outMetadata, scratchArena };
-    const AssetMetadataParseResult::Enum metadataParseResult = TryAutoCollectedDocumentMetadataParsers(metadataParseContext);
+    const AssetMetadataParseResult::Enum metadataParseResult = CookMetadataDetail::TryDocumentMetadataParsers(registrySnapshot, metadataParseContext);
     if(metadataParseResult == AssetMetadataParseResult::Parsed){
         inOutStandalone = false;
         return true;
@@ -106,7 +113,7 @@ namespace __hidden_cook_metadata{
         return false;
 
     if(outMetadata.entryRegistry.has(assetType)){
-        if(IsNonStandaloneAssetType(assetType))
+        if(CookMetadataDetail::IsNonStandaloneAssetType(registrySnapshot, assetType))
             inOutStandalone = false;
 
         CookEntryParseContext parseContext{ cookArena, cpuScheduler, scratchArena, seenPropertyAssetPathHashes, nwbFileIndex, 0u };
@@ -153,15 +160,21 @@ b8 ParseAssetMetadata(
     Sha256Digest producerDigest = {};
     Vector<AssetPairedSidecarRule, ScratchArena> pairedSidecarRules(scratchArena);
     Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena> externalSourceCollectors(scratchArena);
+    CookMetadataDetail::CookMetadataRegistrySnapshot registrySnapshot(scratchArena);
+    Optional<CookMetadataDetail::CookExternalSourceDigestCache> externalDigestCache;
+    if(!nwbFiles.empty())
+        CookMetadataDetail::CaptureMetadataRegistrySnapshot(registrySnapshot);
     if(useAssetCache && !nwbFiles.empty()){
         AssetProducerFingerprint::Resolve(scratchArena, useAssetCache, producerDigest);
         if(useAssetCache){
             CookMetadataDetail::CopyPairedSidecarRules(pairedSidecarRules);
             CookMetadataDetail::CopyCookExternalSourceCollectors(externalSourceCollectors);
+            externalDigestCache.emplace();
         }
     }
     const Span<const AssetPairedSidecarRule> pairedSidecarRuleSpan(pairedSidecarRules.data(), pairedSidecarRules.size());
     const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectorSpan(externalSourceCollectors.data(), externalSourceCollectors.size());
+    CookMetadataDetail::CookExternalSourceDigestCache* const externalDigestCachePtr = externalDigestCache ? &*externalDigestCache : nullptr;
 
     outMetadata.fileCacheRecords.clear();
     if(useAssetCache){
@@ -170,10 +183,22 @@ b8 ParseAssetMetadata(
             outMetadata.fileCacheRecords.emplace_back(cookArena);
     }
 
+    struct PreparedParsedDocument final : NoCopy{
+        Core::Metascript::MetaArena arena;
+        Core::Metascript::Document doc;
+        b8 ok = false;
+
+        PreparedParsedDocument()
+            : arena(Name("cook_meta/prep_doc"))
+            , doc(arena)
+        {}
+    };
+
     struct PreparedCookMetaFile final{
         AInteropString metaText;
         AInteropString sourcePathText;
         AInteropString cacheFileName;
+        UniquePtr<PreparedParsedDocument> parsedDocument;
         Sha256Digest paramSha256 = {};
         b8 readOk = false;
         b8 canUseCache = false;
@@ -194,6 +219,18 @@ b8 ParseAssetMetadata(
             entry.readOk = true;
             StripUtf8Bom(entry.metaText);
             if(useAssetCache){
+                struct PreparedParseThunk final{
+                    PreparedCookMetaFile* entry = nullptr;
+                };
+                PreparedParseThunk parseThunk{ &entry };
+                const auto ensurePreparedDoc = [](void* const user) -> const Core::Metascript::Document*{
+                    auto* const thunk = static_cast<PreparedParseThunk*>(user);
+                    if(!thunk->entry->parsedDocument){
+                        thunk->entry->parsedDocument = MakeUnique<PreparedParsedDocument>();
+                        thunk->entry->parsedDocument->ok = thunk->entry->parsedDocument->doc.parse(AStringView(thunk->entry->metaText));
+                    }
+                    return thunk->entry->parsedDocument->ok ? &thunk->entry->parsedDocument->doc : nullptr;
+                };
                 entry.canUseCache = CookMetadataDetail::ComputeNwbFileAssetCacheData(
                     discoveredNwbFile,
                     AStringView(entry.metaText),
@@ -203,7 +240,10 @@ b8 ParseAssetMetadata(
                     workerScratch,
                     sourcePathText,
                     cacheFileName,
-                    entry.paramSha256
+                    entry.paramSha256,
+                    externalDigestCachePtr,
+                    ensurePreparedDoc,
+                    &parseThunk
                 );
                 entry.sourcePathText.assign(sourcePathText.data(), sourcePathText.size());
                 entry.cacheFileName.assign(cacheFileName.data(), cacheFileName.size());
@@ -220,6 +260,10 @@ b8 ParseAssetMetadata(
     b8 parsedAnyMetadata = false;
     for(usize fileIndex = 0u; fileIndex < nwbFiles.size(); ++fileIndex){
         Alloc::ScratchArena::Scope fileScratchScope(fileScratchArena);
+        ScopeExit releasePreparedDoc([&]()noexcept{
+            if(useParallelPrep)
+                preparedFiles[fileIndex].parsedDocument.reset();
+        });
         ScratchString metaText{fileScratchArena};
         ScratchString sourcePathText{fileScratchArena};
         ScratchString cacheFileName{fileScratchArena};
@@ -244,6 +288,10 @@ b8 ParseAssetMetadata(
             metaTextView = AStringView(metaText);
         }
 
+        Optional<Core::Metascript::Document> serialParsedDoc;
+        b8 serialParsedDocAttempted = false;
+        b8 serialParsedDocOk = false;
+
         if(useAssetCache){
             NwbFileAssetCacheRecord& cacheRecord = outMetadata.fileCacheRecords[fileIndex];
             const AStringView firstToken = ReadFirstIdentifierAfterCComments(metaTextView);
@@ -259,6 +307,23 @@ b8 ParseAssetMetadata(
                 );
             }
             else{
+                struct SerialParseThunk final{
+                    AStringView metaText;
+                    CookArena* cookArena = nullptr;
+                    Optional<Core::Metascript::Document>* doc = nullptr;
+                    b8* attempted = nullptr;
+                    b8* ok = nullptr;
+                };
+                SerialParseThunk serialThunk{ metaTextView, &cookArena, &serialParsedDoc, &serialParsedDocAttempted, &serialParsedDocOk };
+                const auto ensureSerialDoc = [](void* const user) -> const Core::Metascript::Document*{
+                    auto* const thunk = static_cast<SerialParseThunk*>(user);
+                    if(!*thunk->attempted){
+                        *thunk->attempted = true;
+                        thunk->doc->emplace(*thunk->cookArena);
+                        *thunk->ok = (*thunk->doc)->parse(thunk->metaText);
+                    }
+                    return *thunk->ok ? &**thunk->doc : nullptr;
+                };
                 CookMetadataDetail::PrepareNwbFileAssetCacheRecord(
                     assetCacheDirectory,
                     discoveredNwbFile,
@@ -269,17 +334,21 @@ b8 ParseAssetMetadata(
                     fileScratchArena,
                     sourcePathText,
                     cacheFileName,
-                    cacheRecord
+                    cacheRecord,
+                    externalDigestCachePtr,
+                    ensureSerialDoc,
+                    &serialThunk
                 );
             }
 
 #if !defined(NWB_BUILDMODE)
-            if(cacheRecord.canWriteCache && !IsLikelyNonStandaloneFirstToken(firstToken)){
+            if(cacheRecord.canWriteCache && !CookMetadataDetail::IsLikelyNonStandaloneFirstToken(registrySnapshot, firstToken)){
                 const auto cacheResult = CookMetadataDetail::TryLoadNwbFileAssetCache(
                     cacheRecord,
                     fileScratchArena,
                     seenPropertyAssetPathHashes,
-                    outMetadata
+                    outMetadata,
+                    &registrySnapshot
                 );
                 if(cacheResult == CookMetadataDetail::NwbCacheLoadResult::Error)
                     return false;
@@ -296,14 +365,35 @@ b8 ParseAssetMetadata(
 #endif
         }
 
-        const auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocumentText(discoveredNwbFile.filePath, metaTextView, cookArena);
-        if(!parsedDoc)
-            return false;
-        const auto& doc = *parsedDoc;
+        Optional<Core::Metascript::Document> localParsedDoc;
+        const Core::Metascript::Document* docPtr = nullptr;
+        if(useParallelPrep && preparedFiles[fileIndex].parsedDocument){
+            const PreparedParsedDocument& prepDoc = *preparedFiles[fileIndex].parsedDocument;
+            if(!prepDoc.ok){
+                __hidden_cook_metadata::LogMetascriptParseErrors(discoveredNwbFile.filePath, prepDoc.doc);
+                return false;
+            }
+            docPtr = &prepDoc.doc;
+        }
+        else if(serialParsedDocAttempted){
+            if(!serialParsedDocOk){
+                __hidden_cook_metadata::LogMetascriptParseErrors(discoveredNwbFile.filePath, *serialParsedDoc);
+                return false;
+            }
+            docPtr = &*serialParsedDoc;
+        }
+        else{
+            auto parsedDoc = __hidden_cook_metadata::ParseMetascriptDocumentText(discoveredNwbFile.filePath, metaTextView, cookArena);
+            if(!parsedDoc)
+                return false;
+            localParsedDoc.emplace(Move(*parsedDoc));
+            docPtr = &*localParsedDoc;
+        }
+        const auto& doc = *docPtr;
 
         b8 fileIsStandalone = true;
         AssetBunchExpandContext assetBunchExpandContext{ discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, fileScratchArena };
-        auto expandedAssets = TryAutoCollectedAssetBunchExpanders(assetBunchExpandContext);
+        auto expandedAssets = CookMetadataDetail::TryAssetBunchExpanders(registrySnapshot, assetBunchExpandContext);
         if(!expandedAssets && expandedAssets.error() == AssetBunchExpandFailure::Error)
             return false;
         if(expandedAssets){
@@ -318,6 +408,7 @@ b8 ParseAssetMetadata(
                     expandedAsset.assetType,
                     expandedAsset.virtualPath,
                     expandedAsset.value,
+                    registrySnapshot,
                     cookArena,
                     cpuScheduler,
                     fileScratchArena,
@@ -339,7 +430,7 @@ b8 ParseAssetMetadata(
             return false;
         }
 
-        if(!__hidden_cook_metadata::ParseSingleAssetDocument(discoveredNwbFile, fileIndex, doc, cookArena, cpuScheduler, fileScratchArena, seenPropertyAssetPathHashes, outMetadata, fileIsStandalone))
+        if(!__hidden_cook_metadata::ParseSingleAssetDocument(discoveredNwbFile, fileIndex, doc, registrySnapshot, cookArena, cpuScheduler, fileScratchArena, seenPropertyAssetPathHashes, outMetadata, fileIsStandalone))
             return false;
         if(useAssetCache)
             outMetadata.fileCacheRecords[fileIndex].standalone = fileIsStandalone;

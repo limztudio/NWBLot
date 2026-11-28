@@ -698,6 +698,19 @@ b8 ValidPhysicsQuaternion(in VectorSingle q){
 
 
 class PhysicsRigBinaryCodec{
+    private b8 addPayloadBytes(mut usize inOutBytes, in usize addBytes)const{
+        if(addBytes > cast<usize>(usize.max) - inOutBytes)
+            return false;
+        inOutBytes += addBytes;
+        return true;
+    }
+
+    private b8 addPayloadItemsBytes(mut usize inOutBytes, in usize count, in usize elemBytes)const{
+        if(elemBytes > 0u && count > cast<usize>(usize.max) / elemBytes)
+            return false;
+        return this.addPayloadBytes(inOutBytes, count * elemBytes);
+    }
+
     public b8 validFilter(in Filter f)const{
         return f.broadPhaseLayer < 32u;
     }
@@ -813,9 +826,38 @@ class PhysicsRigBinaryCodec{
         return false;
     }
 
-    public b8 appendFractureCollectionPayload(in FractureCollection col, mut Vector<u8> outBinary)const{
+    public b8 fractureCollectionPayloadBytes(in FractureCollection col, mut usize outBytes)const{
         if(col.nodes.size() > cast<usize>(u32.max) || col.leafNeighborPairs.size() > cast<usize>(u32.max))
             return false;
+        const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
+        outBytes = size_of<FractureCollectionPayloadHeaderBinary>();
+        if(!this.addPayloadItemsBytes(outBytes, col.nodes.size(), size_of<FractureNodeBinary>()))
+            return false;
+        for(usize ni = 0u; ni < col.nodes.size(); ++ni){
+            in FractureCollectionNode node = col.nodes[ni];
+            if(node.childIndices.size() > cast<usize>(u32.max))
+                return false;
+            if(!this.addPayloadItemsBytes(outBytes, node.childIndices.size(), size_of<u32>()))
+                return false;
+            if(!node.chunk.hull.vertices.empty()){
+                if(
+                    node.chunk.hull.vertices.size() > cast<usize>(u32.max)
+                    || node.chunk.hull.faceTopologies.size() > cast<usize>(u32.max)
+                    || node.chunk.hull.halfEdges.size() > cast<usize>(u32.max)
+                )
+                    return false;
+                if(!this.addPayloadBytes(outBytes, assetCodec.convexHullSerializedBytes(node.chunk.hull)))
+                    return false;
+            }
+        }
+        return this.addPayloadItemsBytes(outBytes, col.leafNeighborPairs.size(), size_of<FractureNeighborPairBinary>());
+    }
+
+    public b8 appendFractureCollectionPayload(in FractureCollection col, mut Vector<u8> outBinary)const{
+        usize reqBytes = 0u;
+        if(!this.fractureCollectionPayloadBytes(col, reqBytes) || !CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
         const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
         FractureCollectionPayloadHeaderBinary phdr;
         phdr.nodeCount = cast<u32>(col.nodes.size());
@@ -925,7 +967,14 @@ class PhysicsRigBinaryCodec{
 
     public b8 serializeFractureCollectionUnchecked(in FractureCollection col, mut Vector<u8> outBinary)const{
         static_assert(size_of<FractureAssetHeaderBinary>() == 16u && size_of<FractureCollectionPayloadHeaderBinary>() == 16u && size_of<FractureNodeBinary>() == 80u && size_of<FractureNeighborPairBinary>() == 32u);
+        usize reqBytes = size_of<FractureAssetHeaderBinary>();
+        usize payloadBytes = 0u;
+        if(!this.fractureCollectionPayloadBytes(col, payloadBytes) || !this.addPayloadBytes(reqBytes, payloadBytes))
+            return false;
+        if(!CanStoreValueCount(outBinary, reqBytes))
+            return false;
         outBinary.clear();
+        outBinary.reserve(reqBytes);
         FractureAssetHeaderBinary hdr;
         AppendPOD(outBinary, hdr);
         return this.appendFractureCollectionPayload(col, outBinary);
@@ -1105,8 +1154,7 @@ class PhysicsRigBinaryCodec{
         return false;
     }
 
-    public b8 appendSoftBodyPayload(in SoftBody sb, mut Vector<u8> outBinary)const{
-        static_assert(size_of<SoftBodyPayloadHeaderBinary>() == 304u && size_of<SoftBodyParticleBinary>() == 64u && size_of<SoftBodyVolumeBinary>() == 128u);
+    public b8 softBodyPayloadBytes(in SoftBody sb, mut usize outBytes)const{
         if(
             sb.particles.size() > cast<usize>(u32.max)
             || sb.distanceConstraints.size() > cast<usize>(u32.max)
@@ -1124,6 +1172,29 @@ class PhysicsRigBinaryCodec{
             || sb.particleSourceIndices.size() > cast<usize>(u32.max)
         )
             return false;
+        outBytes = size_of<SoftBodyPayloadHeaderBinary>();
+        return this.addPayloadItemsBytes(outBytes, sb.particles.size(), size_of<SoftBodyParticleBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.distanceConstraints.size(), size_of<SoftBodyDistanceBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.bendingConstraints.size(), size_of<SoftBodyDistanceBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.dihedralBendingConstraints.size(), size_of<SoftBodyDihedralBendingBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.volumeConstraints.size(), size_of<SoftBodyVolumeBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.anisotropicConstraints.size(), size_of<SoftBodyAnisotropicBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.tetherConstraints.size(), size_of<SoftBodyTetherBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.surfaceTriangles.size(), size_of<SoftBodyTriangleBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.attachments.size(), size_of<SoftBodyAttachmentBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.backstopConstraints.size(), size_of<SoftBodyBackstopBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.goalConstraints.size(), size_of<SoftBodyGoalBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.cageBinding.bindings.size(), size_of<SoftBodyTetBindWeightBinary>())
+            && this.addPayloadItemsBytes(outBytes, sb.restLocalPositions.size(), size_of<f32x4>())
+            && this.addPayloadItemsBytes(outBytes, sb.particleSourceIndices.size(), size_of<u32>());
+    }
+
+    public b8 appendSoftBodyPayload(in SoftBody sb, mut Vector<u8> outBinary)const{
+        static_assert(size_of<SoftBodyPayloadHeaderBinary>() == 304u && size_of<SoftBodyParticleBinary>() == 64u && size_of<SoftBodyVolumeBinary>() == 128u);
+        usize reqBytes = 0u;
+        if(!this.softBodyPayloadBytes(sb, reqBytes) || !CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
         SoftBodyPayloadHeaderBinary hdr;
@@ -1557,7 +1628,14 @@ class PhysicsRigBinaryCodec{
 
     public b8 serializeSoftBodyUnchecked(in SoftBody sb, mut Vector<u8> outBinary)const{
         static_assert(size_of<SoftBodyAssetHeaderBinary>() == 16u);
+        usize reqBytes = size_of<SoftBodyAssetHeaderBinary>();
+        usize payloadBytes = 0u;
+        if(!this.softBodyPayloadBytes(sb, payloadBytes) || !this.addPayloadBytes(reqBytes, payloadBytes))
+            return false;
+        if(!CanStoreValueCount(outBinary, reqBytes))
+            return false;
         outBinary.clear();
+        outBinary.reserve(reqBytes);
         SoftBodyAssetHeaderBinary hdr;
         AppendPOD(outBinary, hdr);
         return this.appendSoftBodyPayload(sb, outBinary);
@@ -1634,30 +1712,39 @@ class PhysicsRigBinaryCodec{
         return true;
     }
 
-    public b8 validRagdollData(in RagdollAssetData data, in b8 allowEmptyBones)const{
-        if(cast<u8>(data.mode) >= cast<u8>(RagdollMode::kCount))
+    public b8 validRagdollFields(
+        in Vector<RagdollBoneDef> bones,
+        in RagdollMode mode,
+        in Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs,
+        in RagdollAutoGenParams autoGenParams,
+        in f32 driveStrengthMultiplier,
+        in Vector<b8> boneKinematicMask,
+        in Vector<u32> boneJointIndices,
+        in b8 allowEmptyBones
+    )const{
+        if(cast<u8>(mode) >= cast<u8>(RagdollMode::kCount))
             return false;
         if(
-            !IsFinite(VectorSingle(data.driveStrengthMultiplier))
-            || data.driveStrengthMultiplier < 0.0f
-            || !IsFinite(VectorSingle(data.autoGenParams.minBoneLength, data.autoGenParams.defaultRadiusRatio, data.autoGenParams.minCapsuleRadius, data.autoGenParams.maxCapsuleRadius))
-            || !IsFinite(VectorSingle(data.autoGenParams.defaultDensity, data.autoGenParams.defaultSwingLimit, 0.0f, 0.0f))
-            || data.autoGenParams.minBoneLength <= 0.0f
-            || data.autoGenParams.defaultRadiusRatio <= 0.0f
-            || data.autoGenParams.minCapsuleRadius <= 0.0f
-            || data.autoGenParams.maxCapsuleRadius < data.autoGenParams.minCapsuleRadius
-            || data.autoGenParams.defaultDensity <= 0.0f
-            || data.autoGenParams.defaultSwingLimit < 0.0f
+            !IsFinite(VectorSingle(driveStrengthMultiplier))
+            || driveStrengthMultiplier < 0.0f
+            || !IsFinite(VectorSingle(autoGenParams.minBoneLength, autoGenParams.defaultRadiusRatio, autoGenParams.minCapsuleRadius, autoGenParams.maxCapsuleRadius))
+            || !IsFinite(VectorSingle(autoGenParams.defaultDensity, autoGenParams.defaultSwingLimit, 0.0f, 0.0f))
+            || autoGenParams.minBoneLength <= 0.0f
+            || autoGenParams.defaultRadiusRatio <= 0.0f
+            || autoGenParams.minCapsuleRadius <= 0.0f
+            || autoGenParams.maxCapsuleRadius < autoGenParams.minCapsuleRadius
+            || autoGenParams.defaultDensity <= 0.0f
+            || autoGenParams.defaultSwingLimit < 0.0f
         )
             return false;
-        if(data.bones.empty())
-            return allowEmptyBones && data.disabledSelfCollisionPairs.empty() && data.boneKinematicMask.size() <= cast<usize>(u32.max) && data.boneJointIndices.size() <= cast<usize>(u32.max);
-        if(data.bones.size() > cast<usize>(u32.max))
+        if(bones.empty())
+            return allowEmptyBones && disabledSelfCollisionPairs.empty() && boneKinematicMask.size() <= cast<usize>(u32.max) && boneJointIndices.size() <= cast<usize>(u32.max);
+        if(bones.size() > cast<usize>(u32.max))
             return false;
 
-        const usize boneCount = data.bones.size();
+        const usize boneCount = bones.size();
         for(usize bi = 0u; bi < boneCount; ++bi){
-            in RagdollBoneDef b = data.bones[bi];
+            in RagdollBoneDef b = bones[bi];
             if(b.parentIndex != s_NullIndex && (cast<usize>(b.parentIndex) >= boneCount || cast<usize>(b.parentIndex) == bi))
                 return false;
             if(cast<u8>(b.bodyDef.type) >= cast<u8>(BodyType::kCount) || cast<u8>(b.preset) >= cast<u8>(RagdollJointPreset::kCount))
@@ -1732,27 +1819,48 @@ class PhysicsRigBinaryCodec{
             }
         }
 
+        Vector<u8> visitState;
+        visitState.resize(boneCount, 0u);
         for(usize bi = 0u; bi < boneCount; ++bi){
-            u32 cur = data.bones[bi].parentIndex;
-            usize steps = 0u;
-            while(cur != s_NullIndex){
-                if(steps >= boneCount)
-                    return false;
-                cur = data.bones[cur].parentIndex;
-                ++steps;
+            if(visitState[bi] != 0u)
+                continue;
+            u32 cur = cast<u32>(bi);
+            while(cur != s_NullIndex && visitState[cur] == 0u){
+                visitState[cur] = 1u;
+                cur = bones[cur].parentIndex;
+            }
+            if(cur != s_NullIndex && visitState[cur] == 1u)
+                return false;
+            u32 mark = cast<u32>(bi);
+            while(mark != cur){
+                visitState[mark] = 2u;
+                mark = bones[mark].parentIndex;
             }
         }
 
-        for(usize pi = 0u; pi < data.disabledSelfCollisionPairs.size(); ++pi){
-            in RagdollSelfCollisionPair pair = data.disabledSelfCollisionPairs[pi];
+        for(usize pi = 0u; pi < disabledSelfCollisionPairs.size(); ++pi){
+            in RagdollSelfCollisionPair pair = disabledSelfCollisionPairs[pi];
             if(cast<usize>(pair.boneA) >= boneCount || cast<usize>(pair.boneB) >= boneCount || pair.boneA == pair.boneB)
                 return false;
         }
-        if(!data.boneKinematicMask.empty() && data.boneKinematicMask.size() != boneCount)
+        if(!boneKinematicMask.empty() && boneKinematicMask.size() != boneCount)
             return false;
-        if(!data.boneJointIndices.empty() && data.boneJointIndices.size() != boneCount)
+        if(!boneJointIndices.empty() && boneJointIndices.size() != boneCount)
             return false;
         return true;
+    }
+
+    public b8 validRagdollData(in RagdollAssetData data, in b8 allowEmptyBones)const{
+        return this.validRagdollFields(
+            data.bones,
+            data.mode,
+            data.disabledSelfCollisionPairs,
+            data.autoGenParams,
+            data.driveStrengthMultiplier,
+            data.boneKinematicMask,
+            data.boneJointIndices,
+            allowEmptyBones
+        );
     }
 
     public b8 validateRagdoll(in RagdollAssetData data, in Name virtualPath)const{
@@ -1762,37 +1870,83 @@ class PhysicsRigBinaryCodec{
         return false;
     }
 
-    public b8 appendRagdollPayload(in RagdollAssetData data, mut Vector<u8> outBinary)const{
-        static_assert(size_of<RagdollPayloadHeaderBinary>() == 48u && size_of<RagdollBoneFullBinary>() == 624u && size_of<RagdollExtraShapeFullBinary>() == 256u && size_of<RagdollSelfPairBinary>() == 8u);
+    public b8 ragdollFieldsPayloadBytes(
+        in Vector<RagdollBoneDef> bones,
+        in Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs,
+        in Vector<b8> boneKinematicMask,
+        in Vector<u32> boneJointIndices,
+        mut usize outBytes
+    )const{
         if(
-            data.bones.size() > cast<usize>(u32.max)
-            || data.disabledSelfCollisionPairs.size() > cast<usize>(u32.max)
-            || data.boneKinematicMask.size() > cast<usize>(u32.max)
-            || data.boneJointIndices.size() > cast<usize>(u32.max)
+            bones.size() > cast<usize>(u32.max)
+            || disabledSelfCollisionPairs.size() > cast<usize>(u32.max)
+            || boneKinematicMask.size() > cast<usize>(u32.max)
+            || boneJointIndices.size() > cast<usize>(u32.max)
         )
             return false;
+        outBytes = size_of<RagdollPayloadHeaderBinary>();
+        if(!this.addPayloadItemsBytes(outBytes, bones.size(), size_of<RagdollBoneFullBinary>()))
+            return false;
+        for(usize bi = 0u; bi < bones.size(); ++bi){
+            in RagdollBoneDef b = bones[bi];
+            if(b.hullVertices.size() > cast<usize>(u32.max) || b.extraShapes.size() > cast<usize>(u32.max))
+                return false;
+            if(!this.addPayloadItemsBytes(outBytes, b.hullVertices.size(), size_of<f32x4>()))
+                return false;
+            if(!this.addPayloadItemsBytes(outBytes, b.extraShapes.size(), size_of<RagdollExtraShapeFullBinary>()))
+                return false;
+            for(usize ei = 0u; ei < b.extraShapes.size(); ++ei){
+                in RagdollExtraShapeDef es = b.extraShapes[ei];
+                if(es.hullVertices.size() > cast<usize>(u32.max))
+                    return false;
+                if(!this.addPayloadItemsBytes(outBytes, es.hullVertices.size(), size_of<f32x4>()))
+                    return false;
+            }
+        }
+        return this.addPayloadItemsBytes(outBytes, disabledSelfCollisionPairs.size(), size_of<RagdollSelfPairBinary>())
+            && this.addPayloadBytes(outBytes, boneKinematicMask.size())
+            && this.addPayloadItemsBytes(outBytes, boneJointIndices.size(), size_of<u32>());
+    }
+
+    public b8 appendRagdollFields(
+        in Vector<RagdollBoneDef> bones,
+        in RagdollMode mode,
+        in b8 enableSelfCollision,
+        in b8 autoExcludeInitialOverlaps,
+        in Vector<RagdollSelfCollisionPair> disabledSelfCollisionPairs,
+        in RagdollAutoGenParams autoGenParams,
+        in f32 driveStrengthMultiplier,
+        in Vector<b8> boneKinematicMask,
+        in Vector<u32> boneJointIndices,
+        mut Vector<u8> outBinary
+    )const{
+        static_assert(size_of<RagdollPayloadHeaderBinary>() == 48u && size_of<RagdollBoneFullBinary>() == 624u && size_of<RagdollExtraShapeFullBinary>() == 256u && size_of<RagdollSelfPairBinary>() == 8u);
+        usize reqBytes = 0u;
+        if(!this.ragdollFieldsPayloadBytes(bones, disabledSelfCollisionPairs, boneKinematicMask, boneJointIndices, reqBytes) || !CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         const PhysicsAssetBinaryCodec assetCodec = PhysicsAssetBinaryCodec();
         RagdollPayloadHeaderBinary hdr;
-        hdr.boneCount = cast<u32>(data.bones.size());
-        hdr.disabledSelfCollisionPairCount = cast<u32>(data.disabledSelfCollisionPairs.size());
-        hdr.boneKinematicMaskCount = cast<u32>(data.boneKinematicMask.size());
-        hdr.boneJointIndexCount = cast<u32>(data.boneJointIndices.size());
-        hdr.minBoneLength = data.autoGenParams.minBoneLength;
-        hdr.defaultRadiusRatio = data.autoGenParams.defaultRadiusRatio;
-        hdr.minCapsuleRadius = data.autoGenParams.minCapsuleRadius;
-        hdr.maxCapsuleRadius = data.autoGenParams.maxCapsuleRadius;
-        hdr.defaultDensity = data.autoGenParams.defaultDensity;
-        hdr.defaultSwingLimit = data.autoGenParams.defaultSwingLimit;
-        hdr.driveStrengthMultiplier = data.driveStrengthMultiplier;
-        hdr.mode = cast<u8>(data.mode);
-        if(data.enableSelfCollision) hdr.flags |= s_RagdollFlagEnableSelfCollision;
-        if(data.autoExcludeInitialOverlaps) hdr.flags |= s_RagdollFlagAutoExcludeInitialOverlaps;
-        if(data.autoGenParams.useBoxForRoot) hdr.flags |= s_RagdollFlagUseBoxForRoot;
+        hdr.boneCount = cast<u32>(bones.size());
+        hdr.disabledSelfCollisionPairCount = cast<u32>(disabledSelfCollisionPairs.size());
+        hdr.boneKinematicMaskCount = cast<u32>(boneKinematicMask.size());
+        hdr.boneJointIndexCount = cast<u32>(boneJointIndices.size());
+        hdr.minBoneLength = autoGenParams.minBoneLength;
+        hdr.defaultRadiusRatio = autoGenParams.defaultRadiusRatio;
+        hdr.minCapsuleRadius = autoGenParams.minCapsuleRadius;
+        hdr.maxCapsuleRadius = autoGenParams.maxCapsuleRadius;
+        hdr.defaultDensity = autoGenParams.defaultDensity;
+        hdr.defaultSwingLimit = autoGenParams.defaultSwingLimit;
+        hdr.driveStrengthMultiplier = driveStrengthMultiplier;
+        hdr.mode = cast<u8>(mode);
+        if(enableSelfCollision) hdr.flags |= s_RagdollFlagEnableSelfCollision;
+        if(autoExcludeInitialOverlaps) hdr.flags |= s_RagdollFlagAutoExcludeInitialOverlaps;
+        if(autoGenParams.useBoxForRoot) hdr.flags |= s_RagdollFlagUseBoxForRoot;
         AppendPOD(outBinary, hdr);
 
-        for(usize bi = 0u; bi < data.bones.size(); ++bi){
-            in RagdollBoneDef b = data.bones[bi];
+        for(usize bi = 0u; bi < bones.size(); ++bi){
+            in RagdollBoneDef b = bones[bi];
             RagdollBoneFullBinary bbin;
             bbin.position = b.bodyDef.position;
             bbin.rotation = b.bodyDef.rotation;
@@ -1889,19 +2043,34 @@ class PhysicsRigBinaryCodec{
             }
         }
 
-        for(usize pi = 0u; pi < data.disabledSelfCollisionPairs.size(); ++pi){
+        for(usize pi = 0u; pi < disabledSelfCollisionPairs.size(); ++pi){
             RagdollSelfPairBinary pbin;
-            pbin.boneA = data.disabledSelfCollisionPairs[pi].boneA;
-            pbin.boneB = data.disabledSelfCollisionPairs[pi].boneB;
+            pbin.boneA = disabledSelfCollisionPairs[pi].boneA;
+            pbin.boneB = disabledSelfCollisionPairs[pi].boneB;
             AppendPOD(outBinary, pbin);
         }
-        for(usize ki = 0u; ki < data.boneKinematicMask.size(); ++ki){
+        for(usize ki = 0u; ki < boneKinematicMask.size(); ++ki){
             u8 val = 0u;
-            if(data.boneKinematicMask[ki])
+            if(boneKinematicMask[ki])
                 val = 1u;
             outBinary.push_back(val);
         }
-        return AppendBinaryVectorPayload(outBinary, data.boneJointIndices).has_value();
+        return AppendBinaryVectorPayload(outBinary, boneJointIndices).has_value();
+    }
+
+    public b8 appendRagdollPayload(in RagdollAssetData data, mut Vector<u8> outBinary)const{
+        return this.appendRagdollFields(
+            data.bones,
+            data.mode,
+            data.enableSelfCollision,
+            data.autoExcludeInitialOverlaps,
+            data.disabledSelfCollisionPairs,
+            data.autoGenParams,
+            data.driveStrengthMultiplier,
+            data.boneKinematicMask,
+            data.boneJointIndices,
+            outBinary
+        );
     }
 
     public Expected<RagdollAssetData> readRagdollPayload(in Span<u8> binary, mut usize cursor, in b8 allowEmptyBones)const{
@@ -2105,7 +2274,14 @@ class PhysicsRigBinaryCodec{
 
     public b8 serializeRagdollUnchecked(in RagdollAssetData data, mut Vector<u8> outBinary)const{
         static_assert(size_of<RagdollAssetHeaderBinary>() == 16u);
+        usize reqBytes = size_of<RagdollAssetHeaderBinary>();
+        usize payloadBytes = 0u;
+        if(!this.ragdollFieldsPayloadBytes(data.bones, data.disabledSelfCollisionPairs, data.boneKinematicMask, data.boneJointIndices, payloadBytes) || !this.addPayloadBytes(reqBytes, payloadBytes))
+            return false;
+        if(!CanStoreValueCount(outBinary, reqBytes))
+            return false;
         outBinary.clear();
+        outBinary.reserve(reqBytes);
         RagdollAssetHeaderBinary hdr;
         AppendPOD(outBinary, hdr);
         return this.appendRagdollPayload(data, outBinary);
@@ -2137,31 +2313,50 @@ class PhysicsRigBinaryCodec{
         return dataRes.value();
     }
 
-    public b8 validArticulationData(in ArticulationAssetData data, in b8 allowEmptyLinks)const{
+    public b8 validArticulationFields(
+        in Vector<ArticulationLinkDef> links,
+        in u32 subSteps,
+        in u32 solverIterations,
+        in f32 contactRestitution,
+        in f32 contactFriction,
+        in Filter contactFilter,
+        in Vector<ArticulationMimicConstraint> mimicConstraints,
+        in Vector<ArticulationTendonConstraint> tendonConstraints,
+        in Vector<ArticulationSpatialTendon> spatialTendons,
+        in Vector<ArticulationLoopConstraint> loopConstraints,
+        in f32 selfCollisionMargin,
+        in f32 ccdMotionThreshold,
+        in f32 sleepLinearThreshold,
+        in f32 sleepAngularThreshold,
+        in f32 sleepTimeThreshold,
+        in f32 driveStrengthMultiplier,
+        in Vector<u32> linkJointIndices,
+        in b8 allowEmptyLinks
+    )const{
         if(
-            !this.validFilter(data.contactFilter)
-            || data.subSteps < 1u
-            || data.solverIterations < 1u
-            || !IsFinite(VectorSingle(data.contactRestitution, data.contactFriction, data.selfCollisionMargin, data.ccdMotionThreshold))
-            || !IsFinite(VectorSingle(data.sleepLinearThreshold, data.sleepAngularThreshold, data.sleepTimeThreshold, data.driveStrengthMultiplier))
-            || data.contactRestitution < 0.0f
-            || data.contactFriction < 0.0f
-            || data.selfCollisionMargin < 0.0f
-            || data.ccdMotionThreshold < 0.0f
-            || data.sleepLinearThreshold < 0.0f
-            || data.sleepAngularThreshold < 0.0f
-            || data.sleepTimeThreshold < 0.0f
-            || data.driveStrengthMultiplier < 0.0f
+            !this.validFilter(contactFilter)
+            || subSteps < 1u
+            || solverIterations < 1u
+            || !IsFinite(VectorSingle(contactRestitution, contactFriction, selfCollisionMargin, ccdMotionThreshold))
+            || !IsFinite(VectorSingle(sleepLinearThreshold, sleepAngularThreshold, sleepTimeThreshold, driveStrengthMultiplier))
+            || contactRestitution < 0.0f
+            || contactFriction < 0.0f
+            || selfCollisionMargin < 0.0f
+            || ccdMotionThreshold < 0.0f
+            || sleepLinearThreshold < 0.0f
+            || sleepAngularThreshold < 0.0f
+            || sleepTimeThreshold < 0.0f
+            || driveStrengthMultiplier < 0.0f
         )
             return false;
-        if(data.links.empty())
-            return allowEmptyLinks && data.mimicConstraints.empty() && data.tendonConstraints.empty() && data.spatialTendons.empty() && data.loopConstraints.empty() && data.linkJointIndices.size() <= cast<usize>(u32.max);
-        if(data.links.size() > cast<usize>(u32.max))
+        if(links.empty())
+            return allowEmptyLinks && mimicConstraints.empty() && tendonConstraints.empty() && spatialTendons.empty() && loopConstraints.empty() && linkJointIndices.size() <= cast<usize>(u32.max);
+        if(links.size() > cast<usize>(u32.max))
             return false;
 
-        const usize linkCount = data.links.size();
+        const usize linkCount = links.size();
         for(usize li = 0u; li < linkCount; ++li){
-            in ArticulationLinkDef l = data.links[li];
+            in ArticulationLinkDef l = links[li];
             if(li == 0u){
                 if(l.parentIndex != s_NullIndex)
                     return false;
@@ -2206,8 +2401,8 @@ class PhysicsRigBinaryCodec{
             )
                 return false;
         }
-        for(usize mi = 0u; mi < data.mimicConstraints.size(); ++mi){
-            in ArticulationMimicConstraint mc = data.mimicConstraints[mi];
+        for(usize mi = 0u; mi < mimicConstraints.size(); ++mi){
+            in ArticulationMimicConstraint mc = mimicConstraints[mi];
             if(
                 cast<usize>(mc.linkIndex) >= linkCount
                 || cast<usize>(mc.targetLinkIndex) >= linkCount
@@ -2218,8 +2413,8 @@ class PhysicsRigBinaryCodec{
             )
                 return false;
         }
-        for(usize ti = 0u; ti < data.tendonConstraints.size(); ++ti){
-            in ArticulationTendonConstraint tc = data.tendonConstraints[ti];
+        for(usize ti = 0u; ti < tendonConstraints.size(); ++ti){
+            in ArticulationTendonConstraint tc = tendonConstraints[ti];
             if(
                 tc.linkIndices.empty()
                 || tc.linkIndices.size() > 8u
@@ -2235,8 +2430,8 @@ class PhysicsRigBinaryCodec{
                     return false;
             }
         }
-        for(usize si = 0u; si < data.spatialTendons.size(); ++si){
-            in ArticulationSpatialTendon st = data.spatialTendons[si];
+        for(usize si = 0u; si < spatialTendons.size(); ++si){
+            in ArticulationSpatialTendon st = spatialTendons[si];
             if(
                 st.attachments.size() < 2u
                 || st.attachments.size() > 8u
@@ -2251,8 +2446,8 @@ class PhysicsRigBinaryCodec{
                     return false;
             }
         }
-        for(usize lpi = 0u; lpi < data.loopConstraints.size(); ++lpi){
-            in ArticulationLoopConstraint lc = data.loopConstraints[lpi];
+        for(usize lpi = 0u; lpi < loopConstraints.size(); ++lpi){
+            in ArticulationLoopConstraint lc = loopConstraints[lpi];
             if(
                 cast<usize>(lc.linkIndexA) >= linkCount
                 || cast<usize>(lc.linkIndexB) >= linkCount
@@ -2265,9 +2460,32 @@ class PhysicsRigBinaryCodec{
             )
                 return false;
         }
-        if(!data.linkJointIndices.empty() && data.linkJointIndices.size() != linkCount)
+        if(!linkJointIndices.empty() && linkJointIndices.size() != linkCount)
             return false;
         return true;
+    }
+
+    public b8 validArticulationData(in ArticulationAssetData data, in b8 allowEmptyLinks)const{
+        return this.validArticulationFields(
+            data.links,
+            data.subSteps,
+            data.solverIterations,
+            data.contactRestitution,
+            data.contactFriction,
+            data.contactFilter,
+            data.mimicConstraints,
+            data.tendonConstraints,
+            data.spatialTendons,
+            data.loopConstraints,
+            data.selfCollisionMargin,
+            data.ccdMotionThreshold,
+            data.sleepLinearThreshold,
+            data.sleepAngularThreshold,
+            data.sleepTimeThreshold,
+            data.driveStrengthMultiplier,
+            data.linkJointIndices,
+            allowEmptyLinks
+        );
     }
 
     public b8 validateArticulation(in ArticulationAssetData data, in Name virtualPath)const{
@@ -2277,7 +2495,59 @@ class PhysicsRigBinaryCodec{
         return false;
     }
 
-    public b8 appendArticulationPayload(in ArticulationAssetData data, mut Vector<u8> outBinary)const{
+    public b8 articulationFieldsPayloadBytes(
+        in Vector<ArticulationLinkDef> links,
+        in Vector<ArticulationMimicConstraint> mimicConstraints,
+        in Vector<ArticulationTendonConstraint> tendonConstraints,
+        in Vector<ArticulationSpatialTendon> spatialTendons,
+        in Vector<ArticulationLoopConstraint> loopConstraints,
+        in Vector<u32> linkJointIndices,
+        mut usize outBytes
+    )const{
+        if(
+            links.size() > cast<usize>(u32.max)
+            || mimicConstraints.size() > cast<usize>(u32.max)
+            || tendonConstraints.size() > cast<usize>(u32.max)
+            || spatialTendons.size() > cast<usize>(u32.max)
+            || loopConstraints.size() > cast<usize>(u32.max)
+            || linkJointIndices.size() > cast<usize>(u32.max)
+        )
+            return false;
+        outBytes = size_of<ArticulationPayloadHeaderBinary>();
+        return this.addPayloadItemsBytes(outBytes, links.size(), size_of<ArticulationLinkFullBinary>())
+            && this.addPayloadItemsBytes(outBytes, mimicConstraints.size(), size_of<ArticulationMimicFullBinary>())
+            && this.addPayloadItemsBytes(outBytes, tendonConstraints.size(), size_of<ArticulationTendonFullBinary>())
+            && this.addPayloadItemsBytes(outBytes, spatialTendons.size(), size_of<ArticulationSpatialTendonBinary>())
+            && this.addPayloadItemsBytes(outBytes, loopConstraints.size(), size_of<ArticulationLoopFullBinary>())
+            && this.addPayloadItemsBytes(outBytes, linkJointIndices.size(), size_of<u32>());
+    }
+
+    public b8 appendArticulationFields(
+        in Vector<ArticulationLinkDef> links,
+        in b8 isFixedBase,
+        in u32 subSteps,
+        in u32 solverIterations,
+        in b8 enableContactCoupling,
+        in b8 overrideContactFriction,
+        in f32 contactRestitution,
+        in f32 contactFriction,
+        in Filter contactFilter,
+        in Vector<ArticulationMimicConstraint> mimicConstraints,
+        in Vector<ArticulationTendonConstraint> tendonConstraints,
+        in Vector<ArticulationSpatialTendon> spatialTendons,
+        in Vector<ArticulationLoopConstraint> loopConstraints,
+        in b8 enableSelfCollision,
+        in f32 selfCollisionMargin,
+        in b8 enableCcd,
+        in f32 ccdMotionThreshold,
+        in b8 enableSleep,
+        in f32 sleepLinearThreshold,
+        in f32 sleepAngularThreshold,
+        in f32 sleepTimeThreshold,
+        in f32 driveStrengthMultiplier,
+        in Vector<u32> linkJointIndices,
+        mut Vector<u8> outBinary
+    )const{
         static_assert(
             size_of<ArticulationPayloadHeaderBinary>() == 96u
             && size_of<ArticulationLinkFullBinary>() == 384u
@@ -2286,44 +2556,39 @@ class PhysicsRigBinaryCodec{
             && size_of<ArticulationSpatialTendonBinary>() == 192u
             && size_of<ArticulationLoopFullBinary>() == 64u
         );
-        if(
-            data.links.size() > cast<usize>(u32.max)
-            || data.mimicConstraints.size() > cast<usize>(u32.max)
-            || data.tendonConstraints.size() > cast<usize>(u32.max)
-            || data.spatialTendons.size() > cast<usize>(u32.max)
-            || data.loopConstraints.size() > cast<usize>(u32.max)
-            || data.linkJointIndices.size() > cast<usize>(u32.max)
-        )
+        usize reqBytes = 0u;
+        if(!this.articulationFieldsPayloadBytes(links, mimicConstraints, tendonConstraints, spatialTendons, loopConstraints, linkJointIndices, reqBytes) || !CanAppendBytes(outBinary, reqBytes))
             return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         ArticulationPayloadHeaderBinary hdr;
-        hdr.contactFilter = this.packFilter(data.contactFilter);
-        hdr.linkCount = cast<u32>(data.links.size());
-        hdr.mimicCount = cast<u32>(data.mimicConstraints.size());
-        hdr.tendonCount = cast<u32>(data.tendonConstraints.size());
-        hdr.spatialTendonCount = cast<u32>(data.spatialTendons.size());
-        hdr.loopCount = cast<u32>(data.loopConstraints.size());
-        hdr.linkJointIndexCount = cast<u32>(data.linkJointIndices.size());
-        hdr.subSteps = data.subSteps;
-        hdr.solverIterations = data.solverIterations;
-        hdr.contactRestitution = data.contactRestitution;
-        hdr.contactFriction = data.contactFriction;
-        hdr.selfCollisionMargin = data.selfCollisionMargin;
-        hdr.ccdMotionThreshold = data.ccdMotionThreshold;
-        hdr.sleepLinearThreshold = data.sleepLinearThreshold;
-        hdr.sleepAngularThreshold = data.sleepAngularThreshold;
-        hdr.sleepTimeThreshold = data.sleepTimeThreshold;
-        hdr.driveStrengthMultiplier = data.driveStrengthMultiplier;
-        if(data.isFixedBase) hdr.flags |= s_ArticulationFlagIsFixedBase;
-        if(data.enableContactCoupling) hdr.flags |= s_ArticulationFlagEnableContactCoupling;
-        if(data.overrideContactFriction) hdr.flags |= s_ArticulationFlagOverrideContactFriction;
-        if(data.enableSelfCollision) hdr.flags |= s_ArticulationFlagEnableSelfCollision;
-        if(data.enableCcd) hdr.flags |= s_ArticulationFlagEnableCcd;
-        if(data.enableSleep) hdr.flags |= s_ArticulationFlagEnableSleep;
+        hdr.contactFilter = this.packFilter(contactFilter);
+        hdr.linkCount = cast<u32>(links.size());
+        hdr.mimicCount = cast<u32>(mimicConstraints.size());
+        hdr.tendonCount = cast<u32>(tendonConstraints.size());
+        hdr.spatialTendonCount = cast<u32>(spatialTendons.size());
+        hdr.loopCount = cast<u32>(loopConstraints.size());
+        hdr.linkJointIndexCount = cast<u32>(linkJointIndices.size());
+        hdr.subSteps = subSteps;
+        hdr.solverIterations = solverIterations;
+        hdr.contactRestitution = contactRestitution;
+        hdr.contactFriction = contactFriction;
+        hdr.selfCollisionMargin = selfCollisionMargin;
+        hdr.ccdMotionThreshold = ccdMotionThreshold;
+        hdr.sleepLinearThreshold = sleepLinearThreshold;
+        hdr.sleepAngularThreshold = sleepAngularThreshold;
+        hdr.sleepTimeThreshold = sleepTimeThreshold;
+        hdr.driveStrengthMultiplier = driveStrengthMultiplier;
+        if(isFixedBase) hdr.flags |= s_ArticulationFlagIsFixedBase;
+        if(enableContactCoupling) hdr.flags |= s_ArticulationFlagEnableContactCoupling;
+        if(overrideContactFriction) hdr.flags |= s_ArticulationFlagOverrideContactFriction;
+        if(enableSelfCollision) hdr.flags |= s_ArticulationFlagEnableSelfCollision;
+        if(enableCcd) hdr.flags |= s_ArticulationFlagEnableCcd;
+        if(enableSleep) hdr.flags |= s_ArticulationFlagEnableSleep;
         AppendPOD(outBinary, hdr);
 
-        for(usize li = 0u; li < data.links.size(); ++li){
-            in ArticulationLinkDef l = data.links[li];
+        for(usize li = 0u; li < links.size(); ++li){
+            in ArticulationLinkDef l = links[li];
             ArticulationLinkFullBinary lbin;
             lbin.parentToJointPos = l.parentToJoint.position;
             lbin.parentToJointRot = l.parentToJoint.rotation;
@@ -2379,8 +2644,8 @@ class PhysicsRigBinaryCodec{
             AppendPOD(outBinary, lbin);
         }
 
-        for(usize mi = 0u; mi < data.mimicConstraints.size(); ++mi){
-            in ArticulationMimicConstraint mc = data.mimicConstraints[mi];
+        for(usize mi = 0u; mi < mimicConstraints.size(); ++mi){
+            in ArticulationMimicConstraint mc = mimicConstraints[mi];
             ArticulationMimicFullBinary mbin;
             mbin.linkIndex = mc.linkIndex;
             mbin.dofIndex = mc.dofIndex;
@@ -2394,8 +2659,8 @@ class PhysicsRigBinaryCodec{
             AppendPOD(outBinary, mbin);
         }
 
-        for(usize ti = 0u; ti < data.tendonConstraints.size(); ++ti){
-            in ArticulationTendonConstraint tc = data.tendonConstraints[ti];
+        for(usize ti = 0u; ti < tendonConstraints.size(); ++ti){
+            in ArticulationTendonConstraint tc = tendonConstraints[ti];
             ArticulationTendonFullBinary tbin;
             tbin.entryCount = cast<u32>(tc.linkIndices.size());
             for(usize ei = 0u; ei < tc.linkIndices.size() && ei < 8u; ++ei){
@@ -2412,8 +2677,8 @@ class PhysicsRigBinaryCodec{
             AppendPOD(outBinary, tbin);
         }
 
-        for(usize si = 0u; si < data.spatialTendons.size(); ++si){
-            in ArticulationSpatialTendon st = data.spatialTendons[si];
+        for(usize si = 0u; si < spatialTendons.size(); ++si){
+            in ArticulationSpatialTendon st = spatialTendons[si];
             ArticulationSpatialTendonBinary stbin;
             stbin.attachmentCount = cast<u32>(st.attachments.size());
             for(usize ai = 0u; ai < st.attachments.size() && ai < 8u; ++ai){
@@ -2431,8 +2696,8 @@ class PhysicsRigBinaryCodec{
             AppendPOD(outBinary, stbin);
         }
 
-        for(usize lpi = 0u; lpi < data.loopConstraints.size(); ++lpi){
-            in ArticulationLoopConstraint lc = data.loopConstraints[lpi];
+        for(usize lpi = 0u; lpi < loopConstraints.size(); ++lpi){
+            in ArticulationLoopConstraint lc = loopConstraints[lpi];
             ArticulationLoopFullBinary lpbin;
             lpbin.localAnchorA = lc.localAnchorA;
             lpbin.localAnchorB = lc.localAnchorB;
@@ -2445,7 +2710,36 @@ class PhysicsRigBinaryCodec{
             AppendPOD(outBinary, lpbin);
         }
 
-        return AppendBinaryVectorPayload(outBinary, data.linkJointIndices).has_value();
+        return AppendBinaryVectorPayload(outBinary, linkJointIndices).has_value();
+    }
+
+    public b8 appendArticulationPayload(in ArticulationAssetData data, mut Vector<u8> outBinary)const{
+        return this.appendArticulationFields(
+            data.links,
+            data.isFixedBase,
+            data.subSteps,
+            data.solverIterations,
+            data.enableContactCoupling,
+            data.overrideContactFriction,
+            data.contactRestitution,
+            data.contactFriction,
+            data.contactFilter,
+            data.mimicConstraints,
+            data.tendonConstraints,
+            data.spatialTendons,
+            data.loopConstraints,
+            data.enableSelfCollision,
+            data.selfCollisionMargin,
+            data.enableCcd,
+            data.ccdMotionThreshold,
+            data.enableSleep,
+            data.sleepLinearThreshold,
+            data.sleepAngularThreshold,
+            data.sleepTimeThreshold,
+            data.driveStrengthMultiplier,
+            data.linkJointIndices,
+            outBinary
+        );
     }
 
     public Expected<ArticulationAssetData> readArticulationPayload(in Span<u8> binary, mut usize cursor, in b8 allowEmptyLinks)const{
@@ -2650,7 +2944,14 @@ class PhysicsRigBinaryCodec{
 
     public b8 serializeArticulationUnchecked(in ArticulationAssetData data, mut Vector<u8> outBinary)const{
         static_assert(size_of<ArticulationAssetHeaderBinary>() == 16u);
+        usize reqBytes = size_of<ArticulationAssetHeaderBinary>();
+        usize payloadBytes = 0u;
+        if(!this.articulationFieldsPayloadBytes(data.links, data.mimicConstraints, data.tendonConstraints, data.spatialTendons, data.loopConstraints, data.linkJointIndices, payloadBytes) || !this.addPayloadBytes(reqBytes, payloadBytes))
+            return false;
+        if(!CanStoreValueCount(outBinary, reqBytes))
+            return false;
         outBinary.clear();
+        outBinary.reserve(reqBytes);
         ArticulationAssetHeaderBinary hdr;
         AppendPOD(outBinary, hdr);
         return this.appendArticulationPayload(data, outBinary);
@@ -2682,10 +2983,18 @@ class PhysicsRigBinaryCodec{
         return dataRes.value();
     }
 
-    public b8 validVehicleData(in VehicleAssetData data, in b8 allowEmptyWheels)const{
-        in VehicleEngineDef e = data.engine;
+    public b8 validVehicleFields(
+        in VehicleEngineDef e,
+        in Vector<VehicleWheelDef> wheels,
+        in Filter queryFilter,
+        in f32 wheelSlipEventThreshold,
+        in VectorSingle trailerLocalHitchChassis,
+        in VectorSingle trailerLocalHitchTrailer,
+        in f32 trailerSwingLimitRad,
+        in b8 allowEmptyWheels
+    )const{
         if(
-            !this.validFilter(data.queryFilter)
+            !this.validFilter(queryFilter)
             || cast<u8>(e.archetype) >= cast<u8>(VehicleArchetype::kCount)
             || cast<u8>(e.centerDifferentialMode) >= cast<u8>(VehicleDifferentialMode::kCount)
             || cast<u8>(e.axleDifferentialMode) >= cast<u8>(VehicleDifferentialMode::kCount)
@@ -2700,16 +3009,16 @@ class PhysicsRigBinaryCodec{
             || !IsFinite(VectorSingle(e.steerSlewRateRadPerSec, e.rearSteerRatio, e.motorcycleLeanGain, e.motorcycleLeanMaxRad))
             || !IsFinite(VectorSingle(e.trackWidth, e.wheelbase, e.espStrength, e.espMaxBrakeTorque))
             || !IsFinite(VectorSingle(e.steerSelfCenteringGain, e.trailerBrakeForce, e.motorcycleCasterAngleRad, e.motorcycleTrail))
-            || !IsFinite(VectorSingle(e.motorcycleCounterSteerGain, e.motorcycleGyroGain, data.wheelSlipEventThreshold, data.trailerSwingLimitRad))
+            || !IsFinite(VectorSingle(e.motorcycleCounterSteerGain, e.motorcycleGyroGain, wheelSlipEventThreshold, trailerSwingLimitRad))
             || !IsFinite(VectorSingle(e.ambientWindVelocity))
             || !ValidPhysicsVec3NonZero(VectorSingle(e.chassisForwardAxis))
             || !ValidPhysicsVec3NonZero(VectorSingle(e.chassisUpAxis))
-            || !IsValidPositionVec3(VectorSingle(data.trailerLocalHitchChassis))
-            || !IsValidPositionVec3(VectorSingle(data.trailerLocalHitchTrailer))
+            || !IsValidPositionVec3(trailerLocalHitchChassis)
+            || !IsValidPositionVec3(trailerLocalHitchTrailer)
             || e.maxTorque < 0.0f || e.idleRpm < 0.0f || e.maxRpm <= 0.0f || e.revLimiterRpm < 0.0f
             || e.engineInertia <= 0.0f || e.frontalArea < 0.0f || e.airDensity < 0.0f
             || e.trackWidth <= 0.0f || e.wheelbase <= 0.0f
-            || data.wheelSlipEventThreshold < 0.0f
+            || wheelSlipEventThreshold < 0.0f
         )
             return false;
         for(usize gi = 0u; gi < 6u; ++gi){
@@ -2721,12 +3030,12 @@ class PhysicsRigBinaryCodec{
             if(!IsFinite(VectorSingle(pt.x, pt.y, 0.0f, 0.0f)) || pt.x < 0.0f || pt.y < 0.0f)
                 return false;
         }
-        if(data.wheels.empty())
+        if(wheels.empty())
             return allowEmptyWheels;
-        if(data.wheels.size() > cast<usize>(u32.max))
+        if(wheels.size() > cast<usize>(u32.max))
             return false;
-        for(usize wi = 0u; wi < data.wheels.size(); ++wi){
-            in VehicleWheelDef w = data.wheels[wi];
+        for(usize wi = 0u; wi < wheels.size(); ++wi){
+            in VehicleWheelDef w = wheels[wi];
             if(
                 cast<u8>(w.wheelCastMode) >= cast<u8>(VehicleWheelCastMode::kCount)
                 || !IsValidPositionVec3(VectorSingle(w.attachmentPoint))
@@ -2751,6 +3060,19 @@ class PhysicsRigBinaryCodec{
         return true;
     }
 
+    public b8 validVehicleData(in VehicleAssetData data, in b8 allowEmptyWheels)const{
+        return this.validVehicleFields(
+            data.engine,
+            data.wheels,
+            data.queryFilter,
+            data.wheelSlipEventThreshold,
+            VectorSingle(data.trailerLocalHitchChassis),
+            VectorSingle(data.trailerLocalHitchTrailer),
+            data.trailerSwingLimitRad,
+            allowEmptyWheels
+        );
+    }
+
     public b8 validateVehicle(in VehicleAssetData data, in Name virtualPath)const{
         if(this.validVehicleData(data, false))
             return true;
@@ -2758,21 +3080,43 @@ class PhysicsRigBinaryCodec{
         return false;
     }
 
-    public b8 appendVehiclePayload(in VehicleAssetData data, mut Vector<u8> outBinary)const{
-        static_assert(size_of<VehiclePayloadHeaderBinary>() == 304u && size_of<VehicleWheelFullBinary>() == 224u && size_of<VehicleTorqueCurvePointBinary>() == 8u);
-        if(data.wheels.size() > cast<usize>(u32.max) || data.engine.torqueCurvePoints.size() > 16u)
+    public b8 vehicleFieldsPayloadBytes(
+        in VehicleEngineDef e,
+        in Vector<VehicleWheelDef> wheels,
+        mut usize outBytes
+    )const{
+        if(wheels.size() > cast<usize>(u32.max) || e.torqueCurvePoints.size() > 16u)
             return false;
+        outBytes = size_of<VehiclePayloadHeaderBinary>();
+        return this.addPayloadItemsBytes(outBytes, wheels.size(), size_of<VehicleWheelFullBinary>())
+            && this.addPayloadItemsBytes(outBytes, e.torqueCurvePoints.size(), size_of<VehicleTorqueCurvePointBinary>());
+    }
 
-        in VehicleEngineDef e = data.engine;
+    public b8 appendVehicleFields(
+        in VehicleEngineDef e,
+        in Vector<VehicleWheelDef> wheels,
+        in Filter queryFilter,
+        in f32 wheelSlipEventThreshold,
+        in VectorSingle trailerLocalHitchChassis,
+        in VectorSingle trailerLocalHitchTrailer,
+        in f32 trailerSwingLimitRad,
+        mut Vector<u8> outBinary
+    )const{
+        static_assert(size_of<VehiclePayloadHeaderBinary>() == 304u && size_of<VehicleWheelFullBinary>() == 224u && size_of<VehicleTorqueCurvePointBinary>() == 8u);
+        usize reqBytes = 0u;
+        if(!this.vehicleFieldsPayloadBytes(e, wheels, reqBytes) || !CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
+
         VehiclePayloadHeaderBinary hdr;
         hdr.ambientWindVelocity = e.ambientWindVelocity;
         hdr.chassisForwardAxis = e.chassisForwardAxis;
         hdr.chassisUpAxis = e.chassisUpAxis;
-        hdr.trailerLocalHitchChassis = data.trailerLocalHitchChassis;
-        hdr.trailerLocalHitchTrailer = data.trailerLocalHitchTrailer;
-        hdr.queryFilter = this.packFilter(data.queryFilter);
+        hdr.trailerLocalHitchChassis = f32x4(trailerLocalHitchChassis);
+        hdr.trailerLocalHitchTrailer = f32x4(trailerLocalHitchTrailer);
+        hdr.queryFilter = this.packFilter(queryFilter);
         hdr.forwardGearRatios = e.forwardGearRatios;
-        hdr.wheelCount = cast<u32>(data.wheels.size());
+        hdr.wheelCount = cast<u32>(wheels.size());
         hdr.torqueCurvePointCount = cast<u32>(e.torqueCurvePoints.size());
         hdr.gearCount = e.gearCount;
         hdr.subSteps = e.subSteps;
@@ -2810,8 +3154,8 @@ class PhysicsRigBinaryCodec{
         hdr.motorcycleTrail = e.motorcycleTrail;
         hdr.motorcycleCounterSteerGain = e.motorcycleCounterSteerGain;
         hdr.motorcycleGyroGain = e.motorcycleGyroGain;
-        hdr.wheelSlipEventThreshold = data.wheelSlipEventThreshold;
-        hdr.trailerSwingLimitRad = data.trailerSwingLimitRad;
+        hdr.wheelSlipEventThreshold = wheelSlipEventThreshold;
+        hdr.trailerSwingLimitRad = trailerSwingLimitRad;
         if(e.useAckermanSteering) hdr.flags |= s_VehicleFlagUseAckerman;
         if(e.automaticTransmission) hdr.flags |= s_VehicleFlagAutomaticTransmission;
         if(e.useTorqueConverter) hdr.flags |= s_VehicleFlagUseTorqueConverter;
@@ -2824,8 +3168,8 @@ class PhysicsRigBinaryCodec{
         hdr.axleDifferentialMode = cast<u8>(e.axleDifferentialMode);
         AppendPOD(outBinary, hdr);
 
-        for(usize wi = 0u; wi < data.wheels.size(); ++wi){
-            in VehicleWheelDef w = data.wheels[wi];
+        for(usize wi = 0u; wi < wheels.size(); ++wi){
+            in VehicleWheelDef w = wheels[wi];
             VehicleWheelFullBinary wbin;
             wbin.attachmentPoint = w.attachmentPoint;
             wbin.suspensionDirection = w.suspensionDirection;
@@ -2882,6 +3226,19 @@ class PhysicsRigBinaryCodec{
             AppendPOD(outBinary, pt);
         }
         return true;
+    }
+
+    public b8 appendVehiclePayload(in VehicleAssetData data, mut Vector<u8> outBinary)const{
+        return this.appendVehicleFields(
+            data.engine,
+            data.wheels,
+            data.queryFilter,
+            data.wheelSlipEventThreshold,
+            VectorSingle(data.trailerLocalHitchChassis),
+            VectorSingle(data.trailerLocalHitchTrailer),
+            data.trailerSwingLimitRad,
+            outBinary
+        );
     }
 
     public Expected<VehicleAssetData> readVehiclePayload(in Span<u8> binary, mut usize cursor, in b8 allowEmptyWheels)const{
@@ -3045,7 +3402,14 @@ class PhysicsRigBinaryCodec{
 
     public b8 serializeVehicleUnchecked(in VehicleAssetData data, mut Vector<u8> outBinary)const{
         static_assert(size_of<VehicleAssetHeaderBinary>() == 16u);
+        usize reqBytes = size_of<VehicleAssetHeaderBinary>();
+        usize payloadBytes = 0u;
+        if(!this.vehicleFieldsPayloadBytes(data.engine, data.wheels, payloadBytes) || !this.addPayloadBytes(reqBytes, payloadBytes))
+            return false;
+        if(!CanStoreValueCount(outBinary, reqBytes))
+            return false;
         outBinary.clear();
+        outBinary.reserve(reqBytes);
         VehicleAssetHeaderBinary hdr;
         AppendPOD(outBinary, hdr);
         return this.appendVehiclePayload(data, outBinary);

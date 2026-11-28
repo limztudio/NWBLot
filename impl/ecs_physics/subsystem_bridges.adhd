@@ -346,6 +346,245 @@ void TransformForceFieldInto(
     }
 }
 
+u64 ComputeEcsFluidVolumeContentSignature(in FluidVolume vol){
+    u64 h = FluidHashMixU64(cast<u64>(0x9e3779b97f4a7c15u), cast<u64>(vol.shape));
+    h = FluidHashMixU64(h, cast<u64>(vol.enabled));
+    h = FluidHashMixU64(h, cast<u64>(vol.enableDynamicWaveGrid));
+    h = FluidHashMixU64(h, cast<u64>(vol.waveGridDimX));
+    h = FluidHashMixU64(h, cast<u64>(vol.waveGridDimZ));
+    h = FluidHashMixU64(h, cast<u64>(vol.waveHeights.size()));
+    h = FluidHashMixU64(h, cast<u64>(vol.waveVelocities.size()));
+    h = FluidHashMixU64(h, cast<u64>(vol.hasSurfaceCallback()));
+    h = FluidHashMixU64(h, cast<u64>(vol.filter.categoryBits));
+    h = FluidHashMixU64(h, cast<u64>(vol.filter.maskBits));
+    h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(vol.filter.groupIndex)));
+    h = FluidHashVec4(h, VectorSingle(vol.surfaceNormalOffset));
+    h = FluidHashVec4(h, VectorSingle(vol.bounds.lowerBound));
+    h = FluidHashVec4(h, VectorSingle(vol.bounds.upperBound));
+    h = FluidHashVec4(h, VectorSingle(vol.obbCenter));
+    h = FluidHashVec4(h, VectorSingle(vol.obbHalfExtents));
+    h = FluidHashVec4(h, VectorSingle(vol.obbRotation));
+    h = FluidHashVec4(h, VectorSingle(vol.shapeTransform.position));
+    h = FluidHashVec4(h, VectorSingle(vol.shapeTransform.rotation));
+    h = FluidHashVec4(h, VectorSingle(vol.flowVelocity));
+    h = FluidHashVec4(h, VectorSingle(vol.waveGridOrigin));
+    h = FluidHashVec4(h, VectorSingle(vol.waveGridCellSize, vol.waveGridSpeed, vol.waveDamping, vol.waveMaxAmplitude));
+    h = FluidHashVec4(h, VectorSingle(vol.waveImpulseScale, vol.riverHalfWidth, vol.riverDepth, vol.riverFlowSpeed));
+    h = FluidHashVec4(h, VectorSingle(vol.density, vol.linearDrag, vol.angularDrag, vol.quadraticDrag));
+    h = FluidHashVec4(h, VectorSingle(vol.liftCoeff, vol.addedMassCoeff, vol.waveAmplitude, vol.waveFrequency));
+    h = FluidHashVec4(h, VectorSingle(vol.waveSpeed, vol.sleepWrenchTolerance, 0.0f, 0.0f));
+    h = FluidHashMixU64(h, vol.computeGerstnerWaveSignature());
+    h = FluidHashMixU64(h, FluidHashVec4SampleSig(vol.hullVertices));
+    h = FluidHashMixU64(h, FluidHashVec4SampleSig(vol.hullPlanes));
+    h = FluidHashMixU64(h, FluidHashVec4SampleSig(vol.meshVertices));
+    h = FluidHashMixU64(h, FluidHashU32SampleSig(vol.meshIndices));
+    h = FluidHashMixU64(h, FluidHashVec4SampleSig(vol.riverPoints));
+    return h;
+}
+
+u64 ComputeEcsForceFieldScalarSignature(in ForceField fld){
+    u64 h = FluidHashMixU64(cast<u64>(0x517cc1b727220a95u), cast<u64>(fld.type));
+    h = FluidHashMixU64(h, cast<u64>(fld.shape));
+    h = FluidHashMixU64(h, cast<u64>(fld.falloffMode));
+    h = FluidHashMixU64(h, cast<u64>(fld.useBounds));
+    h = FluidHashMixU64(h, cast<u64>(fld.enableOcclusion));
+    h = FluidHashMixU64(h, cast<u64>(fld.enabled));
+    h = FluidHashMixU64(h, cast<u64>(fld.vectorFieldDimX));
+    h = FluidHashMixU64(h, cast<u64>(fld.vectorFieldDimY));
+    h = FluidHashMixU64(h, cast<u64>(fld.vectorFieldDimZ));
+    h = FluidHashMixU64(h, cast<u64>(fld.vectorFieldSamples.size()));
+    h = FluidHashMixU64(h, cast<u64>(fld.filter.categoryBits));
+    h = FluidHashMixU64(h, cast<u64>(fld.filter.maskBits));
+    h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(fld.filter.groupIndex)));
+    h = FluidHashVec4(h, VectorSingle(fld.bounds.lowerBound));
+    h = FluidHashVec4(h, VectorSingle(fld.bounds.upperBound));
+    h = FluidHashVec4(h, VectorSingle(fld.obbCenter));
+    h = FluidHashVec4(h, VectorSingle(fld.obbHalfExtents));
+    h = FluidHashVec4(h, VectorSingle(fld.obbRotation));
+    h = FluidHashVec4(h, VectorSingle(fld.capsulePointA));
+    h = FluidHashVec4(h, VectorSingle(fld.capsulePointB));
+    h = FluidHashVec4(h, VectorSingle(fld.originOrDirection));
+    h = FluidHashVec4(h, VectorSingle(fld.axis));
+    h = FluidHashVec4(h, VectorSingle(fld.capsuleRadius, fld.strength, fld.minDistance, fld.radius));
+    h = FluidHashVec4(h, VectorSingle(fld.falloffPower, fld.inwardSuction, fld.turbulenceAmplitude, fld.turbulenceFrequency));
+    return h;
+}
+
+void CopyForceFieldScalarsAndShapeInto(in ForceField src, mut ForceField dst){
+    dst.type = src.type;
+    dst.shape = src.shape;
+    dst.falloffMode = src.falloffMode;
+    dst.bounds = src.bounds;
+    dst.useBounds = src.useBounds;
+    dst.obbCenter = src.obbCenter;
+    dst.obbHalfExtents = src.obbHalfExtents;
+    dst.obbRotation = src.obbRotation;
+    dst.capsulePointA = src.capsulePointA;
+    dst.capsulePointB = src.capsulePointB;
+    dst.capsuleRadius = src.capsuleRadius;
+    dst.originOrDirection = src.originOrDirection;
+    dst.axis = src.axis;
+    dst.strength = src.strength;
+    dst.minDistance = src.minDistance;
+    dst.radius = src.radius;
+    dst.falloffPower = src.falloffPower;
+    dst.inwardSuction = src.inwardSuction;
+    dst.turbulenceAmplitude = src.turbulenceAmplitude;
+    dst.turbulenceFrequency = src.turbulenceFrequency;
+    dst.filter = src.filter;
+    dst.enableOcclusion = src.enableOcclusion;
+    dst.enabled = src.enabled;
+    dst.vectorFieldDimX = src.vectorFieldDimX;
+    dst.vectorFieldDimY = src.vectorFieldDimY;
+    dst.vectorFieldDimZ = src.vectorFieldDimZ;
+}
+
+void TransformForceFieldScalarsOnlyInto(
+    in ForceField src,
+    in b8 applyTransform,
+    in Transform3D xf,
+    in VectorSingle worldScale,
+    in Filter resolvedFilter,
+    mut ForceField dst
+){
+    CopyForceFieldScalarsAndShapeInto(src, dst);
+    dst.filter = resolvedFilter;
+    if(!applyTransform)
+        return;
+    const VectorSingle rot = SafeNormalizeQuat(VectorSingle(xf.rotation));
+    const VectorSingle pos(xf.position);
+    const VectorSingle absScale = Abs(worldScale);
+    const f32 maxS = Vector3MaxComponent(absScale).x;
+    if(src.useBounds){
+        dst.bounds = TransformAabbByPoseAndScale(src.bounds, pos, rot, worldScale);
+        const VectorSingle scaledObbC = VectorSetW(VectorSingle(src.obbCenter) * worldScale, 0.0f);
+        dst.obbCenter = f32x4(pos + Vector3Rotate(scaledObbC, rot), 0.0f);
+        dst.obbHalfExtents = f32x4(Max(VectorSingle(src.obbHalfExtents) * absScale, VectorSingle(1.0e-3f)), 0.0f);
+        dst.obbRotation = f32x4(SafeNormalizeQuat(QuaternionMultiply(rot, SafeNormalizeQuat(VectorSingle(src.obbRotation)))));
+        const VectorSingle scaledCapA = VectorSetW(VectorSingle(src.capsulePointA) * worldScale, 0.0f);
+        const VectorSingle scaledCapB = VectorSetW(VectorSingle(src.capsulePointB) * worldScale, 0.0f);
+        dst.capsulePointA = f32x4(pos + Vector3Rotate(scaledCapA, rot), 0.0f);
+        dst.capsulePointB = f32x4(pos + Vector3Rotate(scaledCapB, rot), 0.0f);
+        dst.capsuleRadius = src.capsuleRadius * maxS;
+    }
+    if(
+        src.type == ForceFieldType::PointGravity
+        || src.type == ForceFieldType::Vortex
+        || src.type == ForceFieldType::RadialImpulse
+        || src.type == ForceFieldType::Attractor
+    ){
+        const VectorSingle scaledOrigin = VectorSetW(VectorSingle(src.originOrDirection) * worldScale, 0.0f);
+        dst.originOrDirection = f32x4(pos + Vector3Rotate(scaledOrigin, rot), 0.0f);
+        dst.radius = src.radius * maxS;
+        dst.minDistance = src.minDistance * maxS;
+        if(src.type == ForceFieldType::Vortex)
+            dst.axis = f32x4(SafeNormalizeVec3(Vector3Rotate(VectorSingle(src.axis), rot), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f)), 0.0f);
+    }
+    else{
+        dst.originOrDirection = f32x4(Vector3Rotate(VectorSingle(src.originOrDirection), rot), 0.0f);
+        if(src.radius > 0.0f)
+            dst.radius = src.radius * maxS;
+    }
+}
+
+void PrepareEcsTransformedFluidVolumeCached(
+    in EntityID ent,
+    in FluidVolumeComponent fvc,
+    in b8 hasAnyPhysicsParents,
+    in CollisionLayerMatrix collisionLayerMatrix,
+    mut World world,
+    mut HashMap<EntityID, EcsWorldPose> poseCache,
+    mut EcsEnvFluidSlotCache slotCache,
+    mut FluidVolume outFluid
+){
+    EcsWorldPose pose;
+    const b8 hasPose = ResolveEcsSubsystemWorldPoseCached(ent, hasAnyPhysicsParents, world, poseCache, pose);
+    const Filter resolvedFilter = ResolveEcsNamedLayerFilter(fvc.volume.filter, fvc.collisionLayer, collisionLayerMatrix);
+    const u64 contentSig = ComputeEcsFluidVolumeContentSignature(fvc.volume);
+
+    const b8 poseMatch = !hasPose
+        || (EcsTransformsNearlyEqual(slotCache.poseTransform, pose.transform) && EcsVec4NearlyEqual(VectorSingle(slotCache.poseScale), VectorSingle(pose.scale), 1.0e-5f));
+    if(
+        slotCache.valid
+        && slotCache.entity == ent
+        && slotCache.hasPose == hasPose
+        && poseMatch
+        && slotCache.resolvedFilter.categoryBits == resolvedFilter.categoryBits
+        && slotCache.resolvedFilter.maskBits == resolvedFilter.maskBits
+        && slotCache.resolvedFilter.groupIndex == resolvedFilter.groupIndex
+        && slotCache.contentSig == contentSig
+    ){
+        if(fvc.volume.hasSurfaceCallback())
+            outFluid.copySurfaceCallbackFrom(fvc.volume);
+        if(fvc.volume.hasDynamicWaveGrid()){
+            outFluid.waveHeights = fvc.volume.waveHeights;
+            outFluid.waveVelocities = fvc.volume.waveVelocities;
+        }
+        return;
+    }
+
+    TransformFluidVolumeInto(fvc.volume, hasPose, pose.transform, VectorSingle(pose.scale), resolvedFilter, outFluid);
+    slotCache.entity = ent;
+    slotCache.valid = true;
+    slotCache.hasPose = hasPose;
+    slotCache.poseTransform = pose.transform;
+    slotCache.poseScale = pose.scale;
+    slotCache.resolvedFilter = resolvedFilter;
+    slotCache.contentSig = contentSig;
+}
+
+void PrepareEcsTransformedForceFieldCached(
+    in EntityID ent,
+    in ForceFieldComponent ffc,
+    in b8 hasAnyPhysicsParents,
+    in CollisionLayerMatrix collisionLayerMatrix,
+    mut World world,
+    mut HashMap<EntityID, EcsWorldPose> poseCache,
+    mut EcsEnvForceFieldSlotCache slotCache,
+    mut ForceField outField
+){
+    EcsWorldPose pose;
+    const b8 hasPose = ResolveEcsSubsystemWorldPoseCached(ent, hasAnyPhysicsParents, world, poseCache, pose);
+    const Filter resolvedFilter = ResolveEcsNamedLayerFilter(ffc.field.filter, ffc.collisionLayer, collisionLayerMatrix);
+    const u64 contentSig = ComputeEcsForceFieldScalarSignature(ffc.field);
+    const u64 vfRev = ffc.field.vectorFieldRevision();
+
+    const b8 poseMatch = !hasPose
+        || (EcsTransformsNearlyEqual(slotCache.poseTransform, pose.transform) && EcsVec4NearlyEqual(VectorSingle(slotCache.poseScale), VectorSingle(pose.scale), 1.0e-5f));
+    const b8 sameVectorGrid =
+        slotCache.valid
+        && slotCache.entity == ent
+        && slotCache.vectorFieldRevision == vfRev
+        && outField.vectorFieldDimX == ffc.field.vectorFieldDimX
+        && outField.vectorFieldDimY == ffc.field.vectorFieldDimY
+        && outField.vectorFieldDimZ == ffc.field.vectorFieldDimZ
+        && outField.vectorFieldSamples.size() == ffc.field.vectorFieldSamples.size();
+
+    if(
+        sameVectorGrid
+        && slotCache.hasPose == hasPose
+        && poseMatch
+        && slotCache.resolvedFilter.categoryBits == resolvedFilter.categoryBits
+        && slotCache.resolvedFilter.maskBits == resolvedFilter.maskBits
+        && slotCache.resolvedFilter.groupIndex == resolvedFilter.groupIndex
+        && slotCache.contentSig == contentSig
+    )
+        return;
+
+    TransformForceFieldScalarsOnlyInto(ffc.field, hasPose, pose.transform, VectorSingle(pose.scale), resolvedFilter, outField);
+    if(!sameVectorGrid)
+        outField.vectorFieldSamples = ffc.field.vectorFieldSamples;
+
+    slotCache.entity = ent;
+    slotCache.valid = true;
+    slotCache.hasPose = hasPose;
+    slotCache.poseTransform = pose.transform;
+    slotCache.poseScale = pose.scale;
+    slotCache.resolvedFilter = resolvedFilter;
+    slotCache.vectorFieldRevision = vfRev;
+    slotCache.contentSig = contentSig;
+}
+
 BodyId ResolveEntityOwnPhysicsBody(
     in EntityID entity,
     mut World world,
@@ -1316,15 +1555,20 @@ void StepEcsTransformedFluidVolume(
     in f32 dt,
     in b8 hasAnyPhysicsParents,
     in CollisionLayerMatrix collisionLayerMatrix,
+    in b8 useSlotCache,
     mut World world,
     mut PhysicsWorld physicsWorld,
     mut CpuTaskScheduler scheduler,
     mut PhysicsEnvironment envScratch,
     mut EcsPhysicsSyncScratch scratch,
+    mut EcsEnvFluidSlotCache slotCache,
     mut FluidVolumeComponent fvc,
     mut FluidVolume targetFluid
 ){
-    PrepareEcsTransformedFluidVolume(ent, fvc, hasAnyPhysicsParents, collisionLayerMatrix, world, scratch.writeBackPoseCache, targetFluid);
+    if(useSlotCache)
+        PrepareEcsTransformedFluidVolumeCached(ent, fvc, hasAnyPhysicsParents, collisionLayerMatrix, world, scratch.writeBackPoseCache, slotCache, targetFluid);
+    else
+        PrepareEcsTransformedFluidVolume(ent, fvc, hasAnyPhysicsParents, collisionLayerMatrix, world, scratch.writeBackPoseCache, targetFluid);
     StepFluidVolumeWithEventsWithScheduler(
         physicsWorld,
         targetFluid,
@@ -1351,14 +1595,19 @@ void StepEcsTransformedForceField(
     in f32 dt,
     in b8 hasAnyPhysicsParents,
     in CollisionLayerMatrix collisionLayerMatrix,
+    in b8 useSlotCache,
     in u32 gravEpoch,
     mut World world,
     mut PhysicsWorld physicsWorld,
     mut CpuTaskScheduler scheduler,
     mut EcsPhysicsSyncScratch scratch,
+    mut EcsEnvForceFieldSlotCache slotCache,
     mut ForceField targetField
 ){
-    PrepareEcsTransformedForceField(ent, ffc, hasAnyPhysicsParents, collisionLayerMatrix, world, scratch.writeBackPoseCache, targetField);
+    if(useSlotCache)
+        PrepareEcsTransformedForceFieldCached(ent, ffc, hasAnyPhysicsParents, collisionLayerMatrix, world, scratch.writeBackPoseCache, slotCache, targetField);
+    else
+        PrepareEcsTransformedForceField(ent, ffc, hasAnyPhysicsParents, collisionLayerMatrix, world, scratch.writeBackPoseCache, targetField);
     ApplyForceFieldWithSchedulerEpoch(physicsWorld, targetField, activeTimeSec, dt, scheduler, gravEpoch);
 }
 
@@ -1366,51 +1615,73 @@ void CollectEcsPhysicsEnvironment(
     in b8 hasAnyPhysicsParents,
     in CollisionLayerMatrix collisionLayerMatrix,
     mut World world,
-    mut HashMap<EntityID, EcsWorldPose> poseCache,
-    mut PhysicsEnvironment envScratch,
-    mut Vector<EntityID> outFluidEntities
+    mut EcsPhysicsSyncScratch scratch,
+    mut PhysicsEnvironment envScratch
 ){
     if(hasAnyPhysicsParents)
-        poseCache.clear();
-    envScratch.fluids.clear();
-    outFluidEntities.clear();
+        scratch.writeBackPoseCache.clear();
+    scratch.envFluidEntitiesScratch.clear();
     const auto fluidView = world.view<FluidVolumeComponent>();
     const usize fluidCount = fluidView.candidateCount();
     usize activeFluidCount = 0u;
     if(fluidCount > 0u){
-        outFluidEntities.reserve(fluidCount);
+        scratch.envFluidEntitiesScratch.reserve(fluidCount);
         fluidView.each(
-            lambda[in hasAnyPhysicsParents, in collisionLayerMatrix, mut world, mut poseCache, mut envScratch, mut outFluidEntities, mut activeFluidCount](in EntityID ent, in FluidVolumeComponent fvc) -> void{
+            lambda[in hasAnyPhysicsParents, in collisionLayerMatrix, mut world, mut scratch, mut envScratch, mut activeFluidCount](in EntityID ent, in FluidVolumeComponent fvc) -> void{
                 if(!fvc.enabled || !fvc.volume.enabled)
                     return;
                 const usize slotIdx = activeFluidCount;
                 ++activeFluidCount;
                 if(slotIdx >= envScratch.fluids.size())
                     envScratch.fluids.resize(slotIdx + 1u);
-                PrepareEcsTransformedFluidVolume(ent, fvc, hasAnyPhysicsParents, collisionLayerMatrix, world, poseCache, envScratch.fluids[slotIdx]);
-                outFluidEntities.push_back(ent);
+                if(slotIdx >= scratch.envFluidSlotCache.size())
+                    scratch.envFluidSlotCache.resize(slotIdx + 1u);
+                PrepareEcsTransformedFluidVolumeCached(
+                    ent,
+                    fvc,
+                    hasAnyPhysicsParents,
+                    collisionLayerMatrix,
+                    world,
+                    scratch.writeBackPoseCache,
+                    scratch.envFluidSlotCache[slotIdx],
+                    envScratch.fluids[slotIdx]
+                );
+                scratch.envFluidEntitiesScratch.push_back(ent);
             }
         );
     }
     envScratch.fluids.resize(activeFluidCount);
+    scratch.envFluidSlotCache.resize(activeFluidCount);
 
     const auto fieldView = world.view<ForceFieldComponent>();
     const usize fieldCount = fieldView.candidateCount();
     usize activeFieldCount = 0u;
     if(fieldCount > 0u){
         fieldView.each(
-            lambda[in hasAnyPhysicsParents, in collisionLayerMatrix, mut world, mut poseCache, mut envScratch, mut activeFieldCount](in EntityID ent, in ForceFieldComponent ffc) -> void{
+            lambda[in hasAnyPhysicsParents, in collisionLayerMatrix, mut world, mut scratch, mut envScratch, mut activeFieldCount](in EntityID ent, in ForceFieldComponent ffc) -> void{
                 if(!ffc.enabled || !ffc.field.enabled)
                     return;
                 const usize slotIdx = activeFieldCount;
                 ++activeFieldCount;
                 if(slotIdx >= envScratch.forceFields.size())
                     envScratch.forceFields.resize(slotIdx + 1u);
-                PrepareEcsTransformedForceField(ent, ffc, hasAnyPhysicsParents, collisionLayerMatrix, world, poseCache, envScratch.forceFields[slotIdx]);
+                if(slotIdx >= scratch.envForceFieldSlotCache.size())
+                    scratch.envForceFieldSlotCache.resize(slotIdx + 1u);
+                PrepareEcsTransformedForceFieldCached(
+                    ent,
+                    ffc,
+                    hasAnyPhysicsParents,
+                    collisionLayerMatrix,
+                    world,
+                    scratch.writeBackPoseCache,
+                    scratch.envForceFieldSlotCache[slotIdx],
+                    envScratch.forceFields[slotIdx]
+                );
             }
         );
     }
     envScratch.forceFields.resize(activeFieldCount);
+    scratch.envForceFieldSlotCache.resize(activeFieldCount);
 }
 
 CharacterControllerDef BuildScaledCharacterControllerDef(in CharacterControllerDef src, in VectorSingle worldScale){
@@ -1726,99 +1997,345 @@ void ScaleArticulationSpatialTendons(
     }
 }
 
+u64 HashEcsFilterSig(in u64 seed, in Filter f){
+    u64 h = FluidHashMixU64(seed, cast<u64>(f.categoryBits));
+    h = FluidHashMixU64(h, cast<u64>(f.maskBits));
+    return FluidHashMixU64(h, cast<u64>(bit_cast<u32>(f.groupIndex)));
+}
+
+u64 HashEcsNameSig(in u64 seed, in Name n){
+    return FluidHashMixU64(seed, FoldNameHash64(n.hash()));
+}
+
+u64 ComputeEcsCharacterLiveSyncSignature(in CharacterControllerComponent cc, in VectorSingle worldScale){
+    in CharacterControllerDef d = cc.def;
+    u64 h = FluidHashMixU64(cast<u64>(0x9e3779b97f4a7c15u), cast<u64>(d.shapeType));
+    h = FluidHashMixU64(h, cast<u64>(d.maxCollisionIterations));
+    h = FluidHashMixU64(h, cast<u64>(d.maxConstraintIterations));
+    h = FluidHashMixU64(h, cast<u64>(d.enableGroundFriction));
+    h = FluidHashMixU64(h, cast<u64>(d.enableRotationalSweep));
+    h = FluidHashMixU64(h, cast<u64>(d.hitSensors));
+    h = FluidHashMixU64(h, cast<u64>(d.stickToFloor));
+    h = FluidHashMixU64(h, cast<u64>(d.pushDynamicBodies));
+    h = FluidHashMixU64(h, cast<u64>(d.applyStandingWeight));
+    h = FluidHashMixU64(h, cast<u64>(d.followPlatformPitchRoll));
+    h = FluidHashMixU64(h, cast<u64>(d.enableGravityAndSlopeSlide));
+    h = FluidHashMixU64(h, cast<u64>(d.inheritPlatformVelocity));
+    h = HashEcsFilterSig(h, d.filter);
+    h = HashEcsNameSig(h, cc.collisionLayer);
+    h = FluidHashMixU64(h, cast<u64>(d.customHullGeometryId.index));
+    h = FluidHashMixU64(h, cast<u64>(d.customHullGeometryId.generation));
+    h = FluidHashMixU64(h, cast<u64>(d.customCompoundGeometryId.index));
+    h = FluidHashMixU64(h, cast<u64>(d.customCompoundGeometryId.generation));
+    h = FluidHashVec4(h, VectorSingle(d.radius, d.halfHeight, d.skinWidth, d.maxSlopeAngleRad));
+    h = FluidHashVec4(h, VectorSingle(d.stepUpHeight, d.stepDownHeight, d.maxStrength, d.mass));
+    h = FluidHashVec4(h, VectorSingle(d.predictiveContactDistance, d.characterFriction, d.characterRestitution, d.gravityScale));
+    h = FluidHashVec4(h, VectorSingle(d.slopeSlideAcceleration, 0.0f, 0.0f, 0.0f));
+    h = FluidHashVec4(h, VectorSingle(d.boxHalfExtents));
+    h = FluidHashVec4(h, VectorSingle(d.customShapeScale));
+    h = FluidHashVec4(h, VectorSingle(d.up));
+    h = FluidHashVec4(h, VectorSetW(worldScale, 0.0f));
+    return h;
+}
+
+u64 ComputeEcsVehicleLiveSyncSignature(in VehicleComponent vc, in VectorSingle signedScale){
+    in VehicleEngineDef eng = vc.engine;
+    u64 h = FluidHashMixU64(cast<u64>(0x517cc1b727220a95u), cast<u64>(vc.wheels.size()));
+    h = FluidHashMixU64(h, cast<u64>(eng.gearCount));
+    h = FluidHashMixU64(h, cast<u64>(eng.archetype));
+    h = FluidHashMixU64(h, cast<u64>(eng.centerDifferentialMode));
+    h = FluidHashMixU64(h, cast<u64>(eng.axleDifferentialMode));
+    h = FluidHashMixU64(h, cast<u64>(eng.subSteps));
+    h = FluidHashMixU64(h, cast<u64>(eng.useAckermanSteering));
+    h = FluidHashMixU64(h, cast<u64>(eng.automaticTransmission));
+    h = FluidHashMixU64(h, cast<u64>(eng.useTorqueConverter));
+    h = FluidHashMixU64(h, cast<u64>(eng.useSolverImpulses));
+    h = FluidHashMixU64(h, cast<u64>(eng.enableAbs));
+    h = FluidHashMixU64(h, cast<u64>(eng.enableTcs));
+    h = FluidHashMixU64(h, cast<u64>(eng.enableEsp));
+    h = FluidHashMixU64(h, cast<u64>(eng.torqueCurvePoints.size()));
+    h = HashEcsFilterSig(h, vc.queryFilter);
+    h = HashEcsNameSig(h, vc.collisionLayer);
+    h = FluidHashVec4(h, VectorSetW(signedScale, 0.0f));
+    h = FluidHashVec4(h, VectorSingle(eng.maxTorque, eng.idleRpm, eng.maxRpm, eng.revLimiterRpm));
+    h = FluidHashVec4(h, VectorSingle(eng.shiftUpRpm, eng.shiftDownRpm, eng.finalDriveRatio, eng.reverseRatio));
+    h = FluidHashVec4(h, VectorSingle(eng.differentialBias, eng.torsenBiasRatio, eng.centerDiffFrontSplit, eng.differentialLockTorque));
+    h = FluidHashVec4(h, VectorSingle(eng.clutchStrength, eng.torqueConverterStallRpm, eng.torqueConverterMaxTorqueRatio, eng.engineInertia));
+    h = FluidHashVec4(h, VectorSingle(eng.dragCoeff, eng.downforceCoeff, eng.frontalArea, eng.airDensity));
+    h = FluidHashVec4(h, VectorSingle(eng.ambientWindVelocity));
+    h = FluidHashVec4(h, VectorSingle(eng.chassisForwardAxis));
+    h = FluidHashVec4(h, VectorSingle(eng.chassisUpAxis));
+    h = FluidHashVec4(h, VectorSingle(eng.steerSlewRateRadPerSec, eng.rearSteerRatio, eng.motorcycleLeanGain, eng.motorcycleLeanMaxRad));
+    h = FluidHashVec4(h, VectorSingle(eng.trackWidth, eng.wheelbase, eng.espStrength, eng.espMaxBrakeTorque));
+    h = FluidHashVec4(h, VectorSingle(eng.steerSelfCenteringGain, eng.trailerBrakeForce, eng.motorcycleCasterAngleRad, eng.motorcycleTrail));
+    h = FluidHashVec4(h, VectorSingle(eng.motorcycleCounterSteerGain, eng.motorcycleGyroGain, eng.forwardGearRatios[0u], eng.forwardGearRatios[1u]));
+    h = FluidHashVec4(h, VectorSingle(eng.forwardGearRatios[2u], eng.forwardGearRatios[3u], eng.forwardGearRatios[4u], eng.forwardGearRatios[5u]));
+    for(usize ti = 0u; ti < eng.torqueCurvePoints.size(); ++ti){
+        const f32x2u pt = eng.torqueCurvePoints[ti];
+        h = FluidHashVec4(h, VectorSingle(pt.x, pt.y, 0.0f, 0.0f));
+    }
+    for(usize wi = 0u; wi < vc.wheels.size(); ++wi){
+        in VehicleWheelDef w = vc.wheels[wi];
+        h = FluidHashVec4(h, VectorSingle(w.attachmentPoint));
+        h = FluidHashVec4(h, VectorSingle(w.suspensionDirection));
+        h = FluidHashVec4(h, VectorSingle(w.axleAxis));
+        h = FluidHashVec4(h, VectorSingle(w.forwardAxis));
+        h = FluidHashVec4(h, VectorSingle(w.suspensionRestLength, w.suspensionMaxTravel, w.suspensionStiffness, w.suspensionDamping));
+        h = FluidHashVec4(h, VectorSingle(w.wheelRadius, w.wheelWidth, w.wheelChamfer, w.wheelInertia));
+        h = FluidHashVec4(h, VectorSingle(w.maxSteerAngleRad, w.rearSteerRatio, w.camberAngleRad, w.toeAngleRad));
+        h = FluidHashVec4(h, VectorSingle(w.driveFraction, w.maxBrakeTorque, w.maxHandbrakeTorque, w.frictionMultiplier));
+        h = FluidHashVec4(h, VectorSingle(w.loadSensitivity, w.nominalWheelLoad, w.rollingResistanceCoeff, w.longitudinalStiffness));
+        h = FluidHashVec4(h, VectorSingle(w.lateralStiffness, w.pacejkaShapeC, w.pacejkaCurvatureE, w.pacejkaShapeCLat));
+        h = FluidHashVec4(h, VectorSingle(w.pacejkaCurvatureELat, w.relaxationLengthLong, w.relaxationLengthLat, w.selfAligningTrail));
+        h = FluidHashVec4(h, VectorSingle(w.antiRollStiffness, 0.0f, 0.0f, 0.0f));
+        h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(w.axleIndex)));
+        h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(w.antiRollPairIndex)));
+        h = FluidHashMixU64(h, cast<u64>(bit_cast<u32>(w.trackSide)));
+        h = FluidHashMixU64(h, cast<u64>(w.wheelCastMode));
+        h = FluidHashMixU64(h, cast<u64>(w.isSteerable) | (cast<u64>(w.isDriven) << 1u) | (cast<u64>(w.handbrakeAffected) << 2u) | (cast<u64>(w.useSweptCast) << 3u) | (cast<u64>(w.attachedToTrailer) << 4u));
+    }
+    return h;
+}
+
+void ComputeEcsArticulationLiveSignatures(
+    in ArticulationComponent ac,
+    in VectorSingle signedScale,
+    in VectorSingle absScale,
+    mut u64 outLiveSig,
+    mut u64 outConstraintsSig
+){
+    u64 h = FluidHashMixU64(cast<u64>(0x9e3779b97f4a7c15u), cast<u64>(ac.links.size()));
+    h = FluidHashMixU64(h, cast<u64>(ac.subSteps));
+    h = FluidHashMixU64(h, cast<u64>(ac.solverIterations));
+    h = FluidHashMixU64(h, cast<u64>(ac.enableContactCoupling));
+    h = FluidHashMixU64(h, cast<u64>(ac.overrideContactFriction));
+    h = FluidHashMixU64(h, cast<u64>(ac.enableSelfCollision));
+    h = FluidHashMixU64(h, cast<u64>(ac.enableCcd));
+    h = FluidHashMixU64(h, cast<u64>(ac.enableSleep));
+    h = HashEcsNameSig(h, ac.materialAsset.name());
+    h = HashEcsNameSig(h, ac.collisionLayer);
+    h = HashEcsFilterSig(h, ac.contactFilter);
+    h = FluidHashVec4(h, VectorSetW(signedScale, 0.0f));
+    h = FluidHashVec4(h, VectorSetW(absScale, 0.0f));
+    h = FluidHashVec4(h, VectorSingle(ac.contactRestitution, ac.contactFriction, ac.selfCollisionMargin, ac.ccdMotionThreshold));
+    h = FluidHashVec4(h, VectorSingle(ac.sleepLinearThreshold, ac.sleepAngularThreshold, ac.sleepTimeThreshold, 0.0f));
+
+    for(usize i = 0u; i < ac.links.size(); ++i){
+        in ArticulationLinkDef s = ac.links[i];
+        h = FluidHashMixU64(h, cast<u64>(s.proxyBodyId.index));
+        h = FluidHashMixU64(h, cast<u64>(s.proxyBodyId.generation));
+        h = FluidHashMixU64(h, cast<u64>(s.jointType));
+        h = FluidHashMixU64(h, cast<u64>(s.limitDofMask));
+        h = FluidHashMixU64(h, cast<u64>(s.driveDofMask));
+        h = FluidHashMixU64(h, cast<u64>(s.enableLimit) | (cast<u64>(s.enableDrive) << 1u) | (cast<u64>(s.usePerDofLimits) << 2u) | (cast<u64>(s.usePerDofDrives) << 3u) | (cast<u64>(s.useImplicitDrive) << 4u) | (cast<u64>(s.useEllipticConeLimit) << 5u) | (cast<u64>(s.useQuatDrive) << 6u));
+        h = FluidHashVec4(h, VectorSingle(s.lowerLimit, s.upperLimit, s.limitStiffness, s.limitDamping));
+        h = FluidHashVec4(h, VectorSingle(s.lowerLimits));
+        h = FluidHashVec4(h, VectorSingle(s.upperLimits));
+        h = FluidHashVec4(h, VectorSingle(s.driveTargetPos, s.driveTargetVel, s.driveStiffness, s.driveDamping));
+        h = FluidHashVec4(h, VectorSingle(s.driveTargetPos3));
+        h = FluidHashVec4(h, VectorSingle(s.driveTargetVel3));
+        h = FluidHashVec4(h, VectorSingle(s.driveMaxForce, s.jointDamping, s.jointFriction, s.limitRestitution));
+        h = FluidHashVec4(h, VectorSingle(s.screwPitch, s.breakForce, s.breakTorque, 0.0f));
+        h = FluidHashVec4(h, VectorSingle(s.driveStiffness3));
+        h = FluidHashVec4(h, VectorSingle(s.driveDamping3));
+        h = FluidHashVec4(h, VectorSingle(s.driveMaxForce3));
+        h = FluidHashVec4(h, VectorSingle(s.armature));
+        h = FluidHashVec4(h, VectorSingle(s.driveTargetQuat));
+    }
+    outLiveSig = h;
+
+    const usize mimicN = ac.mimicConstraints.size();
+    const usize tendonN = ac.tendonConstraints.size();
+    const usize spatialN = ac.spatialTendons.size();
+    const usize loopN = ac.loopConstraints.size();
+    u64 ch = cast<u64>(0x517cc1b727220a95u);
+    if(mimicN == 0u && tendonN == 0u && spatialN == 0u && loopN == 0u){
+        outConstraintsSig = ch;
+        return;
+    }
+    ch = FluidHashMixU64(ch, cast<u64>(mimicN));
+    ch = FluidHashMixU64(ch, cast<u64>(tendonN));
+    ch = FluidHashMixU64(ch, cast<u64>(spatialN));
+    ch = FluidHashMixU64(ch, cast<u64>(loopN));
+    ch = FluidHashVec4(ch, VectorSetW(signedScale, 0.0f));
+    ch = FluidHashVec4(ch, VectorSetW(absScale, 0.0f));
+    for(usize i = 0u; i < mimicN; ++i){
+        in ArticulationMimicConstraint mc = ac.mimicConstraints[i];
+        ch = FluidHashMixU64(ch, cast<u64>(mc.linkIndex) | (cast<u64>(mc.dofIndex) << 16u) | (cast<u64>(mc.targetLinkIndex) << 32u) | (cast<u64>(mc.targetDofIndex) << 48u));
+        ch = FluidHashVec4(ch, VectorSingle(mc.gearRatio, mc.offset, mc.compliance, cast<f32>(mc.enabled)));
+    }
+    for(usize i = 0u; i < tendonN; ++i){
+        in ArticulationTendonConstraint tc = ac.tendonConstraints[i];
+        ch = FluidHashMixU64(ch, cast<u64>(tc.linkIndices.size()) | (cast<u64>(tc.isEquality) << 16u) | (cast<u64>(tc.enabled) << 17u));
+        ch = FluidHashVec4(ch, VectorSingle(tc.restLength, tc.lowerLimit, tc.upperLimit, tc.compliance));
+        for(usize k = 0u; k < tc.linkIndices.size(); ++k)
+            ch = FluidHashMixU64(ch, cast<u64>(tc.linkIndices[k]) ^ (cast<u64>(tc.dofIndices[k]) << 20u) ^ (cast<u64>(bit_cast<u32>(tc.coefficients[k])) << 32u));
+    }
+    for(usize i = 0u; i < spatialN; ++i){
+        in ArticulationSpatialTendon st = ac.spatialTendons[i];
+        ch = FluidHashMixU64(ch, cast<u64>(st.attachments.size()) | (cast<u64>(st.isEquality) << 16u) | (cast<u64>(st.enabled) << 17u));
+        ch = FluidHashVec4(ch, VectorSingle(st.restLength, st.lowerLimit, st.upperLimit, st.stiffness));
+        ch = FluidHashVec4(ch, VectorSingle(st.damping, st.compliance, 0.0f, 0.0f));
+        for(usize k = 0u; k < st.attachments.size(); ++k){
+            ch = FluidHashMixU64(ch, cast<u64>(st.attachments[k].linkIndex));
+            ch = FluidHashVec4(ch, VectorSingle(st.attachments[k].localPoint));
+        }
+    }
+    for(usize i = 0u; i < loopN; ++i){
+        in ArticulationLoopConstraint lc = ac.loopConstraints[i];
+        ch = FluidHashMixU64(ch, cast<u64>(lc.linkIndexA) | (cast<u64>(lc.linkIndexB) << 16u) | (cast<u64>(lc.lockOrientation) << 32u) | (cast<u64>(lc.enabled) << 33u));
+        ch = FluidHashVec4(ch, VectorSingle(lc.localAnchorA));
+        ch = FluidHashVec4(ch, VectorSingle(lc.localAnchorB));
+        ch = FluidHashVec4(ch, VectorSingle(lc.relOrientation));
+        ch = FluidHashVec4(ch, VectorSingle(lc.compliance, 0.0f, 0.0f, 0.0f));
+    }
+    outConstraintsSig = ch;
+}
+
 void SyncArticulationLiveSettings(
     mut ArticulationComponent ac,
     in VectorSingle signedScale,
     in VectorSingle absScale,
     in CollisionLayerMatrix collisionLayerMatrix,
+    in b8 collisionLayerMatrixChanged,
     in Optional<mut AssetManager> assetManager,
-    mut EcsPhysicsAssetCache assetCache
+    mut EcsPhysicsAssetCache assetCache,
+    mut EcsArticulationLiveState live
 ){
-    const usize n = Min(ac.links.size(), ac.articulation.linkDefs.size());
-    b8 anyBreakable = false;
-    for(usize i = 0u; i < n; ++i){
-        in ArticulationLinkDef src = ac.links[i];
-        mut ArticulationLinkDef dst = ac.articulation.linkDefs[i];
-        dst.proxyBodyId = src.proxyBodyId;
-        dst.enableLimit = src.enableLimit;
-        dst.lowerLimit = src.lowerLimit;
-        dst.upperLimit = src.upperLimit;
-        dst.lowerLimits = src.lowerLimits;
-        dst.upperLimits = src.upperLimits;
-        dst.limitStiffness = src.limitStiffness;
-        dst.limitDamping = src.limitDamping;
-        dst.enableDrive = src.enableDrive;
-        dst.driveTargetPos = src.driveTargetPos;
-        dst.driveTargetVel = src.driveTargetVel;
-        dst.driveTargetPos3 = src.driveTargetPos3;
-        dst.driveTargetVel3 = src.driveTargetVel3;
-        dst.driveStiffness = src.driveStiffness;
-        dst.driveDamping = src.driveDamping;
-        dst.driveMaxForce = src.driveMaxForce;
-        dst.jointDamping = src.jointDamping;
-        dst.jointFriction = src.jointFriction;
-        dst.limitRestitution = src.limitRestitution;
-        dst.screwPitch = src.screwPitch;
-        dst.limitDofMask = src.limitDofMask;
-        dst.driveDofMask = src.driveDofMask;
-        dst.usePerDofLimits = src.usePerDofLimits;
-        dst.usePerDofDrives = src.usePerDofDrives;
-        dst.driveStiffness3 = src.driveStiffness3;
-        dst.driveDamping3 = src.driveDamping3;
-        dst.driveMaxForce3 = src.driveMaxForce3;
-        dst.armature = src.armature;
-        dst.useImplicitDrive = src.useImplicitDrive;
-        dst.useEllipticConeLimit = src.useEllipticConeLimit;
-        dst.driveTargetQuat = src.driveTargetQuat;
-        dst.useQuatDrive = src.useQuatDrive;
-        dst.breakForce = Max(0.0f, src.breakForce);
-        dst.breakTorque = Max(0.0f, src.breakTorque);
-        if(dst.breakForce > 0.0f || dst.breakTorque > 0.0f)
-            anyBreakable = true;
-        ScaleArticulationJointDofs(src, absScale, dst);
-    }
+    u64 curLiveSig = 0u;
+    u64 curConstraintsSig = 0u;
+    ComputeEcsArticulationLiveSignatures(ac, signedScale, absScale, curLiveSig, curConstraintsSig);
+    const b8 settingsDirty = ac.dirty || !live.hasSyncedLiveSettings || live.syncedLiveSettingsSig != curLiveSig;
+    const b8 constraintsDirty = ac.dirty || !live.hasSyncedLiveSettings || live.syncedConstraintsSig != curConstraintsSig;
+    const b8 layerDirty = settingsDirty || !live.hasBaseContactFilter || live.syncedCollisionLayer != ac.collisionLayer || (collisionLayerMatrixChanged && ac.collisionLayer != s_NameNone);
+    if(!settingsDirty && !constraintsDirty && !layerDirty)
+        return;
+
     const f32 maxS = Vector3MaxComponent(absScale).x;
-    ac.articulation.enableBreakEvents = anyBreakable;
-    ac.articulation.subSteps = Max(ac.subSteps, 1u);
-    ac.articulation.solverIterations = Max(ac.solverIterations, 1u);
-    ac.articulation.enableContactCoupling = ac.enableContactCoupling;
-    ac.articulation.overrideContactFriction = ac.overrideContactFriction;
-    ac.articulation.contactRestitution = ac.contactRestitution;
-    ac.articulation.contactFriction = ac.contactFriction;
-    if(ac.materialAsset.valid()){
-        SurfaceMaterial assetMat;
-        if(TryResolveEcsPhysicsMaterialAsset(ac.materialAsset, assetManager, assetCache, assetMat)){
-            ac.articulation.contactFriction = assetMat.friction;
-            ac.articulation.contactRestitution = assetMat.restitution;
-            ac.articulation.overrideContactFriction = true;
+    if(settingsDirty){
+        const usize n = Min(ac.links.size(), ac.articulation.linkDefs.size());
+        b8 anyBreakable = false;
+        for(usize i = 0u; i < n; ++i){
+            in ArticulationLinkDef src = ac.links[i];
+            mut ArticulationLinkDef dst = ac.articulation.linkDefs[i];
+            dst.proxyBodyId = src.proxyBodyId;
+            dst.enableLimit = src.enableLimit;
+            dst.lowerLimit = src.lowerLimit;
+            dst.upperLimit = src.upperLimit;
+            dst.lowerLimits = src.lowerLimits;
+            dst.upperLimits = src.upperLimits;
+            dst.limitStiffness = src.limitStiffness;
+            dst.limitDamping = src.limitDamping;
+            dst.enableDrive = src.enableDrive;
+            dst.driveTargetPos = src.driveTargetPos;
+            dst.driveTargetVel = src.driveTargetVel;
+            dst.driveTargetPos3 = src.driveTargetPos3;
+            dst.driveTargetVel3 = src.driveTargetVel3;
+            dst.driveStiffness = src.driveStiffness;
+            dst.driveDamping = src.driveDamping;
+            dst.driveMaxForce = src.driveMaxForce;
+            dst.jointDamping = src.jointDamping;
+            dst.jointFriction = src.jointFriction;
+            dst.limitRestitution = src.limitRestitution;
+            dst.screwPitch = src.screwPitch;
+            dst.limitDofMask = src.limitDofMask;
+            dst.driveDofMask = src.driveDofMask;
+            dst.usePerDofLimits = src.usePerDofLimits;
+            dst.usePerDofDrives = src.usePerDofDrives;
+            dst.driveStiffness3 = src.driveStiffness3;
+            dst.driveDamping3 = src.driveDamping3;
+            dst.driveMaxForce3 = src.driveMaxForce3;
+            dst.armature = src.armature;
+            dst.useImplicitDrive = src.useImplicitDrive;
+            dst.useEllipticConeLimit = src.useEllipticConeLimit;
+            dst.driveTargetQuat = src.driveTargetQuat;
+            dst.useQuatDrive = src.useQuatDrive;
+            dst.breakForce = Max(0.0f, src.breakForce);
+            dst.breakTorque = Max(0.0f, src.breakTorque);
+            if(dst.breakForce > 0.0f || dst.breakTorque > 0.0f)
+                anyBreakable = true;
+            ScaleArticulationJointDofs(src, absScale, dst);
+        }
+        ac.articulation.enableBreakEvents = anyBreakable;
+        ac.articulation.subSteps = Max(ac.subSteps, 1u);
+        ac.articulation.solverIterations = Max(ac.solverIterations, 1u);
+        ac.articulation.enableContactCoupling = ac.enableContactCoupling;
+        ac.articulation.overrideContactFriction = ac.overrideContactFriction;
+        ac.articulation.contactRestitution = ac.contactRestitution;
+        ac.articulation.contactFriction = ac.contactFriction;
+        if(ac.materialAsset.valid()){
+            const Name wantMat = ac.materialAsset.name();
+            if(ac.dirty || !live.hasResolvedAssetMaterial || live.syncedMaterialAsset != wantMat){
+                SurfaceMaterial assetMat;
+                if(TryResolveEcsPhysicsMaterialAsset(ac.materialAsset, assetManager, assetCache, assetMat)){
+                    live.resolvedAssetMaterial = assetMat;
+                    live.hasResolvedAssetMaterial = true;
+                }
+                else{
+                    live.hasResolvedAssetMaterial = false;
+                }
+                live.syncedMaterialAsset = wantMat;
+            }
+            if(live.hasResolvedAssetMaterial){
+                ac.articulation.contactFriction = live.resolvedAssetMaterial.friction;
+                ac.articulation.contactRestitution = live.resolvedAssetMaterial.restitution;
+                ac.articulation.overrideContactFriction = true;
+            }
+        }
+        else{
+            live.syncedMaterialAsset = s_NameNone;
+            live.hasResolvedAssetMaterial = false;
+        }
+        ac.articulation.enableSelfCollision = ac.enableSelfCollision;
+        ac.articulation.selfCollisionMargin = Max(0.0f, ac.selfCollisionMargin) * maxS;
+        ac.articulation.enableCcd = ac.enableCcd;
+        ac.articulation.ccdMotionThreshold = Max(0.0f, ac.ccdMotionThreshold) * maxS;
+        ac.articulation.enableSleep = ac.enableSleep;
+        ac.articulation.sleepLinearThreshold = ac.sleepLinearThreshold;
+        ac.articulation.sleepAngularThreshold = ac.sleepAngularThreshold;
+        ac.articulation.sleepTimeThreshold = ac.sleepTimeThreshold;
+        if(!ac.enableSleep){
+            ac.articulation.isSleeping = false;
+            ac.articulation.sleepTimer = 0.0f;
+        }
+        live.baseContactFilter = ac.contactFilter;
+        live.hasBaseContactFilter = true;
+    }
+
+    if(layerDirty){
+        if(!live.hasBaseContactFilter){
+            live.baseContactFilter = ac.contactFilter;
+            live.hasBaseContactFilter = true;
+        }
+        ac.articulation.contactFilter = ResolveEcsNamedLayerFilter(live.baseContactFilter, ac.collisionLayer, collisionLayerMatrix);
+        live.syncedCollisionLayer = ac.collisionLayer;
+    }
+
+    if(constraintsDirty){
+        if(!ac.mimicConstraints.empty() || !ac.articulation.mimicConstraints.empty())
+            ac.articulation.mimicConstraints = ac.mimicConstraints;
+        if(!ac.tendonConstraints.empty() || !ac.articulation.tendonConstraints.empty())
+            ac.articulation.tendonConstraints = ac.tendonConstraints;
+        if(!ac.spatialTendons.empty() || !ac.articulation.spatialTendons.empty()){
+            ScaleArticulationSpatialTendons(
+                Span<ArticulationSpatialTendon>(ac.spatialTendons.data(), ac.spatialTendons.size()),
+                signedScale,
+                maxS,
+                ac.articulation.spatialTendons
+            );
+        }
+        if(!ac.loopConstraints.empty() || !ac.articulation.loopConstraints.empty()){
+            ScaleArticulationLoopConstraints(
+                Span<ArticulationLoopConstraint>(ac.loopConstraints.data(), ac.loopConstraints.size()),
+                signedScale,
+                ac.articulation.loopConstraints
+            );
         }
     }
-    ac.articulation.contactFilter = ResolveEcsNamedLayerFilter(ac.contactFilter, ac.collisionLayer, collisionLayerMatrix);
-    ac.articulation.mimicConstraints = ac.mimicConstraints;
-    ac.articulation.tendonConstraints = ac.tendonConstraints;
-    ScaleArticulationSpatialTendons(
-        Span<ArticulationSpatialTendon>(ac.spatialTendons.data(), ac.spatialTendons.size()),
-        signedScale,
-        maxS,
-        ac.articulation.spatialTendons
-    );
-    ScaleArticulationLoopConstraints(
-        Span<ArticulationLoopConstraint>(ac.loopConstraints.data(), ac.loopConstraints.size()),
-        signedScale,
-        ac.articulation.loopConstraints
-    );
-    ac.articulation.enableSelfCollision = ac.enableSelfCollision;
-    ac.articulation.selfCollisionMargin = Max(0.0f, ac.selfCollisionMargin) * maxS;
-    ac.articulation.enableCcd = ac.enableCcd;
-    ac.articulation.ccdMotionThreshold = Max(0.0f, ac.ccdMotionThreshold) * maxS;
-    ac.articulation.enableSleep = ac.enableSleep;
-    ac.articulation.sleepLinearThreshold = ac.sleepLinearThreshold;
-    ac.articulation.sleepAngularThreshold = ac.sleepAngularThreshold;
-    ac.articulation.sleepTimeThreshold = ac.sleepTimeThreshold;
-    if(!ac.enableSleep){
-        ac.articulation.isSleeping = false;
-        ac.articulation.sleepTimer = 0.0f;
-    }
+
+    live.syncedLiveSettingsSig = curLiveSig;
+    live.syncedConstraintsSig = curConstraintsSig;
+    live.hasSyncedLiveSettings = true;
 }
 
 EntityID ResolveEcsBodyOrShapeOwnerEntity(
@@ -2057,6 +2574,7 @@ void StepEcsPhysicsSubsystemBridges(
     in b8 useCollectedEnv,
     in b8 gpuResidentActive,
     in b8 writeBackCharacters,
+    in b8 interpolateTransforms,
     in b8 hasAnyPhysicsParents,
     in b8 isFinalStep,
     in b8 wantSoftBodyImpactEvents,
@@ -2138,6 +2656,10 @@ void StepEcsPhysicsSubsystemBridges(
         if(!cacheEnvFields){
             envScratch.fluids.clear();
             envScratch.forceFields.clear();
+            if(fluidCandidateCount != 1u)
+                scratch.envFluidSlotCache.clear();
+            if(fieldCandidateCount != 1u)
+                scratch.envForceFieldSlotCache.clear();
         }
         usize activeFluidCount = 0u;
         usize activeFieldCount = 0u;
@@ -2145,9 +2667,12 @@ void StepEcsPhysicsSubsystemBridges(
             f32 activeTimeSec = envScratch.elapsedTimeSec;
             b8 advancedEnvTime = false;
             if(hasFluids){
+                const b8 singleFluidCache = !cacheEnvFields && (fluidCandidateCount == 1u);
+                if(singleFluidCache && scratch.envFluidSlotCache.empty())
+                    scratch.envFluidSlotCache.resize(1u);
                 scratch.envFluidEntitiesScratch.reserve(fluidCandidateCount);
                 fluidView.each(
-                    lambda[in dt, in hasAnyPhysicsParents, in collisionLayerMatrix, in cacheEnvFields, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut scratch, mut activeTimeSec, mut advancedEnvTime, mut activeFluidCount](in EntityID ent, mut FluidVolumeComponent fvc) -> void{
+                    lambda[in dt, in hasAnyPhysicsParents, in collisionLayerMatrix, in cacheEnvFields, in singleFluidCache, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut scratch, mut activeTimeSec, mut advancedEnvTime, mut activeFluidCount](in EntityID ent, mut FluidVolumeComponent fvc) -> void{
                         if(!fvc.enabled || !fvc.volume.enabled)
                             return;
                         if(!advancedEnvTime){
@@ -2162,19 +2687,30 @@ void StepEcsPhysicsSubsystemBridges(
                             ++activeFluidCount;
                             if(slotIdx >= envScratch.fluids.size())
                                 envScratch.fluids.resize(slotIdx + 1u);
-                            StepEcsTransformedFluidVolume(ent, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, world, physicsWorld, scheduler, envScratch, scratch, fvc, envScratch.fluids[slotIdx]);
+                            if(slotIdx >= scratch.envFluidSlotCache.size())
+                                scratch.envFluidSlotCache.resize(slotIdx + 1u);
+                            StepEcsTransformedFluidVolume(ent, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, true, world, physicsWorld, scheduler, envScratch, scratch, scratch.envFluidSlotCache[slotIdx], fvc, envScratch.fluids[slotIdx]);
                             scratch.envFluidEntitiesScratch.push_back(ent);
                         }
                         else{
-                            StepEcsTransformedFluidVolume(ent, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, world, physicsWorld, scheduler, envScratch, scratch, fvc, scratch.fluidStepScratch);
+                            if(singleFluidCache){
+                                StepEcsTransformedFluidVolume(ent, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, true, world, physicsWorld, scheduler, envScratch, scratch, scratch.envFluidSlotCache[0u], fvc, scratch.fluidStepScratch);
+                            }
+                            else{
+                                EcsEnvFluidSlotCache dummyFluidSlot;
+                                StepEcsTransformedFluidVolume(ent, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, false, world, physicsWorld, scheduler, envScratch, scratch, dummyFluidSlot, fvc, scratch.fluidStepScratch);
+                            }
                         }
                     }
                 );
             }
             if(hasFields){
                 const u32 gravEpoch = ResetWorldForceFieldGravityOverrideEpoch(physicsWorld);
+                const b8 singleFieldCache = !cacheEnvFields && (fieldCandidateCount == 1u);
+                if(singleFieldCache && scratch.envForceFieldSlotCache.empty())
+                    scratch.envForceFieldSlotCache.resize(1u);
                 fieldView.each(
-                    lambda[in dt, in hasAnyPhysicsParents, in collisionLayerMatrix, in cacheEnvFields, in gravEpoch, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut scratch, mut activeTimeSec, mut advancedEnvTime, mut activeFieldCount](in EntityID ent, in ForceFieldComponent ffc) -> void{
+                    lambda[in dt, in hasAnyPhysicsParents, in collisionLayerMatrix, in cacheEnvFields, in singleFieldCache, in gravEpoch, mut world, mut physicsWorld, mut scheduler, mut envScratch, mut scratch, mut activeTimeSec, mut advancedEnvTime, mut activeFieldCount](in EntityID ent, in ForceFieldComponent ffc) -> void{
                         if(!ffc.enabled || !ffc.field.enabled)
                             return;
                         if(!advancedEnvTime){
@@ -2187,10 +2723,18 @@ void StepEcsPhysicsSubsystemBridges(
                             ++activeFieldCount;
                             if(slotIdx >= envScratch.forceFields.size())
                                 envScratch.forceFields.resize(slotIdx + 1u);
-                            StepEcsTransformedForceField(ent, ffc, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, gravEpoch, world, physicsWorld, scheduler, scratch, envScratch.forceFields[slotIdx]);
+                            if(slotIdx >= scratch.envForceFieldSlotCache.size())
+                                scratch.envForceFieldSlotCache.resize(slotIdx + 1u);
+                            StepEcsTransformedForceField(ent, ffc, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, true, gravEpoch, world, physicsWorld, scheduler, scratch, scratch.envForceFieldSlotCache[slotIdx], envScratch.forceFields[slotIdx]);
                         }
                         else{
-                            StepEcsTransformedForceField(ent, ffc, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, gravEpoch, world, physicsWorld, scheduler, scratch, scratch.forceFieldStepScratch);
+                            if(singleFieldCache){
+                                StepEcsTransformedForceField(ent, ffc, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, true, gravEpoch, world, physicsWorld, scheduler, scratch, scratch.envForceFieldSlotCache[0u], scratch.forceFieldStepScratch);
+                            }
+                            else{
+                                EcsEnvForceFieldSlotCache dummyFieldSlot;
+                                StepEcsTransformedForceField(ent, ffc, activeTimeSec, dt, hasAnyPhysicsParents, collisionLayerMatrix, false, gravEpoch, world, physicsWorld, scheduler, scratch, dummyFieldSlot, scratch.forceFieldStepScratch);
+                            }
                         }
                     }
                 );
@@ -2198,7 +2742,9 @@ void StepEcsPhysicsSubsystemBridges(
         }
         if(cacheEnvFields){
             envScratch.fluids.resize(activeFluidCount);
+            scratch.envFluidSlotCache.resize(activeFluidCount);
             envScratch.forceFields.resize(activeFieldCount);
+            scratch.envForceFieldSlotCache.resize(activeFieldCount);
         }
         if(!scratch.ecsFluidSplashScratch.empty() || !scratch.ecsFluidImmersionState.empty() || !scratch.activeFluidEntitiesById.empty())
             FinalizeEcsFluidStepEvents(bodyIndexToEntity, scratch);
@@ -2212,7 +2758,7 @@ void StepEcsPhysicsSubsystemBridges(
         const b8 hasCharEnvForces = dt > 0.0f && (!envScratch.fluids.empty() || !envScratch.forceFields.empty());
         scratch.activeCharacterEntitiesScratch.clear();
         charView.each(
-            lambda[in dt, in writeBackCharacters, in hasAnyPhysicsParents, in collisionLayerMatrix, in charRecordsRef, in charBodyOwnersRef, in charShapeOwnersRef, in charEnvRef, in hasCharEnvForces, mut world, mut physicsWorld, mut scratch](in EntityID entity, mut CharacterControllerComponent cc) -> void{
+            lambda[in dt, in writeBackCharacters, in hasAnyPhysicsParents, in collisionLayerMatrix, in collisionLayerMatrixChanged, in charRecordsRef, in charBodyOwnersRef, in charShapeOwnersRef, in charEnvRef, in hasCharEnvForces, mut world, mut physicsWorld, mut scratch](in EntityID entity, mut CharacterControllerComponent cc) -> void{
                 if(!cc.enabled)
                     return;
                 mut EcsCharacterControllerSyncState syncState = scratch.characterSyncStates.try_emplace(entity, EcsCharacterControllerSyncState()).first.value();
@@ -2235,12 +2781,16 @@ void StepEcsPhysicsSubsystemBridges(
                         startRot = SafeNormalizeQuat(VectorSingle(worldPose.transform.rotation));
                         worldScale = VectorSingle(worldPose.scale);
                     }
+                    const u64 curDefSig = ComputeEcsCharacterLiveSyncSignature(cc, worldScale);
                     CharacterControllerDef effDef = BuildScaledCharacterControllerDef(cc.def, worldScale);
                     effDef.filter = ResolveEcsNamedLayerFilter(effDef.filter, cc.collisionLayer, collisionLayerMatrix);
                     cc.controller.init(effDef, startPos, startRot);
                     cc.initialized = true;
                     cc.dirty = false;
                     cc.syncFromTransform = false;
+                    syncState.syncedDefSig = curDefSig;
+                    syncState.syncedCollisionLayer = cc.collisionLayer;
+                    syncState.hasSyncedDef = true;
                     syncState.prevPosition = cc.controller.position;
                     syncState.prevRotation = cc.controller.rotation;
                     syncState.currPosition = cc.controller.position;
@@ -2257,9 +2807,15 @@ void StepEcsPhysicsSubsystemBridges(
                     const b8 hasPose = ResolveEcsSubsystemWorldPoseCached(entity, hasAnyPhysicsParents, world, scratch.writeBackPoseCache, scalePose);
                     if(hasPose)
                         worldScale = VectorSingle(scalePose.scale);
-                    CharacterControllerDef effDef = BuildScaledCharacterControllerDef(cc.def, worldScale);
-                    effDef.filter = ResolveEcsNamedLayerFilter(effDef.filter, cc.collisionLayer, collisionLayerMatrix);
-                    cc.controller.applyDefInPlace(effDef);
+                    const u64 curDefSig = ComputeEcsCharacterLiveSyncSignature(cc, worldScale);
+                    if(cc.dirty || collisionLayerMatrixChanged || !syncState.hasSyncedDef || syncState.syncedDefSig != curDefSig || syncState.syncedCollisionLayer != cc.collisionLayer){
+                        CharacterControllerDef effDef = BuildScaledCharacterControllerDef(cc.def, worldScale);
+                        effDef.filter = ResolveEcsNamedLayerFilter(effDef.filter, cc.collisionLayer, collisionLayerMatrix);
+                        cc.controller.applyDefInPlace(effDef);
+                        syncState.syncedDefSig = curDefSig;
+                        syncState.syncedCollisionLayer = cc.collisionLayer;
+                        syncState.hasSyncedDef = true;
+                    }
                     cc.dirty = false;
                     cc.controller.def.ignoreBodyId = cc.def.ignoreBodyId;
                     cc.controller.def.ignoreShapeId = cc.def.ignoreShapeId;
@@ -2334,21 +2890,41 @@ void StepEcsPhysicsSubsystemBridges(
         );
         const usize activeCharCount = scratch.activeCharacterEntitiesScratch.size();
         if(activeCharCount >= 2u && dt > 0.0f){
+            scratch.characterPairwiseEntriesScratch.clear();
+            scratch.characterPairwiseEntriesScratch.reserve(activeCharCount);
             for(usize i = 0u; i < activeCharCount; ++i){
-                const EntityID entA = scratch.activeCharacterEntitiesScratch[i];
-                if(!world.alive(entA) || !world.hasComponent<CharacterControllerComponent>(entA))
+                const EntityID ent = scratch.activeCharacterEntitiesScratch[i];
+                if(!world.alive(ent) || !world.hasComponent<CharacterControllerComponent>(ent))
                     continue;
-                mut CharacterControllerComponent ccA = world.getComponent<CharacterControllerComponent>(entA);
-                if(!ccA.enabled || !ccA.initialized)
+                mut CharacterControllerComponent cc = world.getComponent<CharacterControllerComponent>(ent);
+                if(!cc.enabled || !cc.initialized)
                     continue;
-                for(usize j = i + 1u; j < activeCharCount; ++j){
-                    const EntityID entB = scratch.activeCharacterEntitiesScratch[j];
-                    if(!world.alive(entB) || !world.hasComponent<CharacterControllerComponent>(entB))
+                EcsCharacterPairwiseEntry pw;
+                pw.entity = ent;
+                pw.worldAabb = cc.controller.computeWorldAabb(physicsWorld);
+                scratch.characterPairwiseEntriesScratch.push_back(pw);
+            }
+            const usize pwCharCount = scratch.characterPairwiseEntriesScratch.size();
+            for(usize i = 0u; i < pwCharCount; ++i){
+                mut EcsCharacterPairwiseEntry entryA = scratch.characterPairwiseEntriesScratch[i];
+                const EntityID entA = entryA.entity;
+                for(usize j = i + 1u; j < pwCharCount; ++j){
+                    mut EcsCharacterPairwiseEntry entryB = scratch.characterPairwiseEntriesScratch[j];
+                    if(!AabbOverlapsValues(
+                        VectorSingle(entryA.worldAabb.lowerBound),
+                        VectorSingle(entryA.worldAabb.upperBound),
+                        VectorSingle(entryB.worldAabb.lowerBound),
+                        VectorSingle(entryB.worldAabb.upperBound)
+                    ))
                         continue;
+                    const EntityID entB = entryB.entity;
+                    mut CharacterControllerComponent ccA = world.getComponent<CharacterControllerComponent>(entA);
                     mut CharacterControllerComponent ccB = world.getComponent<CharacterControllerComponent>(entB);
-                    if(!ccB.enabled || !ccB.initialized)
+                    if(!ccA.enabled || !ccA.initialized || !ccB.enabled || !ccB.initialized)
                         continue;
                     if(ccA.controller.resolveAgainstOtherCharacter(physicsWorld, ccB.controller)){
+                        entryA.worldAabb = ccA.controller.computeWorldAabb(physicsWorld);
+                        entryB.worldAabb = ccB.controller.computeWorldAabb(physicsWorld);
                         const auto itA = scratch.characterSyncStates.find(entA);
                         if(itA != scratch.characterSyncStates.end())
                             itA.value().currPosition = ccA.controller.position;
@@ -2381,8 +2957,9 @@ void StepEcsPhysicsSubsystemBridges(
         in Optional<mut AssetManager> vehAssetManagerRef = assetManager;
         in PhysicsEnvironment vehEnvRef = envScratch;
         const b8 hasVehEnv = dt > 0.0f && (!envScratch.fluids.empty() || !envScratch.forceFields.empty());
+        const u64 vehNamedVersion = scratch.namedEntitiesVersion;
         vehicleView.each(
-            lambda[in dt, in ownerCount, in hasAnyPhysicsParents, in collisionLayerMatrix, in vehScopedRef, in recordsRef, in ownersRef, in vehAssetManagerRef, in vehEnvRef, in hasVehEnv, mut assetCache, mut world, mut physicsWorld, mut scratch, mut scheduler](
+            lambda[in dt, in ownerCount, in hasAnyPhysicsParents, in collisionLayerMatrix, in collisionLayerMatrixChanged, in vehScopedRef, in recordsRef, in ownersRef, in vehAssetManagerRef, in vehEnvRef, in hasVehEnv, in vehNamedVersion, mut assetCache, mut world, mut physicsWorld, mut scratch, mut scheduler](
                 in EntityID entity,
                 mut VehicleComponent vc
             ) -> void{
@@ -2440,19 +3017,30 @@ void StepEcsPhysicsSubsystemBridges(
                 if(!chassisValid)
                     return;
 
-                VehicleEngineDef scaledEng;
+                EcsWorldPose chassisPose;
                 VectorSingle chassisSignedScale(1.0f, 1.0f, 1.0f, 0.0f);
-                BuildScaledEcsVehicleDefs(entity, hasAnyPhysicsParents, world, scratch.writeBackPoseCache, vc, scaledEng, scratch.scaledVehicleWheelsScratch, chassisSignedScale);
-                if(!vc.initialized || !(vc.controller.chassisBodyId == chassisId) || scratch.scaledVehicleWheelsScratch.size() != vc.controller.wheelDefs.size()){
-                    vc.controller.init(chassisId, scaledEng, Span<VehicleWheelDef>(scratch.scaledVehicleWheelsScratch.data(), scratch.scaledVehicleWheelsScratch.size()));
-                    vc.initialized = true;
-                }
-                else{
-                    vc.controller.engine = scaledEng;
-                    vc.controller.wheelDefs = scratch.scaledVehicleWheelsScratch;
+                if(ResolveEcsSubsystemWorldPoseCached(entity, hasAnyPhysicsParents, world, scratch.writeBackPoseCache, chassisPose))
+                    chassisSignedScale = ResolveSignedColliderScale(VectorSingle(chassisPose.scale));
+                const u64 curVehSig = ComputeEcsVehicleLiveSyncSignature(vc, chassisSignedScale);
+                const b8 vehStructureInvalid = !vc.initialized || !(vc.controller.chassisBodyId == chassisId) || vc.wheels.size() != vc.controller.wheelDefs.size();
+                if(vehStructureInvalid || vc.dirty || collisionLayerMatrixChanged || !vehEvState.hasSyncedLiveDefs || vehEvState.syncedLiveDefsSig != curVehSig || vehEvState.syncedCollisionLayer != vc.collisionLayer){
+                    VehicleEngineDef scaledEng;
+                    VectorSingle unusedScale(1.0f, 1.0f, 1.0f, 0.0f);
+                    BuildScaledEcsVehicleDefs(entity, hasAnyPhysicsParents, world, scratch.writeBackPoseCache, vc, scaledEng, scratch.scaledVehicleWheelsScratch, unusedScale);
+                    if(vehStructureInvalid){
+                        vc.controller.init(chassisId, scaledEng, Span<VehicleWheelDef>(scratch.scaledVehicleWheelsScratch.data(), scratch.scaledVehicleWheelsScratch.size()));
+                        vc.initialized = true;
+                    }
+                    else{
+                        vc.controller.engine = scaledEng;
+                        vc.controller.wheelDefs = scratch.scaledVehicleWheelsScratch;
+                    }
+                    vc.controller.queryFilter = ResolveEcsNamedLayerFilter(vc.queryFilter, vc.collisionLayer, collisionLayerMatrix);
+                    vehEvState.hasSyncedLiveDefs = true;
+                    vehEvState.syncedLiveDefsSig = curVehSig;
+                    vehEvState.syncedCollisionLayer = vc.collisionLayer;
                 }
                 vc.dirty = false;
-                vc.controller.queryFilter = ResolveEcsNamedLayerFilter(vc.queryFilter, vc.collisionLayer, collisionLayerMatrix);
                 vc.controller.wheelSlipEventThreshold = Max(0.01f, vc.wheelSlipEventThreshold);
 
                 EntityID resolvedTrailerEnt = s_InvalidEntityId;
@@ -2460,9 +3048,27 @@ void StepEcsPhysicsSubsystemBridges(
                     resolvedTrailerEnt = vc.trailerEntity;
                 }
                 else if(vc.trailerEntityName != s_NameNone){
-                    resolvedTrailerEnt = ResolveEcsScopedEntityName(vehScopedRef, entity, vc.trailerEntityName);
-                    if(!resolvedTrailerEnt.valid() || !world.alive(resolvedTrailerEnt))
-                        resolvedTrailerEnt = FindSceneEntityByName(entity, vc.trailerEntityName, world);
+                    const u64 sceneNameVer = world.componentMutationVersion<SceneEntityNameComponent>();
+                    mut EcsResolvedNamedEntityCacheEntry tCache = vehEvState.syncedTrailerNameCache;
+                    if(
+                        tCache.hasCached
+                        && tCache.name == vc.trailerEntityName
+                        && tCache.namedVersion == vehNamedVersion
+                        && tCache.sceneNameMutVer == sceneNameVer
+                        && (!tCache.resolvedEntity.valid() || world.alive(tCache.resolvedEntity))
+                    ){
+                        resolvedTrailerEnt = tCache.resolvedEntity;
+                    }
+                    else{
+                        resolvedTrailerEnt = ResolveEcsScopedEntityName(vehScopedRef, entity, vc.trailerEntityName);
+                        if(!resolvedTrailerEnt.valid() || !world.alive(resolvedTrailerEnt))
+                            resolvedTrailerEnt = FindSceneEntityByName(entity, vc.trailerEntityName, world);
+                        tCache.name = vc.trailerEntityName;
+                        tCache.resolvedEntity = resolvedTrailerEnt;
+                        tCache.namedVersion = vehNamedVersion;
+                        tCache.sceneNameMutVer = sceneNameVer;
+                        tCache.hasCached = true;
+                    }
                 }
                 BodyId resolvedTrailerBodyId;
                 if(resolvedTrailerEnt.valid() && world.alive(resolvedTrailerEnt))
@@ -2654,7 +3260,7 @@ void StepEcsPhysicsSubsystemBridges(
                 if(rc.initialized){
                     b8 hasTargetPose = false;
                     if(rc.driveFromSkeleton){
-                        const EntityID skelEnt = ResolveEcsSkeletonTargetEntity(entity, rc.skeletonEntity, rc.skeletonEntityName, ragdollScopedRef, world);
+                        const EntityID skelEnt = ResolveEcsSkeletonTargetEntityCached(entity, rc.skeletonEntity, rc.skeletonEntityName, ragdollScopedRef, world, scratch);
                         scratch.skeletonModelJointsScratch.clear();
                         if(ReadSkeletonModelJointMatrices(skelEnt, world, scratch.skeletonModelJointsScratch)){
                             EcsWorldPose skelPose;
@@ -2748,7 +3354,7 @@ void StepEcsPhysicsSubsystemBridges(
         const b8 hasArtEnvForces = dt > 0.0f && (!envScratch.fluids.empty() || !envScratch.forceFields.empty());
         scratch.activeArticulationEntitiesScratch.clear();
         artView.each(
-            lambda[in dt, in isFinalStep, in namedVersion, in hasAnyPhysicsParents, in collisionLayerMatrix, in artScopedNamesRef, in artRecordsRef, in artAssetManagerRef, in artEnvRef, in hasArtEnvForces, mut assetCache, mut world, mut physicsWorld, mut scratch](in EntityID entity, mut ArticulationComponent ac) -> void{
+            lambda[in dt, in isFinalStep, in interpolateTransforms, in namedVersion, in hasAnyPhysicsParents, in collisionLayerMatrix, in collisionLayerMatrixChanged, in artScopedNamesRef, in artRecordsRef, in artAssetManagerRef, in artEnvRef, in hasArtEnvForces, mut assetCache, mut world, mut physicsWorld, mut scratch](in EntityID entity, mut ArticulationComponent ac) -> void{
                 if(!ac.enabled)
                     return;
                 mut EcsArticulationLiveState live = scratch.articulationLiveStates.try_emplace(entity, EcsArticulationLiveState()).first.value();
@@ -2855,7 +3461,8 @@ void StepEcsPhysicsSubsystemBridges(
                     for(usize li = 0u; li < ac.links.size(); ++li)
                         scratch.articulationWorldLinksScratch[li] = ScaleArticulationLinkDef(ac.links[li], signedScale, absScale);
                     if(ac.articulation.init(rootXf, ac.isFixedBase, Span<ArticulationLinkDef>(scratch.articulationWorldLinksScratch.data(), scratch.articulationWorldLinksScratch.size()))){
-                        SyncArticulationLiveSettings(ac, signedScale, absScale, collisionLayerMatrix, artAssetManagerRef, assetCache);
+                        live.hasSyncedLiveSettings = false;
+                        SyncArticulationLiveSettings(ac, signedScale, absScale, collisionLayerMatrix, collisionLayerMatrixChanged, artAssetManagerRef, assetCache, live);
                         live.syncedRootScale = f32x4(signedScale);
                         live.hasSyncedRootScale = true;
                         live.syncedIsFixedBase = ac.isFixedBase;
@@ -2870,7 +3477,7 @@ void StepEcsPhysicsSubsystemBridges(
                 else{
                     if(!ac.proxyEntityNames.empty())
                         ResolveArticulationProxyBodies(entity, ac, artScopedNamesRef, artRecordsRef, physicsWorld, namedVersion, scratch.articulationProxySyncStates);
-                    SyncArticulationLiveSettings(ac, signedScale, absScale, collisionLayerMatrix, artAssetManagerRef, assetCache);
+                    SyncArticulationLiveSettings(ac, signedScale, absScale, collisionLayerMatrix, collisionLayerMatrixChanged, artAssetManagerRef, assetCache, live);
                     if(ac.dirty)
                         live.syncedLinks = ac.links;
                     ac.dirty = false;
@@ -2888,12 +3495,15 @@ void StepEcsPhysicsSubsystemBridges(
                                 ApplyArticulationDriveFromSkeleton(ac, Span<SkeletonJointMatrix>(scratch.skeletonModelJointsScratch.data(), scratch.skeletonModelJointsScratch.size()));
                         }
                     }
-                    if(isFinalStep){
+                    if(isFinalStep && interpolateTransforms){
                         live.prevBaseTransform = ac.articulation.baseTransform;
                         const usize snapLinkCount = ac.articulation.linkStates.size();
                         live.prevLinkWorldTransforms.resize(snapLinkCount);
                         for(usize li = 0u; li < snapLinkCount; ++li)
                             live.prevLinkWorldTransforms[li] = ac.articulation.linkStates[li].worldTransform;
+                    }
+                    else if(!interpolateTransforms){
+                        live.hasPrevPoseSnapshot = false;
                     }
 
                     if(hasArtEnvForces)
@@ -2902,7 +3512,7 @@ void StepEcsPhysicsSubsystemBridges(
                     if(ac.articulation.enableContactCoupling)
                         scratch.activeArticulationEntitiesScratch.push_back(entity);
 
-                    if(isFinalStep){
+                    if(isFinalStep && interpolateTransforms){
                         live.currBaseTransform = ac.articulation.baseTransform;
                         const usize postSnapCount = ac.articulation.linkStates.size();
                         live.currLinkWorldTransforms.resize(postSnapCount);
@@ -2928,24 +3538,44 @@ void StepEcsPhysicsSubsystemBridges(
         );
         const usize activeArtCount = scratch.activeArticulationEntitiesScratch.size();
         if(activeArtCount >= 2u && dt > 0.0f){
+            scratch.articulationPairwiseEntriesScratch.clear();
+            scratch.articulationPairwiseEntriesScratch.reserve(activeArtCount);
             for(usize i = 0u; i < activeArtCount; ++i){
-                const EntityID entA = scratch.activeArticulationEntitiesScratch[i];
-                if(!world.alive(entA) || !world.hasComponent<ArticulationComponent>(entA))
+                const EntityID ent = scratch.activeArticulationEntitiesScratch[i];
+                if(!world.alive(ent) || !world.hasComponent<ArticulationComponent>(ent))
                     continue;
-                mut ArticulationComponent acA = world.getComponent<ArticulationComponent>(entA);
-                if(!acA.enabled || !acA.initialized)
+                in ArticulationComponent ac = world.getComponent<ArticulationComponent>(ent);
+                if(!ac.enabled || !ac.initialized || !ac.articulation.enableContactCoupling)
                     continue;
-                for(usize j = i + 1u; j < activeArtCount; ++j){
-                    const EntityID entB = scratch.activeArticulationEntitiesScratch[j];
-                    if(!world.alive(entB) || !world.hasComponent<ArticulationComponent>(entB))
+                EcsArticulationPairwiseEntry pw;
+                pw.entity = ent;
+                pw.hasAabb = ac.articulation.tryGetCachedAggregateAabb(pw.worldAabb);
+                scratch.articulationPairwiseEntriesScratch.push_back(pw);
+            }
+            const usize pwArtCount = scratch.articulationPairwiseEntriesScratch.size();
+            for(usize i = 0u; i < pwArtCount; ++i){
+                mut EcsArticulationPairwiseEntry entryA = scratch.articulationPairwiseEntriesScratch[i];
+                const EntityID entA = entryA.entity;
+                for(usize j = i + 1u; j < pwArtCount; ++j){
+                    mut EcsArticulationPairwiseEntry entryB = scratch.articulationPairwiseEntriesScratch[j];
+                    if(entryA.hasAabb && entryB.hasAabb && !AabbOverlapsValues(
+                        VectorSingle(entryA.worldAabb.lowerBound),
+                        VectorSingle(entryA.worldAabb.upperBound),
+                        VectorSingle(entryB.worldAabb.lowerBound),
+                        VectorSingle(entryB.worldAabb.upperBound)
+                    ))
                         continue;
+                    const EntityID entB = entryB.entity;
+                    mut ArticulationComponent acA = world.getComponent<ArticulationComponent>(entA);
                     mut ArticulationComponent acB = world.getComponent<ArticulationComponent>(entB);
-                    if(!acB.enabled || !acB.initialized)
+                    if(!acA.enabled || !acA.initialized || !acB.enabled || !acB.initialized)
                         continue;
                     const u32 pairSteps = Max(1u, Max(acA.articulation.subSteps, acB.articulation.subSteps));
                     const f32 pairDt = dt / cast<f32>(pairSteps);
                     for(u32 ps = 0u; ps < pairSteps; ++ps)
                         acA.articulation.solvePairwiseContactsWith(acB.articulation, physicsWorld, pairDt);
+                    entryA.hasAabb = acA.articulation.tryGetCachedAggregateAabb(entryA.worldAabb);
+                    entryB.hasAabb = acB.articulation.tryGetCachedAggregateAabb(entryB.worldAabb);
                 }
             }
         }
@@ -3004,7 +3634,7 @@ void StepEcsPhysicsSubsystemBridges(
         const b8 deferGpuDeform = (activeSoftCandidateCount >= 2u);
         scratch.softBodyPairwiseEntriesScratch.clear();
         softView.each(
-            lambda[in dt, in softEnvTimeSec, in softGravityW, in hasAnyPhysicsParents, in collisionLayerMatrix, in softOwnerCount, in gpuSoftReady, in softEnvGpuSupported, in deferGpuDeform, in wantSoftBodyImpactEvents, in softScopedRef, in softRecordsRef, in softOwnersRef, in softShapeOwnersRef, in softAssetManagerRef, in softFluidsRef, in softFieldsRef, in softEnvRef, in softBodyMeshSystem, mut assetCache, mut world, mut physicsWorld, mut scratch, mut scheduler, mut gpuDispatcher](in EntityID entity, mut SoftBodyComponent sb) -> void{
+            lambda[in dt, in softEnvTimeSec, in softGravityW, in hasAnyPhysicsParents, in collisionLayerMatrix, in collisionLayerMatrixChanged, in softOwnerCount, in gpuSoftReady, in softEnvGpuSupported, in deferGpuDeform, in wantSoftBodyImpactEvents, in softScopedRef, in softRecordsRef, in softOwnersRef, in softShapeOwnersRef, in softAssetManagerRef, in softFluidsRef, in softFieldsRef, in softEnvRef, in softBodyMeshSystem, mut assetCache, mut world, mut physicsWorld, mut scratch, mut scheduler, mut gpuDispatcher](in EntityID entity, mut SoftBodyComponent sb) -> void{
                 if(!sb.enabled)
                     return;
                 mut EcsSoftBodySyncState syncState = scratch.softBodySyncStates.try_emplace(entity, EcsSoftBodySyncState()).first.value();
@@ -3028,6 +3658,7 @@ void StepEcsPhysicsSubsystemBridges(
                         syncState.hasBaseSurfaceMaterial = false;
                         syncState.syncedCollisionLayer = s_NameNone;
                         syncState.syncedMaterialAsset = s_NameNone;
+                        syncState.hasSyncedLiveSettings = false;
                         sb.dirty = true;
                     }
                 }
@@ -3040,8 +3671,10 @@ void StepEcsPhysicsSubsystemBridges(
                     syncState.hasBaseCollisionFilter = true;
                 }
                 if(sb.collisionLayer != s_NameNone){
-                    sb.softBody.collisionFilter = ResolveEcsNamedLayerFilter(syncState.baseCollisionFilter, sb.collisionLayer, collisionLayerMatrix);
-                    syncState.syncedCollisionLayer = sb.collisionLayer;
+                    if(collisionLayerMatrixChanged || sb.dirty || syncState.syncedCollisionLayer != sb.collisionLayer || !syncState.hasSyncedLiveSettings){
+                        sb.softBody.collisionFilter = ResolveEcsNamedLayerFilter(syncState.baseCollisionFilter, sb.collisionLayer, collisionLayerMatrix);
+                        syncState.syncedCollisionLayer = sb.collisionLayer;
+                    }
                 }
                 else if(syncState.syncedCollisionLayer != s_NameNone){
                     sb.softBody.collisionFilter = syncState.baseCollisionFilter;
@@ -3056,10 +3689,13 @@ void StepEcsPhysicsSubsystemBridges(
                     syncState.hasBaseSurfaceMaterial = true;
                 }
                 if(sb.materialAsset.valid()){
-                    SurfaceMaterial assetMat;
-                    if(TryResolveEcsPhysicsMaterialAsset(sb.materialAsset, softAssetManagerRef, assetCache, assetMat))
-                        sb.softBody.surfaceMaterial = assetMat;
-                    syncState.syncedMaterialAsset = sb.materialAsset.name();
+                    const Name wantSbMat = sb.materialAsset.name();
+                    if(sb.dirty || syncState.syncedMaterialAsset != wantSbMat || !syncState.hasSyncedLiveSettings){
+                        SurfaceMaterial assetMat;
+                        if(TryResolveEcsPhysicsMaterialAsset(sb.materialAsset, softAssetManagerRef, assetCache, assetMat))
+                            sb.softBody.surfaceMaterial = assetMat;
+                        syncState.syncedMaterialAsset = wantSbMat;
+                    }
                 }
                 else if(syncState.syncedMaterialAsset != s_NameNone){
                     sb.softBody.surfaceMaterial = syncState.baseSurfaceMaterial;
@@ -3068,6 +3704,7 @@ void StepEcsPhysicsSubsystemBridges(
                 else{
                     syncState.baseSurfaceMaterial = sb.softBody.surfaceMaterial;
                 }
+                syncState.hasSyncedLiveSettings = true;
 
                 if((!syncState.transformApplied && !sb.softBody.isWorldSpaceBaked()) || sb.dirty){
                     EcsWorldPose worldPose;
@@ -3283,17 +3920,18 @@ void StepEcsPhysicsSubsystemBridges(
                 Aabb3D gpuStepWorldBox;
                 b8 hasGpuStepWorldBox = false;
                 if(softGpuEligible){
-                    TransformComponent worldXf;
-                    EcsWorldPose worldPose;
-                    if(ResolveEcsSubsystemWorldPoseCached(entity, hasAnyPhysicsParents, world, scratch.writeBackPoseCache, worldPose)){
-                        worldXf.position = worldPose.transform.position;
-                        worldXf.rotation = worldPose.transform.rotation;
-                        worldXf.scale = worldPose.scale;
-                    }
                     SoftBodyGpuDeformTarget deformTarget;
                     b8 hasDeformTarget = false;
-                    if(softBodyMeshSystem.has_value())
+                    TransformComponent worldXf;
+                    if(!deferGpuDeform && softBodyMeshSystem.has_value()){
+                        EcsWorldPose worldPose;
+                        if(ResolveEcsSubsystemWorldPoseCached(entity, hasAnyPhysicsParents, world, scratch.writeBackPoseCache, worldPose)){
+                            worldXf.position = worldPose.transform.position;
+                            worldXf.rotation = worldPose.transform.rotation;
+                            worldXf.scale = worldPose.scale;
+                        }
                         hasDeformTarget = softBodyMeshSystem.value().tryBuildGpuDeformTarget(entity, worldXf, sb.softBody.isWorldSpaceBaked(), deformTarget);
+                    }
                     const b8 useInlineDeform = hasDeformTarget && !deferGpuDeform;
                     b8 gpuCallOk = false;
                     if(useInlineDeform)
@@ -3421,6 +4059,9 @@ void StepEcsPhysicsSubsystemBridges(
             }
         }
         if(deferGpuDeform && gpuSoftReady && softBodyMeshSystem.has_value()){
+            scratch.deferredSoftBatchParticlesScratch.clear();
+            scratch.deferredSoftBatchItemsScratch.clear();
+            scratch.deferredSoftBatchMetaScratch.clear();
             for(usize i = 0u; i < activeSoftCount; ++i){
                 in EcsSoftBodyPairwiseEntry entry = scratch.softBodyPairwiseEntriesScratch[i];
                 if(!entry.steppedOnGpu || !world.alive(entry.entity))
@@ -3439,19 +4080,57 @@ void StepEcsPhysicsSubsystemBridges(
                     worldXf.scale = worldPose.scale;
                 }
                 SoftBodyGpuDeformTarget deformTarget;
-                b8 deformOk = false;
                 if(softBodyMeshSystem.value().tryBuildGpuDeformTarget(entry.entity, worldXf, sbComp.softBody.isWorldSpaceBaked(), deformTarget)){
-                    if(gpuDispatcher.deformSoftBodyMeshGpu(sbComp.softBody, deformTarget)){
-                        Aabb3D postBox = entry.worldAabb;
-                        if(!entry.hasWorldAabb || sbComp.softBody.deformVersion != entry.postStepDeformVersion)
-                            postBox = sbComp.softBody.computeWorldAabb();
-                        const RuntimeMeshLocalBounds localBounds = ComputeSoftBodyLocalBoundsFromWorldAabb(postBox, sbComp.softBody.isWorldSpaceBaked(), worldXf);
-                        softBodyMeshSystem.value().markGpuDeformed(entry.entity, sbComp.softBody, worldXf, localBounds, gpuDispatcher.lastComputeToken());
-                        deformOk = true;
+                    u32 pOff = 0u;
+                    u32 pCnt = 0u;
+                    gpuDispatcher.appendSoftBodyGpuParticles(sbComp.softBody, scratch.deferredSoftBatchParticlesScratch, pOff, pCnt);
+                    if(pCnt > 0u){
+                        SoftBodyGpuDeformBatchItem item;
+                        item.particleOffset = pOff;
+                        item.particleCount = pCnt;
+                        item.target = deformTarget;
+                        scratch.deferredSoftBatchItemsScratch.push_back(item);
+
+                        EcsDeferredSoftDeformMeta meta;
+                        meta.entity = entry.entity;
+                        meta.worldTransform = worldXf;
+                        meta.worldAabb = entry.worldAabb;
+                        meta.hasWorldAabb = entry.hasWorldAabb;
+                        meta.postStepDeformVersion = entry.postStepDeformVersion;
+                        scratch.deferredSoftBatchMetaScratch.push_back(meta);
+                    }
+                    else{
+                        softBodyMeshSystem.value().clearGpuDeformOverride(entry.entity);
                     }
                 }
-                if(!deformOk)
+                else{
                     softBodyMeshSystem.value().clearGpuDeformOverride(entry.entity);
+                }
+            }
+            if(!scratch.deferredSoftBatchItemsScratch.empty()){
+                const b8 batchOk = gpuDispatcher.deformSoftBodyMeshBatchGpu(
+                    Span<f32x4>(scratch.deferredSoftBatchParticlesScratch.data(), scratch.deferredSoftBatchParticlesScratch.size()),
+                    Span<SoftBodyGpuDeformBatchItem>(scratch.deferredSoftBatchItemsScratch.data(), scratch.deferredSoftBatchItemsScratch.size())
+                );
+                const QueueSubmissionToken batchTok = gpuDispatcher.lastComputeToken();
+                for(usize mi = 0u; mi < scratch.deferredSoftBatchMetaScratch.size(); ++mi){
+                    in EcsDeferredSoftDeformMeta meta = scratch.deferredSoftBatchMetaScratch[mi];
+                    if(!batchOk){
+                        softBodyMeshSystem.value().clearGpuDeformOverride(meta.entity);
+                        continue;
+                    }
+                    const Optional<mut SoftBodyComponent> sbOpt = world.borrowComponent<SoftBodyComponent>(meta.entity);
+                    if(!sbOpt.has_value()){
+                        softBodyMeshSystem.value().clearGpuDeformOverride(meta.entity);
+                        continue;
+                    }
+                    in SoftBodyComponent sbComp = sbOpt.value();
+                    Aabb3D postBox = meta.worldAabb;
+                    if(!meta.hasWorldAabb || sbComp.softBody.deformVersion != meta.postStepDeformVersion)
+                        postBox = sbComp.softBody.computeWorldAabb();
+                    const RuntimeMeshLocalBounds localBounds = ComputeSoftBodyLocalBoundsFromWorldAabb(postBox, sbComp.softBody.isWorldSpaceBaked(), meta.worldTransform);
+                    softBodyMeshSystem.value().markGpuDeformed(meta.entity, sbComp.softBody, meta.worldTransform, localBounds, batchTok);
+                }
             }
         }
         scratch.softBodyPairwiseEntriesScratch.clear();
@@ -3471,9 +4150,9 @@ void StepEcsPhysicsSubsystemBridges(
     const auto fracView = world.view<FractureComponent>();
     if(fracView.candidateCount() > 0u){
         in Optional<mut AssetManager> fracAssetManagerRef = assetManager;
-        Vector<EntityID> fractureChunkSyncEntities;
+        scratch.fractureChunkSyncEntitiesScratch.clear();
         fracView.each(
-            lambda[in collisionLayerMatrix, in collisionLayerMatrixChanged, in hasAnyPhysicsParents, in fracAssetManagerRef, mut assetCache, mut fractureChunkSyncEntities, mut world, mut physicsWorld, mut bodyIndexToEntity, mut shapeIndexToEntity, mut activeFractures, mut scratch](in EntityID entity, mut FractureComponent fc) -> void{
+            lambda[in collisionLayerMatrix, in collisionLayerMatrixChanged, in hasAnyPhysicsParents, in fracAssetManagerRef, mut assetCache, mut world, mut physicsWorld, mut bodyIndexToEntity, mut shapeIndexToEntity, mut activeFractures, mut scratch](in EntityID entity, mut FractureComponent fc) -> void{
                 if(!fc.enabled)
                     return;
 
@@ -3720,13 +4399,13 @@ void StepEcsPhysicsSubsystemBridges(
                         const b8 mismatchChunkEnts = (!fc.spawnDetachedChunkEntities && (!trackedIt.value().spawnedChunkEntities.empty() || !fc.detachedChunkEntities.empty()))
                             || (fc.spawnDetachedChunkEntities && fc.detachedChunkEntities.size() != fc.cluster.detachedBodies.size());
                         if(mismatchChunkEnts)
-                            fractureChunkSyncEntities.push_back(entity);
+                            scratch.fractureChunkSyncEntitiesScratch.push_back(entity);
                     }
                 }
             }
         );
-        for(usize fi = 0u; fi < fractureChunkSyncEntities.size(); ++fi){
-            const EntityID ent = fractureChunkSyncEntities[fi];
+        for(usize fi = 0u; fi < scratch.fractureChunkSyncEntitiesScratch.size(); ++fi){
+            const EntityID ent = scratch.fractureChunkSyncEntitiesScratch[fi];
             if(!world.alive(ent))
                 continue;
             const auto trIt = activeFractures.find(ent);
@@ -3755,7 +4434,7 @@ void ProcessEcsFracturePostStepHits(
     if(activeFractures.empty())
         return;
 
-    Vector<EntityID> chunkSyncEntities;
+    scratch.fractureChunkSyncEntitiesScratch.clear();
     const Span<ContactHitEvent> hits = physicsWorld.contactHitEvents();
     for(usize hi = 0u; hi < hits.size(); ++hi){
         in ContactHitEvent hit = hits[hi];
@@ -3869,21 +4548,21 @@ void ProcessEcsFracturePostStepHits(
                 }
                 if(fc.spawnDetachedChunkEntities){
                     b8 alreadyQueued = false;
-                    for(usize qi = 0u; qi < chunkSyncEntities.size(); ++qi){
-                        if(chunkSyncEntities[qi] == owner.entity){
+                    for(usize qi = 0u; qi < scratch.fractureChunkSyncEntitiesScratch.size(); ++qi){
+                        if(scratch.fractureChunkSyncEntitiesScratch[qi] == owner.entity){
                             alreadyQueued = true;
                             break;
                         }
                     }
                     if(!alreadyQueued)
-                        chunkSyncEntities.push_back(owner.entity);
+                        scratch.fractureChunkSyncEntitiesScratch.push_back(owner.entity);
                 }
             }
         }
     }
 
-    for(usize ci = 0u; ci < chunkSyncEntities.size(); ++ci){
-        const EntityID ent = chunkSyncEntities[ci];
+    for(usize ci = 0u; ci < scratch.fractureChunkSyncEntitiesScratch.size(); ++ci){
+        const EntityID ent = scratch.fractureChunkSyncEntitiesScratch[ci];
         if(!world.alive(ent))
             continue;
         const auto trIt = activeFractures.find(ent);

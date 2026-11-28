@@ -289,17 +289,23 @@ b8 TryMergeCoplanarHullFaces(
     return true;
 }
 
-Vector<f32x4> DecimateHullPoints(in Span<f32x4> pts, in usize maxPoints){
-    Vector<f32x4> selected;
+void DecimateHullPointsInto(
+    in Span<f32x4> pts,
+    in usize maxPoints,
+    mut Vector<u8> usedScratch,
+    mut Vector<f32> minDistSqScratch,
+    mut Vector<f32x4> outSelected
+){
+    outSelected.clear();
     if(pts.size() <= maxPoints){
-        selected.reserve(pts.size());
+        outSelected.reserve(pts.size());
         for(usize i = 0u; i < pts.size(); ++i)
-            selected.push_back(pts[i]);
-        return selected;
+            outSelected.push_back(pts[i]);
+        return;
     }
 
-    selected.reserve(maxPoints);
-    Vector<u8> used(pts.size(), 0u);
+    outSelected.reserve(maxPoints);
+    usedScratch.assign(pts.size(), 0u);
     Array<usize, 6u> extIdx;
     for(usize axis = 0u; axis < 3u; ++axis){
         usize lo = 0u;
@@ -322,51 +328,57 @@ Vector<f32x4> DecimateHullPoints(in Span<f32x4> pts, in usize maxPoints){
     }
     for(usize k = 0u; k < 6u; ++k){
         const usize idx = extIdx[k];
-        if(used[idx] == 0u && selected.size() < maxPoints){
-            used[idx] = 1u;
-            selected.push_back(pts[idx]);
+        if(usedScratch[idx] == 0u && outSelected.size() < maxPoints){
+            usedScratch[idx] = 1u;
+            outSelected.push_back(pts[idx]);
         }
     }
 
-    Vector<f32> minDistSq(pts.size(), s_MaxF32);
+    minDistSqScratch.assign(pts.size(), s_MaxF32);
     for(usize i = 0u; i < pts.size(); ++i){
-        if(used[i] != 0u){
-            minDistSq[i] = 0.0f;
+        if(usedScratch[i] != 0u){
+            minDistSqScratch[i] = 0.0f;
             continue;
         }
         const VectorSingle p = VectorSingle(pts[i]);
         f32 best = s_MaxF32;
-        for(usize s = 0u; s < selected.size(); ++s){
-            const f32 dSq = Vector3LengthSq(VectorSingle(p - VectorSingle(selected[s]), 0.0f)).x;
+        for(usize s = 0u; s < outSelected.size(); ++s){
+            const f32 dSq = Vector3LengthSq(VectorSingle(p - VectorSingle(outSelected[s]), 0.0f)).x;
             if(dSq < best)
                 best = dSq;
         }
-        minDistSq[i] = best;
+        minDistSqScratch[i] = best;
     }
 
-    while(selected.size() < maxPoints){
+    while(outSelected.size() < maxPoints){
         usize bestIdx = s_NullIndex;
         f32 farthest = 1.0e-8f;
         for(usize i = 0u; i < pts.size(); ++i){
-            if(used[i] == 0u && minDistSq[i] > farthest){
-                farthest = minDistSq[i];
+            if(usedScratch[i] == 0u && minDistSqScratch[i] > farthest){
+                farthest = minDistSqScratch[i];
                 bestIdx = i;
             }
         }
         if(bestIdx == s_NullIndex)
             break;
-        used[bestIdx] = 1u;
+        usedScratch[bestIdx] = 1u;
         const VectorSingle added = VectorSingle(pts[bestIdx]);
-        selected.push_back(pts[bestIdx]);
+        outSelected.push_back(pts[bestIdx]);
         for(usize i = 0u; i < pts.size(); ++i){
-            if(used[i] != 0u)
+            if(usedScratch[i] != 0u)
                 continue;
             const f32 dSq = Vector3LengthSq(VectorSingle(VectorSingle(pts[i]) - added, 0.0f)).x;
-            if(dSq < minDistSq[i])
-                minDistSq[i] = dSq;
+            if(dSq < minDistSqScratch[i])
+                minDistSqScratch[i] = dSq;
         }
     }
+}
 
+Vector<f32x4> DecimateHullPoints(in Span<f32x4> pts, in usize maxPoints){
+    Vector<f32x4> selected;
+    Vector<u8> used;
+    Vector<f32> minDistSq;
+    DecimateHullPointsInto(pts, maxPoints, used, minDistSq, selected);
     return selected;
 }
 

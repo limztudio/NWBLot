@@ -185,7 +185,8 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
     in World world,
     in EntityID entity,
     mut Vector<LocalTransformComponent> localChainScratch,
-    mut Vector<u8> inheritScaleScratch
+    mut Vector<u8> inheritScaleScratch,
+    mut HashMap<EntityID, TransformComponent> frameTransformCache
 ){
     TransformComponent outXf;
     localChainScratch.clear();
@@ -198,8 +199,16 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
     u32 visitedCount = 0u;
     EntityID cur = entity;
     b8 hasHierarchy = false;
+    b8 hitCycle = false;
     TransformComponent rootXf;
     for(u32 depth = 0u; depth < 32u; ++depth){
+        const auto cachedIt = frameTransformCache.find(cur);
+        if(cachedIt != frameTransformCache.end()){
+            if(depth == 0u)
+                return cachedIt.value();
+            rootXf = cachedIt.value();
+            break;
+        }
         if(!world.hasComponent<LocalTransformComponent>(cur)){
             if(world.hasComponent<TransformComponent>(cur))
                 rootXf = world.getComponent<TransformComponent>(cur);
@@ -232,6 +241,7 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
             }
         }
         if(cyclic){
+            hitCycle = true;
             if(world.hasComponent<TransformComponent>(cur))
                 rootXf = world.getComponent<TransformComponent>(cur);
             break;
@@ -250,7 +260,9 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
 
     if(!hasHierarchy){
         if(world.hasComponent<TransformComponent>(entity))
-            return world.getComponent<TransformComponent>(entity);
+            outXf = world.getComponent<TransformComponent>(entity);
+        if(!hitCycle)
+            frameTransformCache.insert_or_assign(entity, outXf);
         return outXf;
     }
 
@@ -259,6 +271,8 @@ TransformComponent ResolveSoftBodyEntityWorldTransform(
         TransformComponent composed;
         ComposeSceneWorldTransformNormalizedParent(rootXf, localChainScratch[idx - 1u], inheritScaleScratch[idx - 1u] != 0u, composed);
         rootXf = composed;
+        if(!hitCycle)
+            frameTransformCache.insert_or_assign(visited[idx - 1u], rootXf);
     }
     return rootXf;
 }
@@ -505,6 +519,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     private b8 m_syncedInUpdate = false;
     private Vector<LocalTransformComponent> m_localChainScratch;
     private Vector<u8> m_inheritScaleScratch;
+    private HashMap<EntityID, TransformComponent> m_frameWorldTransformCache;
     private Vector<EntityID> m_staleEntities;
     private Vector<GpuTaskId> m_uploadTasksScratch;
     private u64 m_uploadBatchSequence = 0u;
@@ -678,10 +693,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                 if(!latestCrossQueueToken.valid() || tok.value > latestCrossQueueToken.value)
                     latestCrossQueueToken = tok;
             }
-            if(latestCrossQueueToken.valid()){
-                if(!device.waitForSubmissionToken(latestCrossQueueToken))
-                    return false;
-            }
+            return this.uploadPendingBatches(latestCrossQueueToken);
         }
         return this.uploadPendingBatches();
     }
@@ -704,6 +716,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         }
         this.m_retiredRingSlot = 0u;
         this.m_syncedInUpdate = false;
+        this.m_frameWorldTransformCache.clear();
         this.m_staleEntities.clear();
     }
 
@@ -777,7 +790,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         const b8 worldBaked = sbComp.softBody.isWorldSpaceBaked();
         TransformComponent xf;
         if(worldBaked)
-            xf = ResolveSoftBodyEntityWorldTransform(this.m_world, entity, this.m_localChainScratch, this.m_inheritScaleScratch);
+            xf = ResolveSoftBodyEntityWorldTransform(this.m_world, entity, this.m_localChainScratch, this.m_inheritScaleScratch, this.m_frameWorldTransformCache);
 
         const u64 deformSignature = ComputeSoftBodyDeformSignature(sbComp.softBody, xf);
         if(entry.cpu.needsTopologyRebuild(sbComp.softBody, xf, sourceMeshName)){
@@ -860,6 +873,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
     }
 
     private void syncEntities(){
+        this.m_frameWorldTransformCache.clear();
         this.m_staleEntities.clear();
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
             const EntityID entity = it.key();
@@ -880,7 +894,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
             this.syncSingleEntity(Get<0>(row), Get<1>(row));
     }
 
-    private b8 uploadPendingBatches(){
+    private b8 uploadPendingBatches(in QueueSubmissionToken crossQueueDeformToken){
         b8 hasPending = false;
         for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
             if(!it.value().cpu.topologyValid || !it.value().gpu.valid())
@@ -890,7 +904,7 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                 break;
             }
         }
-        if(!hasPending)
+        if(!hasPending && !crossQueueDeformToken.valid())
             return true;
 
         ++this.m_uploadBatchSequence;
@@ -898,11 +912,18 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         if(batchReadyName == s_NameNone)
             return false;
 
+        Name deformReadyName = s_NameNone;
+        if(crossQueueDeformToken.valid()){
+            deformReadyName = DeriveRuntimeResourceName(s_SoftBodyUploadName, this.m_uploadBatchSequence, 0u, "deform_ready");
+            if(deformReadyName == s_NameNone)
+                return false;
+        }
+
         in HashMap<EntityID, SoftBodyRuntimeMeshEntry> entriesRef = this.m_entries;
         mut Vector<GpuTaskId> uploadTasksScratch = this.m_uploadTasksScratch;
         const GpuPhysicalQueueId graphicsQueue = this.m_graphics.getDevice().getPrimaryPhysicalQueue(CommandQueue::Graphics);
         const Expected<QueueSubmissionToken> uploaded = this.m_graphics.standaloneGraph().submitStandaloneTaskGraph(
-            lambda[in entriesRef, in batchReadyName, mut uploadTasksScratch](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
+            lambda[in entriesRef, in batchReadyName, in deformReadyName, in crossQueueDeformToken, mut uploadTasksScratch](mut GpuTaskGraph graph) -> Expected<GpuTaskId>{
                 uploadTasksScratch.clear();
                 uploadTasksScratch.reserve(entriesRef.size() * 15u);
 
@@ -920,15 +941,34 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
                     }
                 }
 
-                if(uploadTasksScratch.empty())
+                Array<GpuExternalCompletionId, 1u> extDeps;
+                b8 hasExtDep = false;
+                if(crossQueueDeformToken.valid()){
+                    GpuExternalCompletionDesc extDesc;
+                    extDesc
+                        .setIdentity(deformReadyName)
+                        .setMarkerLabel("SoftBody GPU Deform Completion")
+                        .setToken(crossQueueDeformToken)
+                    ;
+                    const auto extRes = graph.importExternalCompletion(extDesc);
+                    if(!extRes.has_value())
+                        return MakeUnexpected(Failure());
+                    extDeps[0u] = extRes.value();
+                    hasExtDep = true;
+                }
+
+                if(uploadTasksScratch.empty() && !hasExtDep)
                     return MakeUnexpected(Failure());
 
                 GpuTaskDesc readyDesc = GpuTaskDesc();
                 readyDesc
                     .setIdentity(batchReadyName)
                     .setMarkerLabel("SoftBody Runtime Batch Upload Ready")
-                    .setDependencies(Span<GpuTaskId>(uploadTasksScratch))
                 ;
+                if(!uploadTasksScratch.empty())
+                    readyDesc.setDependencies(Span<GpuTaskId>(uploadTasksScratch));
+                if(hasExtDep)
+                    readyDesc.setExternalDependencies(Span<GpuExternalCompletionId>(extDeps.data(), 1u));
                 RuntimeMeshBatchUploadReadyTask readyTask;
                 return graph.addPayloadTask(readyDesc, readyTask);
             },
@@ -937,11 +977,17 @@ class SoftBodyMeshSystem : IRenderPass, IRuntimeMeshProvider{
         if(!uploaded.has_value() || !uploaded.value().valid())
             return false;
 
-        for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
-            it.value().pendingTopologyUpload = false;
-            it.value().pendingDeformUpload = false;
+        if(hasPending){
+            for(auto it = this.m_entries.begin(); it != this.m_entries.end(); ++it){
+                it.value().pendingTopologyUpload = false;
+                it.value().pendingDeformUpload = false;
+            }
         }
         return true;
+    }
+
+    private b8 uploadPendingBatches(){
+        return this.uploadPendingBatches(QueueSubmissionToken());
     }
 }
 

@@ -317,10 +317,16 @@ struct AssetPairedSidecarRule{
     AStringView sidecarExtension;
 };
 
+struct CookExternalSourceCollectContext{
+    const DiscoveredNwbFile& discoveredNwbFile;
+    AStringView metaText;
+    ScratchArena& scratchArena;
+    const Core::Metascript::Document* (*ensureParsedDocument)(void* user) = nullptr;
+    void* ensureParsedDocumentUser = nullptr;
+};
+
 using CookExternalSourceCollectorFunction = b8 (*)(
-    const DiscoveredNwbFile& discoveredNwbFile,
-    AStringView metaText,
-    ScratchArena& scratchArena,
+    const CookExternalSourceCollectContext& context,
     Vector<::Path<ScratchArena>, ScratchArena>& outPaths,
     b8& outCanUseCache
 );

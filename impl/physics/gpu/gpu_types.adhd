@@ -416,6 +416,9 @@ extern const u32 s_GpuResidentModeEmitBulletToiPairs;
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_FINALIZE_TOI_INDIRECT")]
 extern const u32 s_GpuResidentModeFinalizeToiIndirect;
 
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RESIDENT_MODE_REDUCE_BULLET_TOI")]
+extern const u32 s_GpuResidentModeReduceBulletToi;
+
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_SOLVER_FLAG_FUSED_COLORS")]
 extern const u32 s_GpuSolverFlagFusedColors;
 
@@ -433,6 +436,15 @@ extern const u32 s_GpuResIndirectAllSlot;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_BUILD_SLOT")]
 extern const u32 s_GpuResIndirectBuildSlot;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_REST_WIDE_BASE_SLOT")]
+extern const u32 s_GpuResIndirectRestWideBaseSlot;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_REST_FUSED_SLOT")]
+extern const u32 s_GpuResIndirectRestFusedSlot;
+
+[cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_WAKE_BODIES_SLOT")]
+extern const u32 s_GpuResIndirectWakeBodiesSlot;
 
 [cpp_header("<impl/assets/physics/constants.h>"), cpp_name("NWB_PHYSICS_RES_INDIRECT_UINT_COUNT")]
 extern const u32 s_GpuResIndirectUintCount;
@@ -1174,9 +1186,22 @@ class SoftBodyColorSlice{
 }
 
 u32 PackGpuSoftBackstopNormalXY(in f32 nx, in f32 ny){
-    const u32 qx = cast<u32>(Clamp(nx, -1.0f, 1.0f) * 32767.0f + 32767.5f);
-    const u32 qy = cast<u32>(Clamp(ny, -1.0f, 1.0f) * 32767.0f + 32767.5f);
+    const VectorSingle clamped = Clamp(VectorSingle(nx, ny, 0.0f, 0.0f), VectorSingle(-1.0f), VectorSingle(1.0f));
+    const VectorSingle scaled = clamped * 32767.0f + VectorSingle(32767.5f);
+    const u32 qx = cast<u32>(scaled.x);
+    const u32 qy = cast<u32>(scaled.y);
     return (qx & 0xffffu) | ((qy & 0xffffu) << 16u);
+}
+
+class SoftBodyColorScratch{
+    public Vector<u32> masks;
+    public Vector<u32> colorCounts;
+    public Vector<u32> colors;
+    public Vector<u32> writeOffsets;
+    public Vector<u32> flatVerts;
+    public Vector<GpuPhysicsSoftDistConstraint> distSrc;
+    public Vector<GpuPhysicsSoftVolConstraint> volSrc;
+    public Vector<GpuPhysicsSoftBendConstraint> bendSrc;
 }
 
 void ExpandParticleColorMaskWords(
@@ -1212,7 +1237,8 @@ void AssignSoftBodyConstraintColors(
     in u32 constraintCount,
     in u32 particleCount,
     mut Vector<u32> outConstraintColors,
-    mut Vector<SoftBodyColorSlice> outSlices
+    mut Vector<SoftBodyColorSlice> outSlices,
+    mut SoftBodyColorScratch scratch
 ){
     outConstraintColors.clear();
     outSlices.clear();
@@ -1220,11 +1246,9 @@ void AssignSoftBodyConstraintColors(
         return;
 
     u32 wordsPerParticle = 2u;
-    Vector<u32> masks;
-    masks.resize(cast<usize>(particleCount) * cast<usize>(wordsPerParticle), 0u);
+    scratch.masks.assign(cast<usize>(particleCount) * cast<usize>(wordsPerParticle), 0u);
     outConstraintColors.resize(constraintCount, 0u);
-    Vector<u32> colorCounts;
-    colorCounts.reserve(64u);
+    scratch.colorCounts.clear();
 
     for(u32 ci = 0u; ci < constraintCount; ++ci){
         const usize vBase = cast<usize>(ci) * cast<usize>(stride);
@@ -1235,7 +1259,7 @@ void AssignSoftBodyConstraintColors(
             u32 usedBits = 0u;
             for(u32 k = 0u; k < stride; ++k){
                 const u32 pv = flatVertices[vBase + cast<usize>(k)];
-                usedBits |= masks[cast<usize>(pv) * cast<usize>(wordsPerParticle) + cast<usize>(wi)];
+                usedBits |= scratch.masks[cast<usize>(pv) * cast<usize>(wordsPerParticle) + cast<usize>(wi)];
             }
             const u32 freeBits = ~usedBits;
             if(freeBits != 0u){
@@ -1248,28 +1272,28 @@ void AssignSoftBodyConstraintColors(
         }
         if(!found){
             chosenColor = wordsPerParticle * 32u;
-            ExpandParticleColorMaskWords(masks, wordsPerParticle, particleCount, wordsPerParticle + 2u);
+            ExpandParticleColorMaskWords(scratch.masks, wordsPerParticle, particleCount, wordsPerParticle + 2u);
         }
 
         const u32 wordIdx = chosenColor >> 5u;
         const u32 bitMask = 1u << (chosenColor & 31u);
         for(u32 k = 0u; k < stride; ++k){
             const u32 pv = flatVertices[vBase + cast<usize>(k)];
-            masks[cast<usize>(pv) * cast<usize>(wordsPerParticle) + cast<usize>(wordIdx)] |= bitMask;
+            scratch.masks[cast<usize>(pv) * cast<usize>(wordsPerParticle) + cast<usize>(wordIdx)] |= bitMask;
         }
         outConstraintColors[ci] = chosenColor;
-        if(cast<usize>(chosenColor) >= colorCounts.size())
-            colorCounts.resize(cast<usize>(chosenColor) + 1u, 0u);
-        colorCounts[chosenColor] += 1u;
+        if(cast<usize>(chosenColor) >= scratch.colorCounts.size())
+            scratch.colorCounts.resize(cast<usize>(chosenColor) + 1u, 0u);
+        scratch.colorCounts[chosenColor] += 1u;
     }
 
-    const usize colorCount = colorCounts.size();
+    const usize colorCount = scratch.colorCounts.size();
     outSlices.resize(colorCount);
     u32 runningOffset = 0u;
     for(usize c = 0u; c < colorCount; ++c){
         outSlices[c].offset = runningOffset;
-        outSlices[c].count = colorCounts[c];
-        runningOffset += colorCounts[c];
+        outSlices[c].count = scratch.colorCounts[c];
+        runningOffset += scratch.colorCounts[c];
     }
 }
 
@@ -1279,23 +1303,22 @@ void ScatterColoredSoftBodyConstraints<T>(
     in u32 particleCount,
     in Vector<T> src,
     mut Vector<T> outOrdered,
-    mut Vector<SoftBodyColorSlice> outSlices
+    mut Vector<SoftBodyColorSlice> outSlices,
+    mut SoftBodyColorScratch scratch
 ){
     if(src.empty())
         return;
 
-    Vector<u32> colors;
-    AssignSoftBodyConstraintColors(Span<u32>(flatVerts.data(), flatVerts.size()), stride, cast<u32>(src.size()), particleCount, colors, outSlices);
-    Vector<u32> writeOffsets;
-    writeOffsets.resize(outSlices.size());
+    AssignSoftBodyConstraintColors(Span<u32>(flatVerts.data(), flatVerts.size()), stride, cast<u32>(src.size()), particleCount, scratch.colors, outSlices, scratch);
+    scratch.writeOffsets.resize(outSlices.size());
     for(usize c = 0u; c < outSlices.size(); ++c)
-        writeOffsets[c] = outSlices[c].offset;
+        scratch.writeOffsets[c] = outSlices[c].offset;
 
     outOrdered.resize(src.size());
     for(usize i = 0u; i < src.size(); ++i){
-        const u32 c = colors[i];
-        const u32 dst = writeOffsets[c];
-        writeOffsets[c] = dst + 1u;
+        const u32 c = scratch.colors[i];
+        const u32 dst = scratch.writeOffsets[c];
+        scratch.writeOffsets[c] = dst + 1u;
         outOrdered[dst] = src[i];
     }
 }
@@ -1303,7 +1326,8 @@ void ScatterColoredSoftBodyConstraints<T>(
 void BuildSoftBodyDistanceConstraintColors(
     in SoftBody softBody,
     mut Vector<GpuPhysicsSoftDistConstraint> outOrdered,
-    mut Vector<SoftBodyColorSlice> outSlices
+    mut Vector<SoftBodyColorSlice> outSlices,
+    mut SoftBodyColorScratch scratch
 ){
     outOrdered.clear();
     outSlices.clear();
@@ -1311,11 +1335,11 @@ void BuildSoftBodyDistanceConstraintColors(
     if(particleCount < 2u)
         return;
 
-    Vector<u32> flatVerts;
-    Vector<GpuPhysicsSoftDistConstraint> src;
+    scratch.flatVerts.clear();
+    scratch.distSrc.clear();
     const usize maxTotal = softBody.distanceConstraints.size() + softBody.bendingConstraints.size();
-    flatVerts.reserve(maxTotal * 2u);
-    src.reserve(maxTotal);
+    scratch.flatVerts.reserve(maxTotal * 2u);
+    scratch.distSrc.reserve(maxTotal);
 
     for(usize i = 0u; i < softBody.distanceConstraints.size(); ++i){
         in SoftBodyDistanceConstraint dc = softBody.distanceConstraints[i];
@@ -1325,12 +1349,12 @@ void BuildSoftBodyDistanceConstraintColors(
         in SoftBodyParticle pt1 = softBody.particles[dc.p1];
         if((pt0.isFixed || pt0.invMass <= 0.0f) && (pt1.isFixed || pt1.invMass <= 0.0f))
             continue;
-        flatVerts.push_back(dc.p0);
-        flatVerts.push_back(dc.p1);
+        scratch.flatVerts.push_back(dc.p0);
+        scratch.flatVerts.push_back(dc.p1);
         GpuPhysicsSoftDistConstraint gc;
         gc.indices = u32x4(dc.p0, dc.p1, 0u, 0u);
         gc.restCompLambdaPad = f32x4(dc.restLength, dc.compliance, dc.lambda, 0.0f);
-        src.push_back(gc);
+        scratch.distSrc.push_back(gc);
     }
 
     for(usize i = 0u; i < softBody.bendingConstraints.size(); ++i){
@@ -1341,21 +1365,22 @@ void BuildSoftBodyDistanceConstraintColors(
         in SoftBodyParticle pt1 = softBody.particles[bc.p1];
         if((pt0.isFixed || pt0.invMass <= 0.0f) && (pt1.isFixed || pt1.invMass <= 0.0f))
             continue;
-        flatVerts.push_back(bc.p0);
-        flatVerts.push_back(bc.p1);
+        scratch.flatVerts.push_back(bc.p0);
+        scratch.flatVerts.push_back(bc.p1);
         GpuPhysicsSoftDistConstraint gc;
         gc.indices = u32x4(bc.p0, bc.p1, 1u, 0u);
         gc.restCompLambdaPad = f32x4(bc.restLength, bc.compliance, bc.lambda, 0.0f);
-        src.push_back(gc);
+        scratch.distSrc.push_back(gc);
     }
 
-    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftDistConstraint>(flatVerts, 2u, particleCount, src, outOrdered, outSlices);
+    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftDistConstraint>(scratch.flatVerts, 2u, particleCount, scratch.distSrc, outOrdered, outSlices, scratch);
 }
 
 void BuildSoftBodyVolumeConstraintColors(
     in SoftBody softBody,
     mut Vector<GpuPhysicsSoftVolConstraint> outOrdered,
-    mut Vector<SoftBodyColorSlice> outSlices
+    mut Vector<SoftBodyColorSlice> outSlices,
+    mut SoftBodyColorScratch scratch
 ){
     outOrdered.clear();
     outSlices.clear();
@@ -1363,10 +1388,10 @@ void BuildSoftBodyVolumeConstraintColors(
     if(particleCount < 4u || softBody.volumeConstraints.empty())
         return;
 
-    Vector<u32> flatVerts;
-    Vector<GpuPhysicsSoftVolConstraint> src;
-    flatVerts.reserve(softBody.volumeConstraints.size() * 4u);
-    src.reserve(softBody.volumeConstraints.size());
+    scratch.flatVerts.clear();
+    scratch.volSrc.clear();
+    scratch.flatVerts.reserve(softBody.volumeConstraints.size() * 4u);
+    scratch.volSrc.reserve(softBody.volumeConstraints.size());
 
     for(usize i = 0u; i < softBody.volumeConstraints.size(); ++i){
         in SoftBodyVolumeConstraint vc = softBody.volumeConstraints[i];
@@ -1385,23 +1410,24 @@ void BuildSoftBodyVolumeConstraintColors(
             && (pt3.isFixed || pt3.invMass <= 0.0f)
         )
             continue;
-        flatVerts.push_back(vc.p0);
-        flatVerts.push_back(vc.p1);
-        flatVerts.push_back(vc.p2);
-        flatVerts.push_back(vc.p3);
+        scratch.flatVerts.push_back(vc.p0);
+        scratch.flatVerts.push_back(vc.p1);
+        scratch.flatVerts.push_back(vc.p2);
+        scratch.flatVerts.push_back(vc.p3);
         GpuPhysicsSoftVolConstraint gc;
         gc.indices = u32x4(vc.p0, vc.p1, vc.p2, vc.p3);
         gc.restCompLambdaPad = f32x4(vc.restVolume, vc.compliance, vc.lambda, 0.0f);
-        src.push_back(gc);
+        scratch.volSrc.push_back(gc);
     }
 
-    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftVolConstraint>(flatVerts, 4u, particleCount, src, outOrdered, outSlices);
+    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftVolConstraint>(scratch.flatVerts, 4u, particleCount, scratch.volSrc, outOrdered, outSlices, scratch);
 }
 
 void BuildSoftBodyBendingConstraintColors(
     in SoftBody softBody,
     mut Vector<GpuPhysicsSoftBendConstraint> outOrdered,
-    mut Vector<SoftBodyColorSlice> outSlices
+    mut Vector<SoftBodyColorSlice> outSlices,
+    mut SoftBodyColorScratch scratch
 ){
     outOrdered.clear();
     outSlices.clear();
@@ -1409,10 +1435,10 @@ void BuildSoftBodyBendingConstraintColors(
     if(particleCount < 4u || softBody.dihedralBendingConstraints.empty())
         return;
 
-    Vector<u32> flatVerts;
-    Vector<GpuPhysicsSoftBendConstraint> src;
-    flatVerts.reserve(softBody.dihedralBendingConstraints.size() * 4u);
-    src.reserve(softBody.dihedralBendingConstraints.size());
+    scratch.flatVerts.clear();
+    scratch.bendSrc.clear();
+    scratch.flatVerts.reserve(softBody.dihedralBendingConstraints.size() * 4u);
+    scratch.bendSrc.reserve(softBody.dihedralBendingConstraints.size());
 
     for(usize i = 0u; i < softBody.dihedralBendingConstraints.size(); ++i){
         in SoftBodyDihedralBendingConstraint dbc = softBody.dihedralBendingConstraints[i];
@@ -1431,17 +1457,17 @@ void BuildSoftBodyBendingConstraintColors(
             && (pt3.isFixed || pt3.invMass <= 0.0f)
         )
             continue;
-        flatVerts.push_back(dbc.p0);
-        flatVerts.push_back(dbc.p1);
-        flatVerts.push_back(dbc.p2);
-        flatVerts.push_back(dbc.p3);
+        scratch.flatVerts.push_back(dbc.p0);
+        scratch.flatVerts.push_back(dbc.p1);
+        scratch.flatVerts.push_back(dbc.p2);
+        scratch.flatVerts.push_back(dbc.p3);
         GpuPhysicsSoftBendConstraint gc;
         gc.indices = u32x4(dbc.p0, dbc.p1, dbc.p2, dbc.p3);
         gc.restAngleCompLambdaPad = f32x4(dbc.restAngle, dbc.compliance, dbc.lambda, 0.0f);
-        src.push_back(gc);
+        scratch.bendSrc.push_back(gc);
     }
 
-    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftBendConstraint>(flatVerts, 4u, particleCount, src, outOrdered, outSlices);
+    ScatterColoredSoftBodyConstraints<GpuPhysicsSoftBendConstraint>(scratch.flatVerts, 4u, particleCount, scratch.bendSrc, outOrdered, outSlices, scratch);
 }
 
 GpuPhysicsForceField PackGpuForceField(in ForceField field){

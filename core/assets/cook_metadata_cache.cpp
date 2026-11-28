@@ -85,16 +85,26 @@ template<typename PathArenaT>
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView metaText,
     const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    CookMetadataDetail::CookExternalSourceDigestCache* const externalDigestCache,
+    const CookMetadataDetail::EnsureCookParsedDocumentFunction ensureParsedDocument,
+    void* const ensureParsedDocumentUser,
     ScratchArena& scratchArena,
     Vector<u8, ScratchArena>& shaInput
 ){
     if(externalSourceCollectors.empty())
         return true;
 
+    const CookExternalSourceCollectContext collectContext{
+        discoveredNwbFile,
+        metaText,
+        scratchArena,
+        ensureParsedDocument,
+        ensureParsedDocumentUser
+    };
     Vector<::Path<ScratchArena>, ScratchArena> rawPaths(scratchArena);
     for(const NotNull<CookExternalSourceCollectorFunction> collector : externalSourceCollectors){
         b8 collectorCanUseCache = true;
-        if(!(*collector)(discoveredNwbFile, metaText, scratchArena, rawPaths, collectorCanUseCache) || !collectorCanUseCache)
+        if(!(*collector)(collectContext, rawPaths, collectorCanUseCache) || !collectorCanUseCache)
             return false;
     }
     if(rawPaths.empty())
@@ -138,15 +148,31 @@ template<typename PathArenaT>
     const u64 sourceCount = static_cast<u64>(entries.size());
     AppendPOD(shaInput, sourceCount);
     for(const ExternalSourceEntry& entry : entries){
-        if(!AppendString(shaInput, AStringView(entry.canonicalText)))
+        const AStringView canonicalView(entry.canonicalText);
+        if(!AppendString(shaInput, canonicalView))
             return false;
+
+        CookMetadataDetail::CookExternalSourceDigestCache::Entry cachedEntry;
+        if(externalDigestCache != nullptr && externalDigestCache->find(canonicalView, cachedEntry)){
+            if(!cachedEntry.ok)
+                return false;
+            const u8 present = cachedEntry.exists ? 1u : 0u;
+            AppendPOD(shaInput, present);
+            if(cachedEntry.exists)
+                AppendPOD(shaInput, cachedEntry.digest);
+            continue;
+        }
+
         const auto exists = FileExists(entry.path);
         if(!exists)
             return false;
         const u8 present = *exists ? 1u : 0u;
         AppendPOD(shaInput, present);
-        if(!*exists)
+        if(!*exists){
+            if(externalDigestCache != nullptr)
+                externalDigestCache->insert(canonicalView, CookMetadataDetail::CookExternalSourceDigestCache::Entry{ {}, true, false });
             continue;
+        }
         Sha256Digest digest{};
         {
             Alloc::ScratchArena::Scope extScope(scratchArena);
@@ -155,6 +181,8 @@ template<typename PathArenaT>
                 return false;
             digest = ComputeSha256(BinaryByteView{ extBytes.data(), extBytes.size() });
         }
+        if(externalDigestCache != nullptr)
+            externalDigestCache->insert(canonicalView, CookMetadataDetail::CookExternalSourceDigestCache::Entry{ digest, true, true });
         AppendPOD(shaInput, digest);
     }
     return true;
@@ -167,6 +195,9 @@ template<typename PathArenaT>
     const Sha256Digest& producerDigest,
     const Span<const AssetPairedSidecarRule> pairedSidecarRules,
     const Span<const NotNull<CookExternalSourceCollectorFunction>> externalSourceCollectors,
+    CookMetadataDetail::CookExternalSourceDigestCache* const externalDigestCache,
+    const CookMetadataDetail::EnsureCookParsedDocumentFunction ensureParsedDocument,
+    void* const ensureParsedDocumentUser,
     ScratchArena& scratchArena,
     b8& outCanUseCache
 ){
@@ -198,7 +229,7 @@ template<typename PathArenaT>
     AppendPOD(shaInput, metaSha256);
     if(!AppendPairedSidecarChecksums(discoveredNwbFile.filePath, pairedSidecarRules, scratchArena, shaInput))
         outCanUseCache = false;
-    if(!AppendExternalSourceChecksums(discoveredNwbFile, metaText, externalSourceCollectors, scratchArena, shaInput))
+    if(!AppendExternalSourceChecksums(discoveredNwbFile, metaText, externalSourceCollectors, externalDigestCache, ensureParsedDocument, ensureParsedDocumentUser, scratchArena, shaInput))
         outCanUseCache = false;
 
     return ComputeSha256(BinaryByteView{ shaInput.data(), shaInput.size() });
@@ -220,6 +251,23 @@ namespace CookMetadataDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+b8 CookExternalSourceDigestCache::find(const AStringView canonicalPathText, Entry& outEntry)const noexcept{
+    NothrowScopedLock lock(m_mutex);
+    const auto found = m_entries.find(canonicalPathText);
+    if(found == m_entries.end())
+        return false;
+    outEntry = found.value();
+    return true;
+}
+
+void CookExternalSourceDigestCache::insert(const AStringView canonicalPathText, const Entry& entry){
+    ScopedLock lock(m_mutex);
+    if(m_entries.find(canonicalPathText) != m_entries.end())
+        return;
+    ScratchString key(canonicalPathText.data(), canonicalPathText.size(), m_arena);
+    m_entries.try_emplace(Move(key), entry);
+}
+
 b8 ComputeNwbFileAssetCacheData(
     const DiscoveredNwbFile& discoveredNwbFile,
     const AStringView metaText,
@@ -229,7 +277,10 @@ b8 ComputeNwbFileAssetCacheData(
     ScratchArena& scratchArena,
     ScratchString& outSourcePathText,
     ScratchString& outCacheFileName,
-    Sha256Digest& outParamSha256
+    Sha256Digest& outParamSha256,
+    CookExternalSourceDigestCache* const externalDigestCache,
+    const EnsureCookParsedDocumentFunction ensureParsedDocument,
+    void* const ensureParsedDocumentUser
 ){
     const b8 canonicalPathOk = __hidden_cook_metadata_cache::BuildCanonicalAbsolutePathText(discoveredNwbFile.filePath, scratchArena, outSourcePathText);
     const Sha1Digest pathSha1 = ComputeSha1Text(AStringView(outSourcePathText));
@@ -246,6 +297,9 @@ b8 ComputeNwbFileAssetCacheData(
         producerDigest,
         pairedSidecarRules,
         externalSourceCollectors,
+        externalDigestCache,
+        ensureParsedDocument,
+        ensureParsedDocumentUser,
         scratchArena,
         canUseCache
     );
@@ -278,7 +332,10 @@ void PrepareNwbFileAssetCacheRecord(
     ScratchArena& scratchArena,
     ScratchString& inOutSourcePathText,
     ScratchString& inOutCacheFileName,
-    NwbFileAssetCacheRecord& outRecord
+    NwbFileAssetCacheRecord& outRecord,
+    CookExternalSourceDigestCache* const externalDigestCache,
+    const EnsureCookParsedDocumentFunction ensureParsedDocument,
+    void* const ensureParsedDocumentUser
 ){
     Sha256Digest paramSha256 = {};
     const b8 canUseCache = ComputeNwbFileAssetCacheData(
@@ -290,7 +347,10 @@ void PrepareNwbFileAssetCacheRecord(
         scratchArena,
         inOutSourcePathText,
         inOutCacheFileName,
-        paramSha256
+        paramSha256,
+        externalDigestCache,
+        ensureParsedDocument,
+        ensureParsedDocumentUser
     );
     PopulateNwbFileAssetCacheRecord(assetCacheDirectory, AStringView(inOutSourcePathText), AStringView(inOutCacheFileName), paramSha256, canUseCache, outRecord);
 }
@@ -327,7 +387,8 @@ NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
     NwbFileAssetCacheRecord& inOutRecord,
     ScratchArena& scratchArena,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    const ParsedAssetMetadata& metadata
+    const ParsedAssetMetadata& metadata,
+    const CookMetadataRegistrySnapshot* const registrySnapshot
 ){
     inOutRecord.cachedVirtualPaths.clear();
 
@@ -348,7 +409,10 @@ NwbCacheLoadResult::Enum TryLoadNwbFileAssetCache(
         return NwbCacheLoadResult::Miss;
 
     for(const DecodedBuiltAssetEntryView& entry : decodedEntries){
-        if(!entry.assetType || IsNonStandaloneAssetType(entry.assetType) || !metadata.entryRegistry.has(entry.assetType))
+        const b8 nonStandalone = (registrySnapshot != nullptr)
+            ? IsNonStandaloneAssetType(*registrySnapshot, entry.assetType)
+            : Assets::IsNonStandaloneAssetType(entry.assetType);
+        if(!entry.assetType || nonStandalone || !metadata.entryRegistry.has(entry.assetType))
             return NwbCacheLoadResult::Miss;
     }
 

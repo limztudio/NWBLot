@@ -9,6 +9,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_PHYSICS_SUBSYS_PROFILE
+#define NWB_PHYSICS_SUBSYS_PROFILE 0
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if NWB_PHYSICS_SUBSYS_PROFILE == 0
 bool nwbPhysicsSubsysBodyMatchesFilter(const uint bodyFilterSlot, const uint bodyIdx, const uint4 targetFilter){
     if(bodyFilterSlot == NWB_PHYSICS_INVALID_INDEX)
         return true;
@@ -24,7 +33,9 @@ bool nwbPhysicsSubsysBodyMatchesFilter(const uint bodyFilterSlot, const uint bod
     }
     return false;
 }
+#endif
 
+#if NWB_PHYSICS_SUBSYS_PROFILE == 0 || NWB_PHYSICS_SUBSYS_PROFILE == 1
 float nwbPhysicsSubsysFieldFalloff(
     const uint falloffMode,
     const float distSq,
@@ -324,6 +335,7 @@ float3 nwbPhysicsSubsysEvalForceField(
     return float3(0.0f, 0.0f, 0.0f);
 }
 
+#if NWB_PHYSICS_SUBSYS_PROFILE == 0
 void nwbPhysicsSubsysApplyForceFieldAngular(
     const NwbPhysicsGpuForceField f,
     const float3 pos,
@@ -364,6 +376,7 @@ void nwbPhysicsSubsysApplyForceFieldAngular(
     const float maxT = effI * wSp * invDt * 0.9f;
     inoutTorque -= wDir * min(rawT, maxT);
 }
+#endif
 
 float nwbPhysicsSubsysFluidWaveOffset(
     const NwbPhysicsGpuFluidVolume fl,
@@ -506,6 +519,51 @@ void nwbPhysicsSubsysFluidEvalSurface(
     outSurfNormal = nwbPhysicsSafeNormal(float3(0.0f, 1.0f, 0.0f) - boxSlope, surfN);
 }
 
+bool nwbPhysicsSubsysFluidCoarseMayOverlap(
+    const NwbPhysicsGpuFluidVolume fl,
+    const uint gerstnerWaveSlot,
+    const float3 center,
+    const float3 surfN,
+    const float boundRadius
+){
+    const uint shapeType = asuint(fl.boundsMinShape.w);
+    if(shapeType == 0u)
+        return (dot(center, surfN) - fl.surfaceNormalOffset.w) <= (boundRadius + abs(fl.dragLiftWaveAmpFreq.z));
+    if(shapeType == 7u){
+        const float above = dot(center, surfN) - fl.surfaceNormalOffset.w;
+        if(above <= boundRadius)
+            return true;
+        const uint gerstnerPack = asuint(fl.obbHalfExtentsGerstner.w);
+        const uint gOff = gerstnerPack & 0xffffu;
+        const uint gCnt = gerstnerPack >> 16u;
+        float maxAmp = 0.0f;
+        if(gCnt == 0u || gerstnerWaveSlot == NWB_PHYSICS_INVALID_INDEX){
+            maxAmp = abs(fl.dragLiftWaveAmpFreq.z);
+        }
+        else{
+            [loop] for(uint wi = 0u; wi < gCnt; ++wi)
+                maxAmp += abs(g_NwbPhysicsFloat4Buffers[gerstnerWaveSlot][(gOff + wi) * 2u + 1u].x);
+        }
+        return above <= (boundRadius + maxAmp);
+    }
+    if(shapeType == 2u){
+        const float3 d = center - fl.surfaceNormalOffset.xyz;
+        const float maxR = max(0.0f, fl.surfaceNormalOffset.w) + boundRadius;
+        return dot(d, d) <= maxR * maxR;
+    }
+    if(shapeType == 3u){
+        const float3 he = max(fl.obbHalfExtentsGerstner.xyz, float3(1.0e-3f, 1.0e-3f, 1.0e-3f));
+        const float3 pL = nwbPhysicsQuatInvRotate(center - fl.obbCenterSplash.xyz, nwbPhysicsQuatNormalize(fl.obbRotation));
+        const float3 padHe = he + float3(boundRadius, boundRadius + abs(fl.dragLiftWaveAmpFreq.z), boundRadius);
+        return all(abs(pL) <= padHe);
+    }
+    const float3 bMin = fl.boundsMinShape.xyz - float3(boundRadius, boundRadius, boundRadius);
+    const float3 bMax = fl.boundsMaxDensity.xyz + float3(boundRadius, boundRadius + abs(fl.dragLiftWaveAmpFreq.z), boundRadius);
+    return all(center >= bMin) && all(center <= bMax);
+}
+#endif
+
+#if NWB_PHYSICS_SUBSYS_PROFILE == 2
 void nwbPhysicsSubsysGjkReduceTriangle(
     const float3 a,
     const float3 b,
@@ -576,6 +634,7 @@ void nwbPhysicsSubsysGjkReduceTriangle(
     outV = a + ab * (vb * denom) + ac * (vc * denom);
 }
 
+[noinline]
 float3 nwbPhysicsSubsysClosestPointOnHull(
     const uint hullSlot,
     const uint vOffset,
@@ -711,6 +770,7 @@ float3 nwbPhysicsSubsysClosestPointOnHull(
     return lp + v;
 }
 
+[noinline]
 bool nwbPhysicsSubsysCollideParticleShape(
     const NwbPhysicsGpuShapeProxy sp,
     const float3 sOrig,
@@ -1039,14 +1099,113 @@ bool nwbPhysicsSubsysCollideParticleShape(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_PHYSICS_SUBSYS_WAVE_SLOTS 16u
-
 groupshared float3 s_SoftVec0[NWB_PHYSICS_WORKGROUP_SIZE];
 groupshared float3 s_SoftVec1[NWB_PHYSICS_WORKGROUP_SIZE];
+#elif NWB_PHYSICS_SUBSYS_PROFILE == 1
+#define NWB_PHYSICS_SUBSYS_WAVE_SLOTS 16u
+
+groupshared float3 s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS * 2u];
+groupshared float3 s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS * 2u];
+groupshared float3 s_SoftVec2[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
+groupshared float s_SoftScalar0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
+
+[require(spvGroupNonUniform, spvGroupNonUniformArithmetic)]
+void nwbPhysicsSubsysReduceShapeMoments(
+    const uint gtid,
+    inout float3 ioMassRelPos,
+    inout float ioMass,
+    inout float3 ioSumR,
+    inout float3 ioCol0,
+    inout float3 ioCol1,
+    inout float3 ioCol2
+){
+    const float3 wPos = WaveActiveSum(ioMassRelPos);
+    const float wMass = WaveActiveSum(ioMass);
+    const float3 wSumR = WaveActiveSum(ioSumR);
+    const float3 wCol0 = WaveActiveSum(ioCol0);
+    const float3 wCol1 = WaveActiveSum(ioCol1);
+    const float3 wCol2 = WaveActiveSum(ioCol2);
+    const uint laneCnt = WaveGetLaneCount();
+    if(laneCnt >= NWB_PHYSICS_WORKGROUP_SIZE){
+        ioMassRelPos = wPos;
+        ioMass = wMass;
+        ioSumR = wSumR;
+        ioCol0 = wCol0;
+        ioCol1 = wCol1;
+        ioCol2 = wCol2;
+        return;
+    }
+    const uint waveId = gtid / laneCnt;
+    const uint numWaves = (NWB_PHYSICS_WORKGROUP_SIZE + laneCnt - 1u) / laneCnt;
+    if(WaveIsFirstLane() && waveId < NWB_PHYSICS_SUBSYS_WAVE_SLOTS){
+        s_SoftVec0[waveId] = wPos;
+        s_SoftScalar0[waveId] = wMass;
+        s_SoftVec2[waveId] = wSumR;
+        s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + waveId] = wCol0;
+        s_SoftVec1[waveId] = wCol1;
+        s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + waveId] = wCol2;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if(gtid == 0u){
+        float3 accPos = s_SoftVec0[0];
+        float accMass = s_SoftScalar0[0];
+        float3 accSumR = s_SoftVec2[0];
+        float3 accCol0 = s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
+        float3 accCol1 = s_SoftVec1[0];
+        float3 accCol2 = s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
+        const uint cap = min(numWaves, NWB_PHYSICS_SUBSYS_WAVE_SLOTS);
+        [loop] for(uint wi = 1u; wi < cap; ++wi){
+            accPos += s_SoftVec0[wi];
+            accMass += s_SoftScalar0[wi];
+            accSumR += s_SoftVec2[wi];
+            accCol0 += s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + wi];
+            accCol1 += s_SoftVec1[wi];
+            accCol2 += s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + wi];
+        }
+        ioMassRelPos = accPos;
+        ioMass = accMass;
+        ioSumR = accSumR;
+        ioCol0 = accCol0;
+        ioCol1 = accCol1;
+        ioCol2 = accCol2;
+    }
+}
+
+void nwbPhysicsSubsysSolveShapeMatchQuat(
+    const uint shapeOutSlot,
+    const float3 com,
+    const float3 a0,
+    const float3 a1,
+    const float3 a2
+){
+    float4 q = g_NwbPhysicsFloat4Buffers[shapeOutSlot][1];
+    const float qLenSq = dot(q, q);
+    q = (nwbFiniteFloat4(q) && qLenSq > 1.0e-8f) ? (q * rsqrt(qLenSq)) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+    for(uint iter = 0u; iter < 10u; ++iter){
+        float3 rx;
+        float3 ry;
+        float3 rz;
+        nwbPhysicsQuatToAxes(q, rx, ry, rz);
+        const float denom = abs(dot(rx, a0) + dot(ry, a1) + dot(rz, a2)) + 1.0e-9f;
+        const float3 omega = (cross(rx, a0) + cross(ry, a1) + cross(rz, a2)) / denom;
+        const float w = length(omega);
+        if(w < 1.0e-9f)
+            break;
+        const float halfW = 0.5f * w;
+        const float4 dq = float4((omega / w) * sin(halfW), cos(halfW));
+        q = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(dq, q));
+    }
+    g_NwbPhysicsFloat4Buffers[shapeOutSlot][0] = float4(com, 1.0f);
+    g_NwbPhysicsFloat4Buffers[shapeOutSlot][1] = q;
+}
+#elif NWB_PHYSICS_SUBSYS_PROFILE == 3
+#define NWB_PHYSICS_SUBSYS_WAVE_SLOTS 16u
+
+groupshared float3 s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
+groupshared float3 s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
 groupshared float3 s_SoftVec2[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
 groupshared float s_SoftScalar0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
 groupshared uint s_SoftUint0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
-groupshared float3 s_SoftCenter;
 
 [require(spvGroupNonUniform, spvGroupNonUniformArithmetic)]
 void nwbPhysicsSubsysReduceMinMaxAndUintSum(
@@ -1208,99 +1367,12 @@ void nwbPhysicsSubsysReduceSum3AndUint(
     outVec = s_SoftVec2[0];
     outCount = s_SoftUint0[0];
 }
+#endif
 
+
+#if NWB_PHYSICS_SUBSYS_PROFILE == 1 || NWB_PHYSICS_SUBSYS_PROFILE == 3
 [require(spvGroupNonUniform, spvGroupNonUniformArithmetic)]
-void nwbPhysicsSubsysReduceShapeMoments(
-    const uint gtid,
-    inout float3 ioMassRelPos,
-    inout float ioMass,
-    inout float3 ioSumR,
-    inout float3 ioCol0,
-    inout float3 ioCol1,
-    inout float3 ioCol2
-){
-    const float3 wPos = WaveActiveSum(ioMassRelPos);
-    const float wMass = WaveActiveSum(ioMass);
-    const float3 wSumR = WaveActiveSum(ioSumR);
-    const float3 wCol0 = WaveActiveSum(ioCol0);
-    const float3 wCol1 = WaveActiveSum(ioCol1);
-    const float3 wCol2 = WaveActiveSum(ioCol2);
-    const uint laneCnt = WaveGetLaneCount();
-    if(laneCnt >= NWB_PHYSICS_WORKGROUP_SIZE){
-        ioMassRelPos = wPos;
-        ioMass = wMass;
-        ioSumR = wSumR;
-        ioCol0 = wCol0;
-        ioCol1 = wCol1;
-        ioCol2 = wCol2;
-        return;
-    }
-    const uint waveId = gtid / laneCnt;
-    const uint numWaves = (NWB_PHYSICS_WORKGROUP_SIZE + laneCnt - 1u) / laneCnt;
-    if(WaveIsFirstLane() && waveId < NWB_PHYSICS_SUBSYS_WAVE_SLOTS){
-        s_SoftVec0[waveId] = wPos;
-        s_SoftScalar0[waveId] = wMass;
-        s_SoftVec2[waveId] = wSumR;
-        s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + waveId] = wCol0;
-        s_SoftVec1[waveId] = wCol1;
-        s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + waveId] = wCol2;
-    }
-    GroupMemoryBarrierWithGroupSync();
-    if(gtid == 0u){
-        float3 accPos = s_SoftVec0[0];
-        float accMass = s_SoftScalar0[0];
-        float3 accSumR = s_SoftVec2[0];
-        float3 accCol0 = s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
-        float3 accCol1 = s_SoftVec1[0];
-        float3 accCol2 = s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS];
-        const uint cap = min(numWaves, NWB_PHYSICS_SUBSYS_WAVE_SLOTS);
-        [loop] for(uint wi = 1u; wi < cap; ++wi){
-            accPos += s_SoftVec0[wi];
-            accMass += s_SoftScalar0[wi];
-            accSumR += s_SoftVec2[wi];
-            accCol0 += s_SoftVec0[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + wi];
-            accCol1 += s_SoftVec1[wi];
-            accCol2 += s_SoftVec1[NWB_PHYSICS_SUBSYS_WAVE_SLOTS + wi];
-        }
-        ioMassRelPos = accPos;
-        ioMass = accMass;
-        ioSumR = accSumR;
-        ioCol0 = accCol0;
-        ioCol1 = accCol1;
-        ioCol2 = accCol2;
-    }
-}
-
-void nwbPhysicsSubsysSolveShapeMatchQuat(
-    const uint shapeOutSlot,
-    const float3 com,
-    const float3 a0,
-    const float3 a1,
-    const float3 a2
-){
-    float4 q = g_NwbPhysicsFloat4Buffers[shapeOutSlot][1];
-    const float qLenSq = dot(q, q);
-    q = (nwbFiniteFloat4(q) && qLenSq > 1.0e-8f) ? (q * rsqrt(qLenSq)) : float4(0.0f, 0.0f, 0.0f, 1.0f);
-    for(uint iter = 0u; iter < 10u; ++iter){
-        float3 rx;
-        float3 ry;
-        float3 rz;
-        nwbPhysicsQuatToAxes(q, rx, ry, rz);
-        const float denom = abs(dot(rx, a0) + dot(ry, a1) + dot(rz, a2)) + 1.0e-9f;
-        const float3 omega = (cross(rx, a0) + cross(ry, a1) + cross(rz, a2)) / denom;
-        const float w = length(omega);
-        if(w < 1.0e-9f)
-            break;
-        const float halfW = 0.5f * w;
-        const float4 dq = float4((omega / w) * sin(halfW), cos(halfW));
-        q = nwbPhysicsQuatNormalize(nwbPhysicsQuatMul(dq, q));
-    }
-    g_NwbPhysicsFloat4Buffers[shapeOutSlot][0] = float4(com, 1.0f);
-    g_NwbPhysicsFloat4Buffers[shapeOutSlot][1] = q;
-}
-
-
-[require(spvGroupNonUniform, spvGroupNonUniformArithmetic)]
+#endif
 [numthreads(NWB_PHYSICS_WORKGROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint tid = dispatchThreadID.x;
@@ -1309,215 +1381,285 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint mode = g_NwbPhysicsPushConstants.modeOrSecondaryCount;
     const uint flags = g_NwbPhysicsPushConstants.flags;
 
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_BACKSTOP_COLLIDE && flags != 0u){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint stateSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint shapeSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint bodyPoseSlot = g_NwbPhysicsPushConstants.slots0.w;
-        const uint hullSlot = g_NwbPhysicsPushConstants.slots1.x;
-        const uint worldAabbSlot = g_NwbPhysicsPushConstants.slots1.y;
-        const uint meshBvhSlot = g_NwbPhysicsPushConstants.slots1.z;
-        const uint meshTriSlot = g_NwbPhysicsPushConstants.slots1.w;
-        const uint worldShapeCount = g_NwbPhysicsPushConstants.itemOffset;
-        const float fricScale = g_NwbPhysicsPushConstants.deltaTime;
-        const float restCoeff = clamp(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f, 1.0f);
-        const float pRadius = g_NwbPhysicsPushConstants.maxLinearVelocity;
-        const float3 radVec = float3(pRadius, pRadius, pRadius);
+#if NWB_PHYSICS_SUBSYS_PROFILE == 0
+    if(tid >= itemCount)
+        return;
 
-        bool canCollide = false;
-        float3 curPos = float3(0.0f, 0.0f, 0.0f);
-        float3 prevPos = float3(0.0f, 0.0f, 0.0f);
-        if(tid < itemCount){
-            const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
-            if(posInvMass.w > 0.0f){
-                const float4 prevPosFlags = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags;
-                if((asuint(prevPosFlags.w) & 1u) == 0u){
-                    canCollide = true;
-                    curPos = posInvMass.xyz;
-                    prevPos = prevPosFlags.xyz;
-                }
-            }
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_APPLY_FORCE_FIELDS){
+        const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint fieldSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint eventRingSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint prepCounterSlot = g_NwbPhysicsPushConstants.slots1.y;
+        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots1.z;
+        const uint fieldCount = g_NwbPhysicsPushConstants.itemOffset;
+        const uint maxEvents = flags;
+        const float timeSec = g_NwbPhysicsPushConstants.deltaTime;
+        const float invDt = g_NwbPhysicsPushConstants.invDeltaTime;
+        const float3 worldGrav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+
+        NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
+        NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
+        uint bFlags = asuint(st.deltaPositionFlags.w);
+        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
+            return;
+
+        const float bodyMass = 1.0f / sim.positionInvMass.w;
+        const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
+            : max(sim.localCenterMinExtent.w, 0.05f);
+        float3 addForce = float3(0.0f, 0.0f, 0.0f);
+        float3 addTorque = float3(0.0f, 0.0f, 0.0f);
+        bool localGravSubApplied = false;
+        [loop] for(uint fi = 0u; fi < fieldCount; ++fi){
+            const NwbPhysicsGpuForceField fld = g_NwbPhysicsForceFieldBuffers[fieldSlot][fi];
+            if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, fld.filterData))
+                continue;
+            float3 fTorque = float3(0.0f, 0.0f, 0.0f);
+            const float3 fForce = nwbPhysicsSubsysEvalForceField(
+                fld,
+                sim.positionInvMass.xyz,
+                st.linearVelocityPad.xyz,
+                bodyMass,
+                maxExt,
+                0.0f,
+                true,
+                timeSec,
+                invDt,
+                worldGrav,
+                sim.invInertiaWorld1.z,
+                fTorque,
+                localGravSubApplied
+            );
+            nwbPhysicsSubsysApplyForceFieldAngular(
+                fld,
+                sim.positionInvMass.xyz,
+                st.angularVelocityPad.xyz,
+                maxExt,
+                sim.invInertiaWorld0,
+                sim.invInertiaWorld1,
+                invDt,
+                fTorque
+            );
+            addForce += fForce;
+            addTorque += fTorque;
         }
-
-        [loop] for(uint tileBase = 0u; tileBase < worldShapeCount; tileBase += NWB_PHYSICS_WORKGROUP_SIZE){
-            const uint loadIdx = tileBase + gtid;
-            if(loadIdx < worldShapeCount && worldAabbSlot != NWB_PHYSICS_INVALID_INDEX){
-                s_SoftVec0[gtid] = g_NwbPhysicsFloat4Buffers[worldAabbSlot][loadIdx * 2u + 0u].xyz;
-                s_SoftVec1[gtid] = g_NwbPhysicsFloat4Buffers[worldAabbSlot][loadIdx * 2u + 1u].xyz;
+        if(any(addForce != float3(0.0f, 0.0f, 0.0f)) || any(addTorque != float3(0.0f, 0.0f, 0.0f))){
+            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].forceLinearDamping.xyz = sim.forceLinearDamping.xyz + addForce;
+            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].torqueAngularDamping.xyz = sim.torqueAngularDamping.xyz + addTorque;
+            if((bFlags & NWB_PHYSICS_BODY_FLAG_SLEEPING) != 0u){
+                bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
+                nwbPhysicsWriteBodyFlags(bodyStateSlot, tid, bFlags);
+                g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, tid, 0u, 0u, float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), uint4(tid, 0u, 0u, 0u));
             }
-            GroupMemoryBarrierWithGroupSync();
-
-            if(canCollide){
-                float3 pMin = curPos - radVec;
-                float3 pMax = curPos + radVec;
-                const uint tileEnd = min(NWB_PHYSICS_WORKGROUP_SIZE, worldShapeCount - tileBase);
-                [loop] for(uint j = 0u; j < tileEnd; ++j){
-                    if(worldAabbSlot != NWB_PHYSICS_INVALID_INDEX && (any(pMax < s_SoftVec0[j]) || any(pMin > s_SoftVec1[j])))
-                        continue;
-                    const NwbPhysicsGpuShapeProxy sp = g_NwbPhysicsShapeProxyBuffers[shapeSlot][tileBase + j];
-                    if((sp.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u)
-                        continue;
-                    const NwbPhysicsGpuBodyPose bp = g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][sp.bodyIndexTypeShape.x];
-                    float3 sOrig = float3(0.0f, 0.0f, 0.0f);
-                    float4 sRot = float4(0.0f, 0.0f, 0.0f, 1.0f);
-                    nwbPhysicsResolveShapeWorldPose(sp, bp.originPad.xyz, bp.rotation, sOrig, sRot);
-                    float3 outN = float3(0.0f, 1.0f, 0.0f);
-                    float pen = 0.0f;
-                    if(nwbPhysicsSubsysCollideParticleShape(sp, sOrig, sRot, hullSlot, meshBvhSlot, meshTriSlot, curPos, pRadius, outN, pen)){
-                        const float3 disp = curPos - prevPos;
-                        const float vn = dot(disp, outN);
-                        const float3 tanDisp = disp - outN * vn;
-                        curPos += outN * pen + tanDisp * (fricScale - 1.0f);
-                        if(restCoeff > 0.0f && vn < -1.0e-4f){
-                            const float curVn = dot(curPos - prevPos, outN);
-                            const float targetVn = -restCoeff * vn;
-                            if(targetVn > curVn)
-                                prevPos -= outN * (targetVn - curVn);
-                        }
-                        pMin = curPos - radVec;
-                        pMax = curPos + radVec;
-                    }
-                }
-            }
-            GroupMemoryBarrierWithGroupSync();
-        }
-
-        if(canCollide){
-            g_NwbPhysicsFloat4Buffers[pSlot][tid].xyz = curPos;
-            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags.xyz = prevPos;
         }
         return;
     }
 
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_SELF_COLLIDE){
-        if(tid >= itemCount)
-            return;
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint adjRangeSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint adjListSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint headSlot = g_NwbPhysicsPushConstants.slots0.w;
-        if(flags == 2u){
-            g_NwbPhysicsUintBuffers[headSlot][tid] = NWB_PHYSICS_INVALID_INDEX;
-            return;
-        }
-        const uint pOutSlot = g_NwbPhysicsPushConstants.slots1.w;
-        if(flags == 3u){
-            if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
-                g_NwbPhysicsFloat4Buffers[pSlot][tid] = g_NwbPhysicsFloat4Buffers[pOutSlot][tid];
-            return;
-        }
-        const uint nextSlot = g_NwbPhysicsPushConstants.slots1.x;
-        const uint tableMask = g_NwbPhysicsPushConstants.slots1.y;
-        const uint stateSlot = g_NwbPhysicsPushConstants.slots1.z;
-        const float minDist = g_NwbPhysicsPushConstants.deltaTime;
-        const float invCell = (minDist > 1.0e-5f) ? (1.0f / minDist) : 1.0f;
-        const float4 posSelf = g_NwbPhysicsFloat4Buffers[pSlot][tid];
-        const uint writePSlot = (pOutSlot != NWB_PHYSICS_INVALID_INDEX) ? pOutSlot : pSlot;
-        const float3 selfPos = posSelf.xyz;
-        if(!nwbFiniteFloat3(selfPos)){
-            if(flags == 1u && pOutSlot != NWB_PHYSICS_INVALID_INDEX)
-                g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posSelf;
-            return;
-        }
-        const int3 selfCell = int3(floor(selfPos * invCell));
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_APPLY_FLUID_BUOYANCY){
+        const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint fluidSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint gerstnerSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots1.y;
+        const uint eventRingSlot = g_NwbPhysicsPushConstants.slots1.z;
+        const uint prepCounterSlot = g_NwbPhysicsPushConstants.slots1.w;
+        const uint fluidCount = g_NwbPhysicsPushConstants.itemOffset;
+        const uint maxEvents = flags;
+        const float timeSec = g_NwbPhysicsPushConstants.deltaTime;
+        const float invDt = g_NwbPhysicsPushConstants.invDeltaTime;
+        const float3 grav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
 
-        if(flags == 0u){
-            const uint h = nwbPhysicsHashCell(selfCell, tableMask);
-            uint prevHead = NWB_PHYSICS_INVALID_INDEX;
-            InterlockedExchange(g_NwbPhysicsUintBuffers[headSlot][h], tid, prevHead);
-            g_NwbPhysicsUintBuffers[nextSlot][tid] = prevHead;
-            return;
-        }
-
-        if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
-            g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posSelf;
-
-        const float wSelf = max(posSelf.w, 0.0f);
-        const float stiff = clamp(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f, 1.0f);
-        const float selfFric = clamp(g_NwbPhysicsPushConstants.maxLinearVelocity, 0.0f, 1.0f);
-        if(wSelf <= 0.0f || minDist <= 1.0e-5f || stiff <= 0.0f)
+        NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
+        NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
+        uint bFlags = asuint(st.deltaPositionFlags.w);
+        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
             return;
 
-        uint adjStart = 0u;
-        uint adjCount = 0u;
-        if(adjRangeSlot != NWB_PHYSICS_INVALID_INDEX && adjListSlot != NWB_PHYSICS_INVALID_INDEX){
-            adjStart = g_NwbPhysicsUintBuffers[adjRangeSlot][tid * 2u + 0u];
-            adjCount = g_NwbPhysicsUintBuffers[adjRangeSlot][tid * 2u + 1u];
-        }
+        const float bodyMass = 1.0f / sim.positionInvMass.w;
+        const float effR = max(sim.localCenterMinExtent.w, 0.05f);
+        const float4 volInfo = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 0u]
+            : float4((4.0f / 3.0f) * 3.1415926535897932f * effR * effR * effR, effR, effR, effR);
+        const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
+            : effR;
+        const float bodyVol = max(volInfo.x, 1.0e-6f);
+        const float3 localH = max(volInfo.yzw, float3(0.025f, 0.025f, 0.025f));
+        const float boundRadius = length(localH) + 1.0e-3f;
+        const float areaEst = 2.0f * (localH.x * localH.z + localH.x * localH.y + localH.y * localH.z);
 
-        const float3 selfPrev = (stateSlot != NWB_PHYSICS_INVALID_INDEX)
-            ? g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags.xyz
-            : selfPos;
-        const float minDistSq = minDist * minDist;
-        float3 accumCorr = float3(0.0f, 0.0f, 0.0f);
-        uint visitedBuckets[27];
-        [unroll] for(uint bi = 0u; bi < 27u; ++bi)
-            visitedBuckets[bi] = NWB_PHYSICS_INVALID_INDEX;
-        uint visitedCount = 0u;
-        for(int dz = -1; dz <= 1; ++dz){
-            for(int dy = -1; dy <= 1; ++dy){
-                for(int dx = -1; dx <= 1; ++dx){
-                    const uint h = nwbPhysicsHashCell(selfCell + int3(dx, dy, dz), tableMask);
-                    bool seen = false;
-                    for(uint vb = 0u; vb < visitedCount; ++vb){
-                        if(visitedBuckets[vb] == h){
-                            seen = true;
-                            break;
-                        }
-                    }
-                    if(seen)
-                        continue;
-                    visitedBuckets[visitedCount++] = h;
-                    uint otherIdx = g_NwbPhysicsUintBuffers[headSlot][h];
-                    uint steps = 0u;
-                    [loop] while(otherIdx != NWB_PHYSICS_INVALID_INDEX && steps < itemCount){
-                        if(otherIdx != tid){
-                            const float4 posOther = g_NwbPhysicsFloat4Buffers[pSlot][otherIdx];
-                            const float3 diff = selfPos - posOther.xyz;
-                            const float dSq = dot(diff, diff);
-                            if(dSq < minDistSq && dSq > 1.0e-12f){
-                                bool isAdj = false;
-                                [loop] for(uint ai = 0u; ai < adjCount; ++ai){
-                                    if(g_NwbPhysicsUintBuffers[adjListSlot][adjStart + ai] == otherIdx){
-                                        isAdj = true;
-                                        break;
-                                    }
-                                }
-                                if(!isAdj){
-                                    const float invD = rsqrt(dSq);
-                                    const float d = dSq * invD;
-                                    const float wOther = max(posOther.w, 0.0f);
-                                    const float massRatio = wSelf / max(wSelf + wOther, 1.0e-12f);
-                                    const float pen = (minDist - d) * stiff;
-                                    const float3 nrm = diff * invD;
-                                    accumCorr += nrm * (pen * massRatio);
-                                    if(selfFric > 0.0f && stateSlot != NWB_PHYSICS_INVALID_INDEX){
-                                        const float3 pOtherPrev = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][otherIdx].prevPosFlags.xyz;
-                                        const float3 relDisp = (selfPos - selfPrev) - (posOther.xyz - pOtherPrev);
-                                        const float3 relTan = relDisp - nrm * dot(relDisp, nrm);
-                                        const float tanSq = dot(relTan, relTan);
-                                        if(tanSq > 1.0e-12f){
-                                            const float invTan = rsqrt(tanSq);
-                                            const float tanLen = tanSq * invTan;
-                                            const float maxSlide = min(tanLen, selfFric * pen);
-                                            accumCorr -= relTan * (invTan * maxSlide * massRatio);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        otherIdx = g_NwbPhysicsUintBuffers[nextSlot][otherIdx];
-                        ++steps;
-                    }
+        float3 addForce = float3(0.0f, 0.0f, 0.0f);
+        float3 addTorque = float3(0.0f, 0.0f, 0.0f);
+        [loop] for(uint fli = 0u; fli < fluidCount; ++fli){
+            const NwbPhysicsGpuFluidVolume fl = g_NwbPhysicsFluidVolumeBuffers[fluidSlot][fli];
+            if(asuint(fl.waveSpeedAngAddedFlags.w) == 0u)
+                continue;
+            if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, fl.filterData))
+                continue;
+            const float3 surfN = nwbPhysicsSafeNormal(fl.surfaceNormalOffset.xyz, float3(0.0f, 1.0f, 0.0f));
+            if(!nwbPhysicsSubsysFluidCoarseMayOverlap(fl, gerstnerSlot, sim.positionInvMass.xyz, surfN, boundRadius))
+                continue;
+            float sumFrac = 0.0f;
+            float3 cobAccum = float3(0.0f, 0.0f, 0.0f);
+            float3 flowAccum = float3(0.0f, 0.0f, 0.0f);
+            float3 normAccum = float3(0.0f, 0.0f, 0.0f);
+            [loop] for(uint oi = 0u; oi < 8u; ++oi){
+                const float3 octSign = float3(
+                    ((oi & 1u) != 0u) ? 0.5f : -0.5f,
+                    ((oi & 2u) != 0u) ? 0.5f : -0.5f,
+                    ((oi & 4u) != 0u) ? 0.5f : -0.5f
+                );
+                const float3 sampleP = sim.positionInvMass.xyz + nwbPhysicsQuatRotate(octSign * localH, sim.rotation);
+                float sampleD = 0.0f;
+                float3 sampleFlow = float3(0.0f, 0.0f, 0.0f);
+                float3 sampleNorm = surfN;
+                nwbPhysicsSubsysFluidEvalSurface(fl, gerstnerSlot, sampleP, surfN, timeSec, sampleD, sampleFlow, sampleNorm);
+                const float sampleHalfH = max(0.5f * dot(abs(nwbPhysicsQuatInvRotate(sampleNorm, sim.rotation)), localH), 1.0e-4f);
+                const float sampleFrac = clamp((sampleD + sampleHalfH) / (2.0f * sampleHalfH), 0.0f, 1.0f);
+                sumFrac += sampleFrac;
+                cobAccum += sampleP * sampleFrac;
+                flowAccum += sampleFlow * sampleFrac;
+                normAccum += sampleNorm * sampleFrac;
+            }
+            if(sumFrac <= 1.0e-5f)
+                continue;
+            const float subFrac = clamp(sumFrac * 0.125f, 0.0f, 1.0f);
+            const float3 cob = cobAccum / sumFrac;
+            const float3 localFlowVel = flowAccum / sumFrac;
+            const float3 localSurfN = nwbPhysicsSafeNormal(normAccum, surfN);
+            const float3 relCob = cob - sim.positionInvMass.xyz;
+
+            const float subVol = bodyVol * subFrac;
+            const float dispMass = fl.boundsMaxDensity.w * subVol;
+            const float3 buoyancyForce = (-grav) * (dispMass * sim.invInertiaWorld1.z);
+            float3 fluidForce = buoyancyForce;
+            float3 forceAtCob = buoyancyForce;
+
+            const float3 relV = localFlowVel - (st.linearVelocityPad.xyz + cross(st.angularVelocityPad.xyz, relCob));
+            const float spSq = dot(relV, relV);
+            const float subArea = areaEst * subFrac;
+            if(spSq > 1.0e-10f){
+                const float invSp = rsqrt(spSq);
+                const float sp = spSq * invSp;
+                const float3 relDir = relV * invSp;
+                const float linMag = fl.flowVelLinDrag.w * sp * subFrac * bodyMass
+                    + 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * subArea * spSq;
+                const float3 dragF = relDir * min(linMag, bodyMass * sp * invDt * 0.9f);
+                fluidForce += dragF;
+                forceAtCob += dragF;
+                if(fl.dragLiftWaveAmpFreq.x != 0.0f){
+                    const float3 liftDir = nwbPhysicsSafeNormal(localSurfN - relDir * dot(localSurfN, relDir), localSurfN);
+                    const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * subArea * spSq;
+                    const float maxLift = bodyMass * sp * invDt * 2.0f;
+                    const float3 liftF = liftDir * clamp(rawLift, -maxLift, maxLift);
+                    fluidForce += liftF;
+                    forceAtCob += liftF;
                 }
             }
-        }
 
-        if(dot(accumCorr, accumCorr) > 0.0f)
-            g_NwbPhysicsFloat4Buffers[writePSlot][tid].xyz = selfPos + accumCorr;
+            const float addedMass = max(0.0f, fl.waveSpeedAngAddedFlags.z) * dispMass;
+            if(addedMass > 1.0e-7f){
+                const float effRatio = bodyMass / (bodyMass + addedMass);
+                fluidForce = fluidForce * effRatio - (grav * sim.invInertiaWorld1.z) * (addedMass * effRatio);
+            }
+            addForce += fluidForce;
+            addTorque += cross(relCob, forceAtCob);
+
+            const float3 angV = st.angularVelocityPad.xyz;
+            const float wSq = dot(angV, angV);
+            if(wSq > 1.0e-10f){
+                const float invW = rsqrt(wSq);
+                const float wSp = wSq * invW;
+                const float3 wDir = angV * invW;
+                const float rawT = fl.waveSpeedAngAddedFlags.y * subFrac * max(0.1f, maxExt) * wSp;
+                const float kInvI = dot(wDir, nwbPhysicsMulSymmetric3(sim.invInertiaWorld0, sim.invInertiaWorld1, wDir));
+                const float maxT = (kInvI > 1.0e-10f) ? ((1.0f / kInvI) * wSp * invDt * 0.9f) : rawT;
+                addTorque -= wDir * min(rawT, maxT);
+            }
+
+            const float impactSpeed = max(0.0f, -dot(st.linearVelocityPad.xyz, localSurfN));
+            const float impactImpulse = bodyMass * impactSpeed;
+            if(maxEvents > 0u && eventRingSlot != NWB_PHYSICS_INVALID_INDEX && prepCounterSlot != NWB_PHYSICS_INVALID_INDEX && subFrac > 1.0e-5f)
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH, tid, fl.filterData.w, 0u, float4(cob, subFrac), float4(localSurfN, impactSpeed), uint4(tid, fl.filterData.w, asuint(impactImpulse), 0u));
+        }
+        if(any(addForce != float3(0.0f, 0.0f, 0.0f)) || any(addTorque != float3(0.0f, 0.0f, 0.0f))){
+            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].forceLinearDamping.xyz = sim.forceLinearDamping.xyz + addForce;
+            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].torqueAngularDamping.xyz = sim.torqueAngularDamping.xyz + addTorque;
+            if((bFlags & NWB_PHYSICS_BODY_FLAG_SLEEPING) != 0u){
+                bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
+                nwbPhysicsWriteBodyFlags(bodyStateSlot, tid, bFlags);
+                g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
+                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, tid, 0u, 0u, float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), uint4(tid, 0u, 0u, 0u));
+            }
+        }
         return;
     }
 
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_APPLY_EXPLOSION){
+        const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint bodyOutSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint4 expFilter = uint4(g_NwbPhysicsPushConstants.slots1.xyz, 0u);
+        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots1.w;
+        const float impulseParam = g_NwbPhysicsPushConstants.deltaTime;
+        const float upwardBias = g_NwbPhysicsPushConstants.invDeltaTime;
+        const float radiusParam = g_NwbPhysicsPushConstants.maxLinearVelocity;
+        const float falloffParam = max(g_NwbPhysicsPushConstants.linearSlop, 0.0f);
+        const float3 origin = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+
+        const NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
+        NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
+        uint bFlags = asuint(st.deltaPositionFlags.w);
+        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
+            return;
+        if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, expFilter))
+            return;
+
+        const float3 diff = sim.positionInvMass.xyz - origin;
+        const float dist = length(diff);
+        const float3 radDir = nwbPhysicsSafeNormal(diff, float3(0.0f, 1.0f, 0.0f));
+        float3 deltaV = float3(0.0f, 0.0f, 0.0f);
+        if(flags == 1u){
+            const float innerRadius = max(radiusParam, 0.0f);
+            const float maxR = innerRadius + falloffParam;
+            if(maxR <= 0.0f || impulseParam == 0.0f)
+                return;
+            const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
+                ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
+                : max(sim.localCenterMinExtent.w, 0.05f);
+            const float surfDist = max(0.0f, dist - maxExt);
+            if(surfDist >= maxR)
+                return;
+            float falloffScale = 1.0f;
+            if(surfDist > innerRadius)
+                falloffScale = (falloffParam > 0.0f) ? clamp(1.0f - (surfDist - innerRadius) / falloffParam, 0.0f, 1.0f) : 0.0f;
+            if(falloffScale <= 0.0f)
+                return;
+            const float charLen = max(0.1f, maxExt * 2.0f);
+            deltaV = nwbPhysicsApplyLinearLocks(radDir * (impulseParam * falloffScale * charLen * sim.positionInvMass.w), bFlags);
+        }
+        else{
+            if(radiusParam <= 0.0f || dist >= radiusParam)
+                return;
+            const float atten = pow(clamp(1.0f - dist / radiusParam, 0.0f, 1.0f), falloffParam);
+            const float3 blastDir = nwbPhysicsSafeNormal(radDir + float3(0.0f, upwardBias, 0.0f), float3(0.0f, 1.0f, 0.0f));
+            deltaV = nwbPhysicsApplyLinearLocks(blastDir * (impulseParam * atten * sim.positionInvMass.w), bFlags);
+        }
+
+        const float3 newVel = st.linearVelocityPad.xyz + deltaV;
+        bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
+        g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid].linearVelocityPad = float4(newVel, asfloat(bFlags));
+        g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid].deltaPositionFlags.w = asfloat(bFlags);
+        g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
+        if(bodyOutSlot != NWB_PHYSICS_INVALID_INDEX)
+            g_NwbPhysicsBodyOutBuffers[bodyOutSlot][tid].linearVelocityFlags = float4(newVel, asfloat(bFlags));
+    }
+#elif NWB_PHYSICS_SUBSYS_PROFILE == 1
     if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_SHAPE_MATCH){
         if(itemCount == 0u)
             return;
@@ -1637,6 +1779,587 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
+    if(tid >= itemCount)
+        return;
+
+    const uint idx = g_NwbPhysicsPushConstants.itemOffset + tid;
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_PREDICT){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint fieldSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint fluidSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint stateSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint gerstnerSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint fieldCount = g_NwbPhysicsPushConstants.itemOffset;
+        const uint fluidCount = flags;
+        const float h = g_NwbPhysicsPushConstants.deltaTime;
+        const float dampScale = g_NwbPhysicsPushConstants.invDeltaTime;
+        const float dragCoeff = g_NwbPhysicsPushConstants.maxLinearVelocity;
+        const float timeSec = g_NwbPhysicsPushConstants.linearSlop;
+        const float3 grav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+        const float rawParticleRadius = g_NwbPhysicsPushConstants.gravitySpeculative.w;
+        const float invH = (h > 1.0e-5f) ? (1.0f / h) : 1.0e5f;
+
+        float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        NwbPhysicsGpuSoftParticleState st = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid];
+        st.prevPosFlags.xyz = posInvMass.xyz;
+        const uint pFlags = asuint(st.prevPosFlags.w);
+        const float invMass = posInvMass.w;
+        if((pFlags & 1u) != 0u || invMass <= 0.0f){
+            st.velPad.xyz = float3(0.0f, 0.0f, 0.0f);
+            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid] = st;
+            return;
+        }
+
+        const float mass = 1.0f / invMass;
+        float3 totalF = st.extForcePad.xyz;
+        const float dragK = clamp(dragCoeff * 4.0f, 0.05f, 4.0f) * mass;
+        float3 dummyTrq = float3(0.0f, 0.0f, 0.0f);
+        bool localGravSubApplied = false;
+        if(fieldSlot != NWB_PHYSICS_INVALID_INDEX && fieldCount > 0u){
+            [loop] for(uint fi = 0u; fi < fieldCount; ++fi)
+                totalF += nwbPhysicsSubsysEvalForceField(g_NwbPhysicsForceFieldBuffers[fieldSlot][fi], posInvMass.xyz, st.velPad.xyz, mass, dragK, rawParticleRadius, false, timeSec, invH, grav, 1.0f, dummyTrq, localGravSubApplied);
+        }
+        if(fluidSlot != NWB_PHYSICS_INVALID_INDEX && fluidCount > 0u){
+            const float pRad = max(rawParticleRadius, 1.0e-2f);
+            const float pVol = (4.0f / 3.0f) * 3.1415926535897932f * pRad * pRad * pRad;
+            [loop] for(uint fli = 0u; fli < fluidCount; ++fli){
+                const NwbPhysicsGpuFluidVolume fl = g_NwbPhysicsFluidVolumeBuffers[fluidSlot][fli];
+                if(asuint(fl.waveSpeedAngAddedFlags.w) == 0u)
+                    continue;
+                const float3 surfN = nwbPhysicsSafeNormal(fl.surfaceNormalOffset.xyz, float3(0.0f, 1.0f, 0.0f));
+                if(!nwbPhysicsSubsysFluidCoarseMayOverlap(fl, gerstnerSlot, posInvMass.xyz, surfN, pRad + 1.0e-3f))
+                    continue;
+                float d = 0.0f;
+                float3 flowVel = float3(0.0f, 0.0f, 0.0f);
+                float3 localSurfN = surfN;
+                nwbPhysicsSubsysFluidEvalSurface(fl, gerstnerSlot, posInvMass.xyz, surfN, timeSec, d, flowVel, localSurfN);
+                if(d + pRad > 0.0f){
+                    const float hCap = clamp(d + pRad, 0.0f, 2.0f * pRad);
+                    const float vCap = (3.1415926535897932f / 3.0f) * hCap * hCap * (3.0f * pRad - hCap);
+                    const float frac = clamp(vCap / max(pVol, 1.0e-7f), 0.0f, 1.0f);
+                    const float dispM = fl.boundsMaxDensity.w * vCap;
+                    float3 flForce = (-grav) * dispM;
+                    const float3 relV = flowVel - st.velPad.xyz;
+                    const float spSq = dot(relV, relV);
+                    if(spSq > 1.0e-10f){
+                        const float invSp = rsqrt(spSq);
+                        const float sp = spSq * invSp;
+                        const float3 relDir = relV * invSp;
+                        const float pArea = 3.1415926535897932f * pRad * pRad * frac;
+                        const float linD = fl.flowVelLinDrag.w * sp * frac * mass;
+                        const float quadD = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * pArea * spSq;
+                        const float maxF = (mass * sp) * invH * 0.9f;
+                        flForce += relDir * min(linD + quadD, maxF);
+                        if(fl.dragLiftWaveAmpFreq.x != 0.0f){
+                            const float3 liftDir = nwbPhysicsSafeNormal(localSurfN - relDir * dot(localSurfN, relDir), localSurfN);
+                            const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * pArea * spSq;
+                            flForce += liftDir * clamp(rawLift, -maxF * 2.0f, maxF * 2.0f);
+                        }
+                    }
+                    const float addedM = max(0.0f, fl.waveSpeedAngAddedFlags.z) * dispM;
+                    if(addedM > 1.0e-7f){
+                        const float effRatio = mass / (mass + addedM);
+                        flForce = flForce * effRatio - grav * (addedM * effRatio);
+                    }
+                    totalF += flForce;
+                }
+            }
+        }
+
+        const float3 acc = grav + totalF * invMass;
+        const float3 newVel = (st.velPad.xyz + acc * h) * dampScale;
+        st.velPad.xyz = newVel;
+        posInvMass.xyz += newVel * h;
+        g_NwbPhysicsFloat4Buffers[pSlot][tid] = posInvMass;
+        g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid] = st;
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_RESET_LAMBDAS){
+        const uint conSlot = g_NwbPhysicsPushConstants.slots0.x;
+        if(flags == 0u)
+            g_NwbPhysicsSoftDistConstraintBuffers[conSlot][idx].restCompLambdaPad.z = 0.0f;
+        else if(flags == 1u)
+            g_NwbPhysicsSoftVolConstraintBuffers[conSlot][idx].restCompLambdaPad.z = 0.0f;
+        else
+            g_NwbPhysicsSoftBendConstraintBuffers[conSlot][idx].restAngleCompLambdaPad.z = 0.0f;
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_DISTANCE_COLOR){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint dcSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const float invDt2 = g_NwbPhysicsPushConstants.deltaTime;
+        NwbPhysicsGpuSoftDistConstraint dc = g_NwbPhysicsSoftDistConstraintBuffers[dcSlot][idx];
+        const uint i0 = dc.indices.x;
+        const uint i1 = dc.indices.y;
+        if(i0 == i1)
+            return;
+        const float4 p0 = g_NwbPhysicsFloat4Buffers[pSlot][i0];
+        const float4 p1 = g_NwbPhysicsFloat4Buffers[pSlot][i1];
+        const float w0 = max(p0.w, 0.0f);
+        const float w1 = max(p1.w, 0.0f);
+        const float wSum = w0 + w1;
+        if(wSum <= 1.0e-12f)
+            return;
+        const float3 diff = p0.xyz - p1.xyz;
+        const float dSq = dot(diff, diff);
+        if(dSq <= 1.0e-16f)
+            return;
+        const float invD = rsqrt(dSq);
+        const float d = dSq * invD;
+        const float3 n = diff * invD;
+        const float cVal = d - dc.restCompLambdaPad.x;
+        const float alphaTilde = dc.restCompLambdaPad.y * invDt2;
+        const float dLambda = (-cVal - alphaTilde * dc.restCompLambdaPad.z) / (wSum + alphaTilde);
+        dc.restCompLambdaPad.z += dLambda;
+        g_NwbPhysicsSoftDistConstraintBuffers[dcSlot][idx].restCompLambdaPad.z = dc.restCompLambdaPad.z;
+        if(w0 > 0.0f)
+            g_NwbPhysicsFloat4Buffers[pSlot][i0].xyz = p0.xyz + n * (dLambda * w0);
+        if(w1 > 0.0f)
+            g_NwbPhysicsFloat4Buffers[pSlot][i1].xyz = p1.xyz - n * (dLambda * w1);
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_VOLUME_COLOR){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint vcSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const float invDt2 = g_NwbPhysicsPushConstants.deltaTime;
+        NwbPhysicsGpuSoftVolConstraint vc = g_NwbPhysicsSoftVolConstraintBuffers[vcSlot][idx];
+        const float4 p0 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.x];
+        const float4 p1 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.y];
+        const float4 p2 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.z];
+        const float4 p3 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.w];
+        const float w0 = max(p0.w, 0.0f);
+        const float w1 = max(p1.w, 0.0f);
+        const float w2 = max(p2.w, 0.0f);
+        const float w3 = max(p3.w, 0.0f);
+        const float3 x0 = p0.xyz;
+        const float3 x1 = p1.xyz;
+        const float3 x2 = p2.xyz;
+        const float3 x3 = p3.xyz;
+        const float3 g1 = cross(x2 - x0, x3 - x0) * (1.0f / 6.0f);
+        const float3 g2 = cross(x3 - x0, x1 - x0) * (1.0f / 6.0f);
+        const float3 g3 = cross(x1 - x0, x2 - x0) * (1.0f / 6.0f);
+        const float3 g0 = -(g1 + g2 + g3);
+        const float denomGrad = w0 * dot(g0, g0) + w1 * dot(g1, g1) + w2 * dot(g2, g2) + w3 * dot(g3, g3);
+        if(denomGrad <= 1.0e-12f)
+            return;
+        const float vol = dot(x1 - x0, g1);
+        const float cVal = vol - vc.restCompLambdaPad.x;
+        const float alphaTilde = vc.restCompLambdaPad.y * invDt2;
+        const float dLambda = (-cVal - alphaTilde * vc.restCompLambdaPad.z) / (denomGrad + alphaTilde);
+        vc.restCompLambdaPad.z += dLambda;
+        g_NwbPhysicsSoftVolConstraintBuffers[vcSlot][idx].restCompLambdaPad.z = vc.restCompLambdaPad.z;
+        if(w0 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.x].xyz = x0 + g0 * (dLambda * w0);
+        if(w1 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.y].xyz = x1 + g1 * (dLambda * w1);
+        if(w2 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.z].xyz = x2 + g2 * (dLambda * w2);
+        if(w3 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.w].xyz = x3 + g3 * (dLambda * w3);
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_BENDING_COLOR){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint bcSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const float invDt2 = g_NwbPhysicsPushConstants.deltaTime;
+        NwbPhysicsGpuSoftBendConstraint bc = g_NwbPhysicsSoftBendConstraintBuffers[bcSlot][idx];
+        const float4 p0 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.x];
+        const float4 p1 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.y];
+        const float4 p2 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.z];
+        const float4 p3 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.w];
+        const float w0 = max(p0.w, 0.0f);
+        const float w1 = max(p1.w, 0.0f);
+        const float w2 = max(p2.w, 0.0f);
+        const float w3 = max(p3.w, 0.0f);
+        if(w0 + w1 + w2 + w3 <= 1.0e-12f)
+            return;
+
+        const float3 x0 = p0.xyz;
+        const float3 x1 = p1.xyz;
+        const float3 x2 = p2.xyz;
+        const float3 x3 = p3.xyz;
+        const float3 e = x1 - x0;
+        const float eLenSq = dot(e, e);
+        if(eLenSq <= 1.0e-12f)
+            return;
+        const float eInv = rsqrt(eLenSq);
+        const float eLen = eLenSq * eInv;
+        const float3 eHat = e * eInv;
+
+        const float3 n1Raw = cross(e, x2 - x0);
+        const float3 n2Raw = cross(x3 - x0, e);
+        const float a1Sq = dot(n1Raw, n1Raw);
+        const float a2Sq = dot(n2Raw, n2Raw);
+        if(a1Sq <= 1.0e-12f || a2Sq <= 1.0e-12f)
+            return;
+        const float a1Inv = rsqrt(a1Sq);
+        const float a2Inv = rsqrt(a2Sq);
+        const float a1 = a1Sq * a1Inv;
+        const float a2 = a2Sq * a2Inv;
+        const float3 n1Hat = n1Raw * a1Inv;
+        const float3 n2Hat = n2Raw * a2Inv;
+
+        const float sinVal = dot(cross(n1Hat, n2Hat), eHat);
+        const float cosVal = clamp(dot(n1Hat, n2Hat), -1.0f, 1.0f);
+        const float phi = atan2(sinVal, cosVal);
+        float cVal = phi - bc.restAngleCompLambdaPad.x;
+        if(cVal > 3.14159265359f)
+            cVal -= 6.28318530718f;
+        if(cVal < -3.14159265359f)
+            cVal += 6.28318530718f;
+
+        const float3 q2 = (-n1Hat) * (eLen / a1);
+        const float3 q3 = (-n2Hat) * (eLen / a2);
+        const float invESq = 1.0f / eLenSq;
+        const float u = dot(x2 - x0, e) * invESq;
+        const float v = dot(x3 - x0, e) * invESq;
+        const float3 q0 = q2 * (u - 1.0f) + q3 * (v - 1.0f);
+        const float3 q1 = -(q2 * u + q3 * v);
+
+        const float denom = w0 * dot(q0, q0) + w1 * dot(q1, q1) + w2 * dot(q2, q2) + w3 * dot(q3, q3);
+        const float alphaTilde = bc.restAngleCompLambdaPad.y * invDt2;
+        if(denom + alphaTilde <= 1.0e-12f)
+            return;
+        const float dLambda = (-cVal - alphaTilde * bc.restAngleCompLambdaPad.z) / (denom + alphaTilde);
+        bc.restAngleCompLambdaPad.z += dLambda;
+        g_NwbPhysicsSoftBendConstraintBuffers[bcSlot][idx].restAngleCompLambdaPad.z = bc.restAngleCompLambdaPad.z;
+        if(w0 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.x].xyz = x0 + q0 * (dLambda * w0);
+        if(w1 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.y].xyz = x1 + q1 * (dLambda * w1);
+        if(w2 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.z].xyz = x2 + q2 * (dLambda * w2);
+        if(w3 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.w].xyz = x3 + q3 * (dLambda * w3);
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_AERO_DRAG){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint triRangeSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint triIdxListSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint surfTriSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint stateSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint pOutSlot = g_NwbPhysicsPushConstants.slots1.y;
+        const float h = g_NwbPhysicsPushConstants.deltaTime;
+        const float dragC = max(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f);
+        const float liftC = g_NwbPhysicsPushConstants.maxLinearVelocity;
+        const float3 windVel = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
+
+        const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+            g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posInvMass;
+        if(posInvMass.w <= 0.0f)
+            return;
+        const uint triStart = g_NwbPhysicsUintBuffers[triRangeSlot][tid * 2u + 0u];
+        const uint triCnt = g_NwbPhysicsUintBuffers[triRangeSlot][tid * 2u + 1u];
+        if(triCnt == 0u || (dragC <= 0.0f && abs(liftC) <= 1.0e-6f))
+            return;
+
+        float3 totalDisp = float3(0.0f, 0.0f, 0.0f);
+        const bool hasDrag = dragC > 0.0f;
+        const bool hasLift = abs(liftC) > 1.0e-6f;
+        [loop] for(uint ti = 0u; ti < triCnt; ++ti){
+            const uint triId = g_NwbPhysicsUintBuffers[triIdxListSlot][triStart + ti];
+            const uint4 tri = asuint(g_NwbPhysicsFloat4Buffers[surfTriSlot][triId]);
+            const float3 x0 = g_NwbPhysicsFloat4Buffers[pSlot][tri.x].xyz;
+            const float3 x1 = g_NwbPhysicsFloat4Buffers[pSlot][tri.y].xyz;
+            const float3 x2 = g_NwbPhysicsFloat4Buffers[pSlot][tri.z].xyz;
+            const float3 c = cross(x1 - x0, x2 - x0);
+            const float areaSq = dot(c, c);
+            if(areaSq <= 1.0e-14f)
+                continue;
+            const float invDoubleA = rsqrt(areaSq);
+            const float doubleArea = areaSq * invDoubleA;
+            const float3 triN = c * invDoubleA;
+            const float3 v0 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.x].velPad.xyz;
+            const float3 v1 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.y].velPad.xyz;
+            const float3 v2 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.z].velPad.xyz;
+            const float3 avgVel = (v0 + v1 + v2) * (1.0f / 3.0f);
+            const float3 vRel = avgVel - windVel;
+            const float3 vAir = -vRel;
+            const float vn = dot(vRel, triN);
+            const float3 vAirTan = vAir + triN * vn;
+            const float3 dragPush = (triN * (-vn) + vAirTan * 0.1f) * h;
+            const float baseCoeff = doubleArea * (dragC * h / 6.0f);
+            if(hasDrag)
+                totalDisp += dragPush * clamp(baseCoeff * posInvMass.w, 0.0f, 0.9f);
+            if(hasLift){
+                const float vRelSq = dot(vRel, vRel);
+                if(vRelSq > 1.0e-10f){
+                    const float3 nEff = (vn > 0.0f) ? (-triN) : triN;
+                    const float3 liftVec = cross(cross(vAir, nEff), vAir);
+                    const float liftLenSq = dot(liftVec, liftVec);
+                    if(liftLenSq > 1.0e-14f){
+                        const float3 liftDir = liftVec * rsqrt(liftLenSq);
+                        const float liftImpulse = (doubleArea * liftC * abs(vn) * sqrt(vRelSq) * h * h) / 6.0f;
+                        totalDisp += liftDir * clamp(liftImpulse * posInvMass.w, -0.5f, 0.5f);
+                    }
+                }
+            }
+        }
+        const uint writePSlot = (pOutSlot != NWB_PHYSICS_INVALID_INDEX) ? pOutSlot : pSlot;
+        g_NwbPhysicsFloat4Buffers[writePSlot][tid].xyz = posInvMass.xyz + totalDisp;
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_VEL_UPDATE){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint stateSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const float invH = g_NwbPhysicsPushConstants.deltaTime;
+        const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        const float4 prevPosFlags = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags;
+        if((asuint(prevPosFlags.w) & 1u) != 0u || posInvMass.w <= 0.0f)
+            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].velPad.xyz = float3(0.0f, 0.0f, 0.0f);
+        else
+            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].velPad.xyz = (posInvMass.xyz - prevPosFlags.xyz) * invH;
+        if(flags != 0u)
+            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].extForcePad.xyz = float3(0.0f, 0.0f, 0.0f);
+        return;
+    }
+#elif NWB_PHYSICS_SUBSYS_PROFILE == 2
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_BACKSTOP_COLLIDE && flags != 0u){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint stateSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint shapeSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint bodyPoseSlot = g_NwbPhysicsPushConstants.slots0.w;
+        const uint hullSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint worldAabbSlot = g_NwbPhysicsPushConstants.slots1.y;
+        const uint meshBvhSlot = g_NwbPhysicsPushConstants.slots1.z;
+        const uint meshTriSlot = g_NwbPhysicsPushConstants.slots1.w;
+        const uint worldShapeCount = g_NwbPhysicsPushConstants.itemOffset;
+        const float fricScale = g_NwbPhysicsPushConstants.deltaTime;
+        const float restCoeff = clamp(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f, 1.0f);
+        const float pRadius = g_NwbPhysicsPushConstants.maxLinearVelocity;
+        const float3 radVec = float3(pRadius, pRadius, pRadius);
+
+        bool canCollide = false;
+        float3 curPos = float3(0.0f, 0.0f, 0.0f);
+        float3 prevPos = float3(0.0f, 0.0f, 0.0f);
+        if(tid < itemCount){
+            const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+            if(posInvMass.w > 0.0f){
+                const float4 prevPosFlags = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags;
+                if((asuint(prevPosFlags.w) & 1u) == 0u){
+                    canCollide = true;
+                    curPos = posInvMass.xyz;
+                    prevPos = prevPosFlags.xyz;
+                }
+            }
+        }
+
+        [loop] for(uint tileBase = 0u; tileBase < worldShapeCount; tileBase += NWB_PHYSICS_WORKGROUP_SIZE){
+            const uint loadIdx = tileBase + gtid;
+            if(loadIdx < worldShapeCount && worldAabbSlot != NWB_PHYSICS_INVALID_INDEX){
+                s_SoftVec0[gtid] = g_NwbPhysicsFloat4Buffers[worldAabbSlot][loadIdx * 2u + 0u].xyz;
+                s_SoftVec1[gtid] = g_NwbPhysicsFloat4Buffers[worldAabbSlot][loadIdx * 2u + 1u].xyz;
+            }
+            GroupMemoryBarrierWithGroupSync();
+
+            if(canCollide){
+                float3 pMin = curPos - radVec;
+                float3 pMax = curPos + radVec;
+                const uint tileEnd = min(NWB_PHYSICS_WORKGROUP_SIZE, worldShapeCount - tileBase);
+                [loop] for(uint j = 0u; j < tileEnd; ++j){
+                    if(worldAabbSlot != NWB_PHYSICS_INVALID_INDEX && (any(pMax < s_SoftVec0[j]) || any(pMin > s_SoftVec1[j])))
+                        continue;
+                    const NwbPhysicsGpuShapeProxy sp = g_NwbPhysicsShapeProxyBuffers[shapeSlot][tileBase + j];
+                    if((sp.bodyIndexTypeShape.w & NWB_PHYSICS_SHAPE_FLAG_SENSOR) != 0u)
+                        continue;
+                    const NwbPhysicsGpuBodyPose bp = g_NwbPhysicsBodyPoseBuffers[bodyPoseSlot][sp.bodyIndexTypeShape.x];
+                    float3 sOrig = float3(0.0f, 0.0f, 0.0f);
+                    float4 sRot = float4(0.0f, 0.0f, 0.0f, 1.0f);
+                    nwbPhysicsResolveShapeWorldPose(sp, bp.originPad.xyz, bp.rotation, sOrig, sRot);
+                    float3 outN = float3(0.0f, 1.0f, 0.0f);
+                    float pen = 0.0f;
+                    if(nwbPhysicsSubsysCollideParticleShape(sp, sOrig, sRot, hullSlot, meshBvhSlot, meshTriSlot, curPos, pRadius, outN, pen)){
+                        const float3 disp = curPos - prevPos;
+                        const float vn = dot(disp, outN);
+                        const float3 tanDisp = disp - outN * vn;
+                        curPos += outN * pen + tanDisp * (fricScale - 1.0f);
+                        if(restCoeff > 0.0f && vn < -1.0e-4f){
+                            const float curVn = dot(curPos - prevPos, outN);
+                            const float targetVn = -restCoeff * vn;
+                            if(targetVn > curVn)
+                                prevPos -= outN * (targetVn - curVn);
+                        }
+                        pMin = curPos - radVec;
+                        pMax = curPos + radVec;
+                    }
+                }
+            }
+            GroupMemoryBarrierWithGroupSync();
+        }
+
+        if(canCollide){
+            g_NwbPhysicsFloat4Buffers[pSlot][tid].xyz = curPos;
+            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags.xyz = prevPos;
+        }
+        return;
+    }
+
+    if(tid >= itemCount)
+        return;
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_SELF_COLLIDE){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint adjRangeSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint adjListSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const uint headSlot = g_NwbPhysicsPushConstants.slots0.w;
+        if(flags == 2u){
+            g_NwbPhysicsUintBuffers[headSlot][tid] = NWB_PHYSICS_INVALID_INDEX;
+            return;
+        }
+        const uint nextSlot = g_NwbPhysicsPushConstants.slots1.x;
+        const uint tableMask = g_NwbPhysicsPushConstants.slots1.y;
+        const uint stateSlot = g_NwbPhysicsPushConstants.slots1.z;
+        const uint pOutSlot = g_NwbPhysicsPushConstants.slots1.w;
+        const float minDist = g_NwbPhysicsPushConstants.deltaTime;
+        const float invCell = (minDist > 1.0e-5f) ? (1.0f / minDist) : 1.0f;
+        const float4 posSelf = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        const uint writePSlot = (pOutSlot != NWB_PHYSICS_INVALID_INDEX) ? pOutSlot : pSlot;
+        const float3 selfPos = posSelf.xyz;
+        if(!nwbFiniteFloat3(selfPos)){
+            if(flags == 1u && pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+                g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posSelf;
+            return;
+        }
+        const int3 selfCell = int3(floor(selfPos * invCell));
+
+        if(flags == 0u){
+            const uint h = nwbPhysicsHashCell(selfCell, tableMask);
+            uint prevHead = NWB_PHYSICS_INVALID_INDEX;
+            InterlockedExchange(g_NwbPhysicsUintBuffers[headSlot][h], tid, prevHead);
+            g_NwbPhysicsUintBuffers[nextSlot][tid] = prevHead;
+            return;
+        }
+
+        if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
+            g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posSelf;
+
+        const float wSelf = max(posSelf.w, 0.0f);
+        const float stiff = clamp(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f, 1.0f);
+        const float selfFric = clamp(g_NwbPhysicsPushConstants.maxLinearVelocity, 0.0f, 1.0f);
+        if(wSelf <= 0.0f || minDist <= 1.0e-5f || stiff <= 0.0f)
+            return;
+
+        uint adjStart = 0u;
+        uint adjCount = 0u;
+        if(adjRangeSlot != NWB_PHYSICS_INVALID_INDEX && adjListSlot != NWB_PHYSICS_INVALID_INDEX){
+            adjStart = g_NwbPhysicsUintBuffers[adjRangeSlot][tid * 2u + 0u];
+            adjCount = g_NwbPhysicsUintBuffers[adjRangeSlot][tid * 2u + 1u];
+        }
+
+        const float3 selfPrev = (stateSlot != NWB_PHYSICS_INVALID_INDEX)
+            ? g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags.xyz
+            : selfPos;
+        const float minDistSq = minDist * minDist;
+        float3 accumCorr = float3(0.0f, 0.0f, 0.0f);
+        for(int dz = -1; dz <= 1; ++dz){
+            for(int dy = -1; dy <= 1; ++dy){
+                for(int dx = -1; dx <= 1; ++dx){
+                    const int3 targetCell = selfCell + int3(dx, dy, dz);
+                    const uint h = nwbPhysicsHashCell(targetCell, tableMask);
+                    uint otherIdx = g_NwbPhysicsUintBuffers[headSlot][h];
+                    uint steps = 0u;
+                    [loop] while(otherIdx != NWB_PHYSICS_INVALID_INDEX && steps < itemCount){
+                        if(otherIdx != tid){
+                            const float4 posOther = g_NwbPhysicsFloat4Buffers[pSlot][otherIdx];
+                            const float3 diff = selfPos - posOther.xyz;
+                            const float dSq = dot(diff, diff);
+                            if(dSq < minDistSq && dSq > 1.0e-12f && all(int3(floor(posOther.xyz * invCell)) == targetCell)){
+                                bool isAdj = false;
+                                uint lo = 0u;
+                                uint hi = adjCount;
+                                [loop] while(lo < hi){
+                                    const uint mid = (lo + hi) >> 1u;
+                                    const uint v = g_NwbPhysicsUintBuffers[adjListSlot][adjStart + mid];
+                                    if(v == otherIdx){
+                                        isAdj = true;
+                                        break;
+                                    }
+                                    if(v < otherIdx)
+                                        lo = mid + 1u;
+                                    else
+                                        hi = mid;
+                                }
+                                if(!isAdj){
+                                    const float invD = rsqrt(dSq);
+                                    const float d = dSq * invD;
+                                    const float wOther = max(posOther.w, 0.0f);
+                                    const float massRatio = wSelf / max(wSelf + wOther, 1.0e-12f);
+                                    const float pen = (minDist - d) * stiff;
+                                    const float3 nrm = diff * invD;
+                                    accumCorr += nrm * (pen * massRatio);
+                                    if(selfFric > 0.0f && stateSlot != NWB_PHYSICS_INVALID_INDEX){
+                                        const float3 pOtherPrev = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][otherIdx].prevPosFlags.xyz;
+                                        const float3 relDisp = (selfPos - selfPrev) - (posOther.xyz - pOtherPrev);
+                                        const float3 relTan = relDisp - nrm * dot(relDisp, nrm);
+                                        const float tanSq = dot(relTan, relTan);
+                                        if(tanSq > 1.0e-12f){
+                                            const float invTan = rsqrt(tanSq);
+                                            const float tanLen = tanSq * invTan;
+                                            const float maxSlide = min(tanLen, selfFric * pen);
+                                            accumCorr -= relTan * (invTan * maxSlide * massRatio);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        otherIdx = g_NwbPhysicsUintBuffers[nextSlot][otherIdx];
+                        ++steps;
+                    }
+                }
+            }
+        }
+
+        if(dot(accumCorr, accumCorr) > 0.0f)
+            g_NwbPhysicsFloat4Buffers[writePSlot][tid].xyz = selfPos + accumCorr;
+        return;
+    }
+
+    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_BACKSTOP_COLLIDE){
+        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
+        const uint backstopSlot = g_NwbPhysicsPushConstants.slots0.y;
+        const uint rangeSlot = g_NwbPhysicsPushConstants.slots0.z;
+        const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
+        if(posInvMass.w <= 0.0f)
+            return;
+        const uint start = g_NwbPhysicsUintBuffers[rangeSlot][tid * 2u + 0u];
+        const uint cnt = g_NwbPhysicsUintBuffers[rangeSlot][tid * 2u + 1u];
+        if(cnt == 0u)
+            return;
+        float3 pCur = posInvMass.xyz;
+        [loop] for(uint bi = 0u; bi < cnt; ++bi){
+            const NwbPhysicsGpuSoftBackstop bs = g_NwbPhysicsSoftBackstopBuffers[backstopSlot][start + bi];
+            const float3 center = bs.centerMaxDist.xyz;
+            const float maxDist = bs.centerMaxDist.w;
+            if(maxDist > 0.0f){
+                const float3 diff = pCur - center;
+                const float dSq = dot(diff, diff);
+                if(dSq > maxDist * maxDist && dSq > 1.0e-12f)
+                    pCur = center + diff * (maxDist * rsqrt(dSq));
+            }
+            const float rBs = bs.normalRadiusIdx.y;
+            if(rBs > 0.0f){
+                const uint nXY = asuint(bs.normalRadiusIdx.z);
+                const float nx = (float(nXY & 0xffffu) - 32767.0f) * (1.0f / 32767.0f);
+                const float ny = (float((nXY >> 16u) & 0xffffu) - 32767.0f) * (1.0f / 32767.0f);
+                const float3 rawN = float3(nx, ny, bs.normalRadiusIdx.w);
+                const float nSq = dot(rawN, rawN);
+                if(nSq > 1.0e-10f){
+                    const float3 n = rawN * rsqrt(nSq);
+                    const float3 bsCenter = center - n * rBs;
+                    const float3 toP = pCur - bsCenter;
+                    const float bsSq = dot(toP, toP);
+                    if(bsSq < rBs * rBs){
+                        const float3 pushDir = (bsSq > 1.0e-12f) ? (toP * rsqrt(bsSq)) : n;
+                        pCur = bsCenter + pushDir * rBs;
+                    }
+                }
+            }
+        }
+        g_NwbPhysicsFloat4Buffers[pSlot][tid].xyz = pCur;
+        return;
+    }
+#elif NWB_PHYSICS_SUBSYS_PROFILE == 3
     if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_REDUCE_BOUNDS){
         if(flags == 0u){
             const uint mIdx = groupID.x;
@@ -1843,367 +2566,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     if(tid >= itemCount)
         return;
 
-    const uint idx = g_NwbPhysicsPushConstants.itemOffset + tid;
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_PREDICT){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint fieldSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint fluidSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint stateSlot = g_NwbPhysicsPushConstants.slots0.w;
-        const uint gerstnerSlot = g_NwbPhysicsPushConstants.slots1.x;
-        const uint fieldCount = g_NwbPhysicsPushConstants.itemOffset;
-        const uint fluidCount = flags;
-        const float h = g_NwbPhysicsPushConstants.deltaTime;
-        const float dampScale = g_NwbPhysicsPushConstants.invDeltaTime;
-        const float dragCoeff = g_NwbPhysicsPushConstants.maxLinearVelocity;
-        const float timeSec = g_NwbPhysicsPushConstants.linearSlop;
-        const float3 grav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
-        const float rawParticleRadius = g_NwbPhysicsPushConstants.gravitySpeculative.w;
-        const float invH = (h > 1.0e-5f) ? (1.0f / h) : 1.0e5f;
-
-        float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
-        NwbPhysicsGpuSoftParticleState st = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid];
-        st.prevPosFlags.xyz = posInvMass.xyz;
-        const uint pFlags = asuint(st.prevPosFlags.w);
-        const float invMass = posInvMass.w;
-        if((pFlags & 1u) != 0u || invMass <= 0.0f){
-            st.velPad.xyz = float3(0.0f, 0.0f, 0.0f);
-            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid] = st;
-            return;
-        }
-
-        const float mass = 1.0f / invMass;
-        float3 totalF = st.extForcePad.xyz;
-        const float dragK = clamp(dragCoeff * 4.0f, 0.05f, 4.0f) * mass;
-        float3 dummyTrq = float3(0.0f, 0.0f, 0.0f);
-        bool localGravSubApplied = false;
-        if(fieldSlot != NWB_PHYSICS_INVALID_INDEX && fieldCount > 0u){
-            [loop] for(uint fi = 0u; fi < fieldCount; ++fi)
-                totalF += nwbPhysicsSubsysEvalForceField(g_NwbPhysicsForceFieldBuffers[fieldSlot][fi], posInvMass.xyz, st.velPad.xyz, mass, dragK, rawParticleRadius, false, timeSec, invH, grav, 1.0f, dummyTrq, localGravSubApplied);
-        }
-        if(fluidSlot != NWB_PHYSICS_INVALID_INDEX && fluidCount > 0u){
-            const float pRad = max(rawParticleRadius, 1.0e-2f);
-            const float pVol = (4.0f / 3.0f) * 3.1415926535897932f * pRad * pRad * pRad;
-            [loop] for(uint fli = 0u; fli < fluidCount; ++fli){
-                const NwbPhysicsGpuFluidVolume fl = g_NwbPhysicsFluidVolumeBuffers[fluidSlot][fli];
-                if(asuint(fl.waveSpeedAngAddedFlags.w) == 0u)
-                    continue;
-                const float3 surfN = nwbPhysicsSafeNormal(fl.surfaceNormalOffset.xyz, float3(0.0f, 1.0f, 0.0f));
-                float d = 0.0f;
-                float3 flowVel = float3(0.0f, 0.0f, 0.0f);
-                float3 localSurfN = surfN;
-                nwbPhysicsSubsysFluidEvalSurface(fl, gerstnerSlot, posInvMass.xyz, surfN, timeSec, d, flowVel, localSurfN);
-                if(d + pRad > 0.0f){
-                    const float hCap = clamp(d + pRad, 0.0f, 2.0f * pRad);
-                    const float vCap = (3.1415926535897932f / 3.0f) * hCap * hCap * (3.0f * pRad - hCap);
-                    const float frac = clamp(vCap / max(pVol, 1.0e-7f), 0.0f, 1.0f);
-                    const float dispM = fl.boundsMaxDensity.w * vCap;
-                    float3 flForce = (-grav) * dispM;
-                    const float3 relV = flowVel - st.velPad.xyz;
-                    const float spSq = dot(relV, relV);
-                    if(spSq > 1.0e-10f){
-                        const float invSp = rsqrt(spSq);
-                        const float sp = spSq * invSp;
-                        const float3 relDir = relV * invSp;
-                        const float pArea = 3.1415926535897932f * pRad * pRad * frac;
-                        const float linD = fl.flowVelLinDrag.w * sp * frac * mass;
-                        const float quadD = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * pArea * spSq;
-                        const float maxF = (mass * sp) * invH * 0.9f;
-                        flForce += relDir * min(linD + quadD, maxF);
-                        if(fl.dragLiftWaveAmpFreq.x != 0.0f){
-                            const float3 liftDir = nwbPhysicsSafeNormal(localSurfN - relDir * dot(localSurfN, relDir), localSurfN);
-                            const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * pArea * spSq;
-                            flForce += liftDir * clamp(rawLift, -maxF * 2.0f, maxF * 2.0f);
-                        }
-                    }
-                    const float addedM = max(0.0f, fl.waveSpeedAngAddedFlags.z) * dispM;
-                    if(addedM > 1.0e-7f){
-                        const float effRatio = mass / (mass + addedM);
-                        flForce = flForce * effRatio - grav * (addedM * effRatio);
-                    }
-                    totalF += flForce;
-                }
-            }
-        }
-
-        const float3 acc = grav + totalF * invMass;
-        const float3 newVel = (st.velPad.xyz + acc * h) * dampScale;
-        st.velPad.xyz = newVel;
-        posInvMass.xyz += newVel * h;
-        g_NwbPhysicsFloat4Buffers[pSlot][tid] = posInvMass;
-        g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid] = st;
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_RESET_LAMBDAS){
-        const uint conSlot = g_NwbPhysicsPushConstants.slots0.x;
-        if(flags == 0u)
-            g_NwbPhysicsSoftDistConstraintBuffers[conSlot][idx].restCompLambdaPad.z = 0.0f;
-        else if(flags == 1u)
-            g_NwbPhysicsSoftVolConstraintBuffers[conSlot][idx].restCompLambdaPad.z = 0.0f;
-        else
-            g_NwbPhysicsSoftBendConstraintBuffers[conSlot][idx].restAngleCompLambdaPad.z = 0.0f;
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_DISTANCE_COLOR){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint dcSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const float invDt2 = g_NwbPhysicsPushConstants.deltaTime;
-        NwbPhysicsGpuSoftDistConstraint dc = g_NwbPhysicsSoftDistConstraintBuffers[dcSlot][idx];
-        const uint i0 = dc.indices.x;
-        const uint i1 = dc.indices.y;
-        if(i0 == i1)
-            return;
-        const float4 p0 = g_NwbPhysicsFloat4Buffers[pSlot][i0];
-        const float4 p1 = g_NwbPhysicsFloat4Buffers[pSlot][i1];
-        const float w0 = max(p0.w, 0.0f);
-        const float w1 = max(p1.w, 0.0f);
-        const float wSum = w0 + w1;
-        if(wSum <= 1.0e-12f)
-            return;
-        const float3 diff = p0.xyz - p1.xyz;
-        const float dSq = dot(diff, diff);
-        if(dSq <= 1.0e-16f)
-            return;
-        const float invD = rsqrt(dSq);
-        const float d = dSq * invD;
-        const float3 n = diff * invD;
-        const float cVal = d - dc.restCompLambdaPad.x;
-        const float alphaTilde = dc.restCompLambdaPad.y * invDt2;
-        const float dLambda = (-cVal - alphaTilde * dc.restCompLambdaPad.z) / (wSum + alphaTilde);
-        dc.restCompLambdaPad.z += dLambda;
-        g_NwbPhysicsSoftDistConstraintBuffers[dcSlot][idx].restCompLambdaPad.z = dc.restCompLambdaPad.z;
-        if(w0 > 0.0f)
-            g_NwbPhysicsFloat4Buffers[pSlot][i0].xyz = p0.xyz + n * (dLambda * w0);
-        if(w1 > 0.0f)
-            g_NwbPhysicsFloat4Buffers[pSlot][i1].xyz = p1.xyz - n * (dLambda * w1);
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_VOLUME_COLOR){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint vcSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const float invDt2 = g_NwbPhysicsPushConstants.deltaTime;
-        NwbPhysicsGpuSoftVolConstraint vc = g_NwbPhysicsSoftVolConstraintBuffers[vcSlot][idx];
-        const float4 p0 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.x];
-        const float4 p1 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.y];
-        const float4 p2 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.z];
-        const float4 p3 = g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.w];
-        const float w0 = max(p0.w, 0.0f);
-        const float w1 = max(p1.w, 0.0f);
-        const float w2 = max(p2.w, 0.0f);
-        const float w3 = max(p3.w, 0.0f);
-        const float3 x0 = p0.xyz;
-        const float3 x1 = p1.xyz;
-        const float3 x2 = p2.xyz;
-        const float3 x3 = p3.xyz;
-        const float3 g1 = cross(x2 - x0, x3 - x0) * (1.0f / 6.0f);
-        const float3 g2 = cross(x3 - x0, x1 - x0) * (1.0f / 6.0f);
-        const float3 g3 = cross(x1 - x0, x2 - x0) * (1.0f / 6.0f);
-        const float3 g0 = -(g1 + g2 + g3);
-        const float denomGrad = w0 * dot(g0, g0) + w1 * dot(g1, g1) + w2 * dot(g2, g2) + w3 * dot(g3, g3);
-        if(denomGrad <= 1.0e-12f)
-            return;
-        const float vol = dot(x1 - x0, g1);
-        const float cVal = vol - vc.restCompLambdaPad.x;
-        const float alphaTilde = vc.restCompLambdaPad.y * invDt2;
-        const float dLambda = (-cVal - alphaTilde * vc.restCompLambdaPad.z) / (denomGrad + alphaTilde);
-        vc.restCompLambdaPad.z += dLambda;
-        g_NwbPhysicsSoftVolConstraintBuffers[vcSlot][idx].restCompLambdaPad.z = vc.restCompLambdaPad.z;
-        if(w0 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.x].xyz = x0 + g0 * (dLambda * w0);
-        if(w1 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.y].xyz = x1 + g1 * (dLambda * w1);
-        if(w2 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.z].xyz = x2 + g2 * (dLambda * w2);
-        if(w3 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][vc.indices.w].xyz = x3 + g3 * (dLambda * w3);
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_BENDING_COLOR){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint bcSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const float invDt2 = g_NwbPhysicsPushConstants.deltaTime;
-        NwbPhysicsGpuSoftBendConstraint bc = g_NwbPhysicsSoftBendConstraintBuffers[bcSlot][idx];
-        const float4 p0 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.x];
-        const float4 p1 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.y];
-        const float4 p2 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.z];
-        const float4 p3 = g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.w];
-        const float w0 = max(p0.w, 0.0f);
-        const float w1 = max(p1.w, 0.0f);
-        const float w2 = max(p2.w, 0.0f);
-        const float w3 = max(p3.w, 0.0f);
-        if(w0 + w1 + w2 + w3 <= 1.0e-12f)
-            return;
-
-        const float3 x0 = p0.xyz;
-        const float3 x1 = p1.xyz;
-        const float3 x2 = p2.xyz;
-        const float3 x3 = p3.xyz;
-        const float3 e = x1 - x0;
-        const float eLenSq = dot(e, e);
-        if(eLenSq <= 1.0e-12f)
-            return;
-        const float eInv = rsqrt(eLenSq);
-        const float eLen = eLenSq * eInv;
-        const float3 eHat = e * eInv;
-
-        const float3 n1Raw = cross(e, x2 - x0);
-        const float3 n2Raw = cross(x3 - x0, e);
-        const float a1Sq = dot(n1Raw, n1Raw);
-        const float a2Sq = dot(n2Raw, n2Raw);
-        if(a1Sq <= 1.0e-12f || a2Sq <= 1.0e-12f)
-            return;
-        const float a1Inv = rsqrt(a1Sq);
-        const float a2Inv = rsqrt(a2Sq);
-        const float a1 = a1Sq * a1Inv;
-        const float a2 = a2Sq * a2Inv;
-        const float3 n1Hat = n1Raw * a1Inv;
-        const float3 n2Hat = n2Raw * a2Inv;
-
-        const float sinVal = dot(cross(n1Hat, n2Hat), eHat);
-        const float cosVal = clamp(dot(n1Hat, n2Hat), -1.0f, 1.0f);
-        const float phi = atan2(sinVal, cosVal);
-        float cVal = phi - bc.restAngleCompLambdaPad.x;
-        if(cVal > 3.14159265359f)
-            cVal -= 6.28318530718f;
-        if(cVal < -3.14159265359f)
-            cVal += 6.28318530718f;
-
-        const float3 q2 = (-n1Hat) * (eLen / a1);
-        const float3 q3 = (-n2Hat) * (eLen / a2);
-        const float invESq = 1.0f / eLenSq;
-        const float u = dot(x2 - x0, e) * invESq;
-        const float v = dot(x3 - x0, e) * invESq;
-        const float3 q0 = q2 * (u - 1.0f) + q3 * (v - 1.0f);
-        const float3 q1 = -(q2 * u + q3 * v);
-
-        const float denom = w0 * dot(q0, q0) + w1 * dot(q1, q1) + w2 * dot(q2, q2) + w3 * dot(q3, q3);
-        const float alphaTilde = bc.restAngleCompLambdaPad.y * invDt2;
-        if(denom + alphaTilde <= 1.0e-12f)
-            return;
-        const float dLambda = (-cVal - alphaTilde * bc.restAngleCompLambdaPad.z) / (denom + alphaTilde);
-        bc.restAngleCompLambdaPad.z += dLambda;
-        g_NwbPhysicsSoftBendConstraintBuffers[bcSlot][idx].restAngleCompLambdaPad.z = bc.restAngleCompLambdaPad.z;
-        if(w0 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.x].xyz = x0 + q0 * (dLambda * w0);
-        if(w1 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.y].xyz = x1 + q1 * (dLambda * w1);
-        if(w2 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.z].xyz = x2 + q2 * (dLambda * w2);
-        if(w3 > 0.0f) g_NwbPhysicsFloat4Buffers[pSlot][bc.indices.w].xyz = x3 + q3 * (dLambda * w3);
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_BACKSTOP_COLLIDE){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint backstopSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint rangeSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
-        if(posInvMass.w <= 0.0f)
-            return;
-        const uint start = g_NwbPhysicsUintBuffers[rangeSlot][tid * 2u + 0u];
-        const uint cnt = g_NwbPhysicsUintBuffers[rangeSlot][tid * 2u + 1u];
-        if(cnt == 0u)
-            return;
-        float3 pCur = posInvMass.xyz;
-        [loop] for(uint bi = 0u; bi < cnt; ++bi){
-            const NwbPhysicsGpuSoftBackstop bs = g_NwbPhysicsSoftBackstopBuffers[backstopSlot][start + bi];
-            const float3 center = bs.centerMaxDist.xyz;
-            const float maxDist = bs.centerMaxDist.w;
-            if(maxDist > 0.0f){
-                const float3 diff = pCur - center;
-                const float dSq = dot(diff, diff);
-                if(dSq > maxDist * maxDist && dSq > 1.0e-12f)
-                    pCur = center + diff * (maxDist * rsqrt(dSq));
-            }
-            const float rBs = bs.normalRadiusIdx.y;
-            if(rBs > 0.0f){
-                const uint nXY = asuint(bs.normalRadiusIdx.z);
-                const float nx = (float(nXY & 0xffffu) - 32767.0f) * (1.0f / 32767.0f);
-                const float ny = (float((nXY >> 16u) & 0xffffu) - 32767.0f) * (1.0f / 32767.0f);
-                const float3 rawN = float3(nx, ny, bs.normalRadiusIdx.w);
-                const float nSq = dot(rawN, rawN);
-                if(nSq > 1.0e-10f){
-                    const float3 n = rawN * rsqrt(nSq);
-                    const float3 bsCenter = center - n * rBs;
-                    const float3 toP = pCur - bsCenter;
-                    const float bsSq = dot(toP, toP);
-                    if(bsSq < rBs * rBs){
-                        const float3 pushDir = (bsSq > 1.0e-12f) ? (toP * rsqrt(bsSq)) : n;
-                        pCur = bsCenter + pushDir * rBs;
-                    }
-                }
-            }
-        }
-        g_NwbPhysicsFloat4Buffers[pSlot][tid].xyz = pCur;
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_AERO_DRAG){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint triRangeSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint triIdxListSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint surfTriSlot = g_NwbPhysicsPushConstants.slots0.w;
-        const uint stateSlot = g_NwbPhysicsPushConstants.slots1.x;
-        const uint pOutSlot = g_NwbPhysicsPushConstants.slots1.y;
-        const float h = g_NwbPhysicsPushConstants.deltaTime;
-        const float dragC = max(g_NwbPhysicsPushConstants.invDeltaTime, 0.0f);
-        const float liftC = g_NwbPhysicsPushConstants.maxLinearVelocity;
-        const float3 windVel = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
-
-        const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
-        if(pOutSlot != NWB_PHYSICS_INVALID_INDEX)
-            g_NwbPhysicsFloat4Buffers[pOutSlot][tid] = posInvMass;
-        if(posInvMass.w <= 0.0f)
-            return;
-        const uint triStart = g_NwbPhysicsUintBuffers[triRangeSlot][tid * 2u + 0u];
-        const uint triCnt = g_NwbPhysicsUintBuffers[triRangeSlot][tid * 2u + 1u];
-        if(triCnt == 0u || (dragC <= 0.0f && abs(liftC) <= 1.0e-6f))
-            return;
-
-        float3 totalDisp = float3(0.0f, 0.0f, 0.0f);
-        const bool hasDrag = dragC > 0.0f;
-        const bool hasLift = abs(liftC) > 1.0e-6f;
-        [loop] for(uint ti = 0u; ti < triCnt; ++ti){
-            const uint triId = g_NwbPhysicsUintBuffers[triIdxListSlot][triStart + ti];
-            const uint4 tri = asuint(g_NwbPhysicsFloat4Buffers[surfTriSlot][triId]);
-            const float3 x0 = g_NwbPhysicsFloat4Buffers[pSlot][tri.x].xyz;
-            const float3 x1 = g_NwbPhysicsFloat4Buffers[pSlot][tri.y].xyz;
-            const float3 x2 = g_NwbPhysicsFloat4Buffers[pSlot][tri.z].xyz;
-            const float3 c = cross(x1 - x0, x2 - x0);
-            const float areaSq = dot(c, c);
-            if(areaSq <= 1.0e-14f)
-                continue;
-            const float invDoubleA = rsqrt(areaSq);
-            const float doubleArea = areaSq * invDoubleA;
-            const float3 triN = c * invDoubleA;
-            const float3 v0 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.x].velPad.xyz;
-            const float3 v1 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.y].velPad.xyz;
-            const float3 v2 = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tri.z].velPad.xyz;
-            const float3 avgVel = (v0 + v1 + v2) * (1.0f / 3.0f);
-            const float3 vRel = avgVel - windVel;
-            const float3 vAir = -vRel;
-            const float vn = dot(vRel, triN);
-            const float3 vAirTan = vAir + triN * vn;
-            const float3 dragPush = (triN * (-vn) + vAirTan * 0.1f) * h;
-            const float baseCoeff = doubleArea * (dragC * h / 6.0f);
-            if(hasDrag)
-                totalDisp += dragPush * clamp(baseCoeff * posInvMass.w, 0.0f, 0.9f);
-            if(hasLift){
-                const float vRelSq = dot(vRel, vRel);
-                if(vRelSq > 1.0e-10f){
-                    const float3 nEff = (vn > 0.0f) ? (-triN) : triN;
-                    const float3 liftVec = cross(cross(vAir, nEff), vAir);
-                    const float liftLenSq = dot(liftVec, liftVec);
-                    if(liftLenSq > 1.0e-14f){
-                        const float3 liftDir = liftVec * rsqrt(liftLenSq);
-                        const float liftImpulse = (doubleArea * liftC * abs(vn) * sqrt(vRelSq) * h * h) / 6.0f;
-                        totalDisp += liftDir * clamp(liftImpulse * posInvMass.w, -0.5f, 0.5f);
-                    }
-                }
-            }
-        }
-        const uint writePSlot = (pOutSlot != NWB_PHYSICS_INVALID_INDEX) ? pOutSlot : pSlot;
-        g_NwbPhysicsFloat4Buffers[writePSlot][tid].xyz = posInvMass.xyz + totalDisp;
-        return;
-    }
-
     if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_DEFORM_MESH){
         if(flags == 0u){
             const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
@@ -2315,293 +2677,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         g_NwbHeapStorageBuffers[attrSlot].Store2(tid * 16u, uint2(nHalf.xy, nHalf.zw));
         return;
     }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_SOFT_VEL_UPDATE){
-        const uint pSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint stateSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const float invH = g_NwbPhysicsPushConstants.deltaTime;
-        const float4 posInvMass = g_NwbPhysicsFloat4Buffers[pSlot][tid];
-        const float4 prevPosFlags = g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].prevPosFlags;
-        if((asuint(prevPosFlags.w) & 1u) != 0u || posInvMass.w <= 0.0f)
-            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].velPad.xyz = float3(0.0f, 0.0f, 0.0f);
-        else
-            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].velPad.xyz = (posInvMass.xyz - prevPosFlags.xyz) * invH;
-        if(flags != 0u)
-            g_NwbPhysicsSoftParticleStateBuffers[stateSlot][tid].extForcePad.xyz = float3(0.0f, 0.0f, 0.0f);
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_APPLY_FORCE_FIELDS){
-        const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint fieldSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots0.w;
-        const uint eventRingSlot = g_NwbPhysicsPushConstants.slots1.x;
-        const uint prepCounterSlot = g_NwbPhysicsPushConstants.slots1.y;
-        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots1.z;
-        const uint fieldCount = g_NwbPhysicsPushConstants.itemOffset;
-        const uint maxEvents = flags;
-        const float timeSec = g_NwbPhysicsPushConstants.deltaTime;
-        const float invDt = g_NwbPhysicsPushConstants.invDeltaTime;
-        const float3 worldGrav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
-
-        NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
-        NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
-        uint bFlags = asuint(st.deltaPositionFlags.w);
-        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
-            return;
-
-        const float bodyMass = 1.0f / sim.positionInvMass.w;
-        const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
-            ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
-            : max(sim.localCenterMinExtent.w, 0.05f);
-        float3 addForce = float3(0.0f, 0.0f, 0.0f);
-        float3 addTorque = float3(0.0f, 0.0f, 0.0f);
-        bool localGravSubApplied = false;
-        [loop] for(uint fi = 0u; fi < fieldCount; ++fi){
-            const NwbPhysicsGpuForceField fld = g_NwbPhysicsForceFieldBuffers[fieldSlot][fi];
-            if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, fld.filterData))
-                continue;
-            float3 fTorque = float3(0.0f, 0.0f, 0.0f);
-            const float3 fForce = nwbPhysicsSubsysEvalForceField(
-                fld,
-                sim.positionInvMass.xyz,
-                st.linearVelocityPad.xyz,
-                bodyMass,
-                maxExt,
-                0.0f,
-                true,
-                timeSec,
-                invDt,
-                worldGrav,
-                sim.invInertiaWorld1.z,
-                fTorque,
-                localGravSubApplied
-            );
-            nwbPhysicsSubsysApplyForceFieldAngular(
-                fld,
-                sim.positionInvMass.xyz,
-                st.angularVelocityPad.xyz,
-                maxExt,
-                sim.invInertiaWorld0,
-                sim.invInertiaWorld1,
-                invDt,
-                fTorque
-            );
-            addForce += fForce;
-            addTorque += fTorque;
-        }
-        if(any(addForce != float3(0.0f, 0.0f, 0.0f)) || any(addTorque != float3(0.0f, 0.0f, 0.0f))){
-            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].forceLinearDamping.xyz = sim.forceLinearDamping.xyz + addForce;
-            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].torqueAngularDamping.xyz = sim.torqueAngularDamping.xyz + addTorque;
-            if((bFlags & NWB_PHYSICS_BODY_FLAG_SLEEPING) != 0u){
-                bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
-                nwbPhysicsWriteBodyFlags(bodyStateSlot, tid, bFlags);
-                g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
-                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, tid, 0u, 0u, float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), uint4(tid, 0u, 0u, 0u));
-            }
-        }
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_APPLY_FLUID_BUOYANCY){
-        const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint fluidSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots0.w;
-        const uint gerstnerSlot = g_NwbPhysicsPushConstants.slots1.x;
-        const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots1.y;
-        const uint eventRingSlot = g_NwbPhysicsPushConstants.slots1.z;
-        const uint prepCounterSlot = g_NwbPhysicsPushConstants.slots1.w;
-        const uint fluidCount = g_NwbPhysicsPushConstants.itemOffset;
-        const uint maxEvents = flags;
-        const float timeSec = g_NwbPhysicsPushConstants.deltaTime;
-        const float invDt = g_NwbPhysicsPushConstants.invDeltaTime;
-        const float3 grav = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
-
-        NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
-        NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
-        uint bFlags = asuint(st.deltaPositionFlags.w);
-        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
-            return;
-
-        const float bodyMass = 1.0f / sim.positionInvMass.w;
-        const float effR = max(sim.localCenterMinExtent.w, 0.05f);
-        const float4 volInfo = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
-            ? g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 0u]
-            : float4((4.0f / 3.0f) * 3.1415926535897932f * effR * effR * effR, effR, effR, effR);
-        const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
-            ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
-            : effR;
-        const float bodyVol = max(volInfo.x, 1.0e-6f);
-        const float3 localH = max(volInfo.yzw, float3(0.025f, 0.025f, 0.025f));
-        const float areaEst = 2.0f * (localH.x * localH.z + localH.x * localH.y + localH.y * localH.z);
-
-        float3 addForce = float3(0.0f, 0.0f, 0.0f);
-        float3 addTorque = float3(0.0f, 0.0f, 0.0f);
-        [loop] for(uint fli = 0u; fli < fluidCount; ++fli){
-            const NwbPhysicsGpuFluidVolume fl = g_NwbPhysicsFluidVolumeBuffers[fluidSlot][fli];
-            if(asuint(fl.waveSpeedAngAddedFlags.w) == 0u)
-                continue;
-            if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, fl.filterData))
-                continue;
-            const float3 surfN = nwbPhysicsSafeNormal(fl.surfaceNormalOffset.xyz, float3(0.0f, 1.0f, 0.0f));
-            float sumFrac = 0.0f;
-            float3 cobAccum = float3(0.0f, 0.0f, 0.0f);
-            float3 flowAccum = float3(0.0f, 0.0f, 0.0f);
-            float3 normAccum = float3(0.0f, 0.0f, 0.0f);
-            [loop] for(uint oi = 0u; oi < 8u; ++oi){
-                const float3 octSign = float3(
-                    ((oi & 1u) != 0u) ? 0.5f : -0.5f,
-                    ((oi & 2u) != 0u) ? 0.5f : -0.5f,
-                    ((oi & 4u) != 0u) ? 0.5f : -0.5f
-                );
-                const float3 sampleP = sim.positionInvMass.xyz + nwbPhysicsQuatRotate(octSign * localH, sim.rotation);
-                float sampleD = 0.0f;
-                float3 sampleFlow = float3(0.0f, 0.0f, 0.0f);
-                float3 sampleNorm = surfN;
-                nwbPhysicsSubsysFluidEvalSurface(fl, gerstnerSlot, sampleP, surfN, timeSec, sampleD, sampleFlow, sampleNorm);
-                const float sampleHalfH = max(0.5f * dot(abs(nwbPhysicsQuatInvRotate(sampleNorm, sim.rotation)), localH), 1.0e-4f);
-                const float sampleFrac = clamp((sampleD + sampleHalfH) / (2.0f * sampleHalfH), 0.0f, 1.0f);
-                sumFrac += sampleFrac;
-                cobAccum += sampleP * sampleFrac;
-                flowAccum += sampleFlow * sampleFrac;
-                normAccum += sampleNorm * sampleFrac;
-            }
-            if(sumFrac <= 1.0e-5f)
-                continue;
-            const float subFrac = clamp(sumFrac * 0.125f, 0.0f, 1.0f);
-            const float3 cob = cobAccum / sumFrac;
-            const float3 localFlowVel = flowAccum / sumFrac;
-            const float3 localSurfN = nwbPhysicsSafeNormal(normAccum, surfN);
-            const float3 relCob = cob - sim.positionInvMass.xyz;
-
-            const float subVol = bodyVol * subFrac;
-            const float dispMass = fl.boundsMaxDensity.w * subVol;
-            const float3 buoyancyForce = (-grav) * (dispMass * sim.invInertiaWorld1.z);
-            float3 fluidForce = buoyancyForce;
-            float3 forceAtCob = buoyancyForce;
-
-            const float3 relV = localFlowVel - (st.linearVelocityPad.xyz + cross(st.angularVelocityPad.xyz, relCob));
-            const float spSq = dot(relV, relV);
-            const float subArea = areaEst * subFrac;
-            if(spSq > 1.0e-10f){
-                const float invSp = rsqrt(spSq);
-                const float sp = spSq * invSp;
-                const float3 relDir = relV * invSp;
-                const float linMag = fl.flowVelLinDrag.w * sp * subFrac * bodyMass
-                    + 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.y * subArea * spSq;
-                const float3 dragF = relDir * min(linMag, bodyMass * sp * invDt * 0.9f);
-                fluidForce += dragF;
-                forceAtCob += dragF;
-                if(fl.dragLiftWaveAmpFreq.x != 0.0f){
-                    const float3 liftDir = nwbPhysicsSafeNormal(localSurfN - relDir * dot(localSurfN, relDir), localSurfN);
-                    const float rawLift = 0.5f * fl.boundsMaxDensity.w * fl.dragLiftWaveAmpFreq.x * subArea * spSq;
-                    const float maxLift = bodyMass * sp * invDt * 2.0f;
-                    const float3 liftF = liftDir * clamp(rawLift, -maxLift, maxLift);
-                    fluidForce += liftF;
-                    forceAtCob += liftF;
-                }
-            }
-
-            const float addedMass = max(0.0f, fl.waveSpeedAngAddedFlags.z) * dispMass;
-            if(addedMass > 1.0e-7f){
-                const float effRatio = bodyMass / (bodyMass + addedMass);
-                fluidForce = fluidForce * effRatio - (grav * sim.invInertiaWorld1.z) * (addedMass * effRatio);
-            }
-            addForce += fluidForce;
-            addTorque += cross(relCob, forceAtCob);
-
-            const float3 angV = st.angularVelocityPad.xyz;
-            const float wSq = dot(angV, angV);
-            if(wSq > 1.0e-10f){
-                const float invW = rsqrt(wSq);
-                const float wSp = wSq * invW;
-                const float3 wDir = angV * invW;
-                const float rawT = fl.waveSpeedAngAddedFlags.y * subFrac * max(0.1f, maxExt) * wSp;
-                const float kInvI = dot(wDir, nwbPhysicsMulSymmetric3(sim.invInertiaWorld0, sim.invInertiaWorld1, wDir));
-                const float maxT = (kInvI > 1.0e-10f) ? ((1.0f / kInvI) * wSp * invDt * 0.9f) : rawT;
-                addTorque -= wDir * min(rawT, maxT);
-            }
-
-            const float impactSpeed = max(0.0f, -dot(st.linearVelocityPad.xyz, localSurfN));
-            const float impactImpulse = bodyMass * impactSpeed;
-            if(maxEvents > 0u && eventRingSlot != NWB_PHYSICS_INVALID_INDEX && prepCounterSlot != NWB_PHYSICS_INVALID_INDEX && subFrac > 1.0e-5f)
-                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_FLUID_SPLASH, tid, fl.filterData.w, 0u, float4(cob, subFrac), float4(localSurfN, impactSpeed), uint4(tid, fl.filterData.w, asuint(impactImpulse), 0u));
-        }
-        if(any(addForce != float3(0.0f, 0.0f, 0.0f)) || any(addTorque != float3(0.0f, 0.0f, 0.0f))){
-            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].forceLinearDamping.xyz = sim.forceLinearDamping.xyz + addForce;
-            g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].torqueAngularDamping.xyz = sim.torqueAngularDamping.xyz + addTorque;
-            if((bFlags & NWB_PHYSICS_BODY_FLAG_SLEEPING) != 0u){
-                bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
-                nwbPhysicsWriteBodyFlags(bodyStateSlot, tid, bFlags);
-                g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
-                nwbPhysicsEmitEvent(prepCounterSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, tid, 0u, 0u, float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 1.0f, 0.0f, 0.0f), uint4(tid, 0u, 0u, 0u));
-            }
-        }
-        return;
-    }
-
-    if(mode == NWB_PHYSICS_SUBSYS_MODE_APPLY_EXPLOSION){
-        const uint bodySimSlot = g_NwbPhysicsPushConstants.slots0.x;
-        const uint bodyStateSlot = g_NwbPhysicsPushConstants.slots0.y;
-        const uint bodyOutSlot = g_NwbPhysicsPushConstants.slots0.z;
-        const uint bodyFilterSlot = g_NwbPhysicsPushConstants.slots0.w;
-        const uint4 expFilter = uint4(g_NwbPhysicsPushConstants.slots1.xyz, 0u);
-        const uint bodyVolSlot = g_NwbPhysicsPushConstants.slots1.w;
-        const float impulseParam = g_NwbPhysicsPushConstants.deltaTime;
-        const float upwardBias = g_NwbPhysicsPushConstants.invDeltaTime;
-        const float radiusParam = g_NwbPhysicsPushConstants.maxLinearVelocity;
-        const float falloffParam = max(g_NwbPhysicsPushConstants.linearSlop, 0.0f);
-        const float3 origin = g_NwbPhysicsPushConstants.gravitySpeculative.xyz;
-
-        const NwbPhysicsGpuBodySim sim = g_NwbPhysicsBodySimBuffers[bodySimSlot][tid];
-        NwbPhysicsGpuBodyState st = g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid];
-        uint bFlags = asuint(st.deltaPositionFlags.w);
-        if((bFlags & NWB_PHYSICS_BODY_FLAG_DYNAMIC) == 0u || sim.positionInvMass.w <= 0.0f)
-            return;
-        if(!nwbPhysicsSubsysBodyMatchesFilter(bodyFilterSlot, tid, expFilter))
-            return;
-
-        const float3 diff = sim.positionInvMass.xyz - origin;
-        const float dist = length(diff);
-        const float3 radDir = nwbPhysicsSafeNormal(diff, float3(0.0f, 1.0f, 0.0f));
-        float3 deltaV = float3(0.0f, 0.0f, 0.0f);
-        if(flags == 1u){
-            const float innerRadius = max(radiusParam, 0.0f);
-            const float maxR = innerRadius + falloffParam;
-            if(maxR <= 0.0f || impulseParam == 0.0f)
-                return;
-            const float maxExt = (bodyVolSlot != NWB_PHYSICS_INVALID_INDEX)
-                ? max(g_NwbPhysicsFloat4Buffers[bodyVolSlot][tid * 2u + 1u].x, 0.05f)
-                : max(sim.localCenterMinExtent.w, 0.05f);
-            const float surfDist = max(0.0f, dist - maxExt);
-            if(surfDist >= maxR)
-                return;
-            float falloffScale = 1.0f;
-            if(surfDist > innerRadius)
-                falloffScale = (falloffParam > 0.0f) ? clamp(1.0f - (surfDist - innerRadius) / falloffParam, 0.0f, 1.0f) : 0.0f;
-            if(falloffScale <= 0.0f)
-                return;
-            const float charLen = max(0.1f, maxExt * 2.0f);
-            deltaV = nwbPhysicsApplyLinearLocks(radDir * (impulseParam * falloffScale * charLen * sim.positionInvMass.w), bFlags);
-        }
-        else{
-            if(radiusParam <= 0.0f || dist >= radiusParam)
-                return;
-            const float atten = pow(clamp(1.0f - dist / radiusParam, 0.0f, 1.0f), falloffParam);
-            const float3 blastDir = nwbPhysicsSafeNormal(radDir + float3(0.0f, upwardBias, 0.0f), float3(0.0f, 1.0f, 0.0f));
-            deltaV = nwbPhysicsApplyLinearLocks(blastDir * (impulseParam * atten * sim.positionInvMass.w), bFlags);
-        }
-
-        const float3 newVel = st.linearVelocityPad.xyz + deltaV;
-        bFlags &= ~NWB_PHYSICS_BODY_FLAG_SLEEPING;
-        g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid].linearVelocityPad = float4(newVel, asfloat(bFlags));
-        g_NwbPhysicsBodyStateBuffers[bodyStateSlot][tid].deltaPositionFlags.w = asfloat(bFlags);
-        g_NwbPhysicsBodySimBuffers[bodySimSlot][tid].invInertiaWorld1.w = 0.0f;
-        if(bodyOutSlot != NWB_PHYSICS_INVALID_INDEX)
-            g_NwbPhysicsBodyOutBuffers[bodyOutSlot][tid].linearVelocityFlags = float4(newVel, asfloat(bFlags));
-    }
+#endif
 }
 
 

@@ -3,3 +3,6 @@ compute_shader asset;
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics", "engine/physics"];
 asset.optimization_level = "maximal";
+asset.defines = {
+    "NWB_PHYSICS_RES_STEP_PROFILE": ["0", "1"],
+};

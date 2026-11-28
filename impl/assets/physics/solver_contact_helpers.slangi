@@ -218,6 +218,7 @@ void nwbPhysicsLoadContactBodyPairMasses(
     nwbPhysicsApplyContactCustomScales(customScaleFlags, outInvMassA, outInvIA0, outInvIA1, outInvMassB, outInvIB0, outInvIB1, outMaxNormalImpulse);
 }
 
+[noinline]
 void nwbPhysicsWarmStartContact(
     const uint constraintIdx,
     const uint bodySimSlot,
@@ -356,6 +357,7 @@ void nwbPhysicsWarmStartContact(
     }
 }
 
+[noinline]
 void nwbPhysicsRestitutionContact(
     const uint constraintIdx,
     const uint bodySimSlot,
@@ -473,59 +475,275 @@ void nwbPhysicsRestitutionContact(
 
 #if NWB_PHYSICS_ENABLE_BLOCK_SOLVER
 [noinline]
-bool nwbPhysicsSolveLinear4x4(const uint n, inout float a[16], inout float b[4], out float outX[4]){
-    outX[0] = 0.0f;
-    outX[1] = 0.0f;
-    outX[2] = 0.0f;
-    outX[3] = 0.0f;
-    [loop]
-    for(uint col = 0u; col < n; ++col){
-        uint pivotRow = col;
-        float bestVal = abs(a[col * 4u + col]);
-        [loop]
-        for(uint r = col + 1u; r < n; ++r){
-            const float v = abs(a[r * 4u + col]);
-            if(v > bestVal){
-                bestVal = v;
-                pivotRow = r;
-            }
-        }
-        if(bestVal <= 1.0e-12f)
-            return false;
-        if(pivotRow != col){
-            [loop]
-            for(uint c = col; c < n; ++c){
-                const float tmp = a[col * 4u + c];
-                a[col * 4u + c] = a[pivotRow * 4u + c];
-                a[pivotRow * 4u + c] = tmp;
-            }
-            const float tmpB = b[col];
-            b[col] = b[pivotRow];
-            b[pivotRow] = tmpB;
-        }
-        const float invPivot = 1.0f / a[col * 4u + col];
-        a[col * 4u + col] = 1.0f;
-        [loop]
-        for(uint c = col + 1u; c < n; ++c)
-            a[col * 4u + c] *= invPivot;
-        b[col] *= invPivot;
-        [loop]
-        for(uint r = 0u; r < n; ++r){
-            if(r == col)
-                continue;
-            const float factor = a[r * 4u + col];
-            if(factor == 0.0f)
-                continue;
-            [loop]
-            for(uint c = col; c < n; ++c)
-                a[r * 4u + c] -= factor * a[col * 4u + c];
-            b[r] -= factor * b[col];
+bool nwbPhysicsSolveLinear4x4Reg(float4 r0, float4 r1, float4 r2, float4 r3, float4 b, out float4 outX){
+    outX = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    uint piv0 = 0u;
+    float best0 = abs(r0.x);
+    if(abs(r1.x) > best0){ best0 = abs(r1.x); piv0 = 1u; }
+    if(abs(r2.x) > best0){ best0 = abs(r2.x); piv0 = 2u; }
+    if(abs(r3.x) > best0){ best0 = abs(r3.x); piv0 = 3u; }
+    if(best0 <= 1.0e-12f)
+        return false;
+    if(piv0 == 1u){
+        const float4 tr = r0; r0 = r1; r1 = tr;
+        const float tb = b.x; b.x = b.y; b.y = tb;
+    }
+    else if(piv0 == 2u){
+        const float4 tr = r0; r0 = r2; r2 = tr;
+        const float tb = b.x; b.x = b.z; b.z = tb;
+    }
+    else if(piv0 == 3u){
+        const float4 tr = r0; r0 = r3; r3 = tr;
+        const float tb = b.x; b.x = b.w; b.w = tb;
+    }
+    const float invP0 = 1.0f / r0.x;
+    r0 *= invP0;
+    r0.x = 1.0f;
+    b.x *= invP0;
+    if(r1.x != 0.0f){ const float f = r1.x; r1 -= f * r0; r1.x = 0.0f; b.y -= f * b.x; }
+    if(r2.x != 0.0f){ const float f = r2.x; r2 -= f * r0; r2.x = 0.0f; b.z -= f * b.x; }
+    if(r3.x != 0.0f){ const float f = r3.x; r3 -= f * r0; r3.x = 0.0f; b.w -= f * b.x; }
+
+    uint piv1 = 1u;
+    float best1 = abs(r1.y);
+    if(abs(r2.y) > best1){ best1 = abs(r2.y); piv1 = 2u; }
+    if(abs(r3.y) > best1){ best1 = abs(r3.y); piv1 = 3u; }
+    if(best1 <= 1.0e-12f)
+        return false;
+    if(piv1 == 2u){
+        const float4 tr = r1; r1 = r2; r2 = tr;
+        const float tb = b.y; b.y = b.z; b.z = tb;
+    }
+    else if(piv1 == 3u){
+        const float4 tr = r1; r1 = r3; r3 = tr;
+        const float tb = b.y; b.y = b.w; b.w = tb;
+    }
+    const float invP1 = 1.0f / r1.y;
+    r1 *= invP1;
+    r1.y = 1.0f;
+    b.y *= invP1;
+    if(r0.y != 0.0f){ const float f = r0.y; r0 -= f * r1; r0.y = 0.0f; b.x -= f * b.y; }
+    if(r2.y != 0.0f){ const float f = r2.y; r2 -= f * r1; r2.y = 0.0f; b.z -= f * b.y; }
+    if(r3.y != 0.0f){ const float f = r3.y; r3 -= f * r1; r3.y = 0.0f; b.w -= f * b.y; }
+
+    if(abs(r3.z) > abs(r2.z)){
+        const float4 tr = r2; r2 = r3; r3 = tr;
+        const float tb = b.z; b.z = b.w; b.w = tb;
+    }
+    if(abs(r2.z) <= 1.0e-12f)
+        return false;
+    const float invP2 = 1.0f / r2.z;
+    r2 *= invP2;
+    r2.z = 1.0f;
+    b.z *= invP2;
+    if(r0.z != 0.0f){ const float f = r0.z; r0 -= f * r2; r0.z = 0.0f; b.x -= f * b.z; }
+    if(r1.z != 0.0f){ const float f = r1.z; r1 -= f * r2; r1.z = 0.0f; b.y -= f * b.z; }
+    if(r3.z != 0.0f){ const float f = r3.z; r3 -= f * r2; r3.z = 0.0f; b.w -= f * b.z; }
+
+    if(abs(r3.w) <= 1.0e-12f)
+        return false;
+    b.w /= r3.w;
+    b.x -= r0.w * b.w;
+    b.y -= r1.w * b.w;
+    b.z -= r2.w * b.w;
+    outX = b;
+    return true;
+}
+
+void nwbPhysicsSetupBlockContactPoint(
+    const uint constraintIdx,
+    const uint constraintSlot,
+    const uint pointIdx,
+    const float oldImp,
+    const bool useBias,
+    const float invH,
+    const bool dynA,
+    const bool dynB,
+    const bool hasA,
+    const bool hasB,
+    const float4 invIA0,
+    const float4 invIA1,
+    const float4 invIB0,
+    const float4 invIB1,
+    const float3 normal,
+    const float vnLin,
+    const float3 wA,
+    const float3 wB,
+    const float biasRate,
+    const float massScaleCfg,
+    const float impulseScaleCfg,
+    const float baseDeltaPosN,
+    const bool hasRotDelta,
+    const float3 rotDeltaNA,
+    const float3 rotDeltaNB,
+    out bool outEligible,
+    out float outBias,
+    out float outSoftRatio,
+    out float outVn,
+    out float3 outRnA,
+    out float3 outRnB,
+    out float3 outIRnA,
+    out float3 outIRnB
+){
+    const float4 rABaseSep = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[pointIdx].rABaseSep;
+    const float3 rB = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[pointIdx].rBRelVel.xyz;
+    const float3 rA = rABaseSep.xyz;
+
+    float sep = rABaseSep.w + baseDeltaPosN;
+    if(hasRotDelta)
+        sep += dot(rB, rotDeltaNB) - dot(rA, rotDeltaNA);
+
+    if(sep > 0.0f && !useBias && oldImp <= 0.0f){
+        outEligible = false;
+        outBias = 0.0f;
+        outSoftRatio = 0.0f;
+        outVn = 0.0f;
+        outRnA = float3(0.0f, 0.0f, 0.0f);
+        outRnB = float3(0.0f, 0.0f, 0.0f);
+        outIRnA = float3(0.0f, 0.0f, 0.0f);
+        outIRnB = float3(0.0f, 0.0f, 0.0f);
+        return;
+    }
+
+    outEligible = true;
+    float bias = 0.0f;
+    float massScale = 1.0f;
+    float impulseScale = 0.0f;
+    if(sep > 0.0f){
+        bias = sep * invH;
+    }
+    else if(useBias){
+        bias = max(biasRate * sep, -NWB_PHYSICS_MAX_CONTACT_BIAS_SPEED);
+        massScale = max(massScaleCfg, 1.0e-5f);
+        impulseScale = impulseScaleCfg;
+    }
+    outBias = bias;
+    outSoftRatio = impulseScale / massScale;
+    outRnA = hasA ? cross(rA, normal) : float3(0.0f, 0.0f, 0.0f);
+    outRnB = hasB ? cross(rB, normal) : float3(0.0f, 0.0f, 0.0f);
+    outIRnA = dynA ? nwbPhysicsMulSymmetric3(invIA0, invIA1, outRnA) : float3(0.0f, 0.0f, 0.0f);
+    outIRnB = dynB ? nwbPhysicsMulSymmetric3(invIB0, invIB1, outRnB) : float3(0.0f, 0.0f, 0.0f);
+    outVn = vnLin + dot(wB, outRnB) - dot(wA, outRnA);
+}
+
+float nwbPhysicsBlockMassEntry(
+    const float stepInvMassSum,
+    const bool dynA,
+    const bool dynB,
+    const float3 rnAi,
+    const float3 iRnAj,
+    const float3 rnBi,
+    const float3 iRnBj
+){
+    float kij = stepInvMassSum;
+    if(dynA)
+        kij += dot(rnAi, iRnAj);
+    if(dynB)
+        kij += dot(rnBi, iRnBj);
+    return kij;
+}
+
+void nwbPhysicsCheckPrimalLane(
+    const uint idx,
+    const uint freeMask,
+    const float xVal,
+    const float maxNormalImpulse,
+    const bool hasUpper,
+    inout bool anyViol,
+    inout uint worstIdx,
+    inout uint worstNextState,
+    inout float worstMag
+){
+    if((freeMask & (1u << idx)) == 0u)
+        return;
+    if(xVal < -worstMag){
+        anyViol = true;
+        worstMag = -xVal;
+        worstIdx = idx;
+        worstNextState = 0u;
+    }
+    if(hasUpper && (xVal - maxNormalImpulse) > worstMag){
+        anyViol = true;
+        worstMag = xVal - maxNormalImpulse;
+        worstIdx = idx;
+        worstNextState = 2u;
+    }
+}
+
+void nwbPhysicsCheckDualLane(
+    const uint idx,
+    const uint dualMask,
+    const uint upperMask,
+    const float4 mRow,
+    const float4 xSol,
+    const float rhsVal,
+    inout bool anyViol,
+    inout uint worstIdx,
+    inout float worstMag
+){
+    const uint bit = 1u << idx;
+    if((dualMask & bit) == 0u)
+        return;
+    const float res = dot(mRow, xSol) - rhsVal;
+    if((upperMask & bit) == 0u){
+        if(res < -worstMag){
+            anyViol = true;
+            worstMag = -res;
+            worstIdx = idx;
         }
     }
-    [loop]
-    for(uint i = 0u; i < n; ++i)
-        outX[i] = b[i];
-    return true;
+    else if(res > worstMag){
+        anyViol = true;
+        worstMag = res;
+        worstIdx = idx;
+    }
+}
+
+void nwbPhysicsApplyBlockPointLane(
+    const uint idx,
+    const uint pointCount,
+    const uint eligibleMask,
+    const float maxNormalImpulse,
+    const bool useBias,
+    const float xVal,
+    const bool dynA,
+    const bool dynB,
+    const float3 iRnA,
+    const float3 iRnB,
+    inout float ioNormImp,
+    inout float ioTotalImp,
+    inout float ioTotalImpOut,
+    inout float ioTotalDelta,
+    inout float3 ioAngDeltaA,
+    inout float3 ioAngDeltaB,
+    inout bool ioNormDirty,
+    inout bool ioTotalDirty,
+    inout bool ioAnyApplied
+){
+    if(idx >= pointCount)
+        return;
+    if((eligibleMask & (1u << idx)) == 0u){
+        ioTotalImpOut += ioNormImp;
+        return;
+    }
+    const float newImpulse = clamp(xVal, 0.0f, maxNormalImpulse);
+    const float delta = newImpulse - ioNormImp;
+    ioTotalImpOut += newImpulse;
+    if(delta != 0.0f){
+        ioNormImp = newImpulse;
+        ioNormDirty = true;
+        ioTotalDelta += delta;
+        if(dynA)
+            ioAngDeltaA += iRnA * delta;
+        if(dynB)
+            ioAngDeltaB += iRnB * delta;
+        ioAnyApplied = true;
+    }
+    if(useBias && newImpulse != 0.0f){
+        ioTotalImp += newImpulse;
+        ioTotalDirty = true;
+    }
 }
 
 [noinline]
@@ -577,225 +795,262 @@ bool nwbPhysicsSolveContactNormalBlock(
     const float stepInvMassSum = (dynA ? invMassA : 0.0f) + (dynB ? invMassB : 0.0f);
     const float vnLin = dot(vB - vA, normal);
 
-    bool eligible[4];
-    float biasArr[4];
-    float softRatioArr[4];
-    float oldImpArr[4];
-    float vnArr[4];
-    float3 rnAArr[4];
-    float3 rnBArr[4];
-    float3 iRnAArr[4];
-    float3 iRnBArr[4];
+    uint eligibleMask = 0u;
     uint eligibleCount = 0u;
+    float4 biasV = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 softRatioV = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 vnV = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    [loop]
-    for(uint i = 0u; i < pointCount; ++i){
-        const float4 rABaseSep = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].rABaseSep;
-        const float3 rB = g_NwbPhysicsContactConstraintBuffers[constraintSlot][constraintIdx].points[i].rBRelVel.xyz;
-        const float3 rA = rABaseSep.xyz;
-        const float oldImp = normImp[i];
-        oldImpArr[i] = oldImp;
-
-        float sep = rABaseSep.w + baseDeltaPosN;
-        if(hasRotDelta)
-            sep += dot(rB, rotDeltaNB) - dot(rA, rotDeltaNA);
-
-        if(sep > 0.0f && !useBias && oldImp <= 0.0f){
-            eligible[i] = false;
-            biasArr[i] = 0.0f;
-            softRatioArr[i] = 0.0f;
-            vnArr[i] = 0.0f;
-            rnAArr[i] = float3(0.0f, 0.0f, 0.0f);
-            rnBArr[i] = float3(0.0f, 0.0f, 0.0f);
-            iRnAArr[i] = float3(0.0f, 0.0f, 0.0f);
-            iRnBArr[i] = float3(0.0f, 0.0f, 0.0f);
-            continue;
-        }
-        eligible[i] = true;
-        ++eligibleCount;
-
+    float3 rnA0 = float3(0.0f, 0.0f, 0.0f);
+    float3 rnB0 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnA0 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnB0 = float3(0.0f, 0.0f, 0.0f);
+    {
+        bool elig = false;
         float bias = 0.0f;
-        float massScale = 1.0f;
-        float impulseScale = 0.0f;
-        if(sep > 0.0f){
-            bias = sep * invH;
+        float softR = 0.0f;
+        float vn = 0.0f;
+        nwbPhysicsSetupBlockContactPoint(
+            constraintIdx, constraintSlot, 0u, normImp.x, useBias, invH, dynA, dynB, hasA, hasB,
+            invIA0, invIA1, invIB0, invIB1, normal, vnLin, wA, wB, biasRate, massScaleCfg, impulseScaleCfg,
+            baseDeltaPosN, hasRotDelta, rotDeltaNA, rotDeltaNB, elig, bias, softR, vn, rnA0, rnB0, iRnA0, iRnB0
+        );
+        if(elig){
+            eligibleMask |= 1u;
+            ++eligibleCount;
+            biasV.x = bias;
+            softRatioV.x = softR;
+            vnV.x = vn;
         }
-        else if(useBias){
-            bias = max(biasRate * sep, -NWB_PHYSICS_MAX_CONTACT_BIAS_SPEED);
-            massScale = max(massScaleCfg, 1.0e-5f);
-            impulseScale = impulseScaleCfg;
-        }
-        biasArr[i] = bias;
-        softRatioArr[i] = impulseScale / massScale;
+    }
 
-        const float3 rnA = hasA ? cross(rA, normal) : float3(0.0f, 0.0f, 0.0f);
-        const float3 rnB = hasB ? cross(rB, normal) : float3(0.0f, 0.0f, 0.0f);
-        rnAArr[i] = rnA;
-        rnBArr[i] = rnB;
-        iRnAArr[i] = dynA ? nwbPhysicsMulSymmetric3(invIA0, invIA1, rnA) : float3(0.0f, 0.0f, 0.0f);
-        iRnBArr[i] = dynB ? nwbPhysicsMulSymmetric3(invIB0, invIB1, rnB) : float3(0.0f, 0.0f, 0.0f);
-        vnArr[i] = vnLin + dot(wB, rnB) - dot(wA, rnA);
+    float3 rnA1 = float3(0.0f, 0.0f, 0.0f);
+    float3 rnB1 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnA1 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnB1 = float3(0.0f, 0.0f, 0.0f);
+    {
+        bool elig = false;
+        float bias = 0.0f;
+        float softR = 0.0f;
+        float vn = 0.0f;
+        nwbPhysicsSetupBlockContactPoint(
+            constraintIdx, constraintSlot, 1u, normImp.y, useBias, invH, dynA, dynB, hasA, hasB,
+            invIA0, invIA1, invIB0, invIB1, normal, vnLin, wA, wB, biasRate, massScaleCfg, impulseScaleCfg,
+            baseDeltaPosN, hasRotDelta, rotDeltaNA, rotDeltaNB, elig, bias, softR, vn, rnA1, rnB1, iRnA1, iRnB1
+        );
+        if(elig){
+            eligibleMask |= 2u;
+            ++eligibleCount;
+            biasV.y = bias;
+            softRatioV.y = softR;
+            vnV.y = vn;
+        }
+    }
+
+    float3 rnA2 = float3(0.0f, 0.0f, 0.0f);
+    float3 rnB2 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnA2 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnB2 = float3(0.0f, 0.0f, 0.0f);
+    if(pointCount > 2u){
+        bool elig = false;
+        float bias = 0.0f;
+        float softR = 0.0f;
+        float vn = 0.0f;
+        nwbPhysicsSetupBlockContactPoint(
+            constraintIdx, constraintSlot, 2u, normImp.z, useBias, invH, dynA, dynB, hasA, hasB,
+            invIA0, invIA1, invIB0, invIB1, normal, vnLin, wA, wB, biasRate, massScaleCfg, impulseScaleCfg,
+            baseDeltaPosN, hasRotDelta, rotDeltaNA, rotDeltaNB, elig, bias, softR, vn, rnA2, rnB2, iRnA2, iRnB2
+        );
+        if(elig){
+            eligibleMask |= 4u;
+            ++eligibleCount;
+            biasV.z = bias;
+            softRatioV.z = softR;
+            vnV.z = vn;
+        }
+    }
+
+    float3 rnA3 = float3(0.0f, 0.0f, 0.0f);
+    float3 rnB3 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnA3 = float3(0.0f, 0.0f, 0.0f);
+    float3 iRnB3 = float3(0.0f, 0.0f, 0.0f);
+    if(pointCount > 3u){
+        bool elig = false;
+        float bias = 0.0f;
+        float softR = 0.0f;
+        float vn = 0.0f;
+        nwbPhysicsSetupBlockContactPoint(
+            constraintIdx, constraintSlot, 3u, normImp.w, useBias, invH, dynA, dynB, hasA, hasB,
+            invIA0, invIA1, invIB0, invIB1, normal, vnLin, wA, wB, biasRate, massScaleCfg, impulseScaleCfg,
+            baseDeltaPosN, hasRotDelta, rotDeltaNA, rotDeltaNB, elig, bias, softR, vn, rnA3, rnB3, iRnA3, iRnB3
+        );
+        if(elig){
+            eligibleMask |= 8u;
+            ++eligibleCount;
+            biasV.w = bias;
+            softRatioV.w = softR;
+            vnV.w = vn;
+        }
     }
 
     if(eligibleCount < 2u)
         return false;
 
-    float mMat[16];
-    [loop]
-    for(uint i = 0u; i < 16u; ++i)
-        mMat[i] = 0.0f;
-    [loop]
-    for(uint i = 0u; i < pointCount; ++i){
-        if(!eligible[i])
-            continue;
-        [loop]
-        for(uint j = i; j < pointCount; ++j){
-            if(!eligible[j])
-                continue;
-            float kij = stepInvMassSum;
-            if(dynA)
-                kij += dot(rnAArr[i], iRnAArr[j]);
-            if(dynB)
-                kij += dot(rnBArr[i], iRnBArr[j]);
-            mMat[i * 4u + j] = kij;
-            mMat[j * 4u + i] = kij;
-        }
-    }
+    const float4 oldImpMasked = float4(
+        ((eligibleMask & 1u) != 0u) ? normImp.x : 0.0f,
+        ((eligibleMask & 2u) != 0u) ? normImp.y : 0.0f,
+        ((eligibleMask & 4u) != 0u) ? normImp.z : 0.0f,
+        ((eligibleMask & 8u) != 0u) ? normImp.w : 0.0f
+    );
 
-    float rhsAll[4];
-    [loop]
-    for(uint i = 0u; i < pointCount; ++i){
-        if(!eligible[i]){
-            rhsAll[i] = 0.0f;
-            continue;
+    float4 m0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 m1 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 m2 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 m3 = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    if((eligibleMask & 1u) != 0u){
+        m0.x = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA0, iRnA0, rnB0, iRnB0);
+        if((eligibleMask & 2u) != 0u){
+            const float k01 = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA0, iRnA1, rnB0, iRnB1);
+            m0.y = k01;
+            m1.x = k01;
         }
-        float kxOld = 0.0f;
-        [loop]
-        for(uint j = 0u; j < pointCount; ++j){
-            if(eligible[j])
-                kxOld += mMat[i * 4u + j] * oldImpArr[j];
+        if((eligibleMask & 4u) != 0u){
+            const float k02 = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA0, iRnA2, rnB0, iRnB2);
+            m0.z = k02;
+            m2.x = k02;
         }
-        rhsAll[i] = kxOld - (vnArr[i] + biasArr[i]);
+        if((eligibleMask & 8u) != 0u){
+            const float k03 = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA0, iRnA3, rnB0, iRnB3);
+            m0.w = k03;
+            m3.x = k03;
+        }
     }
-    [loop]
-    for(uint i = 0u; i < pointCount; ++i){
-        if(eligible[i])
-            mMat[i * 4u + i] *= (1.0f + softRatioArr[i]);
+    if((eligibleMask & 2u) != 0u){
+        m1.y = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA1, iRnA1, rnB1, iRnB1);
+        if((eligibleMask & 4u) != 0u){
+            const float k12 = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA1, iRnA2, rnB1, iRnB2);
+            m1.z = k12;
+            m2.y = k12;
+        }
+        if((eligibleMask & 8u) != 0u){
+            const float k13 = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA1, iRnA3, rnB1, iRnB3);
+            m1.w = k13;
+            m3.y = k13;
+        }
     }
-    [loop]
-    for(uint i = pointCount; i < 4u; ++i)
-        rhsAll[i] = 0.0f;
+    if((eligibleMask & 4u) != 0u){
+        m2.z = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA2, iRnA2, rnB2, iRnB2);
+        if((eligibleMask & 8u) != 0u){
+            const float k23 = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA2, iRnA3, rnB2, iRnB3);
+            m2.w = k23;
+            m3.z = k23;
+        }
+    }
+    if((eligibleMask & 8u) != 0u)
+        m3.w = nwbPhysicsBlockMassEntry(stepInvMassSum, dynA, dynB, rnA3, iRnA3, rnB3, iRnB3);
+
+    const float4 rhsAll = float4(
+        ((eligibleMask & 1u) != 0u) ? (dot(m0, oldImpMasked) - (vnV.x + biasV.x)) : 0.0f,
+        ((eligibleMask & 2u) != 0u) ? (dot(m1, oldImpMasked) - (vnV.y + biasV.y)) : 0.0f,
+        ((eligibleMask & 4u) != 0u) ? (dot(m2, oldImpMasked) - (vnV.z + biasV.z)) : 0.0f,
+        ((eligibleMask & 8u) != 0u) ? (dot(m3, oldImpMasked) - (vnV.w + biasV.w)) : 0.0f
+    );
+
+    m0.x *= (1.0f + softRatioV.x);
+    m1.y *= (1.0f + softRatioV.y);
+    m2.z *= (1.0f + softRatioV.z);
+    m3.w *= (1.0f + softRatioV.w);
 
     const bool hasUpper = (maxNormalImpulse < 1.0e37f);
-    int actState[4];
-    float xSol[4];
-    [loop]
-    for(uint i = 0u; i < 4u; ++i){
-        actState[i] = (i < pointCount && eligible[i]) ? 1 : 0;
-        xSol[i] = 0.0f;
-    }
-
+    uint freeMask = eligibleMask;
+    uint upperMask = 0u;
+    float4 xSol = float4(0.0f, 0.0f, 0.0f, 0.0f);
     bool solved = false;
+
     [loop]
     for(uint asIter = 0u; asIter < 12u; ++asIter){
-        uint activeIndices[4];
-        uint nActive = 0u;
-        [loop]
-        for(uint i = 0u; i < pointCount; ++i){
-            xSol[i] = (actState[i] == 2) ? maxNormalImpulse : 0.0f;
-            if(actState[i] == 1)
-                activeIndices[nActive++] = i;
+        const float4 xFixed = hasUpper
+            ? float4(
+                ((upperMask & 1u) != 0u) ? maxNormalImpulse : 0.0f,
+                ((upperMask & 2u) != 0u) ? maxNormalImpulse : 0.0f,
+                ((upperMask & 4u) != 0u) ? maxNormalImpulse : 0.0f,
+                ((upperMask & 8u) != 0u) ? maxNormalImpulse : 0.0f
+            )
+            : float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+        if(freeMask == 0u){
+            xSol = xFixed;
         }
-        if(nActive > 0u){
-            float subA[16];
-            float subRhs[4];
-            float subX[4];
-            [loop]
-            for(uint k = 0u; k < 16u; ++k)
-                subA[k] = 0.0f;
-            [loop]
-            for(uint r = 0u; r < 4u; ++r){
-                subRhs[r] = 0.0f;
-                subX[r] = 0.0f;
-            }
-            [loop]
-            for(uint r = 0u; r < nActive; ++r){
-                const uint ri = activeIndices[r];
-                float adjRhs = rhsAll[ri];
-                if(hasUpper){
-                    [loop]
-                    for(uint col = 0u; col < pointCount; ++col){
-                        if(eligible[col] && actState[col] == 2)
-                            adjRhs -= mMat[ri * 4u + col] * maxNormalImpulse;
-                    }
-                }
-                subRhs[r] = adjRhs;
-                [loop]
-                for(uint col = 0u; col < nActive; ++col)
-                    subA[r * 4u + col] = mMat[ri * 4u + activeIndices[col]];
-            }
-            if(!nwbPhysicsSolveLinear4x4(nActive, subA, subRhs, subX))
+        else if(freeMask == 3u){
+            const float b0 = rhsAll.x - dot(m0, xFixed);
+            const float b1 = rhsAll.y - dot(m1, xFixed);
+            const float det = m0.x * m1.y - m0.y * m1.x;
+            const float diagRef = max(abs(m0.x), abs(m1.x));
+            if(diagRef <= 1.0e-12f || abs(det) <= 1.0e-12f * diagRef)
                 return false;
-            [loop]
-            for(uint r = 0u; r < nActive; ++r)
-                xSol[activeIndices[r]] = subX[r];
+            const float invDet = 1.0f / det;
+            xSol = float4((b0 * m1.y - b1 * m0.y) * invDet, (m0.x * b1 - m1.x * b0) * invDet, xFixed.z, xFixed.w);
         }
+        else{
+            const float4 freeVec = float4(
+                ((freeMask & 1u) != 0u) ? 1.0f : 0.0f,
+                ((freeMask & 2u) != 0u) ? 1.0f : 0.0f,
+                ((freeMask & 4u) != 0u) ? 1.0f : 0.0f,
+                ((freeMask & 8u) != 0u) ? 1.0f : 0.0f
+            );
+            const float4 a0 = ((freeMask & 1u) != 0u) ? (m0 * freeVec) : float4(1.0f, 0.0f, 0.0f, 0.0f);
+            const float4 a1 = ((freeMask & 2u) != 0u) ? (m1 * freeVec) : float4(0.0f, 1.0f, 0.0f, 0.0f);
+            const float4 a2 = ((freeMask & 4u) != 0u) ? (m2 * freeVec) : float4(0.0f, 0.0f, 1.0f, 0.0f);
+            const float4 a3 = ((freeMask & 8u) != 0u) ? (m3 * freeVec) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+            const float4 bVec = float4(
+                ((freeMask & 1u) != 0u) ? (rhsAll.x - dot(m0, xFixed)) : xFixed.x,
+                ((freeMask & 2u) != 0u) ? (rhsAll.y - dot(m1, xFixed)) : xFixed.y,
+                ((freeMask & 4u) != 0u) ? (rhsAll.z - dot(m2, xFixed)) : xFixed.z,
+                ((freeMask & 8u) != 0u) ? (rhsAll.w - dot(m3, xFixed)) : xFixed.w
+            );
+            if(!nwbPhysicsSolveLinear4x4Reg(a0, a1, a2, a3, bVec, xSol))
+                return false;
+        }
+
+        if(
+            (((freeMask & 1u) != 0u) && !isfinite(xSol.x))
+            || (((freeMask & 2u) != 0u) && !isfinite(xSol.y))
+            || (((freeMask & 4u) != 0u) && !isfinite(xSol.z))
+            || (((freeMask & 8u) != 0u) && !isfinite(xSol.w))
+        )
+            return false;
 
         bool anyPrimalViol = false;
         uint worstPrimalIdx = 0u;
-        int worstNextState = 0;
+        uint worstNextState = 0u;
         float worstPrimalMag = 1.0e-5f;
-        [loop]
-        for(uint i = 0u; i < pointCount; ++i){
-            if(actState[i] != 1)
-                continue;
-            if(!isfinite(xSol[i]))
-                return false;
-            if(xSol[i] < -worstPrimalMag){
-                anyPrimalViol = true;
-                worstPrimalMag = -xSol[i];
-                worstPrimalIdx = i;
-                worstNextState = 0;
-            }
-            if(hasUpper && (xSol[i] - maxNormalImpulse) > worstPrimalMag){
-                anyPrimalViol = true;
-                worstPrimalMag = xSol[i] - maxNormalImpulse;
-                worstPrimalIdx = i;
-                worstNextState = 2;
-            }
-        }
+        nwbPhysicsCheckPrimalLane(0u, freeMask, xSol.x, maxNormalImpulse, hasUpper, anyPrimalViol, worstPrimalIdx, worstNextState, worstPrimalMag);
+        nwbPhysicsCheckPrimalLane(1u, freeMask, xSol.y, maxNormalImpulse, hasUpper, anyPrimalViol, worstPrimalIdx, worstNextState, worstPrimalMag);
+        nwbPhysicsCheckPrimalLane(2u, freeMask, xSol.z, maxNormalImpulse, hasUpper, anyPrimalViol, worstPrimalIdx, worstNextState, worstPrimalMag);
+        nwbPhysicsCheckPrimalLane(3u, freeMask, xSol.w, maxNormalImpulse, hasUpper, anyPrimalViol, worstPrimalIdx, worstNextState, worstPrimalMag);
         if(anyPrimalViol){
-            actState[worstPrimalIdx] = worstNextState;
+            const uint bit = 1u << worstPrimalIdx;
+            freeMask &= ~bit;
+            if(worstNextState == 2u)
+                upperMask |= bit;
+            else
+                upperMask &= ~bit;
             continue;
         }
 
+        const uint dualMask = eligibleMask & ~freeMask;
         bool anyDualViolation = false;
         uint worstDualIdx = 0u;
         float worstDualMag = 1.0e-3f;
-        [loop]
-        for(uint i = 0u; i < pointCount; ++i){
-            if(!eligible[i] || actState[i] == 1)
-                continue;
-            float mx = 0.0f;
-            [loop]
-            for(uint j = 0u; j < pointCount; ++j){
-                if(eligible[j])
-                    mx += mMat[i * 4u + j] * xSol[j];
-            }
-            const float res = mx - rhsAll[i];
-            if(actState[i] == 0 && res < -worstDualMag){
-                anyDualViolation = true;
-                worstDualMag = -res;
-                worstDualIdx = i;
-            }
-            else if(actState[i] == 2 && res > worstDualMag){
-                anyDualViolation = true;
-                worstDualMag = res;
-                worstDualIdx = i;
-            }
-        }
+        nwbPhysicsCheckDualLane(0u, dualMask, upperMask, m0, xSol, rhsAll.x, anyDualViolation, worstDualIdx, worstDualMag);
+        nwbPhysicsCheckDualLane(1u, dualMask, upperMask, m1, xSol, rhsAll.y, anyDualViolation, worstDualIdx, worstDualMag);
+        nwbPhysicsCheckDualLane(2u, dualMask, upperMask, m2, xSol, rhsAll.z, anyDualViolation, worstDualIdx, worstDualMag);
+        nwbPhysicsCheckDualLane(3u, dualMask, upperMask, m3, xSol, rhsAll.w, anyDualViolation, worstDualIdx, worstDualMag);
         if(anyDualViolation){
-            actState[worstDualIdx] = 1;
+            const uint bit = 1u << worstDualIdx;
+            freeMask |= bit;
+            upperMask &= ~bit;
             continue;
         }
         solved = true;
@@ -806,35 +1061,26 @@ bool nwbPhysicsSolveContactNormalBlock(
         return false;
 
     float totalImpOut = 0.0f;
-    [loop]
-    for(uint i = 0u; i < pointCount; ++i){
-        if(!eligible[i]){
-            totalImpOut += normImp[i];
-            continue;
+    float totalDelta = 0.0f;
+    float3 angDeltaA = float3(0.0f, 0.0f, 0.0f);
+    float3 angDeltaB = float3(0.0f, 0.0f, 0.0f);
+    nwbPhysicsApplyBlockPointLane(0u, pointCount, eligibleMask, maxNormalImpulse, useBias, xSol.x, dynA, dynB, iRnA0, iRnB0, normImp.x, totalImp.x, totalImpOut, totalDelta, angDeltaA, angDeltaB, outNormImpDirty, outTotalImpDirty, outAnyApplied);
+    nwbPhysicsApplyBlockPointLane(1u, pointCount, eligibleMask, maxNormalImpulse, useBias, xSol.y, dynA, dynB, iRnA1, iRnB1, normImp.y, totalImp.y, totalImpOut, totalDelta, angDeltaA, angDeltaB, outNormImpDirty, outTotalImpDirty, outAnyApplied);
+    nwbPhysicsApplyBlockPointLane(2u, pointCount, eligibleMask, maxNormalImpulse, useBias, xSol.z, dynA, dynB, iRnA2, iRnB2, normImp.z, totalImp.z, totalImpOut, totalDelta, angDeltaA, angDeltaB, outNormImpDirty, outTotalImpDirty, outAnyApplied);
+    nwbPhysicsApplyBlockPointLane(3u, pointCount, eligibleMask, maxNormalImpulse, useBias, xSol.w, dynA, dynB, iRnA3, iRnB3, normImp.w, totalImp.w, totalImpOut, totalDelta, angDeltaA, angDeltaB, outNormImpDirty, outTotalImpDirty, outAnyApplied);
+
+    if(outAnyApplied){
+        if(dynA){
+            vA -= (invMassA * totalDelta) * normal;
+            wA -= angDeltaA;
+            if((flagsA & 0x07u) != 0u)
+                vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
         }
-        const float newImpulse = clamp(xSol[i], 0.0f, maxNormalImpulse);
-        const float delta = newImpulse - normImp[i];
-        totalImpOut += newImpulse;
-        if(delta != 0.0f){
-            normImp[i] = newImpulse;
-            outNormImpDirty = true;
-            if(dynA){
-                vA -= (invMassA * delta) * normal;
-                wA -= iRnAArr[i] * delta;
-                if((flagsA & 0x07u) != 0u)
-                    vA = nwbPhysicsApplyLinearLocks(vA, flagsA);
-            }
-            if(dynB){
-                vB += (invMassB * delta) * normal;
-                wB += iRnBArr[i] * delta;
-                if((flagsB & 0x07u) != 0u)
-                    vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
-            }
-            outAnyApplied = true;
-        }
-        if(useBias && newImpulse != 0.0f){
-            totalImp[i] += newImpulse;
-            outTotalImpDirty = true;
+        if(dynB){
+            vB += (invMassB * totalDelta) * normal;
+            wB += angDeltaB;
+            if((flagsB & 0x07u) != 0u)
+                vB = nwbPhysicsApplyLinearLocks(vB, flagsB);
         }
     }
     outTotalNormalImpulse = totalImpOut;
@@ -842,6 +1088,7 @@ bool nwbPhysicsSolveContactNormalBlock(
 }
 #endif
 
+[noinline]
 void nwbPhysicsSolveContactVelocity(
     const uint constraintIdx,
     const bool useBias,
@@ -1214,6 +1461,7 @@ void nwbPhysicsSolveContactVelocity(
     }
 }
 
+[noinline]
 void nwbPhysicsSolveSingleContact(
     const uint constraintIdx,
     const uint mode,
@@ -1240,6 +1488,7 @@ void nwbPhysicsSolveSingleContact(
 }
 
 #ifdef NWB_PHYSICS_USE_LDS_BODY_STATES
+[noinline]
 void nwbPhysicsIslandSolveContactsPass(
     const uint tid,
     const uint contactOffset,

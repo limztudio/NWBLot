@@ -318,6 +318,14 @@ class RagdollInstance{
     private Vector<Transform3D> m_poseScratchXf;
     private b8 m_articulationKinematic = false;
     private Vector<u8> m_articulationBoneKinMask;
+    private Vector<usize> m_heldLinkIndicesScratch;
+    private Vector<f32> m_heldQScratch;
+    private Vector<f32x4> m_heldQ3Scratch;
+    private Vector<f32x4> m_heldJointRotScratch;
+    private Vector<f32x4> m_balanceBonePosScratch;
+    private Vector<u8> m_balanceBoneHasPosScratch;
+    private Vector<Transform3D> m_blendCurPoseScratch;
+    private Vector<u8> m_envGravSubtractedScratch;
 
     public void reset(){
         this.boneBodies.clear();
@@ -346,6 +354,14 @@ class RagdollInstance{
         this.m_poseScratchXf.clear();
         this.m_articulationKinematic = false;
         this.m_articulationBoneKinMask.clear();
+        this.m_heldLinkIndicesScratch.clear();
+        this.m_heldQScratch.clear();
+        this.m_heldQ3Scratch.clear();
+        this.m_heldJointRotScratch.clear();
+        this.m_balanceBonePosScratch.clear();
+        this.m_balanceBoneHasPosScratch.clear();
+        this.m_blendCurPoseScratch.clear();
+        this.m_envGravSubtractedScratch.clear();
     }
 
     public void shiftOrigin(in VectorSingle negDelta){
@@ -407,6 +423,14 @@ class RagdollInstance{
         this.m_articulationBoneKinMask.resize(artBoneKinMask.size(), 0u);
         for(usize i = 0u; i < artBoneKinMask.size(); ++i)
             this.m_articulationBoneKinMask[i] = artBoneKinMask[i];
+        this.m_heldLinkIndicesScratch.clear();
+        this.m_heldQScratch.clear();
+        this.m_heldQ3Scratch.clear();
+        this.m_heldJointRotScratch.clear();
+        this.m_balanceBonePosScratch.clear();
+        this.m_balanceBoneHasPosScratch.clear();
+        this.m_blendCurPoseScratch.clear();
+        this.m_envGravSubtractedScratch.clear();
     }
 
     public void refreshBoneInertias(in PhysicsWorld world){
@@ -1005,6 +1029,14 @@ class RagdollInstance{
         this.m_poseScratchXf.clear();
         this.m_articulationKinematic = false;
         this.m_articulationBoneKinMask.clear();
+        this.m_heldLinkIndicesScratch.clear();
+        this.m_heldQScratch.clear();
+        this.m_heldQ3Scratch.clear();
+        this.m_heldJointRotScratch.clear();
+        this.m_balanceBonePosScratch.clear();
+        this.m_balanceBoneHasPosScratch.clear();
+        this.m_blendCurPoseScratch.clear();
+        this.m_envGravSubtractedScratch.clear();
     }
 
     public b8 isValid(in PhysicsWorld world)const{
@@ -1208,10 +1240,8 @@ class RagdollInstance{
                 }
             }
             if(anyArtUpdated){
-                this.articulation.markCachesDirty();
-                this.articulation.computeForwardKinematics();
+                this.articulation.markPoseDirty();
                 this.articulation.computeLinkSpatialVelocities();
-                this.articulation.computeForwardKinematics();
                 for(usize i = 0u; i < this.boneBodies.size() && i < this.articulation.linkStates.size(); ++i){
                     if(this.articulation.isLinkDetached(i))
                         continue;
@@ -1265,10 +1295,8 @@ class RagdollInstance{
                     const VectorSingle childQ = SafeNormalizeQuat(VectorSingle(worldTransforms[i].rotation));
                     this.projectArticulationLinkFromTargetQuats(i, parQ, childQ, resetVelocities);
                 }
-                this.articulation.markCachesDirty();
-                this.articulation.computeForwardKinematics();
+                this.articulation.markPoseDirty();
                 this.articulation.computeLinkSpatialVelocities();
-                this.articulation.computeForwardKinematics();
             }
             for(usize i = 0u; i < this.boneBodies.size(); ++i){
                 const BodyId bodyId = this.boneBodies[i];
@@ -1307,14 +1335,13 @@ class RagdollInstance{
         const VectorSingle tVec(t);
         const VectorSingle zero(0.0f);
         if(this.mode == RagdollMode::Articulation){
-            Vector<Transform3D> curXfs;
-            this.readPose(world, curXfs);
-            const usize count = Min(curXfs.size(), targetWorldTransforms.size());
+            this.readPose(world, this.m_blendCurPoseScratch);
+            const usize count = Min(this.m_blendCurPoseScratch.size(), targetWorldTransforms.size());
             if(count == 0u)
                 return;
             this.m_poseScratchXf.resize(count);
             for(usize i = 0u; i < count; ++i){
-                in Transform3D curXf = curXfs[i];
+                in Transform3D curXf = this.m_blendCurPoseScratch[i];
                 in Transform3D tgtXf = targetWorldTransforms[i];
                 const VectorSingle pBlend = Lerp(VectorSingle(curXf.position), VectorSingle(tgtXf.position), tVec);
                 const VectorSingle q0 = SafeNormalizeQuat(VectorSingle(curXf.rotation));
@@ -1407,12 +1434,9 @@ class RagdollInstance{
     }
 
     public void writeSkeletonPose(in PhysicsWorld world, mut Vector<Transform3D> outJointWorldTransforms)const{
-        outJointWorldTransforms.clear();
-        Vector<Transform3D> boneXfs;
-        this.readPose(world, boneXfs);
-        outJointWorldTransforms.reserve(boneXfs.size());
-        for(usize i = 0u; i < boneXfs.size(); ++i){
-            in Transform3D bXf = boneXfs[i];
+        this.readPose(world, outJointWorldTransforms);
+        for(usize i = 0u; i < outJointWorldTransforms.size(); ++i){
+            const Transform3D bXf = outJointWorldTransforms[i];
             Transform3D off;
             if(i < this.boneJointToBodyOffsets.size())
                 off = this.boneJointToBodyOffsets[i];
@@ -1421,7 +1445,7 @@ class RagdollInstance{
             const VectorSingle invOffPos = -Vector3Rotate(VectorSingle(off.position), invOffRot);
             const VectorSingle jPos = TransformPointValues(VectorSingle(bXf.position), bRotN, invOffPos);
             const VectorSingle jRot = SafeNormalizeQuat(QuaternionMultiply(bRotN, invOffRot));
-            outJointWorldTransforms.push_back(Transform3D(jPos, jRot));
+            outJointWorldTransforms[i] = Transform3D(jPos, jRot);
         }
     }
 
@@ -1434,38 +1458,36 @@ class RagdollInstance{
                 this.articulation.fixedBase = rootKin;
                 const usize linkCnt = this.articulation.linkStates.size();
                 const usize maskCnt = Min(this.m_articulationBoneKinMask.size(), linkCnt);
-                Vector<usize> heldIndices;
-                Vector<f32> heldQ;
-                Vector<f32x4> heldQ3;
-                Vector<f32x4> heldJointRot;
+                this.m_heldLinkIndicesScratch.clear();
+                this.m_heldQScratch.clear();
+                this.m_heldQ3Scratch.clear();
+                this.m_heldJointRotScratch.clear();
                 for(usize i = 1u; i < maskCnt; ++i){
                     if(this.m_articulationBoneKinMask[i] != 0u && !this.articulation.isLinkDetached(i)){
                         in ArticulationLinkState s = this.articulation.linkStates[i];
-                        heldIndices.push_back(i);
-                        heldQ.push_back(s.q);
-                        heldQ3.push_back(s.q3);
-                        heldJointRot.push_back(s.jointRotation);
+                        this.m_heldLinkIndicesScratch.push_back(i);
+                        this.m_heldQScratch.push_back(s.q);
+                        this.m_heldQ3Scratch.push_back(s.q3);
+                        this.m_heldJointRotScratch.push_back(s.jointRotation);
                     }
                 }
                 this.articulation.step(world, dt);
-                if(!heldIndices.empty()){
+                if(!this.m_heldLinkIndicesScratch.empty()){
                     const VectorSingle zero(0.0f);
-                    for(usize hi = 0u; hi < heldIndices.size(); ++hi){
-                        const usize li = heldIndices[hi];
+                    for(usize hi = 0u; hi < this.m_heldLinkIndicesScratch.size(); ++hi){
+                        const usize li = this.m_heldLinkIndicesScratch[hi];
                         mut ArticulationLinkState s = this.articulation.linkStates[li];
-                        s.q = heldQ[hi];
-                        s.q3 = heldQ3[hi];
-                        s.jointRotation = heldJointRot[hi];
+                        s.q = this.m_heldQScratch[hi];
+                        s.q3 = this.m_heldQ3Scratch[hi];
+                        s.jointRotation = this.m_heldJointRotScratch[hi];
                         s.qd = 0.0f;
                         s.qd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                         s.qdd = 0.0f;
                         s.qdd3 = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
                         s.spatialVelocity = SpatialVec();
                     }
-                    this.articulation.markCachesDirty();
-                    this.articulation.computeForwardKinematics();
+                    this.articulation.markPoseDirty();
                     this.articulation.computeLinkSpatialVelocities();
-                    this.articulation.computeForwardKinematics();
                     for(usize i = 0u; i < this.boneBodies.size() && i < linkCnt; ++i){
                         if(this.articulation.isLinkDetached(i))
                             continue;
@@ -1828,15 +1850,11 @@ class RagdollInstance{
         VectorSingle massPosSum(0.0f);
         VectorSingle massVelSum(0.0f);
         f32 minH = s_MaxF32;
-        Vector<f32x4> bonePositions;
-        bonePositions.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
-        Vector<u8> boneHasPos;
-        boneHasPos.assign(n, 0u);
+        this.m_balanceBonePosScratch.resize(n, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        this.m_balanceBoneHasPosScratch.assign(n, 0u);
 
-        if(this.mode == RagdollMode::Articulation){
-            this.articulation.computeForwardKinematics();
+        if(this.mode == RagdollMode::Articulation)
             this.articulation.computeLinkSpatialVelocities();
-        }
 
         VectorSingle rootRot = QuaternionIdentity();
         VectorSingle rootAngVel(0.0f);
@@ -1854,8 +1872,8 @@ class RagdollInstance{
                 totalMass += m;
                 massPosSum = massPosSum + comW * m;
                 massVelSum = massVelSum + velW * m;
-                bonePositions[i] = f32x4(lPos, 0.0f);
-                boneHasPos[i] = 1u;
+                this.m_balanceBonePosScratch[i] = f32x4(lPos, 0.0f);
+                this.m_balanceBoneHasPosScratch[i] = 1u;
                 minH = Min(minH, Vector3Dot(lPos, upDir).x);
                 if(i == 0u){
                     rootRot = lRot;
@@ -1887,8 +1905,8 @@ class RagdollInstance{
                 totalMass += m;
                 massPosSum = massPosSum + comW * m;
                 massVelSum = massVelSum + velW * m;
-                bonePositions[i] = f32x4(posW, 0.0f);
-                boneHasPos[i] = 1u;
+                this.m_balanceBonePosScratch[i] = f32x4(posW, 0.0f);
+                this.m_balanceBoneHasPosScratch[i] = 1u;
                 minH = Min(minH, Vector3Dot(posW, upDir).x);
                 if(i == 0u){
                     rootRot = rotW;
@@ -1910,16 +1928,16 @@ class RagdollInstance{
         u32 supportCnt = 0u;
         const f32 supportBand = 0.15f;
         for(usize i = 0u; i < n; ++i){
-            if(boneHasPos[i] == 0u)
+            if(this.m_balanceBoneHasPosScratch[i] == 0u)
                 continue;
-            const VectorSingle bp(bonePositions[i]);
+            const VectorSingle bp(this.m_balanceBonePosScratch[i]);
             const f32 h = Vector3Dot(bp, upDir).x;
             if(h <= minH + supportBand){
                 supportSum = supportSum + bp;
                 ++supportCnt;
             }
         }
-        VectorSingle supportPos(bonePositions[0u]);
+        VectorSingle supportPos(this.m_balanceBonePosScratch[0u]);
         if(supportCnt > 0u)
             supportPos = supportSum * (1.0f / cast<f32>(supportCnt));
 
@@ -1967,45 +1985,69 @@ class RagdollInstance{
     public void applyEnvironment(in PhysicsEnvironment env, in f32 dt, mut PhysicsWorld world){
         if(dt <= 0.0f || this.boneBodies.empty())
             return;
-        if(this.mode == RagdollMode::Articulation){
+        const b8 artMode = (this.mode == RagdollMode::Articulation);
+        if(artMode)
             this.articulation.applyEnvironment(world, env, dt);
-            for(usize i = 0u; i < this.boneBodies.size(); ++i){
-                if(!this.articulation.isLinkDetached(i))
+        const usize boneCount = this.boneBodies.size();
+        b8 anyBone = false;
+        for(usize i = 0u; i < boneCount; ++i){
+            if(artMode && !this.articulation.isLinkDetached(i))
+                continue;
+            if(world.isValidBody(this.boneBodies[i])){
+                anyBone = true;
+                break;
+            }
+        }
+        if(!anyBone)
+            return;
+        world.flushDirtyBodyMasses();
+        const VectorSingle grav = world.gravity();
+        const f32 invDt = 1.0f / Max(1.0e-5f, dt);
+        BuoyancySubmersionScratch subScratch;
+        for(usize fi = 0u; fi < env.fluids.size(); ++fi){
+            in FluidVolume fl = env.fluids[fi];
+            if(!fl.enabled)
+                continue;
+            const VectorSingle surfNorm = fl.normalizedSurfaceNormal();
+            VectorSingle waveT1(0.0f);
+            VectorSingle waveT2(0.0f);
+            fl.computeSurfaceTangentBasis(surfNorm, waveT1, waveT2);
+            const b8 trustCache = fl.isPreparedCacheValidForBatch(surfNorm);
+            for(usize i = 0u; i < boneCount; ++i){
+                if(artMode && !this.articulation.isLinkDetached(i))
                     continue;
                 const BodyId bId = this.boneBodies[i];
                 if(!world.isValidBody(bId))
                     continue;
-                for(usize fi = 0u; fi < env.fluids.size(); ++fi){
-                    in FluidVolume fl = env.fluids[fi];
-                    if(fl.enabled)
-                        ApplyFluidVolumeToSingleBody(world, bId, fl, env.elapsedTimeSec, dt);
-                }
-                b8 gravSubtracted = false;
-                for(usize fi = 0u; fi < env.forceFields.size(); ++fi){
-                    in ForceField ff = env.forceFields[fi];
-                    if(ff.enabled){
-                        if(ApplyForceFieldToSingleBodyWithGravFlag(world, bId, ff, env.elapsedTimeSec, dt, !gravSubtracted))
-                            gravSubtracted = true;
-                    }
-                }
+                ApplyFluidVolumeToSingleBodyPrepared(world, bId, fl, surfNorm, waveT1, waveT2, grav, env.elapsedTimeSec, invDt, trustCache, subScratch);
             }
-            return;
         }
-        for(usize i = 0u; i < this.boneBodies.size(); ++i){
-            const BodyId bId = this.boneBodies[i];
-            if(!world.isValidBody(bId))
-                continue;
-            for(usize fi = 0u; fi < env.fluids.size(); ++fi){
-                in FluidVolume fl = env.fluids[fi];
-                if(fl.enabled)
-                    ApplyFluidVolumeToSingleBody(world, bId, fl, env.elapsedTimeSec, dt);
+        b8 hasLocalGravOverride = false;
+        for(usize fi = 0u; fi < env.forceFields.size(); ++fi){
+            if(env.forceFields[fi].enabled && env.forceFields[fi].type == ForceFieldType::LocalGravityOverride){
+                hasLocalGravOverride = true;
+                break;
             }
-            b8 gravSubtracted = false;
-            for(usize fi = 0u; fi < env.forceFields.size(); ++fi){
-                in ForceField ff = env.forceFields[fi];
-                if(ff.enabled){
-                    if(ApplyForceFieldToSingleBodyWithGravFlag(world, bId, ff, env.elapsedTimeSec, dt, !gravSubtracted))
-                        gravSubtracted = true;
+        }
+        if(hasLocalGravOverride)
+            this.m_envGravSubtractedScratch.assign(boneCount, 0u);
+        VectorSingle hoistedDir(0.0f);
+        Aabb3D unusedBox;
+        for(usize fi = 0u; fi < env.forceFields.size(); ++fi){
+            in ForceField ff = env.forceFields[fi];
+            if(!ff.enabled)
+                continue;
+            ResolveForceFieldDirectionAndQueryBox(ff, hoistedDir, unusedBox);
+            for(usize i = 0u; i < boneCount; ++i){
+                if(artMode && !this.articulation.isLinkDetached(i))
+                    continue;
+                const BodyId bId = this.boneBodies[i];
+                if(!world.isValidBody(bId))
+                    continue;
+                const b8 applyGravSub = hasLocalGravOverride && (this.m_envGravSubtractedScratch[i] == 0u);
+                if(ApplyForceFieldToSingleBodyPrepared(world, bId, ff, hoistedDir, env.elapsedTimeSec, invDt, applyGravSub)){
+                    if(hasLocalGravOverride)
+                        this.m_envGravSubtractedScratch[i] = 1u;
                 }
             }
         }

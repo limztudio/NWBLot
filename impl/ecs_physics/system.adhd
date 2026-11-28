@@ -594,6 +594,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             globalCutterSig,
             hasAnyPhysicsParents,
             true,
+            this.m_assetCache,
             this.m_world,
             col,
             this.m_syncScratch
@@ -3096,6 +3097,17 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_syncScratch.subsystemBoundTargetNameCache.clear();
         this.m_syncScratch.subsystemSkeletonTargetNameCache.clear();
         this.m_syncScratch.softBodyAttachmentNameCache.clear();
+        this.m_syncScratch.characterSyncStates.clear();
+        this.m_syncScratch.softBodySyncStates.clear();
+        this.m_syncScratch.articulationProxySyncStates.clear();
+        this.m_syncScratch.articulationLiveStates.clear();
+        this.m_syncScratch.envFluidSlotCache.clear();
+        this.m_syncScratch.envForceFieldSlotCache.clear();
+        this.m_debugDrawScratch.fluidSlotCache.clear();
+        this.m_debugDrawScratch.forceFieldSlotCache.clear();
+        this.m_debugDrawScratch.transformedFluidCache.clear();
+        this.m_debugDrawScratch.transformedForceFieldCache.clear();
+        this.m_debugDrawScratch.ragdollSkeletonNameCache.clear();
         this.m_syncScratch.pendingWriteBackBodyIndices.clear();
         this.m_syncScratch.prevAwakeWriteBackBodyIndices.clear();
         this.m_syncScratch.nextAwakeWriteBackBodyIndices.clear();
@@ -3107,6 +3119,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_syncScratch.hasRagdollTopology = false;
         this.m_syncScratch.mutationVersionsValid = false;
         this.m_syncScratch.tagPrepassVersionsValid = false;
+        this.m_syncScratch.hierarchyCacheValid = false;
+        this.m_syncScratch.cachedHasAnyPhysicsParents = false;
+        this.m_syncScratch.hasSyncedPhysicsEntityCounts = false;
+        this.m_syncScratch.syncedSceneEntityNameVersionValid = false;
         this.m_accumulator = 0.0f;
         this.m_interpolationAlpha = 1.0f;
         return true;
@@ -3410,14 +3426,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_exportCustomPosesScratch.clear();
         this.m_batchExportTargetsScratch.clear();
 
-        Vector<u32> uniqueIdOffsets;
-        Vector<u32> uniqueIdCounts;
-        Vector<u32> uniqueBindOffsets;
-        Vector<u32> uniqueBindCounts;
-        uniqueIdOffsets.reserve(requests.size());
-        uniqueIdCounts.reserve(requests.size());
-        uniqueBindOffsets.reserve(requests.size());
-        uniqueBindCounts.reserve(requests.size());
+        this.m_syncScratch.exportUniqueIdOffsetsScratch.clear();
+        this.m_syncScratch.exportUniqueIdCountsScratch.clear();
+        this.m_syncScratch.exportUniqueBindOffsetsScratch.clear();
+        this.m_syncScratch.exportUniqueBindCountsScratch.clear();
+        this.m_syncScratch.exportUniqueIdOffsetsScratch.reserve(requests.size());
+        this.m_syncScratch.exportUniqueIdCountsScratch.reserve(requests.size());
+        this.m_syncScratch.exportUniqueBindOffsetsScratch.reserve(requests.size());
+        this.m_syncScratch.exportUniqueBindCountsScratch.reserve(requests.size());
 
         for(usize ri = 0u; ri < requests.size(); ++ri){
             in GpuTaskGraphInstanceTransformPatchRequest req = requests[ri];
@@ -3436,14 +3452,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             else if(req.layout != GpuTaskGraphInstanceTransformPatchLayout::InstanceTrs)
                 return MakeUnexpected(Failure());
 
-            usize sliceIdx = uniqueIdOffsets.size();
-            for(usize ui = 0u; ui < uniqueIdOffsets.size(); ++ui){
-                if(uniqueIdOffsets[ui] == idOff && uniqueIdCounts[ui] == idCnt){
+            usize sliceIdx = this.m_syncScratch.exportUniqueIdOffsetsScratch.size();
+            for(usize ui = 0u; ui < this.m_syncScratch.exportUniqueIdOffsetsScratch.size(); ++ui){
+                if(this.m_syncScratch.exportUniqueIdOffsetsScratch[ui] == idOff && this.m_syncScratch.exportUniqueIdCountsScratch[ui] == idCnt){
                     sliceIdx = ui;
                     break;
                 }
             }
-            if(sliceIdx == uniqueIdOffsets.size()){
+            if(sliceIdx == this.m_syncScratch.exportUniqueIdOffsetsScratch.size()){
                 CollectEcsPassGpuRenderTransformBindings(
                     packedEntityIds.subspan(idOff, idCnt),
                     this.m_entityRecords,
@@ -3461,13 +3477,13 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 const u32 bCnt = cast<u32>(this.m_batchSingleBindingsScratch.size());
                 for(usize bi = 0u; bi < this.m_batchSingleBindingsScratch.size(); ++bi)
                     this.m_exportBindingsScratch.push_back(this.m_batchSingleBindingsScratch[bi]);
-                uniqueIdOffsets.push_back(idOff);
-                uniqueIdCounts.push_back(idCnt);
-                uniqueBindOffsets.push_back(bOff);
-                uniqueBindCounts.push_back(bCnt);
+                this.m_syncScratch.exportUniqueIdOffsetsScratch.push_back(idOff);
+                this.m_syncScratch.exportUniqueIdCountsScratch.push_back(idCnt);
+                this.m_syncScratch.exportUniqueBindOffsetsScratch.push_back(bOff);
+                this.m_syncScratch.exportUniqueBindCountsScratch.push_back(bCnt);
             }
 
-            const u32 bindCnt = uniqueBindCounts[sliceIdx];
+            const u32 bindCnt = this.m_syncScratch.exportUniqueBindCountsScratch[sliceIdx];
             if(bindCnt == 0u)
                 continue;
 
@@ -3477,7 +3493,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             targetInput.instanceStrideFloat4 = req.instanceStrideFloat4;
             targetInput.exportMode = exportMode;
             targetInput.baseFloat4Offset = req.baseFloat4Offset;
-            targetInput.bindingOffset = uniqueBindOffsets[sliceIdx];
+            targetInput.bindingOffset = this.m_syncScratch.exportUniqueBindOffsetsScratch[sliceIdx];
             targetInput.bindingCount = bindCnt;
             this.m_batchExportTargetsScratch.push_back(targetInput);
         }
@@ -3832,14 +3848,17 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         this.m_pendingCpuWakeBodiesScratch.clear();
 
         const usize gpuFluidCount = Min(this.m_environmentScratch.fluids.size(), this.m_syncScratch.envFluidEntitiesScratch.size());
-        Vector<Vector<FluidCandidateSample>> gpuFluidSamplesByIdx;
-        if(processGpuEnvFluids && gpuFluidCount > 0u)
-            gpuFluidSamplesByIdx.resize(gpuFluidCount);
+        if(processGpuEnvFluids && gpuFluidCount > 0u){
+            if(this.m_syncScratch.gpuStepFluidSamplesByIdxScratch.size() < gpuFluidCount)
+                this.m_syncScratch.gpuStepFluidSamplesByIdxScratch.resize(gpuFluidCount);
+            for(usize fi = 0u; fi < gpuFluidCount; ++fi)
+                this.m_syncScratch.gpuStepFluidSamplesByIdxScratch[fi].clear();
+        }
 
         b8 needsCpuFallbackSync = false;
-        Vector<u32> fallbackShapeAs;
-        Vector<u32> fallbackShapeBs;
-        HashSet<u64> seenFallbackPairs;
+        this.m_syncScratch.gpuStepFallbackShapeAsScratch.clear();
+        this.m_syncScratch.gpuStepFallbackShapeBsScratch.clear();
+        this.m_syncScratch.gpuStepSeenFallbackPairsScratch.clear();
         for(usize ei = 0u; ei < this.m_gpuResidentEventsScratch.size(); ++ei){
             in GpuPhysicsEvent ev = this.m_gpuResidentEventsScratch[ei];
             const u32 evType = ev.header.x;
@@ -3925,9 +3944,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 const u32 bodyId = this.m_gpuDispatcher.residentBodyIdAtSlot(ev.header.y);
                 const u32 fluidIdx = ev.header.z;
                 if(
-                    bodyId < this.m_physicsWorld.m_bodies.size()
+                    processGpuEnvFluids
+                    && bodyId < this.m_physicsWorld.m_bodies.size()
                     && this.m_physicsWorld.m_bodies[bodyId].alive
-                    && cast<usize>(fluidIdx) < gpuFluidSamplesByIdx.size()
+                    && cast<usize>(fluidIdx) < gpuFluidCount
                 ){
                     FluidCandidateSample sample;
                     sample.bodyId = this.m_physicsWorld.makeBodyId(bodyId);
@@ -3937,7 +3957,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                     sample.cob = f32x4(ev.pointImpulse.x, ev.pointImpulse.y, ev.pointImpulse.z, 0.0f);
                     sample.localSurfNorm = f32x4(ev.normalApproach.x, ev.normalApproach.y, ev.normalApproach.z, 0.0f);
                     sample.hasLocalSurfNorm = true;
-                    gpuFluidSamplesByIdx[fluidIdx].push_back(sample);
+                    this.m_syncScratch.gpuStepFluidSamplesByIdxScratch[fluidIdx].push_back(sample);
                 }
             }
             else if(evType == s_GpuEventCpuFallback){
@@ -3952,10 +3972,10 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                         hiS = sA;
                     }
                     const u64 fbKey = (cast<u64>(loS) << 32u) | cast<u64>(hiS);
-                    if(seenFallbackPairs.find(fbKey) == seenFallbackPairs.end()){
-                        seenFallbackPairs.emplace(fbKey);
-                        fallbackShapeAs.push_back(sA);
-                        fallbackShapeBs.push_back(sB);
+                    if(this.m_syncScratch.gpuStepSeenFallbackPairsScratch.find(fbKey) == this.m_syncScratch.gpuStepSeenFallbackPairsScratch.end()){
+                        this.m_syncScratch.gpuStepSeenFallbackPairsScratch.emplace(fbKey);
+                        this.m_syncScratch.gpuStepFallbackShapeAsScratch.push_back(sA);
+                        this.m_syncScratch.gpuStepFallbackShapeBsScratch.push_back(sB);
                     }
                 }
             }
@@ -4025,7 +4045,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 const EntityID fEnt = this.m_syncScratch.envFluidEntitiesScratch[fi];
                 this.m_syncScratch.seenFluidIdsThisStep.insert(fEnt.id);
                 this.m_syncScratch.activeFluidEntitiesById.insert_or_assign(fEnt.id, fEnt);
-                in Vector<FluidCandidateSample> samples = gpuFluidSamplesByIdx[fi];
+                in Vector<FluidCandidateSample> samples = this.m_syncScratch.gpuStepFluidSamplesByIdxScratch[fi];
                 ReconcileFluidImmersionRecords(
                     fl,
                     fl.normalizedSurfaceNormal(),
@@ -4053,14 +4073,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             this.m_physicsWorld.m_pendingBodyWakeEvents.clear();
 
             b8 anyMoved = false;
-            if(!fallbackShapeAs.empty()){
-                Vector<u8> movedFallbackBodies;
-                movedFallbackBodies.resize(this.m_physicsWorld.m_bodies.size(), 0u);
-                for(usize fi = 0u; fi < fallbackShapeAs.size(); ++fi)
-                    this.resolveGpuResidentFallbackContactPair(fallbackShapeAs[fi], fallbackShapeBs[fi], movedFallbackBodies);
+            if(!this.m_syncScratch.gpuStepFallbackShapeAsScratch.empty()){
+                this.m_syncScratch.gpuStepMovedFallbackBodiesScratch.clear();
+                this.m_syncScratch.gpuStepMovedFallbackBodiesScratch.resize(this.m_physicsWorld.m_bodies.size(), 0u);
+                for(usize fi = 0u; fi < this.m_syncScratch.gpuStepFallbackShapeAsScratch.size(); ++fi)
+                    this.resolveGpuResidentFallbackContactPair(this.m_syncScratch.gpuStepFallbackShapeAsScratch[fi], this.m_syncScratch.gpuStepFallbackShapeBsScratch[fi], this.m_syncScratch.gpuStepMovedFallbackBodiesScratch);
 
-                for(usize bi = 0u; bi < movedFallbackBodies.size(); ++bi){
-                    if(movedFallbackBodies[bi] != 0u){
+                for(usize bi = 0u; bi < this.m_syncScratch.gpuStepMovedFallbackBodiesScratch.size(); ++bi){
+                    if(this.m_syncScratch.gpuStepMovedFallbackBodiesScratch[bi] != 0u){
                         anyMoved = true;
                         break;
                     }
@@ -4250,6 +4270,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             this.m_assetManager,
             this.m_scopedNames,
             RefreshPhysicsHierarchyCache(world, this.m_syncScratch),
+            this.m_assetCache,
             this.m_csgShapeRegistry,
             world,
             this.m_syncScratch
@@ -4278,6 +4299,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
             this.m_assetManager,
             this.m_scopedNames,
             hasAnyPhysicsParents,
+            this.m_assetCache,
             world,
             this.m_physicsWorld,
             this.m_entityRecords,
@@ -4350,50 +4372,57 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         }
 
         const b8 useCollectedEnv = plannedSteps > 1u;
-        const auto fluidCheckView = world.view<FluidVolumeComponent>();
-        const auto fieldCheckView = world.view<ForceFieldComponent>();
-        const b8 hasAnyEnvEntities = fluidCheckView.candidateCount() > 0u || fieldCheckView.candidateCount() > 0u;
-        b8 allFluidsGpuSupported = true;
-        if(fluidCheckView.candidateCount() > 0u){
-            fluidCheckView.each(
-                lambda[mut allFluidsGpuSupported](in EntityID ent, in FluidVolumeComponent fvc) -> void{
-                    if(fvc.enabled && fvc.volume.enabled && !IsGpuSupportedFluidVolume(fvc.volume))
-                        allFluidsGpuSupported = false;
-                }
-            );
-        }
-        b8 allFieldsGpuSupported = true;
-        if(fieldCheckView.candidateCount() > 0u){
-            fieldCheckView.each(
-                lambda[mut allFieldsGpuSupported](in EntityID ent, in ForceFieldComponent ffc) -> void{
-                    if(ffc.enabled && ffc.field.enabled && !IsGpuSupportedForceField(ffc.field))
-                        allFieldsGpuSupported = false;
-                }
-            );
-        }
-
-        const b8 hasAnyActiveSubsystems =
-            HasAnyEnabledEcsComponent<CharacterControllerComponent>(world)
-            || HasAnyEnabledEcsComponent<VehicleComponent>(world)
-            || HasAnyEnabledEcsComponent<ArticulationComponent>(world)
-            || HasAnyEnabledEcsComponent<RagdollComponent>(world)
-            || HasAnyEnabledEcsComponent<SoftBodyComponent>(world)
-            || HasAnyEnabledEcsComponent<FractureComponent>(world)
-        ;
         const b8 gpuResidentBaseEligible =
             this.m_physicsWorld.m_def.gpuResidentMode
             && this.m_physicsWorld.m_backendMode != PhysicsBackendMode::CpuOnly
             && CanGpuHandleResidentWorldStep(this.m_physicsWorld)
         ;
-        const b8 gpuResidentNoReadbackEligible =
+        b8 gpuResidentNoReadbackEligible =
             gpuResidentBaseEligible
-            && allFluidsGpuSupported
-            && allFieldsGpuSupported
             && !hasDrivenKinematic
             && !hasAnyPhysicsParents
             && !interpolateTransforms
-            && !hasAnyActiveSubsystems
         ;
+        if(gpuResidentNoReadbackEligible){
+            const b8 hasAnyActiveSubsystems =
+                HasAnyEnabledEcsComponent<CharacterControllerComponent>(world)
+                || HasAnyEnabledEcsComponent<VehicleComponent>(world)
+                || HasAnyEnabledEcsComponent<ArticulationComponent>(world)
+                || HasAnyEnabledEcsComponent<RagdollComponent>(world)
+                || HasAnyEnabledEcsComponent<SoftBodyComponent>(world)
+                || HasAnyEnabledEcsComponent<FractureComponent>(world)
+            ;
+            if(hasAnyActiveSubsystems)
+                gpuResidentNoReadbackEligible = false;
+        }
+        b8 hasAnyEnvEntities = false;
+        if(useCollectedEnv || gpuResidentNoReadbackEligible){
+            const auto fluidCheckView = world.view<FluidVolumeComponent>();
+            const auto fieldCheckView = world.view<ForceFieldComponent>();
+            hasAnyEnvEntities = fluidCheckView.candidateCount() > 0u || fieldCheckView.candidateCount() > 0u;
+            if(gpuResidentNoReadbackEligible && hasAnyEnvEntities){
+                b8 allFluidsGpuSupported = true;
+                if(fluidCheckView.candidateCount() > 0u){
+                    fluidCheckView.each(
+                        lambda[mut allFluidsGpuSupported](in EntityID ent, in FluidVolumeComponent fvc) -> void{
+                            if(fvc.enabled && fvc.volume.enabled && !IsGpuSupportedFluidVolume(fvc.volume))
+                                allFluidsGpuSupported = false;
+                        }
+                    );
+                }
+                b8 allFieldsGpuSupported = true;
+                if(allFluidsGpuSupported && fieldCheckView.candidateCount() > 0u){
+                    fieldCheckView.each(
+                        lambda[mut allFieldsGpuSupported](in EntityID ent, in ForceFieldComponent ffc) -> void{
+                            if(ffc.enabled && ffc.field.enabled && !IsGpuSupportedForceField(ffc.field))
+                                allFieldsGpuSupported = false;
+                        }
+                    );
+                }
+                if(!allFluidsGpuSupported || !allFieldsGpuSupported)
+                    gpuResidentNoReadbackEligible = false;
+            }
+        }
         const b8 gpuResidentHybridEligible = gpuResidentBaseEligible && !gpuResidentNoReadbackEligible;
         const b8 gpuResidentNoReadbackActive = gpuResidentNoReadbackEligible && this.m_gpuDispatcher.isReady();
         const b8 gpuResidentHybridActive = gpuResidentHybridEligible && this.m_gpuDispatcher.isReady();
@@ -4401,12 +4430,14 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
         if(useCollectedEnv || (gpuResidentNoReadbackEligible && hasAnyEnvEntities)){
             if(useCollectedEnv && hasDrivenKinematic)
                 SnapshotDrivenKinematicTargets(this.m_physicsWorld, this.m_syncScratch.drivenKinematicEntries, hasAnyPhysicsParents, world, this.m_syncScratch.writeBackPoseCache, this.m_syncScratch.kinematicTargets);
-            CollectEcsPhysicsEnvironment(hasAnyPhysicsParents, this.m_collisionLayerMatrix, world, this.m_syncScratch.writeBackPoseCache, this.m_environmentScratch, this.m_syncScratch.envFluidEntitiesScratch);
+            CollectEcsPhysicsEnvironment(hasAnyPhysicsParents, this.m_collisionLayerMatrix, world, this.m_syncScratch, this.m_environmentScratch);
         }
         else if(gpuResidentNoReadbackEligible){
             this.m_environmentScratch.fluids.clear();
             this.m_environmentScratch.forceFields.clear();
             this.m_syncScratch.envFluidEntitiesScratch.clear();
+            this.m_syncScratch.envFluidSlotCache.clear();
+            this.m_syncScratch.envForceFieldSlotCache.clear();
         }
         const Optional<mut SoftBodyMeshSystem> softBodyMeshSystem = world.borrowSystem<SoftBodyMeshSystem>();
         if(!gpuResidentBaseEligible){
@@ -4453,6 +4484,7 @@ class PhysicsSystem : IGpuTaskGraphInstanceTransformPatchContributor, IDebugLine
                 useCollectedEnv,
                 gpuResidentNoReadbackActive,
                 writeBackCharacters,
+                interpolateTransforms,
                 hasAnyPhysicsParents,
                 isFinalStep,
                 wantSoftBodyImpactEvents,

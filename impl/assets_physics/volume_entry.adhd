@@ -914,6 +914,37 @@ b8 CheckSceneJointEntryEntityNames(
     return allValid;
 }
 
+enum<u8> EcsPhysicsSceneRefCompKind{
+    Joint = 0u,
+    Parent,
+    Vehicle,
+    Ragdoll,
+    Articulation,
+    SoftBody,
+}
+
+class EcsPhysicsSceneRefCompEntry{
+    public usize index = 0u;
+    public EcsPhysicsSceneRefCompKind kind = EcsPhysicsSceneRefCompKind::Joint;
+}
+
+void AppendScenePhysicsEntityTagEntries<T>(in Span<T> entries, mut HashMap<Name, NameHash> outMap){
+    for(usize i = 0u; i < entries.size(); ++i){
+        in T entry = entries[i];
+        if(entry.component.entityTag != s_NameNone)
+            outMap.insert_or_assign(entry.virtualPath, entry.component.entityTag.hash());
+    }
+}
+
+void AppendScenePhysicsRefCompEntries<T>(in Span<T> entries, in EcsPhysicsSceneRefCompKind kind, mut HashMap<Name, EcsPhysicsSceneRefCompEntry> outMap){
+    for(usize i = 0u; i < entries.size(); ++i){
+        EcsPhysicsSceneRefCompEntry refEntry;
+        refEntry.index = i;
+        refEntry.kind = kind;
+        outMap.insert_or_assign(entries[i].virtualPath, refEntry);
+    }
+}
+
 b8 ValidateScenePhysicsEntityReferencesWithCache(
     in Span<SceneCookEntry> scenes,
     in Span<EntityCookEntry> entities,
@@ -932,24 +963,23 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
         return true;
 
     HashMap<Name, usize> entityMap;
-    HashMap<Name, usize> rigidBodyMap;
-    HashMap<Name, usize> colliderMap;
-    HashMap<Name, usize> jointMap;
-    HashMap<Name, usize> parentMap;
-    HashMap<Name, usize> vehicleMap;
-    HashMap<Name, usize> ragdollMap;
-    HashMap<Name, usize> articulationMap;
-    HashMap<Name, usize> softBodyMap;
-
     BuildPhysicsCookEntryIndexMap<EntityCookEntry>(entities, entityMap);
-    BuildPhysicsCookEntryIndexMap<RigidBodyComponentCookEntry>(rigidBodies, rigidBodyMap);
-    BuildPhysicsCookEntryIndexMap<ColliderComponentCookEntry>(colliders, colliderMap);
-    BuildPhysicsCookEntryIndexMap<JointComponentCookEntry>(joints, jointMap);
-    BuildPhysicsCookEntryIndexMap<PhysicsParentComponentCookEntry>(parents, parentMap);
-    BuildPhysicsCookEntryIndexMap<VehicleComponentCookEntry>(vehicles, vehicleMap);
-    BuildPhysicsCookEntryIndexMap<RagdollComponentCookEntry>(ragdolls, ragdollMap);
-    BuildPhysicsCookEntryIndexMap<ArticulationComponentCookEntry>(articulations, articulationMap);
-    BuildPhysicsCookEntryIndexMap<SoftBodyComponentCookEntry>(softBodies, softBodyMap);
+
+    HashMap<Name, NameHash> entityTagCompMap;
+    AppendScenePhysicsEntityTagEntries<RigidBodyComponentCookEntry>(rigidBodies, entityTagCompMap);
+    AppendScenePhysicsEntityTagEntries<ColliderComponentCookEntry>(colliders, entityTagCompMap);
+
+    HashMap<Name, EcsPhysicsSceneRefCompEntry> refCompMap;
+    const usize totalRefComps = joints.size() + parents.size() + vehicles.size() + ragdolls.size() + articulations.size() + softBodies.size();
+    if(totalRefComps > 0u){
+        refCompMap.reserve(totalRefComps);
+        AppendScenePhysicsRefCompEntries<JointComponentCookEntry>(joints, EcsPhysicsSceneRefCompKind::Joint, refCompMap);
+        AppendScenePhysicsRefCompEntries<PhysicsParentComponentCookEntry>(parents, EcsPhysicsSceneRefCompKind::Parent, refCompMap);
+        AppendScenePhysicsRefCompEntries<VehicleComponentCookEntry>(vehicles, EcsPhysicsSceneRefCompKind::Vehicle, refCompMap);
+        AppendScenePhysicsRefCompEntries<RagdollComponentCookEntry>(ragdolls, EcsPhysicsSceneRefCompKind::Ragdoll, refCompMap);
+        AppendScenePhysicsRefCompEntries<ArticulationComponentCookEntry>(articulations, EcsPhysicsSceneRefCompKind::Articulation, refCompMap);
+        AppendScenePhysicsRefCompEntries<SoftBodyComponentCookEntry>(softBodies, EcsPhysicsSceneRefCompKind::SoftBody, refCompMap);
+    }
 
     HashSet<NameHash> cachedPathSet;
     if(allowPartialEntityTable && !cachedVirtualPaths.empty()){
@@ -958,11 +988,18 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
             cachedPathSet.insert(cachedVirtualPaths[ci].hash());
     }
 
+    const b8 checkCachedPaths = allowPartialEntityTable && !cachedPathSet.empty();
+    const b8 checkEntityTagComps = !entityTagCompMap.empty();
+    const b8 needPass1CompScan = checkCachedPaths || checkEntityTagComps;
+
+    HashSet<NameHash> sceneEntityNames;
+    Vector<usize> sceneEntityIndices;
+
     b8 allValid = true;
     for(usize sceneIdx = 0u; sceneIdx < scenes.size(); ++sceneIdx){
         in SceneCookEntry scene = scenes[sceneIdx];
-        HashSet<NameHash> sceneEntityNames;
-        Vector<usize> sceneEntityIndices;
+        sceneEntityNames.clear();
+        sceneEntityIndices.clear();
         sceneEntityNames.reserve(scene.entities.size() * 2u);
         sceneEntityIndices.reserve(scene.entities.size());
         b8 skipScene = false;
@@ -984,39 +1021,36 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
             in EntityCookEntry ent = entities[ei];
             if(ent.name != s_NameNone)
                 sceneEntityNames.insert(ent.name.hash());
-            for(usize ci = 0u; ci < ent.components.size(); ++ci){
-                const Name compPath = ent.components[ci].name();
-                if(allowPartialEntityTable && !cachedPathSet.empty() && cachedPathSet.find(compPath.hash()) != cachedPathSet.end()){
-                    skipScene = true;
+            if(needPass1CompScan){
+                for(usize ci = 0u; ci < ent.components.size(); ++ci){
+                    const Name compPath = ent.components[ci].name();
+                    if(checkCachedPaths && cachedPathSet.find(compPath.hash()) != cachedPathSet.end()){
+                        skipScene = true;
+                        break;
+                    }
+                    if(checkEntityTagComps){
+                        const auto tagIt = entityTagCompMap.find(compPath);
+                        if(tagIt != entityTagCompMap.end())
+                            sceneEntityNames.insert(tagIt.value());
+                    }
+                }
+                if(skipScene)
                     break;
-                }
-                const auto rbIt = rigidBodyMap.find(compPath);
-                if(rbIt != rigidBodyMap.end()){
-                    in RigidBodyComponent rb = rigidBodies[rbIt.value()].component;
-                    if(rb.entityTag != s_NameNone)
-                        sceneEntityNames.insert(rb.entityTag.hash());
-                }
-                const auto colIt = colliderMap.find(compPath);
-                if(colIt != colliderMap.end()){
-                    in ColliderComponent col = colliders[colIt.value()].component;
-                    if(col.entityTag != s_NameNone)
-                        sceneEntityNames.insert(col.entityTag.hash());
-                }
             }
-            if(skipScene)
-                break;
         }
-        if(skipScene)
+        if(skipScene || refCompMap.empty())
             continue;
 
         for(usize si = 0u; si < sceneEntityIndices.size(); ++si){
             in EntityCookEntry ent = entities[sceneEntityIndices[si]];
             for(usize ci = 0u; ci < ent.components.size(); ++ci){
                 const Name compPath = ent.components[ci].name();
-
-                const auto jIt = jointMap.find(compPath);
-                if(jIt != jointMap.end()){
-                    in JointComponent jc = joints[jIt.value()].component;
+                const auto refIt = refCompMap.find(compPath);
+                if(refIt == refCompMap.end())
+                    continue;
+                const EcsPhysicsSceneRefCompEntry refEntry = refIt.value();
+                if(refEntry.kind == EcsPhysicsSceneRefCompKind::Joint){
+                    in JointComponent jc = joints[refEntry.index].component;
                     if(!CheckSceneJointEntryEntityNames(scene.virtualPath, compPath, jc.primaryJoint, sceneEntityNames))
                         allValid = false;
                     for(usize ji = 0u; ji < jc.extraJoints.size(); ++ji){
@@ -1024,17 +1058,13 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
                             allValid = false;
                     }
                 }
-
-                const auto pIt = parentMap.find(compPath);
-                if(pIt != parentMap.end()){
-                    in PhysicsParentComponent pc = parents[pIt.value()].component;
+                else if(refEntry.kind == EcsPhysicsSceneRefCompKind::Parent){
+                    in PhysicsParentComponent pc = parents[refEntry.index].component;
                     if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "parent_entity_name", pc.parentEntityName, sceneEntityNames))
                         allValid = false;
                 }
-
-                const auto vIt = vehicleMap.find(compPath);
-                if(vIt != vehicleMap.end()){
-                    in VehicleComponent vc = vehicles[vIt.value()].component;
+                else if(refEntry.kind == EcsPhysicsSceneRefCompKind::Vehicle){
+                    in VehicleComponent vc = vehicles[refEntry.index].component;
                     if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "wheel_entity_names", vc.wheelEntityNames, sceneEntityNames))
                         allValid = false;
                     if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", vc.skeletonEntityName, sceneEntityNames))
@@ -1042,19 +1072,15 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
                     if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "trailer_entity_name", vc.trailerEntityName, sceneEntityNames))
                         allValid = false;
                 }
-
-                const auto rIt = ragdollMap.find(compPath);
-                if(rIt != ragdollMap.end()){
-                    in RagdollComponent rc = ragdolls[rIt.value()].component;
+                else if(refEntry.kind == EcsPhysicsSceneRefCompKind::Ragdoll){
+                    in RagdollComponent rc = ragdolls[refEntry.index].component;
                     if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "bone_entity_names", rc.boneEntityNames, sceneEntityNames))
                         allValid = false;
                     if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", rc.skeletonEntityName, sceneEntityNames))
                         allValid = false;
                 }
-
-                const auto aIt = articulationMap.find(compPath);
-                if(aIt != articulationMap.end()){
-                    in ArticulationComponent ac = articulations[aIt.value()].component;
+                else if(refEntry.kind == EcsPhysicsSceneRefCompKind::Articulation){
+                    in ArticulationComponent ac = articulations[refEntry.index].component;
                     if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "proxy_entity_names", ac.proxyEntityNames, sceneEntityNames))
                         allValid = false;
                     if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "link_entity_names", ac.linkEntityNames, sceneEntityNames))
@@ -1062,10 +1088,8 @@ b8 ValidateScenePhysicsEntityReferencesWithCache(
                     if(!CheckScenePhysicsEntityName(scene.virtualPath, compPath, "skeleton_entity_name", ac.skeletonEntityName, sceneEntityNames))
                         allValid = false;
                 }
-
-                const auto sbIt = softBodyMap.find(compPath);
-                if(sbIt != softBodyMap.end()){
-                    in SoftBodyComponent sbc = softBodies[sbIt.value()].component;
+                else{
+                    in SoftBodyComponent sbc = softBodies[refEntry.index].component;
                     if(!CheckScenePhysicsEntityNameList(scene.virtualPath, compPath, "attachment_body_entity_names", sbc.attachmentBodyEntityNames, sceneEntityNames))
                         allValid = false;
                 }

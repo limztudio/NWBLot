@@ -324,60 +324,6 @@ class SubsystemPhysicsComponentBinaryCodec{
         return true;
     }
 
-    private VehicleAssetData extractVehicleRigData(in VehicleComponent v)const{
-        VehicleAssetData data;
-        data.engine = v.engine;
-        data.wheels = v.wheels;
-        data.queryFilter = v.queryFilter;
-        data.wheelSlipEventThreshold = v.wheelSlipEventThreshold;
-        data.trailerLocalHitchChassis = v.trailerLocalHitchChassis;
-        data.trailerLocalHitchTrailer = v.trailerLocalHitchTrailer;
-        data.trailerSwingLimitRad = v.trailerSwingLimitRad;
-        return data;
-    }
-
-    private RagdollAssetData extractRagdollRigData(in RagdollComponent r)const{
-        RagdollAssetData data;
-        data.bones = r.bones;
-        data.mode = r.mode;
-        data.enableSelfCollision = r.enableSelfCollision;
-        data.autoExcludeInitialOverlaps = r.autoExcludeInitialOverlaps;
-        data.disabledSelfCollisionPairs = r.disabledSelfCollisionPairs;
-        data.boneKinematicMask = r.boneKinematicMask;
-        data.boneJointIndices = r.boneJointIndices;
-        data.autoGenParams = r.autoGenParams;
-        data.driveStrengthMultiplier = r.driveStrengthMultiplier;
-        return data;
-    }
-
-    private ArticulationAssetData extractArticulationRigData(in ArticulationComponent a)const{
-        ArticulationAssetData data;
-        data.links = a.links;
-        data.isFixedBase = a.isFixedBase;
-        data.subSteps = a.subSteps;
-        data.solverIterations = a.solverIterations;
-        data.enableContactCoupling = a.enableContactCoupling;
-        data.overrideContactFriction = a.overrideContactFriction;
-        data.contactRestitution = a.contactRestitution;
-        data.contactFriction = a.contactFriction;
-        data.contactFilter = a.contactFilter;
-        data.mimicConstraints = a.mimicConstraints;
-        data.tendonConstraints = a.tendonConstraints;
-        data.spatialTendons = a.spatialTendons;
-        data.loopConstraints = a.loopConstraints;
-        data.enableSelfCollision = a.enableSelfCollision;
-        data.selfCollisionMargin = a.selfCollisionMargin;
-        data.enableCcd = a.enableCcd;
-        data.ccdMotionThreshold = a.ccdMotionThreshold;
-        data.enableSleep = a.enableSleep;
-        data.sleepLinearThreshold = a.sleepLinearThreshold;
-        data.sleepAngularThreshold = a.sleepAngularThreshold;
-        data.sleepTimeThreshold = a.sleepTimeThreshold;
-        data.driveStrengthMultiplier = a.driveStrengthMultiplier;
-        data.linkJointIndices = a.linkJointIndices;
-        return data;
-    }
-
     public b8 validCharacterControllerData(in CharacterControllerComponent c)const{
         in CharacterControllerDef d = c.def;
         if(cast<u8>(d.shapeType) >= cast<u8>(CharacterShapeType::kCount))
@@ -534,10 +480,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         return c;
     }
 
-    public b8 validVehicleData(in VehicleComponent v)const{
-        const VehicleAssetData rigData = this.extractVehicleRigData(v);
-        if(!PhysicsRigBinaryCodec().validVehicleData(rigData, true))
-            return false;
+    private b8 validVehicleComponentExtras(in VehicleComponent v)const{
         in VehicleEngineDef eng = v.engine;
         if(
             eng.idleRpm >= eng.maxRpm
@@ -610,6 +553,12 @@ class SubsystemPhysicsComponentBinaryCodec{
         return true;
     }
 
+    public b8 validVehicleData(in VehicleComponent v)const{
+        if(!PhysicsRigBinaryCodec().validVehicleFields(v.engine, v.wheels, v.queryFilter, v.wheelSlipEventThreshold, VectorSingle(v.trailerLocalHitchChassis), VectorSingle(v.trailerLocalHitchTrailer), v.trailerSwingLimitRad, true))
+            return false;
+        return this.validVehicleComponentExtras(v);
+    }
+
     public b8 validateVehicle(in VehicleComponent v, in Name virtualPath)const{
         if(this.validVehicleData(v))
             return true;
@@ -621,8 +570,29 @@ class SubsystemPhysicsComponentBinaryCodec{
         static_assert(size_of<VehicleComponentBinary>() == 296u && offset_of<VehicleComponentBinary>(reserved2) == 292u);
         if(v.wheelEntityNames.size() > cast<usize>(u32.max) || v.wheelJointIndices.size() > cast<usize>(u32.max))
             return false;
-        if(!CanAppendBytes(outBinary, size_of<VehicleComponentBinary>()))
+        const PhysicsRigBinaryCodec rigCodec = PhysicsRigBinaryCodec();
+        usize reqBytes = size_of<VehicleComponentBinary>();
+        usize rigBytes = 0u;
+        if(!rigCodec.vehicleFieldsPayloadBytes(v.engine, v.wheels, rigBytes))
             return false;
+        if(
+            rigBytes > cast<usize>(usize.max) - reqBytes
+            || v.wheelEntityNames.size() > cast<usize>(usize.max) / size_of<NameHash>()
+            || v.wheelJointIndices.size() > cast<usize>(usize.max) / size_of<u32>()
+        )
+            return false;
+        reqBytes += rigBytes;
+        const usize nameBytes = v.wheelEntityNames.size() * size_of<NameHash>();
+        const usize idxBytes = v.wheelJointIndices.size() * size_of<u32>();
+        if(nameBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += nameBytes;
+        if(idxBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += idxBytes;
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         VehicleComponentBinary bin;
         bin.collisionLayerHash = v.collisionLayer.hash();
@@ -641,8 +611,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(v.writeBackToSkeleton) bin.flags |= s_VehicleCompFlagWriteBackToSkeleton;
         AppendPOD(outBinary, bin);
 
-        const VehicleAssetData rigData = this.extractVehicleRigData(v);
-        if(!PhysicsRigBinaryCodec().appendVehiclePayload(rigData, outBinary))
+        if(!rigCodec.appendVehicleFields(v.engine, v.wheels, v.queryFilter, v.wheelSlipEventThreshold, VectorSingle(v.trailerLocalHitchChassis), VectorSingle(v.trailerLocalHitchTrailer), v.trailerSwingLimitRad, outBinary))
             return false;
         this.appendNameHashList(v.wheelEntityNames, outBinary);
         return AppendBinaryVectorPayload(outBinary, v.wheelJointIndices).has_value();
@@ -700,17 +669,14 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(!this.readNameHashList(payload, bin.wheelEntityNameCount, cursor, v.wheelEntityNames)
             || !ReadBinaryVectorPayload(payload, bin.wheelJointIndexCount, cursor, v.wheelJointIndices).has_value()
             || cursor != payload.size()
-            || !this.validVehicleData(v)){
+            || !this.validVehicleComponentExtras(v)){
             error("VehicleComponentAsset::loadComponentPayload failed: invalid trailing vehicle component data");
             return MakeUnexpected(Failure());
         }
         return v;
     }
 
-    public b8 validRagdollData(in RagdollComponent r)const{
-        const RagdollAssetData rigData = this.extractRagdollRigData(r);
-        if(!PhysicsRigBinaryCodec().validRagdollData(rigData, true))
-            return false;
+    private b8 validRagdollComponentExtras(in RagdollComponent r)const{
         if(r.targetPose.size() > cast<usize>(u32.max)
             || r.boneEntityNames.size() > cast<usize>(u32.max)
             || r.boneMaterialAssets.size() > cast<usize>(u32.max))
@@ -721,6 +687,12 @@ class SubsystemPhysicsComponentBinaryCodec{
                 return false;
         }
         return true;
+    }
+
+    public b8 validRagdollData(in RagdollComponent r)const{
+        if(!PhysicsRigBinaryCodec().validRagdollFields(r.bones, r.mode, r.disabledSelfCollisionPairs, r.autoGenParams, r.driveStrengthMultiplier, r.boneKinematicMask, r.boneJointIndices, true))
+            return false;
+        return this.validRagdollComponentExtras(r);
     }
 
     public b8 validateRagdoll(in RagdollComponent r, in Name virtualPath)const{
@@ -740,8 +712,34 @@ class SubsystemPhysicsComponentBinaryCodec{
             || r.boneEntityNames.size() > cast<usize>(u32.max)
             || r.boneMaterialAssets.size() > cast<usize>(u32.max))
             return false;
-        if(!CanAppendBytes(outBinary, size_of<RagdollComponentBinary>()))
+        const PhysicsRigBinaryCodec rigCodec = PhysicsRigBinaryCodec();
+        usize reqBytes = size_of<RagdollComponentBinary>();
+        usize rigBytes = 0u;
+        if(!rigCodec.ragdollFieldsPayloadBytes(r.bones, r.disabledSelfCollisionPairs, r.boneKinematicMask, r.boneJointIndices, rigBytes))
             return false;
+        if(
+            rigBytes > cast<usize>(usize.max) - reqBytes
+            || r.targetPose.size() > cast<usize>(usize.max) / size_of<Transform3D>()
+            || r.boneEntityNames.size() > cast<usize>(usize.max) / size_of<NameHash>()
+            || r.boneMaterialAssets.size() > cast<usize>(usize.max) / size_of<NameHash>()
+        )
+            return false;
+        reqBytes += rigBytes;
+        const usize poseBytes = r.targetPose.size() * size_of<Transform3D>();
+        const usize nameBytes = r.boneEntityNames.size() * size_of<NameHash>();
+        const usize matBytes = r.boneMaterialAssets.size() * size_of<NameHash>();
+        if(poseBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += poseBytes;
+        if(nameBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += nameBytes;
+        if(matBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += matBytes;
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         RagdollComponentBinary hdr;
         hdr.collisionLayerHash = r.collisionLayer.hash();
@@ -760,8 +758,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(r.autoGenerateFromSkeleton) hdr.flags |= s_RagdollCompFlagAutoGenerateFromSkeleton;
         AppendPOD(outBinary, hdr);
 
-        const RagdollAssetData rigData = this.extractRagdollRigData(r);
-        if(!PhysicsRigBinaryCodec().appendRagdollPayload(rigData, outBinary))
+        if(!rigCodec.appendRagdollFields(r.bones, r.mode, r.enableSelfCollision, r.autoExcludeInitialOverlaps, r.disabledSelfCollisionPairs, r.autoGenParams, r.driveStrengthMultiplier, r.boneKinematicMask, r.boneJointIndices, outBinary))
             return false;
         if(!AppendBinaryVectorPayload(outBinary, r.targetPose).has_value())
             return false;
@@ -835,7 +832,7 @@ class SubsystemPhysicsComponentBinaryCodec{
                 return MakeUnexpected(Failure());
             r.boneMaterialAssets[mi].virtualPath = DecodeOptionalPhysicsName(hRes.value());
         }
-        if(cursor != payload.size() || !this.validRagdollData(r)){
+        if(cursor != payload.size() || !this.validRagdollComponentExtras(r)){
             error("RagdollComponentAsset::loadComponentPayload failed: invalid ragdoll fields");
             return MakeUnexpected(Failure());
         }
@@ -1303,10 +1300,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         return ff;
     }
 
-    public b8 validArticulationData(in ArticulationComponent a)const{
-        const ArticulationAssetData rigData = this.extractArticulationRigData(a);
-        if(!PhysicsRigBinaryCodec().validArticulationData(rigData, true))
-            return false;
+    private b8 validArticulationComponentExtras(in ArticulationComponent a)const{
         if(a.contactRestitution > 1.0f)
             return false;
         if(a.proxyEntityNames.size() > cast<usize>(u32.max)
@@ -1323,6 +1317,31 @@ class SubsystemPhysicsComponentBinaryCodec{
         return true;
     }
 
+    public b8 validArticulationData(in ArticulationComponent a)const{
+        if(!PhysicsRigBinaryCodec().validArticulationFields(
+            a.links,
+            a.subSteps,
+            a.solverIterations,
+            a.contactRestitution,
+            a.contactFriction,
+            a.contactFilter,
+            a.mimicConstraints,
+            a.tendonConstraints,
+            a.spatialTendons,
+            a.loopConstraints,
+            a.selfCollisionMargin,
+            a.ccdMotionThreshold,
+            a.sleepLinearThreshold,
+            a.sleepAngularThreshold,
+            a.sleepTimeThreshold,
+            a.driveStrengthMultiplier,
+            a.linkJointIndices,
+            true
+        ))
+            return false;
+        return this.validArticulationComponentExtras(a);
+    }
+
     public b8 validateArticulation(in ArticulationComponent a, in Name virtualPath)const{
         if(this.validArticulationData(a))
             return true;
@@ -1336,8 +1355,34 @@ class SubsystemPhysicsComponentBinaryCodec{
             || a.linkEntityNames.size() > cast<usize>(u32.max)
             || a.urdfXml.size() > cast<usize>(u32.max))
             return false;
-        if(!CanAppendBytes(outBinary, size_of<ArticulationComponentBinary>()))
+        const PhysicsRigBinaryCodec rigCodec = PhysicsRigBinaryCodec();
+        usize reqBytes = size_of<ArticulationComponentBinary>();
+        usize rigBytes = 0u;
+        if(!rigCodec.articulationFieldsPayloadBytes(a.links, a.mimicConstraints, a.tendonConstraints, a.spatialTendons, a.loopConstraints, a.linkJointIndices, rigBytes))
             return false;
+        if(
+            rigBytes > cast<usize>(usize.max) - reqBytes
+            || a.proxyEntityNames.size() > cast<usize>(usize.max) / size_of<NameHash>()
+            || a.linkEntityNames.size() > cast<usize>(usize.max) / size_of<NameHash>()
+            || a.urdfXml.size() > cast<usize>(usize.max) - size_of<u32>()
+        )
+            return false;
+        reqBytes += rigBytes;
+        const usize proxyBytes = a.proxyEntityNames.size() * size_of<NameHash>();
+        const usize linkNameBytes = a.linkEntityNames.size() * size_of<NameHash>();
+        const usize xmlBytes = size_of<u32>() + a.urdfXml.size();
+        if(proxyBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += proxyBytes;
+        if(linkNameBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += linkNameBytes;
+        if(xmlBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += xmlBytes;
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         ArticulationComponentBinary hdr;
         hdr.collisionLayerHash = a.collisionLayer.hash();
@@ -1354,8 +1399,32 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(a.writeBackLinkTransforms) hdr.flags |= s_ArticulationCompFlagWriteBackLinkTransforms;
         AppendPOD(outBinary, hdr);
 
-        const ArticulationAssetData rigData = this.extractArticulationRigData(a);
-        if(!PhysicsRigBinaryCodec().appendArticulationPayload(rigData, outBinary))
+        if(!rigCodec.appendArticulationFields(
+            a.links,
+            a.isFixedBase,
+            a.subSteps,
+            a.solverIterations,
+            a.enableContactCoupling,
+            a.overrideContactFriction,
+            a.contactRestitution,
+            a.contactFriction,
+            a.contactFilter,
+            a.mimicConstraints,
+            a.tendonConstraints,
+            a.spatialTendons,
+            a.loopConstraints,
+            a.enableSelfCollision,
+            a.selfCollisionMargin,
+            a.enableCcd,
+            a.ccdMotionThreshold,
+            a.enableSleep,
+            a.sleepLinearThreshold,
+            a.sleepAngularThreshold,
+            a.sleepTimeThreshold,
+            a.driveStrengthMultiplier,
+            a.linkJointIndices,
+            outBinary
+        ))
             return false;
         this.appendNameHashList(a.proxyEntityNames, outBinary);
         this.appendNameHashList(a.linkEntityNames, outBinary);
@@ -1435,17 +1504,15 @@ class SubsystemPhysicsComponentBinaryCodec{
             return MakeUnexpected(Failure());
         }
         a.urdfXml.assign(xmlRes.value());
-        if(!this.validArticulationData(a)){
+        if(!this.validArticulationComponentExtras(a)){
             error("ArticulationComponentAsset::loadComponentPayload failed: invalid articulation fields");
             return MakeUnexpected(Failure());
         }
         return a;
     }
 
-    public b8 validSoftBodyData(in SoftBodyComponent sb)const{
+    private b8 validSoftBodyComponentExtras(in SoftBodyComponent sb)const{
         in SoftBody s = sb.softBody;
-        if(!PhysicsRigBinaryCodec().validSoftBodyData(s, true))
-            return false;
         if(s.particleRadius <= 0.0f || s.restSurfaceVolume < 0.0f || s.shapeMatchingStiffness > 1.0f)
             return false;
         for(usize pi = 0u; pi < s.particles.size(); ++pi){
@@ -1488,6 +1555,12 @@ class SubsystemPhysicsComponentBinaryCodec{
         return true;
     }
 
+    public b8 validSoftBodyData(in SoftBodyComponent sb)const{
+        if(!PhysicsRigBinaryCodec().validSoftBodyData(sb.softBody, true))
+            return false;
+        return this.validSoftBodyComponentExtras(sb);
+    }
+
     public b8 validateSoftBody(in SoftBodyComponent sb, in Name virtualPath)const{
         if(this.validSoftBodyData(sb))
             return true;
@@ -1499,8 +1572,24 @@ class SubsystemPhysicsComponentBinaryCodec{
         static_assert(size_of<SoftBodyComponentBinary>() == 200u && offset_of<SoftBodyComponentBinary>(reserved1) == 198u);
         if(sb.attachmentBodyEntityNames.size() > cast<usize>(u32.max))
             return false;
-        if(!CanAppendBytes(outBinary, size_of<SoftBodyComponentBinary>()))
+        const PhysicsRigBinaryCodec rigCodec = PhysicsRigBinaryCodec();
+        usize reqBytes = size_of<SoftBodyComponentBinary>();
+        usize rigBytes = 0u;
+        if(!rigCodec.softBodyPayloadBytes(sb.softBody, rigBytes))
             return false;
+        if(
+            rigBytes > cast<usize>(usize.max) - reqBytes
+            || sb.attachmentBodyEntityNames.size() > cast<usize>(usize.max) / size_of<NameHash>()
+        )
+            return false;
+        reqBytes += rigBytes;
+        const usize attachBytes = sb.attachmentBodyEntityNames.size() * size_of<NameHash>();
+        if(attachBytes > cast<usize>(usize.max) - reqBytes)
+            return false;
+        reqBytes += attachBytes;
+        if(!CanAppendBytes(outBinary, reqBytes))
+            return false;
+        outBinary.reserve(outBinary.size() + reqBytes);
 
         SoftBodyComponentBinary hdr;
         hdr.collisionLayerHash = sb.collisionLayer.hash();
@@ -1510,7 +1599,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         if(sb.enabled) hdr.flags |= s_SoftBodyCompFlagEnabled;
         AppendPOD(outBinary, hdr);
 
-        if(!PhysicsRigBinaryCodec().appendSoftBodyPayload(sb.softBody, outBinary))
+        if(!rigCodec.appendSoftBodyPayload(sb.softBody, outBinary))
             return false;
         this.appendNameHashList(sb.attachmentBodyEntityNames, outBinary);
         return true;
@@ -1549,7 +1638,7 @@ class SubsystemPhysicsComponentBinaryCodec{
         sb.dirty = false;
         if(!this.readNameHashList(payload, hdr.attachmentBodyEntityNameCount, cursor, sb.attachmentBodyEntityNames)
             || cursor != payload.size()
-            || !this.validSoftBodyData(sb)){
+            || !this.validSoftBodyComponentExtras(sb)){
             error("SoftBodyComponentAsset::loadComponentPayload failed: invalid trailing soft body component data");
             return MakeUnexpected(Failure());
         }

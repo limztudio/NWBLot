@@ -63,9 +63,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         if(tid == 0u){
             [loop] for(uint k = 0u; k < 32u; ++k)
                 g_NwbPhysicsUintBuffers[prepCountersSlot][k] = 0u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][34u] = 0u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][35u] = 0u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][36u] = 0u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][37u] = 0u;
             [loop] for(uint k = 0u; k < NWB_PHYSICS_RES_COLOR_META_UINT_COUNT; ++k)
                 g_NwbPhysicsUintBuffers[colorMetaSlot][k] = 0u;
-            [loop] for(uint c = 0u; c <= NWB_PHYSICS_RES_INDIRECT_BUILD_SLOT; ++c){
+            [loop] for(uint c = 0u; c <= NWB_PHYSICS_RES_INDIRECT_WAKE_BODIES_SLOT; ++c){
                 const uint base = c * 3u;
                 g_NwbPhysicsUintBuffers[colorIndirectSlot][base + 0u] = 0u;
                 g_NwbPhysicsUintBuffers[colorIndirectSlot][base + 1u] = 1u;
@@ -109,10 +113,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     if(mode == NWB_PHYSICS_RES_PREP_MODE_PREFIX_COLORS){
         if(tid != 0u)
             return;
+        const uint residentBodyCount = g_NwbPhysicsPushConstants.itemOffset;
         const uint prepCountersSlot = g_NwbPhysicsPushConstants.slots0.x;
         const uint colorMetaSlot = g_NwbPhysicsPushConstants.slots0.y;
         const uint colorIndirectSlot = g_NwbPhysicsPushConstants.slots0.z;
         const uint maxConstraints = flags;
+        const uint restColorMask = g_NwbPhysicsUintBuffers[prepCountersSlot][34u];
 
         uint runningOffset = 0u;
         [loop] for(uint c = 0u; c < NWB_PHYSICS_GRAPH_COLOR_COUNT; ++c){
@@ -130,21 +136,34 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         g_NwbPhysicsUintBuffers[colorMetaSlot][NWB_PHYSICS_GRAPH_COLOR_COUNT * 2u + 2u] = fusedStartColor;
 
         bool fusedHasWork = false;
+        bool fusedHasRest = false;
         [loop] for(uint c = 0u; c < NWB_PHYSICS_GRAPH_COLOR_COUNT; ++c){
             const uint cnt = g_NwbPhysicsUintBuffers[colorMetaSlot][c * 2u + 1u];
+            const bool colorHasRest = (restColorMask & (1u << c)) != 0u;
             if(c < fusedStartColor){
                 const uint groups = (cnt > 0u) ? ((cnt + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE) : 0u;
                 g_NwbPhysicsUintBuffers[colorIndirectSlot][c * 3u + 0u] = groups;
                 g_NwbPhysicsUintBuffers[colorIndirectSlot][c * 3u + 1u] = 1u;
                 g_NwbPhysicsUintBuffers[colorIndirectSlot][c * 3u + 2u] = 1u;
+                const uint restIndSlot = NWB_PHYSICS_RES_INDIRECT_REST_WIDE_BASE_SLOT + c;
+                g_NwbPhysicsUintBuffers[colorIndirectSlot][restIndSlot * 3u + 0u] = colorHasRest ? groups : 0u;
+                g_NwbPhysicsUintBuffers[colorIndirectSlot][restIndSlot * 3u + 1u] = 1u;
+                g_NwbPhysicsUintBuffers[colorIndirectSlot][restIndSlot * 3u + 2u] = 1u;
             }
             else{
-                if(cnt > 0u)
+                if(cnt > 0u){
                     fusedHasWork = true;
+                    if(colorHasRest)
+                        fusedHasRest = true;
+                }
                 if(c < NWB_PHYSICS_RES_WIDE_COLOR_COUNT){
                     g_NwbPhysicsUintBuffers[colorIndirectSlot][c * 3u + 0u] = 0u;
                     g_NwbPhysicsUintBuffers[colorIndirectSlot][c * 3u + 1u] = 1u;
                     g_NwbPhysicsUintBuffers[colorIndirectSlot][c * 3u + 2u] = 1u;
+                    const uint restIndSlot = NWB_PHYSICS_RES_INDIRECT_REST_WIDE_BASE_SLOT + c;
+                    g_NwbPhysicsUintBuffers[colorIndirectSlot][restIndSlot * 3u + 0u] = 0u;
+                    g_NwbPhysicsUintBuffers[colorIndirectSlot][restIndSlot * 3u + 1u] = 1u;
+                    g_NwbPhysicsUintBuffers[colorIndirectSlot][restIndSlot * 3u + 2u] = 1u;
                 }
             }
         }
@@ -152,6 +171,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_FUSED_SLOT * 3u + 0u] = fusedHasWork ? 1u : 0u;
         g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_FUSED_SLOT * 3u + 1u] = 1u;
         g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_FUSED_SLOT * 3u + 2u] = 1u;
+        g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_REST_FUSED_SLOT * 3u + 0u] = fusedHasRest ? 1u : 0u;
+        g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_REST_FUSED_SLOT * 3u + 1u] = 1u;
+        g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_REST_FUSED_SLOT * 3u + 2u] = 1u;
+        const uint wakeGroups = (g_NwbPhysicsUintBuffers[prepCountersSlot][35u] != 0u && residentBodyCount > 0u)
+            ? ((residentBodyCount + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE)
+            : 0u;
+        g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_WAKE_BODIES_SLOT * 3u + 0u] = wakeGroups;
+        g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_WAKE_BODIES_SLOT * 3u + 1u] = 1u;
+        g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_WAKE_BODIES_SLOT * 3u + 2u] = 1u;
         g_NwbPhysicsUintBuffers[prepCountersSlot][2u] = runningOffset;
         const uint allGroups = (runningOffset > 0u) ? ((runningOffset + NWB_PHYSICS_WORKGROUP_SIZE - 1u) / NWB_PHYSICS_WORKGROUP_SIZE) : 0u;
         g_NwbPhysicsUintBuffers[colorIndirectSlot][NWB_PHYSICS_RES_INDIRECT_ALL_SLOT * 3u + 0u] = allGroups;
@@ -303,7 +331,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint bodyMaskWakeSlot = g_NwbPhysicsPushConstants.slots0.z;
         const uint prepCountersSlot = g_NwbPhysicsPushConstants.slots0.w;
         const uint eventRingSlot = g_NwbPhysicsPushConstants.slots1.x;
-        if(tid >= residentBodyCount)
+        if(tid >= residentBodyCount || g_NwbPhysicsUintBuffers[prepCountersSlot][35u] == 0u)
             return;
         if(g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][wakeOffset + tid] == 0u)
             return;
@@ -350,11 +378,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(isDyn && !isSlp)
                 initVal = canSleep ? asuint(max(boInit.positionSleepTime.w, 0.0f)) : 0u;
             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + tid] = initVal;
+            if(isDyn && !isSlp && initVal > 0u)
+                g_NwbPhysicsUintBuffers[prepCountersSlot][36u] = 1u;
             return;
         }
 
         const bool isJointEdge = (flags & 2u) != 0u;
         const bool sleepCoherency = (flags & 1u) != 0u;
+        const uint hopIdx = flags >> 4u;
+        if(sleepCoherency){
+            if(g_NwbPhysicsUintBuffers[prepCountersSlot][36u] < (hopIdx + 1u))
+                return;
+        }
+        else if(hopIdx > 0u && g_NwbPhysicsUintBuffers[prepCountersSlot][37u] < hopIdx){
+            return;
+        }
         const uint edgeCount = isJointEdge
             ? g_NwbPhysicsPushConstants.itemCount
             : min(g_NwbPhysicsUintBuffers[prepCountersSlot][2u], g_NwbPhysicsPushConstants.itemCount);
@@ -386,10 +424,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(tA == 0xffffffffu || tB == 0xffffffffu)
                 return;
             const uint tMin = min(tA, tB);
-            if(tMin < tA)
+            bool changed = false;
+            if(tMin < tA){
                 InterlockedMin(g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA], tMin);
-            if(tMin < tB)
+                changed = true;
+            }
+            if(tMin < tB){
                 InterlockedMin(g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB], tMin);
+                changed = true;
+            }
+            if(changed && g_NwbPhysicsUintBuffers[prepCountersSlot][36u] < (hopIdx + 2u))
+                g_NwbPhysicsUintBuffers[prepCountersSlot][36u] = hopIdx + 2u;
             return;
         }
 
@@ -401,10 +446,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         const bool awakeA = ((flagsA & NWB_PHYSICS_BODY_FLAG_SLEEPING) == 0u) || (dynA && g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA] != 0u);
         const bool awakeB = ((flagsB & NWB_PHYSICS_BODY_FLAG_SLEEPING) == 0u) || (dynB && g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB] != 0u);
-        if(awakeA && dynB && !awakeB)
+        if(awakeA && dynB && !awakeB){
             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB] = 1u;
-        else if(awakeB && dynA && !awakeA)
+            g_NwbPhysicsUintBuffers[prepCountersSlot][35u] = 1u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][37u] = hopIdx + 1u;
+        }
+        else if(awakeB && dynA && !awakeA){
             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA] = 1u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][35u] = 1u;
+            g_NwbPhysicsUintBuffers[prepCountersSlot][37u] = hopIdx + 1u;
+        }
         return;
     }
 
@@ -442,6 +493,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     uint pointCount = 0u;
     uint slotA = NWB_PHYSICS_INVALID_INDEX;
     uint slotB = NWB_PHYSICS_INVALID_INDEX;
+    uint matFA = 0u;
+    uint matFB = 0u;
+    float tanSpeedA = 0.0f;
+    float tanSpeedB = 0.0f;
     bool dynA = false;
     bool dynB = false;
 
@@ -451,21 +506,25 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         shapeB = pairInfo.y;
         manifoldSubKey = ((pairInfo.w & NWB_PHYSICS_MANIFOLD_FLAG_SECONDARY) != 0u) ? 1u : 0u;
         pointCount = min(pairInfo.z, NWB_PHYSICS_MAX_MANIFOLD_POINTS);
-        const NwbPhysicsGpuShapeMaterial matA = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA];
-        const NwbPhysicsGpuShapeMaterial matB = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB];
-        const uint bodyIdA = asuint(matA.surfVelBodyId.w);
-        const uint bodyIdB = asuint(matB.surfVelBodyId.w);
         if((pairInfo.w & NWB_PHYSICS_MANIFOLD_FLAG_CPU_FALLBACK) != 0u){
+            const uint bodyIdA = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].surfVelBodyId.w);
+            const uint bodyIdB = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].surfVelBodyId.w);
             const float4 fallbackN = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].normalPad;
             nwbPhysicsEmitEvent(prepCountersSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_CPU_FALLBACK, shapeA, shapeB, tid, float4(0.0f, 0.0f, 0.0f, 0.0f), fallbackN, uint4(bodyIdA, bodyIdB, 0u, 0u));
         }
         else if(pointCount > 0u){
-            const uint matFA = asuint(matA.tanFlagsThreshSlot.y);
-            const uint matFB = asuint(matB.tanFlagsThreshSlot.y);
-            slotA = asuint(matA.tanFlagsThreshSlot.w);
-            slotB = asuint(matB.tanFlagsThreshSlot.w);
+            const float4 tanA = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].tanFlagsThreshSlot;
+            const float4 tanB = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].tanFlagsThreshSlot;
+            tanSpeedA = tanA.x;
+            tanSpeedB = tanB.x;
+            matFA = asuint(tanA.y);
+            matFB = asuint(tanB.y);
+            slotA = asuint(tanA.w);
+            slotB = asuint(tanB.w);
             if(((matFA | matFB) & NWB_PHYSICS_MAT_FLAG_IS_SENSOR) != 0u){
                 if(((matFA | matFB) & NWB_PHYSICS_MAT_FLAG_ENABLE_SENSOR_EVENTS) != 0u){
+                    const uint bodyIdA = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].surfVelBodyId.w);
+                    const uint bodyIdB = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].surfVelBodyId.w);
                     const float4 pt0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].anchorAFeature[0];
                     const float4 norm0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].normalPad;
                     nwbPhysicsEmitEvent(prepCountersSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_SENSOR_OVERLAP, shapeA, shapeB, pointCount, pt0, norm0, uint4(bodyIdA, bodyIdB, slotA, slotB));
@@ -485,22 +544,35 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const bool cpuSleepingB = !hasB && ((matFB & NWB_PHYSICS_MAT_FLAG_CPU_SLEEPING) != 0u);
                     const bool anyAwakeTouching = (hasA && !sleepingA) || (hasB && !sleepingB);
                     if(cpuSleepingA && hasB && !sleepingB){
+                        const uint bodyIdA = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].surfVelBodyId.w);
+                        const uint bodyIdB = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].surfVelBodyId.w);
                         const float4 pt0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].anchorAFeature[0];
                         const float4 norm0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].normalPad;
                         nwbPhysicsEmitEvent(prepCountersSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, bodyIdA, bodyIdB, NWB_PHYSICS_EVENT_FLAG_CPU_SLEEP_WAKE, pt0, norm0, uint4(bodyIdA, bodyIdB, slotB, 0u));
                     }
                     if(cpuSleepingB && hasA && !sleepingA){
+                        const uint bodyIdA = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].surfVelBodyId.w);
+                        const uint bodyIdB = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].surfVelBodyId.w);
                         const float4 pt0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].anchorAFeature[0];
                         const float4 norm0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].normalPad;
                         nwbPhysicsEmitEvent(prepCountersSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_BODY_WAKE, bodyIdB, bodyIdA, NWB_PHYSICS_EVENT_FLAG_CPU_SLEEP_WAKE, pt0, norm0, uint4(bodyIdB, bodyIdA, slotA, 0u));
                     }
                     if((dynA || dynB) && anyAwakeTouching){
-                        if(dynA && sleepingA && hasB && !sleepingB)
+                        bool markWake = false;
+                        if(dynA && sleepingA && hasB && !sleepingB){
                             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotA] = 1u;
-                        if(dynB && sleepingB && hasA && !sleepingA)
+                            markWake = true;
+                        }
+                        if(dynB && sleepingB && hasA && !sleepingA){
                             g_NwbPhysicsUintBuffers[bodyMaskWakeSlot][residentBodyCount + slotB] = 1u;
+                            markWake = true;
+                        }
+                        if(markWake)
+                            g_NwbPhysicsUintBuffers[prepCountersSlot][35u] = 1u;
 
                         if(((matFA | matFB) & NWB_PHYSICS_MAT_FLAG_ENABLE_CONTACT_EVENTS) != 0u){
+                            const uint bodyIdA = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].surfVelBodyId.w);
+                            const uint bodyIdB = asuint(g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].surfVelBodyId.w);
                             const float4 pt0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].anchorAFeature[0];
                             const float4 norm0 = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid].normalPad;
                             nwbPhysicsEmitEvent(prepCountersSlot, eventRingSlot, maxEvents, NWB_PHYSICS_GPU_EVENT_CONTACT_ACTIVE, shapeA, shapeB, pointCount, float4(pt0.xyz, 0.0f), norm0, uint4(bodyIdA, bodyIdB, hasA ? slotA : NWB_PHYSICS_INVALID_INDEX, hasB ? slotB : NWB_PHYSICS_INVALID_INDEX));
@@ -603,10 +675,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     if(keepWrite){
         const uint colorLocalIdx = s_ColorBases[chosenColor] + localColorOff;
         const NwbPhysicsGpuNarrowphaseManifold gm = g_NwbPhysicsNarrowphaseManifoldBuffers[manifoldSlot][tid];
-        const NwbPhysicsGpuShapeMaterial matA = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA];
-        const NwbPhysicsGpuShapeMaterial matB = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB];
-        const uint matFA = asuint(matA.tanFlagsThreshSlot.y);
-        const uint matFB = asuint(matB.tanFlagsThreshSlot.y);
+        const float4 fricA = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].fricRestStatRoll;
+        const float4 fricB = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].fricRestStatRoll;
         const bool hasA = (slotA != NWB_PHYSICS_INVALID_INDEX && slotA < residentBodyCount);
         const bool hasB = (slotB != NWB_PHYSICS_INVALID_INDEX && slotB < residentBodyCount);
 
@@ -626,11 +696,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         const uint fricMode = nwbPhysicsResolveCombineMode(matFA & 7u, matFB & 7u, 4u);
         const uint restMode = nwbPhysicsResolveCombineMode((matFA >> 3u) & 7u, (matFB >> 3u) & 7u, 3u);
-        const float friction = nwbPhysicsCombineMaterialVal(max(matA.fricRestStatRoll.x, 0.0f), max(matB.fricRestStatRoll.x, 0.0f), fricMode);
-        const float restitution = max(nwbPhysicsCombineMaterialVal(matA.fricRestStatRoll.y, matB.fricRestStatRoll.y, restMode), 0.0f);
-        const float rollingResistance = max(matA.fricRestStatRoll.w, matB.fricRestStatRoll.w);
-        const float tangentSpeed = matA.tanFlagsThreshSlot.x + matB.tanFlagsThreshSlot.x;
-        const float auxStatFric = max(nwbPhysicsCombineMaterialVal(max(matA.fricRestStatRoll.z, 0.0f), max(matB.fricRestStatRoll.z, 0.0f), fricMode), friction);
+        const float friction = nwbPhysicsCombineMaterialVal(max(fricA.x, 0.0f), max(fricB.x, 0.0f), fricMode);
+        const float restitution = max(nwbPhysicsCombineMaterialVal(fricA.y, fricB.y, restMode), 0.0f);
+        if(restitution > 0.0f){
+            const uint restBit = 1u << chosenColor;
+            if((g_NwbPhysicsUintBuffers[prepCountersSlot][34u] & restBit) == 0u){
+                uint unusedRest = 0u;
+                InterlockedOr(g_NwbPhysicsUintBuffers[prepCountersSlot][34u], restBit, unusedRest);
+            }
+        }
+        const float rollingResistance = max(fricA.w, fricB.w);
+        const float tangentSpeed = tanSpeedA + tanSpeedB;
+        const float auxStatFric = max(nwbPhysicsCombineMaterialVal(max(fricA.z, 0.0f), max(fricB.z, 0.0f), fricMode), friction);
 
         float invMassA = 0.0f;
         float4 invIA0 = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -694,15 +771,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const bool hasAnisoB = (matFB & NWB_PHYSICS_MAT_FLAG_HAS_ANISO_FRICTION) != 0u;
         const bool hasAniso = hasAnisoA || hasAnisoB;
         if(hasAniso){
-            const float3 afA = hasAnisoA ? max(float3(matA.fricDirAniso0.w, matA.aniso1RestPad.x, matA.aniso1RestPad.y), float3(0.0f, 0.0f, 0.0f)) : float3(1.0f, 1.0f, 1.0f);
-            const float3 afB = hasAnisoB ? max(float3(matB.fricDirAniso0.w, matB.aniso1RestPad.x, matB.aniso1RestPad.y), float3(0.0f, 0.0f, 0.0f)) : float3(1.0f, 1.0f, 1.0f);
+            const float4 dirA4 = hasAnisoA ? g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].fricDirAniso0 : float4(1.0f, 0.0f, 0.0f, 1.0f);
+            const float2 anisoA2 = hasAnisoA ? g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].aniso1RestPad.xy : float2(1.0f, 1.0f);
+            const float4 dirB4 = hasAnisoB ? g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].fricDirAniso0 : float4(1.0f, 0.0f, 0.0f, 1.0f);
+            const float2 anisoB2 = hasAnisoB ? g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].aniso1RestPad.xy : float2(1.0f, 1.0f);
+            const float3 afA = max(float3(dirA4.w, anisoA2.x, anisoA2.y), float3(0.0f, 0.0f, 0.0f));
+            const float3 afB = max(float3(dirB4.w, anisoB2.x, anisoB2.y), float3(0.0f, 0.0f, 0.0f));
             const float ax = nwbPhysicsCombineMaterialVal(afA.x, afB.x, fricMode);
             const float ay = nwbPhysicsCombineMaterialVal(afA.y, afB.y, fricMode);
             const float az = nwbPhysicsCombineMaterialVal(afA.z, afB.z, fricMode);
             float3 fDir = float3(1.0f, 0.0f, 0.0f);
             if(hasAnisoA && hasAnisoB){
-                const float3 dA = nwbPhysicsSafeNormal(((matFA & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? matA.fricDirAniso0.xyz : nwbPhysicsQuatRotate(matA.fricDirAniso0.xyz, rotA), fDir);
-                float3 dB = nwbPhysicsSafeNormal(((matFB & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? matB.fricDirAniso0.xyz : nwbPhysicsQuatRotate(matB.fricDirAniso0.xyz, rotB), fDir);
+                const float3 dA = nwbPhysicsSafeNormal(((matFA & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? dirA4.xyz : nwbPhysicsQuatRotate(dirA4.xyz, rotA), fDir);
+                float3 dB = nwbPhysicsSafeNormal(((matFB & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? dirB4.xyz : nwbPhysicsQuatRotate(dirB4.xyz, rotB), fDir);
                 if(dot(dA, dB) < 0.0f)
                     dB = -dB;
                 float wA = abs(afA.x - afA.y) + abs(afA.x - afA.z);
@@ -714,10 +795,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 fDir = nwbPhysicsSafeNormal(dA * wA + dB * wB, dA);
             }
             else if(hasAnisoA){
-                fDir = nwbPhysicsSafeNormal(((matFA & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? matA.fricDirAniso0.xyz : nwbPhysicsQuatRotate(matA.fricDirAniso0.xyz, rotA), fDir);
+                fDir = nwbPhysicsSafeNormal(((matFA & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? dirA4.xyz : nwbPhysicsQuatRotate(dirA4.xyz, rotA), fDir);
             }
             else{
-                fDir = nwbPhysicsSafeNormal(((matFB & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? matB.fricDirAniso0.xyz : nwbPhysicsQuatRotate(matB.fricDirAniso0.xyz, rotB), fDir);
+                fDir = nwbPhysicsSafeNormal(((matFB & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? dirB4.xyz : nwbPhysicsQuatRotate(dirB4.xyz, rotB), fDir);
             }
             const float3 proj = fDir - n * dot(fDir, n);
             const bool hasTangentProj = dot(proj, proj) > 1.0e-10f;
@@ -746,10 +827,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
 
         float3 svTotal = float3(0.0f, 0.0f, 0.0f);
-        if((matFA & NWB_PHYSICS_MAT_FLAG_HAS_SURFACE_VELOCITY) != 0u)
-            svTotal += ((matFA & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? matA.surfVelBodyId.xyz : nwbPhysicsQuatRotate(matA.surfVelBodyId.xyz, rotA);
-        if((matFB & NWB_PHYSICS_MAT_FLAG_HAS_SURFACE_VELOCITY) != 0u)
-            svTotal -= ((matFB & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? matB.surfVelBodyId.xyz : nwbPhysicsQuatRotate(matB.surfVelBodyId.xyz, rotB);
+        if((matFA & NWB_PHYSICS_MAT_FLAG_HAS_SURFACE_VELOCITY) != 0u){
+            const float3 svA = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeA].surfVelBodyId.xyz;
+            svTotal += ((matFA & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? svA : nwbPhysicsQuatRotate(svA, rotA);
+        }
+        if((matFB & NWB_PHYSICS_MAT_FLAG_HAS_SURFACE_VELOCITY) != 0u){
+            const float3 svB = g_NwbPhysicsShapeMaterialBuffers[shapeMatSlot][shapeB].surfVelBodyId.xyz;
+            svTotal -= ((matFB & NWB_PHYSICS_MAT_FLAG_WORLD_SPACE_SURFACE) != 0u) ? svB : nwbPhysicsQuatRotate(svB, rotB);
+        }
         const float tanVel1 = tangentSpeed + dot(svTotal, t1);
         const float tanVel2 = dot(svTotal, t2);
 

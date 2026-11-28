@@ -21,6 +21,7 @@ flag<u32> ContactFlags{
     HasAnisotropicFriction = 0x00000400u,
     DynamicMaterial = 0x00000800u,
     HasCustomSolverScale = 0x00001000u,
+    HasExtraManifolds = 0x00002000u,
 }
 
 flag<u16> ShapeFlags{
@@ -2916,15 +2917,32 @@ void CollidePlaneAndSdfMulti(
 
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     const f32 cellDiag = Vector3Length(VectorSingle(sdfB.cellSize, 0.0f)).x;
+    const f32 planeScaleLen = Vector3Length(planeNInBUnscaled).x;
+    const f32 maxPlaneDistP = maxDistance + cellDiag * planeScaleLen;
+    const f32 quickRejectBandB = cellDiag * 1.001f + 1.0e-5f;
+    const b8 closedB = sdfB.isClosed;
     const u32 sx = Max(1u, sdfB.dimX / 12u);
     const u32 sy = Max(1u, sdfB.dimY / 12u);
     const u32 sz = Max(1u, sdfB.dimZ / 12u);
     for(u32 z = 0u; z < sdfB.dimZ; z += sz){
         const f32 pz = sdfB.boundsMin.z + cast<f32>(z) * sdfB.cellSize.z;
+        const f32 baseZ = planeNInBUnscaled.z * pz - planeDInB;
         for(u32 y = 0u; y < sdfB.dimY; y += sy){
             const f32 py = sdfB.boundsMin.y + cast<f32>(y) * sdfB.cellSize.y;
+            const f32 baseY = baseZ + planeNInBUnscaled.y * py;
             for(u32 x = 0u; x < sdfB.dimX; x += sx){
-                const VectorSingle p(sdfB.boundsMin.x + cast<f32>(x) * sdfB.cellSize.x, py, pz, 0.0f);
+                const f32 px = sdfB.boundsMin.x + cast<f32>(x) * sdfB.cellSize.x;
+                if(baseY + planeNInBUnscaled.x * px > maxPlaneDistP)
+                    continue;
+                f32 effRaw = sdfB.atGrid(x, y, z);
+                if(!closedB && effRaw < 0.0f)
+                    effRaw = -effRaw;
+                f32 absQuickD = effRaw - sdfB.margin;
+                if(absQuickD < 0.0f)
+                    absQuickD = -absQuickD;
+                if(absQuickD > quickRejectBandB)
+                    continue;
+                const VectorSingle p(px, py, pz, 0.0f);
                 f32 dSurf = 0.0f;
                 VectorSingle gUnscaled(0.0f, 1.0f, 0.0f, 0.0f);
                 sdfB.sampleEffectiveDistanceAndGradient(p, dSurf, gUnscaled);
@@ -3381,6 +3399,7 @@ void CollideScaledChainAndUnwrappedMulti(
     TransformAabbByScaleValues(qMinScaledA, qMaxScaledA, invScaleA, queryMinA, queryMaxA);
 
     const usize vCount = chainA.vertices.size();
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> segExtras;
     BvhSpillStack<u32, 256u> stack;
     stack.push(0u);
     u32 nodeIdx = 0u;
@@ -3400,7 +3419,7 @@ void CollideScaledChainAndUnwrappedMulti(
                 segPts[1u] = f32x3u(vb);
                 const ShapeProxyView segView = MakeSpanProxyView(Span<f32x3u>(segPts), chainR);
                 Manifold segP;
-                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> segExtras;
+                segExtras.clear();
                 CollideConvexProxyWithUnwrappedLeafMulti(segView, posA, rotA, leafTypeB, g0B, g1B, gIdxB, scaleB, invScaleB, isScaledB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdB, triFilter, segP, segExtras);
                 AppendMergedMultiManifold(segP, segExtras, outManifold, outExtraManifolds);
             }
@@ -3410,6 +3429,213 @@ void CollideScaledChainAndUnwrappedMulti(
             stack.push(node.rightOrCount());
         }
     }
+}
+
+void CollideScaledMeshAndMeshDualBvh(
+    in MeshShape meshA,
+    in VectorSingle scaleA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle scaleB,
+    in VectorSingle invScaleB,
+    in b8 isScaledB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in ShapeId shapeIdA,
+    in ShapeId shapeIdB,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    if(meshA.nodes.empty() || meshA.triangles.empty() || meshB.nodes.empty() || meshB.triangles.empty())
+        return;
+
+    const b8 hasTriFilter = triFilter.has_value();
+    VectorSingle relPosBtoA(0.0f);
+    VectorSingle relRotBtoA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPosBtoA, relRotBtoA);
+    const VectorSingle absRotX = Abs(Vector3Rotate(VectorSingle(1.0f, 0.0f, 0.0f, 0.0f), relRotBtoA));
+    const VectorSingle absRotY = Abs(Vector3Rotate(VectorSingle(0.0f, 1.0f, 0.0f, 0.0f), relRotBtoA));
+    const VectorSingle absRotZ = Abs(Vector3Rotate(VectorSingle(0.0f, 0.0f, 1.0f, 0.0f), relRotBtoA));
+    VectorSingle relPosAtoB(0.0f);
+    VectorSingle relRotAtoB(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, relPosAtoB, relRotAtoB);
+
+    const VectorSingle absScaleA = Abs(scaleA);
+    const f32 meshRA = meshA.radius() * Min(absScaleA.x, Min(absScaleA.y, absScaleA.z));
+    const VectorSingle absScaleB = Abs(scaleB);
+    const f32 meshRB = meshB.radius() * Min(absScaleB.x, Min(absScaleB.y, absScaleB.z));
+    const f32 pad = meshRA + meshRB + maxDistance;
+    const VectorSingle padVec(pad, pad, pad, 0.0f);
+    const b8 cullBackFacesB = (meshB.isClosed() || meshB.sidedness() == MeshSidedness::SingleSided);
+    const VectorSingle fallbackUp(0.0f, 1.0f, 0.0f, 0.0f);
+    const VectorSingle zeroPos(0.0f);
+    const VectorSingle identRot(0.0f, 0.0f, 0.0f, 1.0f);
+
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
+    f32 deepestSep = s_MaxF32;
+
+    BvhSpillStack<u32x2u, 256u> stack;
+    stack.push(u32x2u(0u, 0u));
+    u32x2u pair(0u, 0u);
+    while(stack.pop(pair)){
+        in MeshBvhNode nA = meshA.nodes[pair.x];
+        in MeshBvhNode nB = meshB.nodes[pair.y];
+        VectorSingle aMin(0.0f);
+        VectorSingle aMax(0.0f);
+        TransformAabbByScaleValues(VectorSingle(nA.aabbMinLeft, 0.0f), VectorSingle(nA.aabbMaxRight, 0.0f), scaleA, aMin, aMax);
+        VectorSingle bMinLocal(nB.aabbMinLeft, 0.0f);
+        VectorSingle bMaxLocal(nB.aabbMaxRight, 0.0f);
+        if(isScaledB)
+            TransformAabbByScaleValues(bMinLocal, bMaxLocal, scaleB, bMinLocal, bMaxLocal);
+        VectorSingle bInAMin(0.0f);
+        VectorSingle bInAMax(0.0f);
+        TransformLocalAabbValuesWithAbsAxes(bMinLocal, bMaxLocal, relPosBtoA, relRotBtoA, absRotX, absRotY, absRotZ, bInAMin, bInAMax);
+        if(!AabbOverlapsValues(aMin - padVec, aMax + padVec, bInAMin, bInAMax))
+            continue;
+
+        if(nA.isLeaf() && nB.isLeaf()){
+            const u32 firstA = nA.leftOrFirst();
+            const u32 endA = firstA + nA.rightOrCount();
+            const u32 firstB = nB.leftOrFirst();
+            const u32 endB = firstB + nB.rightOrCount();
+            u32 chunkBaseB = firstB;
+            while(chunkBaseB < endB){
+                const u32 chunkEndB = Min(chunkBaseB + 16u, endB);
+                const usize chunkCountB = cast<usize>(chunkEndB - chunkBaseB);
+                Array<f32x4, 16u> cMinInA;
+                Array<f32x4, 16u> cMaxInA;
+                Array<f32x3u, 16u> cbv0B;
+                Array<f32x3u, 16u> cbv1B;
+                Array<f32x3u, 16u> cbv2B;
+                Array<f32x4, 16u> cbNB;
+                Array<u8, 16u> cEdgeFlagsB;
+                for(usize bi = 0u; bi < chunkCountB; ++bi){
+                    const u32 tBi = chunkBaseB + cast<u32>(bi);
+                    in MeshTriangle triB = meshB.triangles[tBi];
+                    VectorSingle bv0(triB.v0, 0.0f);
+                    VectorSingle bv1(triB.v1, 0.0f);
+                    VectorSingle bv2(triB.v2, 0.0f);
+                    VectorSingle bN(triB.normal, 0.0f);
+                    if(isScaledB){
+                        bv0 = bv0 * scaleB;
+                        bv1 = bv1 * scaleB;
+                        bv2 = bv2 * scaleB;
+                        bN = SafeNormalizeVec3(bN * invScaleB, fallbackUp);
+                    }
+                    cbv0B[bi] = f32x3u(bv0);
+                    cbv1B[bi] = f32x3u(bv1);
+                    cbv2B[bi] = f32x3u(bv2);
+                    cbNB[bi] = f32x4(bN, 0.0f);
+                    cEdgeFlagsB[bi] = meshB.triangleEdgeFlag(tBi);
+                    const VectorSingle a0 = TransformPointValues(relPosBtoA, relRotBtoA, bv0);
+                    const VectorSingle a1 = TransformPointValues(relPosBtoA, relRotBtoA, bv1);
+                    const VectorSingle a2 = TransformPointValues(relPosBtoA, relRotBtoA, bv2);
+                    cMinInA[bi] = f32x4(Min(a0, Min(a1, a2)), 0.0f);
+                    cMaxInA[bi] = f32x4(Max(a0, Max(a1, a2)), 0.0f);
+                }
+                const u32 chunkStartB = chunkBaseB;
+                chunkBaseB = chunkEndB;
+                for(u32 tAi = firstA; tAi < endA; ++tAi){
+                    if(hasTriFilter && !triFilter.value()(shapeIdA, tAi))
+                        continue;
+                    in MeshTriangle triA = meshA.triangles[tAi];
+                    const VectorSingle av0 = VectorSingle(triA.v0, 0.0f) * scaleA;
+                    const VectorSingle av1 = VectorSingle(triA.v1, 0.0f) * scaleA;
+                    const VectorSingle av2 = VectorSingle(triA.v2, 0.0f) * scaleA;
+                    const VectorSingle tAMin = Min(av0, Min(av1, av2)) - padVec;
+                    const VectorSingle tAMax = Max(av0, Max(av1, av2)) + padVec;
+                    if(!AabbOverlapsValues(tAMin, tAMax, bInAMin, bInAMax))
+                        continue;
+                    Array<f32x3u, 3u> triPtsA;
+                    triPtsA[0u] = f32x3u(av0);
+                    triPtsA[1u] = f32x3u(av1);
+                    triPtsA[2u] = f32x3u(av2);
+                    const ShapeProxyView triViewA = MakeSpanProxyView(Span<f32x3u>(triPtsA), meshRA);
+                    const VectorSingle triCenterInB = TransformPointValues(relPosAtoB, relRotAtoB, (av0 + av1 + av2) * (1.0f / 3.0f));
+                    for(usize bi = 0u; bi < chunkCountB; ++bi){
+                        const u32 tBi = chunkStartB + cast<u32>(bi);
+                        if(hasTriFilter && !triFilter.value()(shapeIdB, tBi))
+                            continue;
+                        if(!AabbOverlapsValues(tAMin, tAMax, VectorSingle(cMinInA[bi]), VectorSingle(cMaxInA[bi])))
+                            continue;
+                        const VectorSingle bv0(cbv0B[bi].x, cbv0B[bi].y, cbv0B[bi].z, 0.0f);
+                        const VectorSingle bv1(cbv1B[bi].x, cbv1B[bi].y, cbv1B[bi].z, 0.0f);
+                        const VectorSingle bv2(cbv2B[bi].x, cbv2B[bi].y, cbv2B[bi].z, 0.0f);
+                        const VectorSingle triNB(cbNB[bi]);
+                        if(!isScaledB && cullBackFacesB && Vector3Dot(triNB, VectorSingle(triCenterInB - bv0, 0.0f)).x < -meshRA - s_LinearSlop)
+                            continue;
+                        Array<f32x3u, 3u> triPtsB;
+                        triPtsB[0u] = cbv0B[bi];
+                        triPtsB[1u] = cbv1B[bi];
+                        triPtsB[2u] = cbv2B[bi];
+                        const ShapeProxyView triViewB = MakeSpanProxyView(Span<f32x3u>(triPtsB), meshRB);
+                        const Manifold triM = CollideConvexProxyViews(triViewA, relPosAtoB, relRotAtoB, triViewB, zeroPos, identRot, maxDistance);
+                        if(triM.pointCount() == 0u)
+                            continue;
+                        const VectorSingle nLocalAtoB = triM.normal();
+                        const u8 edgeFlagsB = cEdgeFlagsB[bi];
+                        for(u32 pi = 0u; pi < triM.pointCount(); ++pi){
+                            VectorSingle candLocalN = nLocalAtoB;
+                            const VectorSingle localPtA = relPosAtoB + triM.points[pi].anchorA();
+                            VectorSingle localPtB = triM.points[pi].anchorB();
+                            f32 sep = triM.points[pi].separation();
+                            if(!isScaledB && edgeFlagsB != 0u){
+                                const VectorSingle rawMeshToA = -nLocalAtoB;
+                                VectorSingle smoothedMeshToA = rawMeshToA;
+                                if(SmoothMeshContactNormal(bv0, bv1, bv2, triNB, edgeFlagsB, localPtB, rawMeshToA, smoothedMeshToA)){
+                                    const f32 signedPlane = Vector3Dot(triNB, VectorSingle(localPtA - bv0, 0.0f)).x - meshRB;
+                                    if(signedPlane > maxDistance)
+                                        continue;
+                                    sep = signedPlane;
+                                    candLocalN = -smoothedMeshToA;
+                                    localPtB = localPtA + candLocalN * sep;
+                                }
+                            }
+                            if(cullBackFacesB && Vector3Dot(candLocalN, triNB).x >= 0.0f)
+                                continue;
+                            const VectorSingle candN = SafeNormalizeVec3(Vector3Rotate(candLocalN, rotB), fallbackUp);
+                            const VectorSingle worldAncB = Vector3Rotate(localPtB, rotB);
+                            const VectorSingle worldPtA = TransformPointValues(posB, rotB, localPtA);
+                            const VectorSingle worldAncA = worldPtA - posA;
+                            const VectorSingle candPt = (worldPtA + posB + worldAncB) * 0.5f;
+                            if(sep < deepestSep){
+                                deepestSep = sep;
+                                chosenNormal = candN;
+                            }
+                            PushMeshCandidateWithTris(
+                                candPt,
+                                worldAncA,
+                                worldAncB,
+                                candN,
+                                sep,
+                                MakeFeatureId(3u, cast<u8>(tAi & 0xffu), 3u, cast<u8>(tBi & 0xffu)),
+                                tAi,
+                                tBi,
+                                candidates
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        else if(!nA.isLeaf() && (nB.isLeaf() || Vector3Dot(aMax - aMin, VectorSingle(1.0f)).x >= Vector3Dot(bInAMax - bInAMin, VectorSingle(1.0f)).x)){
+            stack.push(u32x2u(nA.leftOrFirst(), pair.y));
+            stack.push(u32x2u(nA.rightOrCount(), pair.y));
+        }
+        else{
+            stack.push(u32x2u(pair.x, nB.leftOrFirst()));
+            stack.push(u32x2u(pair.x, nB.rightOrCount()));
+        }
+    }
+
+    if(!candidates.empty())
+        ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
 
 void CollideScaledMeshAndUnwrappedMulti(
@@ -3444,6 +3670,11 @@ void CollideScaledMeshAndUnwrappedMulti(
     if(meshA.nodes.empty() || meshA.triangles.empty() || leafTypeB == ShapeType::Chain)
         return;
 
+    if(leafTypeB == ShapeType::Mesh && gIdxB < meshShapes.size()){
+        CollideScaledMeshAndMeshDualBvh(meshA, scaleA, posA, rotA, meshShapes[gIdxB], scaleB, invScaleB, isScaledB, posB, rotB, maxDistance, shapeIdA, shapeIdB, triFilter, outManifold, outExtraManifolds);
+        return;
+    }
+
     VectorSingle scaledMinB(0.0f);
     VectorSingle scaledMaxB(0.0f);
     f32 radB = 0.0f;
@@ -3463,6 +3694,7 @@ void CollideScaledMeshAndUnwrappedMulti(
     TransformAabbByScaleValues(qMinScaledA, qMaxScaledA, invScaleA, queryMinA, queryMaxA);
 
     const b8 hasTriFilter = triFilter.has_value();
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> triExtras;
     BvhSpillStack<u32, 256u> stack;
     stack.push(0u);
     u32 nodeIdx = 0u;
@@ -3483,7 +3715,7 @@ void CollideScaledMeshAndUnwrappedMulti(
                 triPts[2u] = f32x3u(VectorSingle(tri.v2, 0.0f) * scaleA);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), meshRA);
                 Manifold triP;
-                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> triExtras;
+                triExtras.clear();
                 CollideConvexProxyWithUnwrappedLeafMulti(triView, posA, rotA, leafTypeB, g0B, g1B, gIdxB, scaleB, invScaleB, isScaledB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdB, triFilter, triP, triExtras);
                 AppendMergedMultiManifold(triP, triExtras, outManifold, outExtraManifolds);
             }
@@ -3552,6 +3784,7 @@ void CollideScaledHeightfieldAndUnwrappedMulti(
 
     const b8 hasTriFilter = triFilter.has_value();
     const b8 flipDiag = hfA.flipDiagonal;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> triExtras;
     for(u32 cz = minCz; cz <= maxCz; ++cz){
         for(u32 cx = minCx; cx <= maxCx; ++cx){
             const u32 cellIdx = cz * (hfA.cols - 1u) + cx;
@@ -3573,7 +3806,7 @@ void CollideScaledHeightfieldAndUnwrappedMulti(
                 triPts[2u] = f32x3u(tv2);
                 const ShapeProxyView triView = MakeSpanProxyView(Span<f32x3u>(triPts), thickA);
                 Manifold triP;
-                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> triExtras;
+                triExtras.clear();
                 CollideConvexProxyWithUnwrappedLeafMulti(triView, posA, rotA, leafTypeB, g0B, g1B, gIdxB, scaleB, invScaleB, isScaledB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdB, triFilter, triP, triExtras);
                 AppendMergedMultiManifold(triP, triExtras, outManifold, outExtraManifolds);
             }
@@ -3743,36 +3976,64 @@ void CollideScaledSdfAndScaledSdfMulti(
     const u32 sxB = Max(1u, sdfB.dimX / 10u);
     const u32 syB = Max(1u, sdfB.dimY / 10u);
     const u32 szB = Max(1u, sdfB.dimZ / 10u);
-    for(u32 z = 0u; z < sdfB.dimZ; z += szB){
-        const f32 pz = sdfB.boundsMin.z + cast<f32>(z) * sdfB.cellSize.z;
-        for(u32 y = 0u; y < sdfB.dimY; y += syB){
-            const f32 py = sdfB.boundsMin.y + cast<f32>(y) * sdfB.cellSize.y;
-            for(u32 x = 0u; x < sdfB.dimX; x += sxB){
-                const VectorSingle p(sdfB.boundsMin.x + cast<f32>(x) * sdfB.cellSize.x, py, pz, 0.0f);
-                f32 dSurfB = 0.0f;
-                VectorSingle gUnscaledB(0.0f, 1.0f, 0.0f, 0.0f);
-                sdfB.sampleEffectiveDistanceAndGradient(p, dSurfB, gUnscaledB);
-                if(Abs(VectorSingle(dSurfB)).x > diagB)
-                    continue;
-                const VectorSingle surfB = (p - gUnscaledB * dSurfB) * scaleB;
-                const VectorSingle ptInA = TransformPointValues(relPosBtoA, relRotBtoA, surfB);
-                f32 dUnscaledA = 0.0f;
-                VectorSingle gUnscaledA(0.0f, 1.0f, 0.0f, 0.0f);
-                sdfA.sampleEffectiveDistanceAndGradient(ptInA * invScaleA, dUnscaledA, gUnscaledA);
-                const VectorSingle gScaledA = gUnscaledA * invScaleA;
-                const f32 gradLenA = Max(Vector3Length(gScaledA).x, 1.0e-6f);
-                const VectorSingle gA = SafeNormalizeVec3(gScaledA, up);
-                const f32 sep = dUnscaledA / gradLenA;
-                if(sep > maxDistance)
-                    continue;
-                const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(gA, rotA), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
-                const VectorSingle worldPtA = TransformPointValues(posA, rotA, ptInA - gA * sep);
-                const VectorSingle worldPtB = TransformPointValues(posB, rotB, surfB);
-                if(sep < deepestSep){
-                    deepestSep = sep;
-                    chosenNormal = nAtoB;
+    VectorSingle qUnscMinB(0.0f);
+    VectorSingle qUnscMaxB(0.0f);
+    TransformAabbByScaleValues(qMinAinB, qMaxAinB, invScaleB, qUnscMinB, qUnscMaxB);
+    const VectorSingle bMinB(sdfB.boundsMin, 0.0f);
+    const VectorSingle bMaxB(sdfB.boundsMax, 0.0f);
+    const VectorSingle ovMinB = Max(qUnscMinB - VectorSingle(diagB), bMinB);
+    const VectorSingle ovMaxB = Min(qUnscMaxB + VectorSingle(diagB), bMaxB);
+    if(ovMinB.x <= ovMaxB.x && ovMinB.y <= ovMaxB.y && ovMinB.z <= ovMaxB.z){
+        const VectorSingle maxGridB(cast<f32>(sdfB.dimX - 1u), cast<f32>(sdfB.dimY - 1u), cast<f32>(sdfB.dimZ - 1u), 0.0f);
+        const VectorSingle loB = Clamp(Floor(Max((ovMinB - bMinB) * VectorSingle(sdfB.invCellSize, 0.0f) - VectorSingle(1.0e-3f), VectorSingle(0.0f))), VectorSingle(0.0f), maxGridB);
+        const VectorSingle hiB = Clamp(Floor(Max((ovMaxB - bMinB) * VectorSingle(sdfB.invCellSize, 0.0f), VectorSingle(0.0f))) + VectorSingle(1.0f), VectorSingle(0.0f), maxGridB);
+        const u32 xBegB = (cast<u32>(loB.x) / sxB) * sxB;
+        const u32 yBegB = (cast<u32>(loB.y) / syB) * syB;
+        const u32 zBegB = (cast<u32>(loB.z) / szB) * szB;
+        const u32 xEndB = cast<u32>(hiB.x);
+        const u32 yEndB = cast<u32>(hiB.y);
+        const u32 zEndB = cast<u32>(hiB.z);
+        const f32 quickRejectB = diagB * 1.001f + 1.0e-5f;
+        const b8 closedB = sdfB.isClosed;
+        for(u32 z = zBegB; z <= zEndB; z += szB){
+            const f32 pz = sdfB.boundsMin.z + cast<f32>(z) * sdfB.cellSize.z;
+            for(u32 y = yBegB; y <= yEndB; y += syB){
+                const f32 py = sdfB.boundsMin.y + cast<f32>(y) * sdfB.cellSize.y;
+                for(u32 x = xBegB; x <= xEndB; x += sxB){
+                    f32 effRawB = sdfB.atGrid(x, y, z);
+                    if(!closedB && effRawB < 0.0f)
+                        effRawB = -effRawB;
+                    f32 absQuickDB = effRawB - sdfB.margin;
+                    if(absQuickDB < 0.0f)
+                        absQuickDB = -absQuickDB;
+                    if(absQuickDB > quickRejectB)
+                        continue;
+                    const VectorSingle p(sdfB.boundsMin.x + cast<f32>(x) * sdfB.cellSize.x, py, pz, 0.0f);
+                    f32 dSurfB = 0.0f;
+                    VectorSingle gUnscaledB(0.0f, 1.0f, 0.0f, 0.0f);
+                    sdfB.sampleEffectiveDistanceAndGradient(p, dSurfB, gUnscaledB);
+                    if(Abs(VectorSingle(dSurfB)).x > diagB)
+                        continue;
+                    const VectorSingle surfB = (p - gUnscaledB * dSurfB) * scaleB;
+                    const VectorSingle ptInA = TransformPointValues(relPosBtoA, relRotBtoA, surfB);
+                    f32 dUnscaledA = 0.0f;
+                    VectorSingle gUnscaledA(0.0f, 1.0f, 0.0f, 0.0f);
+                    sdfA.sampleEffectiveDistanceAndGradient(ptInA * invScaleA, dUnscaledA, gUnscaledA);
+                    const VectorSingle gScaledA = gUnscaledA * invScaleA;
+                    const f32 gradLenA = Max(Vector3Length(gScaledA).x, 1.0e-6f);
+                    const VectorSingle gA = SafeNormalizeVec3(gScaledA, up);
+                    const f32 sep = dUnscaledA / gradLenA;
+                    if(sep > maxDistance)
+                        continue;
+                    const VectorSingle nAtoB = SafeNormalizeVec3(Vector3Rotate(gA, rotA), VectorSingle(0.0f, -1.0f, 0.0f, 0.0f));
+                    const VectorSingle worldPtA = TransformPointValues(posA, rotA, ptInA - gA * sep);
+                    const VectorSingle worldPtB = TransformPointValues(posB, rotB, surfB);
+                    if(sep < deepestSep){
+                        deepestSep = sep;
+                        chosenNormal = nAtoB;
+                    }
+                    PushMeshCandidateWithTris((worldPtA + worldPtB) * 0.5f, worldPtA - posA, worldPtB - posB, nAtoB, sep, MakeFeatureId(7u, 0u, 7u, cast<u8>(x & 0xffu)), s_NullIndex, s_NullIndex, candidates);
                 }
-                PushMeshCandidateWithTris((worldPtA + worldPtB) * 0.5f, worldPtA - posA, worldPtB - posB, nAtoB, sep, MakeFeatureId(7u, 0u, 7u, cast<u8>(x & 0xffu)), s_NullIndex, s_NullIndex, candidates);
             }
         }
     }
@@ -3781,36 +4042,67 @@ void CollideScaledSdfAndScaledSdfMulti(
     const u32 sxA = Max(1u, sdfA.dimX / 10u);
     const u32 syA = Max(1u, sdfA.dimY / 10u);
     const u32 szA = Max(1u, sdfA.dimZ / 10u);
-    for(u32 z = 0u; z < sdfA.dimZ; z += szA){
-        const f32 pz = sdfA.boundsMin.z + cast<f32>(z) * sdfA.cellSize.z;
-        for(u32 y = 0u; y < sdfA.dimY; y += syA){
-            const f32 py = sdfA.boundsMin.y + cast<f32>(y) * sdfA.cellSize.y;
-            for(u32 x = 0u; x < sdfA.dimX; x += sxA){
-                const VectorSingle p(sdfA.boundsMin.x + cast<f32>(x) * sdfA.cellSize.x, py, pz, 0.0f);
-                f32 dSurfA = 0.0f;
-                VectorSingle gUnscaledA(0.0f, 1.0f, 0.0f, 0.0f);
-                sdfA.sampleEffectiveDistanceAndGradient(p, dSurfA, gUnscaledA);
-                if(Abs(VectorSingle(dSurfA)).x > diagA)
-                    continue;
-                const VectorSingle surfA = (p - gUnscaledA * dSurfA) * scaleA;
-                const VectorSingle ptInB = TransformPointValues(relPosAtoB, relRotAtoB, surfA);
-                f32 dUnscaledB = 0.0f;
-                VectorSingle gUnscaledB(0.0f, 1.0f, 0.0f, 0.0f);
-                sdfB.sampleEffectiveDistanceAndGradient(ptInB * invScaleB, dUnscaledB, gUnscaledB);
-                const VectorSingle gScaledB = gUnscaledB * invScaleB;
-                const f32 gradLenB = Max(Vector3Length(gScaledB).x, 1.0e-6f);
-                const VectorSingle gB = SafeNormalizeVec3(gScaledB, up);
-                const f32 sep = dUnscaledB / gradLenB;
-                if(sep > maxDistance)
-                    continue;
-                const VectorSingle nAtoB = -SafeNormalizeVec3(Vector3Rotate(gB, rotB), up);
-                const VectorSingle worldPtA = TransformPointValues(posA, rotA, surfA);
-                const VectorSingle worldPtB = TransformPointValues(posB, rotB, ptInB - gB * sep);
-                if(sep < deepestSep){
-                    deepestSep = sep;
-                    chosenNormal = nAtoB;
+    VectorSingle qMinBinA(0.0f);
+    VectorSingle qMaxBinA(0.0f);
+    TransformLocalAabbValuesToWorld(sdfMinScaledB, sdfMaxScaledB, maxDistance, relPosBtoA, relRotBtoA, qMinBinA, qMaxBinA);
+    VectorSingle qUnscMinA(0.0f);
+    VectorSingle qUnscMaxA(0.0f);
+    TransformAabbByScaleValues(qMinBinA, qMaxBinA, invScaleA, qUnscMinA, qUnscMaxA);
+    const VectorSingle bMinA(sdfA.boundsMin, 0.0f);
+    const VectorSingle bMaxA(sdfA.boundsMax, 0.0f);
+    const VectorSingle ovMinA = Max(qUnscMinA - VectorSingle(diagA), bMinA);
+    const VectorSingle ovMaxA = Min(qUnscMaxA + VectorSingle(diagA), bMaxA);
+    if(ovMinA.x <= ovMaxA.x && ovMinA.y <= ovMaxA.y && ovMinA.z <= ovMaxA.z){
+        const VectorSingle maxGridA(cast<f32>(sdfA.dimX - 1u), cast<f32>(sdfA.dimY - 1u), cast<f32>(sdfA.dimZ - 1u), 0.0f);
+        const VectorSingle loA = Clamp(Floor(Max((ovMinA - bMinA) * VectorSingle(sdfA.invCellSize, 0.0f) - VectorSingle(1.0e-3f), VectorSingle(0.0f))), VectorSingle(0.0f), maxGridA);
+        const VectorSingle hiA = Clamp(Floor(Max((ovMaxA - bMinA) * VectorSingle(sdfA.invCellSize, 0.0f), VectorSingle(0.0f))) + VectorSingle(1.0f), VectorSingle(0.0f), maxGridA);
+        const u32 xBegA = (cast<u32>(loA.x) / sxA) * sxA;
+        const u32 yBegA = (cast<u32>(loA.y) / syA) * syA;
+        const u32 zBegA = (cast<u32>(loA.z) / szA) * szA;
+        const u32 xEndA = cast<u32>(hiA.x);
+        const u32 yEndA = cast<u32>(hiA.y);
+        const u32 zEndA = cast<u32>(hiA.z);
+        const f32 quickRejectA = diagA * 1.001f + 1.0e-5f;
+        const b8 closedA = sdfA.isClosed;
+        for(u32 z = zBegA; z <= zEndA; z += szA){
+            const f32 pz = sdfA.boundsMin.z + cast<f32>(z) * sdfA.cellSize.z;
+            for(u32 y = yBegA; y <= yEndA; y += syA){
+                const f32 py = sdfA.boundsMin.y + cast<f32>(y) * sdfA.cellSize.y;
+                for(u32 x = xBegA; x <= xEndA; x += sxA){
+                    f32 effRawA = sdfA.atGrid(x, y, z);
+                    if(!closedA && effRawA < 0.0f)
+                        effRawA = -effRawA;
+                    f32 absQuickDA = effRawA - sdfA.margin;
+                    if(absQuickDA < 0.0f)
+                        absQuickDA = -absQuickDA;
+                    if(absQuickDA > quickRejectA)
+                        continue;
+                    const VectorSingle p(sdfA.boundsMin.x + cast<f32>(x) * sdfA.cellSize.x, py, pz, 0.0f);
+                    f32 dSurfA = 0.0f;
+                    VectorSingle gUnscaledA(0.0f, 1.0f, 0.0f, 0.0f);
+                    sdfA.sampleEffectiveDistanceAndGradient(p, dSurfA, gUnscaledA);
+                    if(Abs(VectorSingle(dSurfA)).x > diagA)
+                        continue;
+                    const VectorSingle surfA = (p - gUnscaledA * dSurfA) * scaleA;
+                    const VectorSingle ptInB = TransformPointValues(relPosAtoB, relRotAtoB, surfA);
+                    f32 dUnscaledB = 0.0f;
+                    VectorSingle gUnscaledB(0.0f, 1.0f, 0.0f, 0.0f);
+                    sdfB.sampleEffectiveDistanceAndGradient(ptInB * invScaleB, dUnscaledB, gUnscaledB);
+                    const VectorSingle gScaledB = gUnscaledB * invScaleB;
+                    const f32 gradLenB = Max(Vector3Length(gScaledB).x, 1.0e-6f);
+                    const VectorSingle gB = SafeNormalizeVec3(gScaledB, up);
+                    const f32 sep = dUnscaledB / gradLenB;
+                    if(sep > maxDistance)
+                        continue;
+                    const VectorSingle nAtoB = -SafeNormalizeVec3(Vector3Rotate(gB, rotB), up);
+                    const VectorSingle worldPtA = TransformPointValues(posA, rotA, surfA);
+                    const VectorSingle worldPtB = TransformPointValues(posB, rotB, ptInB - gB * sep);
+                    if(sep < deepestSep){
+                        deepestSep = sep;
+                        chosenNormal = nAtoB;
+                    }
+                    PushMeshCandidateWithTris((worldPtA + worldPtB) * 0.5f, worldPtA - posA, worldPtB - posB, nAtoB, sep, MakeFeatureId(7u, 1u, 7u, cast<u8>(x & 0xffu)), s_NullIndex, s_NullIndex, candidates);
                 }
-                PushMeshCandidateWithTris((worldPtA + worldPtB) * 0.5f, worldPtA - posA, worldPtB - posB, nAtoB, sep, MakeFeatureId(7u, 1u, 7u, cast<u8>(x & 0xffu)), s_NullIndex, s_NullIndex, candidates);
             }
         }
     }
@@ -3911,6 +4203,106 @@ void CollidePlaneVsUnwrappedLeafMulti(
     }
 }
 
+b8 TryCollideUnwrappedConvexPair(
+    in ShapeType inLeafTypeA,
+    in VectorSingle g0A,
+    in VectorSingle g1A,
+    in u32 inIdxA,
+    in VectorSingle inScaleA,
+    in b8 isScA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in ShapeType inLeafTypeB,
+    in VectorSingle g0B,
+    in VectorSingle g1B,
+    in u32 inIdxB,
+    in VectorSingle inScaleB,
+    in b8 isScB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in f32 maxDistance,
+    in Vector<HullShape> hullShapes,
+    mut Manifold outPrimary
+){
+    if(!IsConvexTypeForProxy(inLeafTypeA) || !IsConvexTypeForProxy(inLeafTypeB))
+        return false;
+    if(!isScA && !isScB){
+        if(inLeafTypeA == ShapeType::Sphere){
+            SphereShape sphA;
+            sphA.centerRadius = f32x4(g0A);
+            if(inLeafTypeB == ShapeType::Sphere){
+                SphereShape sphB;
+                sphB.centerRadius = f32x4(g0B);
+                outPrimary = CollideSpheres(sphA, posA, rotA, sphB, posB, rotB, maxDistance);
+                return true;
+            }
+            if(inLeafTypeB == ShapeType::Capsule){
+                CapsuleShape capB;
+                capB.center1Radius = f32x4(g0B);
+                capB.center2 = f32x4(g1B);
+                outPrimary = CollideSphereAndCapsule(sphA, posA, rotA, capB, posB, rotB, maxDistance);
+                return true;
+            }
+            if(inLeafTypeB == ShapeType::Hull && inIdxB < hullShapes.size()){
+                outPrimary = CollideSphereAndHull(sphA, posA, rotA, hullShapes[inIdxB], posB, rotB, maxDistance);
+                return true;
+            }
+        }
+        else if(inLeafTypeA == ShapeType::Capsule){
+            CapsuleShape capA;
+            capA.center1Radius = f32x4(g0A);
+            capA.center2 = f32x4(g1A);
+            if(inLeafTypeB == ShapeType::Sphere){
+                SphereShape sphB;
+                sphB.centerRadius = f32x4(g0B);
+                outPrimary = FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(sphB, posB, rotB, capA, posA, rotA, maxDistance));
+                return true;
+            }
+            if(inLeafTypeB == ShapeType::Capsule){
+                CapsuleShape capB;
+                capB.center1Radius = f32x4(g0B);
+                capB.center2 = f32x4(g1B);
+                outPrimary = CollideCapsules(capA, posA, rotA, capB, posB, rotB, maxDistance);
+                return true;
+            }
+            if(inLeafTypeB == ShapeType::Hull && inIdxB < hullShapes.size()){
+                outPrimary = CollideCapsuleAndHull(capA, posA, rotA, hullShapes[inIdxB], posB, rotB, maxDistance);
+                return true;
+            }
+        }
+        else if(inLeafTypeA == ShapeType::Hull && inIdxA < hullShapes.size()){
+            in HullShape hullA = hullShapes[inIdxA];
+            if(inLeafTypeB == ShapeType::Sphere){
+                SphereShape sphB;
+                sphB.centerRadius = f32x4(g0B);
+                outPrimary = FlipManifoldNormalAndAnchors(CollideSphereAndHull(sphB, posB, rotB, hullA, posA, rotA, maxDistance));
+                return true;
+            }
+            if(inLeafTypeB == ShapeType::Capsule){
+                CapsuleShape capB;
+                capB.center1Radius = f32x4(g0B);
+                capB.center2 = f32x4(g1B);
+                outPrimary = FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(capB, posB, rotB, hullA, posA, rotA, maxDistance));
+                return true;
+            }
+            if(inLeafTypeB == ShapeType::Hull && inIdxB < hullShapes.size()){
+                outPrimary = CollideHulls(hullA, posA, rotA, hullShapes[inIdxB], posB, rotB, maxDistance);
+                return true;
+            }
+        }
+    }
+    Array<f32x3u, 2u> ptsA;
+    ShapeProxyView viewA = MakeUnscaledChildProxyView(inLeafTypeA, g0A, g1A, inIdxA, hullShapes, ptsA);
+    if(isScA && !IsProxyViewEmpty(viewA))
+        viewA = MakeScaledProxyView(viewA, inScaleA);
+    Array<f32x3u, 2u> ptsB;
+    ShapeProxyView viewB = MakeUnscaledChildProxyView(inLeafTypeB, g0B, g1B, inIdxB, hullShapes, ptsB);
+    if(isScB && !IsProxyViewEmpty(viewB))
+        viewB = MakeScaledProxyView(viewB, inScaleB);
+    outPrimary = CollideConvexProxyViews(viewA, posA, rotA, viewB, posB, rotB, maxDistance);
+    return true;
+}
+
 void CollideUnwrappedLeafPairMulti(
     in ShapeType inLeafTypeA,
     in VectorSingle inG0A,
@@ -3984,85 +4376,11 @@ void CollideUnwrappedLeafPairMulti(
         isScB = false;
     }
 
+    if(TryCollideUnwrappedConvexPair(inLeafTypeA, g0A, g1A, inIdxA, inScaleA, isScA, posA, rotA, inLeafTypeB, g0B, g1B, inIdxB, inScaleB, isScB, posB, rotB, maxDistance, hullShapes, outPrimary))
+        return;
+
     const b8 convA = IsConvexTypeForProxy(inLeafTypeA);
     const b8 convB = IsConvexTypeForProxy(inLeafTypeB);
-    if(convA && convB){
-        if(!isScA && !isScB){
-            if(inLeafTypeA == ShapeType::Sphere){
-                SphereShape sphA;
-                sphA.centerRadius = f32x4(g0A);
-                if(inLeafTypeB == ShapeType::Sphere){
-                    SphereShape sphB;
-                    sphB.centerRadius = f32x4(g0B);
-                    outPrimary = CollideSpheres(sphA, posA, rotA, sphB, posB, rotB, maxDistance);
-                    return;
-                }
-                if(inLeafTypeB == ShapeType::Capsule){
-                    CapsuleShape capB;
-                    capB.center1Radius = f32x4(g0B);
-                    capB.center2 = f32x4(g1B);
-                    outPrimary = CollideSphereAndCapsule(sphA, posA, rotA, capB, posB, rotB, maxDistance);
-                    return;
-                }
-                if(inLeafTypeB == ShapeType::Hull && inIdxB < hullShapes.size()){
-                    outPrimary = CollideSphereAndHull(sphA, posA, rotA, hullShapes[inIdxB], posB, rotB, maxDistance);
-                    return;
-                }
-            }
-            else if(inLeafTypeA == ShapeType::Capsule){
-                CapsuleShape capA;
-                capA.center1Radius = f32x4(g0A);
-                capA.center2 = f32x4(g1A);
-                if(inLeafTypeB == ShapeType::Sphere){
-                    SphereShape sphB;
-                    sphB.centerRadius = f32x4(g0B);
-                    outPrimary = FlipManifoldNormalAndAnchors(CollideSphereAndCapsule(sphB, posB, rotB, capA, posA, rotA, maxDistance));
-                    return;
-                }
-                if(inLeafTypeB == ShapeType::Capsule){
-                    CapsuleShape capB;
-                    capB.center1Radius = f32x4(g0B);
-                    capB.center2 = f32x4(g1B);
-                    outPrimary = CollideCapsules(capA, posA, rotA, capB, posB, rotB, maxDistance);
-                    return;
-                }
-                if(inLeafTypeB == ShapeType::Hull && inIdxB < hullShapes.size()){
-                    outPrimary = CollideCapsuleAndHull(capA, posA, rotA, hullShapes[inIdxB], posB, rotB, maxDistance);
-                    return;
-                }
-            }
-            else if(inLeafTypeA == ShapeType::Hull && inIdxA < hullShapes.size()){
-                in HullShape hullA = hullShapes[inIdxA];
-                if(inLeafTypeB == ShapeType::Sphere){
-                    SphereShape sphB;
-                    sphB.centerRadius = f32x4(g0B);
-                    outPrimary = FlipManifoldNormalAndAnchors(CollideSphereAndHull(sphB, posB, rotB, hullA, posA, rotA, maxDistance));
-                    return;
-                }
-                if(inLeafTypeB == ShapeType::Capsule){
-                    CapsuleShape capB;
-                    capB.center1Radius = f32x4(g0B);
-                    capB.center2 = f32x4(g1B);
-                    outPrimary = FlipManifoldNormalAndAnchors(CollideCapsuleAndHull(capB, posB, rotB, hullA, posA, rotA, maxDistance));
-                    return;
-                }
-                if(inLeafTypeB == ShapeType::Hull && inIdxB < hullShapes.size()){
-                    outPrimary = CollideHulls(hullA, posA, rotA, hullShapes[inIdxB], posB, rotB, maxDistance);
-                    return;
-                }
-            }
-        }
-        Array<f32x3u, 2u> ptsA;
-        ShapeProxyView viewA = MakeUnscaledChildProxyView(inLeafTypeA, g0A, g1A, inIdxA, hullShapes, ptsA);
-        if(isScA && !IsProxyViewEmpty(viewA))
-            viewA = MakeScaledProxyView(viewA, inScaleA);
-        Array<f32x3u, 2u> ptsB;
-        ShapeProxyView viewB = MakeUnscaledChildProxyView(inLeafTypeB, g0B, g1B, inIdxB, hullShapes, ptsB);
-        if(isScB && !IsProxyViewEmpty(viewB))
-            viewB = MakeScaledProxyView(viewB, inScaleB);
-        outPrimary = CollideConvexProxyViews(viewA, posA, rotA, viewB, posB, rotB, maxDistance);
-        return;
-    }
 
     if(convA){
         Array<f32x3u, 2u> ptsA;
@@ -4236,55 +4554,6 @@ void CollideUnwrappedLeafPairMulti(
     if(inLeafTypeA == ShapeType::Heightfield && inIdxA < heightfieldShapes.size()){
         CollideScaledHeightfieldAndUnwrappedMulti(heightfieldShapes[inIdxA], inScaleA, inInvScaleA, posA, rotA, inLeafTypeB, g0B, g1B, inIdxB, inScaleB, inInvScaleB, isScB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
     }
-}
-
-void CollideLeafShapePairRawMulti(
-    in Shape inShapeA,
-    in VectorSingle posA,
-    in VectorSingle rotA,
-    in Shape inShapeB,
-    in VectorSingle posB,
-    in VectorSingle rotB,
-    in f32 maxDistance,
-    in Vector<HullShape> hullShapes,
-    in Vector<MeshShape> meshShapes,
-    in Vector<HeightfieldShape> heightfieldShapes,
-    in Vector<ScaledShape> scaledShapes,
-    in Vector<ChainShape> chainShapes,
-    in Vector<SdfShape> sdfShapes,
-    in ShapeId shapeIdA,
-    in ShapeId shapeIdB,
-    in Optional<TriangleFilterCallback> triFilter,
-    mut Manifold outPrimary,
-    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
-){
-    ShapeType typeA = ShapeType::kCount;
-    VectorSingle g0A(0.0f);
-    VectorSingle g1A(0.0f);
-    u32 idxA = s_NullIndex;
-    VectorSingle scA(1.0f);
-    VectorSingle invScA(1.0f);
-    b8 isScA = false;
-    if(!UnwrapScaledShapeLeaf(inShapeA, scaledShapes, typeA, g0A, g1A, idxA, scA, invScA, isScA)){
-        outPrimary = Manifold();
-        outExtraManifolds.clear();
-        return;
-    }
-
-    ShapeType typeB = ShapeType::kCount;
-    VectorSingle g0B(0.0f);
-    VectorSingle g1B(0.0f);
-    u32 idxB = s_NullIndex;
-    VectorSingle scB(1.0f);
-    VectorSingle invScB(1.0f);
-    b8 isScB = false;
-    if(!UnwrapScaledShapeLeaf(inShapeB, scaledShapes, typeB, g0B, g1B, idxB, scB, invScB, isScB)){
-        outPrimary = Manifold();
-        outExtraManifolds.clear();
-        return;
-    }
-
-    CollideUnwrappedLeafPairMulti(typeA, g0A, g1A, idxA, scA, invScA, isScA, posA, rotA, typeB, g0B, g1B, idxB, scB, invScB, isScB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
 }
 
 void StampManifoldMaterialSubShapes(
@@ -4606,19 +4875,6 @@ class CompoundPairWorkItem{
     public b8 scaledB = false;
 }
 
-b8 UnwrapCompoundOrScaledCompound(in Shape s, in Vector<ScaledShape> scaledShapes, mut u32 outCompIdx, mut b8 outScaled, mut VectorSingle outScale){
-    ShapeType leafType = ShapeType::kCount;
-    VectorSingle g0(0.0f);
-    VectorSingle g1(0.0f);
-    VectorSingle invSc(1.0f);
-    if(UnwrapScaledShapeLeaf(s, scaledShapes, leafType, g0, g1, outCompIdx, outScale, invSc, outScaled) && leafType == ShapeType::Compound)
-        return true;
-    outCompIdx = s_NullIndex;
-    outScaled = false;
-    outScale = VectorSingle(1.0f);
-    return false;
-}
-
 void CollideCompoundWithUnwrappedLeafMulti(
     in u32 rootCompIdxA,
     in b8 rootScaledA,
@@ -4677,7 +4933,7 @@ void CollideCompoundWithUnwrappedLeafMulti(
         }
     }
 
-    FixedVector<CompoundLeafWorkItem, 64u> workQueue;
+    BvhSpillStack<CompoundLeafWorkItem, 4u> workQueue;
     CompoundLeafWorkItem rootItem;
     rootItem.pos = f32x4(rootPosA);
     rootItem.rot = f32x4(rootRotA);
@@ -4686,12 +4942,14 @@ void CollideCompoundWithUnwrappedLeafMulti(
     rootItem.topSubIdx = fixedTopSubA;
     rootItem.depth = 0u;
     rootItem.scaled = rootScaledA;
-    workQueue.push_back(rootItem);
+    workQueue.push(rootItem);
+    u32 workPushed = 1u;
 
+    FixedVector<f32x3u, s_MaxHullVertices> cHullPts;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> candE;
     BvhSpillStack<u32, 256u> stack;
-    while(!workQueue.empty()){
-        const CompoundLeafWorkItem w = workQueue[workQueue.size() - 1u];
-        workQueue.pop_back();
+    CompoundLeafWorkItem w;
+    while(workQueue.pop(w)){
         if(w.compIdx >= compoundShapes.size())
             continue;
         in CompoundShape compA = compoundShapes[w.compIdx];
@@ -4739,13 +4997,13 @@ void CollideCompoundWithUnwrappedLeafMulti(
                     VectorSingle cPos(0.0f);
                     VectorSingle cRot(0.0f, 0.0f, 0.0f, 1.0f);
                     b8 cUseBaked = false;
-                    FixedVector<f32x3u, s_MaxHullVertices> cHullPts;
+                    cHullPts.clear();
                     f32 cHullR = 0.0f;
                     if(!ResolveCompoundSubShape(sub, w.scaled, curScaleA, curPosA, curRotA, scaledShapes, hullShapes, cType, cG0, cG1, cIdx, cEffSc, cEffInvSc, cIsSc, cPos, cRot, cUseBaked, cHullPts, cHullR))
                         continue;
 
                     if(cType == ShapeType::Compound){
-                        if(w.depth + 1u < 8u && workQueue.size() < 64u){
+                        if(w.depth + 1u < 8u && workPushed < 64u){
                             CompoundLeafWorkItem nextW;
                             nextW.pos = f32x4(cPos);
                             nextW.rot = f32x4(cRot);
@@ -4754,13 +5012,14 @@ void CollideCompoundWithUnwrappedLeafMulti(
                             nextW.topSubIdx = effTopSub;
                             nextW.depth = w.depth + 1u;
                             nextW.scaled = cIsSc;
-                            workQueue.push_back(nextW);
+                            workQueue.push(nextW);
+                            ++workPushed;
                         }
                         continue;
                     }
 
                     Manifold candP;
-                    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> candE;
+                    candE.clear();
                     if(cUseBaked){
                         const ShapeProxyView viewA = MakeSpanProxyView(Span<f32x3u>(cHullPts), cHullR);
                         if(useBakedB)
@@ -4819,7 +5078,7 @@ void CollideCompoundPairWithScaleMulti(
     if(rootCompIdxA >= compoundShapes.size() || rootCompIdxB >= compoundShapes.size())
         return;
 
-    FixedVector<CompoundPairWorkItem, 64u> pairQueue;
+    BvhSpillStack<CompoundPairWorkItem, 4u> pairQueue;
     CompoundPairWorkItem rootPair;
     rootPair.posA = f32x4(rootPosA);
     rootPair.rotA = f32x4(rootRotA);
@@ -4834,12 +5093,15 @@ void CollideCompoundPairWithScaleMulti(
     rootPair.depth = 0u;
     rootPair.scaledA = rootScaledA;
     rootPair.scaledB = rootScaledB;
-    pairQueue.push_back(rootPair);
+    pairQueue.push(rootPair);
+    u32 pairPushed = 1u;
 
+    FixedVector<f32x3u, s_MaxHullVertices> cHullPtsA;
+    FixedVector<f32x3u, s_MaxHullVertices> cHullPtsB;
+    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> candE;
     BvhSpillStack<u32x2u, 256u> stack;
-    while(!pairQueue.empty()){
-        const CompoundPairWorkItem item = pairQueue[pairQueue.size() - 1u];
-        pairQueue.pop_back();
+    CompoundPairWorkItem item;
+    while(pairQueue.pop(item)){
         if(item.compIdxA >= compoundShapes.size() || item.compIdxB >= compoundShapes.size())
             continue;
         in CompoundShape compA = compoundShapes[item.compIdxA];
@@ -4904,7 +5166,7 @@ void CollideCompoundPairWithScaleMulti(
                     VectorSingle cPosA(0.0f);
                     VectorSingle cRotA(0.0f, 0.0f, 0.0f, 1.0f);
                     b8 cUseBakedA = false;
-                    FixedVector<f32x3u, s_MaxHullVertices> cHullPtsA;
+                    cHullPtsA.clear();
                     f32 cHullRA = 0.0f;
                     if(!ResolveCompoundSubShape(subA, item.scaledA, curScaleA, curPosA, curRotA, scaledShapes, hullShapes, cTypeA, cG0A, cG1A, cIdxA, cEffScA, cEffInvScA, cIsScA, cPosA, cRotA, cUseBakedA, cHullPtsA, cHullRA))
                         continue;
@@ -4926,13 +5188,13 @@ void CollideCompoundPairWithScaleMulti(
                         VectorSingle cPosB(0.0f);
                         VectorSingle cRotB(0.0f, 0.0f, 0.0f, 1.0f);
                         b8 cUseBakedB = false;
-                        FixedVector<f32x3u, s_MaxHullVertices> cHullPtsB;
+                        cHullPtsB.clear();
                         f32 cHullRB = 0.0f;
                         if(!ResolveCompoundSubShape(subB, item.scaledB, curScaleB, curPosB, curRotB, scaledShapes, hullShapes, cTypeB, cG0B, cG1B, cIdxB, cEffScB, cEffInvScB, cIsScB, cPosB, cRotB, cUseBakedB, cHullPtsB, cHullRB))
                             continue;
 
                         if(cTypeA == ShapeType::Compound && cTypeB == ShapeType::Compound){
-                            if(item.depth + 1u < 8u && pairQueue.size() < 64u){
+                            if(item.depth + 1u < 8u && pairPushed < 64u){
                                 CompoundPairWorkItem nextP;
                                 nextP.posA = f32x4(cPosA);
                                 nextP.rotA = f32x4(cRotA);
@@ -4947,7 +5209,8 @@ void CollideCompoundPairWithScaleMulti(
                                 nextP.depth = item.depth + 1u;
                                 nextP.scaledA = cIsScA;
                                 nextP.scaledB = cIsScB;
-                                pairQueue.push_back(nextP);
+                                pairQueue.push(nextP);
+                                ++pairPushed;
                             }
                             continue;
                         }
@@ -4958,7 +5221,7 @@ void CollideCompoundPairWithScaleMulti(
                                 if(cUseBakedB)
                                     viewB = MakeSpanProxyView(Span<f32x3u>(cHullPtsB), cHullRB);
                                 Manifold candP;
-                                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> candE;
+                                candE.clear();
                                 CollideCompoundWithUnwrappedLeafMulti(cIdxA, cIsScA, cEffScA, cPosA, cRotA, effTopA, cTypeB, cG0B, cG1B, cIdxB, cEffScB, cEffInvScB, cIsScB, cUseBakedB, viewB, cPosB, cRotB, effTopB, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, candP, candE);
                                 ShiftMultiManifoldsAnchorsByDelta(cPosA - rootPosA, cPosB - rootPosB, candP, candE);
                                 AppendMergedMultiManifold(candP, candE, outPrimary, outExtraManifolds);
@@ -4972,7 +5235,7 @@ void CollideCompoundPairWithScaleMulti(
                                 if(cUseBakedA)
                                     viewA = MakeSpanProxyView(Span<f32x3u>(cHullPtsA), cHullRA);
                                 Manifold candP;
-                                FixedVector<Manifold, s_MaxExtraManifoldsPerContact> candE;
+                                candE.clear();
                                 CollideCompoundWithUnwrappedLeafMulti(cIdxB, cIsScB, cEffScB, cPosB, cRotB, effTopB, cTypeA, cG0A, cG1A, cIdxA, cEffScA, cEffInvScA, cIsScA, cUseBakedA, viewA, cPosA, cRotA, effTopA, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdB, shapeIdA, triFilter, candP, candE);
                                 FlipMultiManifoldsInPlace(candP, candE);
                                 ShiftMultiManifoldsAnchorsByDelta(cPosA - rootPosA, cPosB - rootPosB, candP, candE);
@@ -4982,7 +5245,7 @@ void CollideCompoundPairWithScaleMulti(
                         }
 
                         Manifold candP;
-                        FixedVector<Manifold, s_MaxExtraManifoldsPerContact> candE;
+                        candE.clear();
                         if(cUseBakedA && cUseBakedB){
                             const ShapeProxyView viewA = MakeSpanProxyView(Span<f32x3u>(cHullPtsA), cHullRA);
                             const ShapeProxyView viewB = MakeSpanProxyView(Span<f32x3u>(cHullPtsB), cHullRB);
@@ -5007,7 +5270,7 @@ void CollideCompoundPairWithScaleMulti(
                     }
                 }
             }
-            else if(!nA.isLeaf() && (nB.isLeaf() || pair.x <= pair.y)){
+            else if(!nA.isLeaf() && (nB.isLeaf() || Vector3Dot(aMax - aMin, VectorSingle(1.0f)).x >= Vector3Dot(bInAMax - bInAMin, VectorSingle(1.0f)).x)){
                 stack.push(u32x2u(nA.leftOrFirst(), pair.y));
                 stack.push(u32x2u(nA.rightOrCount(), pair.y));
             }
@@ -5043,53 +5306,45 @@ void CollideShapePairRawMulti(
     outPrimary = Manifold();
     outExtraManifolds.clear();
 
-    u32 compIdxA = s_NullIndex;
-    b8 scaledCompA = false;
-    VectorSingle scaleVecA(1.0f);
-    const b8 isCompA = UnwrapCompoundOrScaledCompound(shapeA, scaledShapes, compIdxA, scaledCompA, scaleVecA);
+    ShapeType typeA = ShapeType::kCount;
+    VectorSingle g0A(0.0f);
+    VectorSingle g1A(0.0f);
+    u32 idxA = s_NullIndex;
+    VectorSingle scA(1.0f);
+    VectorSingle invScA(1.0f);
+    b8 isScA = false;
+    if(!UnwrapScaledShapeLeaf(shapeA, scaledShapes, typeA, g0A, g1A, idxA, scA, invScA, isScA))
+        return;
 
-    u32 compIdxB = s_NullIndex;
-    b8 scaledCompB = false;
-    VectorSingle scaleVecB(1.0f);
-    const b8 isCompB = UnwrapCompoundOrScaledCompound(shapeB, scaledShapes, compIdxB, scaledCompB, scaleVecB);
+    ShapeType typeB = ShapeType::kCount;
+    VectorSingle g0B(0.0f);
+    VectorSingle g1B(0.0f);
+    u32 idxB = s_NullIndex;
+    VectorSingle scB(1.0f);
+    VectorSingle invScB(1.0f);
+    b8 isScB = false;
+    if(!UnwrapScaledShapeLeaf(shapeB, scaledShapes, typeB, g0B, g1B, idxB, scB, invScB, isScB))
+        return;
 
-    if(isCompA && isCompB){
-        CollideCompoundPairWithScaleMulti(compIdxA, scaledCompA, scaleVecA, posA, rotA, compIdxB, scaledCompB, scaleVecB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
+    if(typeA == ShapeType::Compound && typeB == ShapeType::Compound){
+        CollideCompoundPairWithScaleMulti(idxA, isScA, scA, posA, rotA, idxB, isScB, scB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
         return;
     }
 
-    if(isCompA){
-        ShapeType leafTypeB = ShapeType::kCount;
-        VectorSingle g0B(0.0f);
-        VectorSingle g1B(0.0f);
-        u32 gIdxB = s_NullIndex;
-        VectorSingle scB(1.0f);
-        VectorSingle invScB(1.0f);
-        b8 isScB = false;
-        if(UnwrapScaledShapeLeaf(shapeB, scaledShapes, leafTypeB, g0B, g1B, gIdxB, scB, invScB, isScB)){
-            ShapeProxyView unusedViewB;
-            CollideCompoundWithUnwrappedLeafMulti(compIdxA, scaledCompA, scaleVecA, posA, rotA, s_NullIndex, leafTypeB, g0B, g1B, gIdxB, scB, invScB, isScB, false, unusedViewB, posB, rotB, s_NullIndex, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
-        }
+    if(typeA == ShapeType::Compound){
+        ShapeProxyView unusedViewB;
+        CollideCompoundWithUnwrappedLeafMulti(idxA, isScA, scA, posA, rotA, s_NullIndex, typeB, g0B, g1B, idxB, scB, invScB, isScB, false, unusedViewB, posB, rotB, s_NullIndex, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
         return;
     }
 
-    if(isCompB){
-        ShapeType leafTypeA = ShapeType::kCount;
-        VectorSingle g0A(0.0f);
-        VectorSingle g1A(0.0f);
-        u32 gIdxA = s_NullIndex;
-        VectorSingle scA(1.0f);
-        VectorSingle invScA(1.0f);
-        b8 isScA = false;
-        if(UnwrapScaledShapeLeaf(shapeA, scaledShapes, leafTypeA, g0A, g1A, gIdxA, scA, invScA, isScA)){
-            ShapeProxyView unusedViewA;
-            CollideCompoundWithUnwrappedLeafMulti(compIdxB, scaledCompB, scaleVecB, posB, rotB, s_NullIndex, leafTypeA, g0A, g1A, gIdxA, scA, invScA, isScA, false, unusedViewA, posA, rotA, s_NullIndex, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdB, shapeIdA, triFilter, outPrimary, outExtraManifolds);
-            FlipMultiManifoldsInPlace(outPrimary, outExtraManifolds);
-        }
+    if(typeB == ShapeType::Compound){
+        ShapeProxyView unusedViewA;
+        CollideCompoundWithUnwrappedLeafMulti(idxB, isScB, scB, posB, rotB, s_NullIndex, typeA, g0A, g1A, idxA, scA, invScA, isScA, false, unusedViewA, posA, rotA, s_NullIndex, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, shapeIdB, shapeIdA, triFilter, outPrimary, outExtraManifolds);
+        FlipMultiManifoldsInPlace(outPrimary, outExtraManifolds);
         return;
     }
 
-    CollideLeafShapePairRawMulti(shapeA, posA, rotA, shapeB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, scaledShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
+    CollideUnwrappedLeafPairMulti(typeA, g0A, g1A, idxA, scA, invScA, isScA, posA, rotA, typeB, g0B, g1B, idxB, scB, invScB, isScB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, chainShapes, sdfShapes, shapeIdA, shapeIdB, triFilter, outPrimary, outExtraManifolds);
 }
 
 void CollideShapePairMulti(
@@ -5144,6 +5399,40 @@ Manifold CollideShapePair(
     in Vector<SdfShape> sdfShapes
 ){
     Manifold primary;
+    if(shapeA.type != ShapeType::Compound && shapeB.type != ShapeType::Compound){
+        ShapeType typeA = ShapeType::kCount;
+        VectorSingle g0A(0.0f);
+        VectorSingle g1A(0.0f);
+        u32 idxA = s_NullIndex;
+        VectorSingle scA(1.0f);
+        VectorSingle invScA(1.0f);
+        b8 isScA = false;
+        ShapeType typeB = ShapeType::kCount;
+        VectorSingle g0B(0.0f);
+        VectorSingle g1B(0.0f);
+        u32 idxB = s_NullIndex;
+        VectorSingle scB(1.0f);
+        VectorSingle invScB(1.0f);
+        b8 isScB = false;
+        if(
+            UnwrapScaledShapeLeaf(shapeA, scaledShapes, typeA, g0A, g1A, idxA, scA, invScA, isScA)
+            && UnwrapScaledShapeLeaf(shapeB, scaledShapes, typeB, g0B, g1B, idxB, scB, invScB, isScB)
+            && IsConvexTypeForProxy(typeA)
+            && IsConvexTypeForProxy(typeB)
+        ){
+            VectorSingle effPosA = posA;
+            VectorSingle effRotA = rotA;
+            if(shapeA.hasLocalTransform())
+                shapeA.worldTransformValues(posA, rotA, effPosA, effRotA);
+            VectorSingle effPosB = posB;
+            VectorSingle effRotB = rotB;
+            if(shapeB.hasLocalTransform())
+                shapeB.worldTransformValues(posB, rotB, effPosB, effRotB);
+            if(TryCollideUnwrappedConvexPair(typeA, g0A, g1A, idxA, scA, isScA, effPosA, effRotA, typeB, g0B, g1B, idxB, scB, isScB, effPosB, effRotB, maxDistance, hullShapes, primary))
+                ShiftManifoldAnchorsByDelta(effPosA - posA, effPosB - posB, primary);
+            return primary;
+        }
+    }
     FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
     Optional<TriangleFilterCallback> noFilter;
     CollideShapePairMulti(shapeA, posA, rotA, shapeB, posB, rotB, maxDistance, hullShapes, meshShapes, heightfieldShapes, compoundShapes, scaledShapes, chainShapes, sdfShapes, ShapeId(), ShapeId(), noFilter, primary, unusedExtras);

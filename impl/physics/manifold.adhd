@@ -1864,38 +1864,53 @@ void MatchManifoldImpulsesCore(
     const VectorSingle newN = VectorSingle(newManifold.normal(), 0.0f);
     const f32 nDot = Vector3Dot(oldN, newN).x;
     if(nDot > 0.9f){
-        VectorSingle oldT1 = explicitOldT1;
-        VectorSingle oldT2 = explicitOldT2;
-        VectorSingle newT1 = explicitNewT1;
-        VectorSingle newT2 = explicitNewT2;
-        if(!hasExplicitBasis){
-            ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
-            ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
-        }
-
-        const b8 sameDefaultBasis = !hasExplicitBasis && nDot > 0.99999f && ((Abs(VectorSingle(oldN.y)).x > 0.9f) == (Abs(VectorSingle(newN.y)).x > 0.9f));
-        if(oldManifold.frictionImpulse.x != 0.0f || oldManifold.frictionImpulse.y != 0.0f){
-            if(sameDefaultBasis){
-                newManifold.frictionImpulse = oldManifold.frictionImpulse;
-            }
-            else{
-                const VectorSingle worldF = oldT1 * oldManifold.frictionImpulse.x + oldT2 * oldManifold.frictionImpulse.y;
-                newManifold.frictionImpulse = f32x2u(Vector3Dot(worldF, newT1).x, Vector3Dot(worldF, newT2).x);
+        b8 hasFriction = (oldManifold.frictionImpulse.x != 0.0f || oldManifold.frictionImpulse.y != 0.0f);
+        if(!hasFriction){
+            for(u32 i = 0u; i < newCount; ++i){
+                const u32 j = matchedOldIdx[i];
+                if(j == s_NullIndex)
+                    continue;
+                const f32x2u pf = oldManifold.pointFrictionImpulses[j];
+                if(pf.x != 0.0f || pf.y != 0.0f){
+                    hasFriction = true;
+                    break;
+                }
             }
         }
+        if(hasFriction){
+            const b8 sameDefaultBasis = !hasExplicitBasis && nDot > 0.99999f && ((Abs(VectorSingle(oldN.y)).x > 0.9f) == (Abs(VectorSingle(newN.y)).x > 0.9f));
+            VectorSingle oldT1 = explicitOldT1;
+            VectorSingle oldT2 = explicitOldT2;
+            VectorSingle newT1 = explicitNewT1;
+            VectorSingle newT2 = explicitNewT2;
+            if(!hasExplicitBasis && !sameDefaultBasis){
+                ComputeTangentBasisFromUnitNormal(oldN, oldT1, oldT2);
+                ComputeTangentBasisFromUnitNormal(newN, newT1, newT2);
+            }
 
-        for(u32 i = 0u; i < newCount; ++i){
-            const u32 j = matchedOldIdx[i];
-            if(j == s_NullIndex)
-                continue;
-            const f32x2u pf = oldManifold.pointFrictionImpulses[j];
-            if(pf.x != 0.0f || pf.y != 0.0f){
+            if(oldManifold.frictionImpulse.x != 0.0f || oldManifold.frictionImpulse.y != 0.0f){
                 if(sameDefaultBasis){
-                    newManifold.pointFrictionImpulses[i] = pf;
+                    newManifold.frictionImpulse = oldManifold.frictionImpulse;
                 }
                 else{
-                    const VectorSingle worldPf = oldT1 * pf.x + oldT2 * pf.y;
-                    newManifold.pointFrictionImpulses[i] = f32x2u(Vector3Dot(worldPf, newT1).x, Vector3Dot(worldPf, newT2).x);
+                    const VectorSingle worldF = oldT1 * oldManifold.frictionImpulse.x + oldT2 * oldManifold.frictionImpulse.y;
+                    newManifold.frictionImpulse = f32x2u(Vector3Dot(worldF, newT1).x, Vector3Dot(worldF, newT2).x);
+                }
+            }
+
+            for(u32 i = 0u; i < newCount; ++i){
+                const u32 j = matchedOldIdx[i];
+                if(j == s_NullIndex)
+                    continue;
+                const f32x2u pf = oldManifold.pointFrictionImpulses[j];
+                if(pf.x != 0.0f || pf.y != 0.0f){
+                    if(sameDefaultBasis){
+                        newManifold.pointFrictionImpulses[i] = pf;
+                    }
+                    else{
+                        const VectorSingle worldPf = oldT1 * pf.x + oldT2 * pf.y;
+                        newManifold.pointFrictionImpulses[i] = f32x2u(Vector3Dot(worldPf, newT1).x, Vector3Dot(worldPf, newT2).x);
+                    }
                 }
             }
         }
@@ -2071,12 +2086,15 @@ void ReduceContactPointsTo4(in VectorSingle refNormal, mut FixedVector<ClipVerte
     if(bestOutsideArea < 0.0f)
         idx3 = fallbackIdx3;
 
-    FixedVector<ClipVertex, s_MaxClipPoints> reduced;
-    reduced.push_back(candidates[idx0]);
-    reduced.push_back(candidates[idx1]);
-    reduced.push_back(candidates[idx2]);
-    reduced.push_back(candidates[idx3]);
-    candidates = reduced;
+    const ClipVertex c0 = candidates[idx0];
+    const ClipVertex c1 = candidates[idx1];
+    const ClipVertex c2 = candidates[idx2];
+    const ClipVertex c3 = candidates[idx3];
+    candidates.clear();
+    candidates.push_back(c0);
+    candidates.push_back(c1);
+    candidates.push_back(c2);
+    candidates.push_back(c3);
 }
 
 void ReduceSinglePlaneMeshCandidates(
@@ -2507,6 +2525,26 @@ b8 ClipSegmentAgainstPolygonSidePlanes(
     return true;
 }
 
+void CollectClippedPolygonCandidates(
+    in FixedVector<ClipVertex, s_MaxClipPoints> poly,
+    in VectorSingle vBRef,
+    in VectorSingle nPolyB,
+    in VectorSingle nAtoB,
+    in VectorSingle posA,
+    in VectorSingle posB,
+    in f32 maxDistance,
+    mut FixedVector<MeshContactCandidate, s_MaxClipPoints> outCandidates
+){
+    for(usize k = 0u; k < poly.size(); ++k){
+        const VectorSingle wA(poly[k].position, 0.0f);
+        const f32 sepK = Vector3Dot(VectorSingle(wA - vBRef, 0.0f), nPolyB).x;
+        if(sepK <= maxDistance){
+            const VectorSingle wB = wA + nAtoB * sepK;
+            PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, sepK, MakeFeatureId(5u, poly[k].id0, 5u, poly[k].id1), outCandidates);
+        }
+    }
+}
+
 Manifold CollideConvexProxyViewsFromGjk(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
@@ -2587,16 +2625,10 @@ Manifold CollideConvexProxyViewsFromGjk(
             }
         }
         if(!clipEmpty){
-            if(!useA)
-                workA = workB;
-            for(usize k = 0u; k < workA.size(); ++k){
-                const VectorSingle wA(workA[k].position, 0.0f);
-                const f32 sepK = Vector3Dot(VectorSingle(wA - vBRef, 0.0f), nPolyB).x;
-                if(sepK <= maxDistance){
-                    const VectorSingle wB = wA + nAtoB * sepK;
-                    PushMeshCandidate((wA + wB) * 0.5f, wA - posA, wB - posB, nAtoB, sepK, MakeFeatureId(5u, workA[k].id0, 5u, workA[k].id1), candidates);
-                }
-            }
+            if(useA)
+                CollectClippedPolygonCandidates(workA, vBRef, nPolyB, nAtoB, posA, posB, maxDistance, candidates);
+            else
+                CollectClippedPolygonCandidates(workB, vBRef, nPolyB, nAtoB, posA, posB, maxDistance, candidates);
         }
     }
     else if(patchA.size() == 2u && patchB.size() >= 3u){
@@ -2900,7 +2932,7 @@ Manifold CollideConvexProxyVsPlane(
     return m;
 }
 
-void CollideConvexProxyAndMeshWithRelativeMulti(
+void BuildConvexProxyAndMeshCandidates(
     in ShapeProxyView proxyA,
     in VectorSingle posA,
     in VectorSingle rotA,
@@ -2912,11 +2944,11 @@ void CollideConvexProxyAndMeshWithRelativeMulti(
     in f32 maxDistance,
     in ShapeId meshShapeId,
     in Optional<TriangleFilterCallback> triFilter,
-    mut Manifold outManifold,
-    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
+    mut VectorSingle outChosenNormal,
+    mut FixedVector<MeshContactCandidate, s_MaxClipPoints> outCandidates
 ){
-    outManifold = Manifold();
-    outExtraManifolds.clear();
+    outChosenNormal = VectorSingle(0.0f, -1.0f, 0.0f, 0.0f);
+    outCandidates.clear();
     if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA))
         return;
 
@@ -2937,7 +2969,6 @@ void CollideConvexProxyAndMeshWithRelativeMulti(
     const VectorSingle identRot = QuaternionIdentity();
     const VectorSingle fallbackUp(0.0f, 1.0f, 0.0f, 0.0f);
 
-    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
     f32 deepestSep = s_MaxF32;
 
@@ -3012,7 +3043,7 @@ void CollideConvexProxyAndMeshWithRelativeMulti(
                         MakeFeatureId(5u, cast<u8>(pi), 3u, cast<u8>(ti & 0xffu)),
                         s_NullIndex,
                         ti,
-                        candidates
+                        outCandidates
                     );
                 }
             }
@@ -3023,7 +3054,7 @@ void CollideConvexProxyAndMeshWithRelativeMulti(
         }
     }
 
-    if(candidates.empty() && meshB.isClosed() && IsPointInsideClosedMeshFiltered(meshB, shapeCenterB, meshShapeId, triFilter)){
+    if(outCandidates.empty() && meshB.isClosed() && IsPointInsideClosedMeshFiltered(meshB, shapeCenterB, meshShapeId, triFilter)){
         VectorSingle closePt(0.0f);
         VectorSingle closeN(0.0f, 1.0f, 0.0f, 0.0f);
         u32 closeTri = s_NullIndex;
@@ -3046,11 +3077,34 @@ void CollideConvexProxyAndMeshWithRelativeMulti(
                 MakeFeatureId(5u, 0u, 3u, cast<u8>(closeTri & 0xffu)),
                 s_NullIndex,
                 closeTri,
-                candidates
+                outCandidates
             );
         }
     }
 
+    outChosenNormal = chosenNormal;
+}
+
+void CollideConvexProxyAndMeshWithRelativeMulti(
+    in ShapeProxyView proxyA,
+    in VectorSingle posA,
+    in VectorSingle rotA,
+    in MeshShape meshB,
+    in VectorSingle posB,
+    in VectorSingle rotB,
+    in VectorSingle localPosA,
+    in VectorSingle localRotA,
+    in f32 maxDistance,
+    in ShapeId meshShapeId,
+    in Optional<TriangleFilterCallback> triFilter,
+    mut Manifold outManifold,
+    mut FixedVector<Manifold, s_MaxExtraManifoldsPerContact> outExtraManifolds
+){
+    outManifold = Manifold();
+    outExtraManifolds.clear();
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
+    BuildConvexProxyAndMeshCandidates(proxyA, posA, rotA, meshB, posB, rotB, localPosA, localRotA, maxDistance, meshShapeId, triFilter, chosenNormal, candidates);
     if(!candidates.empty())
         ReduceMeshCandidatesMultiManifold(chosenNormal, candidates, maxDistance, outManifold, outExtraManifolds);
 }
@@ -3089,9 +3143,17 @@ Manifold CollideConvexProxyAndMesh(
     in f32 maxDistance
 ){
     Manifold primary;
-    FixedVector<Manifold, s_MaxExtraManifoldsPerContact> unusedExtras;
+    if(meshB.nodes.empty() || meshB.triangles.empty() || IsProxyViewEmpty(proxyA))
+        return primary;
+    VectorSingle localPosA(0.0f);
+    VectorSingle localRotA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posB, rotB, posA, rotA, localPosA, localRotA);
+    FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
+    VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
     Optional<TriangleFilterCallback> noFilter;
-    CollideConvexProxyAndMeshMulti(proxyA, posA, rotA, meshB, posB, rotB, maxDistance, ShapeId(), noFilter, primary, unusedExtras);
+    BuildConvexProxyAndMeshCandidates(proxyA, posA, rotA, meshB, posB, rotB, localPosA, localRotA, maxDistance, ShapeId(), noFilter, chosenNormal, candidates);
+    if(!candidates.empty())
+        ReduceSinglePlaneMeshCandidates(chosenNormal, candidates, false, primary);
     return primary;
 }
 
@@ -3423,22 +3485,61 @@ void CollideSdfAndSdfMulti(
     VectorSingle bAMax(0.0f);
     TransformLocalAabbValuesToWorld(VectorSingle(sdfA.boundsMin, 0.0f), VectorSingle(sdfA.boundsMax, 0.0f), sdfA.margin + maxDistance, relPosAtoB, relRotAtoB, bAMin, bAMax);
     const VectorSingle padB(sdfB.margin, sdfB.margin, sdfB.margin, 0.0f);
-    if(!AabbOverlapsValues(bAMin, bAMax, VectorSingle(sdfB.boundsMin, 0.0f) - padB, VectorSingle(sdfB.boundsMax, 0.0f) + padB))
+    const VectorSingle bMinB = VectorSingle(sdfB.boundsMin, 0.0f) - padB;
+    const VectorSingle bMaxB = VectorSingle(sdfB.boundsMax, 0.0f) + padB;
+    if(!AabbOverlapsValues(bAMin, bAMax, bMinB, bMaxB))
+        return;
+
+    VectorSingle relPosBtoA(0.0f);
+    VectorSingle relRotBtoA(0.0f, 0.0f, 0.0f, 1.0f);
+    RelativeTransformValues(posA, rotA, posB, rotB, relPosBtoA, relRotBtoA);
+    const f32 surfBandA = Vector3Length(VectorSingle(sdfA.cellSize, 0.0f)).x;
+    VectorSingle bInAMin(0.0f);
+    VectorSingle bInAMax(0.0f);
+    TransformLocalAabbValuesToWorld(bMinB, bMaxB, maxDistance + surfBandA, relPosBtoA, relRotBtoA, bInAMin, bInAMax);
+    const VectorSingle aMin(sdfA.boundsMin, 0.0f);
+    const VectorSingle aMax(sdfA.boundsMax, 0.0f);
+    const VectorSingle overlapMinA = Max(bInAMin, aMin);
+    const VectorSingle overlapMaxA = Min(bInAMax, aMax);
+    if(overlapMinA.x > overlapMaxA.x || overlapMinA.y > overlapMaxA.y || overlapMinA.z > overlapMaxA.z)
+        return;
+
+    const u32 strideX = Max(1u, sdfA.dimX / 12u);
+    const u32 strideY = Max(1u, sdfA.dimY / 12u);
+    const u32 strideZ = Max(1u, sdfA.dimZ / 12u);
+    const VectorSingle loRel = (overlapMinA - aMin) * VectorSingle(sdfA.invCellSize, 0.0f);
+    const VectorSingle hiRel = (overlapMaxA - aMin) * VectorSingle(sdfA.invCellSize, 0.0f);
+    const VectorSingle maxGridF(cast<f32>(sdfA.dimX - 1u), cast<f32>(sdfA.dimY - 1u), cast<f32>(sdfA.dimZ - 1u), 0.0f);
+    const VectorSingle loIdxF = Clamp(Floor(Max(loRel - VectorSingle(1.0e-3f), VectorSingle(0.0f))), VectorSingle(0.0f), maxGridF);
+    const VectorSingle hiIdxF = Clamp(Floor(Max(hiRel, VectorSingle(0.0f))) + VectorSingle(1.0f), VectorSingle(0.0f), maxGridF);
+    const u32 xBeg = (cast<u32>(loIdxF.x) / strideX) * strideX;
+    const u32 yBeg = (cast<u32>(loIdxF.y) / strideY) * strideY;
+    const u32 zBeg = (cast<u32>(loIdxF.z) / strideZ) * strideZ;
+    const u32 xEnd = cast<u32>(hiIdxF.x);
+    const u32 yEnd = cast<u32>(hiIdxF.y);
+    const u32 zEnd = cast<u32>(hiIdxF.z);
+    if(xBeg > xEnd || yBeg > yEnd || zBeg > zEnd)
         return;
 
     FixedVector<MeshContactCandidate, s_MaxClipPoints> candidates;
     VectorSingle chosenNormal(0.0f, -1.0f, 0.0f, 0.0f);
     f32 deepestSep = s_MaxF32;
 
-    const f32 surfBandA = Vector3Length(VectorSingle(sdfA.cellSize, 0.0f)).x;
-    const u32 strideX = Max(1u, sdfA.dimX / 12u);
-    const u32 strideY = Max(1u, sdfA.dimY / 12u);
-    const u32 strideZ = Max(1u, sdfA.dimZ / 12u);
-    for(u32 z = 0u; z < sdfA.dimZ; z += strideZ){
+    const f32 quickRejectBandA = surfBandA * 1.001f + 1.0e-5f;
+    const b8 closedA = sdfA.isClosed;
+    for(u32 z = zBeg; z <= zEnd; z += strideZ){
         const f32 pz = sdfA.boundsMin.z + cast<f32>(z) * sdfA.cellSize.z;
-        for(u32 y = 0u; y < sdfA.dimY; y += strideY){
+        for(u32 y = yBeg; y <= yEnd; y += strideY){
             const f32 py = sdfA.boundsMin.y + cast<f32>(y) * sdfA.cellSize.y;
-            for(u32 x = 0u; x < sdfA.dimX; x += strideX){
+            for(u32 x = xBeg; x <= xEnd; x += strideX){
+                f32 effRaw = sdfA.atGrid(x, y, z);
+                if(!closedA && effRaw < 0.0f)
+                    effRaw = -effRaw;
+                f32 absQuickD = effRaw - sdfA.margin;
+                if(absQuickD < 0.0f)
+                    absQuickD = -absQuickD;
+                if(absQuickD > quickRejectBandA)
+                    continue;
                 const VectorSingle pA(sdfA.boundsMin.x + cast<f32>(x) * sdfA.cellSize.x, py, pz, 0.0f);
                 f32 dA = 0.0f;
                 VectorSingle gA(0.0f, 1.0f, 0.0f, 0.0f);

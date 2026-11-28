@@ -229,6 +229,9 @@ class JointConstraintStepCache{
     public b8 hasCachedPathTan = false;
     public b8 hasRevoluteAngle = false;
     public b8 slerpSoftnessReady = false;
+    public b8 kAngInvValid = false;
+    public f32 maxLinImpSq = 0.0f;
+    public f32 maxAngImpSq = 0.0f;
 }
 
 
@@ -993,6 +996,103 @@ void ReadCarrierBodyState(
         ResolveKinematicSubstepDelta(movingKinSlots, movingKinStates, kinStride, kinStage, stateIdx, outDeltaPos, outDeltaRot);
 }
 
+f32 ComputeGearOrRackStepPhaseFromRefs(
+    in JointConstraint jc,
+    in VectorSingle axisA,
+    in VectorSingle axisB,
+    in VectorSingle deltaPosA,
+    in VectorSingle deltaRotA,
+    in VectorSingle deltaPosB,
+    in VectorSingle deltaRotB,
+    in VectorSingle rA,
+    in VectorSingle rB,
+    in VectorSingle dPosRefA,
+    in VectorSingle dRotRefA,
+    in VectorSingle dRotRefB
+){
+    const VectorSingle thetaDeltaB = ExtractRotationAngleVec(deltaRotB);
+    if(jc.type == JointType::Gear){
+        const VectorSingle thetaDeltaA = ExtractRotationAngleVec(deltaRotA);
+        VectorSingle thetaDeltaRefA(0.0f);
+        if(jc.hasRefA)
+            thetaDeltaRefA = ExtractRotationAngleVec(dRotRefA);
+        VectorSingle thetaDeltaRefB(0.0f);
+        if(jc.hasRefB){
+            if(jc.hasRefA && jc.indexRefB == jc.indexRefA)
+                thetaDeltaRefB = thetaDeltaRefA;
+            else
+                thetaDeltaRefB = ExtractRotationAngleVec(dRotRefB);
+        }
+        const VectorSingle relThetaA = VectorSingle(thetaDeltaA - thetaDeltaRefA, 0.0f);
+        const VectorSingle relThetaB = VectorSingle(thetaDeltaB - thetaDeltaRefB, 0.0f);
+        return Vector3Dot(relThetaA, axisA).x + jc.ratio * Vector3Dot(relThetaB, axisB).x;
+    }
+
+    if(!jc.hasRefA && !jc.hasRefB){
+        const VectorSingle thetaDeltaA = ExtractRotationAngleVec(deltaRotA);
+        const f32 linStep = Vector3Dot((deltaPosA + (rA - jc.rA0())) - (deltaPosB + (rB - jc.rB0())), axisA).x;
+        const f32 angStep = Vector3Dot(VectorSingle(thetaDeltaB - thetaDeltaA, 0.0f), axisB).x;
+        return linStep + jc.ratio * angStep;
+    }
+
+    const VectorSingle rRefA0(jc.rRefA0, 0.0f);
+    const VectorSingle rRefA = Vector3Rotate(rRefA0, dRotRefA);
+    f32 linStep = Vector3Dot(deltaPosA + (rA - jc.rA0()), axisA).x;
+    if(jc.hasRefA)
+        linStep -= Vector3Dot(dPosRefA + (rRefA - rRefA0), axisA).x;
+    VectorSingle thetaDeltaRefB(0.0f);
+    if(jc.hasRefB)
+        thetaDeltaRefB = ExtractRotationAngleVec(dRotRefB);
+    const f32 angStep = Vector3Dot(VectorSingle(thetaDeltaB - thetaDeltaRefB, 0.0f), axisB).x;
+    return linStep + jc.ratio * angStep;
+}
+
+f32 ComputeGearOrRackStepPhase(
+    in JointConstraint jc,
+    in Vector<BodyState> states,
+    in VectorSingle deltaPosA,
+    in VectorSingle deltaRotA,
+    in VectorSingle deltaPosB,
+    in VectorSingle deltaRotB,
+    in VectorSingle rA,
+    in VectorSingle qA,
+    in VectorSingle rB,
+    in VectorSingle qB,
+    in Span<u32> movingKinSlots,
+    in Span<BodyState> movingKinStates,
+    in u32 kinStride,
+    in u32 kinStage
+){
+    VectorSingle vDummy(0.0f);
+    VectorSingle wDummy(0.0f);
+    VectorSingle dPosRefA(0.0f);
+    VectorSingle dRotRefA(0.0f, 0.0f, 0.0f, 1.0f);
+    if(jc.hasRefA)
+        ReadCarrierBodyState(states, jc.indexRefA, movingKinSlots, movingKinStates, kinStride, kinStage, vDummy, wDummy, dPosRefA, dRotRefA);
+
+    VectorSingle dPosRefB(0.0f);
+    VectorSingle dRotRefB(0.0f, 0.0f, 0.0f, 1.0f);
+    if(jc.hasRefB){
+        if(jc.hasRefA && jc.indexRefB == jc.indexRefA){
+            dPosRefB = dPosRefA;
+            dRotRefB = dRotRefA;
+        }
+        else{
+            ReadCarrierBodyState(states, jc.indexRefB, movingKinSlots, movingKinStates, kinStride, kinStage, vDummy, wDummy, dPosRefB, dRotRefB);
+        }
+    }
+
+    if(jc.type == JointType::Gear){
+        const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        return ComputeGearOrRackStepPhaseFromRefs(jc, axisA, axisB, deltaPosA, deltaRotA, deltaPosB, deltaRotB, rA, rB, dPosRefA, dRotRefA, dRotRefB);
+    }
+
+    const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
+    const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+    return ComputeGearOrRackStepPhaseFromRefs(jc, axisA, axisB, deltaPosA, deltaRotA, deltaPosB, deltaRotB, rA, rB, dPosRefA, dRotRefA, dRotRefB);
+}
+
 void BuildGearOrRackSlotTerms(
     in JointConstraint jc,
     in Vector<BodyState> states,
@@ -1012,6 +1112,7 @@ void BuildGearOrRackSlotTerms(
     in Span<BodyState> movingKinStates,
     in u32 kinStride,
     in u32 kinStage,
+    in b8 needStepPhase,
     mut Array<GearRackSlotTerm, 4u> outTerms,
     mut u32 outTermCount,
     mut f32 outCDot,
@@ -1046,10 +1147,6 @@ void BuildGearOrRackSlotTerms(
 
     const MatrixSingle invIAMat = Matrix3FromSymMat3(jc.invIA);
     const MatrixSingle invIBMat = Matrix3FromSymMat3(jc.invIB);
-    const VectorSingle thetaDeltaA = ExtractRotationAngleVec(deltaRotA);
-    const VectorSingle thetaDeltaB = ExtractRotationAngleVec(deltaRotB);
-    const VectorSingle thetaDeltaRefA = ExtractRotationAngleVec(dRotRefA);
-    const VectorSingle thetaDeltaRefB = ExtractRotationAngleVec(dRotRefB);
 
     if(jc.type == JointType::Gear){
         const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
@@ -1057,9 +1154,8 @@ void BuildGearOrRackSlotTerms(
         const VectorSingle relWA = VectorSingle(wA - wRefA, 0.0f);
         const VectorSingle relWB = VectorSingle(wB - wRefB, 0.0f);
         outCDot = Vector3Dot(relWA, axisA).x + jc.ratio * Vector3Dot(relWB, axisB).x;
-        const VectorSingle relThetaA = VectorSingle(thetaDeltaA - thetaDeltaRefA, 0.0f);
-        const VectorSingle relThetaB = VectorSingle(thetaDeltaB - thetaDeltaRefB, 0.0f);
-        outStepPhase = Vector3Dot(relThetaA, axisA).x + jc.ratio * Vector3Dot(relThetaB, axisB).x;
+        if(needStepPhase)
+            outStepPhase = ComputeGearOrRackStepPhaseFromRefs(jc, axisA, axisB, deltaPosA, deltaRotA, deltaPosB, deltaRotB, rA, rB, dPosRefA, dRotRefA, dRotRefB);
 
         AppendGearRackBodyTerm(jc.indexA, 0.0f, invIAMat, VectorSingle(0.0f), axisA, outTerms, outTermCount);
         AppendGearRackBodyTerm(jc.indexB, 0.0f, invIBMat, VectorSingle(0.0f), axisB * jc.ratio, outTerms, outTermCount);
@@ -1072,13 +1168,13 @@ void BuildGearOrRackSlotTerms(
 
     const VectorSingle axisA = SafeNormalizeVec3(Vector3Rotate(jc.localAxisA(), qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
     const VectorSingle axisB = SafeNormalizeVec3(Vector3Rotate(jc.localAxisB(), qB), VectorSingle(0.0f, 0.0f, 1.0f, 0.0f));
+    if(needStepPhase)
+        outStepPhase = ComputeGearOrRackStepPhaseFromRefs(jc, axisA, axisB, deltaPosA, deltaRotA, deltaPosB, deltaRotB, rA, rB, dPosRefA, dRotRefA, dRotRefB);
+
     if(!jc.hasRefA && !jc.hasRefB){
         const VectorSingle pVelA = vA + Cross(wA, rA);
         const VectorSingle pVelB = vB + Cross(wB, rB);
         outCDot = Vector3Dot(pVelA - pVelB, axisA).x + jc.ratio * Vector3Dot(VectorSingle(wB - wA, 0.0f), axisB).x;
-        const f32 linStep = Vector3Dot((deltaPosA + (rA - jc.rA0())) - (deltaPosB + (rB - jc.rB0())), axisA).x;
-        const f32 angStep = Vector3Dot(VectorSingle(thetaDeltaB - thetaDeltaA, 0.0f), axisB).x;
-        outStepPhase = linStep + jc.ratio * angStep;
 
         AppendGearRackBodyTerm(jc.indexA, jc.invMassA(), invIAMat, axisA, Cross(rA, axisA) - axisB * jc.ratio, outTerms, outTermCount);
         AppendGearRackBodyTerm(jc.indexB, jc.invMassB(), invIBMat, -axisA, -Cross(rB, axisA) + axisB * jc.ratio, outTerms, outTermCount);
@@ -1089,11 +1185,6 @@ void BuildGearOrRackSlotTerms(
     const VectorSingle rRefA = Vector3Rotate(rRefA0, dRotRefA);
     const VectorSingle pVelA = vA + Cross(wA, rA);
     const VectorSingle pVelRefA = vRefA + Cross(wRefA, rRefA);
-    f32 linStep = Vector3Dot(deltaPosA + (rA - jc.rA0()), axisA).x;
-    if(jc.hasRefA)
-        linStep -= Vector3Dot(dPosRefA + (rRefA - rRefA0), axisA).x;
-    const f32 angStep = Vector3Dot(VectorSingle(thetaDeltaB - thetaDeltaRefB, 0.0f), axisB).x;
-    outStepPhase = linStep + jc.ratio * angStep;
 
     f32 linVelRel = Vector3Dot(pVelA, axisA).x;
     if(jc.hasRefA)
@@ -1351,9 +1442,11 @@ VectorSingle ExtractRotationAngleVec(in VectorSingle qIn){
     if(q.w < 0.0f)
         q = -q;
     const VectorSingle qv(q.x, q.y, q.z, 0.0f);
-    const f32 qvLen = Vector3Length(qv).x;
-    if(qvLen > 1.0e-7f)
+    const f32 qvLenSq = Vector3LengthSq(qv).x;
+    if(qvLenSq > 1.0e-14f){
+        const f32 qvLen = Sqrt(qvLenSq);
         return qv * ((2.0f * ATan2(VectorSingle(qvLen), VectorSingle(q.w)).x) / qvLen);
+    }
     return qv * 2.0f;
 }
 
@@ -1452,6 +1545,7 @@ void WarmStartJointConstraintWithExtra(
             Span<BodyState>(),
             0u,
             0u,
+            false,
             terms,
             termCount,
             dummyCDot,
@@ -1911,6 +2005,9 @@ void BuildJointConstraintStepCache(in Vector<BodyState> states, in JointConstrai
     outCache.hasCachedPathTan = false;
     outCache.hasRevoluteAngle = false;
     outCache.slerpSoftnessReady = false;
+    outCache.kAngInvValid = false;
+    outCache.maxLinImpSq = 0.0f;
+    outCache.maxAngImpSq = 0.0f;
     outCache.revoluteBaseAngle = 0.0f;
     outCache.revoluteRawAngle0 = 0.0f;
     outCache.revoluteContinuousAngle = 0.0f;
@@ -1920,8 +2017,10 @@ void BuildJointConstraintStepCache(in Vector<BodyState> states, in JointConstrai
     const MatrixSingle invIBMat = Matrix3FromSymMat3(jc.invIB);
     const MatrixSingle sumInvIMat = Matrix3Add(invIAMat, invIBMat);
     outCache.sumInvI = SymMat3FromMatrix3(sumInvIMat);
-    if(jc.type == JointType::Fixed || jc.type == JointType::Prismatic || jc.type == JointType::Path || (jc.type == JointType::Motor && jc.maxTorque > 0.0f))
+    if(jc.type == JointType::Fixed || jc.type == JointType::Prismatic || jc.type == JointType::Path || (jc.type == JointType::Motor && jc.maxTorque > 0.0f)){
         outCache.kAngInv = SymMat3FromMatrix3(Matrix3InvertSymmetric(sumInvIMat));
+        outCache.kAngInvValid = true;
+    }
     if(jc.type == JointType::Spherical || jc.type == JointType::Fixed || jc.type == JointType::Revolute || jc.type == JointType::Motor){
         u32 flagsA = 0u;
         if(jc.indexA < states.size())
@@ -3058,6 +3157,7 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
             movingKinStates,
             kinStride,
             kinStage,
+            true,
             terms,
             termCount,
             cDot,
@@ -3381,14 +3481,16 @@ void SolveJointConstraintCachedWithExtraWithKinematics(
         VectorSingle curLinP(0.0f);
         VectorSingle curAngL(0.0f);
         ComputeJointConstraintTotalImpulsesWithExtraCached(jc, jointExtraData, cache, curLinP, curAngL);
-        const f32 linSq = Vector3LengthSq(curLinP).x;
-        const f32 prevLin = jc.maxLinearImpulseMag();
-        if(linSq > prevLin * prevLin)
-            jc.setMaxLinearImpulseMag(Sqrt(linSq));
-        const f32 angSq = Vector3LengthSq(curAngL).x;
-        const f32 prevAng = jc.maxAngularImpulseMag();
-        if(angSq > prevAng * prevAng)
-            jc.setMaxAngularImpulseMag(Sqrt(angSq));
+        if(jc.breakForce > 0.0f){
+            const f32 linSq = Vector3LengthSq(curLinP).x;
+            if(linSq > cache.maxLinImpSq)
+                cache.maxLinImpSq = linSq;
+        }
+        if(jc.breakTorque > 0.0f){
+            const f32 angSq = Vector3LengthSq(curAngL).x;
+            if(angSq > cache.maxAngImpSq)
+                cache.maxAngImpSq = angSq;
+        }
     }
 
     if(jc.indexA != s_NullIndex && (flagsA & cast<u32>(BodyFlags::Dynamic)) != 0u){
@@ -3436,12 +3538,22 @@ void StoreJointConstraintImpulsesWithExtra(in JointConstraint jc, in f32 invDt, 
 }
 
 void StoreJointConstraintImpulsesWithExtraCached(
-    in JointConstraint jc,
+    mut JointConstraint jc,
     in f32 invDt,
     in Vector<JointExtraData> jointExtraData,
     in JointConstraintStepCache cache,
     mut Joint joint
 ){
+    if(jc.breakForce > 0.0f){
+        const f32 prevLin = jc.maxLinearImpulseMag();
+        if(cache.maxLinImpSq > prevLin * prevLin)
+            jc.setMaxLinearImpulseMag(Sqrt(cache.maxLinImpSq));
+    }
+    if(jc.breakTorque > 0.0f){
+        const f32 prevAng = jc.maxAngularImpulseMag();
+        if(cache.maxAngImpSq > prevAng * prevAng)
+            jc.setMaxAngularImpulseMag(Sqrt(cache.maxAngImpSq));
+    }
     joint.setLinearImpulse(jc.linearImpulse());
     joint.setAngularImpulse(jc.angularImpulse());
     joint.setMotorImpulse(jc.motorImpulse);
@@ -3511,6 +3623,8 @@ b8 ProjectJointConstraintWithKinematics(
     VectorSingle linErr(0.0f);
     VectorSingle pathCpWorldOff(0.0f);
     b8 hasPathCpWorldOff = false;
+    VectorSingle savedPathTanLocal(1.0f, 0.0f, 0.0f, 0.0f);
+    b8 hasSavedPathTan = false;
     if((jc.type == JointType::Spherical && !jc.isSpring()) || (jc.type == JointType::Fixed && !jc.isSpring()) || jc.type == JointType::Revolute){
         linErr = d;
     }
@@ -3551,6 +3665,8 @@ b8 ProjectJointConstraintWithKinematics(
             f32 arcPos = 0.0f;
             f32 totalLen = 0.0f;
             EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
+            savedPathTanLocal = tanLocal;
+            hasSavedPathTan = true;
             pathCpWorldOff = Vector3Rotate(cpLocal, qA);
             hasPathCpWorldOff = true;
             const VectorSingle tanWorld = SafeNormalizeVec3(Vector3Rotate(tanLocal, qA), VectorSingle(1.0f, 0.0f, 0.0f, 0.0f));
@@ -3750,6 +3866,7 @@ b8 ProjectJointConstraintWithKinematics(
             movingKinStates,
             kinStride,
             kinStage,
+            true,
             terms,
             termCount,
             dummyCDot,
@@ -3800,14 +3917,9 @@ b8 ProjectJointConstraintWithKinematics(
                     appliedPhase = true;
                 }
                 if(appliedPhase){
-                    f32 postPhase = 0.0f;
-                    BuildGearOrRackSlotTerms(
+                    const f32 postPhase = ComputeGearOrRackStepPhase(
                         jc,
                         states,
-                        VectorSingle(0.0f),
-                        VectorSingle(0.0f),
-                        VectorSingle(0.0f),
-                        VectorSingle(0.0f),
                         deltaPosA,
                         deltaRotA,
                         deltaPosB,
@@ -3819,11 +3931,7 @@ b8 ProjectJointConstraintWithKinematics(
                         movingKinSlots,
                         movingKinStates,
                         kinStride,
-                        kinStage,
-                        terms,
-                        termCount,
-                        dummyCDot,
-                        postPhase
+                        kinStage
                     );
                     cErr = cache.phaseError0 + postPhase;
                 }
@@ -3899,11 +4007,13 @@ b8 ProjectJointConstraintWithKinematics(
     else if(jc.type == JointType::Path && jc.extraDataIndex < jointExtraData.size()){
         in JointExtraData extra = jointExtraData[jc.extraDataIndex];
         if(extra.pathLockRotation && extra.pathPoints.size() >= 2u){
-            VectorSingle cpLocal(0.0f);
-            VectorSingle tanLocal(1.0f, 0.0f, 0.0f, 0.0f);
-            f32 arcPos = 0.0f;
-            f32 totalLen = 0.0f;
-            EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
+            VectorSingle tanLocal = savedPathTanLocal;
+            if(!hasSavedPathTan || anyProjected){
+                VectorSingle cpLocal(0.0f);
+                f32 arcPos = 0.0f;
+                f32 totalLen = 0.0f;
+                EvaluatePathClosestPoint(extra, Vector3InverseRotate(d, qA), cpLocal, tanLocal, arcPos, totalLen);
+            }
             const VectorSingle targetRel = ComputePathTargetRelativeRotation(jc, tanLocal);
             const VectorSingle qTarget = SafeNormalizeQuat(QuaternionMultiply(qA, targetRel));
             angErr = ExtractRotationAngleVec(QuaternionMultiply(qB, QuaternionConjugate(qTarget)));
@@ -3972,7 +4082,11 @@ b8 ProjectJointConstraintWithKinematics(
 
     const f32 angMag = Vector3Length(VectorSingle(angErr, 0.0f)).x;
     if(angMag > jc.projectionAngularTolerance){
-        const MatrixSingle kAngInvMat = Matrix3InvertSymmetric(Matrix3Add(invIAMat, invIBMat));
+        if(!cache.kAngInvValid){
+            cache.kAngInv = SymMat3FromMatrix3(Matrix3InvertSymmetric(Matrix3FromSymMat3(cache.sumInvI)));
+            cache.kAngInvValid = true;
+        }
+        const MatrixSingle kAngInvMat = Matrix3FromSymMat3(cache.kAngInv);
         const VectorSingle dTheta = Matrix3MulVec(kAngInvMat, angErr);
         if(Vector3LengthSq(dTheta).x > 1.0e-24f){
             if(jc.indexA != s_NullIndex && (flagsA & dynBit) != 0u){

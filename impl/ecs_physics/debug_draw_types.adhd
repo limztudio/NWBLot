@@ -626,6 +626,11 @@ class PhysicsDebugDrawScratch{
     public Vector<SkeletonJointMatrix> skeletonModelJointsScratch;
     public Vector<Transform3D> ragdollOffsetsScratch;
     public HashMap<EntityID, EcsWorldPose> worldPoseCache;
+    public HashMap<EntityID, EcsEnvFluidSlotCache> fluidSlotCache;
+    public HashMap<EntityID, EcsEnvForceFieldSlotCache> forceFieldSlotCache;
+    public HashMap<EntityID, FluidVolume> transformedFluidCache;
+    public HashMap<EntityID, ForceField> transformedForceFieldCache;
+    public HashMap<EntityID, EcsResolvedNamedEntityCacheEntry> ragdollSkeletonNameCache;
     public FluidVolume fluidVolumeScratch;
     public ForceField forceFieldScratch;
     public u32 bodyPoseStamp = 0u;

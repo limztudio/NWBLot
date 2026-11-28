@@ -98,28 +98,40 @@ namespace __hidden_assets_physics_volume_entry_registration{
 }
 
 [[nodiscard]] static b8 CollectPhysicsExternalSourceFiles(
-    const Core::Assets::DiscoveredNwbFile& discoveredNwbFile,
-    const AStringView metaText,
-    Core::Assets::ScratchArena& scratchArena,
+    const Core::Assets::CookExternalSourceCollectContext& context,
     Vector<::Path<Core::Assets::ScratchArena>, Core::Assets::ScratchArena>& outPaths,
     b8& outCanUseCache
 )noexcept{
-    if(!MetaTextMayContainExternalPhysicsSource(metaText))
+    if(!MetaTextMayContainExternalPhysicsSource(context.metaText))
         return true;
+
+    const auto walkDocument = [&](const Core::Metascript::Document& doc)noexcept{
+        doc.forEachDeclaration([&](const Core::Metascript::MStringView /*declType*/, const Core::Metascript::MStringView declVar) -> b8{
+            const Core::Metascript::Value* varVal = doc.findVariable(declVar);
+            if(varVal != nullptr)
+                (void)CollectExternalPathsFromMetascriptValue(context.discoveredNwbFile.filePath, *varVal, context.scratchArena, outPaths, outCanUseCache);
+            return outCanUseCache;
+        });
+    };
+
+    if(context.ensureParsedDocument != nullptr){
+        const Core::Metascript::Document* const parsedDoc = context.ensureParsedDocument(context.ensureParsedDocumentUser);
+        if(parsedDoc == nullptr){
+            outCanUseCache = false;
+            return true;
+        }
+        walkDocument(*parsedDoc);
+        return true;
+    }
 
     Core::Metascript::MetaArena parseArena(Name("physics_cook/external_source_parse"));
     Core::Metascript::Document doc(parseArena);
-    if(!doc.parse(metaText)){
+    if(!doc.parse(context.metaText)){
         outCanUseCache = false;
         return true;
     }
 
-    doc.forEachDeclaration([&](const Core::Metascript::MStringView /*declType*/, const Core::Metascript::MStringView declVar) -> b8{
-        const Core::Metascript::Value* varVal = doc.findVariable(declVar);
-        if(varVal != nullptr)
-            (void)CollectExternalPathsFromMetascriptValue(discoveredNwbFile.filePath, *varVal, scratchArena, outPaths, outCanUseCache);
-        return outCanUseCache;
-    });
+    walkDocument(doc);
     return true;
 }
 

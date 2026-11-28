@@ -3923,7 +3923,29 @@ void AppendEcsRagdollDebugLineItem<TSink : IPhysicsDebugLineSink>(
     if(wantTargetPose && !IsPhysicsDebugPhaseFull(sink, budget)){
         scratch.ragdollTargetScratch.clear();
         if(rc.driveFromSkeleton){
-            const EntityID skelEnt = ResolveEcsSkeletonTargetEntity(entity, rc.skeletonEntity, rc.skeletonEntityName, scopedNames, ecsWorld);
+            EntityID skelEnt = rc.skeletonEntity;
+            if(!skelEnt.valid() || !ecsWorld.alive(skelEnt)){
+                const u64 sceneNameVer = ecsWorld.componentMutationVersion<SceneEntityNameComponent>();
+                const u64 scopedSig = cast<u64>(scopedNames.globalNames.size()) | (cast<u64>(scopedNames.entityToScope.size()) << 32u);
+                mut EcsResolvedNamedEntityCacheEntry sCache = scratch.ragdollSkeletonNameCache.try_emplace(entity, EcsResolvedNamedEntityCacheEntry()).first.value();
+                if(
+                    sCache.hasCached
+                    && sCache.name == rc.skeletonEntityName
+                    && sCache.sceneNameMutVer == sceneNameVer
+                    && sCache.namedVersion == scopedSig
+                    && (!sCache.resolvedEntity.valid() || ecsWorld.alive(sCache.resolvedEntity))
+                ){
+                    skelEnt = sCache.resolvedEntity;
+                }
+                else{
+                    skelEnt = ResolveEcsSkeletonTargetEntity(entity, rc.skeletonEntity, rc.skeletonEntityName, scopedNames, ecsWorld);
+                    sCache.name = rc.skeletonEntityName;
+                    sCache.resolvedEntity = skelEnt;
+                    sCache.sceneNameMutVer = sceneNameVer;
+                    sCache.namedVersion = scopedSig;
+                    sCache.hasCached = true;
+                }
+            }
             if(skelEnt.valid() && ReadSkeletonModelJointMatrices(skelEnt, ecsWorld, scratch.skeletonModelJointsScratch)){
                 EcsWorldPose skelPose;
                 b8 hasSkelPose = ResolveEcsSubsystemWorldPoseCached(skelEnt, true, ecsWorld, scratch.worldPoseCache, skelPose);
@@ -5081,6 +5103,76 @@ void AppendEcsFractureDebugLineItem<TSink : IPhysicsDebugLineSink>(
     AppendEcsFractureExtraBodyGroup(Span<BodyId>(fc.cluster.anchoredBodies.data(), fc.cluster.anchoredBodies.size()), physicsWorld, options, projector, useProjector, physicsSystemOpt, hasValidRoot, rootPos, anchoredCol, scratch, sink, budget);
 }
 
+void ResolveOrCacheDebugFluidVolume(
+    in EntityID ent,
+    in FluidVolumeComponent fvc,
+    in EcsWorldPose pose,
+    mut PhysicsDebugDrawScratch scratch
+){
+    mut EcsEnvFluidSlotCache slotCache = scratch.fluidSlotCache.try_emplace(ent, EcsEnvFluidSlotCache()).first.value();
+    mut FluidVolume dst = scratch.transformedFluidCache.try_emplace(ent, FluidVolume()).first.value();
+    const u64 contentSig = ComputeEcsFluidVolumeContentSignature(fvc.volume);
+    const b8 poseMatch = slotCache.hasPose
+        && EcsTransformsNearlyEqual(slotCache.poseTransform, pose.transform)
+        && EcsVec4NearlyEqual(VectorSingle(slotCache.poseScale), VectorSingle(pose.scale), 1.0e-5f);
+    if(
+        slotCache.valid
+        && slotCache.entity == ent
+        && poseMatch
+        && slotCache.contentSig == contentSig
+    ){
+        if(fvc.volume.hasSurfaceCallback())
+            dst.copySurfaceCallbackFrom(fvc.volume);
+        if(fvc.volume.hasDynamicWaveGrid()){
+            dst.waveHeights = fvc.volume.waveHeights;
+            dst.waveVelocities = fvc.volume.waveVelocities;
+        }
+        return;
+    }
+    TransformFluidVolumeInto(fvc.volume, true, pose.transform, VectorSingle(pose.scale), fvc.volume.filter, dst);
+    slotCache.entity = ent;
+    slotCache.valid = true;
+    slotCache.hasPose = true;
+    slotCache.poseTransform = pose.transform;
+    slotCache.poseScale = pose.scale;
+    slotCache.contentSig = contentSig;
+}
+
+void ResolveOrCacheDebugForceField(
+    in EntityID ent,
+    in ForceFieldComponent ffc,
+    in EcsWorldPose pose,
+    mut PhysicsDebugDrawScratch scratch
+){
+    mut EcsEnvForceFieldSlotCache slotCache = scratch.forceFieldSlotCache.try_emplace(ent, EcsEnvForceFieldSlotCache()).first.value();
+    mut ForceField dst = scratch.transformedForceFieldCache.try_emplace(ent, ForceField()).first.value();
+    const u64 contentSig = ComputeEcsForceFieldScalarSignature(ffc.field);
+    const u64 vfRev = ffc.field.vectorFieldRevision();
+    const b8 poseMatch = slotCache.hasPose
+        && EcsTransformsNearlyEqual(slotCache.poseTransform, pose.transform)
+        && EcsVec4NearlyEqual(VectorSingle(slotCache.poseScale), VectorSingle(pose.scale), 1.0e-5f);
+    const b8 sameVectorGrid =
+        slotCache.valid
+        && slotCache.entity == ent
+        && slotCache.vectorFieldRevision == vfRev
+        && dst.vectorFieldDimX == ffc.field.vectorFieldDimX
+        && dst.vectorFieldDimY == ffc.field.vectorFieldDimY
+        && dst.vectorFieldDimZ == ffc.field.vectorFieldDimZ
+        && dst.vectorFieldSamples.size() == ffc.field.vectorFieldSamples.size();
+    if(sameVectorGrid && poseMatch && slotCache.contentSig == contentSig)
+        return;
+    TransformForceFieldScalarsOnlyInto(ffc.field, true, pose.transform, VectorSingle(pose.scale), ffc.field.filter, dst);
+    if(!sameVectorGrid)
+        dst.vectorFieldSamples = ffc.field.vectorFieldSamples;
+    slotCache.entity = ent;
+    slotCache.valid = true;
+    slotCache.hasPose = true;
+    slotCache.poseTransform = pose.transform;
+    slotCache.poseScale = pose.scale;
+    slotCache.vectorFieldRevision = vfRev;
+    slotCache.contentSig = contentSig;
+}
+
 void AppendEcsFluidComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
     in EntityID ent,
     in FluidVolumeComponent fvc,
@@ -5096,8 +5188,8 @@ void AppendEcsFluidComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
         return;
     EcsWorldPose pose;
     if(ResolveEcsSubsystemWorldPoseCached(ent, true, ecsWorld, scratch.worldPoseCache, pose)){
-        TransformFluidVolumeInto(fvc.volume, true, pose.transform, VectorSingle(pose.scale), fvc.volume.filter, scratch.fluidVolumeScratch);
-        AppendEcsFluidDebugLineItem(scratch.fluidVolumeScratch, projector, useProjector, fluidCol, scratch, sink, budget);
+        ResolveOrCacheDebugFluidVolume(ent, fvc, pose, scratch);
+        AppendEcsFluidDebugLineItem(scratch.transformedFluidCache.at(ent), projector, useProjector, fluidCol, scratch, sink, budget);
     }
     else{
         AppendEcsFluidDebugLineItem(fvc.volume, projector, useProjector, fluidCol, scratch, sink, budget);
@@ -5119,8 +5211,8 @@ void AppendEcsForceFieldComponentDebugLineItem<TSink : IPhysicsDebugLineSink>(
         return;
     EcsWorldPose pose;
     if(ResolveEcsSubsystemWorldPoseCached(ent, true, ecsWorld, scratch.worldPoseCache, pose)){
-        TransformForceFieldInto(ffc.field, true, pose.transform, VectorSingle(pose.scale), ffc.field.filter, scratch.forceFieldScratch);
-        AppendEcsForceFieldDebugLineItem(scratch.forceFieldScratch, projector, useProjector, fieldCol, sink, budget);
+        ResolveOrCacheDebugForceField(ent, ffc, pose, scratch);
+        AppendEcsForceFieldDebugLineItem(scratch.transformedForceFieldCache.at(ent), projector, useProjector, fieldCol, sink, budget);
     }
     else{
         AppendEcsForceFieldDebugLineItem(ffc.field, projector, useProjector, fieldCol, sink, budget);
@@ -5368,6 +5460,78 @@ void BuildPhysicsDebugLabels(
     }
 }
 
+void AppendEcsFluidDebugLabel(
+    in FluidVolume vol,
+    in PhysicsDebugScreenProjector projector,
+    in b8 useProjector,
+    mut Vector<PhysicsDebugLabel> outLabels
+){
+    VectorSingle vCenter(0.0f);
+    if(vol.shape == FluidVolumeShape::BoxAabb){
+        vCenter = (VectorSingle(vol.bounds.lowerBound) + VectorSingle(vol.bounds.upperBound)) * 0.5f;
+    }
+    else if(vol.shape == FluidVolumeShape::Obb){
+        vCenter = VectorSingle(vol.obbCenter, 0.0f);
+    }
+    else if(vol.shape == FluidVolumeShape::Sphere){
+        vCenter = VectorSingle(vol.surfaceNormalOffset, 0.0f);
+    }
+    else if(vol.shape == FluidVolumeShape::ConvexHull || vol.shape == FluidVolumeShape::Mesh){
+        vCenter = VectorSingle(vol.shapeTransform.position);
+    }
+    else if(vol.shape == FluidVolumeShape::SplineRiver){
+        if(!vol.riverPoints.empty())
+            vCenter = VectorSingle(vol.riverPoints[vol.riverPoints.size() / 2u], 0.0f);
+    }
+    else{
+        const VectorSingle n = SafeNormalizeVec3(VectorSingle(vol.surfaceNormalOffset, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        vCenter = n * vol.surfaceNormalOffset.w;
+    }
+    if(useProjector && !projector.isSphereVisible(vCenter, 1.0f))
+        return;
+    PhysicsDebugLabel lbl;
+    lbl.worldPosition = f32x4(vCenter + VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), 0.0f);
+    lbl.color = f32x4(0.28f, 0.78f, 0.98f, 0.95f);
+    b8 ok = lbl.text.assign("Fluid ");
+    ok = AppendPhysicsDebugCentisText(lbl.text, vol.density) && ok;
+    ok = lbl.text.append("kg/m3") && ok;
+    if(ok)
+        outLabels.push_back(lbl);
+}
+
+void AppendEcsForceFieldDebugLabel(
+    in ForceField fld,
+    in PhysicsDebugScreenProjector projector,
+    in b8 useProjector,
+    mut Vector<PhysicsDebugLabel> outLabels
+){
+    VectorSingle fCenter = VectorSingle(fld.originOrDirection);
+    if(fld.useBounds){
+        if(fld.shape == ForceFieldShape::Obb)
+            fCenter = VectorSingle(fld.obbCenter, 0.0f);
+        else if(fld.shape == ForceFieldShape::Sphere)
+            fCenter = fld.sphereShapeCenter();
+        else if(fld.shape == ForceFieldShape::Capsule)
+            fCenter = (VectorSingle(fld.capsulePointA, 0.0f) + VectorSingle(fld.capsulePointB, 0.0f)) * 0.5f;
+        else
+            fCenter = (VectorSingle(fld.bounds.lowerBound) + VectorSingle(fld.bounds.upperBound)) * 0.5f;
+    }
+    else if(fld.type != ForceFieldType::PointGravity && fld.type != ForceFieldType::RadialImpulse && fld.type != ForceFieldType::Attractor && fld.type != ForceFieldType::Vortex){
+        fCenter = VectorSingle(0.0f);
+    }
+    if(useProjector && !projector.isSphereVisible(fCenter, 1.0f))
+        return;
+    PhysicsDebugLabel lbl;
+    lbl.worldPosition = f32x4(fCenter + VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), 0.0f);
+    lbl.color = f32x4(0.78f, 0.45f, 0.98f, 0.95f);
+    b8 ok = lbl.text.assign("Field ");
+    ok = AppendPhysicsDebugCentisText(lbl.text, fld.strength) && ok;
+    if(fld.enableOcclusion)
+        ok = lbl.text.append(" OCC") && ok;
+    if(ok)
+        outLabels.push_back(lbl);
+}
+
 void BuildEcsPhysicsDebugLabels(
     mut World ecsWorld,
     in PhysicsSystem physicsSystem,
@@ -5539,45 +5703,13 @@ void BuildEcsPhysicsDebugLabels(
             if(outLabels.size() >= limit || !fvc.enabled || !fvc.volume.enabled)
                 return;
             EcsWorldPose pose;
-            b8 usedScratch = false;
             if(ResolveEcsSubsystemWorldPoseCached(entity, true, ecsWorld, scratch.worldPoseCache, pose)){
-                TransformFluidVolumeInto(fvc.volume, true, pose.transform, VectorSingle(pose.scale), fvc.volume.filter, scratch.fluidVolumeScratch);
-                usedScratch = true;
-            }
-            FluidVolume vol = fvc.volume;
-            if(usedScratch)
-                vol = scratch.fluidVolumeScratch;
-            VectorSingle vCenter(0.0f);
-            if(vol.shape == FluidVolumeShape::BoxAabb){
-                vCenter = (VectorSingle(vol.bounds.lowerBound) + VectorSingle(vol.bounds.upperBound)) * 0.5f;
-            }
-            else if(vol.shape == FluidVolumeShape::Obb){
-                vCenter = VectorSingle(vol.obbCenter, 0.0f);
-            }
-            else if(vol.shape == FluidVolumeShape::Sphere){
-                vCenter = VectorSingle(vol.surfaceNormalOffset, 0.0f);
-            }
-            else if(vol.shape == FluidVolumeShape::ConvexHull || vol.shape == FluidVolumeShape::Mesh){
-                vCenter = VectorSingle(vol.shapeTransform.position);
-            }
-            else if(vol.shape == FluidVolumeShape::SplineRiver){
-                if(!vol.riverPoints.empty())
-                    vCenter = VectorSingle(vol.riverPoints[vol.riverPoints.size() / 2u], 0.0f);
+                ResolveOrCacheDebugFluidVolume(entity, fvc, pose, scratch);
+                AppendEcsFluidDebugLabel(scratch.transformedFluidCache.at(entity), projector, useProjector, outLabels);
             }
             else{
-                const VectorSingle n = SafeNormalizeVec3(VectorSingle(vol.surfaceNormalOffset, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
-                vCenter = n * vol.surfaceNormalOffset.w;
+                AppendEcsFluidDebugLabel(fvc.volume, projector, useProjector, outLabels);
             }
-            if(useProjector && !projector.isSphereVisible(vCenter, 1.0f))
-                return;
-            PhysicsDebugLabel lbl;
-            lbl.worldPosition = f32x4(vCenter + VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), 0.0f);
-            lbl.color = f32x4(0.28f, 0.78f, 0.98f, 0.95f);
-            b8 ok = lbl.text.assign("Fluid ");
-            ok = AppendPhysicsDebugCentisText(lbl.text, vol.density) && ok;
-            ok = lbl.text.append("kg/m3") && ok;
-            if(ok)
-                outLabels.push_back(lbl);
         }
     );
     const auto fieldView = ecsWorld.view<ForceFieldComponent>();
@@ -5586,39 +5718,13 @@ void BuildEcsPhysicsDebugLabels(
             if(outLabels.size() >= limit || !ffc.enabled || !ffc.field.enabled)
                 return;
             EcsWorldPose pose;
-            b8 usedScratch = false;
             if(ResolveEcsSubsystemWorldPoseCached(entity, true, ecsWorld, scratch.worldPoseCache, pose)){
-                TransformForceFieldInto(ffc.field, true, pose.transform, VectorSingle(pose.scale), ffc.field.filter, scratch.forceFieldScratch);
-                usedScratch = true;
+                ResolveOrCacheDebugForceField(entity, ffc, pose, scratch);
+                AppendEcsForceFieldDebugLabel(scratch.transformedForceFieldCache.at(entity), projector, useProjector, outLabels);
             }
-            ForceField fld = ffc.field;
-            if(usedScratch)
-                fld = scratch.forceFieldScratch;
-            VectorSingle fCenter = VectorSingle(fld.originOrDirection);
-            if(fld.useBounds){
-                if(fld.shape == ForceFieldShape::Obb)
-                    fCenter = VectorSingle(fld.obbCenter, 0.0f);
-                else if(fld.shape == ForceFieldShape::Sphere)
-                    fCenter = fld.sphereShapeCenter();
-                else if(fld.shape == ForceFieldShape::Capsule)
-                    fCenter = (VectorSingle(fld.capsulePointA, 0.0f) + VectorSingle(fld.capsulePointB, 0.0f)) * 0.5f;
-                else
-                    fCenter = (VectorSingle(fld.bounds.lowerBound) + VectorSingle(fld.bounds.upperBound)) * 0.5f;
+            else{
+                AppendEcsForceFieldDebugLabel(ffc.field, projector, useProjector, outLabels);
             }
-            else if(fld.type != ForceFieldType::PointGravity && fld.type != ForceFieldType::RadialImpulse && fld.type != ForceFieldType::Attractor && fld.type != ForceFieldType::Vortex){
-                fCenter = VectorSingle(0.0f);
-            }
-            if(useProjector && !projector.isSphereVisible(fCenter, 1.0f))
-                return;
-            PhysicsDebugLabel lbl;
-            lbl.worldPosition = f32x4(fCenter + VectorSingle(0.0f, 0.35f, 0.0f, 0.0f), 0.0f);
-            lbl.color = f32x4(0.78f, 0.45f, 0.98f, 0.95f);
-            b8 ok = lbl.text.assign("Field ");
-            ok = AppendPhysicsDebugCentisText(lbl.text, fld.strength) && ok;
-            if(fld.enableOcclusion)
-                ok = lbl.text.append(" OCC") && ok;
-            if(ok)
-                outLabels.push_back(lbl);
         }
     );
     const auto fracView = ecsWorld.view<FractureComponent>();

@@ -154,6 +154,7 @@ b8 FractureAsset::loadBinary(in Span<u8> binary){
         return false;
 
     this.m_collection = decoded.value();
+    this.m_payloadValidated = true;
     return true;
 }
 
@@ -167,6 +168,7 @@ b8 SoftBodyAsset::loadBinary(in Span<u8> binary){
         return false;
 
     this.m_softBody = decoded.value();
+    this.m_payloadValidated = true;
     return true;
 }
 
@@ -180,6 +182,7 @@ b8 RagdollAsset::loadBinary(in Span<u8> binary){
         return false;
 
     this.m_ragdoll = decoded.value();
+    this.m_payloadValidated = true;
     return true;
 }
 
@@ -193,6 +196,7 @@ b8 ArticulationAsset::loadBinary(in Span<u8> binary){
         return false;
 
     this.m_articulation = decoded.value();
+    this.m_payloadValidated = true;
     return true;
 }
 
@@ -206,6 +210,7 @@ b8 VehicleAsset::loadBinary(in Span<u8> binary){
         return false;
 
     this.m_vehicle = decoded.value();
+    this.m_payloadValidated = true;
     return true;
 }
 

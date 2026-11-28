@@ -29,10 +29,7 @@ namespace __hidden_cook_metadata_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AutoMetadataParser{
-    AssetDocumentMetadataParseFunction documentFunction = nullptr;
-    AssetValueMetadataParseFunction valueFunction = nullptr;
-};
+using AutoMetadataParser = CookMetadataDetail::AutoMetadataParser;
 
 class RegistrationTextPool final : NoCopy{
 public:
@@ -65,10 +62,11 @@ private:
 
 
 template<typename ContextT, typename FunctionT>
-[[nodiscard]] static AssetMetadataParseResult::Enum TryAutoCollectedMetadataParsers(FunctionT AutoMetadataParser::* const member, ContextT& context){
-    Vector<AutoMetadataParser, Core::Alloc::ScratchArena> parsers{context.scratchArena};
-    QueryAssetAutoRegistrationQueue<AutoMetadataParser, AssetsArenaScope::s_MetadataParserQueueArena>().copyTo(parsers);
-
+[[nodiscard]] static AssetMetadataParseResult::Enum TryMetadataParsersSpan(
+    const Span<const AutoMetadataParser> parsers,
+    FunctionT AutoMetadataParser::* const member,
+    ContextT& context
+){
     for(const AutoMetadataParser& parser : parsers){
         const FunctionT function = parser.*member;
         if(function == nullptr)
@@ -81,6 +79,51 @@ template<typename ContextT, typename FunctionT>
     }
 
     return AssetMetadataParseResult::Unsupported;
+}
+
+template<typename ContextT, typename FunctionT>
+[[nodiscard]] static AssetMetadataParseResult::Enum TryAutoCollectedMetadataParsers(FunctionT AutoMetadataParser::* const member, ContextT& context){
+    Vector<AutoMetadataParser, Core::Alloc::ScratchArena> parsers{context.scratchArena};
+    QueryAssetAutoRegistrationQueue<AutoMetadataParser, AssetsArenaScope::s_MetadataParserQueueArena>().copyTo(parsers);
+    return TryMetadataParsersSpan(Span<const AutoMetadataParser>(parsers.data(), parsers.size()), member, context);
+}
+
+[[nodiscard]] static Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryBunchExpandersSpan(
+    const Span<const NotNull<AssetBunchExpandFunction>> functions,
+    const AssetBunchExpandContext& context
+){
+    for(const NotNull<AssetBunchExpandFunction> function : functions){
+        auto result = (*function)(context);
+        if(!result && result.error() == AssetBunchExpandFailure::Unsupported)
+            continue;
+        return result;
+    }
+
+    return MakeUnexpected(AssetBunchExpandFailure::Unsupported);
+}
+
+[[nodiscard]] static b8 ContainsNonStandaloneAssetType(const Span<const Name> types, const Name& assetType)noexcept{
+    for(const Name& entry : types){
+        if(entry == assetType)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] static b8 MatchesNonStandaloneFirstToken(
+    const Span<const AStringView> tokens,
+    const Span<const AStringView> suffixes,
+    const AStringView firstToken
+)noexcept{
+    for(const AStringView token : tokens){
+        if(token == firstToken)
+            return true;
+    }
+    for(const AStringView suffix : suffixes){
+        if(firstToken.ends_with(suffix))
+            return true;
+    }
+    return false;
 }
 
 
@@ -105,6 +148,56 @@ void CopyPairedSidecarRules(Vector<AssetPairedSidecarRule, ScratchArena>& outRul
 
 void CopyCookExternalSourceCollectors(Vector<NotNull<CookExternalSourceCollectorFunction>, ScratchArena>& outCollectors){
     QueryAssetAutoRegistrationQueue<NotNull<CookExternalSourceCollectorFunction>, AssetsArenaScope::s_ExternalSourceCollectorQueueArena>().copyTo(outCollectors);
+}
+
+void CaptureMetadataRegistrySnapshot(CookMetadataRegistrySnapshot& outSnapshot){
+    QueryAssetAutoRegistrationQueue<AutoMetadataParser, AssetsArenaScope::s_MetadataParserQueueArena>().copyTo(outSnapshot.metadataParsers);
+    QueryAssetAutoRegistrationQueue<NotNull<AssetBunchExpandFunction>, AssetsArenaScope::s_BunchExpanderQueueArena>().copyTo(outSnapshot.bunchExpanders);
+    QueryAssetAutoRegistrationQueue<Name, AssetsArenaScope::s_NonStandaloneTypeQueueArena>().copyTo(outSnapshot.nonStandaloneTypes);
+    QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenQueueArena>().copyTo(outSnapshot.nonStandaloneTokens);
+    QueryAssetAutoRegistrationQueue<AStringView, AssetsArenaScope::s_NonStandaloneTokenSuffixQueueArena>().copyTo(outSnapshot.nonStandaloneTokenSuffixes);
+}
+
+AssetMetadataParseResult::Enum TryDocumentMetadataParsers(const CookMetadataRegistrySnapshot& snapshot, AssetDocumentMetadataParseContext& context){
+    return __hidden_cook_metadata_registry::TryMetadataParsersSpan(
+        Span<const AutoMetadataParser>(snapshot.metadataParsers.data(), snapshot.metadataParsers.size()),
+        &AutoMetadataParser::documentFunction,
+        context
+    );
+}
+
+AssetMetadataParseResult::Enum TryValueMetadataParsers(const CookMetadataRegistrySnapshot& snapshot, AssetValueMetadataParseContext& context){
+    return __hidden_cook_metadata_registry::TryMetadataParsersSpan(
+        Span<const AutoMetadataParser>(snapshot.metadataParsers.data(), snapshot.metadataParsers.size()),
+        &AutoMetadataParser::valueFunction,
+        context
+    );
+}
+
+Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAssetBunchExpanders(const CookMetadataRegistrySnapshot& snapshot, const AssetBunchExpandContext& context){
+    return __hidden_cook_metadata_registry::TryBunchExpandersSpan(
+        Span<const NotNull<AssetBunchExpandFunction>>(snapshot.bunchExpanders.data(), snapshot.bunchExpanders.size()),
+        context
+    );
+}
+
+b8 IsNonStandaloneAssetType(const CookMetadataRegistrySnapshot& snapshot, const Name& assetType)noexcept{
+    if(!assetType)
+        return false;
+    return __hidden_cook_metadata_registry::ContainsNonStandaloneAssetType(
+        Span<const Name>(snapshot.nonStandaloneTypes.data(), snapshot.nonStandaloneTypes.size()),
+        assetType
+    );
+}
+
+b8 IsLikelyNonStandaloneFirstToken(const CookMetadataRegistrySnapshot& snapshot, const AStringView firstToken)noexcept{
+    if(firstToken.empty())
+        return false;
+    return __hidden_cook_metadata_registry::MatchesNonStandaloneFirstToken(
+        Span<const AStringView>(snapshot.nonStandaloneTokens.data(), snapshot.nonStandaloneTokens.size()),
+        Span<const AStringView>(snapshot.nonStandaloneTokenSuffixes.data(), snapshot.nonStandaloneTokenSuffixes.size()),
+        firstToken
+    );
 }
 
 
@@ -273,15 +366,7 @@ AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMe
 Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context){
     Vector<NotNull<AssetBunchExpandFunction>, Core::Alloc::ScratchArena> functions{context.scratchArena};
     QueryAssetAutoRegistrationQueue<NotNull<AssetBunchExpandFunction>, AssetsArenaScope::s_BunchExpanderQueueArena>().copyTo(functions);
-
-    for(const NotNull<AssetBunchExpandFunction> function : functions){
-        auto result = (*function)(context);
-        if(!result && result.error() == AssetBunchExpandFailure::Unsupported)
-            continue;
-        return result;
-    }
-
-    return MakeUnexpected(AssetBunchExpandFailure::Unsupported);
+    return __hidden_cook_metadata_registry::TryBunchExpandersSpan(Span<const NotNull<AssetBunchExpandFunction>>(functions.data(), functions.size()), context);
 }
 
 

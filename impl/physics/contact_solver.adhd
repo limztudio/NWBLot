@@ -83,6 +83,9 @@ class ContactPointStepCache{
     public f32x4 rnB(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 invIA_rnA(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 invIB_rnB(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+class ContactPointTangentCache{
     public f32x4 irt1A(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 irt2A(0.0f, 0.0f, 0.0f, 0.0f);
     public f32x4 irt1B(0.0f, 0.0f, 0.0f, 0.0f);
@@ -101,6 +104,7 @@ class ContactConstraintStepCache{
     public SymMat3 rollingMass;
     public Array<f32, 16u> blockK;
     public b8 blockKValid = false;
+    public Array<ContactPointTangentCache, s_MaxManifoldPoints> pointTangents;
 }
 
 class ContactSolverMaterialParams{
@@ -867,15 +871,37 @@ void PrepareContactConstraintCore(
             ptCache.rnB = f32x4(rnB, 0.0f);
             ptCache.invIA_rnA = f32x4(invIArnA, 0.0f);
             ptCache.invIB_rnB = f32x4(invIBrnB, 0.0f);
-            ptCache.irt1A = f32x4(ptIrt1A, 0.0f);
-            ptCache.irt2A = f32x4(ptIrt2A, 0.0f);
-            ptCache.irt1B = f32x4(ptIrt1B, 0.0f);
-            ptCache.irt2B = f32x4(ptIrt2B, 0.0f);
+            if(outConstraint.usePerPointFriction){
+                mut ContactPointTangentCache ptTan = outCache.pointTangents[i];
+                ptTan.irt1A = f32x4(ptIrt1A, 0.0f);
+                ptTan.irt2A = f32x4(ptIrt2A, 0.0f);
+                ptTan.irt1B = f32x4(ptIrt1B, 0.0f);
+                ptTan.irt2B = f32x4(ptIrt2B, 0.0f);
+            }
         }
-        const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
-        sumCenterA = sumCenterA + VectorSingle(mcp.rABaseSep, 0.0f) * weight;
-        sumCenterB = sumCenterB + VectorSingle(mcp.rBRelVel, 0.0f) * weight;
-        totalWeight += weight;
+        if(!outConstraint.usePerPointFriction){
+            const f32 weight = Max(mcp.normalImpulse, s_MinFrictionWeight);
+            sumCenterA = sumCenterA + VectorSingle(mcp.rABaseSep, 0.0f) * weight;
+            sumCenterB = sumCenterB + VectorSingle(mcp.rBRelVel, 0.0f) * weight;
+            totalWeight += weight;
+        }
+    }
+
+    if(outConstraint.usePerPointFriction){
+        outConstraint.maxLeverArm = 0.0f;
+        outConstraint.centerATwistMass = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        outConstraint.centerBTwistImpulse = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+        outConstraint.tangentMass00 = 0.0f;
+        outConstraint.tangentMass01 = 0.0f;
+        outConstraint.tangentMass11 = 0.0f;
+        if(writeCache){
+            if(mat.rollingResistance > 0.0f)
+                outCache.rollingMass = SymMat3FromMatrix3(Matrix3InvertSymmetric(Matrix3Add(effInvIAMat, effInvIBMat)));
+            else
+                outCache.rollingMass = SymMat3();
+            outCache.blockKValid = false;
+        }
+        return;
     }
 
     VectorSingle invIAn(0.0f);
@@ -1041,30 +1067,33 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
 
     const b8 hasA = (c.indexA != s_NullIndex);
     const b8 hasB = (c.indexB != s_NullIndex);
-    VectorSingle invIAn(0.0f);
-    VectorSingle irt1A(0.0f);
-    VectorSingle irt2A(0.0f);
-    if(hasA){
-        invIAn = SymMat3MulVec(c.invIA, n);
-        const VectorSingle centerA = VectorSingle(c.centerATwistMass, 0.0f);
-        irt1A = SymMat3MulVec(c.invIA, Cross(centerA, t1));
-        irt2A = SymMat3MulVec(c.invIA, Cross(centerA, t2));
+    const b8 buildPerPoint = c.usePerPointFriction;
+    if(!buildPerPoint){
+        VectorSingle invIAn(0.0f);
+        VectorSingle irt1A(0.0f);
+        VectorSingle irt2A(0.0f);
+        if(hasA){
+            invIAn = SymMat3MulVec(c.invIA, n);
+            const VectorSingle centerA = VectorSingle(c.centerATwistMass, 0.0f);
+            irt1A = SymMat3MulVec(c.invIA, Cross(centerA, t1));
+            irt2A = SymMat3MulVec(c.invIA, Cross(centerA, t2));
+        }
+        VectorSingle invIBn(0.0f);
+        VectorSingle irt1B(0.0f);
+        VectorSingle irt2B(0.0f);
+        if(hasB){
+            invIBn = SymMat3MulVec(c.invIB, n);
+            const VectorSingle centerB = VectorSingle(c.centerBTwistImpulse, 0.0f);
+            irt1B = SymMat3MulVec(c.invIB, Cross(centerB, t1));
+            irt2B = SymMat3MulVec(c.invIB, Cross(centerB, t2));
+        }
+        outCache.invIA_n = f32x4(invIAn, 0.0f);
+        outCache.invIB_n = f32x4(invIBn, 0.0f);
+        outCache.irt1A = f32x4(irt1A, 0.0f);
+        outCache.irt2A = f32x4(irt2A, 0.0f);
+        outCache.irt1B = f32x4(irt1B, 0.0f);
+        outCache.irt2B = f32x4(irt2B, 0.0f);
     }
-    VectorSingle invIBn(0.0f);
-    VectorSingle irt1B(0.0f);
-    VectorSingle irt2B(0.0f);
-    if(hasB){
-        invIBn = SymMat3MulVec(c.invIB, n);
-        const VectorSingle centerB = VectorSingle(c.centerBTwistImpulse, 0.0f);
-        irt1B = SymMat3MulVec(c.invIB, Cross(centerB, t1));
-        irt2B = SymMat3MulVec(c.invIB, Cross(centerB, t2));
-    }
-    outCache.invIA_n = f32x4(invIAn, 0.0f);
-    outCache.invIB_n = f32x4(invIBn, 0.0f);
-    outCache.irt1A = f32x4(irt1A, 0.0f);
-    outCache.irt2A = f32x4(irt2A, 0.0f);
-    outCache.irt1B = f32x4(irt1B, 0.0f);
-    outCache.irt2B = f32x4(irt2B, 0.0f);
 
     if(c.rollingResistance > 0.0f){
         const MatrixSingle invIAMat = Matrix3FromSymMat3(c.invIA);
@@ -1076,7 +1105,6 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
     }
 
     const u32 count = Min(c.pointCount, cast<u32>(s_MaxManifoldPoints));
-    const b8 buildPerPoint = c.usePerPointFriction;
     for(u32 i = 0u; i < count; ++i){
         in ManifoldConstraintPoint pt = c.points[i];
         mut ContactPointStepCache ptCache = outCache.points[i];
@@ -1086,19 +1114,19 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
             ptCache.rnACachedSep = f32x4(rnA, pt.rABaseSep.w);
             ptCache.invIA_rnA = f32x4(SymMat3MulVec(c.invIA, rnA), 0.0f);
             if(buildPerPoint){
-                ptCache.irt1A = f32x4(SymMat3MulVec(c.invIA, Cross(rA, t1)), 0.0f);
-                ptCache.irt2A = f32x4(SymMat3MulVec(c.invIA, Cross(rA, t2)), 0.0f);
-            }
-            else{
-                ptCache.irt1A = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                ptCache.irt2A = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                mut ContactPointTangentCache ptTan = outCache.pointTangents[i];
+                ptTan.irt1A = f32x4(SymMat3MulVec(c.invIA, Cross(rA, t1)), 0.0f);
+                ptTan.irt2A = f32x4(SymMat3MulVec(c.invIA, Cross(rA, t2)), 0.0f);
             }
         }
         else{
             ptCache.rnACachedSep = f32x4(0.0f, 0.0f, 0.0f, pt.rABaseSep.w);
             ptCache.invIA_rnA = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            ptCache.irt1A = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            ptCache.irt2A = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            if(buildPerPoint){
+                mut ContactPointTangentCache ptTan = outCache.pointTangents[i];
+                ptTan.irt1A = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                ptTan.irt2A = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            }
         }
         if(hasB){
             const VectorSingle rB = VectorSingle(pt.rBRelVel, 0.0f);
@@ -1106,19 +1134,19 @@ void BuildContactConstraintStepCache(in ContactConstraint c, mut ContactConstrai
             ptCache.rnB = f32x4(rnB, 0.0f);
             ptCache.invIB_rnB = f32x4(SymMat3MulVec(c.invIB, rnB), 0.0f);
             if(buildPerPoint){
-                ptCache.irt1B = f32x4(SymMat3MulVec(c.invIB, Cross(rB, t1)), 0.0f);
-                ptCache.irt2B = f32x4(SymMat3MulVec(c.invIB, Cross(rB, t2)), 0.0f);
-            }
-            else{
-                ptCache.irt1B = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-                ptCache.irt2B = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                mut ContactPointTangentCache ptTan = outCache.pointTangents[i];
+                ptTan.irt1B = f32x4(SymMat3MulVec(c.invIB, Cross(rB, t1)), 0.0f);
+                ptTan.irt2B = f32x4(SymMat3MulVec(c.invIB, Cross(rB, t2)), 0.0f);
             }
         }
         else{
             ptCache.rnB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
             ptCache.invIB_rnB = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            ptCache.irt1B = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
-            ptCache.irt2B = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            if(buildPerPoint){
+                mut ContactPointTangentCache ptTan = outCache.pointTangents[i];
+                ptTan.irt1B = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+                ptTan.irt2B = f32x4(0.0f, 0.0f, 0.0f, 0.0f);
+            }
         }
     }
 }
@@ -1188,16 +1216,16 @@ void WarmStartContactConstraintCached(mut Vector<BodyState> states, in ContactCo
             const f32 fy = pt.pointFrictionImpulse.y;
             if(fx == 0.0f && fy == 0.0f)
                 continue;
-            in ContactPointStepCache ptCache = cache.points[i];
+            in ContactPointTangentCache ptTan = cache.pointTangents[i];
             anyWarmApplied = true;
             const VectorSingle fP = t1 * fx + t2 * fy;
             if(dynA){
                 vA = vA - fP * c.invMassA;
-                wA = wA - (VectorSingle(ptCache.irt1A, 0.0f) * fx + VectorSingle(ptCache.irt2A, 0.0f) * fy);
+                wA = wA - (VectorSingle(ptTan.irt1A, 0.0f) * fx + VectorSingle(ptTan.irt2A, 0.0f) * fy);
             }
             if(dynB){
                 vB = vB + fP * c.invMassB;
-                wB = wB + (VectorSingle(ptCache.irt1B, 0.0f) * fx + VectorSingle(ptCache.irt2B, 0.0f) * fy);
+                wB = wB + (VectorSingle(ptTan.irt1B, 0.0f) * fx + VectorSingle(ptTan.irt2B, 0.0f) * fy);
             }
         }
     }
@@ -1310,45 +1338,60 @@ b8 SolveLinearSystemNxN(
         outX[1u] = (a00 * b[1u] - a10 * b[0u]) * invDet;
         return true;
     }
-    for(u32 col = 0u; col < n; ++col){
-        u32 pivRow = col;
-        f32 maxAbs = Abs(VectorSingle(a[col * 4u + col])).x;
-        for(u32 r = col + 1u; r < n; ++r){
-            const f32 v = Abs(VectorSingle(a[r * 4u + col])).x;
-            if(v > maxAbs){
-                maxAbs = v;
-                pivRow = r;
-            }
-        }
-        if(maxAbs <= 1.0e-7f)
-            return false;
-        if(pivRow != col){
-            for(u32 c = col; c < n; ++c){
-                const f32 tmp = a[col * 4u + c];
-                a[col * 4u + c] = a[pivRow * 4u + c];
-                a[pivRow * 4u + c] = tmp;
-            }
-            const f32 tmpB = b[col];
-            b[col] = b[pivRow];
-            b[pivRow] = tmpB;
-        }
-        const f32 invPiv = 1.0f / a[col * 4u + col];
-        for(u32 c = col; c < n; ++c)
-            a[col * 4u + c] *= invPiv;
-        b[col] *= invPiv;
-        for(u32 r = 0u; r < n; ++r){
-            if(r == col)
-                continue;
-            const f32 factor = a[r * 4u + col];
-            if(factor == 0.0f)
-                continue;
-            for(u32 c = col; c < n; ++c)
-                a[r * 4u + c] -= factor * a[col * 4u + c];
-            b[r] -= factor * b[col];
-        }
+    if(n > 4u)
+        return false;
+    const f32 d0 = a[0u];
+    if(!IsFinite(VectorSingle(d0)) || d0 <= 1.0e-12f)
+        return false;
+    const f32 invL00 = Rsqrt(VectorSingle(d0)).x;
+    const VectorSingle col0 = VectorSingle(0.0f, a[4u], a[8u], a[12u]) * invL00;
+    const f32 l10 = col0.y;
+    const f32 l20 = col0.z;
+    const f32 l30 = col0.w;
+
+    const f32 d1 = a[5u] - l10 * l10;
+    if(!IsFinite(VectorSingle(d1)) || d1 <= 1.0e-12f)
+        return false;
+    const f32 invL11 = Rsqrt(VectorSingle(d1)).x;
+    const f32 l21 = (a[9u] - l20 * l10) * invL11;
+    const f32 l31 = (a[13u] - l30 * l10) * invL11;
+
+    const VectorSingle row2(l20, l21, 0.0f, 0.0f);
+    const f32 d2 = a[10u] - Vector3LengthSq(row2).x;
+    if(!IsFinite(VectorSingle(d2)) || d2 <= 1.0e-12f)
+        return false;
+    const f32 invL22 = Rsqrt(VectorSingle(d2)).x;
+
+    const f32 y0 = b[0u] * invL00;
+    const f32 y1 = (b[1u] - l10 * y0) * invL11;
+    const f32 y2 = (b[2u] - l20 * y0 - l21 * y1) * invL22;
+    if(n == 3u){
+        const f32 x2 = y2 * invL22;
+        const f32 x1 = (y1 - l21 * x2) * invL11;
+        const f32 x0 = (y0 - l10 * x1 - l20 * x2) * invL00;
+        outX[0u] = x0;
+        outX[1u] = x1;
+        outX[2u] = x2;
+        return true;
     }
-    for(u32 i = 0u; i < n; ++i)
-        outX[i] = b[i];
+
+    const VectorSingle row3Prefix(l30, l31, 0.0f, 0.0f);
+    const f32 l32 = (a[14u] - Vector3Dot(row3Prefix, row2).x) * invL22;
+    const VectorSingle row3(l30, l31, l32, 0.0f);
+    const f32 d3 = a[15u] - Vector3LengthSq(row3).x;
+    if(!IsFinite(VectorSingle(d3)) || d3 <= 1.0e-12f)
+        return false;
+    const f32 invL33 = Rsqrt(VectorSingle(d3)).x;
+    const f32 y3 = (b[3u] - Vector3Dot(row3, VectorSingle(y0, y1, y2, 0.0f)).x) * invL33;
+
+    const f32 x3 = y3 * invL33;
+    const f32 x2 = (y2 - l32 * x3) * invL22;
+    const f32 x1 = (y1 - l21 * x2 - l31 * x3) * invL11;
+    const f32 x0 = (y0 - l10 * x1 - l20 * x2 - l30 * x3) * invL00;
+    outX[0u] = x0;
+    outX[1u] = x1;
+    outX[2u] = x2;
+    outX[3u] = x3;
     return true;
 }
 
@@ -1812,7 +1855,7 @@ void SolveContactConstraintCachedWithKinematics(
                 sumFy += pt.pointFrictionImpulse.y;
                 continue;
             }
-            in ContactPointStepCache ptCache = cache.points[i];
+            in ContactPointTangentCache ptTan = cache.pointTangents[i];
             VectorSingle velA(0.0f);
             if(hasA)
                 velA = vA + Cross(wA, VectorSingle(pt.rABaseSep, 0.0f));
@@ -1847,7 +1890,7 @@ void SolveContactConstraintCachedWithKinematics(
                 const VectorSingle p = t1 * appliedFx + t2 * appliedFy;
                 if(dynA){
                     vA = vA - p * c.invMassA;
-                    wA = wA - (VectorSingle(ptCache.irt1A, 0.0f) * appliedFx + VectorSingle(ptCache.irt2A, 0.0f) * appliedFy);
+                    wA = wA - (VectorSingle(ptTan.irt1A, 0.0f) * appliedFx + VectorSingle(ptTan.irt2A, 0.0f) * appliedFy);
                     if(lockedA){
                         vA = ApplyLinearLocks(vA, flagsA);
                         wA = ApplyAngularLocks(wA, flagsA);
@@ -1855,7 +1898,7 @@ void SolveContactConstraintCachedWithKinematics(
                 }
                 if(dynB){
                     vB = vB + p * c.invMassB;
-                    wB = wB + (VectorSingle(ptCache.irt1B, 0.0f) * appliedFx + VectorSingle(ptCache.irt2B, 0.0f) * appliedFy);
+                    wB = wB + (VectorSingle(ptTan.irt1B, 0.0f) * appliedFx + VectorSingle(ptTan.irt2B, 0.0f) * appliedFy);
                     if(lockedB){
                         vB = ApplyLinearLocks(vB, flagsB);
                         wB = ApplyAngularLocks(wB, flagsB);

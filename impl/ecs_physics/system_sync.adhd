@@ -202,6 +202,16 @@ class EcsCachedCompoundShapeGeometry{
     public CompoundGeometryId geometryId;
 }
 
+class EcsCachedSkinnedColliderData{
+    public Name skinName = s_NameNone;
+    public Name meshName = s_NameNone;
+    public Vector<f32x3u> restPositions;
+    public Vector<u32> triangleIndices;
+    public Vector<u32> posToSkinIdx;
+    public InfluenceVector influences;
+    public InverseBindMatrixVector inverseBindMatrices;
+}
+
 class EcsPhysicsAssetCache{
     public HashMap<Name, SurfaceMaterial> materialCache;
     public HashMap<Name, Vector<EcsCachedHullGeometry>> hullGeometries;
@@ -211,6 +221,7 @@ class EcsPhysicsAssetCache{
     public HashMap<Name, Vector<EcsCachedSdfGeometry>> sdfGeometries;
     public HashMap<Name, Vector<EcsCachedChainGeometry>> chainGeometries;
     public HashMap<Name, Vector<EcsCachedCompoundShapeGeometry>> compoundShapeGeometries;
+    public HashMap<Name, EcsCachedSkinnedColliderData> skinnedColliderDataCache;
     public HashMap<Name, FractureCollection> fractureCache;
     public HashMap<Name, SoftBody> softBodyCache;
     public HashMap<Name, RagdollAssetData> ragdollCache;
@@ -281,6 +292,7 @@ void ReleaseEcsPhysicsAssetCache(mut EcsPhysicsAssetCache cache, mut PhysicsWorl
     cache.sdfGeometries.clear();
     cache.chainGeometries.clear();
     cache.compoundShapeGeometries.clear();
+    cache.skinnedColliderDataCache.clear();
     cache.fractureCache.clear();
     cache.softBodyCache.clear();
     cache.ragdollCache.clear();
@@ -537,6 +549,11 @@ class EcsCharacterControllerSyncState{
     public b8 hasPrevSnapshot = false;
     public b8 hasPrevGroundState = false;
     public b8 prevHitCeiling = false;
+    public u64 syncedDefSig = 0u;
+    public Filter baseFilter;
+    public b8 hasBaseFilter = false;
+    public Name syncedCollisionLayer = s_NameNone;
+    public b8 hasSyncedDef = false;
 }
 
 class EcsSoftBodySyncState{
@@ -549,6 +566,8 @@ class EcsSoftBodySyncState{
     public Name syncedMaterialAsset = s_NameNone;
     public Name syncedSoftBodyAsset = s_NameNone;
     public Name failedSoftBodyAsset = s_NameNone;
+    public u64 syncedLiveSettingsSig = 0u;
+    public b8 hasSyncedLiveSettings = false;
 }
 
 class EcsVehicleEventSyncState{
@@ -563,6 +582,12 @@ class EcsVehicleEventSyncState{
     public f32 syncedTrailerSwingLimitRad = 0.0f;
     public Name syncedVehicleAsset = s_NameNone;
     public Name failedVehicleAsset = s_NameNone;
+    public b8 hasSyncedLiveDefs = false;
+    public u64 syncedLiveDefsSig = 0u;
+    public Filter baseQueryFilter;
+    public b8 hasBaseQueryFilter = false;
+    public Name syncedCollisionLayer = s_NameNone;
+    public EcsResolvedNamedEntityCacheEntry syncedTrailerNameCache;
 }
 
 class EcsArticulationProxySyncState{
@@ -583,6 +608,15 @@ class EcsArticulationLiveState{
     public b8 wroteSleepingPose = false;
     public Name syncedArticulationAsset = s_NameNone;
     public Name failedArticulationAsset = s_NameNone;
+    public u64 syncedLiveSettingsSig = 0u;
+    public u64 syncedConstraintsSig = 0u;
+    public b8 hasSyncedLiveSettings = false;
+    public Name syncedMaterialAsset = s_NameNone;
+    public SurfaceMaterial resolvedAssetMaterial;
+    public b8 hasResolvedAssetMaterial = false;
+    public Filter baseContactFilter;
+    public b8 hasBaseContactFilter = false;
+    public Name syncedCollisionLayer = s_NameNone;
 }
 
 class EcsResolvedNamedEntityCacheEntry{
@@ -639,6 +673,46 @@ class EcsSoftBodyPairwiseEntry{
     public b8 hasWorldAabb = false;
     public b8 steppedOnGpu = false;
     public b8 valid = false;
+}
+
+class EcsEnvFluidSlotCache{
+    public EntityID entity = s_InvalidEntityId;
+    public b8 valid = false;
+    public b8 hasPose = false;
+    public Transform3D poseTransform;
+    public f32x4 poseScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public Filter resolvedFilter;
+    public u64 contentSig = 0u;
+}
+
+class EcsEnvForceFieldSlotCache{
+    public EntityID entity = s_InvalidEntityId;
+    public b8 valid = false;
+    public b8 hasPose = false;
+    public Transform3D poseTransform;
+    public f32x4 poseScale(1.0f, 1.0f, 1.0f, 0.0f);
+    public Filter resolvedFilter;
+    public u64 vectorFieldRevision = 0u;
+    public u64 contentSig = 0u;
+}
+
+class EcsCharacterPairwiseEntry{
+    public EntityID entity = s_InvalidEntityId;
+    public Aabb3D worldAabb;
+}
+
+class EcsArticulationPairwiseEntry{
+    public EntityID entity = s_InvalidEntityId;
+    public Aabb3D worldAabb;
+    public b8 hasAabb = false;
+}
+
+class EcsDeferredSoftDeformMeta{
+    public EntityID entity = s_InvalidEntityId;
+    public TransformComponent worldTransform;
+    public Aabb3D worldAabb;
+    public b8 hasWorldAabb = false;
+    public u64 postStepDeformVersion = 0u;
 }
 
 class EcsPhysicsSyncScratch{
@@ -781,6 +855,32 @@ class EcsPhysicsSyncScratch{
     public b8 cachedHasAnyPhysicsParents = false;
     public b8 hasSyncedPhysicsEntityCounts = false;
     public b8 syncedSceneEntityNameVersionValid = false;
+    public Vector<EcsCharacterPairwiseEntry> characterPairwiseEntriesScratch;
+    public Vector<EcsArticulationPairwiseEntry> articulationPairwiseEntriesScratch;
+    public Vector<EcsEnvFluidSlotCache> envFluidSlotCache;
+    public Vector<EcsEnvForceFieldSlotCache> envForceFieldSlotCache;
+    public Vector<f32x4> deferredSoftBatchParticlesScratch;
+    public Vector<SoftBodyGpuDeformBatchItem> deferredSoftBatchItemsScratch;
+    public Vector<EcsDeferredSoftDeformMeta> deferredSoftBatchMetaScratch;
+    public Vector<SkeletonJointMatrix> skinnedPoseJointsScratch;
+    public Vector<SkeletonJointMatrix> skinnedResolvedMatricesScratch;
+    public Vector<u8> skinnedJointValidScratch;
+    public Vector<f32x4> skinnedDqRealsScratch;
+    public Vector<f32x4> skinnedDqDualsScratch;
+    public Vector<f32x4> skinnedTransformedVertsScratch;
+    public Vector<f32x4> skinnedExtractVertsScratch;
+    public Vector<u32> skinnedExtractIndicesScratch;
+    public Vector<u32> gpuStepFallbackShapeAsScratch;
+    public Vector<u32> gpuStepFallbackShapeBsScratch;
+    public HashSet<u64> gpuStepSeenFallbackPairsScratch;
+    public Vector<u8> gpuStepMovedFallbackBodiesScratch;
+    public Vector<Vector<FluidCandidateSample>> gpuStepFluidSamplesByIdxScratch;
+    public Vector<u32> exportUniqueIdOffsetsScratch;
+    public Vector<u32> exportUniqueIdCountsScratch;
+    public Vector<u32> exportUniqueBindOffsetsScratch;
+    public Vector<u32> exportUniqueBindCountsScratch;
+    public Vector<EntityID> fractureChunkSyncEntitiesScratch;
+    public Vector<BodyId> fractureHitBodiesScratch;
 }
 
 void MarkStaticBodyMoved(in BodyId bodyId, mut Vector<u8> movedFlags, mut Vector<u32> movedIndices){
@@ -8584,14 +8684,19 @@ b8 TryExtractCpuSkinnedMeshVertices(
     in AssetRef<Mesh> expectedMesh,
     in Optional<mut AssetManager> assetManager,
     in EcsScopedEntityNames scopedNames,
+    in b8 copyIndices,
     mut World world,
+    mut EcsPhysicsAssetCache assetCache,
+    mut EcsPhysicsSyncScratch scratch,
     mut Vector<f32x4> outVertices,
     mut Vector<u32> outIndices,
-    mut u64 outPoseSignature
+    mut u64 outPoseSignature,
+    mut usize outTriIndexCount
 ){
     outVertices.clear();
     outIndices.clear();
     outPoseSignature = 0u;
+    outTriIndexCount = 0u;
 
     if(!assetManager.has_value() || !entity.valid() || !world.alive(entity) || !world.hasComponent<SkinnedMeshBindingComponent>(entity))
         return false;
@@ -8599,30 +8704,73 @@ b8 TryExtractCpuSkinnedMeshVertices(
     if(!binding.skin.valid())
         return false;
 
-    const auto skinRes = LoadTypedAssetSync<Skin>(assetManager.value(), binding.skin.name(), "PhysicsSkinnedCollider");
-    if(!skinRes.has_value())
-        return false;
-    in Skin skinAsset = skinRes.value().deref();
-    in AssetRef<Mesh> skinMeshRef = skinAsset.mesh();
-    if(!skinMeshRef.valid())
-        return false;
-    if(expectedMesh.valid() && expectedMesh.name() != skinMeshRef.name())
+    const Name skinName = binding.skin.name();
+    if(assetCache.skinnedColliderDataCache.find(skinName) == assetCache.skinnedColliderDataCache.end()){
+        const auto skinRes = LoadTypedAssetSync<Skin>(assetManager.value(), skinName, "PhysicsSkinnedCollider");
+        if(!skinRes.has_value())
+            return false;
+        in Skin skinAsset = skinRes.value().deref();
+        in AssetRef<Mesh> skinMeshRef = skinAsset.mesh();
+        if(!skinMeshRef.valid())
+            return false;
+        if(expectedMesh.valid() && expectedMesh.name() != skinMeshRef.name())
+            return false;
+
+        const auto meshRes = LoadTypedAssetSync<Mesh>(assetManager.value(), skinMeshRef.name(), "PhysicsSkinnedCollider");
+        if(!meshRes.has_value())
+            return false;
+        in Mesh loadedMesh = meshRes.value().deref();
+        const Expected<Vector<u32>> indicesRes = BuildMeshletTriangleIndices(loadedMesh);
+        if(!indicesRes.has_value())
+            return false;
+        in Vector<f32x3u> restPosStream = loadedMesh.positionStream();
+        if(restPosStream.empty() || indicesRes.value().size() < 3u)
+            return false;
+
+        EcsCachedSkinnedColliderData cachedData;
+        cachedData.skinName = skinName;
+        cachedData.meshName = skinMeshRef.name();
+        cachedData.restPositions = restPosStream;
+        cachedData.triangleIndices = indicesRes.value();
+        cachedData.influences = skinAsset.influences();
+        cachedData.inverseBindMatrices = skinAsset.inverseBindMatrices();
+        cachedData.posToSkinIdx.assign(restPosStream.size(), s_NullIndex);
+
+        in Vector<MeshletDesc> meshlets = loadedMesh.meshlets();
+        in Vector<u8> posRefDeltasVec = loadedMesh.meshletPositionRefDeltas();
+        const Span<u8> posRefDeltas(posRefDeltasVec.data(), posRefDeltasVec.size());
+        for(usize mi = 0u; mi < meshlets.size(); ++mi){
+            in MeshletDesc ml = meshlets[mi];
+            if(ml.skinBase == s_MeshMissingStreamIndex)
+                continue;
+            const Expected<MeshletPositionRefEncodingLayout> layoutRes = TryBuildMeshletPositionRefEncodingLayout(ml, true);
+            if(!layoutRes.has_value())
+                continue;
+            const u32 mlPosCount = MeshletPositionCount(ml);
+            for(u32 lvi = 0u; lvi < mlPosCount; ++lvi){
+                const Expected<MeshletPositionStreamRef> refRes = TryDecodeMeshletPositionRefWithLayout(posRefDeltas, ml, layoutRes.value(), lvi, true);
+                if(!refRes.has_value())
+                    continue;
+                const u32 posIdx = refRes.value().position;
+                if(cast<usize>(posIdx) < cachedData.restPositions.size() && cachedData.posToSkinIdx[posIdx] == s_NullIndex)
+                    cachedData.posToSkinIdx[posIdx] = refRes.value().skin;
+            }
+        }
+        assetCache.skinnedColliderDataCache.insert_or_assign(skinName, cachedData);
+    }
+
+    in EcsCachedSkinnedColliderData cached = assetCache.skinnedColliderDataCache.at(skinName);
+    if(expectedMesh.valid() && expectedMesh.name() != cached.meshName)
         return false;
 
-    const auto meshRes = LoadTypedAssetSync<Mesh>(assetManager.value(), skinMeshRef.name(), "PhysicsSkinnedCollider");
-    if(!meshRes.has_value())
-        return false;
-    in Mesh loadedMesh = meshRes.value().deref();
-    const Expected<Vector<u32>> indicesRes = BuildMeshletTriangleIndices(loadedMesh);
-    if(!indicesRes.has_value())
-        return false;
-    outIndices = indicesRes.value();
-    in Vector<f32x3u> restPositions = loadedMesh.positionStream();
-    if(restPositions.empty() || outIndices.size() < 3u)
-        return false;
+    in Vector<f32x3u> restPositions = cached.restPositions;
+    outTriIndexCount = cached.triangleIndices.size();
+    if(copyIndices)
+        outIndices = cached.triangleIndices;
 
     const EntityID skelEnt = ResolveSkinnedColliderSkeletonEntity(entity, binding, scopedNames, world);
-    Vector<SkeletonJointMatrix> poseJoints;
+    mut Vector<SkeletonJointMatrix> poseJoints = scratch.skinnedPoseJointsScratch;
+    poseJoints.clear();
     u32 skinningMode = cast<u32>(SkeletonSkinningMode::LinearBlend);
     if(skelEnt.valid() && world.alive(skelEnt) && world.hasComponent<SkeletonJointPaletteComponent>(skelEnt)){
         in SkeletonJointPaletteComponent pal = world.getComponent<SkeletonJointPaletteComponent>(skelEnt);
@@ -8637,12 +8785,12 @@ b8 TryExtractCpuSkinnedMeshVertices(
         skinningMode = palModeRes.value();
     }
 
-    u64 poseSig = MixColliderAssetSignatureHash(0xD6E8FEB86659FD93u, FoldNameHash64(binding.skin.name().hash()));
-    poseSig = MixColliderAssetSignatureHash(poseSig, FoldNameHash64(skinMeshRef.name().hash()));
+    u64 poseSig = MixColliderAssetSignatureHash(0xD6E8FEB86659FD93u, FoldNameHash64(skinName.hash()));
+    poseSig = MixColliderAssetSignatureHash(poseSig, FoldNameHash64(cached.meshName.hash()));
     poseSig = MixColliderAssetSignatureHash(poseSig, cast<u64>(skinningMode));
     poseSig = MixColliderAssetSignatureHash(poseSig, cast<u64>(poseJoints.size()));
 
-    in InfluenceVector influences = skinAsset.influences();
+    in InfluenceVector influences = cached.influences;
     if(poseJoints.empty() || influences.empty()){
         outVertices.resize(restPositions.size());
         for(usize vi = 0u; vi < restPositions.size(); ++vi)
@@ -8653,22 +8801,22 @@ b8 TryExtractCpuSkinnedMeshVertices(
         return true;
     }
 
-    in InverseBindMatrixVector invBinds = skinAsset.inverseBindMatrices();
+    in InverseBindMatrixVector invBinds = cached.inverseBindMatrices;
     const b8 hasInvBinds = !invBinds.empty();
     if(hasInvBinds && invBinds.size() != poseJoints.size())
         return false;
 
     const usize jointCount = poseJoints.size();
-    Vector<SkeletonJointMatrix> resolvedMatrices;
-    resolvedMatrices.resize(jointCount, SkeletonJointMatrix(MatrixIdentity()));
-    Vector<u8> jointValid;
-    jointValid.resize(jointCount, 0u);
+    mut Vector<SkeletonJointMatrix> resolvedMatrices = scratch.skinnedResolvedMatricesScratch;
+    resolvedMatrices.assign(jointCount, SkeletonJointMatrix(MatrixIdentity()));
+    mut Vector<u8> jointValid = scratch.skinnedJointValidScratch;
+    jointValid.assign(jointCount, 0u);
     b8 useDualQuat = (skinningMode == cast<u32>(SkeletonSkinningMode::DualQuaternion));
-    Vector<f32x4> dqReals;
-    Vector<f32x4> dqDuals;
+    mut Vector<f32x4> dqReals = scratch.skinnedDqRealsScratch;
+    mut Vector<f32x4> dqDuals = scratch.skinnedDqDualsScratch;
     if(useDualQuat){
-        dqReals.resize(jointCount, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
-        dqDuals.resize(jointCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
+        dqReals.assign(jointCount, f32x4(0.0f, 0.0f, 0.0f, 1.0f));
+        dqDuals.assign(jointCount, f32x4(0.0f, 0.0f, 0.0f, 0.0f));
     }
 
     for(usize ji = 0u; ji < jointCount; ++ji){
@@ -8707,29 +8855,7 @@ b8 TryExtractCpuSkinnedMeshVertices(
         poseSig = 1u;
     outPoseSignature = poseSig;
 
-    Vector<u32> posToSkinIdx;
-    posToSkinIdx.resize(restPositions.size(), s_NullIndex);
-    in Vector<MeshletDesc> meshlets = loadedMesh.meshlets();
-    in Vector<u8> posRefDeltasVec = loadedMesh.meshletPositionRefDeltas();
-    const Span<u8> posRefDeltas(posRefDeltasVec.data(), posRefDeltasVec.size());
-    for(usize mi = 0u; mi < meshlets.size(); ++mi){
-        in MeshletDesc ml = meshlets[mi];
-        if(ml.skinBase == s_MeshMissingStreamIndex)
-            continue;
-        const Expected<MeshletPositionRefEncodingLayout> layoutRes = TryBuildMeshletPositionRefEncodingLayout(ml, true);
-        if(!layoutRes.has_value())
-            continue;
-        const u32 mlPosCount = MeshletPositionCount(ml);
-        for(u32 lvi = 0u; lvi < mlPosCount; ++lvi){
-            const Expected<MeshletPositionStreamRef> refRes = TryDecodeMeshletPositionRefWithLayout(posRefDeltas, ml, layoutRes.value(), lvi, true);
-            if(!refRes.has_value())
-                continue;
-            const u32 posIdx = refRes.value().position;
-            if(cast<usize>(posIdx) < restPositions.size() && posToSkinIdx[posIdx] == s_NullIndex)
-                posToSkinIdx[posIdx] = refRes.value().skin;
-        }
-    }
-
+    in Vector<u32> posToSkinIdx = cached.posToSkinIdx;
     outVertices.resize(restPositions.size());
     for(usize vi = 0u; vi < restPositions.size(); ++vi){
         const f32x3u rp = restPositions[vi];
@@ -8824,6 +8950,8 @@ b8 ExtractColliderBaseMeshForCsg(
     in Optional<mut AssetManager> assetManager,
     in EcsScopedEntityNames scopedNames,
     mut World world,
+    mut EcsPhysicsAssetCache assetCache,
+    mut EcsPhysicsSyncScratch scratch,
     mut Vector<f32x4> outVertices,
     mut Vector<u32> outIndices,
     mut u64 outSkinPoseSig
@@ -8864,7 +8992,8 @@ b8 ExtractColliderBaseMeshForCsg(
         targetMesh = fallbackMesh;
 
     if(entry.meshVertices.empty() && world.hasComponent<SkinnedMeshBindingComponent>(entity)){
-        if(TryExtractCpuSkinnedMeshVertices(entity, targetMesh, assetManager, scopedNames, world, outVertices, outIndices, outSkinPoseSig))
+        usize triIdxCount = 0u;
+        if(TryExtractCpuSkinnedMeshVertices(entity, targetMesh, assetManager, scopedNames, true, world, assetCache, scratch, outVertices, outIndices, outSkinPoseSig, triIdxCount))
             return !outVertices.empty() && outIndices.size() >= 3u;
     }
 
@@ -8947,6 +9076,7 @@ b8 RebuildSingleColliderEntryCsg(
     in u64 skinInputSig,
     in b8 forceRebuild,
     in b8 colDirty,
+    mut EcsPhysicsAssetCache assetCache,
     mut World world,
     mut EcsPhysicsSyncScratch scratch,
     mut EcsCsgColliderState st
@@ -9056,7 +9186,7 @@ b8 RebuildSingleColliderEntryCsg(
     Vector<f32x4> baseVerts;
     Vector<u32> baseIndices;
     u64 extractedSkinPoseSig = 0u;
-    if(!ExtractColliderBaseMeshForCsg(entity, entry, fallbackMesh, assetManager, scopedNames, world, baseVerts, baseIndices, extractedSkinPoseSig))
+    if(!ExtractColliderBaseMeshForCsg(entity, entry, fallbackMesh, assetManager, scopedNames, world, assetCache, scratch, baseVerts, baseIndices, extractedSkinPoseSig))
         return false;
 
     const usize vertCount = baseVerts.size();
@@ -9160,6 +9290,7 @@ b8 RebuildSingleEntityCsgCollider(
     in u64 globalCutterSig,
     in b8 hasAnyPhysicsParents,
     in b8 forceRebuild,
+    mut EcsPhysicsAssetCache assetCache,
     mut World world,
     mut ColliderComponent col,
     mut EcsPhysicsSyncScratch scratch
@@ -9242,6 +9373,7 @@ b8 RebuildSingleEntityCsgCollider(
         skinInputSig,
         forceRebuild,
         col.dirty,
+        assetCache,
         world,
         scratch,
         entState.primary
@@ -9266,6 +9398,7 @@ b8 RebuildSingleEntityCsgCollider(
             skinInputSig,
             forceRebuild,
             col.dirty,
+            assetCache,
             world,
             scratch,
             entState.extras[ei]
@@ -9284,6 +9417,7 @@ void SyncEcsCsgColliderDeforms(
     in Optional<mut AssetManager> assetManager,
     in EcsScopedEntityNames scopedNames,
     in b8 hasAnyPhysicsParents,
+    mut EcsPhysicsAssetCache assetCache,
     mut CsgShapeRegistry csgRegistry,
     mut World world,
     mut EcsPhysicsSyncScratch scratch
@@ -9317,22 +9451,25 @@ void SyncEcsCsgColliderDeforms(
     if(colView.candidateCount() == 0u)
         return;
 
-    if(hasAnyPhysicsParents)
-        scratch.writeBackPoseCache.clear();
-
+    b8 cuttersGathered = false;
     u64 globalCutterSig = 0u;
-    GatherActiveEcsCsgCutters(world, csgRegistry, scratch.csgGatheredCuttersScratch, globalCutterSig);
-    const Span<EcsGatheredCsgCutter> cuttersSpan(scratch.csgGatheredCuttersScratch.data(), scratch.csgGatheredCuttersScratch.size());
 
     colView.each(
-        lambda[in assetManager, in scopedNames, in cuttersSpan, in globalCutterSig, in hasAnyPhysicsParents, mut csgRegistry, mut world, mut scratch](
+        lambda[in assetManager, in scopedNames, in hasAnyPhysicsParents, mut cuttersGathered, mut globalCutterSig, mut assetCache, mut csgRegistry, mut world, mut scratch](
             in EntityID entity,
             mut ColliderComponent col,
             in TransformComponent xf
         ) -> void{
             if(!EcsColliderHasAnyCsgSync(col))
                 return;
-            RebuildSingleEntityCsgCollider(entity, assetManager, scopedNames, csgRegistry, cuttersSpan, globalCutterSig, hasAnyPhysicsParents, false, world, col, scratch);
+            if(!cuttersGathered){
+                if(hasAnyPhysicsParents)
+                    scratch.writeBackPoseCache.clear();
+                GatherActiveEcsCsgCutters(world, csgRegistry, scratch.csgGatheredCuttersScratch, globalCutterSig);
+                cuttersGathered = true;
+            }
+            const Span<EcsGatheredCsgCutter> cuttersSpan(scratch.csgGatheredCuttersScratch.data(), scratch.csgGatheredCuttersScratch.size());
+            RebuildSingleEntityCsgCollider(entity, assetManager, scopedNames, csgRegistry, cuttersSpan, globalCutterSig, hasAnyPhysicsParents, false, assetCache, world, col, scratch);
         }
     );
 }
@@ -9345,6 +9482,8 @@ b8 ApplySkinnedVerticesToSingleMeshShape(
     in u64 skinInputSig,
     in Optional<mut AssetManager> assetManager,
     in EcsScopedEntityNames scopedNames,
+    mut EcsPhysicsAssetCache assetCache,
+    mut EcsPhysicsSyncScratch scratch,
     mut World world,
     mut PhysicsWorld physicsWorld,
     mut u64 inOutEntrySig,
@@ -9386,10 +9525,22 @@ b8 ApplySkinnedVerticesToSingleMeshShape(
     if(hasInlineRefitSlot && inOutEntrySig == entrySig)
         return false;
 
-    Vector<f32x4> skinnedVerts;
-    Vector<u32> skinnedIndices;
     u64 extractedPoseSig = 0u;
-    if(!TryExtractCpuSkinnedMeshVertices(entity, expectedMesh, assetManager, scopedNames, world, skinnedVerts, skinnedIndices, extractedPoseSig))
+    usize extractedTriIdxCount = 0u;
+    if(!TryExtractCpuSkinnedMeshVertices(
+        entity,
+        expectedMesh,
+        assetManager,
+        scopedNames,
+        !hasInlineRefitSlot,
+        world,
+        assetCache,
+        scratch,
+        scratch.skinnedExtractVertsScratch,
+        scratch.skinnedExtractIndicesScratch,
+        extractedPoseSig,
+        extractedTriIdxCount
+    ))
         return false;
 
     const VectorSingle absScale = Abs(signedScale);
@@ -9403,15 +9554,22 @@ b8 ApplySkinnedVerticesToSingleMeshShape(
         && Vector3LessOrEqual(Abs(VectorSingle(entry.center.x, entry.center.y, entry.center.z, 0.0f)), VectorSingle(1.0e-6f))
         && Vector3LessOrEqual(Abs(VectorSetW(signedScale, 0.0f) - VectorSingle(1.0f, 1.0f, 1.0f, 0.0f)), VectorSingle(1.0e-5f));
 
-    Vector<f32x4> transformedVerts;
-    if(!isIdentityXform)
-        TransformEcsPointArray(Span<f32x4>(skinnedVerts.data(), skinnedVerts.size()), signedScale, localRot, hasRot, scaledOffset, transformedVerts);
+    if(!isIdentityXform){
+        TransformEcsPointArray(
+            Span<f32x4>(scratch.skinnedExtractVertsScratch.data(), scratch.skinnedExtractVertsScratch.size()),
+            signedScale,
+            localRot,
+            hasRot,
+            scaledOffset,
+            scratch.skinnedTransformedVertsScratch
+        );
+    }
 
-    Span<f32x4> vertsSpan(skinnedVerts.data(), skinnedVerts.size());
+    Span<f32x4> vertsSpan(scratch.skinnedExtractVertsScratch.data(), scratch.skinnedExtractVertsScratch.size());
     if(!isIdentityXform)
-        vertsSpan = Span<f32x4>(transformedVerts.data(), transformedVerts.size());
+        vertsSpan = Span<f32x4>(scratch.skinnedTransformedVertsScratch.data(), scratch.skinnedTransformedVertsScratch.size());
 
-    if(hasInlineRefitSlot && physicsWorld.m_meshShapes[curShape.geometryIndex].triangles.size() * 3u == skinnedIndices.size()){
+    if(hasInlineRefitSlot && physicsWorld.m_meshShapes[curShape.geometryIndex].triangles.size() * 3u == extractedTriIdxCount){
         if(physicsWorld.updateShapeMeshVertices(shapeId, vertsSpan)){
             inOutEntrySig = entrySig;
             outBodyMassNeedsUpdate = true;
@@ -9419,14 +9577,25 @@ b8 ApplySkinnedVerticesToSingleMeshShape(
         }
     }
 
+    if(hasInlineRefitSlot){
+        in World wRef = world;
+        if(!wRef.hasComponent<SkinnedMeshBindingComponent>(entity))
+            return false;
+        const Name skinName = wRef.getComponent<SkinnedMeshBindingComponent>(entity).skin.name();
+        const auto cacheIt = assetCache.skinnedColliderDataCache.find(skinName);
+        if(cacheIt == assetCache.skinnedColliderDataCache.end())
+            return false;
+        scratch.skinnedExtractIndicesScratch = cacheIt.value().triangleIndices;
+    }
+
     if(isMirrored)
-        FlipMeshTriangleWindingInPlace(skinnedIndices);
+        FlipMeshTriangleWindingInPlace(scratch.skinnedExtractIndicesScratch);
     MeshSidedness sidedness = MeshSidedness::DoubleSided;
     if(entry.cullBackfaces)
         sidedness = MeshSidedness::SingleSided;
     const Expected<MeshShape> builtMesh = MakeMeshShapeWithMaterials(
         vertsSpan,
-        Span<u32>(skinnedIndices.data(), skinnedIndices.size()),
+        Span<u32>(scratch.skinnedExtractIndicesScratch.data(), scratch.skinnedExtractIndicesScratch.size()),
         Max(entry.skinRadius * maxS, 0.0f),
         sidedness,
         Span<SurfaceMaterial>(),
@@ -9444,6 +9613,7 @@ void SyncEcsSkinnedMeshColliders(
     in Optional<mut AssetManager> assetManager,
     in EcsScopedEntityNames scopedNames,
     in b8 hasAnyPhysicsParents,
+    mut EcsPhysicsAssetCache assetCache,
     mut World world,
     mut PhysicsWorld physicsWorld,
     in HashMap<EntityID, EcsEntityPhysicsRecord> entityRecords,
@@ -9472,7 +9642,7 @@ void SyncEcsSkinnedMeshColliders(
         return;
 
     skinnedView.each(
-        lambda[in assetManager, in scopedNames, in hasAnyPhysicsParents, in entityRecords, mut world, mut physicsWorld, mut scratch](
+        lambda[in assetManager, in scopedNames, in hasAnyPhysicsParents, in entityRecords, mut assetCache, mut world, mut physicsWorld, mut scratch](
             in EntityID entity,
             in ColliderComponent col,
             in SkinnedMeshBindingComponent binding,
@@ -9508,7 +9678,7 @@ void SyncEcsSkinnedMeshColliders(
             if(!recIt.value().hasDecomposedShapes || (col.primaryShape.shapeType == ShapeType::Mesh && !col.primaryShape.autoConvexDecompose && !col.primaryShape.compoundHullAsset.valid())){
                 b8 entryChanged = false;
                 u64 sigVal = sigs[0u];
-                if(ApplySkinnedVerticesToSingleMeshShape(entity, recIt.value().primaryShapeId, col.primaryShape, signedScale, skinInputSig, assetManager, scopedNames, world, physicsWorld, sigVal, entryChanged)){
+                if(ApplySkinnedVerticesToSingleMeshShape(entity, recIt.value().primaryShapeId, col.primaryShape, signedScale, skinInputSig, assetManager, scopedNames, assetCache, scratch, world, physicsWorld, sigVal, entryChanged)){
                     sigs[0u] = sigVal;
                     if(entryChanged)
                         anyUpdated = true;
@@ -9529,7 +9699,7 @@ void SyncEcsSkinnedMeshColliders(
                         continue;
                     b8 entryChanged = false;
                     u64 sigVal = sigs[1u + ei];
-                    if(ApplySkinnedVerticesToSingleMeshShape(entity, extraShapeId, col.extraShapes[ei], signedScale, skinInputSig, assetManager, scopedNames, world, physicsWorld, sigVal, entryChanged)){
+                    if(ApplySkinnedVerticesToSingleMeshShape(entity, extraShapeId, col.extraShapes[ei], signedScale, skinInputSig, assetManager, scopedNames, assetCache, scratch, world, physicsWorld, sigVal, entryChanged)){
                         sigs[1u + ei] = sigVal;
                         if(entryChanged)
                             anyUpdated = true;
@@ -9770,6 +9940,33 @@ void RefreshAttachedParentCustomMass(
     }
 }
 
+u64 ResolveEcsColliderFallbackSigCached(
+    in EntityID entity,
+    in ColliderComponent col,
+    in World world,
+    mut b8 inOutHasSig,
+    mut u64 inOutSig
+){
+    if(!inOutHasSig){
+        inOutSig = ComputeEcsColliderFallbackSignature(entity, col, world);
+        inOutHasSig = true;
+    }
+    return inOutSig;
+}
+
+void ResolveEcsColliderSyncFlagsCached(
+    in ColliderComponent col,
+    mut b8 inOutHasFlags,
+    mut b8 inOutHasCsgSync,
+    mut b8 inOutHasSkinnedSync
+){
+    if(!inOutHasFlags){
+        inOutHasCsgSync = EcsColliderHasAnyCsgSync(col);
+        inOutHasSkinnedSync = EcsColliderHasAnySkinnedSync(col);
+        inOutHasFlags = true;
+    }
+}
+
 b8 SyncSingleColliderEntity(
     in EntityID entity,
     mut ColliderComponent col,
@@ -9804,11 +10001,13 @@ b8 SyncSingleColliderEntity(
     }
 
     const b8 bypassLayerSkip = layerMatrixDirty && EcsColliderUsesNamedLayer(col);
-    const u64 curFallbackSig = ComputeEcsColliderFallbackSignature(entity, col, world);
     const Optional<mut RigidBodyComponent> rbOpt = world.borrowComponent<RigidBodyComponent>(entity);
     const b8 wantsAttachToParent = hasAnyPhysicsParents && HasAttachablePhysicsAncestor(entity, world);
-    const b8 hasCsgSync = EcsColliderHasAnyCsgSync(col);
-    const b8 hasSkinnedSync = EcsColliderHasAnySkinnedSync(col);
+    b8 hasFallbackSig = false;
+    u64 fallbackSigCache = 0u;
+    b8 hasSyncFlags = false;
+    b8 hasCsgSync = false;
+    b8 hasSkinnedSync = false;
 
     if(
         !bypassLayerSkip
@@ -9830,7 +10029,7 @@ b8 SyncSingleColliderEntity(
             scaleCache.valid
             && scaleCache.generation == col.runtimeShapeId.generation
             && scaleCache.syncedExtraShapeCount == col.extraShapes.size()
-            && scaleCache.fallbackMeshSig == curFallbackSig
+            && scaleCache.fallbackMeshSig == ResolveEcsColliderFallbackSigCached(entity, col, world, hasFallbackSig, fallbackSigCache)
         ){
             b8 hasParent = false;
             if(hasAnyPhysicsParents){
@@ -9873,14 +10072,14 @@ b8 SyncSingleColliderEntity(
             scaleCache.valid
             && scaleCache.generation == col.runtimeShapeId.generation
             && scaleCache.syncedExtraShapeCount == col.extraShapes.size()
-            && scaleCache.fallbackMeshSig == curFallbackSig
-            && EcsVec4NearlyEqual(VectorSingle(scaleCache.worldScale), VectorSingle(xf.scale), 1.0e-5f)
             && staticCache.valid
             && staticCache.generation == col.boundBodyId.generation
             && staticCache.entity == entity
+            && EcsVec4NearlyEqual(VectorSingle(scaleCache.worldScale), VectorSingle(xf.scale), 1.0e-5f)
             && (shapeHandlesTrusted || MatchesPhysicsBodyTypeAndEnabled(physicsWorld, col.boundBodyId, BodyType::Static, true))
             && (shapeHandlesTrusted || physicsWorld.isValidShape(col.runtimeShapeId))
             && EcsTransformMatchesSynced(xf, staticCache.syncedTransform)
+            && scaleCache.fallbackMeshSig == ResolveEcsColliderFallbackSigCached(entity, col, world, hasFallbackSig, fallbackSigCache)
         ){
             if(AreExtraShapeOwnersValid(entity, Span<ShapeId>(col.runtimeExtraShapeIds.data(), col.runtimeExtraShapeIds.size()), shapeIndexToEntity, shapeHandlesTrusted, physicsWorld))
                 return true;
@@ -9891,8 +10090,6 @@ b8 SyncSingleColliderEntity(
         !bypassLayerSkip
         && wantsAttachToParent
         && !col.dirty
-        && !hasCsgSync
-        && !hasSkinnedSync
         && hasAnyPhysicsParents
         && col.boundBodyId.valid()
         && col.runtimeShapeId.valid()
@@ -9909,7 +10106,6 @@ b8 SyncSingleColliderEntity(
             && scaleCache.generation == col.runtimeShapeId.generation
             && scaleCache.attachedToParentBody
             && scaleCache.syncedExtraShapeCount == col.extraShapes.size()
-            && scaleCache.fallbackMeshSig == curFallbackSig
             && scaleCache.parentEntity.valid()
             && scaleCache.parentBodyId.valid()
             && (col.boundBodyId == scaleCache.parentBodyId)
@@ -9918,39 +10114,49 @@ b8 SyncSingleColliderEntity(
             && bodyIndexToEntity[scaleCache.parentBodyId.index].generation == scaleCache.parentBodyId.generation
             && (shapeHandlesTrusted || physicsWorld.isValidBody(scaleCache.parentBodyId))
         ){
-            const Optional<mut PhysicsParentComponent> selfPpOpt = world.borrowComponent<PhysicsParentComponent>(entity);
-            EntityID dirParent = s_InvalidEntityId;
-            b8 inheritScale = false;
+            ResolveEcsColliderSyncFlagsCached(col, hasSyncFlags, hasCsgSync, hasSkinnedSync);
             if(
-                selfPpOpt.has_value()
-                && selfPpOpt.value().attachColliderToParentBody
-                && TryGetPhysicsOrSceneParent(world, entity, dirParent, inheritScale)
-                && inheritScale == scaleCache.syncedInheritScale
-                && dirParent == scaleCache.parentEntity
-                && world.alive(dirParent)
-                && !EntityUsesLocalHierarchyTransform(world, dirParent)
-                && world.hasComponent<LocalTransformComponent>(entity)
-                && world.hasComponent<TransformComponent>(dirParent)
+                !hasCsgSync
+                && !hasSkinnedSync
+                && scaleCache.fallbackMeshSig == ResolveEcsColliderFallbackSigCached(entity, col, world, hasFallbackSig, fallbackSigCache)
             ){
-                in LocalTransformComponent childLocalXf = world.getComponent<LocalTransformComponent>(entity);
-                in TransformComponent parentXf = world.getComponent<TransformComponent>(dirParent);
+                const Optional<mut PhysicsParentComponent> selfPpOpt = world.borrowComponent<PhysicsParentComponent>(entity);
+                EntityID dirParent = s_InvalidEntityId;
+                b8 inheritScale = false;
                 if(
-                    EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedEntityLocalPos), VectorSingle(childLocalXf.position), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedEntityLocalRot), VectorSingle(childLocalXf.rotation), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedEntityLocalScale), VectorSingle(childLocalXf.scale), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedParentPos), VectorSingle(parentXf.position), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedParentRot), VectorSingle(parentXf.rotation), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedParentScale), VectorSingle(parentXf.scale), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedChildWorldPos), VectorSingle(xf.position), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedChildWorldRot), VectorSingle(xf.rotation), 1.0e-5f)
-                    && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedChildWorldScale), VectorSingle(xf.scale), 1.0e-5f)
+                    selfPpOpt.has_value()
+                    && selfPpOpt.value().attachColliderToParentBody
+                    && TryGetPhysicsOrSceneParent(world, entity, dirParent, inheritScale)
+                    && inheritScale == scaleCache.syncedInheritScale
+                    && dirParent == scaleCache.parentEntity
+                    && world.alive(dirParent)
+                    && !EntityUsesLocalHierarchyTransform(world, dirParent)
+                    && world.hasComponent<LocalTransformComponent>(entity)
+                    && world.hasComponent<TransformComponent>(dirParent)
                 ){
-                    if(AreExtraShapeOwnersValid(entity, Span<ShapeId>(col.runtimeExtraShapeIds.data(), col.runtimeExtraShapeIds.size()), shapeIndexToEntity, shapeHandlesTrusted, physicsWorld))
-                        return true;
+                    in LocalTransformComponent childLocalXf = world.getComponent<LocalTransformComponent>(entity);
+                    in TransformComponent parentXf = world.getComponent<TransformComponent>(dirParent);
+                    if(
+                        EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedEntityLocalPos), VectorSingle(childLocalXf.position), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedEntityLocalRot), VectorSingle(childLocalXf.rotation), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedEntityLocalScale), VectorSingle(childLocalXf.scale), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedParentPos), VectorSingle(parentXf.position), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedParentRot), VectorSingle(parentXf.rotation), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedParentScale), VectorSingle(parentXf.scale), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedChildWorldPos), VectorSingle(xf.position), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedChildWorldRot), VectorSingle(xf.rotation), 1.0e-5f)
+                        && EcsVec4NearlyEqual(VectorSingle(scaleCache.syncedChildWorldScale), VectorSingle(xf.scale), 1.0e-5f)
+                    ){
+                        if(AreExtraShapeOwnersValid(entity, Span<ShapeId>(col.runtimeExtraShapeIds.data(), col.runtimeExtraShapeIds.size()), shapeIndexToEntity, shapeHandlesTrusted, physicsWorld))
+                            return true;
+                    }
                 }
             }
         }
     }
+
+    if(wantsAttachToParent)
+        ResolveEcsColliderSyncFlagsCached(col, hasSyncFlags, hasCsgSync, hasSkinnedSync);
 
     const auto initialRecIt = entityRecords.find(entity);
     BodyId targetBodyId;
@@ -10062,8 +10268,8 @@ b8 SyncSingleColliderEntity(
                     && existingRec.syncedExtraShapeCount == col.extraShapes.size()
                     && (existingRec.hasDecomposedShapes || existingRec.extraShapeIds.size() == col.extraShapes.size())
                     && existingRec.syncedInheritScale == curInheritScale
-                    && existingRec.resolvedFallbackMeshSig == curFallbackSig
                     && EcsVec4NearlyEqual(VectorSingle(existingRec.syncedColliderScale), ancChildScale, 1.0e-5f)
+                    && existingRec.resolvedFallbackMeshSig == ResolveEcsColliderFallbackSigCached(entity, col, world, hasFallbackSig, fallbackSigCache)
                 ){
                     b8 extraChildShapesValid = true;
                     for(usize si = 0u; si < existingRec.extraShapeIds.size(); ++si){

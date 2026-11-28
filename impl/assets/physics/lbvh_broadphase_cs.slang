@@ -250,6 +250,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         const uint blockBase = groupID.x * NWB_PHYSICS_LBVH_RADIX_BLOCK_SIZE;
         if(blockBase >= itemCount)
             return;
+        const uint numBlocks = itemOffset;
         const uint shift = g_NwbPhysicsPushConstants.flags;
         const uint srcMortonSlot = g_NwbPhysicsPushConstants.slots0.x;
         const uint radixHistSlot = g_NwbPhysicsPushConstants.slots0.z;
@@ -266,28 +267,98 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         }
         GroupMemoryBarrierWithGroupSync();
 
-        const uint histBase = groupID.x * 256u;
         for(uint d = localTid; d < 256u; d += NWB_PHYSICS_WORKGROUP_SIZE)
-            g_NwbPhysicsUintBuffers[radixHistSlot][histBase + d] = s_RadixHist[d];
+            g_NwbPhysicsUintBuffers[radixHistSlot][d * numBlocks + groupID.x] = s_RadixHist[d];
         return;
     }
 
     if(mode == NWB_PHYSICS_LBVH_MODE_RADIX_SCAN){
         const uint localTid = groupThreadID.x;
         const uint numBlocks = itemOffset;
+        const uint scanMode = g_NwbPhysicsPushConstants.flags;
         const uint radixHistSlot = g_NwbPhysicsPushConstants.slots0.z;
-        for(uint pass = 0u; pass < 4u; ++pass){
-            const uint b = pass * 64u + localTid;
+
+        if(scanMode == 1u){
+            const uint d = groupID.x;
+            if(d >= 256u)
+                return;
+            const uint base = d * numBlocks;
             uint running = 0u;
-            for(uint g = 0u; g < numBlocks; ++g){
-                const uint addr = g * 256u + b;
-                const uint c = g_NwbPhysicsUintBuffers[radixHistSlot][addr];
-                g_NwbPhysicsUintBuffers[radixHistSlot][addr] = running;
-                running += c;
+            for(uint chunk = 0u; chunk < numBlocks; chunk += 256u){
+                [unroll]
+                for(uint k = 0u; k < 4u; ++k){
+                    const uint idx = k * 64u + localTid;
+                    s_RadixHist[idx] = (chunk + idx < numBlocks)
+                        ? g_NwbPhysicsUintBuffers[radixHistSlot][base + chunk + idx]
+                        : 0u;
+                }
+                GroupMemoryBarrierWithGroupSync();
+
+                const uint bBase = localTid * 4u;
+                const uint v0 = s_RadixHist[bBase + 0u];
+                const uint v1 = s_RadixHist[bBase + 1u];
+                const uint v2 = s_RadixHist[bBase + 2u];
+                const uint v3 = s_RadixHist[bBase + 3u];
+                const uint subTot = v0 + v1 + v2 + v3;
+                s_RadixAux[localTid] = subTot;
+                GroupMemoryBarrierWithGroupSync();
+
+                uint scanVal = subTot;
+                [unroll]
+                for(uint offset = 1u; offset < 64u; offset <<= 1u){
+                    const uint addVal = (localTid >= offset) ? s_RadixAux[localTid - offset] : 0u;
+                    GroupMemoryBarrierWithGroupSync();
+                    scanVal += addVal;
+                    s_RadixAux[localTid] = scanVal;
+                    GroupMemoryBarrierWithGroupSync();
+                }
+
+                const uint lanePrefix = running + ((localTid > 0u) ? s_RadixAux[localTid - 1u] : 0u);
+                s_RadixHist[bBase + 0u] = lanePrefix;
+                s_RadixHist[bBase + 1u] = lanePrefix + v0;
+                s_RadixHist[bBase + 2u] = lanePrefix + v0 + v1;
+                s_RadixHist[bBase + 3u] = lanePrefix + v0 + v1 + v2;
+                GroupMemoryBarrierWithGroupSync();
+
+                [unroll]
+                for(uint k = 0u; k < 4u; ++k){
+                    const uint idx = k * 64u + localTid;
+                    if(chunk + idx < numBlocks)
+                        g_NwbPhysicsUintBuffers[radixHistSlot][base + chunk + idx] = s_RadixHist[idx];
+                }
+                running += s_RadixAux[63u];
+                GroupMemoryBarrierWithGroupSync();
             }
-            s_RadixHist[b] = running;
+            if(localTid == 0u)
+                g_NwbPhysicsUintBuffers[radixHistSlot][numBlocks * 256u + d] = running;
+            return;
         }
-        GroupMemoryBarrierWithGroupSync();
+
+        if(groupID.x != 0u)
+            return;
+
+        if(scanMode == 2u){
+            [unroll]
+            for(uint k = 0u; k < 4u; ++k){
+                const uint d = k * 64u + localTid;
+                s_RadixHist[d] = g_NwbPhysicsUintBuffers[radixHistSlot][numBlocks * 256u + d];
+            }
+            GroupMemoryBarrierWithGroupSync();
+        }
+        else{
+            for(uint pass = 0u; pass < 4u; ++pass){
+                const uint b = pass * 64u + localTid;
+                uint running = 0u;
+                for(uint g = 0u; g < numBlocks; ++g){
+                    const uint addr = b * numBlocks + g;
+                    const uint c = g_NwbPhysicsUintBuffers[radixHistSlot][addr];
+                    g_NwbPhysicsUintBuffers[radixHistSlot][addr] = running;
+                    running += c;
+                }
+                s_RadixHist[b] = running;
+            }
+            GroupMemoryBarrierWithGroupSync();
+        }
 
         const uint bBase = localTid * 4u;
         const uint v0 = s_RadixHist[bBase + 0u];
@@ -333,10 +404,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
             s_LbvhSortMorton[i] = g_NwbPhysicsUintBuffers[srcMortonSlot][(blockBase + i) * 2u + 0u];
             s_LbvhSortShape[i] = g_NwbPhysicsUintBuffers[srcMortonSlot][(blockBase + i) * 2u + 1u];
         }
-        const uint blockHistBase = groupID.x * 256u;
         const uint globalHistBase = numBlocks * 256u;
         for(uint d = localTid; d < 256u; d += NWB_PHYSICS_WORKGROUP_SIZE)
-            s_RadixHist[d] = g_NwbPhysicsUintBuffers[radixHistSlot][globalHistBase + d] + g_NwbPhysicsUintBuffers[radixHistSlot][blockHistBase + d];
+            s_RadixHist[d] = g_NwbPhysicsUintBuffers[radixHistSlot][globalHistBase + d] + g_NwbPhysicsUintBuffers[radixHistSlot][d * numBlocks + groupID.x];
         GroupMemoryBarrierWithGroupSync();
 
         [unroll]

@@ -59,6 +59,7 @@ interface ISnapshotSink{
     void writeU16Span(in Span<u16> data);
     void writeU32Span(in Span<u32> data);
     void writeF32Span(in Span<f32> data);
+    usize byteCount()const;
 }
 
 class SnapshotFnv1a64Sink : ISnapshotSink{
@@ -177,6 +178,10 @@ class SnapshotFnv1a64Sink : ISnapshotSink{
             h ^= cast<u64>((v >> 24u) & 0xffu); h *= s_Fnv64Prime;
         }
         this.hash = h;
+    }
+
+    public usize byteCount()const override{
+        return 0u;
     }
 }
 
@@ -2073,6 +2078,15 @@ b8 SnapReadExtraManifoldRecord(in Span<u8> bytes, mut SnapshotByteReader r, mut 
     ;
 }
 
+b8 SnapWriteExtraManifoldList<TSink : ISnapshotSink>(in u32 cId, in FixedVector<ExtraManifoldRecord, s_MaxExtraManifoldsPerContact> list, mut TSink w){
+    w.writeU32(cId);
+    if(!w.writeCount(list.size()))
+        return false;
+    for(usize ei = 0u; ei < list.size(); ++ei)
+        SnapWriteExtraManifoldRecord(list[ei], w);
+    return true;
+}
+
 b8 SnapWriteExtraManifolds<TSink : ISnapshotSink>(in PhysicsWorld world, mut TSink w){
     Vector<u32> extraKeys;
     extraKeys.reserve(world.m_extraContactManifolds.size());
@@ -2087,13 +2101,9 @@ b8 SnapWriteExtraManifolds<TSink : ISnapshotSink>(in PhysicsWorld world, mut TSi
         return false;
     for(usize i = 0u; i < extraKeys.size(); ++i){
         const u32 cId = extraKeys[i];
-        w.writeU32(cId);
         const auto itExtra = world.m_extraContactManifolds.find(cId);
-        const FixedVector<ExtraManifoldRecord, s_MaxExtraManifoldsPerContact> list = itExtra.value();
-        if(!w.writeCount(list.size()))
+        if(!SnapWriteExtraManifoldList(cId, itExtra.value(), w))
             return false;
-        for(usize ei = 0u; ei < list.size(); ++ei)
-            SnapWriteExtraManifoldRecord(list[ei], w);
     }
     return true;
 }
@@ -2133,7 +2143,11 @@ void RebuildDirtyMassBodyIds(mut PhysicsWorld tmp){
     }
 }
 
-b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld world, mut TSink w){
+b8 SerializePhysicsWorldSnapshotPayloadWithPoolBytes<TSink : ISnapshotSink>(
+    in PhysicsWorld world,
+    mut TSink w,
+    mut SnapshotWorldProvenance outProv
+){
     w.writeU32(s_SnapshotMagic);
     w.writeU32(s_SnapshotVersion);
 
@@ -2153,16 +2167,40 @@ b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld w
     if(!SnapshotWriteU32Vec(w, world.m_freeShapeIds))
         return false;
 
-    if(
-        !SnapWriteHullPool(world, w)
-        || !SnapWriteMeshPool(world, w)
-        || !SnapWriteHeightfieldPool(world, w)
-        || !SnapWriteCompoundPool(world, w)
-        || !SnapWriteScaledPool(world, w)
-        || !SnapWriteChainPool(world, w)
-        || !SnapWriteSdfPool(world, w)
-    )
+    const usize sHull = w.byteCount();
+    if(!SnapWriteHullPool(world, w))
         return false;
+    outProv.hullPoolBytes = cast<u64>(w.byteCount() - sHull);
+
+    const usize sMesh = w.byteCount();
+    if(!SnapWriteMeshPool(world, w))
+        return false;
+    outProv.meshPoolBytes = cast<u64>(w.byteCount() - sMesh);
+
+    const usize sHf = w.byteCount();
+    if(!SnapWriteHeightfieldPool(world, w))
+        return false;
+    outProv.heightfieldPoolBytes = cast<u64>(w.byteCount() - sHf);
+
+    const usize sComp = w.byteCount();
+    if(!SnapWriteCompoundPool(world, w))
+        return false;
+    outProv.compoundPoolBytes = cast<u64>(w.byteCount() - sComp);
+
+    const usize sSc = w.byteCount();
+    if(!SnapWriteScaledPool(world, w))
+        return false;
+    outProv.scaledPoolBytes = cast<u64>(w.byteCount() - sSc);
+
+    const usize sCh = w.byteCount();
+    if(!SnapWriteChainPool(world, w))
+        return false;
+    outProv.chainPoolBytes = cast<u64>(w.byteCount() - sCh);
+
+    const usize sSdf = w.byteCount();
+    if(!SnapWriteSdfPool(world, w))
+        return false;
+    outProv.sdfPoolBytes = cast<u64>(w.byteCount() - sSdf);
 
     if(!w.writeCount(world.m_contacts.size()))
         return false;
@@ -2220,6 +2258,11 @@ b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld w
         && SnapWriteIgnoredPairs(world, w)
         && SnapWriteExtraManifolds(world, w)
     ;
+}
+
+b8 SerializePhysicsWorldSnapshotPayload<TSink : ISnapshotSink>(in PhysicsWorld world, mut TSink w){
+    SnapshotWorldProvenance unusedProv;
+    return SerializePhysicsWorldSnapshotPayloadWithPoolBytes(world, w, unusedProv);
 }
 
 class SnapshotDirectByteWriter : ISnapshotSink{
@@ -2421,6 +2464,10 @@ class SnapshotDirectByteWriter : ISnapshotSink{
         }
         this.m_hash = h;
     }
+
+    public usize byteCount()const override{
+        return this.m_outBytes.size();
+    }
 }
 
 class SnapshotRawByteWriter : ISnapshotSink{
@@ -2553,6 +2600,10 @@ class SnapshotRawByteWriter : ISnapshotSink{
             dst += 4u;
         }
     }
+
+    public usize byteCount()const override{
+        return this.m_outBytes.size();
+    }
 }
 
 class SnapshotWorldProvenance{
@@ -2564,6 +2615,13 @@ class SnapshotWorldProvenance{
     public u64 scaledPoolVersion = 0u;
     public u64 chainPoolVersion = 0u;
     public u64 sdfPoolVersion = 0u;
+    public u64 hullPoolBytes = 0u;
+    public u64 meshPoolBytes = 0u;
+    public u64 heightfieldPoolBytes = 0u;
+    public u64 compoundPoolBytes = 0u;
+    public u64 scaledPoolBytes = 0u;
+    public u64 chainPoolBytes = 0u;
+    public u64 sdfPoolBytes = 0u;
 }
 
 class SnapshotWorldSectionSpans{
@@ -2593,7 +2651,7 @@ class SnapshotWorldSectionSpans{
     public usize extraManifoldsEnd = 0u;
 }
 
-void WriteSnapshotProvenanceFooter(in PhysicsWorld world, mut SnapshotDirectByteWriter w){
+void WriteSnapshotProvenanceFooter(in PhysicsWorld world, in SnapshotWorldProvenance poolSizes, mut SnapshotDirectByteWriter w){
     w.writeU64(world.m_worldGeneration);
     w.writeU64(world.m_hullPoolVersion);
     w.writeU64(world.m_meshPoolVersion);
@@ -2602,21 +2660,64 @@ void WriteSnapshotProvenanceFooter(in PhysicsWorld world, mut SnapshotDirectByte
     w.writeU64(world.m_scaledPoolVersion);
     w.writeU64(world.m_chainPoolVersion);
     w.writeU64(world.m_sdfPoolVersion);
+    w.writeU64(poolSizes.hullPoolBytes);
+    w.writeU64(poolSizes.meshPoolBytes);
+    w.writeU64(poolSizes.heightfieldPoolBytes);
+    w.writeU64(poolSizes.compoundPoolBytes);
+    w.writeU64(poolSizes.scaledPoolBytes);
+    w.writeU64(poolSizes.chainPoolBytes);
+    w.writeU64(poolSizes.sdfPoolBytes);
 }
 
 b8 SerializePhysicsWorldSnapshot(in PhysicsWorld world, mut Vector<u8> outBytes){
     outBytes.clear();
-    outBytes.reserve(EstimatePhysicsWorldSnapshotSize(world) + 72u);
+    outBytes.reserve(EstimatePhysicsWorldSnapshotSize(world) + 128u);
     SnapshotDirectByteWriter w(outBytes);
-    if(!SerializePhysicsWorldSnapshotPayload(world, w))
+    SnapshotWorldProvenance poolSizes;
+    if(!SerializePhysicsWorldSnapshotPayloadWithPoolBytes(world, w, poolSizes))
         return false;
-    WriteSnapshotProvenanceFooter(world, w);
+    WriteSnapshotProvenanceFooter(world, poolSizes, w);
     w.writeU64(w.m_hash);
     return true;
 }
 
-b8 ReadPhysicsWorldSnapshotPayloadWithSpans(
+b8 SnapTrySkipSectionBytes(mut SnapshotByteReader r, in u64 byteCount, mut usize outStart, mut usize outEnd){
+    if(r.cursor > r.limit)
+        return false;
+    const u64 rem = cast<u64>(r.limit - r.cursor);
+    if(byteCount > rem)
+        return false;
+    outStart = r.cursor;
+    r.cursor += cast<usize>(byteCount);
+    outEnd = r.cursor;
+    return true;
+}
+
+u32 ComputeMatchingPoolSkipMask(in SnapshotWorldProvenance prov, in PhysicsWorld world){
+    if(prov.worldGeneration != world.m_worldGeneration)
+        return 0u;
+    u32 mask = 0u;
+    if(prov.hullPoolVersion == world.m_hullPoolVersion)
+        mask |= 1u;
+    if(prov.meshPoolVersion == world.m_meshPoolVersion)
+        mask |= 2u;
+    if(prov.heightfieldPoolVersion == world.m_heightfieldPoolVersion)
+        mask |= 4u;
+    if(prov.compoundPoolVersion == world.m_compoundPoolVersion)
+        mask |= 8u;
+    if(prov.scaledPoolVersion == world.m_scaledPoolVersion)
+        mask |= 16u;
+    if(prov.chainPoolVersion == world.m_chainPoolVersion)
+        mask |= 32u;
+    if(prov.sdfPoolVersion == world.m_sdfPoolVersion)
+        mask |= 64u;
+    return mask;
+}
+
+b8 ReadPhysicsWorldSnapshotPayloadWithSpansFiltered(
     in Span<u8> bytes,
+    in u32 skipPoolMask,
+    in SnapshotWorldProvenance prov,
     mut SnapshotByteReader r,
     mut PhysicsWorld tmp,
     mut SnapshotWorldSectionSpans outSpans
@@ -2659,40 +2760,82 @@ b8 ReadPhysicsWorldSnapshotPayloadWithSpans(
     if(!SnapshotReadU32Vec(bytes, r, tmp.m_freeShapeIds))
         return false;
 
-    outSpans.hullPoolStart = r.cursor;
-    if(!SnapReadHullPool(bytes, r, tmp))
-        return false;
-    outSpans.hullPoolEnd = r.cursor;
+    if((skipPoolMask & 1u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.hullPoolBytes, outSpans.hullPoolStart, outSpans.hullPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.hullPoolStart = r.cursor;
+        if(!SnapReadHullPool(bytes, r, tmp))
+            return false;
+        outSpans.hullPoolEnd = r.cursor;
+    }
 
-    outSpans.meshPoolStart = r.cursor;
-    if(!SnapReadMeshPool(bytes, r, tmp))
-        return false;
-    outSpans.meshPoolEnd = r.cursor;
+    if((skipPoolMask & 2u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.meshPoolBytes, outSpans.meshPoolStart, outSpans.meshPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.meshPoolStart = r.cursor;
+        if(!SnapReadMeshPool(bytes, r, tmp))
+            return false;
+        outSpans.meshPoolEnd = r.cursor;
+    }
 
-    outSpans.heightfieldPoolStart = r.cursor;
-    if(!SnapReadHeightfieldPool(bytes, r, tmp))
-        return false;
-    outSpans.heightfieldPoolEnd = r.cursor;
+    if((skipPoolMask & 4u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.heightfieldPoolBytes, outSpans.heightfieldPoolStart, outSpans.heightfieldPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.heightfieldPoolStart = r.cursor;
+        if(!SnapReadHeightfieldPool(bytes, r, tmp))
+            return false;
+        outSpans.heightfieldPoolEnd = r.cursor;
+    }
 
-    outSpans.compoundPoolStart = r.cursor;
-    if(!SnapReadCompoundPool(bytes, r, tmp))
-        return false;
-    outSpans.compoundPoolEnd = r.cursor;
+    if((skipPoolMask & 8u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.compoundPoolBytes, outSpans.compoundPoolStart, outSpans.compoundPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.compoundPoolStart = r.cursor;
+        if(!SnapReadCompoundPool(bytes, r, tmp))
+            return false;
+        outSpans.compoundPoolEnd = r.cursor;
+    }
 
-    outSpans.scaledPoolStart = r.cursor;
-    if(!SnapReadScaledPool(bytes, r, tmp))
-        return false;
-    outSpans.scaledPoolEnd = r.cursor;
+    if((skipPoolMask & 16u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.scaledPoolBytes, outSpans.scaledPoolStart, outSpans.scaledPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.scaledPoolStart = r.cursor;
+        if(!SnapReadScaledPool(bytes, r, tmp))
+            return false;
+        outSpans.scaledPoolEnd = r.cursor;
+    }
 
-    outSpans.chainPoolStart = r.cursor;
-    if(!SnapReadChainPool(bytes, r, tmp))
-        return false;
-    outSpans.chainPoolEnd = r.cursor;
+    if((skipPoolMask & 32u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.chainPoolBytes, outSpans.chainPoolStart, outSpans.chainPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.chainPoolStart = r.cursor;
+        if(!SnapReadChainPool(bytes, r, tmp))
+            return false;
+        outSpans.chainPoolEnd = r.cursor;
+    }
 
-    outSpans.sdfPoolStart = r.cursor;
-    if(!SnapReadSdfPool(bytes, r, tmp))
-        return false;
-    outSpans.sdfPoolEnd = r.cursor;
+    if((skipPoolMask & 64u) != 0u){
+        if(!SnapTrySkipSectionBytes(r, prov.sdfPoolBytes, outSpans.sdfPoolStart, outSpans.sdfPoolEnd))
+            return false;
+    }
+    else{
+        outSpans.sdfPoolStart = r.cursor;
+        if(!SnapReadSdfPool(bytes, r, tmp))
+            return false;
+        outSpans.sdfPoolEnd = r.cursor;
+    }
 
     u32 contactCount = 0u;
     if(!r.readCount(bytes, 64u, contactCount))
@@ -2776,9 +2919,19 @@ b8 ReadPhysicsWorldSnapshotPayloadWithSpans(
         return false;
     outSpans.extraManifoldsEnd = r.cursor;
 
-    if(!ValidateRestoredPhysicsWorld(tmp))
+    if(skipPoolMask == 0u && !ValidateRestoredPhysicsWorld(tmp))
         return false;
     return true;
+}
+
+b8 ReadPhysicsWorldSnapshotPayloadWithSpans(
+    in Span<u8> bytes,
+    mut SnapshotByteReader r,
+    mut PhysicsWorld tmp,
+    mut SnapshotWorldSectionSpans outSpans
+){
+    SnapshotWorldProvenance unusedProv;
+    return ReadPhysicsWorldSnapshotPayloadWithSpansFiltered(bytes, 0u, unusedProv, r, tmp, outSpans);
 }
 
 b8 ReadPhysicsWorldSnapshotPayload(in Span<u8> bytes, mut SnapshotByteReader r, mut PhysicsWorld tmp){
@@ -3240,9 +3393,14 @@ void CommitRestoredPhysicsWorld(mut PhysicsWorld tmp, mut PhysicsWorld world){
     world.m_extraContactManifolds.clear();
     if(!tmp.m_extraContactManifolds.empty()){
         world.m_extraContactManifolds.reserve(tmp.m_extraContactManifolds.size());
-        for(in auto entry : tmp.m_extraContactManifolds)
+        const u32 hasExtraBit = cast<u32>(ContactFlags::HasExtraManifolds);
+        for(in auto entry : tmp.m_extraContactManifolds){
             world.m_extraContactManifolds.emplace(entry.first, entry.second);
+            if(cast<usize>(entry.first) < world.m_contacts.size())
+                world.m_contacts[entry.first].flags |= hasExtraBit;
+        }
     }
+    world.recomputeDerivedCounts();
 
     world.m_bodyMoveEvents.clear();
     world.m_contactBeginEvents.clear();
@@ -3332,9 +3490,9 @@ b8 VerifyWorldSnapshotChecksumAndProvenance(
     mut u64 outPayloadHash,
     mut SnapshotWorldProvenance outProv
 ){
-    if(bytes.size() < 88u)
+    if(bytes.size() < 144u)
         return false;
-    const usize provOffset = bytes.size() - 72u;
+    const usize provOffset = bytes.size() - 128u;
     const usize totalHashedEnd = bytes.size() - 8u;
     const u64 payloadHash = SnapshotFnv1a64(Span<u8>(bytes.data(), provOffset));
     u64 fullHash = payloadHash;
@@ -3354,6 +3512,13 @@ b8 VerifyWorldSnapshotChecksumAndProvenance(
         || !provReader.readU64(bytes, outProv.scaledPoolVersion)
         || !provReader.readU64(bytes, outProv.chainPoolVersion)
         || !provReader.readU64(bytes, outProv.sdfPoolVersion)
+        || !provReader.readU64(bytes, outProv.hullPoolBytes)
+        || !provReader.readU64(bytes, outProv.meshPoolBytes)
+        || !provReader.readU64(bytes, outProv.heightfieldPoolBytes)
+        || !provReader.readU64(bytes, outProv.compoundPoolBytes)
+        || !provReader.readU64(bytes, outProv.scaledPoolBytes)
+        || !provReader.readU64(bytes, outProv.chainPoolBytes)
+        || !provReader.readU64(bytes, outProv.sdfPoolBytes)
     )
         return false;
     u64 storedHash = 0u;
@@ -3394,6 +3559,9 @@ u64 ComputePhysicsWorldStateHash(in PhysicsWorld world){
 class DeltaSnapshotScratch{
     public Vector<u8> curBuf;
     public Vector<u32> dirtyIndices;
+    public Vector<u8> elemBlobs;
+    public Vector<u32> elemStarts;
+    public Vector<u32> elemLens;
 }
 
 b8 SnapF32BitsEqual(in f32 a, in f32 b){
@@ -4123,7 +4291,7 @@ b8 SnapReadDynamicTreeDelta(in Span<u8> bytes, mut SnapshotByteReader r, mut Dyn
     return SnapReadDynamicTree(bytes, r, dstTree);
 }
 
-void ClonePhysicsWorldStateForDelta(in PhysicsWorld src, mut PhysicsWorld dst){
+void ClonePhysicsWorldNonGeometryStateForDelta(in PhysicsWorld src, mut PhysicsWorld dst){
     dst.m_def = src.m_def;
     dst.m_worldIndex = src.m_worldIndex;
     dst.m_backendMode = src.m_backendMode;
@@ -4136,6 +4304,13 @@ void ClonePhysicsWorldStateForDelta(in PhysicsWorld src, mut PhysicsWorld dst){
     dst.m_hitEventShapeCount = src.m_hitEventShapeCount;
     dst.m_breakableJointCount = src.m_breakableJointCount;
     dst.m_bulletBodyCount = src.m_bulletBodyCount;
+    dst.m_nonDefaultBroadPhaseLayerMaskCount = src.m_nonDefaultBroadPhaseLayerMaskCount;
+    dst.m_gpuUnsupportedFilterShapeCount = src.m_gpuUnsupportedFilterShapeCount;
+    dst.m_referenceJointCount = src.m_referenceJointCount;
+    dst.m_gpuUnsupportedGeomRefTotal = src.m_gpuUnsupportedGeomRefTotal;
+    dst.m_activeShapeCount = src.m_activeShapeCount;
+    dst.m_shapelessDynamicBodyCount = src.m_shapelessDynamicBodyCount;
+    dst.m_ignoredBodyPairCounts = src.m_ignoredBodyPairCounts;
     dst.m_worldOriginOffset = src.m_worldOriginOffset;
 
     dst.m_bodies = src.m_bodies;
@@ -4143,42 +4318,6 @@ void ClonePhysicsWorldStateForDelta(in PhysicsWorld src, mut PhysicsWorld dst){
     dst.m_dirtyMassBodyIds = src.m_dirtyMassBodyIds;
     dst.m_shapes = src.m_shapes;
     dst.m_freeShapeIds = src.m_freeShapeIds;
-    dst.m_hullShapes = src.m_hullShapes;
-    dst.m_hullLocalAabbs = src.m_hullLocalAabbs;
-    dst.m_hullRefCounts = src.m_hullRefCounts;
-    dst.m_hullGenerations = src.m_hullGenerations;
-    dst.m_hullOwnedByUser = src.m_hullOwnedByUser;
-    dst.m_freeHullShapeIds = src.m_freeHullShapeIds;
-    dst.m_meshShapes = src.m_meshShapes;
-    dst.m_meshRefCounts = src.m_meshRefCounts;
-    dst.m_meshGenerations = src.m_meshGenerations;
-    dst.m_meshOwnedByUser = src.m_meshOwnedByUser;
-    dst.m_freeMeshShapeIds = src.m_freeMeshShapeIds;
-    dst.m_heightfieldShapes = src.m_heightfieldShapes;
-    dst.m_heightfieldRefCounts = src.m_heightfieldRefCounts;
-    dst.m_heightfieldGenerations = src.m_heightfieldGenerations;
-    dst.m_heightfieldOwnedByUser = src.m_heightfieldOwnedByUser;
-    dst.m_freeHeightfieldShapeIds = src.m_freeHeightfieldShapeIds;
-    dst.m_compoundShapes = src.m_compoundShapes;
-    dst.m_compoundRefCounts = src.m_compoundRefCounts;
-    dst.m_compoundGenerations = src.m_compoundGenerations;
-    dst.m_compoundOwnedByUser = src.m_compoundOwnedByUser;
-    dst.m_freeCompoundShapeIds = src.m_freeCompoundShapeIds;
-    dst.m_scaledShapes = src.m_scaledShapes;
-    dst.m_scaledRefCounts = src.m_scaledRefCounts;
-    dst.m_scaledGenerations = src.m_scaledGenerations;
-    dst.m_scaledOwnedByUser = src.m_scaledOwnedByUser;
-    dst.m_freeScaledShapeIds = src.m_freeScaledShapeIds;
-    dst.m_chainShapes = src.m_chainShapes;
-    dst.m_chainRefCounts = src.m_chainRefCounts;
-    dst.m_chainGenerations = src.m_chainGenerations;
-    dst.m_chainOwnedByUser = src.m_chainOwnedByUser;
-    dst.m_freeChainShapeIds = src.m_freeChainShapeIds;
-    dst.m_sdfShapes = src.m_sdfShapes;
-    dst.m_sdfRefCounts = src.m_sdfRefCounts;
-    dst.m_sdfGenerations = src.m_sdfGenerations;
-    dst.m_sdfOwnedByUser = src.m_sdfOwnedByUser;
-    dst.m_freeSdfShapeIds = src.m_freeSdfShapeIds;
     dst.m_contacts = src.m_contacts;
     dst.m_freeContactIds = src.m_freeContactIds;
     dst.m_joints = src.m_joints;
@@ -4210,6 +4349,71 @@ void ClonePhysicsWorldStateForDelta(in PhysicsWorld src, mut PhysicsWorld dst){
         dst.m_extraContactManifolds.reserve(src.m_extraContactManifolds.size());
         for(in auto entry : src.m_extraContactManifolds)
             dst.m_extraContactManifolds.emplace(entry.first, entry.second);
+    }
+}
+
+void SwapPhysicsWorldGeometryPoolByBit(mut PhysicsWorld a, mut PhysicsWorld b, in u32 poolBit){
+    if(poolBit == 1u){
+        a.m_hullShapes.swap(b.m_hullShapes);
+        a.m_hullLocalAabbs.swap(b.m_hullLocalAabbs);
+        a.m_hullRefCounts.swap(b.m_hullRefCounts);
+        a.m_hullGenerations.swap(b.m_hullGenerations);
+        a.m_hullOwnedByUser.swap(b.m_hullOwnedByUser);
+        a.m_freeHullShapeIds.swap(b.m_freeHullShapeIds);
+    }
+    else if(poolBit == 2u){
+        a.m_meshShapes.swap(b.m_meshShapes);
+        a.m_meshRefCounts.swap(b.m_meshRefCounts);
+        a.m_meshGenerations.swap(b.m_meshGenerations);
+        a.m_meshOwnedByUser.swap(b.m_meshOwnedByUser);
+        a.m_freeMeshShapeIds.swap(b.m_freeMeshShapeIds);
+    }
+    else if(poolBit == 4u){
+        a.m_heightfieldShapes.swap(b.m_heightfieldShapes);
+        a.m_heightfieldRefCounts.swap(b.m_heightfieldRefCounts);
+        a.m_heightfieldGenerations.swap(b.m_heightfieldGenerations);
+        a.m_heightfieldOwnedByUser.swap(b.m_heightfieldOwnedByUser);
+        a.m_freeHeightfieldShapeIds.swap(b.m_freeHeightfieldShapeIds);
+    }
+    else if(poolBit == 8u){
+        a.m_compoundShapes.swap(b.m_compoundShapes);
+        a.m_compoundRefCounts.swap(b.m_compoundRefCounts);
+        a.m_compoundGenerations.swap(b.m_compoundGenerations);
+        a.m_compoundOwnedByUser.swap(b.m_compoundOwnedByUser);
+        a.m_freeCompoundShapeIds.swap(b.m_freeCompoundShapeIds);
+    }
+    else if(poolBit == 16u){
+        a.m_scaledShapes.swap(b.m_scaledShapes);
+        a.m_scaledRefCounts.swap(b.m_scaledRefCounts);
+        a.m_scaledGenerations.swap(b.m_scaledGenerations);
+        a.m_scaledOwnedByUser.swap(b.m_scaledOwnedByUser);
+        a.m_freeScaledShapeIds.swap(b.m_freeScaledShapeIds);
+    }
+    else if(poolBit == 32u){
+        a.m_chainShapes.swap(b.m_chainShapes);
+        a.m_chainRefCounts.swap(b.m_chainRefCounts);
+        a.m_chainGenerations.swap(b.m_chainGenerations);
+        a.m_chainOwnedByUser.swap(b.m_chainOwnedByUser);
+        a.m_freeChainShapeIds.swap(b.m_freeChainShapeIds);
+    }
+    else if(poolBit == 64u){
+        a.m_sdfShapes.swap(b.m_sdfShapes);
+        a.m_sdfRefCounts.swap(b.m_sdfRefCounts);
+        a.m_sdfGenerations.swap(b.m_sdfGenerations);
+        a.m_sdfOwnedByUser.swap(b.m_sdfOwnedByUser);
+        a.m_freeSdfShapeIds.swap(b.m_freeSdfShapeIds);
+    }
+}
+
+void SwapAllPhysicsWorldGeometryPools(mut PhysicsWorld a, mut PhysicsWorld b){
+    for(u32 bit = 1u; bit <= 64u; bit *= 2u)
+        SwapPhysicsWorldGeometryPoolByBit(a, b, bit);
+}
+
+void RestoreUnchangedPhysicsWorldGeometryPools(mut PhysicsWorld tmp, mut PhysicsWorld world, in u32 restoredPoolMask){
+    for(u32 bit = 1u; bit <= 64u; bit *= 2u){
+        if((restoredPoolMask & bit) == 0u)
+            SwapPhysicsWorldGeometryPoolByBit(tmp, world, bit);
     }
 }
 
@@ -4290,7 +4494,8 @@ b8 CreatePhysicsWorldDeltaSnapshot(in PhysicsWorld world, in Span<u8> baseSnapsh
         return false;
     PhysicsWorld baseWorld;
     SnapshotWorldSectionSpans baseSpans;
-    if(!ReadPhysicsWorldSnapshotPayloadWithSpans(baseSnapshotBytes, baseR, baseWorld, baseSpans) || baseR.cursor != basePayloadEnd)
+    const u32 skipPoolMask = ComputeMatchingPoolSkipMask(baseProv, world);
+    if(!ReadPhysicsWorldSnapshotPayloadWithSpansFiltered(baseSnapshotBytes, skipPoolMask, baseProv, baseR, baseWorld, baseSpans) || baseR.cursor != basePayloadEnd)
         return false;
 
     const u64 targetHash = ComputePhysicsWorldStateHash(world);
@@ -4345,7 +4550,36 @@ b8 SnapApplyWorldBlobDelta<ReadFn>(in Span<u8> bytes, mut SnapshotByteReader r, 
     return readSection(bytes, r, tmp);
 }
 
-b8 ApplyPhysicsWorldDeltaBody(in Span<u8> deltaBytes, mut SnapshotByteReader r, mut PhysicsWorld tmp){
+b8 SnapApplyWorldPoolDelta<ReadFn>(
+    in Span<u8> bytes,
+    in u32 poolBit,
+    in b8 preserveGeometry,
+    mut SnapshotByteReader r,
+    in ReadFn readSection,
+    mut PhysicsWorld backupWorld,
+    mut u32 restoredPoolMask,
+    mut PhysicsWorld tmp
+){
+    u8 changed = 0u;
+    if(!r.readU8(bytes, changed))
+        return false;
+    if(changed == 0u)
+        return true;
+    if(preserveGeometry){
+        SwapPhysicsWorldGeometryPoolByBit(tmp, backupWorld, poolBit);
+        restoredPoolMask |= poolBit;
+    }
+    return readSection(bytes, r, tmp);
+}
+
+b8 ApplyPhysicsWorldDeltaBody(
+    in Span<u8> deltaBytes,
+    in b8 preserveGeometry,
+    mut SnapshotByteReader r,
+    mut PhysicsWorld backupWorld,
+    mut u32 restoredPoolMask,
+    mut PhysicsWorld tmp
+){
     const auto readBodyFn = lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut Body e) -> b8{ return SnapReadBody(b, sr, e); };
     const auto readShapeFn = lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut Shape e) -> b8{ return SnapReadShape(b, sr, e); };
     const auto readContactFn = lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut Contact e) -> b8{ return SnapReadContact(b, sr, e); };
@@ -4364,13 +4598,13 @@ b8 ApplyPhysicsWorldDeltaBody(in Span<u8> deltaBytes, mut SnapshotByteReader r, 
     RebuildDirtyMassBodyIds(tmp);
 
     if(
-        !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadHullPool(b, sr, pw); }, tmp)
-        || !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadMeshPool(b, sr, pw); }, tmp)
-        || !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadHeightfieldPool(b, sr, pw); }, tmp)
-        || !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadCompoundPool(b, sr, pw); }, tmp)
-        || !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadScaledPool(b, sr, pw); }, tmp)
-        || !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadChainPool(b, sr, pw); }, tmp)
-        || !SnapApplyWorldBlobDelta(deltaBytes, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadSdfPool(b, sr, pw); }, tmp)
+        !SnapApplyWorldPoolDelta(deltaBytes, 1u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadHullPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
+        || !SnapApplyWorldPoolDelta(deltaBytes, 2u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadMeshPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
+        || !SnapApplyWorldPoolDelta(deltaBytes, 4u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadHeightfieldPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
+        || !SnapApplyWorldPoolDelta(deltaBytes, 8u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadCompoundPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
+        || !SnapApplyWorldPoolDelta(deltaBytes, 16u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadScaledPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
+        || !SnapApplyWorldPoolDelta(deltaBytes, 32u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadChainPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
+        || !SnapApplyWorldPoolDelta(deltaBytes, 64u, preserveGeometry, r, lambda[](in Span<u8> b, mut SnapshotByteReader sr, mut PhysicsWorld pw) -> b8{ return SnapReadSdfPool(b, sr, pw); }, backupWorld, restoredPoolMask, tmp)
         || !SnapReadSparseArrayDelta(deltaBytes, r, 64u, readContactFn, tmp.m_contacts)
         || !SnapApplyU32VecDelta(deltaBytes, r, tmp.m_freeContactIds)
         || !SnapReadSparseArrayDelta(deltaBytes, r, 64u, readJointFn, tmp.m_joints)
@@ -4407,18 +4641,28 @@ b8 ApplyPhysicsWorldDeltaPayload(
     in u64 baseHash,
     in u64 targetHash,
     in b8 verifyBaseHash,
+    in b8 preserveGeometry,
     mut SnapshotByteReader r,
+    mut PhysicsWorld backupWorld,
     mut PhysicsWorld tmp
 ){
-    if(verifyBaseHash && ComputePhysicsWorldStateHash(tmp) != baseHash)
+    if(verifyBaseHash && ComputePhysicsWorldStateHash(tmp) != baseHash){
+        if(preserveGeometry)
+            RestoreUnchangedPhysicsWorldGeometryPools(tmp, backupWorld, 0u);
         return false;
-    if(!ApplyPhysicsWorldDeltaBody(deltaBytes, r, tmp))
+    }
+    u32 restoredPoolMask = 0u;
+    if(
+        !ApplyPhysicsWorldDeltaBody(deltaBytes, preserveGeometry, r, backupWorld, restoredPoolMask, tmp)
+        || r.cursor != payloadEnd
+        || !ValidateRestoredPhysicsWorld(tmp)
+        || ComputePhysicsWorldStateHash(tmp) != targetHash
+    ){
+        if(preserveGeometry)
+            RestoreUnchangedPhysicsWorldGeometryPools(tmp, backupWorld, restoredPoolMask);
         return false;
-    if(r.cursor != payloadEnd)
-        return false;
-    if(!ValidateRestoredPhysicsWorld(tmp))
-        return false;
-    return ComputePhysicsWorldStateHash(tmp) == targetHash;
+    }
+    return true;
 }
 
 b8 ApplyPhysicsWorldDeltaSnapshot(in Span<u8> deltaBytes, mut PhysicsWorld world){
@@ -4436,9 +4680,10 @@ b8 ApplyPhysicsWorldDeltaSnapshot(in Span<u8> deltaBytes, mut PhysicsWorld world
         return false;
 
     PhysicsWorld tmp;
-    ClonePhysicsWorldStateForDelta(world, tmp);
+    ClonePhysicsWorldNonGeometryStateForDelta(world, tmp);
+    SwapAllPhysicsWorldGeometryPools(world, tmp);
 
-    if(!ApplyPhysicsWorldDeltaPayload(deltaBytes, payloadEnd, baseHash, targetHash, false, r, tmp))
+    if(!ApplyPhysicsWorldDeltaPayload(deltaBytes, payloadEnd, baseHash, targetHash, false, true, r, world, tmp))
         return false;
     CommitRestoredPhysicsWorld(tmp, world);
     return true;
@@ -4468,7 +4713,7 @@ b8 RestorePhysicsWorldDeltaSnapshot(in Span<u8> baseSnapshotBytes, in Span<u8> d
     if(!ReadPhysicsWorldSnapshotPayload(baseSnapshotBytes, baseR, tmp) || baseR.cursor != baseEnd)
         return false;
 
-    if(!ApplyPhysicsWorldDeltaPayload(deltaBytes, payloadEnd, baseHash, targetHash, false, r, tmp))
+    if(!ApplyPhysicsWorldDeltaPayload(deltaBytes, payloadEnd, baseHash, targetHash, false, false, r, world, tmp))
         return false;
     CommitRestoredPhysicsWorld(tmp, world);
     return true;
@@ -7047,6 +7292,29 @@ u64 ComputePhysicsSubsystemsStateHash(in PhysicsSubsystemsBundle bundle){
     return hashSink.hash;
 }
 
+b8 ReadFullPhysicsSnapshotBodyWithSpansFiltered(
+    in Span<u8> bytes,
+    in usize payloadEnd,
+    in u32 skipPoolMask,
+    in SnapshotWorldProvenance prov,
+    mut SnapshotByteReader ioR,
+    mut PhysicsWorld outWorld,
+    mut SnapshotWorldSectionSpans outSpans,
+    mut PhysicsSubsystemsBundle outBundle
+){
+    u32 magic = 0u;
+    u32 version = 0u;
+    if(!ioR.readU32(bytes, magic) || !ioR.readU32(bytes, version))
+        return false;
+    if(magic != s_FullSnapshotMagic || version != s_FullSnapshotVersion)
+        return false;
+    if(!ReadPhysicsWorldSnapshotPayloadWithSpansFiltered(bytes, skipPoolMask, prov, ioR, outWorld, outSpans))
+        return false;
+    if(!ReadPhysicsSubsystemsPayload(bytes, ioR, outBundle))
+        return false;
+    return ioR.cursor == payloadEnd;
+}
+
 b8 ReadFullPhysicsSnapshotWithSpans(
     in Span<u8> bytes,
     mut SnapshotByteReader outR,
@@ -7059,30 +7327,21 @@ b8 ReadFullPhysicsSnapshotWithSpans(
 ){
     if(!VerifyWorldSnapshotChecksumAndProvenance(bytes, outR, outPayloadEnd, outPayloadHash, outProv))
         return false;
-    u32 magic = 0u;
-    u32 version = 0u;
-    if(!outR.readU32(bytes, magic) || !outR.readU32(bytes, version))
-        return false;
-    if(magic != s_FullSnapshotMagic || version != s_FullSnapshotVersion)
-        return false;
-    if(!ReadPhysicsWorldSnapshotPayloadWithSpans(bytes, outR, outWorld, outSpans))
-        return false;
-    if(!ReadPhysicsSubsystemsPayload(bytes, outR, outBundle))
-        return false;
-    return outR.cursor == outPayloadEnd;
+    return ReadFullPhysicsSnapshotBodyWithSpansFiltered(bytes, outPayloadEnd, 0u, outProv, outR, outWorld, outSpans, outBundle);
 }
 
 b8 SerializeFullPhysicsSnapshot(in PhysicsWorld world, in PhysicsSubsystemsBundle bundle, mut Vector<u8> outBytes){
     outBytes.clear();
-    outBytes.reserve(EstimatePhysicsWorldSnapshotSize(world) + EstimatePhysicsSubsystemsSnapshotSize(bundle) + 88u);
+    outBytes.reserve(EstimatePhysicsWorldSnapshotSize(world) + EstimatePhysicsSubsystemsSnapshotSize(bundle) + 144u);
     SnapshotDirectByteWriter w(outBytes);
     w.writeU32(s_FullSnapshotMagic);
     w.writeU32(s_FullSnapshotVersion);
-    if(!SerializePhysicsWorldSnapshotPayload(world, w))
+    SnapshotWorldProvenance poolSizes;
+    if(!SerializePhysicsWorldSnapshotPayloadWithPoolBytes(world, w, poolSizes))
         return false;
     if(!SerializePhysicsSubsystemsPayload(bundle, w))
         return false;
-    WriteSnapshotProvenanceFooter(world, w);
+    WriteSnapshotProvenanceFooter(world, poolSizes, w);
     w.writeU64(w.m_hash);
     return true;
 }
@@ -7123,6 +7382,16 @@ b8 SnapByteVecsEqual(in Vector<u8> a, in Vector<u8> b){
         return false;
     for(usize i = 0u; i < a.size(); ++i){
         if(a[i] != b[i])
+            return false;
+    }
+    return true;
+}
+
+b8 SnapByteVecEqualsSlice(in Vector<u8> a, in Vector<u8> b, in usize bStart, in usize bLen){
+    if(a.size() != bLen)
+        return false;
+    for(usize i = 0u; i < bLen; ++i){
+        if(a[i] != b[bStart + i])
             return false;
     }
     return true;
@@ -7188,6 +7457,11 @@ b8 SnapEmitVectorBlobDelta<T, WriteFn>(
 ){
     if(baseV.size() == curV.size()){
         sc.dirtyIndices.clear();
+        sc.elemBlobs.clear();
+        sc.elemStarts.clear();
+        sc.elemLens.clear();
+        sc.elemStarts.reserve(curV.size());
+        sc.elemLens.reserve(curV.size());
         for(usize i = 0u; i < curV.size(); ++i){
             baseBuf.clear();
             {
@@ -7195,13 +7469,18 @@ b8 SnapEmitVectorBlobDelta<T, WriteFn>(
                 if(!writeElem(baseV[i], bw))
                     return false;
             }
-            sc.curBuf.clear();
+            const usize start = sc.elemBlobs.size();
             {
-                SnapshotRawByteWriter cw(sc.curBuf);
+                SnapshotRawByteWriter cw(sc.elemBlobs);
                 if(!writeElem(curV[i], cw))
                     return false;
             }
-            if(!SnapByteVecsEqual(baseBuf, sc.curBuf))
+            const usize len = sc.elemBlobs.size() - start;
+            if(start > cast<usize>(0xFFFFFFFFu) || len > cast<usize>(0xFFFFFFFFu))
+                return false;
+            sc.elemStarts.push_back(cast<u32>(start));
+            sc.elemLens.push_back(cast<u32>(len));
+            if(!SnapByteVecEqualsSlice(baseBuf, sc.elemBlobs, start, len))
                 sc.dirtyIndices.push_back(cast<u32>(i));
         }
         if(sc.dirtyIndices.empty()){
@@ -7215,16 +7494,19 @@ b8 SnapEmitVectorBlobDelta<T, WriteFn>(
             for(usize k = 0u; k < sc.dirtyIndices.size(); ++k){
                 const u32 idx = sc.dirtyIndices[k];
                 w.writeU32(idx);
-                sc.curBuf.clear();
-                {
-                    SnapshotRawByteWriter ew(sc.curBuf);
-                    if(!writeElem(curV[idx], ew))
-                        return false;
-                }
-                w.writeBytes(Span<u8>(sc.curBuf));
+                const usize start = cast<usize>(sc.elemStarts[idx]);
+                const usize len = cast<usize>(sc.elemLens[idx]);
+                if(len > 0u)
+                    w.writeBytes(Span<u8>(sc.elemBlobs.data() + start, len));
             }
             return true;
         }
+        w.writeU8(2u);
+        if(!w.writeCount(curV.size()))
+            return false;
+        if(!sc.elemBlobs.empty())
+            w.writeBytes(Span<u8>(sc.elemBlobs));
+        return true;
     }
     w.writeU8(2u);
     if(!w.writeCount(curV.size()))
@@ -7424,10 +7706,13 @@ b8 CreateFullPhysicsDeltaSnapshot(
     usize basePayloadEnd = 0u;
     u64 baseHash = 0u;
     SnapshotWorldProvenance baseProv;
+    if(!VerifyWorldSnapshotChecksumAndProvenance(baseFullSnapshotBytes, baseR, basePayloadEnd, baseHash, baseProv))
+        return false;
     PhysicsWorld baseWorld;
     SnapshotWorldSectionSpans baseSpans;
     PhysicsSubsystemsBundle baseBundle;
-    if(!ReadFullPhysicsSnapshotWithSpans(baseFullSnapshotBytes, baseR, basePayloadEnd, baseHash, baseProv, baseWorld, baseSpans, baseBundle))
+    const u32 skipPoolMask = ComputeMatchingPoolSkipMask(baseProv, world);
+    if(!ReadFullPhysicsSnapshotBodyWithSpansFiltered(baseFullSnapshotBytes, basePayloadEnd, skipPoolMask, baseProv, baseR, baseWorld, baseSpans, baseBundle))
         return false;
 
     const u64 targetHash = ComputeFullPhysicsStateHash(world, bundle);
@@ -7453,20 +7738,25 @@ b8 FinalizeFullDeltaRestore(
     in Span<u8> deltaBytes,
     in usize payloadEnd,
     in u64 targetHash,
+    in b8 preserveGeometry,
     mut SnapshotByteReader r,
     mut PhysicsWorld tmpWorld,
     mut PhysicsSubsystemsBundle tmpBundle,
     mut PhysicsWorld world,
     mut PhysicsSubsystemsBundle bundle
 ){
-    if(!ApplyPhysicsWorldDeltaBody(deltaBytes, r, tmpWorld))
+    u32 restoredPoolMask = 0u;
+    if(
+        !ApplyPhysicsWorldDeltaBody(deltaBytes, preserveGeometry, r, world, restoredPoolMask, tmpWorld)
+        || !ApplyPhysicsSubsystemsDeltaPayload(deltaBytes, r, tmpBundle)
+        || r.cursor != payloadEnd
+        || !ValidateRestoredPhysicsWorld(tmpWorld)
+        || ComputeFullPhysicsStateHash(tmpWorld, tmpBundle) != targetHash
+    ){
+        if(preserveGeometry)
+            RestoreUnchangedPhysicsWorldGeometryPools(tmpWorld, world, restoredPoolMask);
         return false;
-    if(!ApplyPhysicsSubsystemsDeltaPayload(deltaBytes, r, tmpBundle) || r.cursor != payloadEnd)
-        return false;
-    if(!ValidateRestoredPhysicsWorld(tmpWorld))
-        return false;
-    if(ComputeFullPhysicsStateHash(tmpWorld, tmpBundle) != targetHash)
-        return false;
+    }
 
     PreservePhysicsSubsystemsCallbacks(bundle, tmpBundle);
     CommitRestoredPhysicsWorld(tmpWorld, world);
@@ -7490,9 +7780,10 @@ b8 ApplyFullPhysicsDeltaSnapshot(in Span<u8> deltaBytes, mut PhysicsWorld world,
         return false;
 
     PhysicsWorld tmpWorld;
-    ClonePhysicsWorldStateForDelta(world, tmpWorld);
+    ClonePhysicsWorldNonGeometryStateForDelta(world, tmpWorld);
+    SwapAllPhysicsWorldGeometryPools(world, tmpWorld);
     PhysicsSubsystemsBundle tmpBundle = bundle;
-    return FinalizeFullDeltaRestore(deltaBytes, payloadEnd, targetHash, r, tmpWorld, tmpBundle, world, bundle);
+    return FinalizeFullDeltaRestore(deltaBytes, payloadEnd, targetHash, true, r, tmpWorld, tmpBundle, world, bundle);
 }
 
 b8 RestoreFullPhysicsDeltaSnapshot(
@@ -7524,7 +7815,7 @@ b8 RestoreFullPhysicsDeltaSnapshot(
     if(basePayloadHash != baseHash)
         return false;
 
-    return FinalizeFullDeltaRestore(deltaBytes, payloadEnd, targetHash, r, tmpWorld, tmpBundle, world, bundle);
+    return FinalizeFullDeltaRestore(deltaBytes, payloadEnd, targetHash, false, r, tmpWorld, tmpBundle, world, bundle);
 }
 
 

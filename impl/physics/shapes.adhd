@@ -2365,37 +2365,34 @@ class SdfShape{
         const VectorSingle bMax(this.boundsMax, 0.0f);
         const VectorSingle clampedP = Clamp(VectorSingle(localP, 0.0f), bMin, bMax);
         const VectorSingle rel = (clampedP - bMin) * VectorSingle(this.invCellSize, 0.0f);
-        const u32 maxIx = this.dimX - 2u;
-        const u32 maxIy = this.dimY - 2u;
-        const u32 maxIz = this.dimZ - 2u;
-        u32 x0 = cast<u32>(Floor(VectorSingle(Max(rel.x, 0.0f))).x);
-        u32 y0 = cast<u32>(Floor(VectorSingle(Max(rel.y, 0.0f))).x);
-        u32 z0 = cast<u32>(Floor(VectorSingle(Max(rel.z, 0.0f))).x);
-        if(x0 > maxIx)
-            x0 = maxIx;
-        if(y0 > maxIy)
-            y0 = maxIy;
-        if(z0 > maxIz)
-            z0 = maxIz;
-        const f32 tx = Clamp(rel.x - cast<f32>(x0), 0.0f, 1.0f);
-        const f32 ty = Clamp(rel.y - cast<f32>(y0), 0.0f, 1.0f);
-        const f32 tz = Clamp(rel.z - cast<f32>(z0), 0.0f, 1.0f);
+        const VectorSingle maxIdxF(cast<f32>(this.dimX - 2u), cast<f32>(this.dimY - 2u), cast<f32>(this.dimZ - 2u), 0.0f);
+        const VectorSingle idxF = Clamp(Floor(Max(rel, VectorSingle(0.0f))), VectorSingle(0.0f), maxIdxF);
+        const u32 x0 = cast<u32>(idxF.x);
+        const u32 y0 = cast<u32>(idxF.y);
+        const u32 z0 = cast<u32>(idxF.z);
+        const VectorSingle tVec = Clamp(rel - idxF, VectorSingle(0.0f), VectorSingle(1.0f));
+        const f32 tx = tVec.x;
+        const f32 ty = tVec.y;
+        const f32 tz = tVec.z;
 
-        const f32 c000 = this.atGrid(x0, y0, z0);
-        const f32 c100 = this.atGrid(x0 + 1u, y0, z0);
-        const f32 c010 = this.atGrid(x0, y0 + 1u, z0);
-        const f32 c110 = this.atGrid(x0 + 1u, y0 + 1u, z0);
-        const f32 c001 = this.atGrid(x0, y0, z0 + 1u);
-        const f32 c101 = this.atGrid(x0 + 1u, y0, z0 + 1u);
-        const f32 c011 = this.atGrid(x0, y0 + 1u, z0 + 1u);
-        const f32 c111 = this.atGrid(x0 + 1u, y0 + 1u, z0 + 1u);
+        const usize strideX = 1u;
+        const usize strideY = cast<usize>(this.dimX);
+        const usize strideZ = strideY * cast<usize>(this.dimY);
+        const usize baseIdx = cast<usize>(z0) * strideZ + cast<usize>(y0) * strideY + cast<usize>(x0);
+        const f32 c000 = this.distances[baseIdx];
+        const f32 c100 = this.distances[baseIdx + strideX];
+        const f32 c010 = this.distances[baseIdx + strideY];
+        const f32 c110 = this.distances[baseIdx + strideY + strideX];
+        const f32 c001 = this.distances[baseIdx + strideZ];
+        const f32 c101 = this.distances[baseIdx + strideZ + strideX];
+        const f32 c011 = this.distances[baseIdx + strideZ + strideY];
+        const f32 c111 = this.distances[baseIdx + strideZ + strideY + strideX];
 
-        const f32 c00 = c000 + (c100 - c000) * tx;
-        const f32 c10 = c010 + (c110 - c010) * tx;
-        const f32 c01 = c001 + (c101 - c001) * tx;
-        const f32 c11 = c011 + (c111 - c011) * tx;
-        const f32 c0 = c00 + (c10 - c00) * ty;
-        const f32 c1 = c01 + (c11 - c01) * ty;
+        const VectorSingle c0Vec(c000, c010, c001, c011);
+        const VectorSingle c1Vec(c100, c110, c101, c111);
+        const VectorSingle cxVec = c0Vec + (c1Vec - c0Vec) * VectorSingle(tx);
+        const f32 c0 = cxVec.x + (cxVec.y - cxVec.x) * ty;
+        const f32 c1 = cxVec.z + (cxVec.w - cxVec.z) * ty;
         const f32 dGrid = c0 + (c1 - c0) * tz;
         const f32 outDistSq = Vector3LengthSq(VectorSingle(localP, 0.0f) - clampedP).x;
         if(outDistSq > 1.0e-12f)
@@ -2413,21 +2410,15 @@ class SdfShape{
         const VectorSingle bMax(this.boundsMax, 0.0f);
         const VectorSingle clampedP = Clamp(VectorSingle(localP, 0.0f), bMin, bMax);
         const VectorSingle rel = (clampedP - bMin) * VectorSingle(this.invCellSize, 0.0f);
-        const u32 maxIx = this.dimX - 2u;
-        const u32 maxIy = this.dimY - 2u;
-        const u32 maxIz = this.dimZ - 2u;
-        u32 x0 = cast<u32>(Floor(VectorSingle(Max(rel.x, 0.0f))).x);
-        u32 y0 = cast<u32>(Floor(VectorSingle(Max(rel.y, 0.0f))).x);
-        u32 z0 = cast<u32>(Floor(VectorSingle(Max(rel.z, 0.0f))).x);
-        if(x0 > maxIx)
-            x0 = maxIx;
-        if(y0 > maxIy)
-            y0 = maxIy;
-        if(z0 > maxIz)
-            z0 = maxIz;
-        const f32 tx = Clamp(rel.x - cast<f32>(x0), 0.0f, 1.0f);
-        const f32 ty = Clamp(rel.y - cast<f32>(y0), 0.0f, 1.0f);
-        const f32 tz = Clamp(rel.z - cast<f32>(z0), 0.0f, 1.0f);
+        const VectorSingle maxIdxF(cast<f32>(this.dimX - 2u), cast<f32>(this.dimY - 2u), cast<f32>(this.dimZ - 2u), 0.0f);
+        const VectorSingle idxF = Clamp(Floor(Max(rel, VectorSingle(0.0f))), VectorSingle(0.0f), maxIdxF);
+        const u32 x0 = cast<u32>(idxF.x);
+        const u32 y0 = cast<u32>(idxF.y);
+        const u32 z0 = cast<u32>(idxF.z);
+        const VectorSingle tVec = Clamp(rel - idxF, VectorSingle(0.0f), VectorSingle(1.0f));
+        const f32 tx = tVec.x;
+        const f32 ty = tVec.y;
+        const f32 tz = tVec.z;
 
         const usize strideX = 1u;
         const usize strideY = cast<usize>(this.dimX);
@@ -2442,12 +2433,14 @@ class SdfShape{
         const f32 c011 = this.distances[baseIdx + strideZ + strideY];
         const f32 c111 = this.distances[baseIdx + strideZ + strideY + strideX];
 
-        const f32 c00 = c000 + (c100 - c000) * tx;
-        const f32 c10 = c010 + (c110 - c010) * tx;
-        const f32 c01 = c001 + (c101 - c001) * tx;
-        const f32 c11 = c011 + (c111 - c011) * tx;
-        const f32 c0 = c00 + (c10 - c00) * ty;
-        const f32 c1 = c01 + (c11 - c01) * ty;
+        const VectorSingle c0Vec(c000, c010, c001, c011);
+        const VectorSingle c1Vec(c100, c110, c101, c111);
+        const VectorSingle dxVec = c1Vec - c0Vec;
+        const VectorSingle cxVec = c0Vec + dxVec * VectorSingle(tx);
+        const f32 dy0 = cxVec.y - cxVec.x;
+        const f32 dy1 = cxVec.w - cxVec.z;
+        const f32 c0 = cxVec.x + dy0 * ty;
+        const f32 c1 = cxVec.z + dy1 * ty;
         const f32 dGrid = c0 + (c1 - c0) * tz;
 
         const VectorSingle outsideDelta = VectorSingle(localP, 0.0f) - clampedP;
@@ -2462,12 +2455,10 @@ class SdfShape{
         }
 
         const f32 omtz = 1.0f - tz;
-        const f32 dx0 = (c100 - c000) + ((c110 - c010) - (c100 - c000)) * ty;
-        const f32 dx1 = (c101 - c001) + ((c111 - c011) - (c101 - c001)) * ty;
-        const f32 gx = (dx0 * omtz + dx1 * tz) * this.invCellSize.x;
-        const f32 gy = ((c10 - c00) * omtz + (c11 - c01) * tz) * this.invCellSize.y;
-        const f32 gz = (c1 - c0) * this.invCellSize.z;
-        outGrad = SafeNormalizeVec3(VectorSingle(gx, gy, gz, 0.0f), VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
+        const f32 dx0 = dxVec.x + (dxVec.y - dxVec.x) * ty;
+        const f32 dx1 = dxVec.z + (dxVec.w - dxVec.z) * ty;
+        const VectorSingle rawGrad = VectorSingle(dx0 * omtz + dx1 * tz, dy0 * omtz + dy1 * tz, c1 - c0, 0.0f) * VectorSingle(this.invCellSize, 0.0f);
+        outGrad = SafeNormalizeVec3(rawGrad, VectorSingle(0.0f, 1.0f, 0.0f, 0.0f));
     }
 
     public VectorSingle sampleGradient(in VectorSingle localP)const{

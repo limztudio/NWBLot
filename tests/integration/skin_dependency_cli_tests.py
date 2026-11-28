@@ -213,7 +213,7 @@ def _run_scene_subsystem_feature_tests(args: argparse.Namespace, root: pathlib.P
 
     manifest = fixture / "scene_dependencies.txt"
     helpers.run_command(_dependency_command(args, fixture, roots, [], manifest), fixture)
-    expected_files = [project_manifest, scene_manifest, subsystem_manifest, active_fx_subsystem_manifest, hero_entity_manifest, skin, base_sampler, active_feature_sampler, texture]
+    expected_files = sorted([project_manifest, scene_manifest, subsystem_manifest, active_fx_subsystem_manifest, hero_entity_manifest, skin, base_sampler, active_feature_sampler, texture], key=lambda path: str(path.resolve()))
     _expect_manifest(manifest, [], expected_files)
 
     packed = fixture / "scene_volume"
@@ -300,10 +300,29 @@ def run_skin_dependency_tests(args: argparse.Namespace, root: pathlib.Path, help
     _write_skin(ordered_b, "engine/order/b/texture")
     sampler_root = fixture / "typed" / LIT_IMPL / LIT_ASSETS
     helpers.write_sampler(sampler_root / LIT_UI / LIT_TEXTURE_NWB, LIT_LINEAR)
-    ordered_cases = (([str(ordered_b), str(ordered_a), str(ordered_b)], roots, [texture_b, texture_a]), ([str(project_root / LIT_ORDER)], roots, [texture_a, texture_b]), ([str(skin)], [project_root, sampler_root, engine_root], [texture]),)
+    sorted_textures = sorted([texture_a, texture_b], key=lambda path: str(path.resolve()))
+    ordered_cases = (([str(ordered_b), str(ordered_a), str(ordered_b)], roots, sorted_textures), ([str(ordered_a), str(ordered_b)], roots, sorted_textures), ([str(project_root / LIT_ORDER)], roots, sorted_textures), ([str(skin)], [project_root, sampler_root, engine_root], [texture]),)
     for inputs, asset_roots, appended in ordered_cases:
         helpers.run_command(_dependency_command(args, fixture, asset_roots, inputs, scratch_manifest), fixture)
         _expect_manifest(scratch_manifest, inputs, appended)
+
+    fanout_names = ("zulu", "alpha", "mike", "bravo", "yankee", "charlie", "xray", "delta", "whiskey", "echo")
+    fanout_samplers = []
+    for name in fanout_names:
+        sampler_path = engine_root / "fanout" / f"{name}.nwb"
+        helpers.write_sampler(sampler_path, LIT_LINEAR)
+        fanout_samplers.append(sampler_path)
+    fanout_child_a = project_root / "subsystems" / "fanout_child_a.nwb"
+    fanout_child_b = project_root / "subsystems" / "fanout_child_b.nwb"
+    _write_metadata(fanout_child_a, 'renderer_subsystem asset;\nasset.basic_samplers = ["engine/fanout/zulu", "engine/fanout/alpha"];\n')
+    _write_metadata(fanout_child_b, 'renderer_subsystem asset;\nasset.basic_samplers = ["engine/fanout/alpha", "engine/fanout/zulu"];\n')
+    fanout_subsystem = project_root / "subsystems" / "fanout.nwb"
+    fanout_refs = [f"engine/fanout/{name}" for name in fanout_names]
+    fanout_children = ["project/subsystems/fanout_child_b", "project/subsystems/fanout_child_a"]
+    _write_metadata(fanout_subsystem, f"renderer_subsystem asset;\nasset.subsystems = {json.dumps(fanout_children)};\nasset.basic_samplers = {json.dumps(fanout_refs)};\n")
+    fanout_seed = [str(fanout_subsystem)]
+    helpers.run_command(_dependency_command(args, fixture, roots, fanout_seed, scratch_manifest), fixture)
+    _expect_manifest(scratch_manifest, fanout_seed, sorted([fanout_child_a, fanout_child_b, *fanout_samplers], key=lambda path: str(path.resolve())))
 
     missing_skin = project_root / "missing" / LIT_ATLAS_NWB
     _write_skin(missing_skin, "engine/ui/missing")

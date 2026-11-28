@@ -30,43 +30,58 @@ class DependencyInputSelection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DependencyQueueState{
-    public Vector<u8> included;
-    public Vector<u8> processed;
-    public Vector<usize> fileQueue;
+class DependencyRequest{
+    public Name path = s_NameNone;
+    public Name expectedType = s_NameNone;
+    public String hint;
+}
 
-    public void initialize(in usize fileCount, in Span<u8> initialSelected, in Span<usize> initialOrder){
-        this.included.clear();
-        this.included.reserve(initialSelected.size());
-        for(usize i = 0u; i < initialSelected.size(); ++i)
-            this.included.push_back(initialSelected[i]);
+class FrontierExtractionResult{
+    public b8 ok = false;
+    public Vector<DependencyRequest> requests;
+}
 
-        this.processed.clear();
-        this.processed.resize(fileCount, 0u);
+class ResolvedDependencyEntry{
+    public Name expectedType = s_NameNone;
+    public usize value = s_InvalidProviderIndex;
+    public usize next = s_InvalidProviderIndex;
+}
 
-        this.fileQueue.clear();
-        this.fileQueue.reserve(fileCount);
-        for(usize i = 0u; i < initialOrder.size(); ++i)
-            this.fileQueue.push_back(initialOrder[i]);
+class ResolvedDependencyCache{
+    private HashMap<Name, usize> m_heads;
+    private Vector<ResolvedDependencyEntry> m_entries;
+
+    public void reserve(in usize count){
+        this.m_heads.reserve(count);
+        this.m_entries.reserve(count);
     }
 
-    public b8 claimIncluded(in usize providerIndex){
-        if(this.included[providerIndex] != 0u)
-            return false;
-        this.included[providerIndex] = 1u;
-        return true;
+    public Optional<usize> find(in Name path, in Name expectedType)const{
+        const auto head = this.m_heads.find(path);
+        if(head == this.m_heads.end())
+            return Optional<usize>();
+        for(usize index = head.value(); index != s_InvalidProviderIndex; index = this.m_entries[index].next){
+            if(this.m_entries[index].expectedType == expectedType)
+                return Optional<usize>(this.m_entries[index].value);
+        }
+        return Optional<usize>();
     }
 
-    public void enqueueIfUnprocessed(in usize providerIndex){
-        if(this.processed[providerIndex] == 0u)
-            this.fileQueue.push_back(providerIndex);
-    }
-
-    public b8 claimProcessed(in usize fileIndex){
-        if(this.processed[fileIndex] != 0u)
-            return false;
-        this.processed[fileIndex] = 1u;
-        return true;
+    public void insert(in Name path, in Name expectedType, in usize value){
+        const auto head = this.m_heads.try_emplace(path, s_InvalidProviderIndex);
+        for(usize index = head.first.value(); index != s_InvalidProviderIndex; index = this.m_entries[index].next){
+            if(this.m_entries[index].expectedType == expectedType){
+                this.m_entries[index].value = value;
+                return;
+            }
+        }
+        ResolvedDependencyEntry entry;
+        entry.expectedType = expectedType;
+        entry.value = value;
+        entry.next = head.first.value();
+        const usize entryIndex = this.m_entries.size();
+        this.m_entries.push_back(entry);
+        head.first.value() = entryIndex;
     }
 }
 
@@ -75,6 +90,8 @@ class DependencyProviderCatalog : NoCopy{
     public mut CookFileCatalog catalog;
     public mut CookDependencyAccess access;
     public Vector<Name> virtualPaths;
+    private HashMap<Name, usize> m_providerHeads;
+    private Vector<usize> m_providerNext;
 
     public DependencyProviderCatalog(mut AssetCookWorkspace workspace, mut CookFileCatalog catalog, mut CookDependencyAccess access){
         this.m_workspace = workspace;
@@ -96,16 +113,49 @@ class DependencyProviderCatalog : NoCopy{
             discovered.appendRoot(root.path, root.virtualRoot.view());
         if(!discovered.discover(s_NwbExtension))
             return false;
+
+        const usize fileCount = discovered.files.size();
         Vector<Name> names;
-        names.reserve(discovered.files.size());
-        for(in DiscoveredNwbFile file : discovered.files){
+        names.resize(fileCount, s_NameNone);
+        if(fileCount > 1u){
+            Vector<u8> derivedOk;
+            derivedOk.resize(fileCount, 0u);
+            parallel_for(usize index = 0u; index < fileCount; ++index){
+                in DiscoveredNwbFile file = discovered.files[index];
+                const auto path = BuildDerivedAssetVirtualPath(file.assetRoot, file.virtualRoot.view(), file.filePath);
+                if(path.has_value()){
+                    names[index] = path.value();
+                    derivedOk[index] = 1u;
+                }
+            }
+            for(in u8 ok : derivedOk){
+                if(ok == 0u)
+                    return false;
+            }
+        }
+        else if(fileCount == 1u){
+            in DiscoveredNwbFile file = discovered.files[0u];
             const auto path = BuildDerivedAssetVirtualPath(file.assetRoot, file.virtualRoot.view(), file.filePath);
             if(!path.has_value())
                 return false;
-            names.push_back(path.value());
+            names[0u] = path.value();
         }
+
+        HashMap<Name, usize> providerHeads;
+        providerHeads.reserve(fileCount);
+        Vector<usize> providerNext;
+        providerNext.resize(fileCount, s_InvalidProviderIndex);
+        for(usize rev = fileCount; rev > 0u; --rev){
+            const usize index = rev - 1u;
+            const auto head = providerHeads.try_emplace(names[index], s_InvalidProviderIndex);
+            providerNext[index] = head.first.value();
+            head.first.value() = index;
+        }
+
         this.catalog.replace(discovered);
         this.virtualPaths = names;
+        this.m_providerHeads = providerHeads;
+        this.m_providerNext = providerNext;
         return true;
     }
 
@@ -149,17 +199,41 @@ class DependencyProviderCatalog : NoCopy{
     }
 
     private Expected<b8> matchesChild(in DiscoveredNwbFile file, in MetascriptDocument document, in Name path, in Name type)const{
-        const auto expanded = this.access.expand(file, document);
-        if(!expanded.has_value()){
-            if(expanded.error() == AssetBunchExpandFailure::Unsupported)
+        const Optional<in Name> pathOwner(path);
+        const Optional<in Name> typeOwner(type);
+        const auto found = this.access.visitExpanded(file, document, lambda[in this, in pathOwner, in typeOwner](in Span<ExpandedAssetMetadata> items) -> b8{
+            for(in ExpandedAssetMetadata item : items){
+                if(item.virtualPath == pathOwner.value() && this.matchesType(item.assetType, typeOwner.value()))
+                    return true;
+            }
+            return false;
+        });
+        if(!found.has_value()){
+            if(found.error() == AssetBunchExpandFailure::Unsupported)
                 return false;
             return MakeUnexpected(Failure());
         }
-        for(in ExpandedAssetMetadata item : expanded.value()){
-            if(item.virtualPath == path && this.matchesType(item.assetType, type))
-                return true;
+        return found.value();
+    }
+
+    private b8 resolveCandidates(in Name lookupPath, in b8 exact, in Name path, in Name type, mut usize inOutMatched)const{
+        const auto head = this.m_providerHeads.find(lookupPath);
+        if(head == this.m_providerHeads.end())
+            return true;
+        for(usize index = head.value(); index != s_InvalidProviderIndex; index = this.m_providerNext[index]){
+            in DiscoveredNwbFile file = this.catalog.files[index];
+            const auto document = this.access.read(file, s_DiagnosticPrefix);
+            if(!document.has_value())
+                return false;
+            Expected<b8> found = false;
+            if(exact)
+                found = this.matchesFile(file, document.value(), path, type);
+            else
+                found = this.matchesChild(file, document.value(), path, type);
+            if(!found.has_value() || (found.value() && !RecordDependencyProviderMatch(path, index, inOutMatched)))
+                return false;
         }
-        return false;
+        return true;
     }
 
     public Expected<usize> resolve(in Name path, in Name type, in StringView hint)const{
@@ -168,22 +242,10 @@ class DependencyProviderCatalog : NoCopy{
         const StringView text = ResolveDependencyVirtualPathText(path, hint);
         const Optional<Name> parent = ExtractParentVirtualPath(text);
         usize matched = s_InvalidProviderIndex;
-        for(usize index = 0u; index < this.catalog.files.size(); ++index){
-            const b8 exact = this.virtualPaths[index] == path;
-            if(!exact && (!parent.has_value() || this.virtualPaths[index] != parent.value()))
-                continue;
-            in DiscoveredNwbFile file = this.catalog.files[index];
-            const auto document = this.access.read(file, s_DiagnosticPrefix);
-            if(!document.has_value())
-                return MakeUnexpected(Failure());
-            Expected<b8> found = false;
-            if(exact)
-                found = this.matchesFile(file, document.value(), path, type);
-            else
-                found = this.matchesChild(file, document.value(), path, type);
-            if(!found.has_value() || (found.value() && !RecordDependencyProviderMatch(path, index, matched)))
-                return MakeUnexpected(Failure());
-        }
+        if(!this.resolveCandidates(path, true, path, type, matched))
+            return MakeUnexpected(Failure());
+        if(parent.has_value() && parent.value() != path && !this.resolveCandidates(parent.value(), false, path, type, matched))
+            return MakeUnexpected(Failure());
         if(matched == s_InvalidProviderIndex){
             LogMissingDependencyProvider(path, type, text);
             return MakeUnexpected(Failure());
@@ -197,43 +259,13 @@ class DependencyProviderCatalog : NoCopy{
 class DependencyTraversal : NoCopy{
     private in DependencyProviderCatalog m_providers;
     private mut Vector<String> m_candidates;
-    private DependencyQueueState m_queue;
-    private DependencyPathHints m_hints;
 
     public DependencyTraversal(in DependencyProviderCatalog providers, mut Vector<String> candidates){
         this.m_providers = providers;
         this.m_candidates = candidates;
     }
 
-    private b8 enqueue(in Name path, in Name type){
-        if(path == s_NameNone)
-            return false;
-        const auto found = this.m_providers.resolve(path, type, this.m_hints.lookup(path));
-        if(!found.has_value())
-            return false;
-        const usize index = found.value();
-        if(this.m_queue.claimIncluded(index))
-            this.m_candidates.push_back(PathToString(this.m_providers.catalog.files[index].filePath.lexicallyNormal()));
-        this.m_queue.enqueueIfUnprocessed(index);
-        return true;
-    }
-
-    private b8 extract(in DiscoveredNwbFile file, in Name type, in Name path, in MetascriptValue value, in Optional<in MetascriptDocument> document){
-        return this.m_providers.access.extract(file, type, path, value, document, lambda[mut this](in Name dep, in Name expected) -> b8{ return this.enqueue(dep, expected); });
-    }
-
-    private b8 process(in usize index);
-
-    public b8 traverse(in DependencyInputSelection selected){
-        this.m_queue.initialize(this.m_providers.catalog.files.size(), selected.selected, selected.order);
-        this.m_hints.reserve(this.m_providers.catalog.files.size());
-        for(usize cursor = 0u; cursor < this.m_queue.fileQueue.size(); ++cursor){
-            const usize file = this.m_queue.fileQueue[cursor];
-            if(this.m_queue.claimProcessed(file) && !this.process(file))
-                return false;
-        }
-        return true;
-    }
+    public b8 traverse(in DependencyInputSelection selected, in b8 includeInitialSelection);
 }
 
 b8 ValidateSingleProviderAssetDeclaration(in usize declarationCount, in StringView providerPathText){
@@ -323,44 +355,214 @@ Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(in As
     return result;
 }
 
-b8 DependencyTraversal::process(in usize index){
-    in DiscoveredNwbFile file = this.m_providers.catalog.files[index];
-    const auto doc = this.m_providers.access.read(file, s_DiagnosticPrefix);
+b8 ExtractSingleAssetDependencies(
+    in DependencyProviderCatalog providers,
+    in DiscoveredNwbFile file,
+    in Name assetType,
+    in Name virtualPath,
+    in MetascriptValue value,
+    in Optional<in MetascriptDocument> document,
+    in DependencyPathHints hints,
+    mut Vector<DependencyRequest> outRequests
+){
+    const Optional<in DependencyPathHints> hintOwner(hints);
+    return providers.access.extract(file, assetType, virtualPath, value, document, lambda[in hintOwner, mut outRequests](in Name dep, in Name expected) -> b8{
+        if(dep == s_NameNone)
+            return false;
+        DependencyRequest req;
+        req.path = dep;
+        req.expectedType = expected;
+        req.hint = String(hintOwner.value().lookup(dep));
+        outRequests.push_back(req);
+        return true;
+    });
+}
+
+FrontierExtractionResult ExtractFileDependencies(in DependencyProviderCatalog providers, in usize index){
+    FrontierExtractionResult result;
+    in DiscoveredNwbFile file = providers.catalog.files[index];
+    const auto doc = providers.access.read(file, s_DiagnosticPrefix);
     if(!doc.has_value())
-        return false;
+        return result;
     in MetascriptDocument document = doc.value();
-    CollectDocumentPathHints(document, this.m_hints);
-    const auto expanded = this.m_providers.access.expand(file, document);
-    if(expanded.has_value()){
-        for(in ExpandedAssetMetadata item : expanded.value())
-            CollectValuePathHints(item.value, this.m_hints);
-        for(in ExpandedAssetMetadata item : expanded.value()){
-            if(!this.extract(file, item.assetType, item.virtualPath, item.value, Optional<in MetascriptDocument>()))
+    DependencyPathHints hints;
+    CollectDocumentPathHints(document, hints);
+    const Optional<in DependencyProviderCatalog> providerOwner(providers);
+    const Optional<in DiscoveredNwbFile> fileOwner(file);
+    Vector<DependencyRequest> requests;
+    const auto expanded = providers.access.visitExpanded(file, document, lambda[in providerOwner, in fileOwner, mut hints, mut requests](in Span<ExpandedAssetMetadata> items) -> b8{
+        for(in ExpandedAssetMetadata item : items)
+            CollectValuePathHints(item.value, hints);
+        for(in ExpandedAssetMetadata item : items){
+            if(!ExtractSingleAssetDependencies(providerOwner.value(), fileOwner.value(), item.assetType, item.virtualPath, item.value, Optional<in MetascriptDocument>(), hints, requests))
                 return false;
         }
         return true;
+    });
+    if(expanded.has_value()){
+        result.requests = requests;
+        result.ok = expanded.value();
+        return result;
     }
     if(expanded.error() != AssetBunchExpandFailure::Unsupported)
-        return false;
+        return result;
     if(document.declarationCount() != 1u && !ValidateSingleProviderAssetDeclaration(document.declarationCount(), PathToString(file.filePath)))
-        return false;
+        return result;
     const auto declared = document.declarationType(s_MetadataAssetVariable);
     if(!declared.has_value()){
         LogMissingMetadataAssetDeclaration(PathToString(file.filePath));
-        return false;
+        return result;
     }
     const auto type = ParseName(declared.value());
     if(!type.has_value())
-        return false;
+        return result;
     if(!document.hasVariable(s_MetadataAssetVariable)){
         error("{} '{}': missing asset declaration '{}'", s_DiagnosticPrefix, file.filePath, s_MetadataAssetVariable);
-        return false;
+        return result;
     }
     const Name declaredType = type.value();
+    const Name virtualPath = providers.virtualPaths[index];
     const Optional<in MetascriptDocument> owner(document);
-    return document.visitVariable(s_MetadataAssetVariable, lambda[mut this, in index, in declaredType, in owner](in MetascriptValue value) -> b8{
-        return this.extract(this.m_providers.catalog.files[index], declaredType, this.m_providers.virtualPaths[index], value, owner);
-    });
+    const Optional<in DependencyPathHints> hintOwner(hints);
+    if(!document.visitVariable(s_MetadataAssetVariable, lambda[in providerOwner, in fileOwner, in declaredType, in virtualPath, in owner, in hintOwner, mut requests](in MetascriptValue value) -> b8{
+        return ExtractSingleAssetDependencies(providerOwner.value(), fileOwner.value(), declaredType, virtualPath, value, owner, hintOwner.value(), requests);
+    }))
+        return result;
+    result.requests = requests;
+    result.ok = true;
+    return result;
+}
+
+b8 DependencyTraversal::traverse(in DependencyInputSelection selected, in b8 includeInitialSelection){
+    in DependencyProviderCatalog providers = this.m_providers;
+    const usize fileCount = providers.catalog.files.size();
+
+    Vector<u8> included;
+    included.reserve(selected.selected.size());
+    for(usize i = 0u; i < selected.selected.size(); ++i)
+        included.push_back(selected.selected[i]);
+
+    Vector<u8> processed;
+    processed.resize(fileCount, 0u);
+
+    Vector<usize> frontier;
+    frontier.reserve(selected.order.size());
+
+    Vector<String> discoveredPaths;
+    discoveredPaths.reserve(fileCount);
+
+    for(in usize file : selected.order){
+        if(includeInitialSelection)
+            discoveredPaths.push_back(PathToString(providers.catalog.files[file].filePath.lexicallyNormal()));
+        if(processed[file] == 0u){
+            processed[file] = 1u;
+            frontier.push_back(file);
+        }
+    }
+
+    ResolvedDependencyCache resolvedCache;
+    resolvedCache.reserve(fileCount);
+
+    while(!frontier.empty()){
+        Vector<FrontierExtractionResult> waveResults;
+        waveResults.resize(frontier.size());
+        if(frontier.size() > 1u){
+            parallel_for(usize slot = 0u; slot < frontier.size(); ++slot){
+                waveResults[slot] = ExtractFileDependencies(providers, frontier[slot]);
+            }
+        }
+        else{
+            waveResults[0u] = ExtractFileDependencies(providers, frontier[0u]);
+        }
+
+        usize totalRequests = 0u;
+        for(in FrontierExtractionResult entry : waveResults){
+            if(!entry.ok)
+                return false;
+            totalRequests += entry.requests.size();
+        }
+
+        Vector<usize> waveProviders;
+        waveProviders.reserve(totalRequests);
+        Vector<DependencyRequest> pendingRequests;
+        pendingRequests.reserve(totalRequests);
+        ResolvedDependencyCache wavePending;
+        wavePending.reserve(totalRequests);
+
+        for(in FrontierExtractionResult entry : waveResults){
+            for(in DependencyRequest req : entry.requests){
+                const auto cached = resolvedCache.find(req.path, req.expectedType);
+                if(cached.has_value()){
+                    waveProviders.push_back(cached.value());
+                    continue;
+                }
+                const auto queued = wavePending.find(req.path, req.expectedType);
+                if(queued.has_value()){
+                    if(pendingRequests[queued.value()].hint.empty() && !req.hint.empty())
+                        pendingRequests[queued.value()].hint = req.hint;
+                    continue;
+                }
+                const usize pendingIndex = pendingRequests.size();
+                wavePending.insert(req.path, req.expectedType, pendingIndex);
+                pendingRequests.push_back(req);
+            }
+        }
+
+        if(!pendingRequests.empty()){
+            const usize pendingCount = pendingRequests.size();
+            Vector<usize> resolvedProviders;
+            resolvedProviders.resize(pendingCount, s_InvalidProviderIndex);
+            Vector<u8> resolvedOk;
+            resolvedOk.resize(pendingCount, 0u);
+            if(pendingCount > 1u){
+                parallel_for(usize reqIndex = 0u; reqIndex < pendingCount; ++reqIndex){
+                    in DependencyRequest req = pendingRequests[reqIndex];
+                    const auto found = providers.resolve(req.path, req.expectedType, StringView(req.hint));
+                    if(found.has_value()){
+                        resolvedProviders[reqIndex] = found.value();
+                        resolvedOk[reqIndex] = 1u;
+                    }
+                }
+            }
+            else{
+                in DependencyRequest req = pendingRequests[0u];
+                const auto found = providers.resolve(req.path, req.expectedType, StringView(req.hint));
+                if(!found.has_value())
+                    return false;
+                resolvedProviders[0u] = found.value();
+                resolvedOk[0u] = 1u;
+            }
+
+            for(usize reqIndex = 0u; reqIndex < pendingCount; ++reqIndex){
+                if(resolvedOk[reqIndex] == 0u)
+                    return false;
+                in DependencyRequest req = pendingRequests[reqIndex];
+                const usize providerIndex = resolvedProviders[reqIndex];
+                resolvedCache.insert(req.path, req.expectedType, providerIndex);
+                waveProviders.push_back(providerIndex);
+            }
+        }
+
+        Vector<usize> nextFrontier;
+        nextFrontier.reserve(waveProviders.size());
+        for(in usize providerIndex : waveProviders){
+            if(included[providerIndex] == 0u){
+                included[providerIndex] = 1u;
+                discoveredPaths.push_back(PathToString(providers.catalog.files[providerIndex].filePath.lexicallyNormal()));
+            }
+            if(processed[providerIndex] == 0u){
+                processed[providerIndex] = 1u;
+                nextFrontier.push_back(providerIndex);
+            }
+        }
+        frontier = nextFrontier;
+    }
+
+    SortUniqueSequence<String>(discoveredPaths);
+    this.m_candidates.reserve(this.m_candidates.size() + discoveredPaths.size());
+    for(in String path : discoveredPaths)
+        this.m_candidates.push_back(path);
+    return true;
 }
 
 Expected<Vector<String>> ComputeAssetDependencies(in AssetDependencyOptions options){
@@ -374,15 +576,13 @@ Expected<Vector<String>> ComputeAssetDependencies(in AssetDependencyOptions opti
     if(!selection.has_value())
         return MakeUnexpected(Failure());
     Vector<String> paths;
-    if(!options.inputs.empty())
+    b8 includeInitialSelection = true;
+    if(!options.inputs.empty()){
         paths = options.inputs;
-    else{
-        paths.reserve(selection.value().order.size());
-        for(in usize index : selection.value().order)
-            paths.push_back(PathToString(providers.catalog.files[index].filePath.lexicallyNormal()));
+        includeInitialSelection = false;
     }
     DependencyTraversal traversal(providers, paths);
-    if(!traversal.traverse(selection.value()))
+    if(!traversal.traverse(selection.value(), includeInitialSelection))
         return MakeUnexpected(Failure());
     return paths;
 }

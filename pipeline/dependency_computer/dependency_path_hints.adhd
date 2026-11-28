@@ -11,10 +11,6 @@
 class DependencyPathHints{
     private HashMap<Name, String> m_texts;
 
-    public void reserve(in usize count){
-        this.m_texts.reserve(count);
-    }
-
     public void record(in StringView rawText){
         const Expected<StringView> trimmed = TryTrimVirtualPathText(rawText);
         if(!trimmed.has_value())

@@ -13,10 +13,10 @@ extern class CookDependencyAccess{
     CookDependencyRegistry registry;
     b8 registerTypes();
     Expected<MetascriptDocument> read(in DiscoveredNwbFile file, in StringView prefix)const;
-    Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure> expand(in DiscoveredNwbFile file, in MetascriptDocument document)const;
+    Expected<b8, AssetBunchExpandFailure> visitExpanded(in DiscoveredNwbFile file, in MetascriptDocument document, in auto visit)const;
     b8 expandBunch(in DiscoveredNwbFile file, in MetascriptDocument document)const;
     b8 expandComposite(in DiscoveredNwbFile file, in MetascriptDocument document)const;
-    b8 extract(in DiscoveredNwbFile file, in Name type, in Name path, in MetascriptValue asset, in Optional<in MetascriptDocument> document, in Func<64u, b8(in Name, in Name)> visit)const;
+    b8 extract(in DiscoveredNwbFile file, in Name type, in Name path, in MetascriptValue asset, in Optional<in MetascriptDocument> document, in auto visit)const;
 };
 
 [cpp_header("<core/assets/bunch/cook.h>"), cpp_name("::NWB::Core::Assets::AssetsBunchCook::HasAssetBunchDeclaration")]

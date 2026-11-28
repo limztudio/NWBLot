@@ -27,20 +27,32 @@ public:
 
     [[nodiscard]] Expected<Core::Metascript::Document> read(const Core::Assets::DiscoveredNwbFile& file, const AStringView prefix)const{
         Core::Metascript::Document document(m_workspace.arena);
-        Core::Assets::ScratchString source(m_workspace.scratch);
+        Core::Assets::ScratchArena scratch(m_workspace.arena.allocationLog());
+        Core::Assets::ScratchString source(scratch);
         if(!Core::Assets::ParseMetadataDocumentText(file.filePath, prefix, [&](const AStringView text){ return document.parse(text); }, source, document))
             return MakeUnexpected(Failure{});
         return document;
     }
 
-    [[nodiscard]] Expected<Core::Assets::ExpandedAssetMetadataVector, Core::Assets::AssetBunchExpandFailure::Enum> expand(const Core::Assets::DiscoveredNwbFile& file, const Core::Metascript::Document& document)const{
-        return Core::Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook({file.assetRoot, file.virtualRoot, file.filePath, document, m_workspace.scratch});
+    template<typename Visit>
+    [[nodiscard]] Expected<b8, Core::Assets::AssetBunchExpandFailure::Enum> visitExpanded(
+        const Core::Assets::DiscoveredNwbFile& file,
+        const Core::Metascript::Document& document,
+        Visit&& visit
+    )const{
+        Core::Assets::ScratchArena scratch(m_workspace.arena.allocationLog());
+        const auto expanded = Core::Assets::AssetsBunchCook::ExpandAssetBunchForAssetCook({file.assetRoot, file.virtualRoot, file.filePath, document, scratch});
+        if(!expanded)
+            return MakeUnexpected(expanded.error());
+        return visit(Span<const Core::Assets::ExpandedAssetMetadata>(expanded->data(), expanded->size()));
     }
     [[nodiscard]] b8 expandBunch(const Core::Assets::DiscoveredNwbFile& file, const Core::Metascript::Document& document)const{
-        return Core::Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot, file.filePath, document, m_workspace.scratch).has_value();
+        Core::Assets::ScratchArena scratch(m_workspace.arena.allocationLog());
+        return Core::Assets::AssetsBunchCook::ExpandAssetBunch(file.assetRoot, file.virtualRoot, file.filePath, document, scratch).has_value();
     }
     [[nodiscard]] b8 expandComposite(const Core::Assets::DiscoveredNwbFile& file, const Core::Metascript::Document& document)const{
-        return Core::Assets::AssetsBunchCook::ExpandCompositeAsset(file.assetRoot, file.virtualRoot, file.filePath, document, m_workspace.scratch).has_value();
+        Core::Assets::ScratchArena scratch(m_workspace.arena.allocationLog());
+        return Core::Assets::AssetsBunchCook::ExpandCompositeAsset(file.assetRoot, file.virtualRoot, file.filePath, document, scratch).has_value();
     }
 
     template<typename Visit>
@@ -59,9 +71,11 @@ public:
         private:
             Visit& m_callback;
         };
+        Core::Assets::AssetArena arena(m_workspace.arena.allocationLog());
+        Core::Assets::ScratchArena scratch(m_workspace.arena.allocationLog());
         Collector collector(visit);
         return registry.extractDependencies({file.assetRoot, file.virtualRoot, file.filePath, type, path, asset,
-            document ? document->get() : nullptr, m_workspace.arena, m_workspace.scratch}, collector);
+            document ? document->get() : nullptr, arena, scratch}, collector);
     }
 
 private:

@@ -41,7 +41,7 @@ unrelated asset documents, and provider ownership follows asset-root order. Unre
 wrong-type, or ambiguous asset references fail before the output list is written.
 Paired encoded texture payloads stay with the texture cooker and are not added as
 separate inputs. Its `--output` is a UTF-8 file containing one input path per line. Explicit seed paths
-are retained, and transitive dependencies add their resolved provider paths.
+are retained in order, and discovered dependencies (starting from `project.nwb` when unseeded, or transitive dependencies for seeded runs) are searched in parallel and appended in sorted order.
 
 Entity metadata may provide a `name` alongside its required component references. A supplied name must be nonempty and unpadded; scene loading rejects duplicate resolved entity names. `ActiveSceneSubsystems::instantiateEntitiesWithResult()` returns the created entity IDs and a name lookup, and rolls back entities created by that call if instantiation fails. Call `destroyEntities()` when the owning code removes those instantiated entities; `unloadScene()` clears loaded scene contents but does not destroy them.
 
